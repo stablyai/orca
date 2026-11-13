@@ -81,7 +81,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
 
   it('replaces the exact old endpoint and commits its successor', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     registerWithFakes(mainWindow, h.runtime, h.store)
     await expect(invoke()).resolves.toMatchObject({ id: 'pty-new' })
     expect(h.leafBinding()).toBe('pty-new')
@@ -90,7 +90,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
 
   it('refuses same-ID/new-incarnation ownership before stopping anything', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     h.store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey[paneKey] = 'inc-successor'
     registerWithFakes(mainWindow, h.runtime, h.store)
     await expect(invoke()).rejects.toThrow('terminal_pane_owner_changed')
@@ -101,7 +101,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
 
   it('preserves the human diagnostic and unknown stop evidence on pre-stop failure', async () => {
     const h = installRestartHarness({ shutdownFails: true })
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     registerWithFakes(mainWindow, h.runtime, h.store)
     const error = await invoke().catch((e: unknown) => e)
     expect(String(error)).toContain('daemon unreachable')
@@ -116,7 +116,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
 
   it('keeps an empty existing leaf after post-stop failure and retries there without a PTY', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     h.providerSpawn.mockRejectedValueOnce(new Error('launch refused'))
     registerWithFakes(mainWindow, h.runtime, h.store)
     const error = await invoke().catch((e: unknown) => e)
@@ -144,7 +144,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
   it('does not dispatch or clear a successor installed during stop', async () => {
     const stopped = Promise.withResolvers<void>()
     const h = installRestartHarness({ shutdownGate: stopped.promise })
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     registerWithFakes(mainWindow, h.runtime, h.store)
     const pending = invoke().catch((e: unknown) => e)
     await vi.waitFor(() => expect(h.shutdown).toHaveBeenCalledTimes(1))
@@ -157,7 +157,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
   })
   it('enforces the same condition on runtime creation and empty-leaf Retry', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     registerWithFakes(mainWindow, h.runtime, h.store)
     const controller = h.runtime.setPtyController.mock.lastCall?.[0]
     if (!controller?.spawn) {
@@ -194,7 +194,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
 
   it('refuses a late binding commit over a successor and preserves that successor', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     h.providerSpawn.mockImplementationOnce(async () => {
       h.store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId[leafId] =
         'successor'
@@ -207,7 +207,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
   })
   it('preserves the Windows capacity diagnostic and stop proof through the final IPC formatter', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     h.providerSpawn.mockRejectedValueOnce(
       terminalStartError(
         'provider stopped',
@@ -230,7 +230,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
 
   it('preserves the same proof in the RPC error data after Windows formatting', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     h.providerSpawn.mockRejectedValueOnce(
       terminalStartError(
         'provider stopped',
@@ -266,7 +266,7 @@ describe('conditional Codex account restart at the IPC boundary', () => {
   })
   it('refuses an ensure adoption from another provider-session owner without touching that owner', async () => {
     const h = installRestartHarness()
-    h.store.trackPtyBindingGeneration('local', leafId)
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
     registerWithFakes(mainWindow, h.runtime, h.store)
     const controller = h.runtime.setPtyController.mock.lastCall?.[0]
     if (!controller?.spawn) {

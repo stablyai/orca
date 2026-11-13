@@ -110,6 +110,38 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
     expect(connected).not.toHaveBeenCalled()
   })
 
+  it('does not bind or kill a late account-restart result after its pane owner changed', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const pending = Promise.withResolvers<{ id: string; incarnationId: string }>()
+    vi.mocked(window.api.pty.spawn).mockReturnValueOnce(pending.promise)
+    let current = true
+    const onPtySpawn = vi.fn()
+    const transport = createIpcPtyTransport({ onPtySpawn })
+    const connecting = transport.connect({
+      url: '',
+      accountRestart: {
+        requestId: 'request',
+        attemptId: 'attempt',
+        hostEpoch: 'host',
+        pane: {
+          worktreeId: 'wt',
+          tabId: 'tab',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          tabCreatedAt: 1
+        },
+        expected: { kind: 'empty', bindingGeneration: 1 }
+      },
+      shouldContinue: () => current,
+      callbacks: {}
+    })
+    current = false
+    pending.resolve({ id: 'successor-id', incarnationId: 'obsolete-incarnation' })
+    expect(await connecting).toBeUndefined()
+    expect(transport.getPtyId()).toBeNull()
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(window.api.pty.kill).not.toHaveBeenCalled()
+  })
+
   // Missing incarnation stays unknown for old-host/synthetic exits; remote-runtime exits use a different channel.
   it('never discards on incarnation when the host names none', async () => {
     const { result, paneExit } = await connectWithExitDuringSpawn(

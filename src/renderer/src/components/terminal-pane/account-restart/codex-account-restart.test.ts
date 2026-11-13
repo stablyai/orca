@@ -17,6 +17,7 @@ import { useAppStore } from '@/store'
 import { selectCodexStaleSessionCount } from '@/components/status-bar/codex-restart-status-summary'
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 import {
+  continueCodexAccountRestart,
   prepareCodexAccountRestart,
   failCodexAccountRestart,
   retryCodexAccountRestarts
@@ -649,6 +650,67 @@ describe('Codex account continuation', () => {
       }
     }
   )
+
+  it.each(['not-started', 'confirmed-retired'] as const)(
+    'ignores a late %s failure after a same-ID successor takes the pane',
+    async (stop) => {
+      const request = accepted()
+      await prepareCodexAccountRestart(request)
+      const lifetime = admitTerminalNoticeLifetime('old', {
+        incarnationId: 'inc-successor',
+        fresh: true
+      })
+      try {
+        failCodexAccountRestart(
+          codexAccountRestartToken(request),
+          receipt(request, stop, stop === 'not-started' ? 'original' : 'empty')
+        )
+        expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
+        expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+      } finally {
+        retireTerminalNoticeLifetime(lifetime)
+      }
+    }
+  )
+
+  it('accepts its own same-ID replacement before the transport admits the new incarnation', async () => {
+    const request = accepted()
+    await prepareCodexAccountRestart(request)
+    expect(
+      continueCodexAccountRestart(codexAccountRestartToken(request), {
+        id: 'old',
+        incarnationId: 'inc-own-replacement'
+      })
+    ).toBe(true)
+    const lifetime = admitTerminalNoticeLifetime('old', {
+      incarnationId: 'inc-own-replacement',
+      fresh: true
+    })
+    try {
+      const scrollback = new Map([[leaf, 'old transcript']])
+      const session = mountedSpawnSession(
+        request,
+        scrollback,
+        async () => undefined,
+        'inc-own-replacement'
+      )
+      session.transport.getPtyId = () => 'old'
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the settlement members consumed by this callback.
+      settleFreshPaneSpawn(session as never, {
+        spawnedPtyId: 'old',
+        accountError: null,
+        accountDeferred: false,
+        ownerRefused: false,
+        generation: 1,
+        startupOverride: null,
+        options: {}
+      })
+      expect(scrollback.has(leaf)).toBe(false)
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+    } finally {
+      retireTerminalNoticeLifetime(lifetime)
+    }
+  })
 
   it('reopens the live moved endpoint without carrying the old request into its new pane', async () => {
     const request = accepted()

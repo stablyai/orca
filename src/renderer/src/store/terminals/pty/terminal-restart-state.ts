@@ -36,7 +36,7 @@ export function createTerminalRestartActions(
   | 'dismissCodexRestartNotices'
   | 'reopenCodexRestartPrompt'
 > {
-  const { queueCodexAccountRestarts, ...codexActions } = createCodexAccountRestartActions(set)
+  const { queueCodexAccountRestarts, ...codexActions } = createCodexAccountRestartActions(set, get)
   return {
     consumeSuppressedPtyExit: (ptyId) => {
       let wasSuppressed = false

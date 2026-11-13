@@ -1,6 +1,7 @@
 import { releaseDeferredCwdFence } from './deferred-cwd-spawn-fence'
 export { releaseDeferredCwdFence } from './deferred-cwd-spawn-fence'
 import { settleFreshPaneSpawn } from './fresh-pane-spawn-settlement'
+import { continueCodexAccountRestart } from '../../account-restart/codex-account-restart-execution'
 import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
 import { isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
@@ -116,9 +117,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           }
         : {}),
       ...(session.userRestart ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
-      shouldContinue: () =>
-        (!accountToken ||
-          Boolean(currentCodexAccountRestart(useAppStore.getState(), accountToken))) &&
+      shouldContinue: (result) =>
+        (!accountToken || continueCodexAccountRestart(accountToken, result)) &&
         !session.disposed &&
         (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
           ?.generation ?? 0) === session.tabGeneration,

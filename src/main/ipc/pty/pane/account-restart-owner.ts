@@ -52,7 +52,7 @@ export function accountRestartSnapshot(
   }
   return {
     hostEpoch: store.getPtyBindingEpoch(),
-    bindingGeneration: store.trackPtyBindingGeneration(hostId, pane.leafId),
+    bindingGeneration: store.trackPtyBindingGeneration({ hostId, leafId: pane.leafId }),
     tabCreatedAt: tab.createdAt,
     owner: owner?.incarnationId ? { ptyId: owner.ptyId, incarnationId: owner.incarnationId } : null
   }

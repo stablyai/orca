@@ -1,7 +1,7 @@
 import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
-import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getResourceExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
@@ -83,7 +83,7 @@ export function isCurrentCodexAccountRestart(
   request: CodexAccountRestart,
   tabs?: ReadonlyMap<string, CodexRestartTabScope>
 ): boolean {
-  if (getExecutionHostIdForWorktree(state, request.worktreeId) !== request.hostId) {
+  if (getResourceExecutionHostIdForWorktree(state, request.worktreeId) !== request.hostId) {
     return false
   }
   if (request.environmentId && request.pairingRevision !== undefined) {
@@ -105,7 +105,11 @@ export function isCurrentCodexAccountRestart(
     return false
   }
   if (!request.leafId) {
-    return (state.ptyIdsByTabId[request.tabId] ?? []).includes(request.oldPtyId)
+    const incarnation = getTerminalNoticeLifetime(request.oldPtyId)?.incarnationId
+    return (
+      (state.ptyIdsByTabId[request.tabId] ?? []).includes(request.oldPtyId) &&
+      (!request.oldIncarnationId || !incarnation || incarnation === request.oldIncarnationId)
+    )
   }
   const layout = state.terminalLayoutsByTabId[request.tabId]
   if (
@@ -115,6 +119,16 @@ export function isCurrentCodexAccountRestart(
     return false
   }
   const current = layout.ptyIdsByLeafId?.[request.leafId]
+  const incarnation = current ? getTerminalNoticeLifetime(current)?.incarnationId : undefined
+  if (
+    current === request.oldPtyId &&
+    current !== request.resultPtyId &&
+    request.oldIncarnationId &&
+    incarnation &&
+    incarnation !== request.oldIncarnationId
+  ) {
+    return false
+  }
   return !current || current === request.oldPtyId || current === request.resultPtyId
 }
 
@@ -193,7 +207,7 @@ function reconcileRetiredCodexNotices(
     const incarnation = getTerminalNoticeLifetime(request.oldPtyId)?.incarnationId
     const originalStillCurrent =
       pane &&
-      getExecutionHostIdForWorktree(next, pane.worktreeId) === request.hostId &&
+      getResourceExecutionHostIdForWorktree(next, pane.worktreeId) === request.hostId &&
       (!incarnation || !request.oldIncarnationId || incarnation === request.oldIncarnationId)
     if (notices === next.codexRestartNoticeByPtyId) {
       notices = { ...notices }

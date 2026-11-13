@@ -49,7 +49,7 @@ export function resolveAccountRestartPane(
     }),
     accountRestart: {
       hostEpoch: store.getPtyBindingEpoch(),
-      bindingGeneration: store.trackPtyBindingGeneration(hostId, pane.leafId),
+      bindingGeneration: store.trackPtyBindingGeneration({ hostId, leafId: pane.leafId }),
       tabCreatedAt: tab.createdAt,
       owner: bound && incarnationId ? { ptyId: bound, incarnationId } : null
     }

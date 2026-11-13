@@ -1,5 +1,7 @@
 export const ACCOUNT_RESTART_CAPABILITY = 'terminal.account-restart.v1'
 const PREFIX = 'terminal_account_restart_v1:'
+export const ACCOUNT_RESTART_OUTCOME_UNKNOWN = 'terminal_account_restart_outcome_unknown'
+export const ACCOUNT_RESTART_VIEW_CHANGED = 'terminal_account_restart_view_changed'
 
 export type AccountRestartOwner =
   | { kind: 'endpoint'; ptyId: string; incarnationId: string; bindingGeneration: number }

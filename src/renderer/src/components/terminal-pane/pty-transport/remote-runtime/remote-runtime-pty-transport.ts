@@ -3892,6 +3892,16 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       const createdTerminal = created.terminal
+      if (
+        options.accountRestart &&
+        options.shouldContinue &&
+        !options.shouldContinue({
+          id: toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId),
+          incarnationId: createdTerminal.incarnationId
+        })
+      ) {
+        return
+      }
       adoptExecutionMetadata(createdTerminal)
       if (created.disposition !== undefined && tabId && createdTerminal.tabId) {
         recordWebAgentSessionHandoff({

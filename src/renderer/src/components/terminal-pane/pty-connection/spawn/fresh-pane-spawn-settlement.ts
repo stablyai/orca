@@ -1,3 +1,4 @@
+import { ACCOUNT_RESTART_VIEW_CHANGED } from '../../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import {
   isObsoleteCodexRestartResult,
   failCodexAccountRestart
@@ -49,7 +50,7 @@ export function settleFreshPaneSpawn(
       if (session.disposed || generation !== session.transportStreamGeneration) {
         useAppStore.getState().updateCodexAccountRestart(accountToken, {
           phase: 'unresolved',
-          error: 'terminal_account_restart_view_changed'
+          error: ACCOUNT_RESTART_VIEW_CHANGED
         })
         return
       }

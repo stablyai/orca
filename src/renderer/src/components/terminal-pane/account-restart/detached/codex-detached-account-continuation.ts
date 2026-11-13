@@ -1,3 +1,4 @@
+import { ACCOUNT_RESTART_OUTCOME_UNKNOWN } from '../../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   setPaneSpawnDeferral,
@@ -128,7 +129,7 @@ export async function restartDetachedAccountRequest(
   const release = holdDetachedRestartSlot(accountRestartSlotKey(key, token), () => {
     useAppStore.getState().updateCodexAccountRestart(token, {
       phase: 'unresolved',
-      error: 'terminal_account_restart_outcome_unknown'
+      error: ACCOUNT_RESTART_OUTCOME_UNKNOWN
     })
     onSettled?.()
   })

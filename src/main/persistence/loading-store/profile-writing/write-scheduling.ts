@@ -88,8 +88,12 @@ export class WriteSchedulingOperations {
     }
   }
 
-  trackPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number {
-    return trackPtyBindingGeneration(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
+  trackPtyBindingGeneration(pane: { hostId: ExecutionHostId; leafId: string }): number {
+    return trackPtyBindingGeneration(
+      this[writeSchedulingOperationsContext].runtime,
+      pane.hostId,
+      pane.leafId
+    )
   }
   getPtyBindingEpoch(): string {
     return this[writeSchedulingOperationsContext].runtime.workspaceMetadataCursor.epoch

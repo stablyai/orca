@@ -218,8 +218,8 @@ export function installRestartHarness(
     persistPtyBinding: vi.fn(bindingOperations.persistPtyBinding.bind(bindingOperations)),
     retirePtyBinding: bindingOperations.retirePtyBinding.bind(bindingOperations),
     getPtyBindingEpoch: () => 'test-host',
-    trackPtyBindingGeneration: (hostId: ExecutionHostId, leafId: string) =>
-      trackPtyBindingGeneration(bindingRuntime, hostId, leafId),
+    trackPtyBindingGeneration: (pane: { hostId: ExecutionHostId; leafId: string }) =>
+      trackPtyBindingGeneration(bindingRuntime, pane.hostId, pane.leafId),
     getPtyBindingGeneration: (hostId: ExecutionHostId, leafId: string) =>
       ptyBindingGenerationOf(bindingRuntime, hostId, leafId)
   })

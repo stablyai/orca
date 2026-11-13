@@ -2,7 +2,7 @@ import { getTerminalNoticeLifetime } from '../provider-notices/terminal-notice-l
 import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
-import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getResourceExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toHostSessionPaneKey } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -33,6 +33,26 @@ export function isObsoleteCodexRestartResult(
   )
 }
 
+/** Claim the returned endpoint before the transport admits its process lifetime. */
+export function continueCodexAccountRestart(
+  token: CodexAccountRestartToken,
+  result?: { id: string; incarnationId?: string | null }
+): boolean {
+  const state = useAppStore.getState(),
+    request = currentCodexAccountRestart(state, token)
+  if (!request) {
+    return false
+  }
+  if (result && isObsoleteCodexRestartResult(request, result)) {
+    state.updateCodexAccountRestart(token, null)
+    return false
+  }
+  if (result) {
+    state.updateCodexAccountRestart(token, { resultPtyId: result.id })
+  }
+  return true
+}
+
 export function prepareCodexAccountRestart(
   request: CodexAccountRestart
 ): Promise<AccountRestartCondition | null> {
@@ -51,7 +71,7 @@ async function prepareCodexAccountRestartOwner(
   if (!request.leafId || !currentCodexAccountRestart(state, token)) {
     return null
   }
-  if (getExecutionHostIdForWorktree(state, request.worktreeId) !== request.hostId) {
+  if (getResourceExecutionHostIdForWorktree(state, request.worktreeId) !== request.hostId) {
     state.updateCodexAccountRestart(token, null)
     return null
   }
@@ -115,7 +135,8 @@ async function prepareCodexAccountRestartOwner(
     return null
   }
   if (
-    getExecutionHostIdForWorktree(useAppStore.getState(), request.worktreeId) !== request.hostId ||
+    getResourceExecutionHostIdForWorktree(useAppStore.getState(), request.worktreeId) !==
+      request.hostId ||
     runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), request.worktreeId) !== environmentId
   ) {
     throw new Error('terminal_pane_owner_changed')

@@ -55,7 +55,6 @@ export function selectCodexRestartStatus(
     previous.ptyIdsByTabId !== state.ptyIdsByTabId ||
     previous.tabsByWorktree !== state.tabsByWorktree ||
     previous.terminalLayoutsByTabId !== state.terminalLayoutsByTabId ||
-    previous.settings?.activeRuntimeEnvironmentId !== state.settings?.activeRuntimeEnvironmentId ||
     previous.repos !== state.repos ||
     previous.worktreesByRepo !== state.worktreesByRepo ||
     previous.detectedWorktreesByRepo !== state.detectedWorktreesByRepo ||
@@ -70,9 +69,6 @@ export function selectCodexRestartStatus(
     previous.removedRuntimeEnvironmentIds !== state.removedRuntimeEnvironmentIds
   ) {
     previous = {
-      settings: state.settings
-        ? { activeRuntimeEnvironmentId: state.settings.activeRuntimeEnvironmentId }
-        : null,
       repos: state.repos,
       worktreesByRepo: state.worktreesByRepo,
       detectedWorktreesByRepo: state.detectedWorktreesByRepo,

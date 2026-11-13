@@ -9,7 +9,7 @@ import {
   captureAgentAccountRestartResumeInput,
   buildPaneAccountRestartStartup
 } from '@/lib/agent-session/accounts/agent-account-restart-startup'
-import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getResourceExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   currentCodexRestartPanes,
   eligibleCodexRestartPtyIds,
@@ -17,10 +17,11 @@ import {
   currentCodexAccountRestart
 } from './codex-account-restart-continuation'
 import type { CodexAccountRestart } from './terminal-contracts'
-import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createCodexAccountRestartActions(
-  set: TerminalStoreSet
+  set: TerminalStoreSet,
+  get: TerminalStoreGet
 ): Pick<
   TerminalSlice,
   'claimCodexAccountRestart' | 'updateCodexAccountRestart' | 'retryCodexAccountRestart'
@@ -92,12 +93,12 @@ export function createCodexAccountRestartActions(
               tab?.startupCwd ??
               s.getKnownWorktreeById(
                 pane.worktreeId,
-                getExecutionHostIdForWorktree(s, pane.worktreeId)
+                getResourceExecutionHostIdForWorktree(s, pane.worktreeId)
               )?.path,
             connectionId: getConnectionIdFromState(s, pane.worktreeId),
             shellOverride: tab?.shellOverride,
             projectRuntime: getLocalProjectExecutionRuntimeContext(s, pane.worktreeId),
-            hostId: getExecutionHostIdForWorktree(s, pane.worktreeId),
+            hostId: getResourceExecutionHostIdForWorktree(s, pane.worktreeId),
             phase: startup ? 'accepted' : 'failed',
             startupInput: startup ? null : startupInput,
             startup,
@@ -176,40 +177,34 @@ export function createCodexAccountRestartActions(
           paneAccountRestarts: next,
           ...(nextNotices !== notices ? { codexRestartNoticeByPtyId: nextNotices } : {})
         }
-        if (
-          (patch?.phase === 'failed' ||
-            patch?.phase === 'deferred' ||
-            patch?.phase === 'unresolved') &&
-          patch.condition?.expected.kind === 'empty' &&
-          request.leafId
-        ) {
-          const layout = s.terminalLayoutsByTabId[request.tabId]
-          if (layout?.ptyIdsByLeafId?.[request.leafId] === request.oldPtyId) {
-            const bindings = { ...layout.ptyIdsByLeafId }
-            delete bindings[request.leafId]
-            const ids = (s.ptyIdsByTabId[request.tabId] ?? []).filter(
-              (id) => id !== request.oldPtyId
-            )
-            return {
-              ...common,
-              terminalLayoutsByTabId: {
-                ...s.terminalLayoutsByTabId,
-                [request.tabId]: { ...layout, ptyIdsByLeafId: bindings }
-              },
-              ptyIdsByTabId: { ...s.ptyIdsByTabId, [request.tabId]: ids },
-              tabsByWorktree: {
-                ...s.tabsByWorktree,
-                [request.worktreeId]: s.tabsByWorktree[request.worktreeId].map((tab) =>
-                  tab.id === request.tabId && tab.ptyId === request.oldPtyId
-                    ? { ...tab, ptyId: ids[0] ?? null }
-                    : tab
-                )
-              }
-            }
-          }
-        }
         return common
       })
+      if (
+        !patch ||
+        !['failed', 'deferred', 'unresolved'].includes(patch.phase ?? '') ||
+        patch.condition?.expected.kind !== 'empty'
+      ) {
+        return
+      }
+      const state = get(),
+        request = currentCodexAccountRestart(state, token)
+      if (!request?.leafId) {
+        return
+      }
+      const layout = state.terminalLayoutsByTabId[request.tabId]
+      if (layout?.ptyIdsByLeafId?.[request.leafId] !== request.oldPtyId) {
+        return
+      }
+      const bindings = { ...layout.ptyIdsByLeafId }
+      delete bindings[request.leafId]
+      state.setTabLayout(request.tabId, { ...layout, ptyIdsByLeafId: bindings })
+      const latest = get()
+      if (
+        currentCodexAccountRestart(latest, token) &&
+        !latest.terminalLayoutsByTabId[request.tabId]?.ptyIdsByLeafId?.[request.leafId]
+      ) {
+        latest.clearTabPtyId(request.tabId, request.oldPtyId)
+      }
     },
     retryCodexAccountRestart: (token) => {
       set((s) => {

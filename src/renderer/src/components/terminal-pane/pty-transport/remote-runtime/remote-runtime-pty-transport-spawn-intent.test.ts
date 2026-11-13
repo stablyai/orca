@@ -81,6 +81,41 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
     return transport.connect({ url: '', resumeSpawnIntent: 'automatic-restore', callbacks })
   }
 
+  it('does not bind or publish a late account-restart result whose pane owner changed', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtySpawn = vi.fn()
+    ensureResponse = okResponse({
+      terminal: {
+        handle: 'replacement',
+        incarnationId: 'obsolete-incarnation',
+        worktreeId: 'repo1::/remote/wt',
+        title: 'Codex'
+      }
+    })
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      launchAgent: 'codex',
+      tabId: 'tab-1',
+      leafId: LEAF_ID,
+      onPtySpawn
+    })
+    const result = await transport.connect({
+      url: '',
+      accountRestart: {
+        requestId: 'request',
+        attemptId: 'attempt',
+        hostEpoch: 'host',
+        pane: { worktreeId: 'repo1::/remote/wt', tabId: 'tab-1', leafId: LEAF_ID, tabCreatedAt: 1 },
+        expected: { kind: 'empty', bindingGeneration: 1 }
+      },
+      shouldContinue: (result) => result === undefined,
+      callbacks: {}
+    })
+    expect(result).toBeUndefined()
+    expect(transport.getPtyId()).toBeNull()
+    expect(onPtySpawn).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])(
     'keeps saved-origin negotiation stable through an unknown outcome (capability %s)',
     async (modern) => {
@@ -117,7 +152,7 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
       } else {
         expect(requests[0].params).not.toHaveProperty('resumeOrigin')
       }
-      expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
+      expect(onSpawnDeferred).toHaveBeenCalledWith('paused', 'terminal_spawn_deferred:paused')
     }
   )
 })

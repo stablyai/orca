@@ -203,8 +203,8 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
-    /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
-    shouldContinue?: () => boolean
+    /** Fence dispatch and, for account restarts, acceptance before binding a returned owner. */
+    shouldContinue?: (result?: { id: string; incarnationId?: string | null }) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
