@@ -1,5 +1,7 @@
-import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { providerDiagnostic } from '../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { readMessageText } from '../turns/zcode-message-text'
