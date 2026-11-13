@@ -80,7 +80,8 @@ const aptCalls = (): string[] =>
   existsSync(join(dir, 'apt')) ? readFileSync(join(dir, 'apt'), 'utf8').trim().split('\n') : []
 const installed = () => writeFileSync(join(dir, 'docker'), FAKE_DOCKER, { mode: 0o755 })
 
-describe('the docker shim (PARITY-DOCKER)', () => {
+// Real processes and sleeps: loaded CI hosts need headroom over vitest's 5 s default.
+describe('the docker shim (PARITY-DOCKER)', { timeout: 20_000 }, () => {
   it('first use installs the pinned packages, writes the daemon config, starts dockerd once, then runs plain docker', () => {
     const first = docker(['run', '--rm', 'hello-world'])
     expect(first.status).toBe(0)
@@ -147,7 +148,7 @@ describe('the docker shim (PARITY-DOCKER)', () => {
 
   it('says so when dockerd never comes up, with where its log is', () => {
     installed()
-    const failed = docker(['ps'], { FAKE_NEVER_UP: '1' })
+    const failed = docker(['ps'], { FAKE_NEVER_UP: '1', ORCA_DOCKER_WAIT_TICKS: '5' })
     expect(failed.status).toBe(1)
     expect(failed.stderr).toContain("Docker didn't start in this workspace")
     expect(failed.stderr).toContain('dockerd.log')
