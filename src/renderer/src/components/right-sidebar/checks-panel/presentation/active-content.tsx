@@ -131,6 +131,7 @@ export function ChecksPanelActiveContent({
       <div className="px-3 py-3 border-b border-border space-y-2.5">
         <ChecksPanelReviewHeader
           review={activeReview}
+          worktreeId={activeWorktreeId}
           isRefreshing={isRefreshing}
           canUnlinkReview={activeReview.provider === 'github' ? true : linkedGitLabMR !== null}
           modifierHintDestination={hostedReviewModifierHintDestination}

@@ -29,8 +29,6 @@ import {
   type PRWatchJobHooks,
   type PRWatchPlan
 } from './pr-refresh-watch-jobs'
-import { PRRefreshRetryState } from './pr-refresh-retry-state'
-import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import {
@@ -246,6 +244,9 @@ export function enqueuePRRefresh(
   }
 
   const enqueued = queue.enqueue(candidate, reason, priority, windowId)
+  if (reason !== 'visible') {
+    registerPRRefreshRequest(candidate, null, true)
+  }
   const pending = queue.get(key)
   if (pending && reason === 'visible' && candidate.isSelected && priority >= 80) {
     // Foreground exposure keeps retry gates while bypassing the list budget once.
@@ -286,31 +287,16 @@ export function reportVisiblePRRefreshCandidates(
   drainer.schedule()
 }
 
-export function _getVisiblePRRefreshWindowCountForTests(): number {
-  return visibility.windowCount
-}
-
-export function _getPRRefreshErrorBackoffCountForTests(): number {
-  return retry.errorBackoffCount
-}
-
-export function _getPRRefreshQueueSizeForTests(): number {
-  return queue.size
-}
-
-export function _getPRRefreshAliasCountForTests(key: string): number {
-  return queue.aliasCount(key)
-}
-
 export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
 ): Promise<PRSnapshotReply> {
+  const settle = registerPRRefreshRequest(candidate, 'd', true)
   return runImmediatePRRefresh(
     { queue, retry, visibility, events, drainer },
     candidate,
     reason,
     options
-  )
+  ).finally(settle)
 }

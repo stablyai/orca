@@ -43,8 +43,9 @@ import type {
   ProjectRowContentUpdate
 } from './projects/project-row-content'
 import type { PRRefreshState, PRRefreshStateClearToken } from './refresh/pr-refresh-state'
+import type { PRDetailRecoverySlice } from './pull-requests/pr-detail-recovery-actions'
 
-export type GitHubSlice = {
+export type GitHubSlice = PRDetailRecoverySlice & {
   githubSourceCollections: GitHubSourceCollections
   githubTaskCache: GitHubTaskRecordCache
   prCache: Record<string, CacheEntry<PRInfo>>

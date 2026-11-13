@@ -15,6 +15,11 @@ import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue } from './pr-refresh-queue'
 import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
+import {
+  prRefreshRequestDigest,
+  PRRefreshRequestRegistry,
+  queuedRequestId
+} from './pr-refresh-request-registry'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import {
   blockedWslDistroForPath,
@@ -29,8 +34,17 @@ import { PRRefreshAdmission } from './pr-refresh-admission'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
+/** Detail-recovery tickets run their entries and expire deadlines on this drainer's one timer. */
+export type PRRefreshRecoveryHooks = {
+  run: (entry: PRRefreshQueueEntry) => Promise<void>
+  tick: () => number | null
+}
+
 export class PRRefreshQueueDrainer {
   private draining = false
+  private recovery: PRRefreshRecoveryHooks | null = null
+  private recoveryDeadline: number | null = null
+  readonly requests = new PRRefreshRequestRegistry()
   registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
   readonly hostedJobs: HostedPRReadJobs
@@ -52,7 +66,15 @@ export class PRRefreshQueueDrainer {
       retry,
       events,
       this.watchJobs,
-      () => this.drain()
+      () => {
+        if (this.recovery) {
+          this.recoveryDeadline = this.recovery.tick()
+          if (this.recoveryDeadline !== null) {
+            this.schedule(Infinity)
+          }
+        }
+        return this.drain()
+      }
     )
     this.admission = new PRRefreshAdmission(queue, pacing, visibility, retry, events, this)
     this.hostedJobs = new HostedPRReadJobs(
@@ -64,8 +86,17 @@ export class PRRefreshQueueDrainer {
     )
   }
 
+  getRegistrationCheck(): PRRefreshRegistrationCheck | null {
+    return this.registrationCheck
+  }
+
+  setRecoveryHooks(hooks: PRRefreshRecoveryHooks | null): void {
+    this.recovery = hooks
+  }
+
   schedule(delay = 0): void {
-    this.scheduler.schedule(delay)
+    const recoveryDelay = this.recoveryDeadline === null ? Infinity : Math.max(0, this.recoveryDeadline - Date.now())
+    this.scheduler.schedule(Math.min(delay, recoveryDelay))
   }
 
   private async drain(): Promise<void> {
@@ -105,6 +136,13 @@ export class PRRefreshQueueDrainer {
           }
         }
 
+        if (next.recovery) {
+          await this.recovery?.run(next)
+          if (this.queue.get(next.key) === next && next.dueAt <= Date.now()) {
+            this.queue.delete(next.key)
+          }
+          continue
+        }
         this.queue.delete(next.key)
         if (this.hostedJobs.completeFromCache(next)) {
           continue

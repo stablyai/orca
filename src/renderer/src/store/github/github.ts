@@ -18,6 +18,7 @@ import { createWorkItemCountActions } from './work-items/work-item-count-actions
 import { createWorkItemAggregateActions } from './work-items/work-item-aggregate-actions'
 import { createWorkItemMutationActions } from './work-items/work-item-mutation-actions'
 import { createPullRequestActions } from './pull-requests/pull-request-actions'
+import { createPRDetailRecoveryActions } from './pull-requests/pr-detail-recovery-actions'
 import { createIssueActions } from './issues/issue-actions'
 import { createCheckActions } from './checks/check-actions'
 import { createCommentFetchActions } from './comments/comment-fetch-actions'
@@ -91,6 +92,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   ...createWorkItemAggregateActions(get),
   ...createWorkItemCountActions(get),
   ...createPullRequestActions(set, get),
+  ...createPRDetailRecoveryActions(set, get),
   ...createIssueActions(set, get),
   ...createCheckActions(set, get),
   ...createCommentFetchActions(set, get),

@@ -64,6 +64,64 @@ export const inflightCommentsRequests = new Map<string, InflightComments>()
 export const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 export const inflightProjectViewRequests = new Map<string, InflightProjectView>()
 export const prRequestGenerations = new Map<string, number>()
+// Each new direct PR lookup takes a never-reused token; a pending detail-recovery grant yields to it.
+const prLookupIntentTokens = new Map<string, number>()
+let prLookupIntentSequence = 0
+// Eviction raises this floor, so a forgotten key still reads newer than any token captured before it.
+let prLookupIntentEvictedFloor = 0
+const prLookupIntentListeners = new Set<(cacheKey: string) => void>()
+const prLookupIntentPins = new Map<string, number>()
+
+/** Hold the alias's current value in place while an owner compares it; release when done. */
+export function pinPRLookupIntent(cacheKey: string): () => void {
+  if (!prLookupIntentTokens.has(cacheKey)) {
+    prLookupIntentTokens.set(cacheKey, prLookupIntentEvictedFloor)
+  }
+  prLookupIntentPins.set(cacheKey, (prLookupIntentPins.get(cacheKey) ?? 0) + 1)
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    const remaining = (prLookupIntentPins.get(cacheKey) ?? 1) - 1
+    if (remaining > 0) {
+      prLookupIntentPins.set(cacheKey, remaining)
+    } else {
+      prLookupIntentPins.delete(cacheKey)
+    }
+  }
+}
+
+export function notePRLookupIntent(cacheKey: string): void {
+  prLookupIntentSequence += 1
+  prLookupIntentTokens.delete(cacheKey)
+  prLookupIntentTokens.set(cacheKey, prLookupIntentSequence)
+  for (const [oldestKey, oldestToken] of prLookupIntentTokens) {
+    if (prLookupIntentTokens.size <= 1_000) {
+      break
+    }
+    // A pinned alias has a live owner comparing its value; unrelated churn must not move it.
+    if (prLookupIntentPins.has(oldestKey)) {
+      continue
+    }
+    prLookupIntentTokens.delete(oldestKey)
+    prLookupIntentEvictedFloor = Math.max(prLookupIntentEvictedFloor, oldestToken)
+  }
+  for (const listener of prLookupIntentListeners) {
+    listener(cacheKey)
+  }
+}
+
+/** Strictly increases whenever new direct intent for the alias exists, including across eviction. */
+export function prLookupIntentRevision(cacheKey: string): number {
+  return prLookupIntentTokens.get(cacheKey) ?? prLookupIntentEvictedFloor
+}
+
+export function onPRLookupIntent(listener: (cacheKey: string) => void): () => void {
+  prLookupIntentListeners.add(listener)
+  return () => prLookupIntentListeners.delete(listener)
+}
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
   {

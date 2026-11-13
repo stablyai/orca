@@ -197,10 +197,13 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   }
   // Background refresh replaces the whole cache map; subscribe only to this repo/branch entry.
   const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
-  const pr: PRInfo | null = isStaleMergedGitHubReviewForHead(prCacheEntry, activeWorktree?.head)
+  const cachedPR: PRInfo | null = isStaleMergedGitHubReviewForHead(
+    prCacheEntry,
+    activeWorktree?.head
+  )
     ? null
     : (prCacheEntry?.data ?? null)
-  const prCachedHasPR = prCacheEntry ? pr !== null : null
+  const prCachedHasPR = prCacheEntry ? cachedPR !== null : null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
@@ -214,21 +217,23 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   // Branch lookup loses fork/deleted-head PRs; prefer known review numbers from metadata/cache.
   const linkedPR = activeWorktree?.linkedPR ?? null
   const suppressedGitHubPR = activeWorktree?.suppressedGitHubPR ?? null
-  const fallbackGitHubPRNumber = linkedPR == null ? (pr?.number ?? null) : null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
-  const activeReview: ChecksPanelReview | null = selectChecksPanelReview({
+  const reviewSelectionInput = {
     hostedReview,
-    pr,
+    pr: cachedPR,
     linkedPR,
     suppressedGitHubPR,
     linkedGitLabMR,
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
     linkedGiteaPR
-  })
+  }
+  // A cached PR the selector rejects (linked #7, cached #5) supplies no details, checks or Open.
+  const pr = selectUsableGitHubPR(reviewSelectionInput)
+  const activeReview: ChecksPanelReview | null = selectChecksPanelReview(reviewSelectionInput)
   const activeGitLabReview = isGitLabChecksPanelReview(activeReview) ? activeReview : null
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
@@ -241,6 +246,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
   )
   const prNumber = pr?.number ?? null
+  const fallbackGitHubPRNumber = linkedPR == null ? prNumber : null
 
   useEffect(() => {
     const expiryAt = getGitHubPRRefreshStateExpiryAt(rawPRRefreshState)
@@ -345,7 +351,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     activeConflictReview,
     prRefreshState,
     rawPRRefreshState,
-    prNumber
+    prNumber,
+    cachedPRNumber: cachedPR?.number ?? null
   }
 }
 
