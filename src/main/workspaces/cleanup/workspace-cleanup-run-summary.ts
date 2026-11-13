@@ -2,7 +2,7 @@ import type {
   WorkspaceCleanupEvaluation,
   WorkspaceCleanupEvaluationInput
 } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
-import { hasWorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
+import { hasWorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import {
   WORKSPACE_CLEANUP_REPORT_ROW_LIMIT,
   WORKSPACE_CLEANUP_ROW_IGNORED_FILE_LIMIT,
