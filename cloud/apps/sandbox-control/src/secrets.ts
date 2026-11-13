@@ -2,7 +2,7 @@
 //   GET    /v1/secrets?scope=org|personal|repo[&repo=owner/name]   -> {secrets: [metadata]}
 //   PUT    /v1/secrets/:scope/:NAME[?repo=owner/name] {value}       -> {secret: metadata}
 //   DELETE /v1/secrets/:scope/:NAME[?repo=owner/name]               -> {deleted: true}
-//   GET    /v1/secrets/activity?view=team|personal                  -> {events, nextCursor} (secret-events.ts)
+//   GET    /v1/secrets/activity?view=personal                       -> {events, nextCursor} (secret-events.ts)
 // Values are write-only: no route returns them, only a last-4 hint for long values. Org secrets
 // (and repo secrets of an org account) need owner/admin of that org to write; any member may list
 // names. Personal secrets belong to the user alone. Values are never logged.
@@ -500,8 +500,10 @@ export async function handleSecretsRoute(
     if (request.method !== 'GET') {
       return json({ error: 'not_found' }, 404)
     }
+    // Personal only: the team's secret events are read through the unified Enterprise audit log
+    // (GET /v1/audit-log), which gates them on the plan's audit_log entitlement and owner/admin.
     const view = url.searchParams.get('view') ?? 'personal'
-    if (view !== 'team' && view !== 'personal') {
+    if (view !== 'personal') {
       return json({ error: 'invalid_request', reason: 'invalid_view' }, 400)
     }
     const allowed = activityAccounts(caller, view, personalOwner(caller.userId, caller.dev === true))
