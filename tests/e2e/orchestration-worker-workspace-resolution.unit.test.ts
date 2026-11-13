@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RepoWorktreeResolutionScan from '../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan'
 
 const electronMocks = vi.hoisted(() => {
   const ipcMain = {
@@ -16,9 +17,13 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 
 const scanLocalRepoWorktreesForResolution = vi.hoisted(() => vi.fn())
-vi.mock('../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan', () => ({
-  scanLocalRepoWorktreesForResolution
-}))
+vi.mock(
+  '../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RepoWorktreeResolutionScan>()),
+    scanLocalRepoWorktreesForResolution
+  })
+)
 
 import '../../src/main/runtime/orchestration/db/contract-constants'
 import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'

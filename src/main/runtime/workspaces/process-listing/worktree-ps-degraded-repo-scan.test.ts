@@ -1,5 +1,7 @@
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
+import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 
 const electronMocks = vi.hoisted(() => {
   const ipcMain = {
@@ -103,8 +105,12 @@ function makeStore(options: StoreOptions = {}) {
     ],
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-      metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta }
+    setWorktreeMeta: ({ id, hostId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+      const existing = metaById[id]
+      metaById[id] = mergeWorktreeMetaForWrite(existing, meta, {
+        instanceId: meta.instanceId ?? existing?.instanceId ?? randomUUID(),
+        hostId
+      })
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
