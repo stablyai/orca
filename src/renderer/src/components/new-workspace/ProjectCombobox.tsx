@@ -27,9 +27,7 @@ import type { ProjectComboboxProps } from './project-combobox-props'
 import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import {
   cloudRepoKey,
-  cloudRowKeys,
-  commitCloudRow,
-  filterCloudRepos,
+  useCloudRows,
   ProjectComboboxCloudSection,
   useOpenOnSignal
 } from './ProjectComboboxCloudSection'
@@ -56,6 +54,7 @@ export default function ProjectCombobox({
   onCloudRepoSelected,
   onMoreCloudAccess: onMoreCloudAccessProp,
   onShowMoreCloudRepos = null,
+  cloudReposRetry = null,
   openSignal = 0,
   focusSignal = 0
 }: ProjectComboboxProps): React.JSX.Element {
@@ -70,6 +69,13 @@ export default function ProjectCombobox({
   // PROJ-MENU: with the Add project menu, "give Orca Cloud access" lives there, not in the list.
   const { addProjectMenu: addProjectMenuWithCloud, listMoreAccess: onMoreCloudAccess } =
     withCloudAddProjectEntry(addProjectMenu, onMoreCloudAccessProp)
+  const cloud = useCloudRows({
+    cloudRepos,
+    cloudReposRetry,
+    onShowMoreCloudRepos,
+    onMoreCloudAccess,
+    onCloudRepoSelected
+  })
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
   const deriveRowKeys = useCallback(
     (query: string): string[] => [
@@ -78,10 +84,10 @@ export default function ProjectCombobox({
         query,
         recentIds
       ).flatMap((section) => section.items.map((match) => match.option.id)),
-      ...cloudRowKeys(cloudRepos, query, onShowMoreCloudRepos, onMoreCloudAccess),
+      ...cloud.keys(query),
       ...(hasAddProjectRow ? [ADD_PROJECT_KEY] : [])
     ],
-    [cloudRepos, hasAddProjectRow, onMoreCloudAccess, onShowMoreCloudRepos, options, recentIds]
+    [cloud, hasAddProjectRow, options, recentIds]
   )
   const {
     query,
@@ -141,22 +147,18 @@ export default function ProjectCombobox({
     }
   })
   const ambiguous = useMemo(() => getAmbiguousProjectOptionIds(options), [options])
-  const cloudMatches = useMemo(
-    () => (cloudRepos ? filterCloudRepos(cloudRepos, query) : []),
-    [cloudRepos, query]
-  )
+  const cloudMatches = useMemo(() => cloud.matches(query), [cloud, query])
   // A picked cloud-only repository stands in for the project in the field (D4).
   const selected = cloudRepoValue ? null : (options.find((option) => option.id === value) ?? null)
   const committed = (selected !== null || cloudRepoValue !== null) && query.length === 0
   const committedName = cloudRepoValue ?? selected?.displayName ?? ''
 
-  const cloudRows = { cloudRepos, onShowMoreCloudRepos, onMoreCloudAccess, onCloudRepoSelected }
   const commit = (key: string | null): void => {
     if (key === null) {
       return
     }
     // Show more keeps the list open: the next page appends in place.
-    const cloudRow = commitCloudRow(key, cloudRows)
+    const cloudRow = cloud.commit(key)
     if (cloudRow === 'kept-open') {
       return
     }
@@ -390,18 +392,17 @@ export default function ProjectCombobox({
                   ))}
                 </div>
               ))}
-              {cloudRepos ? (
-                <ProjectComboboxCloudSection
-                  repos={cloudMatches}
-                  value={cloudRepoValue ? cloudRepoKey(cloudRepoValue) : null}
-                  armedKey={armedKey}
-                  armedId={`${listId}-armed`}
-                  onArm={armClosingCascade}
-                  onCommit={commit}
-                  showMoreAccess={Boolean(onMoreCloudAccess)}
-                  showMoreRepos={Boolean(onShowMoreCloudRepos)}
-                />
-              ) : null}
+              <ProjectComboboxCloudSection
+                repos={cloudRepos ? cloudMatches : null}
+                value={cloudRepoValue ? cloudRepoKey(cloudRepoValue) : null}
+                armedKey={armedKey}
+                armedId={`${listId}-armed`}
+                onArm={armClosingCascade}
+                onCommit={commit}
+                showMoreAccess={Boolean(onMoreCloudAccess)}
+                showMoreRepos={Boolean(onShowMoreCloudRepos)}
+                retry={cloudReposRetry}
+              />
             </div>
             <ProjectComboboxAddProjectOption
               optionId={armedKey === ADD_PROJECT_KEY ? `${listId}-armed` : undefined}

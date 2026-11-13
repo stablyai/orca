@@ -13,11 +13,15 @@ afterEach(cleanup)
 function cloudOnly(
   moreAccess: () => void,
   githubHandoff: CloudOnlyRepo['githubHandoff'] = 'idle',
-  checkGitHubAgain: () => void = () => {}
+  checkGitHubAgain: () => void = () => {},
+  overrides: Partial<CloudOnlyRepo> = {}
 ): CloudOnlyRepo {
   return {
     repos: [],
     showMore: null,
+    retryRepos: null,
+    retryingRepos: false,
+    ...overrides,
     picked: null,
     folderProject: false,
     githubStep: null,
@@ -34,7 +38,8 @@ function renderSection(
   recipeId: string | null,
   moreAccess: () => void,
   githubHandoff: CloudOnlyRepo['githubHandoff'] = 'idle',
-  checkGitHubAgain: () => void = () => {}
+  checkGitHubAgain: () => void = () => {},
+  overrides: Partial<CloudOnlyRepo> = {}
 ): void {
   render(
     <TooltipProvider>
@@ -61,7 +66,7 @@ function renderSection(
         cloudStart={{
           onSelectOrcaCloud: () => {},
           onUserPick: () => {},
-          cloudOnly: cloudOnly(moreAccess, githubHandoff, checkGitHubAgain)
+          cloudOnly: cloudOnly(moreAccess, githubHandoff, checkGitHubAgain, overrides)
         }}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
@@ -119,5 +124,57 @@ describe('back from GitHub (REPO-ACCESS-REFRESH)', () => {
     await user.click(screen.getByRole('button', { name: 'Check again' }))
     expect(checkAgain).toHaveBeenCalledOnce()
     expect(screen.getByRole('combobox', { name: 'Project' })).toBeTruthy()
+  })
+})
+
+describe("GitHub's list couldn't be read (GH-LIST-MISSING)", () => {
+  it('the Project picker keeps a GitHub section that says so, with Retry', async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'idle', () => {}, {
+      repos: null,
+      retryRepos: retry
+    })
+    await user.click(screen.getByRole('combobox', { name: 'Project' }))
+    expect(await screen.findByText('Couldn’t load GitHub repositories.')).toBeTruthy()
+    await user.click(screen.getByRole('option', { name: 'Retry' }))
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('the arrow keys land on Retry like a row, and Enter runs it', async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'idle', () => {}, {
+      repos: null,
+      retryRepos: retry
+    })
+    await user.click(screen.getByRole('combobox', { name: 'Project' }))
+    await screen.findByRole('option', { name: 'Retry' })
+    // No projects here: the first rows are Retry, then Add project.
+    for (
+      let i = 0;
+      i < 3 &&
+      screen.getByRole('option', { name: 'Retry' }).getAttribute('aria-selected') !== 'true';
+      i++
+    ) {
+      await user.keyboard('{ArrowDown}')
+    }
+    expect(screen.getByRole('option', { name: 'Retry' }).getAttribute('aria-selected')).toBe('true')
+    await user.keyboard('{Enter}')
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it("while it reads again, Loading… replaces Retry and can't be pressed twice", async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'idle', () => {}, {
+      repos: null,
+      retryRepos: retry,
+      retryingRepos: true
+    })
+    await user.click(screen.getByRole('combobox', { name: 'Project' }))
+    await user.click(await screen.findByRole('option', { name: 'Loading…' }))
+    expect(screen.queryByRole('option', { name: 'Retry' })).toBeNull()
+    expect(retry).not.toHaveBeenCalled()
   })
 })

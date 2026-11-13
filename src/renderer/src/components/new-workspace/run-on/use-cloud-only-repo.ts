@@ -17,6 +17,10 @@ export type CloudOnlyRepo = {
   repos: readonly OrcaCloudGitHubRepository[] | null
   /** Fetches GitHub's next pages; null when everything is listed. */
   showMore: (() => void) | null
+  /** GitHub's list couldn't be read: read it again. Null while it reads fine. */
+  retryRepos: (() => void) | null
+  /** That Retry is reading now. */
+  retryingRepos: boolean
   picked: OrcaCloudGitHubRepository | null
   /** The project is a plain folder: Orca Cloud needs a GitHub repository (D3/D4). */
   folderProject: boolean
@@ -56,7 +60,10 @@ export function useCloudOnlyRepo({
   // D4 rows show while Orca Cloud is picked, or for a folder, which can only start from GitHub.
   const enabled = (cloudSelected || folderProject) && cloudOffered
   const [refreshSignal, setRefreshSignal] = useState(0)
-  const { repos, showMore } = useOrcaCloudGitHubRepositories(enabled && signedIn, refreshSignal)
+  const { repos, showMore, unavailable, retrying, retry } = useOrcaCloudGitHubRepositories(
+    enabled && signedIn,
+    refreshSignal
+  )
   const [pickedName, setPickedName] = useState<string | null>(initialPicked)
   const handoff = useGitHubAccessHandoff({
     repos,
@@ -114,6 +121,8 @@ export function useCloudOnlyRepo({
   return {
     repos,
     showMore,
+    retryRepos: unavailable ? retry : null,
+    retryingRepos: retrying,
     picked,
     githubStep: githubStep ?? folderStep,
     folderProject,

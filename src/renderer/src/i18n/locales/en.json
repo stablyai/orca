@@ -23933,7 +23933,10 @@
         "addRepositoryMenu": "Add a GitHub repository…",
         "waitingForGitHubAccess": "Waiting for GitHub access…",
         "noNewRepositoryYet": "No new repository yet.",
-        "checkAgain": "Check again"
+        "checkAgain": "Check again",
+        "reposUnavailable": "Couldn’t load GitHub repositories.",
+        "retryRepos": "Retry",
+        "reposLoading": "Loading…"
       },
       "agentLabel": "Agent"
     },
