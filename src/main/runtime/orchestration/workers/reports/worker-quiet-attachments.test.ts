@@ -143,7 +143,7 @@ it.each([
     fixture.changes.notify(new Set(['status']))
     vi.advanceTimersByTime(840_000)
     expect(noticeTimes()).toEqual([900_000])
-    vi.advanceTimersByTime(reminderAt - Date.now() - 60_000)
+    vi.advanceTimersByTime(reminderAt - 3_000_000 - 60_000)
     expect(noticeTimes()).toEqual([900_000])
     vi.advanceTimersByTime(60_000)
     expect(noticeTimes()).toEqual([900_000, reminderAt])
