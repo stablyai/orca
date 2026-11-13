@@ -79,6 +79,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',
+  'text-file': '--text-file <path>    Read the terminal text payload from a UTF-8 file',
   'text-stdin': '--text-stdin          Read text payload from stdin',
   'task-id': '--task-id <id>        Task id to include in orchestration payload JSON',
   'task-title': '--task-title <text>    Concise title for an orchestration task',

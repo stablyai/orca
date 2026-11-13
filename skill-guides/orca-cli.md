@@ -233,6 +233,8 @@ ORCA terminal read --terminal <handle> --screen --json
 ORCA terminal read --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --wait-submit 10 --json
+ORCA terminal send --terminal <handle> --text-file ./prompt.txt --enter --wait-submit 10 --json
+ORCA terminal send --terminal <handle> --text - --enter --json < ./prompt.txt
 ORCA terminal send --text "echo hello" --enter --json
 ORCA terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
 ORCA terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
@@ -263,6 +265,7 @@ Terminal rules:
 - `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.
 - `--screen` and `--cursor` are mutually exclusive: a screen read is the current frame and has no history to page.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
+- To keep the payload out of process arguments, use `--text -` (read stdin until EOF) or `--text-file <path>` (read a UTF-8 file relative to the CLI working directory). Do not combine `--text` and `--text-file`. Both preserve whitespace, trailing newlines, and control bytes, with the same `--enter`, `--interrupt`, `--wait-submit`, and `--retry-request` behavior as inline text. Without `--enter`, control bytes are written verbatim.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.
 - A text-plus-Enter agent prompt is refused with `agent_prompt_blocked` while the agent shows a permission or trust menu. To answer the menu, send `--text` and `--enter` as separate commands.
 - A text-plus-Enter agent prompt returns a durable request ID and additive stages: `input_accepted`, then `turn_started` once the agent's turn is proven. Raw text-only, bare Enter, interrupt, and terminal query replies keep their existing direct-input behavior.

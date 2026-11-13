@@ -35,12 +35,13 @@ export async function readCommandBody(
   return body
 }
 
-/** Reads `--<flag> <text>` or `--<flag>-file <path|->`, refusing both. */
+/** Reads text or a UTF-8 file/stdin, refusing conflicting sources. */
 export async function readTextOrFileFlag(
   flags: Map<string, string | boolean>,
   cwd: string,
   flag: string,
-  required: boolean
+  required: boolean,
+  options: { textDashIsStdin?: boolean } = {}
 ): Promise<string | undefined> {
   const fileFlag = `${flag}-file`
   const hasText = flags.has(flag)
@@ -57,9 +58,11 @@ export async function readTextOrFileFlag(
     }
     return undefined
   }
-  return hasText
-    ? getRequiredStringFlagAllowingEmpty(flags, flag)
-    : readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd)
+  if (hasText) {
+    const text = getRequiredStringFlagAllowingEmpty(flags, flag)
+    return text === '-' && options.textDashIsStdin ? readBodyFile('-', cwd) : text
+  }
+  return readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd)
 }
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {
@@ -67,7 +70,7 @@ async function readBodyFile(path: string, cwd: string): Promise<string> {
     return readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
   }
   if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
+    throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
   }
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) {

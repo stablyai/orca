@@ -198,6 +198,8 @@ orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --screen --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
 orca terminal send --terminal <handle> --text "continue" --enter --json
+orca terminal send --terminal <handle> --text-file ./prompt.txt --enter --json
+orca terminal send --terminal <handle> --text - --enter --json < ./prompt.txt
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
@@ -209,6 +211,8 @@ orca terminal close --worktree active --all --json
 ```
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
+
+Use `--text -` to read stdin until EOF or `--text-file <path>` to read a UTF-8 file without putting the payload in process arguments. Relative file paths use the CLI working directory. `--text` and `--text-file` are mutually exclusive. Whitespace, trailing newlines, and control bytes are preserved; `--enter`, `--interrupt`, `--wait-submit`, and `--retry-request` work as with inline text. Without `--enter`, control bytes are written verbatim.
 
 Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
 terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that

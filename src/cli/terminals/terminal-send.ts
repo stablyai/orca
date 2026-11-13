@@ -4,7 +4,8 @@ import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/termin
 import type { CommandHandler } from '../dispatch/dispatch'
 import { formatTerminalSend, terminalSendWarnings } from './terminal-format'
 import { printResult } from '../output/command-result-output'
-import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../arguments/flags'
+import { getOptionalPositiveIntegerFlag } from '../arguments/flags'
+import { readTextOrFileFlag } from '../arguments/command-body-input'
 import { readRetryRequestFlag } from '../orchestration/recovery/retry-request-flag'
 import { RuntimeClientError } from '../runtime/types'
 import { attachUnverifiedTerminalPromptRecovery } from '../runtime/terminal-prompt-mutation-recovery'
@@ -13,7 +14,8 @@ import { getTerminalHandle } from './terminal-selector'
 type TerminalSendResult = { send: RuntimeTerminalSend; warnings?: string[] }
 
 export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
-  const text = getOptionalStringFlag(flags, 'text')
+  const text =
+    (await readTextOrFileFlag(flags, cwd, 'text', false, { textDashIsStdin: true })) || undefined
   const enter = flags.get('enter') === true
   const interrupt = flags.get('interrupt') === true
   const promptCandidate = !!text && enter && !interrupt
@@ -22,7 +24,7 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
   if ((retryRequest || waitSubmitSeconds) && !promptCandidate) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '--retry-request and --wait-submit require --text with --enter and without --interrupt.'
+      '--retry-request and --wait-submit require --text or --text-file with --enter and without --interrupt.'
     )
   }
   if (waitSubmitSeconds && waitSubmitSeconds > 3600) {
