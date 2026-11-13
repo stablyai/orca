@@ -2,7 +2,7 @@
 // minted for another team is refused with 409 org_mismatch instead of acting on the wrong team. A token minted
 // before a role change is refused (401 stale_token) where it would create, read secrets, or reach GitHub.
 import { describe, expect, it } from 'vitest'
-import { recordMemberChange } from '../src/member-changes'
+import { AUTH_IAT_BACKDATE_MS, recordMemberChange } from '../src/member-changes'
 import { createHarness } from './harness'
 
 async function setup() {
@@ -58,7 +58,8 @@ describe('x-orca-org: a token for another team is refused', () => {
 describe('a token minted before a role change: 401 stale_token where it matters', () => {
   it('create, secrets and GitHub refuse it; a fresh token works', async () => {
     const { h, teamToken } = await setup()
-    h.advance(2_000)
+    // Minted well before the change, even allowing for auth's 30 s iat backdate.
+    h.advance(AUTH_IAT_BACKDATE_MS + 2_000)
     await recordMemberChange(h.env.SANDBOX_DB, 'org:acme', 'alice', 'role', h.now())
     const create = await h.call('POST', '/v1/sandboxes', { bearer: teamToken, body: { workspaceId: 'ws-2', machineSize: 'standard' } })
     expect(create.status).toBe(401)
@@ -68,5 +69,15 @@ describe('a token minted before a role change: 401 stale_token where it matters'
     h.advance(2_000)
     const fresh = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
     expect((await h.call('GET', '/v1/secrets', { bearer: fresh })).body.reason).not.toBe('stale_token')
+  })
+
+  it('a token re-minted just after the change (iat backdated 30 s by auth) is fresh, so the retry works', async () => {
+    const { h } = await setup()
+    // Auth stamps iat = mint time - 30 s: a token minted 5 s after the change carries iat 25 s before it.
+    const reminted = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
+    h.advance(25_000)
+    await recordMemberChange(h.env.SANDBOX_DB, 'org:acme', 'alice', 'role', h.now())
+    const res = await h.call('GET', '/v1/secrets', { bearer: reminted })
+    expect(res.body?.reason).not.toBe('stale_token')
   })
 })

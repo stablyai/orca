@@ -47,7 +47,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers'
 import type { RunnerBuild } from './build-runner'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { cachedCreateTiming } from './create-timing'
-import { creatorLeftAccount, tokenPredatesMemberChange } from './member-changes'
+import { creatorLeftAccount, tokenMintedBeforeMemberChange } from './member-changes'
 import { authenticateDesktop, OrgMismatchError } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
@@ -1417,7 +1417,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
       }
-      if (await tokenPredatesMemberChange(env.SANDBOX_DB, caller)) {
+      if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
         // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
@@ -1446,7 +1446,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
       }
-      if (await tokenPredatesMemberChange(env.SANDBOX_DB, caller)) {
+      if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
         // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
@@ -1524,7 +1524,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
       }
-      if (await tokenPredatesMemberChange(env.SANDBOX_DB, caller)) {
+      if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
         // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
@@ -1674,7 +1674,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (request.method !== 'POST') {
         return fail('not_found', 404)
       }
-      if (await tokenPredatesMemberChange(life.db, caller)) {
+      if (await tokenMintedBeforeMemberChange(life.db, caller)) {
         // ORG-TOKEN-STALE: never create (and bill) with a token minted before a role change.
         return fail('unauthorized', 401, 'stale_token')
       }
