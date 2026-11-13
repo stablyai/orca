@@ -7,7 +7,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type {
   CloudApiApproval,
-  CloudApiAuditPage,
   CloudApiCreatedKey,
   CloudApiGrant,
   CloudApiKey,
@@ -20,7 +19,7 @@ import type {
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { ApproveAppDialog } from './ApproveAppDialog'
-import { AccessLinks, AuditLog, OrgSettings } from './CloudApiKeysSections'
+import { AccessLinks, OrgSettings } from './CloudApiKeysSections'
 import { CloudConfirmDialog } from './CloudConfirmDialog'
 import { CloudConnectedApps } from './CloudConnectedApps'
 import type { CloudLoadState } from './cloud-load-state'
@@ -37,7 +36,6 @@ export type CloudApiKeysViewProps = {
   keys: CloudLoadState<CloudApiKeyList>
   settings: CloudLoadState<CloudApiSettings>
   /** Null hides the activity log (members cannot read it). */
-  audit: CloudLoadState<CloudApiAuditPage> | null
   now: number
   onRefresh: () => void
   /** A refresh is running while the current data stays on screen. */
@@ -46,7 +44,6 @@ export type CloudApiKeysViewProps = {
   /** Resolves to an error message or null. */
   onRevoke: (key: CloudApiKey) => Promise<string | null>
   onToggleVmCli: (enabled: boolean) => Promise<string | null>
-  onLoadAudit: () => void
   grants: CloudLoadState<CloudApiGrant[]>
   onRevokeGrant: (grant: CloudApiGrant) => Promise<string | null>
   onRefreshGrants: () => void
@@ -58,7 +55,6 @@ export type CloudApiKeysViewProps = {
     create?: boolean
     created?: CloudApiCreatedKey
     revokeKeyId?: string
-    auditOpen?: boolean
     approve?: boolean
     approval?: CloudApiApproval
     revokeGrantId?: string
@@ -252,16 +248,6 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
           settings={props.settings}
           onToggle={props.onToggleVmCli}
         />
-
-        {props.audit ? (
-          <AuditLog
-            audit={props.audit}
-            now={props.now}
-            viewer={viewer}
-            initiallyOpen={initial?.auditOpen ?? false}
-            onLoad={props.onLoadAudit}
-          />
-        ) : null}
       </div>
 
       <CreateApiKeyDialog
