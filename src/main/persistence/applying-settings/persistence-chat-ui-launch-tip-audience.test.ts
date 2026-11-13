@@ -137,3 +137,31 @@ it('holds a re-offer back while the telemetry banner is unresolved', () => {
     restoreConsentEnv(env)
   }
 })
+
+it('checks only applicable completion IDs while consent is pending', () => {
+  const env = stashAndClearConsentEnv()
+  try {
+    writeDataFile({
+      ui: { featureTipsSeenIds: ['chat-ui-here'] },
+      settings: {
+        experimentalNativeChat: false,
+        telemetry: { ...EXISTING_TELEMETRY, optedIn: null, chatUiLaunchTipCohort: 'control' }
+      }
+    })
+    const store = createStore()
+    const projection = vi.spyOn(store, 'getUI')
+    expect(ensureChatUiLaunchTipCohort(store)).toBe('control')
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(true)
+    store.updateUI({ featureTipsSeenIds: ['chat-ui-here-v2'] })
+    projection.mockClear()
+    expect(ensureChatUiLaunchTipCohort(store)).toBe('control')
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
+    expect(projection).not.toHaveBeenCalled()
+    store.updateSettings({ telemetry: { ...EXISTING_TELEMETRY, chatUiLaunchTipCohort: 'control' } })
+    const seen = vi.spyOn(store, 'getFeatureTipsSeenIds')
+    ensureChatUiLaunchTipCohort(store)
+    expect(seen).not.toHaveBeenCalled()
+  } finally {
+    restoreConsentEnv(env)
+  }
+})

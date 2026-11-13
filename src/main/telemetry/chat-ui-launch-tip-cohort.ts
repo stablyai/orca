@@ -20,11 +20,12 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
     const saved = telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort
     if (
       telemetry &&
+      resolveConsent(settings).effective === 'pending_banner' &&
       store.getChatUiLaunchTipVariant() !== 'none' &&
       // Why: some profiles carry the generic id without having seen the tip; check the id that applies.
-      !store.getUI().featureTipsSeenIds?.includes(getFeatureTipSeenId('chat-ui-here', telemetry))
+      !store.getFeatureTipsSeenIds().includes(getFeatureTipSeenId('chat-ui-here', telemetry))
     ) {
-      deferredForConsent = resolveConsent(settings).effective === 'pending_banner'
+      deferredForConsent = true
     }
     return saved
   } catch (err) {

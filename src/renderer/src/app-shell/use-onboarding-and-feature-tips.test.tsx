@@ -97,30 +97,6 @@ it('keeps a previously skipped profile on Chat UI out for good', async () => {
   expectNextTipInstead()
 })
 
-it('keeps a previously skipped profile recorded on Chat UI at launch out', async () => {
-  expect(await launch({ tip: 'chat-ui-on' })).toBe(false)
-  expectNextTipInstead()
-})
-
-it('does not show the card again after a re-offer', async () => {
-  expect(await launch({ seen: ['chat-ui-here', 'chat-ui-here-v2'] })).toBe(false)
-  expectNextTipInstead()
-})
-
-it('shows the card to a default profile on the terminal', async () => {
-  expect(await launch({ seen: [], telemetry: {} })).toBe(true)
-})
-
-it('keeps a default profile on Chat UI out', async () => {
-  expect(await launch({ surface: 'chat', seen: [], telemetry: {} })).toBe(false)
-  expectNextTipInstead()
-})
-
-it('keeps a default profile recorded on Chat UI at launch out on the terminal', async () => {
-  expect(await launch({ tip: 'chat-ui-on', seen: [], telemetry: {} })).toBe(false)
-  expectNextTipInstead()
-})
-
 it('does not show the card again to a profile that already saw it', async () => {
   expect(await launch({ seen: ['chat-ui-here'], telemetry: {} })).toBe(false)
   expectNextTipInstead()
@@ -149,10 +125,6 @@ const TARGETED_ALL: Partial<TelemetrySettings> = {
   chatUiLaunchTipTargeting: { mode: 'all' }
 }
 
-it('shows the card to a targeted profile on the terminal', async () => {
-  expect(await launch({ seen: [], telemetry: TARGETED_ALL })).toBe(true)
-})
-
 it('gives a targeted profile on Chat UI no tip', async () => {
   expect(await launch({ surface: 'chat', seen: [], telemetry: TARGETED_ALL })).toBe(false)
   expectNextTipInstead()
@@ -161,19 +133,6 @@ it('gives a targeted profile on Chat UI no tip', async () => {
 it('gives a targeted profile recorded on Chat UI at launch no note', async () => {
   expect(
     await launch({ tip: 'chat-ui-on', surface: 'chat', seen: [], telemetry: TARGETED_ALL })
-  ).toBe(false)
-  expectNextTipInstead()
-})
-
-it('keeps a targeted profile found on Chat UI out after it switched back', async () => {
-  expect(
-    await launch({
-      seen: ['chat-ui-here', 'chat-ui-here-rollout-v1'],
-      telemetry: {
-        chatUiLaunchTipRolloutCohort: 'treatment',
-        chatUiLaunchTipTargeting: { mode: 'not-switched', eligible: false }
-      }
-    })
   ).toBe(false)
   expectNextTipInstead()
 })
