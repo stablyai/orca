@@ -48,7 +48,8 @@ describe('cloudRenewInPlaceModel (design-squad per-step copy)', () => {
     const shown = model({ phase: 'saved' })
     expect(shown.title).toBe('Your Claude sign-in expired')
     expect(shown.paste).toMatchObject({ submitting: true })
-    expect(shown.paste?.setupCode?.submitLabel).toBe('Checking the code…')
+    expect(shown.detail).toBe('Checking the code…')
+    expect(shown.paste?.setupCode?.submitLabel).toBe('Finish renewing')
     expect(shown.primary?.action.kind).not.toBe('renew')
     expect(shown.noClose).toBe(true)
     expect(shown.settingsLink).toBeUndefined()
@@ -96,7 +97,8 @@ describe('cloudRenewInPlaceModel (design-squad per-step copy)', () => {
       code: 'checking'
     })
     expect(shown.paste).toMatchObject({ submitting: true })
-    expect(shown.paste?.setupCode?.submitLabel).toBe('Checking the code…')
+    expect(shown.detail).toBe('Checking the code…')
+    expect(shown.paste?.setupCode?.submitLabel).toBe('Finish renewing')
   })
 
   it('4 rejected: "Code didn\'t work", the newest-code detail, [Open again] and the Settings link', () => {

@@ -73,19 +73,21 @@ export function cloudRenewInPlaceModel(args: {
           ? {
               setupCode: {
                 ...flow.paste.setupCode,
-                submitLabel:
-                  setup.phase === 'browser' && setup.code === 'checking'
-                    ? flow.paste.setupCode.submitLabel
-                    : finishRenewing
+                // While checking, the disabled button keeps its name; "Checking" is said once, in
+                // the detail (design-squad).
+                submitLabel: finishRenewing
               }
             }
           : {}),
         ...(flow.paste.submitLabel ? { submitLabel: finishRenewing } : {})
       }
     : null
+  const checking = setup.phase === 'browser' && setup.code === 'checking'
   return {
     ...flow,
     title: keepsTitle ? flow.title : expired.title,
+    // The browser step is done by now: say what is happening, not what to do.
+    ...(checking ? { detail: t('agentSignInStrip.setupCodeChecking', 'Checking the code…') } : {}),
     paste,
     // A setup that failed outright starts again from Renew.
     primary:
