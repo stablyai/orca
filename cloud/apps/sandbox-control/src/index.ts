@@ -161,6 +161,7 @@ import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
 import { createTransferNotifier, dismissNotice, listNotices, notifyPreviousOwner, type TransferNotifier } from './owner-transfer-notices'
+import { createStepTimer, ownerTransferTimingLine } from './owner-transfer-timing'
 import { createTeamMembershipCheck, type TeamMembershipCheck } from './team-membership'
 import { audit, auditSession } from './api/audit'
 import { ALL_EVENT_FAMILIES, AUTH_EVENT_FAMILIES, AuditIngestError, AuditIngestSchema, BILLING_EVENT_FAMILIES, ingestAuditEvents } from './api/audit-ingest'
@@ -2342,9 +2343,23 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         }
       }
       const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
+      // TRANSFER-SLOW-N60: the desktop's confirmation waits for this whole request, so a completed
+      // hand-off logs how long each part took (owner-transfer-timing.ts).
+      const timer = createStepTimer(clock)
+      const confirmNewOwner = deps.teamMembership ?? createTeamMembershipCheck(env)
       let patched: Awaited<ReturnType<typeof patchWorkspace>> =
         Object.keys(rest).length > 0
-          ? await patchWorkspace(db, caller, current, rest, now, deps.teamMembership ?? createTeamMembershipCheck(env), (running) => suspendSandbox(life, running))
+          ? await timer.step('patch', () =>
+              patchWorkspace(
+                db,
+                caller,
+                current,
+                rest,
+                now,
+                (accountId, userId) => timer.step('membership', () => confirmNewOwner(accountId, userId)),
+                (running) => timer.step('suspend', () => suspendSandbox(life, running))
+              )
+            )
           : { row: current, revoke: 'none' }
       const transferred = patched.row.user_id !== current.user_id
       if (transferred) {
@@ -2352,20 +2367,24 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         // together. End what acted for the previous owner: the share links, the in-VM API token,
         // and the proxy's cached copy of the keys this workspace's sessions were using.
         forgetProviderEnv(row.id)
-        await revokeSandboxShares(env.SANDBOX_DB, row.id, now)
-        await revokeWorkspaceTokens(env.SANDBOX_DB, row.id, now)
+        await timer.step('revokes', async () => {
+          await revokeSandboxShares(env.SANDBOX_DB, row.id, now)
+          await revokeWorkspaceTokens(env.SANDBOX_DB, row.id, now)
+        })
       }
       // Tell the previous owner: a notice in Orca, an email asked of auth, and an audit row saying
       // whether anything reached them. After the hand-off, and never able to fail or undo it.
       const told = transferred
-        ? await notifyPreviousOwner(
-            db,
-            { before: current, after: patched.row, actorUserId: caller.userId, now },
-            { email: deps.transferNotifier ?? createTransferNotifier(env), membership: deps.teamMembership ?? createTeamMembershipCheck(env) }
-          ).catch((error: unknown) => {
-            console.log(JSON.stringify({ event: 'owner_transfer_notify_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
-            return null
-          })
+        ? await timer.step('notify', () =>
+            notifyPreviousOwner(
+              db,
+              { before: current, after: patched.row, actorUserId: caller.userId, now },
+              { email: deps.transferNotifier ?? createTransferNotifier(env), membership: deps.teamMembership ?? createTeamMembershipCheck(env) }
+            ).catch((error: unknown) => {
+              console.log(JSON.stringify({ event: 'owner_transfer_notify_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
+              return null
+            })
+          )
         : null
       // Who can open a workspace decides who its agents act as and whose secrets it gets, so both
       // directions of a share, and a change of owner, go in the team's audit log.
@@ -2383,35 +2402,40 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         )
       }
       if (transferred) {
-        await auditSession(
-          db,
-          caller,
-          { action: 'workspace.owner_changed', targetType: 'workspace', targetId: row.id, detail: { fromUserId: current.user_id, toUserId: patched.row.user_id } },
-          now
-        )
-        // Recorded as Orca's doing, a millisecond later so it reads after the change it follows.
-        await audit(
-          db,
-          { accountId: current.account_id, type: 'system', id: 'control-plane', userId: null },
-          {
-            action: 'workspace.owner_notified',
-            targetType: 'workspace',
-            targetId: row.id,
-            detail: { toUserId: current.user_id, reached: told?.reached ?? false, inApp: told?.inApp ?? false, emailed: told?.email.emailed ?? false, emailMode: told?.email.mode ?? null }
-          },
-          now + 1
-        ).catch(() => undefined)
+        await timer.step('audit', async () => {
+          await auditSession(
+            db,
+            caller,
+            { action: 'workspace.owner_changed', targetType: 'workspace', targetId: row.id, detail: { fromUserId: current.user_id, toUserId: patched.row.user_id } },
+            now
+          )
+          // Recorded as Orca's doing, a millisecond later so it reads after the change it follows.
+          await audit(
+            db,
+            { accountId: current.account_id, type: 'system', id: 'control-plane', userId: null },
+            {
+              action: 'workspace.owner_notified',
+              targetType: 'workspace',
+              targetId: row.id,
+              detail: { toUserId: current.user_id, reached: told?.reached ?? false, inApp: told?.inApp ?? false, emailed: told?.email.emailed ?? false, emailMode: told?.email.mode ?? null }
+            },
+            now + 1
+          ).catch(() => undefined)
+        })
       }
       if (archivedNow && patched.revoke === 'none') {
         // Archiving disconnects teammates' devices, as before.
         patched = { ...patched, revoke: 'non_owner' }
       }
-      if (patched.revoke !== 'none') {
-        // Readers lose the sleeping copy at once, before (and regardless of) the VM-side revokes.
-        await pruneReadSnapshotToOwner(db, patched.row)
-      }
+      const revoke = patched.revoke
       const revoked =
-        patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
+        revoke === 'none'
+          ? null
+          : await timer.step('grantRevokes', async () => {
+              // Readers lose the sleeping copy at once, before (and regardless of) the VM-side revokes.
+              await pruneReadSnapshotToOwner(db, patched.row)
+              return revokeForAccessChange(life, patched.row, revoke, caller.userId)
+            })
       if (patched.row.status === 'running' && !transferred && patched.row.visibility !== current.visibility) {
         // A share changes which account (if any) the agents use (D10/D13): rebuild the env now.
         // Never for a new owner: a transferred workspace is stopped, and its env is not rebuilt for them.
@@ -2422,8 +2446,12 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
           await work
         }
       }
+      const workspace = await timer.step('view', () => view(patched.row))
+      if (transferred) {
+        console.log(ownerTransferTimingLine(timer.durations(), clock() - now))
+      }
       return json({
-        workspace: await view(patched.row),
+        workspace,
         ...(revoked ? { revoked } : {}),
         // For the person who made the change: whether the previous owner will hear about it.
         ...(transferred ? { previousOwner: { userId: current.user_id, notified: told?.reached ?? false, inApp: told?.inApp ?? false, emailed: told?.email.emailed ?? false } } : {})

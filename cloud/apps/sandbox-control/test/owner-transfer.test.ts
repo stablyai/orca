@@ -13,6 +13,7 @@ import { mintApiKey, WORKSPACE_TOKEN_SCOPES } from '../src/api/keys'
 import { connectedMembers } from '../src/member-git'
 import { ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import { ownersForSandbox } from '../src/secrets'
+import { createStepTimer, ownerTransferTimingLine } from '../src/owner-transfer-timing'
 import { isSharedWorkspace } from '../src/shared-workspace'
 import { getSandbox } from '../src/store'
 import { createTeamMembershipCheck, membershipKey, MEMBERSHIP_KEY_PURPOSE, type MembershipAnswer } from '../src/team-membership'
@@ -701,5 +702,74 @@ describe('telling the previous owner', () => {
     expect(after.body.workspace.ownershipTransferredAt).toBe(mark)
     const listed = await t.h.call('GET', '/v1/team/workspaces?scope=mine', { bearer: t.mia })
     expect(listed.body.workspaces.find((w: { id: string }) => w.id === t.id).ownershipTransferredAt).toBe(mark)
+  })
+})
+
+describe('how long a hand-off took (TRANSFER-SLOW-N60)', () => {
+  const timingLines = () => logs.filter((line) => line.includes('"owner_transfer_timing"')).map((line) => JSON.parse(line) as Record<string, unknown>)
+
+  it('logs one line per completed hand-off: step names and milliseconds, nothing else', async () => {
+    // The membership check is the slow part here: 3 s for the new owner, 3 s again for the notice.
+    const slow: { h?: Harness } = {}
+    const t = await setup({
+      teamMembership: async () => {
+        slow.h?.advance(3_000)
+        return { member: true }
+      }
+    })
+    slow.h = t.h
+    const moved = await t.transfer(t.admin, 'mia')
+    expect(moved.status).toBe(200)
+    const lines = timingLines()
+    expect(lines).toHaveLength(1)
+    const line = lines[0]!
+    expect(Object.keys(line).sort()).toEqual(
+      ['auditMs', 'event', 'grantRevokesMs', 'membershipMs', 'notifyMs', 'revokesMs', 'suspendMs', 'totalMs', 'viewMs', 'writeMs'].sort()
+    )
+    expect(line).toMatchObject({ event: 'owner_transfer_timing', membershipMs: 3_000, notifyMs: 3_000, suspendMs: 0, writeMs: 0, totalMs: 6_000 })
+    // Durations only: no workspace, person or team in it.
+    for (const [key, value] of Object.entries(line)) {
+      expect(key === 'event' || typeof value === 'number').toBe(true)
+    }
+    for (const word of [t.id, 'mia', 'mallory', 'ada', 'acme']) {
+      expect(JSON.stringify(line)).not.toContain(word)
+    }
+  })
+
+  it('answers the hand-off exactly as before', async () => {
+    const t = await setup()
+    const moved = await t.transfer(t.admin, 'mia')
+    expect(moved.status).toBe(200)
+    expect(moved.body.workspace).toMatchObject({ ownerUserId: 'mia', status: 'suspended' })
+    expect(moved.body.previousOwner).toEqual({ userId: 'mallory', notified: true, inApp: true, emailed: false })
+    expect((await t.row()).ownership_transferred_at).not.toBeNull()
+  })
+
+  it('logs nothing for a refused hand-off or for an edit that is not a hand-off', async () => {
+    const t = await setup(answers({ member: false }))
+    expect((await t.transfer(t.admin, 'mia')).status).toBe(403)
+    const renamed = await t.h.call('PATCH', `/v1/team/workspaces/${t.id}`, { bearer: t.mallory, body: { title: 'Renamed' } })
+    expect(renamed.status).toBe(200)
+    expect(timingLines()).toEqual([])
+  })
+
+  it('sums a step that runs twice and still counts one that throws', async () => {
+    let now = 0
+    const timer = createStepTimer(() => now)
+    const take = (ms: number) => async () => void (now += ms)
+    await timer.step('membership', take(40))
+    await timer.step('membership', take(60))
+    await expect(
+      timer.step('suspend', async () => {
+        now += 500
+        throw new Error('stop failed')
+      })
+    ).rejects.toThrow('stop failed')
+    expect(timer.durations()).toEqual({ membership: 100, suspend: 500 })
+  })
+
+  it('reports the owner write as what is left of the registry edit', () => {
+    const line = JSON.parse(ownerTransferTimingLine({ patch: 21_000, membership: 300, suspend: 20_500, notify: 45 }, 21_100))
+    expect(line).toEqual({ event: 'owner_transfer_timing', totalMs: 21_100, membershipMs: 300, suspendMs: 20_500, writeMs: 200, notifyMs: 45 })
   })
 })
