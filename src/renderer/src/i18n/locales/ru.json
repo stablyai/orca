@@ -4797,7 +4797,12 @@
             "codexRestartBannerAction_one": "Перезапустить сессию",
             "codexRestartBannerAction_few": "Перезапустить сессии",
             "codexRestartBannerAction_many": "Перезапустить сессии",
-            "codexRestartBannerAction_other": "Перезапустить сессии"
+            "codexRestartBannerAction_other": "Перезапустить сессии",
+            "codexRestartFailedTitle_one": "{{count}} сеанс Codex не перезапустился.",
+            "codexRestartFailedTitle_few": "{{count}} сеансов Codex не перезапустились.",
+            "codexRestartFailedTitle_many": "{{count}} сеансов Codex не перезапустились.",
+            "codexRestartFailedTitle_other": "{{count}} сеансов Codex не перезапустились.",
+            "codexRestartRetry": "Повторить"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Подключить учётную запись",

@@ -67,7 +67,7 @@ export function createTerminalPtyReleaseActions(
         const nextPtyIdsByTabId = replaceRecordEntries(s.ptyIdsByTabId, [
           [tabId, worktreeId ? remainingPtyIds : null]
         ])
-        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
+        const nextPendingPaneAccountRestarts = { ...s.paneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
           delete nextPendingPaneAccountRestarts[ptyId]
@@ -95,7 +95,7 @@ export function createTerminalPtyReleaseActions(
             s.lastKnownRelayPtyIdByTabId,
             relayReplacements
           ),
-          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+          paneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })

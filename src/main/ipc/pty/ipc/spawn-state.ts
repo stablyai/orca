@@ -1,3 +1,4 @@
+import type { AccountRestartOperation } from '../pane/account-restart-owner'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
@@ -19,6 +20,7 @@ import type { AdoptStablePaneResult, PtySpawnIpcArgs, PtySpawnIpcDeps } from './
 import type { PaneAgentLaunch } from './spawn-agent-launch-end'
 
 export type PtyIpcSpawnState = {
+  accountRestartOperation?: AccountRestartOperation
   deps: PtySpawnIpcDeps
   args: PtySpawnIpcArgs
   spawnTiming: PtySpawnTiming

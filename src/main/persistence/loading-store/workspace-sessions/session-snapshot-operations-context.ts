@@ -9,6 +9,8 @@ export type SessionSnapshotOperationsRuntime = Pick<
   | 'pendingSnapshotFileWork'
   | 'profileMaintenancePending'
   | 'quitFlushStarted'
+  | 'ptyBindingGenerations'
+  | 'ptyBindingGenerationSequence'
   | 'state'
   | 'terminalScrollbackSnapshotStorage'
   | 'retainedScrollbackRefsByMigrationId'

@@ -4673,7 +4673,10 @@
             "codexRestartBannerTitle_one": "{{count}} Codex-Sitzung verwendet noch das vorherige Konto.",
             "codexRestartBannerTitle_other": "{{count}} Codex-Sitzungen verwenden noch das vorherige Konto.",
             "codexRestartBannerAction_one": "Sitzung neu starten",
-            "codexRestartBannerAction_other": "Sitzungen neu starten"
+            "codexRestartBannerAction_other": "Sitzungen neu starten",
+            "codexRestartFailedTitle_one": "{{count}} Codex-Sitzung wurde nicht neu gestartet.",
+            "codexRestartFailedTitle_other": "{{count}} Codex-Sitzungen wurden nicht neu gestartet.",
+            "codexRestartRetry": "Erneut versuchen"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Konto verbinden",

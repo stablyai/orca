@@ -57,3 +57,18 @@ export function materializedStablePaneReply(
     }
   }
 }
+
+export function resolveTerminalPaneWorktreeId(
+  leafWorktreeId: string | undefined,
+  ptyWorktreeId: string | undefined,
+  expectedWorktreeId?: string
+): string | null {
+  const worktreeId = leafWorktreeId || ptyWorktreeId || null
+  if (
+    (leafWorktreeId && ptyWorktreeId && leafWorktreeId !== ptyWorktreeId) ||
+    (expectedWorktreeId && worktreeId !== expectedWorktreeId)
+  ) {
+    throw new Error('terminal_not_found')
+  }
+  return worktreeId
+}

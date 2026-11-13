@@ -50,7 +50,7 @@ describe('removeProject cascade', () => {
         tab2: ['pty2']
       },
       suppressedPtyExitIds: { pty1: true, pty2: true },
-      pendingPaneAccountRestarts: { pty1: 'codex', pty2: 'codex' },
+      paneAccountRestarts: { pty1: 'codex', pty2: 'codex' },
       terminalLayoutsByTabId: {
         tab1: makeLayout(),
         tab2: makeLayout()

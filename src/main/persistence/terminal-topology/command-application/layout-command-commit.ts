@@ -20,7 +20,7 @@ import {
 } from '../pane-admission/terminal-pane-admission'
 import { writeMovedLeafProfileRecords } from '../pane-moves/terminal-leaf-move'
 import { writeRestorable } from './restorable-write'
-import { assignWorkspaceSessionPartition } from '../pane-ownership/terminal-topology-membership'
+import { publishTerminalTopologyPartition } from '../terminal-topology-commit'
 import {
   resolveWindowPaneDetach,
   type WindowPaneDetachCommand
@@ -156,8 +156,7 @@ function written(
       ? [
           writeRestorable(
             () => context.getSession(hostId),
-            (next) =>
-              context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, next)),
+            (next) => publishTerminalTopologyPartition(context, hostId, next),
             keepFrozen(hostId, change.session, context)
           )
         ]

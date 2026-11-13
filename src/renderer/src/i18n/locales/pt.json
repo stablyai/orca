@@ -3421,7 +3421,11 @@
             "codexRestartBannerTitle_other": "{{count}} sessões do Codex ainda usam a conta anterior.",
             "codexRestartBannerAction_one": "Reiniciar sessão",
             "codexRestartBannerAction_many": "Reiniciar sessões",
-            "codexRestartBannerAction_other": "Reiniciar sessões"
+            "codexRestartBannerAction_other": "Reiniciar sessões",
+            "codexRestartFailedTitle_one": "{{count}} sessão do Codex não reiniciou.",
+            "codexRestartFailedTitle_many": "{{count}} sessões do Codex não reiniciaram.",
+            "codexRestartFailedTitle_other": "{{count}} sessões do Codex não reiniciaram.",
+            "codexRestartRetry": "Tentar novamente"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar uma conta",

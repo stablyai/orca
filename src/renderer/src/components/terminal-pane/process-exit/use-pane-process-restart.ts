@@ -1,3 +1,4 @@
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -81,7 +82,15 @@ export function usePaneProcessRestart({
   | 'worktreeId'
 >) {
   const handleRestartPane = useCallback(
-    (paneId: number, startup: PtyConnectionDeps['startup'], options: { focus: boolean }) => {
+    (
+      paneId: number,
+      startup: PtyConnectionDeps['startup'],
+      options: {
+        focus: boolean
+        accountRestart?: PtyConnectionDeps['accountRestart']
+        accountRestartToken?: PtyConnectionDeps['accountRestartToken']
+      }
+    ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -90,15 +99,31 @@ export function usePaneProcessRestart({
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
       const existingPtyId = transport?.getPtyId()
+      const accountRequest = options.accountRestartToken
+        ? currentCodexAccountRestart(useAppStore.getState(), options.accountRestartToken)
+        : null
+      if (options.accountRestartToken && !accountRequest) {
+        return
+      }
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
         clearCodexRestartNotice(existingPtyId)
-        clearTabPtyId(tabId, existingPtyId)
+        if (!options.accountRestart) {
+          clearTabPtyId(tabId, existingPtyId)
+        }
       }
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
-      syncPanePtyLayoutBinding(paneId, null)
-      const replacesPtyId = releasePaneTransportForRestart(transport)
+      if (!options.accountRestart) {
+        syncPanePtyLayoutBinding(paneId, null)
+      }
+      let replacesPtyId: string | null = null
+      if (options.accountRestart && transport?.detach) {
+        transport.detach({ preserveExitObserver: false })
+        transport.destroy?.()
+      } else {
+        replacesPtyId = releasePaneTransportForRestart(transport)
+      }
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
@@ -106,8 +131,10 @@ export function usePaneProcessRestart({
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
         worktreeId,
-        cwd,
+        cwd: accountRequest ? accountRequest.cwd : cwd,
         startup,
+        accountRestart: options.accountRestart,
+        accountRestartToken: options.accountRestartToken,
         ...(replacesPtyId ? { replacesPtyId } : {}),
         mountFollowsTerminalPark: false,
         invalidateRetainedInlineScrollback: (leafId) => {

@@ -16,6 +16,37 @@ const codex: ProviderRateLimits = {
 export const stale = defineFixture({
   width: 440,
   store: {
+    tabsByWorktree: {
+      fixture: [
+        {
+          id: 'fixture-tab',
+          worktreeId: 'fixture',
+          createdAt: 1,
+          ptyId: 'fixture-pty-1',
+          title: 'Codex',
+          customTitle: null,
+          color: null,
+          sortOrder: 0
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      'fixture-tab': {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000001' },
+          second: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000002' }
+        },
+        activeLeafId: '00000000-0000-4000-8000-000000000001',
+        expandedLeafId: null,
+        ptyIdsByLeafId: {
+          '00000000-0000-4000-8000-000000000001': 'fixture-pty-1',
+          '00000000-0000-4000-8000-000000000002': 'fixture-pty-2'
+        }
+      }
+    },
+    paneAccountRestarts: {},
     ptyIdsByTabId: { 'fixture-tab': ['fixture-pty-1', 'fixture-pty-2'] },
     codexRestartNoticeByPtyId: {
       'fixture-pty-1': { previousAccountLabel: 'Personal', nextAccountLabel: 'Work' },

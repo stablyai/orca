@@ -1,3 +1,5 @@
+import { restartDetachedAccountRequest } from './codex-detached-account-continuation'
+import { isCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 /** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
 import {
   isTerminalLeafId,
@@ -6,10 +8,7 @@ import {
 import { useAppStore } from '@/store/index'
 import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import {
-  buildCodexAccountRestartStartup,
-  buildPaneAccountRestartStartup
-} from '@/lib/agent-session/accounts/agent-account-restart-startup'
+import { buildPaneAccountRestartStartup } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
 import { isForeignMachineCodexPtyId } from '@/lib/agent-session/accounts/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -28,7 +27,6 @@ import {
   resetDetachedRestartSlotsForTests
 } from './detached-pane-restart-slots'
 import {
-  killReplacedCodexPanePty,
   reapUnboundCodexPty,
   releaseReplacedCodexPanePty
 } from './detached-pane-restart-pty-release'
@@ -46,11 +44,18 @@ export function resetDetachedCodexPaneRestartClaimsForTests(): void {
 
 export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): Promise<void> {
   const restarts: Promise<void>[] = []
-  for (const ptyId of Object.keys(useAppStore.getState().pendingPaneAccountRestarts)) {
+  for (const ptyId of Object.keys(useAppStore.getState().paneAccountRestarts)) {
     if (!hasFreeDetachedRestartSlot()) {
       break
     }
-    restarts.push(restartUnclaimedPane(ptyId, onSettled))
+    const queued = useAppStore.getState().paneAccountRestarts[ptyId]
+    if (isCodexAccountRestart(queued)) {
+      if (queued.phase === 'accepted') {
+        restarts.push(restartDetachedAccountRequest(ptyId, onSettled))
+      }
+    } else {
+      restarts.push(restartUnclaimedPane(ptyId, onSettled))
+    }
   }
   await Promise.all(restarts)
 }
@@ -84,7 +89,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     }
     // Why: a Claude restart waits out the turn; the scheduler re-sweeps on status changes.
     if (
-      state.pendingPaneAccountRestarts[ptyId] === 'claude' &&
+      state.paneAccountRestarts[ptyId] === 'claude' &&
       located.leafId &&
       isClaudePaneMidTurn(state, makePaneKey(located.tab.id, located.leafId))
     ) {
@@ -149,26 +154,7 @@ async function executeDetachedCodexPaneRestart(
 ): Promise<void> {
   const state = useAppStore.getState()
   if (!located.leafId) {
-    // Why: Claude cannot resume without a leaf's session, and a fresh Claude would lose the conversation.
-    if (agent === 'claude') {
-      return
-    }
-    // Without a usable layout leaf, stop the old PTY and let the next mount run Codex startup.
-    if (!isLocatedCodexPaneCurrent(state, located, ptyId)) {
-      reopenCurrentCodexRestartPrompt(located, ptyId)
-      return
-    }
-    const startup = buildCodexAccountRestartStartup({
-      worktreeId: located.worktreeId,
-      shellOverride: located.tab.shellOverride
-    })
-    const store = useAppStore.getState()
-    store.suppressPtyExit(ptyId)
-    store.clearTabPtyId(located.tab.id, ptyId)
-    store.consumeSuppressedPtyExit(ptyId)
-    store.queueTabStartupCommand(located.tab.id, startup)
-    store.clearCodexRestartNotice(ptyId)
-    killReplacedCodexPanePty(ptyId)
+    reopenCurrentCodexRestartPrompt(located, ptyId)
     return
   }
   const { worktreeId, tab, leafId } = located

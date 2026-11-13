@@ -6,9 +6,12 @@ import type {
 import type { DurableProfileStateMutation } from '../../loading-store/store-runtime-state'
 import { writeRestorable } from './restorable-write'
 import { applyRenamesToSession } from '../pane-admission/terminal-pane-admission'
-import { traced, type TerminalTopologyCommitContext } from '../terminal-topology-commit'
+import {
+  traced,
+  publishTerminalTopologyPartition,
+  type TerminalTopologyCommitContext
+} from '../terminal-topology-commit'
 import { keepFrozen } from './layout-command-commit'
-import { assignWorkspaceSessionPartition } from '../pane-ownership/terminal-topology-membership'
 
 /** Publish routed tab renames in one frame and return per-tab refusals. */
 export function applyLayoutRenames(
@@ -30,8 +33,7 @@ export function applyLayoutRenames(
           ? [
               writeRestorable(
                 () => context.getSession(hostId),
-                (value) =>
-                  context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
+                (value) => publishTerminalTopologyPartition(context, hostId, value),
                 keepFrozen(hostId, change.session, context)
               )
             ]

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export type PaneSpawnDeferral = {
+  accountRestart?: { requestId: string; attemptId: string }
   reason: SpawnDeferralReason
   resume: () => void
   /** The retry is in flight; the pane still owns the session but shows no overlay. */

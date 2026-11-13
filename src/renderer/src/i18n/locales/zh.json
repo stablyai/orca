@@ -4297,7 +4297,9 @@
             "codexResetsAvailable_other": "{{count}} 次重置可用",
             "codexRestartBadgeLabel_other": "{{count}} 个 Codex 会话需要重启",
             "codexRestartBannerTitle_other": "{{count}} 个 Codex 会话仍在使用之前的账户。",
-            "codexRestartBannerAction_other": "重启会话"
+            "codexRestartBannerAction_other": "重启会话",
+            "codexRestartFailedTitle_other": "{{count}} 个 Codex 会话未能重启。",
+            "codexRestartRetry": "重试"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",

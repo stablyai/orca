@@ -1,3 +1,7 @@
+import {
+  reconcileTrackedPtyBindingGenerations,
+  hasPtyBindingGenerations
+} from '../loading-store/terminal-bindings/pty-binding-generations'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -214,6 +218,8 @@ type TopologyState = Pick<
 
 export type TerminalTopologyCommitContext = {
   state: TopologyState
+  generations?: Pick<StoreRuntimeState, 'ptyBindingGenerations'> &
+    Partial<Pick<StoreRuntimeState, 'ptyBindingGenerationSequence'>>
   hostIds: () => ExecutionHostId[]
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState
   markDirty: (
@@ -228,7 +234,12 @@ export function topologyCommitContext({
   sessions
 }: {
   runtime: Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains'> &
-    Partial<Pick<StoreRuntimeState, 'layoutEditorViews'>>
+    Partial<
+      Pick<
+        StoreRuntimeState,
+        'layoutEditorViews' | 'ptyBindingGenerations' | 'ptyBindingGenerationSequence'
+      >
+    >
   sessions: Pick<
     SessionHostPartitionOperations,
     'getWorkspaceSessionHostIds' | 'getWorkspaceSession'
@@ -236,6 +247,7 @@ export function topologyCommitContext({
 }): TerminalTopologyCommitContext {
   return {
     state: runtime.state,
+    ...(hasPtyBindingGenerations(runtime) ? { generations: runtime } : {}),
     hostIds: () => sessions.getWorkspaceSessionHostIds(),
     getSession: (hostId) => sessions.getWorkspaceSession(hostId),
     markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain),
@@ -249,7 +261,6 @@ function commitLeafMove(
   request: TerminalLeafMoveRequest,
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<TerminalLeafMoveResult> {
-  const { state } = context
   const planned = planTerminalLeafMove(
     context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
     request
@@ -260,7 +271,7 @@ function commitLeafMove(
   const restores = planned.sessions.map(({ hostId, session }) =>
     writeRestorable(
       () => context.getSession(hostId),
-      (value) => context.markDirty(assignWorkspaceSessionPartition(state, hostId, value)),
+      (value) => publishTerminalTopologyPartition(context, hostId, value),
       keepFrozen(hostId, session, context)
     )
   )
@@ -281,8 +292,24 @@ function commitPaneChange<T>(
   }
   const restore = writeRestorable(
     () => context.getSession(hostId),
-    (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
+    (value) => publishTerminalTopologyPartition(context, hostId, value),
     keepFrozen(hostId, change.session, context)
   )
   return { value: change.value, rollback: restore }
+}
+
+export function publishTerminalTopologyPartition(
+  context: TerminalTopologyCommitContext,
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState
+): void {
+  if (context.generations) {
+    reconcileTrackedPtyBindingGenerations(
+      context.generations,
+      hostId,
+      context.getSession(hostId),
+      session
+    )
+  }
+  context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, session))
 }

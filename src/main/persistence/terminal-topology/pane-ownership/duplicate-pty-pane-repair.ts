@@ -17,7 +17,7 @@ import {
 } from '../pane-moves/terminal-leaf-move'
 import type { TerminalTopologyCommitContext } from '../terminal-topology-commit'
 import { keepFrozen } from '../command-application/layout-command-commit'
-import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
+import { publishTerminalTopologyPartition } from '../terminal-topology-commit'
 
 export type DuplicatePtyPaneTransfer = {
   worktreeId: string
@@ -123,7 +123,7 @@ export function repairDuplicatePtyPanesMutation(
     const restores = plans.map(({ hostId, session, transfers }) =>
       writeRestorable(
         () => context.getSession(hostId),
-        (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
+        (value) => publishTerminalTopologyPartition(context, hostId, value),
         keepFrozen(
           hostId,
           transfers.filter((move) => moved.has(move)).reduce(rekeyPaneSessionRecords, session),

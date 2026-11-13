@@ -1,53 +1,99 @@
-import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
-import type { CodexRestartNotice } from '@/store/terminals/terminal-contracts'
+import {
+  eligibleCodexRestartPtyIds,
+  codexRestartTabIndex,
+  currentCodexRestartPanes,
+  isCodexAccountRestart,
+  isCurrentCodexAccountRestart,
+  type CodexRestartPopulationState
+} from '@/store/terminals/codex-account-restart-continuation'
+import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 
-export type CodexRestartStatusSummaryInput = {
-  ptyIdsByTabId: Record<string, string[]>
-  codexRestartNoticeByPtyId: Record<string, CodexRestartNotice | undefined>
-}
-
+export type CodexRestartStatusSummaryInput = CodexRestartPopulationState
 export type CodexRestartStatusSummary = {
   stalePtyIds: string[]
-  /** Zero unless a stale session is still bound to a tab, so orphaned notices never prompt. */
   staleSessionCount: number
+  failures: CodexAccountRestart[]
+  attentionCount: number
 }
-
-const EMPTY_CODEX_RESTART_STATUS_SUMMARY: CodexRestartStatusSummary = {
+const EMPTY: CodexRestartStatusSummary = {
   stalePtyIds: [],
-  staleSessionCount: 0
+  staleSessionCount: 0,
+  failures: [],
+  attentionCount: 0
 }
 
-export function summarizeCodexRestartStatus({
-  ptyIdsByTabId,
-  codexRestartNoticeByPtyId
-}: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
-  // Exclude scheduled restarts and dismissed notices; dismissed records retain launch-account memory only.
-  const stalePtyIds = Object.entries(codexRestartNoticeByPtyId)
-    .filter(([, notice]) => awaitsCodexRestartAnswer(notice))
-    .map(([ptyId]) => ptyId)
-  if (stalePtyIds.length === 0) {
-    return EMPTY_CODEX_RESTART_STATUS_SUMMARY
+export function summarizeCodexRestartStatus(
+  state: CodexRestartStatusSummaryInput
+): CodexRestartStatusSummary {
+  const requests = Object.values(state.paneAccountRestarts ?? {}).filter(isCodexAccountRestart)
+  if (requests.length === 0 && Object.keys(state.codexRestartNoticeByPtyId).length === 0) {
+    return EMPTY
   }
-
-  const stalePtyIdSet = new Set(stalePtyIds)
-  const boundToTab = Object.values(ptyIdsByTabId).some((ptyIds) =>
-    ptyIds.some((ptyId) => stalePtyIdSet.has(ptyId))
+  const panes = currentCodexRestartPanes(state)
+  const tabs = requests.length > 0 ? codexRestartTabIndex(state) : undefined
+  const failures = requests.filter(
+    (r) =>
+      ['failed', 'unresolved'].includes(r.phase) && isCurrentCodexAccountRestart(state, r, tabs)
   )
-  return boundToTab
-    ? { stalePtyIds, staleSessionCount: stalePtyIds.length }
-    : EMPTY_CODEX_RESTART_STATUS_SUMMARY
-}
-
-let memoNotices: CodexRestartStatusSummaryInput['codexRestartNoticeByPtyId'] | null = null
-let memoBindings: CodexRestartStatusSummaryInput['ptyIdsByTabId'] | null = null
-let memoCount = 0
-
-/** Store selector for always-mounted surfaces: unrelated writes cost two reference checks and allocate nothing. */
-export function selectCodexStaleSessionCount(state: CodexRestartStatusSummaryInput): number {
-  if (state.codexRestartNoticeByPtyId !== memoNotices || state.ptyIdsByTabId !== memoBindings) {
-    memoNotices = state.codexRestartNoticeByPtyId
-    memoBindings = state.ptyIdsByTabId
-    memoCount = summarizeCodexRestartStatus(state).staleSessionCount
+  const stalePtyIds = eligibleCodexRestartPtyIds(state, panes)
+  return {
+    stalePtyIds,
+    staleSessionCount: stalePtyIds.length,
+    failures,
+    attentionCount: stalePtyIds.length + failures.length
   }
-  return memoCount
+}
+let previous: CodexRestartStatusSummaryInput | undefined
+let summary = EMPTY
+export function selectCodexRestartStatus(
+  state: CodexRestartStatusSummaryInput
+): CodexRestartStatusSummary {
+  if (
+    !previous ||
+    previous.codexRestartNoticeByPtyId !== state.codexRestartNoticeByPtyId ||
+    previous.paneAccountRestarts !== state.paneAccountRestarts ||
+    previous.ptyIdsByTabId !== state.ptyIdsByTabId ||
+    previous.tabsByWorktree !== state.tabsByWorktree ||
+    previous.terminalLayoutsByTabId !== state.terminalLayoutsByTabId ||
+    previous.settings?.activeRuntimeEnvironmentId !== state.settings?.activeRuntimeEnvironmentId ||
+    previous.repos !== state.repos ||
+    previous.worktreesByRepo !== state.worktreesByRepo ||
+    previous.detectedWorktreesByRepo !== state.detectedWorktreesByRepo ||
+    previous.folderWorkspaces !== state.folderWorkspaces ||
+    previous.projectGroups !== state.projectGroups ||
+    previous.restoredRuntimeHostIdByWorkspaceSessionKey !==
+      state.restoredRuntimeHostIdByWorkspaceSessionKey ||
+    previous.activeWorktreeId !== state.activeWorktreeId ||
+    previous.activeWorkspaceExecutionHostId !== state.activeWorkspaceExecutionHostId ||
+    previous.runtimeEnvironments !== state.runtimeEnvironments ||
+    previous.runtimeEnvironmentCatalogHydrated !== state.runtimeEnvironmentCatalogHydrated ||
+    previous.removedRuntimeEnvironmentIds !== state.removedRuntimeEnvironmentIds
+  ) {
+    previous = {
+      settings: state.settings
+        ? { activeRuntimeEnvironmentId: state.settings.activeRuntimeEnvironmentId }
+        : null,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo,
+      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+      tabsByWorktree: state.tabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      paneAccountRestarts: state.paneAccountRestarts,
+      codexRestartNoticeByPtyId: state.codexRestartNoticeByPtyId
+    }
+    summary = summarizeCodexRestartStatus(state)
+  }
+  return summary
+}
+export function selectCodexStaleSessionCount(state: CodexRestartStatusSummaryInput): number {
+  return selectCodexRestartStatus(state).attentionCount
 }

@@ -149,7 +149,7 @@ export function findQueuedClaudeRestartsOnAccount(args: {
   for (const pane of localClaudePanes(state, args.owner, args.target)) {
     if (
       pane.inLane &&
-      state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
+      state.paneAccountRestarts[pane.ptyId] === 'claude' &&
       isClaudePaneOnAccount(
         resolveClaudePaneFolder(pane.transcriptPath, saved, host),
         args.accountId,

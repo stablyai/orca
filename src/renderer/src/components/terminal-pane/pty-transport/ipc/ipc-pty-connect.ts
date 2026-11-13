@@ -202,7 +202,7 @@ function handleConnectError(
   }
   const deferral = readTerminalSpawnDeferral(message)
   if (deferral) {
-    context.getCallbacks().onSpawnDeferred?.(deferral)
+    context.getCallbacks().onSpawnDeferred?.(deferral, message)
     return undefined
   }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {

@@ -4641,7 +4641,10 @@
             "codexRestartBannerTitle_one": "{{count}} Codex oturumu hâlâ önceki hesabı kullanıyor.",
             "codexRestartBannerTitle_other": "{{count}} Codex oturumu hâlâ önceki hesabı kullanıyor.",
             "codexRestartBannerAction_one": "Oturumu yeniden başlat",
-            "codexRestartBannerAction_other": "Oturumları yeniden başlat"
+            "codexRestartBannerAction_other": "Oturumları yeniden başlat",
+            "codexRestartFailedTitle_one": "{{count}} Codex oturumu yeniden başlatılamadı.",
+            "codexRestartFailedTitle_other": "{{count}} Codex oturumu yeniden başlatılamadı.",
+            "codexRestartRetry": "Yeniden dene"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Bir hesap bağlayın",

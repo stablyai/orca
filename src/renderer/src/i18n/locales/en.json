@@ -5300,7 +5300,10 @@
             "codexRestartBannerTitle_one": "{{count}} Codex session still uses the previous account.",
             "codexRestartBannerTitle_other": "{{count}} Codex sessions still use the previous account.",
             "codexRestartBannerAction_one": "Restart session",
-            "codexRestartBannerAction_other": "Restart sessions"
+            "codexRestartBannerAction_other": "Restart sessions",
+            "codexRestartFailedTitle_one": "{{count}} Codex session didn't restart.",
+            "codexRestartFailedTitle_other": "{{count}} Codex sessions didn't restart.",
+            "codexRestartRetry": "Retry"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",

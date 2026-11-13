@@ -1,3 +1,5 @@
+import type { PtyRetirementEvidence } from '../../../pty/process-retirement/pty-exit-proof'
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
@@ -25,6 +27,7 @@ import type { ResolvedPtyHost } from '../provider/registry'
 import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
 
 export type PtySpawnIpcArgs = {
+  accountRestart?: AccountRestartCondition
   cols: number
   rows: number
   cwd?: string
@@ -135,5 +138,5 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void
   syncPtyBackgroundedDelivery: (id: string, caller: string) => void
-  stopReplacedPty: (id: string) => Promise<void>
+  stopReplacedPty: (id: string) => Promise<PtyRetirementEvidence | void>
 }

@@ -1,3 +1,4 @@
+import { accountRestartBoundary } from '../../../../ipc/pty/pane/account-restart-owner'
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
@@ -38,32 +39,62 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     requires: terminalCreateFeatureRequirement,
     permission: 'workspace',
     params: TerminalCreateParams,
-    handler: async (params, context) => {
-      const { runtime, pairedDeviceId, clientId, clientKind } = context
-      // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
-      const pairedViewer = clientKind !== undefined
-      const focus = pairedViewer ? false : params.focus === true
-      const activate = pairedViewer ? false : params.activate === true
-      const presentation =
-        pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
-      // Switch point: the window's own new tab, which main starts; refused as a pane-named split is.
-      if (params.windowTab) {
-        // Only transport-proven local IPC owns these host tabs; paired viewers create tabs on their own hosts.
-        if (
-          context.caller?.kind !== 'desktop' ||
-          !params.worktree?.startsWith('id:') ||
-          !params.tabId ||
-          !params.leafId
-        ) {
-          throw new Error('host_not_owned')
+    handler: async (params, context) =>
+      accountRestartBoundary(params.accountRestart, async () => {
+        const { runtime, pairedDeviceId, clientId, clientKind } = context
+        // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
+        const pairedViewer = clientKind !== undefined
+        const focus = pairedViewer ? false : params.focus === true
+        const activate = pairedViewer ? false : params.activate === true
+        const presentation =
+          pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
+        // Switch point: the window's own new tab, which main starts; refused as a pane-named split is.
+        if (params.windowTab) {
+          // Only transport-proven local IPC owns these host tabs; paired viewers create tabs on their own hosts.
+          if (
+            context.caller?.kind !== 'desktop' ||
+            !params.worktree?.startsWith('id:') ||
+            !params.tabId ||
+            !params.leafId
+          ) {
+            throw new Error('host_not_owned')
+          }
+          return {
+            terminal: await runtime.startWindowTabTerminal(
+              params.worktree.slice('id:'.length),
+              { tabId: params.tabId, leafId: params.leafId },
+              {
+                command: params.command,
+                ...(params.accountRestart ? { accountRestart: params.accountRestart } : {}),
+                ...(params.cwd ? { cwd: params.cwd } : {}),
+                ...(params.shell ? { shellOverride: params.shell } : {}),
+                startupCommandDelivery: params.startupCommandDelivery,
+                env: params.env,
+                envToDelete: params.envToDelete,
+                ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+                ...(params.resumeProviderSession
+                  ? { resumeProviderSession: params.resumeProviderSession }
+                  : {}),
+                ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+                ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+                ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
+                terminalImageViewerSupported: terminalImageViewerSupported(context)
+              }
+            )
+          }
         }
-        return {
-          terminal: await runtime.startWindowTabTerminal(
-            params.worktree.slice('id:'.length),
-            { tabId: params.tabId, leafId: params.leafId },
-            {
+        const terminal = await runtime.dedupeTerminalCreate(
+          pairedDeviceId ?? clientId ?? 'local',
+          params.worktree,
+          params.clientMutationId,
+          params.reconcileExisting === true,
+          (canonicalWorktreeSelector, preAllocatedHandle) =>
+            runtime.createTerminal(canonicalWorktreeSelector, {
+              // A CLI command (typed or an agent's) or a window's create is the user's act.
+              wslUserAct: true,
               command: params.command,
-              ...(params.cwd ? { cwd: params.cwd } : {}),
+              ...(params.accountRestart ? { accountRestart: params.accountRestart } : {}),
+              terminalImageViewerSupported: terminalImageViewerSupported(context),
               ...(params.shell ? { shellOverride: params.shell } : {}),
               startupCommandDelivery: params.startupCommandDelivery,
               env: params.env,
@@ -72,74 +103,47 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               ...(params.resumeProviderSession
                 ? { resumeProviderSession: params.resumeProviderSession }
                 : {}),
+              ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
               ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
-              terminalImageViewerSupported: terminalImageViewerSupported(context)
-            }
+              ...(params.terminalKittyKeyboardProtocol === true
+                ? { terminalKittyKeyboardProtocol: true }
+                : {}),
+              ...(params.terminalColorQueryReplies
+                ? {
+                    terminalColorQueryReplies: params.terminalColorQueryReplies,
+                    terminalViewAttributes: params.terminalViewAttributes
+                  }
+                : {}),
+              title: params.title,
+              focus,
+              activate,
+              presentation,
+              tabId: params.tabId,
+              leafId: params.leafId,
+              ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
+              // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
+              ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
+              ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+            }),
+          { wslUserAct: true }
+        )
+        // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
+        if (
+          ORCA_SIDEBAR_INPUTS_IS_MAIN &&
+          context.caller?.kind === 'local-cli' &&
+          !terminal.isReattach
+        ) {
+          runtime.sidebarFacts?.sortStamps.noteTerminalStarted(
+            terminal.worktreeId,
+            terminal.executionHostId
           )
         }
-      }
-      const terminal = await runtime.dedupeTerminalCreate(
-        pairedDeviceId ?? clientId ?? 'local',
-        params.worktree,
-        params.clientMutationId,
-        params.reconcileExisting === true,
-        (canonicalWorktreeSelector, preAllocatedHandle) =>
-          runtime.createTerminal(canonicalWorktreeSelector, {
-            // A CLI command (typed or an agent's) or a window's create is the user's act.
-            wslUserAct: true,
-            command: params.command,
-            terminalImageViewerSupported: terminalImageViewerSupported(context),
-            ...(params.shell ? { shellOverride: params.shell } : {}),
-            startupCommandDelivery: params.startupCommandDelivery,
-            env: params.env,
-            envToDelete: params.envToDelete,
-            ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-            ...(params.resumeProviderSession
-              ? { resumeProviderSession: params.resumeProviderSession }
-              : {}),
-            ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
-            ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-            ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-            ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
-            ...(params.terminalKittyKeyboardProtocol === true
-              ? { terminalKittyKeyboardProtocol: true }
-              : {}),
-            ...(params.terminalColorQueryReplies
-              ? {
-                  terminalColorQueryReplies: params.terminalColorQueryReplies,
-                  terminalViewAttributes: params.terminalViewAttributes
-                }
-              : {}),
-            title: params.title,
-            focus,
-            activate,
-            presentation,
-            tabId: params.tabId,
-            leafId: params.leafId,
-            ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
-            // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
-            ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
-            ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          }),
-        { wslUserAct: true }
-      )
-      // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
-      if (
-        ORCA_SIDEBAR_INPUTS_IS_MAIN &&
-        context.caller?.kind === 'local-cli' &&
-        !terminal.isReattach
-      ) {
-        runtime.sidebarFacts?.sortStamps.noteTerminalStarted(
-          terminal.worktreeId,
-          terminal.executionHostId
-        )
-      }
-      const publicTerminal = { ...terminal }
-      delete publicTerminal.savedStartupCwd
-      return { terminal: publicTerminal }
-    }
+        const publicTerminal = { ...terminal }
+        delete publicTerminal.savedStartupCwd
+        return { terminal: publicTerminal }
+      })
   }),
   defineMethod({
     name: 'terminal.split',

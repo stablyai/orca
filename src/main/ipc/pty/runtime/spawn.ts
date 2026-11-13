@@ -1,3 +1,6 @@
+import { beginAccountRestartOperation } from '../pane/account-restart-owner'
+import { readAccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import { stopAndWaitPtyFromRuntimeController } from './kill'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
 import { requireAcceptedSpawn } from '../spawn-outcome'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -18,9 +21,47 @@ export async function spawnPtyFromRuntimeController(
   request: RuntimePtySpawnArgs
 ) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
+  const condition = readAccountRestartCondition(args.accountRestart)
+  if (
+    args.accountRestart &&
+    (!condition ||
+      condition.pane.worktreeId !== args.worktreeId ||
+      condition.pane.tabId !== args.tabId ||
+      condition.pane.leafId !== args.leafId)
+  ) {
+    throw new Error('invalid_account_restart')
+  }
   const ctx = createRuntimePtySpawnState(deps, args)
+  if (condition) {
+    ctx.accountRestartOperation = beginAccountRestartOperation(condition)
+  }
   const outcome = await runPtySpawn({
     state: ctx,
+    ...(condition?.expected.kind === 'endpoint'
+      ? {
+          replace: async () => {
+            const operation = ctx.accountRestartOperation!
+            operation.stop = 'unknown'
+            if (
+              !(await stopAndWaitPtyFromRuntimeController(
+                deps,
+                condition.expected.kind === 'endpoint' ? condition.expected.ptyId : '',
+                { keepHistory: true }
+              ))
+            ) {
+              throw new Error('terminal_replaced_pty_stop_unverified')
+            }
+            operation.stop = 'confirmed-retired'
+            ctx.replacedPaneOwner = {
+              ptyId: condition.expected.kind === 'endpoint' ? condition.expected.ptyId : '',
+              pane: {
+                ...condition.pane,
+                hostId: args.connectionId ? `ssh:${args.connectionId}` : undefined
+              }
+            }
+          }
+        }
+      : {}),
     prepare: async () => {
       ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
       await prepareRuntimePtySpawn(ctx)
@@ -28,6 +69,7 @@ export async function spawnPtyFromRuntimeController(
     },
     facts: () => ({
       sessionId: ctx.sessionId,
+      replacedPaneOwner: ctx.replacedPaneOwner,
       savedResumePaneKey: ctx.spawnIdentityPaneKey,
       launchConfig: ctx.args.launchConfig,
       suppressRefusedLaunch: () => {

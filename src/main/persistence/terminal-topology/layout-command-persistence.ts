@@ -20,7 +20,8 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   applyLayout,
   applyEditorFileRenamesInPartitions,
-  topologyCommitContext
+  topologyCommitContext,
+  publishTerminalTopologyPartition
 } from './terminal-topology-commit'
 import { keepFrozen } from './command-application/layout-command-commit'
 import { applyLayoutRenames } from './command-application/terminal-layout-renames-commit'
@@ -31,12 +32,10 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { moveTabAcrossPartitions } from './pane-moves/cross-partition-tab-move'
 import { writeRestorable } from './command-application/restorable-write'
-import { raisingBindingGenerations } from './pane-ownership/layout-command-binding-generations'
 import {
   keepPartitionEditorViews,
   partitionEditorViewsOf
 } from '../loading-store/workspace-sessions/layout-editor-views'
-import { assignWorkspaceSessionPartition } from './pane-ownership/terminal-topology-membership'
 import {
   repairDuplicatePtyPanesMutation,
   type DuplicatePtyPaneTransfer
@@ -57,6 +56,7 @@ type LayoutCommandRuntime = Pick<
   | 'dirtyProfileStateDomains'
   | 'writesFrozen'
   | 'ptyBindingGenerations'
+  | 'ptyBindingGenerationSequence'
   | 'layoutEditorViews'
 >
 
@@ -94,16 +94,11 @@ export class LayoutCommandPersistence {
     const context = this[layoutCommandPersistenceContext]
     const resolved = hostIds.length > 0 ? hostIds.map(resolveHostId) : [resolveHostId()]
     let effects: LayoutEffects | undefined
-    const commit = raisingBindingGenerations(
-      context.runtime,
-      resolved,
-      (hostId) => context.sessions.getWorkspaceSession(hostId),
-      applyLayout(resolved, command, topologyCommitContext(context), {
-        live: { ...run.live, visibility: run.visibility },
-        stopBeforeWrite: run.stopBeforeWrite,
-        noteEffects: (noted) => (effects = noted)
-      })
-    )
+    const commit = applyLayout(resolved, command, topologyCommitContext(context), {
+      live: { ...run.live, visibility: run.visibility },
+      stopBeforeWrite: run.stopBeforeWrite,
+      noteEffects: (noted) => (effects = noted)
+    })
     const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> =>
       run.admit &&
       !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
@@ -200,7 +195,7 @@ export class LayoutCommandPersistence {
       ).map(([hostId, session]) =>
         writeRestorable(
           () => commit.getSession(hostId),
-          (value) => commit.markDirty(assignWorkspaceSessionPartition(commit.state, hostId, value)),
+          (value) => publishTerminalTopologyPartition(commit, hostId, value),
           keepFrozen(hostId, session, commit)
         )
       )

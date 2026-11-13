@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { RuntimeTerminalAttention } from '../../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
 import type {
@@ -50,6 +51,7 @@ import type {
 
 export type PtyApi = {
   spawn: (opts: {
+    accountRestart?: AccountRestartCondition
     cols: number
     rows: number
     cwd?: string

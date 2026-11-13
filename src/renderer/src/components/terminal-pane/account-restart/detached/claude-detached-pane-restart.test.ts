@@ -129,12 +129,12 @@ describe('detached Claude account-move restart', () => {
       setPaneState('waiting')
       await settle()
       expect(window.api.pty.spawn).not.toHaveBeenCalled()
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
+      expect(useAppStore.getState().paneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
 
       setPaneState('done')
 
       await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
-      await vi.waitFor(() => expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({}))
+      await vi.waitFor(() => expect(useAppStore.getState().paneAccountRestarts).toEqual({}))
     } finally {
       uninstall()
     }

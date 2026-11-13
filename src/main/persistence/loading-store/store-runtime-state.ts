@@ -113,7 +113,9 @@ export class StoreRuntimeState {
   uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
   readonly workspaceSessionWriteListeners = new Set<WorkspaceSessionWriteListener>()
   readonly workspaceSessionOperationListeners = new Set<WorkspaceSessionOperationListener>()
-  /** In-memory host/leaf binding generations; layout-owner builds only. */
+  /** Process-local sequence prevents retired/recreated leaf ABA without keeping dead leaf entries. */
+  ptyBindingGenerationSequence = 0
+  /** In-memory host/leaf binding generations. */
   readonly ptyBindingGenerations = new Map<string, number>()
   /** In-memory editor views by partition; layout-owner builds only. */
   readonly layoutEditorViews = new Map<ExecutionHostId, PartitionEditorViews>()

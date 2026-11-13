@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../terminal/pty/lifecycle/account-restart-contract'
 import {
   hasUnsafeProviderSessionIdChars,
   isResumableTuiAgent,
@@ -104,6 +105,7 @@ export type RuntimeEnsureAgentSessionRequest =
     }
   | {
       kind: 'explicit'
+      accountRestart?: AccountRestartCondition
       resumeOrigin?: 'saved'
       /** The pane a saved restore resumes; `placement` names the pane it opens in. */
       restoreSourcePaneKey?: string

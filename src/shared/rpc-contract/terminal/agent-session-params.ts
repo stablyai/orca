@@ -1,3 +1,4 @@
+import { AccountRestartConditionSchema } from '../../terminal/pty/lifecycle/account-restart-contract'
 import * as z from 'zod'
 import { isValidTerminalTabId } from '../../workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
@@ -131,6 +132,7 @@ export const AutomaticEnsure = z
 export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
+    accountRestart: AccountRestartConditionSchema.optional(),
     resumeOrigin: z.literal('saved').optional(),
     /** The pane a saved restore resumes; `placement` names the pane it opens in. */
     restoreSourcePaneKey: z.string().min(1).max(300).optional(),

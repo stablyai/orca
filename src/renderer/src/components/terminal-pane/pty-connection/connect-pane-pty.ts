@@ -182,7 +182,8 @@ export function connectPanePty(
   // Hold replacement PTY retirement until main takes it in a spawn request or disposal kills it.
   session.pendingReplacedPtyId = session.deps.replacesPtyId ?? null
   // Why: the first spawn claims the PTY, but a deferred retry is still the same user restart.
-  session.userRestart = session.pendingReplacedPtyId !== null
+  session.userRestart =
+    Boolean(session.deps.accountRestartToken) || session.pendingReplacedPtyId !== null
   session.deps.replacesPtyId = undefined
   session.claimPendingReplacedPtyId = (): string | null => {
     const ptyId: string | null = session.pendingReplacedPtyId
@@ -263,7 +264,7 @@ export function connectPanePty(
     return created
   })()
 
-  session.shellOverride = session.tab?.shellOverride
+  bindPaneProjectRuntime(session)
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
   // enables ConPTY synchronized-output protection, which strips an agent's
@@ -271,7 +272,6 @@ export function connectPanePty(
   // host is the authoritative signal: only a 'local' host is a local native PTY.
   session.executionHostId = session.ownerContext.executionHostId
   installNativeWindowsPanePolicy(session)
-  bindPaneProjectRuntime(session)
   installRendererOwnedPaneStatus(session)
 
   // Choose one side-effect consumer at transport creation; main facts replace title/bell/agent byte parsers.

@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -150,7 +151,7 @@ type PtyCallbacks = {
   onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
   onPausedOutputDropped?: () => void
   /** The host kept this restore asleep; no process started and the resume handle is intact. */
-  onSpawnDeferred?: (reason: SpawnDeferralReason) => void
+  onSpawnDeferred?: (reason: SpawnDeferralReason, failure?: string) => void
 }
 
 /** What started a pane's recovery: the server connection, or only this pane's stream. */
@@ -186,6 +187,7 @@ export type PtyTransport = {
     /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */
     attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
+    accountRestart?: AccountRestartCondition
     resumeSpawnIntent?: RestoreSpawnIntent
     /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
     wslPassiveRestore?: true

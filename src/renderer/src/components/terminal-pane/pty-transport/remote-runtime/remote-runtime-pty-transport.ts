@@ -3670,6 +3670,7 @@ export function createRemoteRuntimePtyTransport(
         ? await trustOptions(createEnvironmentId)
         : {}
       const legacyCreateParams = {
+        ...(options.accountRestart ? { accountRestart: options.accountRestart } : {}),
         ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
@@ -3690,6 +3691,7 @@ export function createRemoteRuntimePtyTransport(
           ? { shell: opts.shellOverride }
           : {}),
         ...spawnIntentParams,
+        ...(options.accountRestart ? { spawnIntent: 'user-resume' as const } : {}),
         ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
         tabId,
@@ -3860,26 +3862,28 @@ export function createRemoteRuntimePtyTransport(
       const resumeHostAuthorityCapability = resumeProviderSessionToSend
         ? agentResumeHostAuthorityCapability(launchAgentToSend)
         : undefined
-      const created = replayLaunch
-        ? await replayLaunch(connectLifecycleEpoch)
-        : launchAgentToSend
-          ? agentSessionRequiresHostAuthorityReplay
-            ? await hostAuthorityCreate()
-            : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                environmentId: createEnvironmentId,
-                hostAuthority: () => {
-                  replayLaunch = hostAuthorityCreate
-                  return hostAuthorityCreate()
-                },
-                ...(resumeHostAuthorityCapability
-                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-                  : {}),
-                legacy: () => {
-                  replayLaunch = legacyCreate
-                  return legacyCreate()
-                }
-              })
-          : await (replayLaunch = legacyCreate)()
+      const created = options.accountRestart
+        ? await legacyCreate()
+        : replayLaunch
+          ? await replayLaunch(connectLifecycleEpoch)
+          : launchAgentToSend
+            ? agentSessionRequiresHostAuthorityReplay
+              ? await hostAuthorityCreate()
+              : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+                  environmentId: createEnvironmentId,
+                  hostAuthority: () => {
+                    replayLaunch = hostAuthorityCreate
+                    return hostAuthorityCreate()
+                  },
+                  ...(resumeHostAuthorityCapability
+                    ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+                    : {}),
+                  legacy: () => {
+                    replayLaunch = legacyCreate
+                    return legacyCreate()
+                  }
+                })
+            : await (replayLaunch = legacyCreate)()
       if (!created) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
           connecting = false
@@ -4013,6 +4017,17 @@ export function createRemoteRuntimePtyTransport(
       if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
         connecting = false
         const message = runtimeTerminalErrorMessage(error)
+        if (options.accountRestart) {
+          const deferral = readTerminalSpawnDeferral(error)
+          recovery.cancel()
+          emitRecoveryState()
+          if (deferral) {
+            storedCallbacks.onSpawnDeferred?.(deferral, message)
+          } else {
+            surfaceErrorMessage(message)
+          }
+          return undefined
+        }
         if (message.includes(ownerChanged)) {
           return await reconcilePaneOwner(options, connectLifecycleEpoch)
         }
@@ -4020,7 +4035,7 @@ export function createRemoteRuntimePtyTransport(
         if (deferral) {
           recovery.cancel()
           emitRecoveryState()
-          storedCallbacks.onSpawnDeferred?.(deferral)
+          storedCallbacks.onSpawnDeferred?.(deferral, message)
         } else if (isRemoteTerminalGoneMessage(message)) {
           recovery.cancel()
           handleRemoteTerminalError(error)

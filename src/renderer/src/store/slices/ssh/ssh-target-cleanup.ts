@@ -97,13 +97,13 @@ function clearSshTargetTabPtyState(
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'lastKnownRelayPtyIdByTabId'
-  | 'pendingPaneAccountRestarts'
+  | 'paneAccountRestarts'
   | 'codexRestartNoticeByPtyId'
 > & { changed: boolean } {
   const unboundTabIds = new Set<string>()
   const lastKnownRelayPtyIdDraft = recordDraft(state.lastKnownRelayPtyIdByTabId)
   const nextPendingPaneAccountRestarts = {
-    ...state.pendingPaneAccountRestarts
+    ...state.paneAccountRestarts
   }
   const nextCodexRestartNoticeByPtyId = { ...state.codexRestartNoticeByPtyId }
 
@@ -134,11 +134,22 @@ function clearSshTargetTabPtyState(
     }
   }
 
+  for (const [key, request] of Object.entries(nextPendingPaneAccountRestarts)) {
+    if (
+      typeof request === 'object' &&
+      (request.hostId === `ssh:${targetId}` || targetTabIds.has(request.tabId))
+    ) {
+      delete nextPendingPaneAccountRestarts[key]
+    }
+  }
   return {
-    changed: unboundTabIds.size > 0,
+    changed:
+      unboundTabIds.size > 0 ||
+      Object.keys(nextPendingPaneAccountRestarts).length !==
+        Object.keys(state.paneAccountRestarts).length,
     ...unbindTerminalTabPtys(state, unboundTabIds),
     lastKnownRelayPtyIdByTabId: lastKnownRelayPtyIdDraft.finish(),
-    pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+    paneAccountRestarts: nextPendingPaneAccountRestarts,
     codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
   }
 }

@@ -1,3 +1,5 @@
+import { beginAccountRestartOperation } from '../pane/account-restart-owner'
+import { readAccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { requireAcceptedSpawn } from '../spawn-outcome'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
@@ -23,7 +25,23 @@ import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpcArgs) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
+  const condition = readAccountRestartCondition(args.accountRestart)
+  if (
+    args.accountRestart &&
+    (!condition ||
+      condition.pane.worktreeId !== args.worktreeId ||
+      condition.pane.tabId !== args.tabId ||
+      condition.pane.leafId !== args.leafId)
+  ) {
+    throw new Error('invalid_account_restart')
+  }
+  if (condition?.expected.kind === 'endpoint') {
+    args.replacesPtyId = condition.expected.ptyId
+  }
   const ctx = createPtyIpcSpawnState(deps, args)
+  if (condition) {
+    ctx.accountRestartOperation = beginAccountRestartOperation(condition)
+  }
   const admit = () => {
     triggerPtySpawnPushTargetMaterialization(deps, args)
     return checkPtyIpcLaunchPane(ctx)
@@ -105,12 +123,19 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     ...(args.replacesPtyId !== undefined
       ? {
           replace: async () => {
+            if (ctx.accountRestartOperation) {
+              ctx.accountRestartOperation.stop = 'unknown'
+            }
             ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
+              requireProof: Boolean(ctx.accountRestartOperation),
               replacesPtyId: args.replacesPtyId!,
               paneKey: resolveEarlyPaneKey(args),
               worktreeId: args.worktreeId,
               connectionId: args.connectionId
             })
+            if (ctx.accountRestartOperation && deps.store) {
+              ctx.accountRestartOperation.stop = 'confirmed-retired'
+            }
             await admit()
           }
         }

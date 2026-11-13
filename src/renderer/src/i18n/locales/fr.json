@@ -4448,7 +4448,11 @@
             "codexRestartBannerTitle_other": "{{count}} sessions Codex utilisent encore le compte précédent.",
             "codexRestartBannerAction_one": "Redémarrer la session",
             "codexRestartBannerAction_many": "Redémarrer les sessions",
-            "codexRestartBannerAction_other": "Redémarrer les sessions"
+            "codexRestartBannerAction_other": "Redémarrer les sessions",
+            "codexRestartFailedTitle_one": "{{count}} session Codex n’a pas redémarré.",
+            "codexRestartFailedTitle_many": "{{count}} sessions Codex n’ont pas redémarré.",
+            "codexRestartFailedTitle_other": "{{count}} sessions Codex n’ont pas redémarré.",
+            "codexRestartRetry": "Réessayer"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connecter un compte",

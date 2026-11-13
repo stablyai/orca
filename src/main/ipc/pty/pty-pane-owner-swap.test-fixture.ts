@@ -1,7 +1,12 @@
+import type { RuntimePtyController } from '../../runtime/terminal/lifecycle/runtime-pty-controller-contract'
+import type { AccountRestartCondition } from '../../../shared/terminal/pty/lifecycle/account-restart-contract'
 // Exercise the real binding store and IPC spawn pipeline over a fake session/provider; suites declare module mocks.
 import { vi, type Mock } from 'vitest'
 import { PtyBindingPersistenceOperations } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
-import { ptyBindingGenerationOf } from '../../persistence/loading-store/terminal-bindings/pty-binding-generations'
+import {
+  ptyBindingGenerationOf,
+  trackPtyBindingGeneration
+} from '../../persistence/loading-store/terminal-bindings/pty-binding-generations'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
 import { TerminalKilledError } from '../../daemon/providers/adapter/daemon-pty-lifecycle-errors'
@@ -24,7 +29,10 @@ export const paneKey = makePaneKey(tabId, leafId)
 
 export type RestartHarness = ReturnType<typeof installRestartHarness>
 type FakeSession = {
-  tabsByWorktree: Record<string, { id: string; worktreeId: string; ptyId: string | null }[]>
+  tabsByWorktree: Record<
+    string,
+    { id: string; worktreeId: string; ptyId: string | null; createdAt: number }[]
+  >
   terminalLayoutsByTabId: Record<
     string,
     {
@@ -39,7 +47,7 @@ type FakeSession = {
 
 export function seedSession(ptyId: string): FakeSession {
   return {
-    tabsByWorktree: { [worktreeId]: [{ id: tabId, worktreeId, ptyId }] },
+    tabsByWorktree: { [worktreeId]: [{ id: tabId, worktreeId, ptyId, createdAt: 1 }] },
     terminalLayoutsByTabId: {
       [tabId]: {
         root: { type: 'leaf', leafId },
@@ -197,7 +205,9 @@ export function installRestartHarness(
     quitFlushStarted: false,
     writeGeneration: 0,
     lastDurableWriteGeneration: 0,
-    ptyBindingGenerations: new Map<string, number>()
+    ptyBindingGenerations: new Map<string, number>(),
+    ptyBindingGenerationSequence: 0,
+    workspaceMetadataCursor: { epoch: 'test-host', seq: 1 }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: binding writes read only state, write bookkeeping, durable mutation and the session partitions from these fakes.
   const bindingArgs = [bindingRuntime, store] as unknown as ConstructorParameters<
@@ -207,11 +217,14 @@ export function installRestartHarness(
   const storeWithRetirement = Object.assign(store, {
     persistPtyBinding: vi.fn(bindingOperations.persistPtyBinding.bind(bindingOperations)),
     retirePtyBinding: bindingOperations.retirePtyBinding.bind(bindingOperations),
+    getPtyBindingEpoch: () => 'test-host',
+    trackPtyBindingGeneration: (hostId: ExecutionHostId, leafId: string) =>
+      trackPtyBindingGeneration(bindingRuntime, hostId, leafId),
     getPtyBindingGeneration: (hostId: ExecutionHostId, leafId: string) =>
       ptyBindingGenerationOf(bindingRuntime, hostId, leafId)
   })
   const runtime = {
-    setPtyController: stub(),
+    setPtyController: vi.fn<(controller: RuntimePtyController) => void>(),
     resolveTerminalPane: vi.fn(() => {
       throw new Error('terminal_not_found')
     }),
@@ -244,7 +257,12 @@ export function installRestartHarness(
   }
 }
 
-export function restartSpawnArgs(extra: { replacesPtyId?: string } = {}) {
+export function restartSpawnArgs(
+  extra: {
+    replacesPtyId?: string
+    accountRestart?: AccountRestartCondition
+  } = {}
+) {
   return {
     cols: 80,
     rows: 24,

@@ -1,3 +1,4 @@
+import { failCodexAccountRestart } from '../../account-restart/codex-account-restart-execution'
 import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
@@ -139,8 +140,11 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
             session.handleRemotePausedOutputDropped()
           }
         },
-        onSpawnDeferred: (reason: SpawnDeferralReason): void => {
+        onSpawnDeferred: (reason: SpawnDeferralReason, failure?: string): void => {
           if (isCurrent()) {
+            if (session.deps.accountRestartToken && failure) {
+              failCodexAccountRestart(session.deps.accountRestartToken, failure, 'deferred')
+            }
             session.pendingSpawnDeferral = reason
           }
         }

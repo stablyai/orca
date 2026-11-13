@@ -212,6 +212,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
       agentSessionClaim: claim,
+      ...(request.accountRestart ? { accountRestart: request.accountRestart } : {}),
       ...(request.spawnIntent ? { spawnIntent: request.spawnIntent } : {}),
       signal: _caller.signal
     })

@@ -1,9 +1,10 @@
+import { selectCodexStaleSessionCount } from '@/components/status-bar/codex-restart-status-summary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 
-import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../../../codex-restart-notice-state'
+import { blocksCodexPaneInput } from '../../../codex-restart-notice-state'
 import {
   installCodexDetachedPaneRestartExecutor,
   resetCodexDetachedPaneRestartExecutorForTests
@@ -106,11 +107,42 @@ describe('accepted account restart queue progress', () => {
     vi.useFakeTimers()
     resetCodexDetachedPaneRestartExecutorForTests()
     useAppStore.setState(useAppStore.getInitialState(), true)
-    spawn.mockReset().mockImplementation(async ({ replacesPtyId }) => ({
-      id: replacesPtyId?.replace('old-', 'replacement-') ?? 'unexpected-spawn'
+    spawn.mockReset().mockImplementation(async ({ accountRestart }) => ({
+      id:
+        accountRestart?.expected.kind === 'endpoint'
+          ? accountRestart.expected.ptyId.replace('old-', 'replacement-')
+          : 'unexpected-spawn'
     }))
     kill.mockReset().mockResolvedValue(undefined)
-    vi.stubGlobal('window', { api: { pty: { spawn, kill } } })
+    vi.stubGlobal('window', {
+      api: {
+        pty: { spawn, kill },
+        runtime: {
+          call: vi.fn(async ({ params }: { params: { paneKey: string } }) => {
+            const paneKey = params.paneKey
+            const tabId = paneKey.slice(0, paneKey.indexOf(':'))
+            const leafId = paneKey.slice(paneKey.indexOf(':') + 1)
+            const tab = useAppStore.getState().tabsByWorktree.wt1?.find((tab) => tab.id === tabId)
+            const ptyId =
+              useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+            return {
+              ok: true,
+              id: 'read',
+              result: {
+                terminal: {
+                  accountRestart: {
+                    hostEpoch: 'host',
+                    tabCreatedAt: tab?.createdAt,
+                    bindingGeneration: 0,
+                    owner: ptyId ? { ptyId, incarnationId: 'inc-original' } : null
+                  }
+                }
+              }
+            }
+          })
+        }
+      }
+    })
   })
 
   afterEach(() => {
@@ -138,9 +170,8 @@ describe('accepted account restart queue progress', () => {
       }
       const state = useAppStore.getState()
       expect(state.ptyIdsByTabId[pane(1).tabId]).toEqual([pane(1).ptyId])
-      expect(awaitsCodexRestartAnswer(state.codexRestartNoticeByPtyId[pane(2).ptyId])).toBe(true)
+      expect(selectCodexStaleSessionCount(state)).toBe(1)
       expect(state.ptyIdsByTabId[pane(2).tabId]).toEqual([pane(2).ptyId])
-      expect(state.pendingPaneAccountRestarts).toEqual({})
       expect(spawn).toHaveBeenCalledTimes(7)
       expect(kill).not.toHaveBeenCalled()
     } finally {
@@ -153,8 +184,10 @@ describe('accepted account restart queue progress', () => {
   })
   it('asks again and frees the slot when a spawn stalls, then adopts its late result', async () => {
     const stalled = Array.from({ length: 4 }, () => Promise.withResolvers<{ id: string }>())
-    spawn.mockImplementation(async ({ replacesPtyId }) => {
-      const index = stalled.findIndex((_, position) => pane(position + 1).ptyId === replacesPtyId)
+    spawn.mockImplementation(async ({ accountRestart }) => {
+      const oldId =
+        accountRestart?.expected.kind === 'endpoint' ? accountRestart.expected.ptyId : null
+      const index = stalled.findIndex((_, position) => pane(position + 1).ptyId === oldId)
       return stalled[index]?.promise ?? { id: pane(5).replacementId }
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -164,15 +197,11 @@ describe('accepted account restart queue progress', () => {
     try {
       await vi.advanceTimersByTimeAsync(0)
       expect(spawn).toHaveBeenCalledTimes(4)
-      expect(
-        awaitsCodexRestartAnswer(useAppStore.getState().codexRestartNoticeByPtyId[pane(1).ptyId])
-      ).toBe(false)
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
 
       await vi.advanceTimersByTimeAsync(STALLED_DETACHED_RESTART_MS)
       expectRestarted(5)
-      expect(
-        awaitsCodexRestartAnswer(useAppStore.getState().codexRestartNoticeByPtyId[pane(1).ptyId])
-      ).toBe(true)
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(4)
 
       stalled[0]?.resolve({ id: pane(1).replacementId })
       await vi.advanceTimersByTimeAsync(0)

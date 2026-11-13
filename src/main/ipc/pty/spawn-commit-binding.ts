@@ -1,3 +1,4 @@
+import type { AccountRestartOperation } from './pane/account-restart-owner'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/workspace-session/terminal-session-state-save-failure'
@@ -23,6 +24,7 @@ export type PtySpawnPaneBinding = {
 /** Saves the binding, or a swap over the replaced owner; a failed save discards the new process. */
 export async function savePtySpawnPaneBinding(
   state: {
+    accountRestartOperation?: AccountRestartOperation
     result: PtySpawnResult
     provider: IPtyProvider
     replacedPaneOwner?: ReplacedPaneOwner | null
@@ -31,6 +33,14 @@ export async function savePtySpawnPaneBinding(
   { store, binding, absentOwner, refusal, failureLog }: PtySpawnPaneBinding,
   connectionId: string | null | undefined
 ): Promise<void> {
+  if (state.accountRestartOperation) {
+    binding = {
+      ...binding,
+      accountRestart: state.accountRestartOperation.condition,
+      mayCreate: false,
+      mayReviveRetiredSurface: false
+    }
+  }
   const replaced = state.replacedPaneOwner
   try {
     const persisted = replaced

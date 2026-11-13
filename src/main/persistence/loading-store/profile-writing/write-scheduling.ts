@@ -1,3 +1,7 @@
+import {
+  trackPtyBindingGeneration,
+  ptyBindingGenerationOf
+} from '../terminal-bindings/pty-binding-generations'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
@@ -7,7 +11,6 @@ import {
   type WorkspaceSessionOperationListener,
   type WorkspaceSessionWriteListener
 } from '../workspace-sessions/workspace-session-write-listeners'
-import { ptyBindingGenerationOf } from '../terminal-bindings/pty-binding-generations'
 import type { PartitionEditorViews } from '../workspace-sessions/layout-editor-views'
 import type { ProfileSaveDomains } from '../../profile-save-domains'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
@@ -44,6 +47,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'worktreeMetaWriteListeners'
   | 'workspaceMetadataCursor'
   | 'ptyBindingGenerations'
+  | 'ptyBindingGenerationSequence'
   | 'layoutEditorViews'
   | 'state'
 >
@@ -82,6 +86,13 @@ export class WriteSchedulingOperations {
     return () => {
       runtime.workspaceSessionOperationListeners.delete(listener)
     }
+  }
+
+  trackPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number {
+    return trackPtyBindingGeneration(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
+  }
+  getPtyBindingEpoch(): string {
+    return this[writeSchedulingOperationsContext].runtime.workspaceMetadataCursor.epoch
   }
 
   getPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number | undefined {
