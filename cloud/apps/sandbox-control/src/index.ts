@@ -1293,6 +1293,11 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (!env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
         return fail('not_configured', 503)
       }
+      // Second lock (EGRESS-SWAP-FAIL-CLOSED): with no proxy URL configured nothing should forward here, and rows
+      // may carry withheld-key routes; never swap a real credential in that state.
+      if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
+        return fail('egress_proxy_missing', 503)
+      }
       return await handleEgressProxy(request, {
         teamId: env.VERCEL_TEAM_ID,
         projectId: env.VERCEL_PROJECT_ID,

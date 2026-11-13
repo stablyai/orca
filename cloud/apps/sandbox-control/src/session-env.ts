@@ -87,12 +87,12 @@ function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick
 // One log line per session, not per env read (boot, refresh and the proxy's cache all land here). The boot read
 // happens before the session exists, so its mark carries over to the session it starts.
 const withheldLogged = new Set<string>()
-function firstWithheldReadThisSession(row: Pick<SandboxRow, 'id' | 'session_id'>): boolean {
-  const pending = `${row.id}:pending`
+function firstReadThisSession(kind: 'withheld' | 'plain', row: Pick<SandboxRow, 'id' | 'session_id'>): boolean {
+  const pending = `${kind}:${row.id}:pending`
   if (!row.session_id) {
     return withheldLogged.has(pending) ? false : (withheldLogged.add(pending), true)
   }
-  const key = `${row.id}:${row.session_id}`
+  const key = `${kind}:${row.id}:${row.session_id}`
   if (withheldLogged.has(key)) {
     return false
   }
@@ -138,7 +138,7 @@ export async function sessionSecretEnv(
   secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
   if (withhold) {
     const withheldSecrets = Object.fromEntries(SWAPPED_CREDENTIALS.filter((secret) => secret in env).map((secret) => [secret, true]))
-    if (firstWithheldReadThisSession(row)) {
+    if (firstReadThisSession('withheld', row)) {
       // Counts only: no secret names or values.
       secretLog('egress_swap_unavailable', { sandboxId: row.id, environment: deps.config.environment, withheld: Object.keys(withheldSecrets).length }, [], 'error')
     }
@@ -156,6 +156,12 @@ export async function sessionSecretEnv(
     return { env: { ...withheld.env, ...accountEnv }, egressSecretHosts: hosts, egressAllowHosts }
   }
   if (!swap) {
+    // An operator turned placeholders off for this account (SECRETS_EGRESS_PLACEHOLDERS=off or accounts:<ids>
+    // without it, or SECRETS_EGRESS_PLACEHOLDERS_OFF): real keys in the VM are deliberate, but never silent.
+    const plain = SWAPPED_CREDENTIALS.filter((secret) => secret in env).length
+    if (plain > 0 && !egressSwapWanted(deps, row) && firstReadThisSession('plain', row)) {
+      secretLog('egress_swap_disabled', { sandboxId: row.id, plainKeys: plain })
+    }
     return { env, egressSecretHosts: null, egressAllowHosts }
   }
   const swapped = applySecretPlaceholders(row, env, scopes)

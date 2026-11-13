@@ -119,6 +119,25 @@ describe('EGRESS-SWAP-FAIL-CLOSED', () => {
     logs = logs.filter((line) => !line.includes(KEY))
   })
 
+  it('placeholders turned off by an operator: plain keys as before, but logged once per session (count only)', async () => {
+    const { h, mia } = await setup({ SANDBOX_ENV: 'staging', EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy', SECRETS_EGRESS_PLACEHOLDERS: 'off' })
+    await h.call('PUT', '/v1/secrets/personal/ANTHROPIC_API_KEY', { body: { value: KEY }, bearer: mia })
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    expect(startEnv(h).ANTHROPIC_API_KEY).toBe(KEY)
+    await h.call('POST', `/v1/sandboxes/${created.body.sandbox.id}/env/refresh`, { bearer: mia })
+    const disabled = logs.filter((line) => line.includes('"event":"egress_swap_disabled"'))
+    expect(disabled).toHaveLength(1)
+    expect(JSON.parse(disabled[0]!)).toEqual({ event: 'egress_swap_disabled', sandboxId: created.body.sandbox.id, plainKeys: 1 })
+    logs = logs.filter((line) => !line.includes(KEY))
+  })
+
+  it('the egress proxy refuses outright in a deployed env without its URL (second lock)', async () => {
+    const { h } = await setup({ SANDBOX_ENV: 'staging', VERCEL_TEAM_ID: 'team_x', VERCEL_PROJECT_ID: 'prj_x' })
+    const res = await h.send(new Request('https://sandbox.test/v1/egress/proxy/v1/messages', { method: 'POST', headers: { 'vercel-forwarded-host': 'api.anthropic.com' } }))
+    expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ error: 'egress_proxy_missing' })
+  })
+
   it('/v1/health is 503 egress_proxy_missing in a deployed env without the proxy, 200 with it or in local/test', async () => {
     const missing = await setup({ SANDBOX_ENV: 'staging' })
     expect(await missing.h.call('GET', '/v1/health')).toEqual({ status: 503, body: { error: 'egress_proxy_missing', keySwap: 'off' } })
