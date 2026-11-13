@@ -5,7 +5,7 @@ import type { LifecycleDeps } from './lifecycle'
 import { agentModesFor, withoutSignInCredentials, type AgentMode } from './agent-sources'
 import { accountProvider } from './account-providers'
 import type { CredentialAgent } from './agent-credential-names'
-import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
+import { SWAPPED_CREDENTIALS, deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
 import { egressProxyMissing } from './network-policy'
 import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
@@ -137,8 +137,10 @@ export async function sessionSecretEnv(
   // Counts only.
   secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
   if (withhold) {
+    const withheldSecrets = Object.fromEntries(SWAPPED_CREDENTIALS.filter((secret) => secret in env).map((secret) => [secret, true]))
     if (firstWithheldReadThisSession(row)) {
-      secretLog('egress_swap_off_no_proxy', { sandboxId: row.id, environment: deps.config.environment })
+      // Counts only: no secret names or values.
+      secretLog('egress_swap_unavailable', { sandboxId: row.id, environment: deps.config.environment, withheld: Object.keys(withheldSecrets).length }, [], 'error')
     }
     const withheld = applySecretPlaceholders(row, env, scopes)
     const accountEnv: Record<string, string> = {}

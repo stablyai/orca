@@ -181,7 +181,7 @@ export function egressProxyMissing(config: { egressProxyUrl?: string; environmen
 
 /** What an agent sees when its model key was withheld (design-squad wording). */
 export const KEYS_WITHHELD_MESSAGE =
-  "Orca Cloud couldn't use your model API key in this workspace because a service on Orca's side isn't set up, so the key was not sent. Contact Orca support or your team admin."
+  "Orca Cloud didn't send your model API key or sign-in because of a problem on Orca's side, not with your key. Contact Orca support."
 /** Provider-style error JSON: Anthropic clients read error.message, OpenAI-compatible ones too. */
 export const KEYS_WITHHELD_BODY = JSON.stringify({ type: 'error', error: { type: 'permission_error', message: KEYS_WITHHELD_MESSAGE } })
 

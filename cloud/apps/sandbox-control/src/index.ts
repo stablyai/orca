@@ -1441,9 +1441,10 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       // EGRESS-SWAP-FAIL-CLOSED: without the proxy no key reaches an agent and open egress is off.
       if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
         console.error(JSON.stringify({ event: 'config_error', variable: 'EGRESS_PROXY_URL', environment: env.SANDBOX_ENV }))
-        return json({ error: 'egress_proxy_missing' }, 503)
+        return json({ error: 'egress_proxy_missing', keySwap: 'off' }, 503)
       }
-      return json({ ok: true }, 200)
+      // keySwap: whether model keys can be swapped at egress (the launch smoke asserts "on").
+      return json({ ok: true, keySwap: env.EGRESS_PROXY_URL ? 'on' : 'off' }, 200)
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.

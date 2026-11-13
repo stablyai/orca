@@ -1,6 +1,7 @@
 // EGRESS-SWAP-FAIL-CLOSED: a deployed env (not local/test) without EGRESS_PROXY_URL can't swap keys at egress.
 // Model keys and Orca-account sign-ins are withheld (the VM gets placeholders, the firewall answers them with a
-// plain error), the session logs egress_swap_off_no_proxy once, and /v1/health fails the post-deploy smoke.
+// plain error), the session logs egress_swap_unavailable once (error level, counts only), and /v1/health fails the
+// post-deploy smoke with keySwap "off".
 // Local and test keep today's behaviour.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { KEYS_WITHHELD_MESSAGE, compileNetworkPolicy } from '../src/network-policy'
@@ -14,9 +15,14 @@ const SETUP_TOKEN = 'sk-ant-oat01-FAKEsetupTOKEN_for_tests_only_000000000000'
 let logs: string[] = []
 beforeEach(() => {
   logs = []
+  errors = []
   for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
-      logs.push(args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' '))
+      const line = args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ')
+      logs.push(line)
+      if (method === 'error') {
+        errors.push(line)
+      }
     })
   }
 })
@@ -42,7 +48,8 @@ function startEnv(h: Awaited<ReturnType<typeof createHarness>>): Record<string, 
   )
 }
 
-const withheldEvents = () => logs.filter((line) => line.includes('"event":"egress_swap_off_no_proxy"'))
+let errors: string[] = []
+const withheldEvents = () => errors.filter((line) => line.includes('"event":"egress_swap_unavailable"'))
 
 describe('EGRESS-SWAP-FAIL-CLOSED', () => {
   it('a deployed env without the proxy withholds model keys: placeholder in the VM, the firewall answers it with a plain error', async () => {
@@ -67,8 +74,10 @@ describe('EGRESS-SWAP-FAIL-CLOSED', () => {
     })
     expect(JSON.parse((answer as { response: { body: string } }).response.body).error.message).toBe(KEYS_WITHHELD_MESSAGE)
     expect(rules.at(-1)).toMatchObject({ response: { statusCode: 403, body: 'orca-egress-denied' } })
-    // Logged once for the session, however many times its env is read.
+    // Logged once for the session at error level, however many times its env is read: a count, no names.
     expect(withheldEvents()).toHaveLength(1)
+    expect(JSON.parse(withheldEvents()[0]!)).toEqual({ event: 'egress_swap_unavailable', sandboxId: id, environment: 'staging', withheld: 1 })
+    expect(withheldEvents()[0]).not.toContain('ANTHROPIC')
     await h.call('POST', `/v1/sandboxes/${id}/env/refresh`, { bearer: mia })
     expect(withheldEvents()).toHaveLength(1)
   })
@@ -87,6 +96,19 @@ describe('EGRESS-SWAP-FAIL-CLOSED', () => {
     })
   })
 
+  it('a deployed env with the proxy behaves as today: placeholder forwarded to the proxy, no event', async () => {
+    const { h, mia } = await setup({ SANDBOX_ENV: 'staging', EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy' })
+    await h.call('PUT', '/v1/secrets/personal/ANTHROPIC_API_KEY', { body: { value: KEY }, bearer: mia })
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const env = startEnv(h)
+    expect(env.ANTHROPIC_API_KEY).not.toBe(KEY)
+    const box = [...h.vercel.boxes.values()][0]!
+    expect(box.policy.allow['*']).toEqual([])
+    expect(box.policy.allow['api.anthropic.com']![0]).toMatchObject({ forwardURL: 'https://sandbox.test/v1/egress/proxy' })
+    expect(JSON.stringify(box.policy)).not.toContain(KEYS_WITHHELD_MESSAGE)
+    expect(withheldEvents()).toHaveLength(0)
+  })
+
   it('test and local keep today’s behaviour without a proxy: plain env injection, no event', async () => {
     const { h, mia } = await setup({ SANDBOX_ENV: 'test' })
     await h.call('PUT', '/v1/secrets/personal/ANTHROPIC_API_KEY', { body: { value: KEY }, bearer: mia })
@@ -99,11 +121,11 @@ describe('EGRESS-SWAP-FAIL-CLOSED', () => {
 
   it('/v1/health is 503 egress_proxy_missing in a deployed env without the proxy, 200 with it or in local/test', async () => {
     const missing = await setup({ SANDBOX_ENV: 'staging' })
-    expect(await missing.h.call('GET', '/v1/health')).toMatchObject({ status: 503, body: { error: 'egress_proxy_missing' } })
+    expect(await missing.h.call('GET', '/v1/health')).toEqual({ status: 503, body: { error: 'egress_proxy_missing', keySwap: 'off' } })
     const present = await setup({ SANDBOX_ENV: 'staging', EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy' })
-    expect(await present.h.call('GET', '/v1/health')).toMatchObject({ status: 200, body: { ok: true } })
+    expect(await present.h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true, keySwap: 'on' } })
     const local = await setup({ SANDBOX_ENV: 'test' })
-    expect((await local.h.call('GET', '/v1/health')).status).toBe(200)
+    expect(await local.h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true, keySwap: 'off' } })
   })
 
   it('a respond route compiles to a matched direct response, before the trailing deny', () => {
