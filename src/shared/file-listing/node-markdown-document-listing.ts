@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import type { MarkdownDocument } from './file-document'
 import { RipgrepFilenameDecoder } from '../ripgrep/ripgrep-filename-decoder'
 import {
@@ -38,7 +38,7 @@ export const MARKDOWN_DOCUMENT_LISTING_ARGS = [
 ]
 
 export function collectMarkdownDocuments(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   rootPath: string,
   windowsOutput = false,
   signal?: AbortSignal,

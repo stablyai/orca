@@ -21,10 +21,6 @@ export type UnconfirmedSend = {
   deadline: ReturnType<typeof setTimeout> | null
 }
 
-export function normalizedUserText(message: NativeChatMessage): string | null {
-  return normalizedNativeChatUserMessageText(message)
-}
-
 export type PendingImagePreviewEcho = Pick<
   NativeChatPendingSend,
   'id' | 'text' | 'sentAt' | 'afterMessageId' | 'matchingOccurrence'
@@ -161,7 +157,7 @@ export function findLandedImagePreviewEchoes(
         return false
       }
       if (targetText) {
-        const text = normalizedUserText(message)
+        const text = normalizedNativeChatUserMessageText(message)
         if (text === null) {
           return false
         }
@@ -199,7 +195,9 @@ export function findLandedUnconfirmedSends(
     if (message.role !== 'user') {
       continue
     }
-    const key = isImageSourceUserTurn(message) ? '' : (normalizedUserText(message) ?? '')
+    const key = isImageSourceUserTurn(message)
+      ? ''
+      : (normalizedNativeChatUserMessageText(message) ?? '')
     const current = userMessagesByText.get(key) ?? []
     current.push({ id: message.id, index })
     userMessagesByText.set(key, current)

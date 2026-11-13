@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { hashKey, useQueryClient } from '@tanstack/react-query'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSourceControlSettings } from './mobile-source-control-settings-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
-import { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -16,7 +16,12 @@ import {
   readBranchCompareOutcome,
   type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
-import { gitStatusQuery } from './mobile-git-status-query'
+import {
+  gitStatusQuery,
+  publishGitStatusSummary,
+  type GitStatusRead
+} from './mobile-git-status-query'
+import { hostQueryKey } from '../query/host-query-key'
 import type {
   LoadStatusOptions,
   MobileBranchCompareState,
@@ -54,7 +59,7 @@ export type MobileSourceControlLoaders = {
   screenState: ScreenState
   branchCompareState: MobileBranchCompareState
   mountedRef: MutableRefObject<boolean>
-  setRootRef: (node: View | null) => void
+  setRootRef: (node: HostInstance | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
   // Shown rows are being re-read; feeds the header's refresh line.
   refreshing: boolean
@@ -103,8 +108,36 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     enabled: statusEnabled,
     subscribed: focused
   })
+  // Published as each read is accepted: a summary read answering just after would otherwise look newer.
+  useEffect(() => {
+    const statusKey = hostQueryKey(hostId, gitStatusQuery.family, target, NO_INPUT)
+    const statusHash = hashKey(statusKey)
+    const publish = (accepted: boolean) => {
+      const state = queryClient.getQueryState<GitStatusRead>(statusKey)
+      if (state?.data) {
+        void publishGitStatusSummary(
+          queryClient,
+          hostId,
+          target,
+          state.data,
+          state.dataUpdatedAt,
+          accepted
+        )
+      }
+    }
+    publish(false)
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'success' &&
+        event.query.queryHash === statusHash
+      ) {
+        publish(true)
+      }
+    })
+  }, [hostId, queryClient, target])
   const mountedRef = useRef(true)
-  const setRootRef = useCallback((node: View | null): void => {
+  const setRootRef = useCallback((node: HostInstance | null): void => {
     // Invalidate route-detached RPC writes without waiting for passive cleanup.
     mountedRef.current = node !== null
   }, [])

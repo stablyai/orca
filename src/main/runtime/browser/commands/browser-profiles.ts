@@ -11,7 +11,7 @@ import type {
   BrowserTabSetProfileResult,
   BrowserProfileClearDefaultCookiesResult,
   BrowserProfileImportFromBrowserResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'

@@ -4,7 +4,9 @@ import type {
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
 import { browserPageDocLocationsEqual } from '../../../../../../shared/browser-page-doc-location'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/constants'
+import '../../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
+import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
 import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
 import { isDocPreviewUrl } from '../../../../../../shared/document-preview/doc-preview-scheme'
 import { basename } from '@/lib/path'
@@ -32,17 +34,7 @@ export function normalizeBrowserTitle(
     }
     return title
   }
-  if (
-    url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
-    title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
-    !title
-  ) {
-    // Why: don't surface the internal blank-guest URL as a title (leaks an impl detail, looks broken); show "New Tab" instead.
-    return 'New Tab'
-  }
-  return title
+  return getBrowserDisplayTitle(title, url)
 }
 
 export function buildBrowserPage(

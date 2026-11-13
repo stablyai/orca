@@ -1,5 +1,6 @@
 import type { Session, WebContents } from 'electron'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
   isBlankBrowserPopupUrl,
   normalizeBrowserPopupUrl
@@ -169,14 +170,14 @@ export function createBrowserRouteGuestPopupController(input: {
     gesture: BrowserGuestInputGesture
   ): (details?: PopupRequest) => Electron.WindowOpenHandlerResponse {
     return (details) => {
-      const clicked = gesture.consume()
+      const observed = gesture.consume()
       const normalized = normalizeBrowserPopupUrl(details?.url)
       if (
         disposed ||
         !normalized ||
         popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS ||
         !navigationAllowed(normalized) ||
-        !clicked
+        !observed
       ) {
         if (!disposed) {
           reportBlockedPopup(details?.url)
@@ -197,6 +198,7 @@ export function createBrowserRouteGuestPopupController(input: {
           opener: source,
           options,
           background: details?.disposition === 'background-tab',
+          showWhenAppActive: observed.byAgent,
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
           onCreated: (nativeOptions) => openPopup(nativeOptions, details?.url ?? normalized)
         })
@@ -208,6 +210,7 @@ export function createBrowserRouteGuestPopupController(input: {
           openPopup(
             {
               ...options,
+              showWhenAppActive: observed.byAgent,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:
                 !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)

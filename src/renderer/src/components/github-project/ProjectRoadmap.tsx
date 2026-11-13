@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRoadmapBar from './ProjectRoadmapBar'
@@ -10,7 +10,7 @@ import { ProjectTitleCell } from './ProjectCellIdentity'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { formatRoadmapTick } from './roadmap-tick-format'
 import { loadRoadmapZoom, saveRoadmapZoom } from './roadmap-zoom-preference'
-import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
+import { groupRows, sortRows } from '../../../../shared/github/projects/project-group-sort'
 import {
   buildRoadmapTicks,
   getRoadmapSpan,
@@ -20,8 +20,11 @@ import {
   type RoadmapSpan,
   type RoadmapTick,
   type RoadmapZoom
-} from '../../../../shared/github/project-roadmap-timeline'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-roadmap-timeline'
+import type {
+  GitHubProjectRow,
+  GitHubProjectTable
+} from '../../../../shared/github/projects/project-types'
 
 const LABEL_WIDTH_PX = 280
 const LANE_HEIGHT_PX = 36

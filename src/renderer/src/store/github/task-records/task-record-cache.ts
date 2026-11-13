@@ -1,23 +1,23 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '../../types'
 import type { StoreApi } from 'zustand'
-import { githubTaskIdentity } from '@/lib/github-task-target'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { lookupReposBySlugFromCache } from '@/lib/repo-slug-cache'
+import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import { lookupReposBySlugFromCache } from '@/lib/workspace/catalog/repo-slug-cache'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
 import { projectViewSourceScope } from '../cache/cache-identity'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { patchGitHubProjectRowContent } from '../projects/project-row-actions'
 import { buildProjectWorkItem } from '@/components/github-project/project-work-item'
 import { isEmptyTaskChange, type TaskChange, type TaskFacts } from './task-change'
 import type {
   GitHubProjectRow,
   GitHubProjectTable
-} from '../../../../../shared/github/project-types'
+} from '../../../../../shared/github/projects/project-types'
 import {
   PROJECT_ASSIGNEE_LIMIT,
   PROJECT_LABEL_LIMIT,

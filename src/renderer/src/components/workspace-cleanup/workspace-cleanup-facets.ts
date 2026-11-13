@@ -1,4 +1,4 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
@@ -23,7 +23,7 @@ import type {
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import type { Translate } from '@/i18n/use-translate'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
@@ -118,7 +118,7 @@ export function buildWorkspaceCleanupFacets(
     identity: hostIdentity,
     repoId: candidate.repoId,
     repoName: candidate.repoName,
-    displayName: candidate.displayName,
+    displayName: candidate.displayName ?? '',
     path: candidate.path,
     branch,
     hostId: worktree?.hostId ?? getWorkspaceCleanupCandidateHostId(candidate),

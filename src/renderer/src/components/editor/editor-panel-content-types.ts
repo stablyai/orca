@@ -2,7 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
-import type { CsvFilePreview } from './csv/csv-file-content'
+import type { CsvFilePreview } from './csv/preview/csv-file-content'
 import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 
 /** Transient owner hydration/connection failure; retry instead of reading remote paths locally and latching access errors. */
@@ -22,6 +22,17 @@ export const WORKTREE_HOST_UNRESOLVED_CODE = 'editor_host_workspace_unresolved'
 /** English fallback for `loadError` alongside the code above; the error view localizes it by code. */
 export const WORKTREE_HOST_UNRESOLVED_ERROR =
   "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
+
+export type ReloadContentOptions = {
+  wakeWslDistro?: boolean
+  /** Skip a file that is no longer failed, such as one already reloaded when its host answered. */
+  onlyIfFailed?: boolean
+}
+
+/** A user's Retry may boot a stopped WSL distro. */
+export const USER_RETRY: ReloadContentOptions = { wakeWslDistro: true }
+/** After Start: the host is already up, and the editor's retry may have reloaded the file. */
+export const HOST_STARTED: ReloadContentOptions = { onlyIfFailed: true }
 
 export type FileContent = {
   mediaUrl?: string

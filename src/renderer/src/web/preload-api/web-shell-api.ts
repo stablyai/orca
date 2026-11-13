@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 
 async function pathExistsOnRuntime(path: string): Promise<boolean> {

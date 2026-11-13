@@ -1,10 +1,10 @@
 import type { AppState } from '@/store/types'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { useOwnedDiffComments } from '@/components/diff-comments/use-diff-comment-owner'
-import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
+import { withoutMarkdownReviewNotes } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { formatDiffComments } from '@/lib/diff-comments-format'
+import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
 import { translate } from '@/i18n/i18n'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 

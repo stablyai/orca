@@ -5,10 +5,13 @@ import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-  isDesktopBrowserBridgeMethod
+  DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
+  isDesktopBrowserBridgeMethod,
+  isHostReachableDocument
 } from '../../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
@@ -21,10 +24,7 @@ import {
   DesktopBrowserBridgeManager,
   type DesktopBrowserBridgeCandidate
 } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-manager'
-import {
-  executeDesktopBrowserBridgeRequest,
-  isHostReachableDocument
-} from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
+import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
@@ -137,7 +137,7 @@ export function installDesktopBrowserBridge(options: {
       const connection = getPreferredPairedRuntimeConnection(
         resolveEnvironment(userDataPath, environmentId)
       )
-      return subscribeRemoteRuntimeRequest(
+      return subscribeRemoteRuntimeTransport(
         connection,
         'desktopBrowserBridge.attach',
         { bridgeClientId: BRIDGE_CLIENT_ID },
@@ -152,7 +152,8 @@ export function installDesktopBrowserBridge(options: {
             ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
             DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
             DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
-            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY
           ]
         }
       )

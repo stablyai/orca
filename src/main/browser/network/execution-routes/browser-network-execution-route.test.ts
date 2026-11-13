@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { resolveNativeBrowserNetworkExecutionRoute } from './browser-network-execution-route'
 import {
   browserNetworkExecutionHostKey,
-  parseBrowserNetworkExecutionHostKey,
-  resolveNativeBrowserNetworkExecutionRoute
-} from './browser-network-execution-route'
+  parseBrowserNetworkExecutionHostKey
+} from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 
 describe('browser network execution route', () => {
   it('uses structural keys for delimiter-containing execution-host identities', () => {

@@ -1,11 +1,13 @@
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type {
   WorkerTerminalArchiveKind,
-  WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
 } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import { summarizeWorkerOutputArchive } from '../../../../orchestration/workers/archives/worker-output-archive'
+import {
+  releaseCommitFieldsForCapturedArchive,
+  releaseCommitFieldsForStoredArchive
+} from '../../../../orchestration/workers/archives/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './worker-observation'
@@ -18,6 +20,7 @@ import { stopStructuredWorkerForRelease } from './structured-worker-release-stop
 import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
 import { WorkerTerminalReleaseSingleFlight } from './worker-terminal-release-single-flight'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 
 export type WorkerReleaseReceipt = {
@@ -156,12 +159,11 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
   const archive = db.getWorkerTerminalArchive(dispatchId)
-  let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
-  let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
-  let capturedArchive: { kind: WorkerTerminalArchiveKind; content: string } | undefined
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
-  if (!archive) {
-    const capture = await captureWorkerReleaseArchive({
+  let recorded: { kind: WorkerTerminalArchiveKind; content: string } | undefined
+  let stored = archive ? releaseCommitFieldsForStoredArchive(archive) : undefined
+  if (!stored) {
+    const capture = captureWorkerReleaseArchive({
       db,
       resource,
       runtime,
@@ -173,21 +175,18 @@ async function completeWorkerTerminalReleaseOnce(
     if ('receipt' in capture) {
       return capture.receipt
     }
-    const { captured } = capture
-    capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
-    archiveSource = captured.kind === 'terminal_tail' ? 'terminal' : 'transcript'
-    archiveStatus = captured.status
-  } else {
-    const stored = summarizeWorkerOutputArchive(archive)
-    archiveSource ??= stored.source
-    archiveStatus ??= stored.status
+    const { kind, content, ...fields } = releaseCommitFieldsForCapturedArchive(capture.captured)
+    recorded = { kind, content }
+    stored = fields
   }
+  const archiveSource = stored.archiveSource
+  const archiveStatus = stored.archiveStatus
   const committed = db.commitWorkerTerminalArchiveForRelease({
     dispatchId,
     resourceId: resource.id,
-    ...capturedArchive,
+    ...recorded,
     archiveSource,
-    archiveStatus: archiveStatus === 'empty' ? 'empty' : 'captured'
+    archiveStatus
   })
   const releasing = !isStillReleasing(committed)
     ? committed
@@ -265,10 +264,6 @@ async function completeWorkerTerminalReleaseOnce(
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
     archive: archiveSummary(released)
   }
-}
-
-export function releaseUnknownRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays this release_unknown receipt. Never substitute a broad terminal close.`
 }
 
 function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {

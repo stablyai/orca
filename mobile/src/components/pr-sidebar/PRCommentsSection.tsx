@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import type { PRState } from '../../../../src/shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { PRState } from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { GitHubPrRepoSlug } from '../../source-control/review/github-pr-repo-slug'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -239,6 +239,7 @@ export function PRCommentsSection({
                   )}
                   submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={actions.isRootBusy}
+                  draftKey={actions.draftKey(null)}
                   onSubmit={actions.addRootComment}
                 />
               </View>
@@ -267,6 +268,7 @@ export function usePRCommentCardActions(
             isResolveBusy: actions.isResolveBusy,
             isEditBusy: actions.isEditBusy,
             isDeleteBusy: actions.isDeleteBusy,
+            draftKey: actions.draftKey,
             prRepo: prRepo ?? null
           }
         : undefined,

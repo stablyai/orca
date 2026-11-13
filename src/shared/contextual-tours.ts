@@ -1,9 +1,11 @@
+import { BROWSER_EXTENSION_DISCOVERY_TOUR } from './browser/extensions/browser-extension-discovery-tour'
 import type { FeatureInteractionId } from './feature-interactions'
 
 export type ContextualTourId =
   | 'workspace-board'
   | 'workspace-agent-sessions'
   | 'browser'
+  | 'browser-extensions'
   | 'client-hosted-browser'
   | 'tasks'
   | 'automations'
@@ -25,6 +27,7 @@ export type ContextualTourStepActionKind =
   | 'open-tasks'
   | 'open-getting-started'
   | 'open-client-hosted-browser-settings'
+  | 'open-chrome-web-store'
 
 export type ContextualTourStepAction = {
   kind: ContextualTourStepActionKind
@@ -54,6 +57,7 @@ export type ContextualTourStep = {
 
 export type ContextualTour = {
   id: ContextualTourId
+  kind?: 'announcement'
   preserveFocus?: boolean
   allowedActiveModals?: readonly string[]
   steps: readonly ContextualTourStep[]
@@ -130,18 +134,11 @@ export const CONTEXTUAL_TOURS = [
     id: 'browser',
     steps: [
       {
-        id: 'browser-grab',
-        title: 'Grab page context for agents',
-        body: "Use the grab tool to copy a page element's context for agents.",
-        targetSelector: '[data-contextual-tour-target="browser-grab-control"]',
-        requiredForStart: true,
-        preferredPlacement: 'bottom'
-      },
-      {
         id: 'browser-annotate',
         title: 'Mark design feedback in place',
         body: 'Annotate elements and send those notes to an agent.',
         targetSelector: '[data-contextual-tour-target="browser-annotation-control"]',
+        requiredForStart: true,
         preferredPlacement: 'bottom'
       },
       {
@@ -155,6 +152,7 @@ export const CONTEXTUAL_TOURS = [
       }
     ]
   },
+  BROWSER_EXTENSION_DISCOVERY_TOUR,
   {
     id: 'client-hosted-browser',
     steps: [

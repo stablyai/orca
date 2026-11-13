@@ -5,9 +5,12 @@ import type {
   PRCheckAnnotation,
   PRCheckDetail,
   PRCheckJob
-} from '../../../../shared/github/check-types'
+} from '../../../../shared/github/checks/check-types'
 
 export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = translate): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return t('checks.gitlabAllowedFailure', 'Allowed to fail')
+  }
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
     return t('auto.components.github.prCheckPresentation.successful', 'Successful')
@@ -37,6 +40,16 @@ export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = transla
     return t('auto.components.github.prCheckPresentation.inProgress', 'In progress')
   }
   return t('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
+}
+
+export function isGitLabAllowedFailureJob(check: PRCheckDetail, job: PRCheckJob): boolean {
+  return (
+    check.gitlabAllowedFailure === true &&
+    check.conclusion === 'neutral' &&
+    job.conclusion === 'neutral' &&
+    check.gitlabJobId !== undefined &&
+    job.id === check.gitlabJobId
+  )
 }
 
 export function getCheckDetailsKey(check: PRCheckDetail): string {

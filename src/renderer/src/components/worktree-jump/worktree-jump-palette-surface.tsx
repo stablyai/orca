@@ -193,7 +193,7 @@ export function WorktreeJumpPaletteSurface({
   )
 
   return (
-    <TooltipProvider delayDuration={400}>
+    <TooltipProvider>
       <PaletteLiveStatusProvider active={controller.paletteStatusInputsActive}>
         {paletteDialog}
       </PaletteLiveStatusProvider>

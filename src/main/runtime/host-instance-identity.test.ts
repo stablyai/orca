@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -129,6 +129,26 @@ describe('ensureHostInstanceIdentity', () => {
       ensureHostInstanceIdentity(dir, vmA, failingWriteOf(HOST_INSTANCE_FILENAME))
     ).toMatchObject({ kind: 'kept' })
     expect((await identity(dir)).registry.validateToken(before.token)).not.toBeNull()
+  })
+
+  it('deletes files staged by a rotation that crashed before its marker, keeping the identity', async () => {
+    ensureHostInstanceIdentity(dir, vmA)
+    const before = await pairedHost(dir)
+    // A crash mid-staging leaves `.next` files (one holds a secret key) and no `rotating` marker.
+    writeNewE2EEKeypair(dir, (path, value) => writeDurableSecureJsonFile(`${path}.next`, value))
+    writeDurableSecureJsonFile(join(dir, `${DEVICE_REGISTRY_FILENAME}.next`), [])
+
+    expect(ensureHostInstanceIdentity(dir, vmA)).toEqual({ kind: 'unchanged' })
+    expect(readdirSync(dir).filter((name) => name.endsWith('.next'))).toEqual([])
+    const after = await identity(dir)
+    expect(after.publicKeyB64).toBe(before.publicKeyB64)
+    expect(after.registry.validateToken(before.token)).not.toBeNull()
+
+    // A marker that cannot be read might have said `rotating`; its staged files stay.
+    writeDurableSecureJsonFile(join(dir, `${DEVICE_REGISTRY_FILENAME}.next`), [])
+    writeFileSync(join(dir, HOST_INSTANCE_FILENAME), '{not json')
+    ensureHostInstanceIdentity(dir, null)
+    expect(readdirSync(dir).filter((name) => name.endsWith('.next'))).toHaveLength(1)
   })
 
   it('finishes a publish interrupted after the marker on the next start, without the variable', async () => {

@@ -12,10 +12,8 @@ src/main/runtime/orchestration/terminal-authority/verify-orchestration-compatibi
 src/main/runtime/orchestration/terminal-authority/orchestration-compatibility-authority.ts
 src/main/managed-server/migration/cutover/orcad-migration-delta-move.test.ts
 src/main/managed-server/migration/cutover/orcad-migration-delta-move.ts
-src/main/managed-server/migration/linking/orcad-migration-repository-link.test.ts
 src/main/ssh/migration-source/orcad-migration-terminal-gate.test.ts
 src/main/ssh/migration-source/orcad-migration-terminal-gate.ts
-src/main/ssh/host-server/ssh-host-server-on-connect.test.ts
 src/main/ssh/host-server/ssh-host-server-on-connect.ts
 src/main/ssh/targets/ssh-target-orcad-preflight.ts
 src/preload/api-types.ts

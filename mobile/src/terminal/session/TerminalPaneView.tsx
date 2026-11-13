@@ -10,12 +10,12 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { TerminalFrame } from '../terminal-webview-messages'
 import { TerminalWebView } from '../TerminalWebView'
 import type {
-  MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
   TerminalPointerInput,
   TerminalWebViewHandle
 } from '../terminal-webview-contract'
+import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 
 type TerminalPaneViewProps = {
   handle: string
@@ -28,9 +28,11 @@ type TerminalPaneViewProps = {
   title?: string
   onFrame?: (handle: string, frame: TerminalFrame) => void
   keyboardLift: number
-  terminalTheme?: MobileTerminalTheme
+  terminalTheme?: RuntimeMobileTerminalTheme
   textScale: number
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
+  // Must keep one identity: the pane reports its document gone when it unmounts.
+  onDocumentReleased: (handle: string) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
   onSelectionCopy: (handle: string, text: string) => void
@@ -63,6 +65,7 @@ export function TerminalPaneView({
   terminalTheme,
   textScale,
   onRef,
+  onDocumentReleased,
   onWebReady,
   onSelectionMode,
   onSelectionCopy,
@@ -82,10 +85,7 @@ export function TerminalPaneView({
 }: TerminalPaneViewProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [visited, setVisited] = useState(visible)
-  if (visible && !visited) {
-    setVisited(true)
-  }
+  useEffect(() => () => onDocumentReleased(handle), [handle, onDocumentReleased])
   const [routeFocused, setRouteFocused] = useState(false)
   useFocusEffect(
     useCallback(() => {
@@ -113,13 +113,9 @@ export function TerminalPaneView({
       ? terminalPaneKeyboardLayout(splitFrame, splitDirection, splitIndex, keyboardInset)
       : null
 
-  if (!visible && !visited) {
-    return null
-  }
-
   return (
     <View
-      // Hidden terminals stay mounted so changing the visible pair preserves scrollback.
+      // Hidden terminals the session keeps mounted preserve scrollback when the visible pair changes.
       pointerEvents={visible ? 'auto' : 'none'}
       style={[
         styles.terminalPane,
@@ -205,7 +201,7 @@ export function TerminalPaneView({
 
 const styles = themedStyleSheet(() => ({
   terminalPane: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   paneViewport: { flex: 1, overflow: 'hidden' },
   paneHeading: {

@@ -21,7 +21,7 @@ import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 export function TaskPageJiraContent({
   model
 }: {

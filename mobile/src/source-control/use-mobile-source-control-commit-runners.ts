@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -12,7 +12,8 @@ type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => P
 type RunGitWorkflow = (
   actionId: string,
   runner: () => Promise<void>,
-  options?: { clearCommitMessage?: boolean }
+  // The committed message; the field is cleared only while it still holds that text.
+  options?: { clearCommitMessage?: string }
 ) => Promise<boolean>
 
 type Params = {
@@ -28,7 +29,7 @@ type Params = {
   busyActionRef: MutableRefObject<string | null>
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
-  setCommitMessage: (next: string) => void
+  setCommitMessage: Dispatch<SetStateAction<string>>
   recordCommitFailure: RecordMobileCommitFailure
 }
 
@@ -80,7 +81,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           throw err
         }
       },
-      { clearCommitMessage: true }
+      { clearCommitMessage: message }
     )
   }, [commitMessage, recordCommitFailure, runGitWorkflow, sendCommitRequest, stagedEntries])
 
@@ -101,11 +102,12 @@ export function useMobileSourceControlCommitRunners(params: Params) {
       try {
         await sendCommitRequest(message)
         didCommit = true
+        // The commit landed: a kill during the push must not bring its message back, and text typed since stays.
+        setCommitMessage((current) => (current.trim() === message ? '' : current))
         await afterCommit()
         if (!mountedRef.current) {
           return false
         }
-        setCommitMessage('')
         triggerSuccess()
         await loadStatus({ force: true })
         return true
@@ -122,7 +124,6 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
         }
         if (didCommit) {
-          setCommitMessage('')
           await loadStatus({
             clearActionErrorOnSuccess: false,
             force: true

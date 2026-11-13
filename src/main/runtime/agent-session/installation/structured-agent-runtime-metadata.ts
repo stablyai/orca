@@ -16,7 +16,7 @@ import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../
 import { supportsClaudeStructuredLocation } from '../../../claude/structured/launch/claude-structured-location-support'
 import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -26,7 +26,7 @@ import {
   claudeModelCatalogDiscovery,
   codexModelCatalogDiscovery
 } from '../model-catalog/structured-agent-model-catalog-discovery'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import type {
   StructuredAgentAccountHomeRequest,
@@ -149,6 +149,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: codexModelCatalogDiscovery,
       ...CODEX_CLI_CONVERSATIONS,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
+      launchFollowsSelection: () => true,
       resolveAccountHome: async (request, services) =>
         agentSessionAccountHome(
           CODEX_STRUCTURED_AGENT,

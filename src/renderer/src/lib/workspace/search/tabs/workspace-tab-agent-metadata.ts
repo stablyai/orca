@@ -7,7 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { isExecutionHostAliasForWorktree } from '../../../worktree-execution-host-alias'
+import { isExecutionHostAliasForWorktree } from '../../ownership/worktree-execution-host-alias'
 
 export type AgentMetadata = {
   paneKey: string

@@ -10,8 +10,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { trackAgentDefaultSurfaceChanged } from '../../../feature-tips/feature-tip-telemetry'
 import {
@@ -254,7 +254,7 @@ export function AgentDefaultSurfaceSection({
           role="radiogroup"
           aria-label={title}
           aria-busy={pending}
-          className="grid gap-3.5 @3xl:grid-cols-2"
+          className="grid gap-3.5 @2xl:grid-cols-2"
         >
           <SurfaceTile
             name={name}

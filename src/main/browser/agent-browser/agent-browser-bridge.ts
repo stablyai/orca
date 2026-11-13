@@ -11,7 +11,7 @@ import type {
   BrowserCaptureStopResult,
   BrowserConsoleResult,
   BrowserNetworkLogResult
-} from '../../../shared/runtime-browser-contracts'
+} from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
 import {
   parseShellArgs,
@@ -278,7 +278,8 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
       worktreeId,
       browserPageId,
       async (sessionName) => await this.execAgentBrowser(sessionName, args, { cliArgv: true }),
-      { elements: passthroughElementArgs(args) }
+      // Raw commands and batches can click or press keys too.
+      { elements: passthroughElementArgs(args), blockFileChooser: true }
     )
   }
 }

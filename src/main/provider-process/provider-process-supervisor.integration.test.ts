@@ -7,6 +7,7 @@ import {
   createProviderSpawnSpec,
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
+  PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL,
   supervisedPosixLaunch,
   type ProviderSupervisorOptions
 } from './provider-process-supervisor'
@@ -15,7 +16,9 @@ import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 // The provider leads its own group; its grandchild shares that group and ignores SIGTERM.
 const PROVIDER = String.raw`
   const { spawn } = require('node:child_process')
-  if (process.env.ORCA_TEST_PROVIDER_IGNORES_SIGTERM) process.on('SIGTERM', () => {})
+  if (process.env.ORCA_TEST_PROVIDER_IGNORES_SIGTERM) {
+    process.on('SIGTERM', () => console.log(JSON.stringify({ sigterm: process.pid })))
+  }
   if (process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE) {
     process.on('SIGTERM', () => {
       require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, 'SIGTERM')
@@ -300,6 +303,25 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
 
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
     expect(groupAliveAtExit).toBe(false)
+    expect(alive(provider)).toBe(false)
+    expect(alive(grandchild)).toBe(false)
+  })
+
+  it('reaps the group at once when a stopping supervisor is asked to', async () => {
+    const { supervisor, exit } = launchSupervisor({}, { ORCA_TEST_PROVIDER_IGNORES_SIGTERM: '1' })
+    const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
+
+    // ast-grep-ignore: test-no-wall-clock -- the cut SIGTERM grace is the behaviour under test
+    const startedAt = Date.now()
+    supervisor.kill('SIGTERM')
+    // Repeat only once the first stop reached the group, so the two signals cannot coalesce.
+    await readPids(supervisor, ['sigterm'])
+    expect(alive(-provider)).toBe(true)
+    supervisor.kill(PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)
+
+    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
+    // ast-grep-ignore: test-no-wall-clock -- the full grace is 3 s; a reap-now request must not wait it out
+    expect(Date.now() - startedAt).toBeLessThan(1_500)
     expect(alive(provider)).toBe(false)
     expect(alive(grandchild)).toBe(false)
   })

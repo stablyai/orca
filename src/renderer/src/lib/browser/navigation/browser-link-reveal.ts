@@ -1,5 +1,8 @@
 import type { AppState } from '@/store/types'
-import { captureWorkspaceSelection, isWorkspaceSelected } from '../../active-workspace-host'
+import {
+  captureWorkspaceSelection,
+  isWorkspaceSelected
+} from '../../workspace/ownership/active-workspace-host'
 
 type SelectionState = Partial<
   Pick<AppState, 'activeView' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>

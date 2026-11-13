@@ -9,33 +9,13 @@ import type {
   MobileSessionTabType
 } from '../../../session/tabs/mobile-session-tabs'
 import type { Terminal } from '../../../terminal/session/mobile-terminal-model'
-import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 
 const PREVIOUS_HANDLE = 'terminal-0'
 
-const DECLARABLE_AGENTS = ['claude', 'codex'] as const satisfies readonly TuiAgent[]
-
-function declaredAgent(value: unknown): TuiAgent | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  const agent = DECLARABLE_AGENTS.find((candidate) => candidate === value)
-  if (!agent) {
-    throw new Error(`Unknown agent: ${String(value)}`)
-  }
-  return agent
-}
-
 // Record unsubscribe choice to catch leaked desktop dimensions; no device subscription runs here.
 // Scenario inputs own wire values and omissions: worktree/tab on mount, launch options on create.
 // The scheduler pins time/randomness and primes React so mutation ids stay deterministic.
-const AGENT_LAUNCH_HOST_CAPABILITIES = [
-  'agent.launch.v2',
-  'agent.launch.replay.v1',
-  'agent.launch.replay-required.v1'
-]
-
 export function sessionTerminalCreateMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -51,7 +31,7 @@ export function sessionTerminalCreateMountAdapters(
       let activeHandle: string | null = PREVIOUS_HANDLE
       let worktreeId = ''
       let activeSessionTabId: string | null = null
-      let hostCapabilities: string[] = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+      const hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
       let creating = false
       let createError = ''
       const terminalsRef = { current: terminals }
@@ -132,42 +112,21 @@ export function sessionTerminalCreateMountAdapters(
             activeSessionTabId =
               typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
             activeSessionTabIdRef.current = activeSessionTabId
-            hostCapabilities = [
-              ...(args.supportsSplitGroupPlacement === false
-                ? []
-                : [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]),
-              ...(args.agentLaunch === true ? AGENT_LAUNCH_HOST_CAPABILITIES : [])
-            ]
             deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
             return hook.mount()
           }
           if (name !== 'create') {
             throw new Error(`Unknown terminal create action: ${name}`)
           }
-          const agent = declaredAgent(args.agent)
-          if (
-            args.startupCommandDelivery !== undefined &&
-            args.startupCommandDelivery !== 'shell-ready'
-          ) {
-            throw new Error(`Unknown startup delivery: ${String(args.startupCommandDelivery)}`)
-          }
-          // Preserve omitted launch options so bare New Tab reaches the structured-provider branch.
           const options = {
             ...(args.initialPrompt === undefined
               ? {}
               : { initialPrompt: String(args.initialPrompt) }),
             ...(args.successToast === undefined ? {} : { successToast: String(args.successToast) }),
-            ...(args.errorToast === undefined ? {} : { errorToast: String(args.errorToast) }),
-            ...(args.startupCommand === undefined
-              ? {}
-              : { startupCommand: String(args.startupCommand) }),
-            ...(args.startupCommandDelivery === undefined
-              ? {}
-              : { startupCommandDelivery: 'shell-ready' as const }),
-            ...(args.agentPrompt === undefined ? {} : { agentPrompt: String(args.agentPrompt) })
+            ...(args.errorToast === undefined ? {} : { errorToast: String(args.errorToast) })
           }
           return actions!.handleCreateTerminal(
-            agent,
+            undefined,
             Object.keys(options).length === 0 ? undefined : options
           )
         },

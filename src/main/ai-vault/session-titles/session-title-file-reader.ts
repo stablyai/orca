@@ -1,4 +1,4 @@
-import { wslGatedLstat } from '../../native-chat/wsl-transcript-fs-access'
+import { wslGatedLstat } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
   type AiVaultSessionTitle,

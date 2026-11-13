@@ -1,6 +1,6 @@
 import { pickTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { newAgentLaunchesMayOpenChats } from '@/runtime/native-chat/local-sessions/local-structured-chats'
-import { acquireAgentLaunchChoices } from '../../../host-chat-program-acquisition'
+import { acquireAgentLaunchChoices } from '../../../agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
@@ -11,13 +11,17 @@ import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import {
   ensureDetectedAgentsForTarget,
   readDetectedAgentsForTarget
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-chat-program'
+import {
+  chosenAgentChatUnlearned,
+  agentChoiceOpensAsChat
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
@@ -88,7 +92,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
   }
   // No user gesture: opening this empty workspace is the one action this chat serves.
   const agentSessionLaunchPlan = planAgentSessionLaunch(state, {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     agent,
     workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
     tuiCustomization: { cwd: initialCwd }
@@ -97,7 +101,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
   if (agentSessionLaunchPlan.route === 'terminal-tui') {
     return null
   }
-  const result = launchAgentInNewTab({
+  const result = launchAgentInNewTabWithOutcome({
     agent,
     worktreeId,
     initialCwd,

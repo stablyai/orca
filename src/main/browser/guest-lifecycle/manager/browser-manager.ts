@@ -1,13 +1,21 @@
 import { webContents } from 'electron'
 import { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { BrowserManagerEventForwarding } from './browser-manager-event-forwarding'
 
 type OpenLinkInTab = (url: string, activate: boolean) => void
 
 export class BrowserManager extends BrowserManagerEventForwarding {
-  protected openLinkInOrcaTab(browserTabId: string, rawUrl: string, activate?: boolean): boolean {
+  protected openLinkInOrcaTab(
+    browserTabId: string,
+    rawUrl: string,
+    activate?: boolean,
+    // Opened while an agent drives the page, not by the desktop user's own click.
+    agentOpened = false
+  ): boolean {
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     const open: OpenLinkInTab | null = renderer
       ? // The renderer owns Orca's tab model; forward the validated URL for materialization.
@@ -15,7 +23,8 @@ export class BrowserManager extends BrowserManagerEventForwarding {
           renderer.send('browser:open-link-in-orca-tab', {
             browserPageId: browserTabId,
             url,
-            ...(activateTab ? {} : { activate: false })
+            // An agent's link must not move the desktop user's view.
+            ...(activateTab && !agentOpened ? {} : { activate: false })
           })
       : this.resolveOffscreenTabOpener(browserTabId)
     if (!open) {

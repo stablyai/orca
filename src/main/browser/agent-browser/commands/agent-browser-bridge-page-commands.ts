@@ -7,12 +7,19 @@ import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-brows
 import type {
   BrowserBackResult,
   BrowserReloadResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog
 } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
+import {
+  cancelBrowserPasskeyRequests,
+  getBrowserPasskeyRequest
+} from '../../webauthn/browser-passkey-requests'
+import { formatBrowserPasskeyRequest } from '../../../../shared/browser-passkey-request'
+import { browserGuestHasNothingToReload } from '../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
+import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
 import { captureRemoteCliBrowserRevocation } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
   ExpectedPageUrlGuard,
@@ -72,10 +79,22 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     guard?.verify(this.livePageUrls(target))
     // Chrome answers an untouched prompt with its default text.
     const promptText = text ?? getBrowserJavaScriptDialog(webContentsId)?.defaultPromptText ?? ''
-    if (!answerBrowserJavaScriptDialog(webContentsId, { accept, promptText })) {
-      throw new BrowserError('browser_no_dialog', 'No JavaScript dialog is open on this page')
+    if (answerBrowserJavaScriptDialog(webContentsId, { accept, promptText })) {
+      return { accepted: accept, ...guard?.withReceipt({}) }
     }
-    return { accepted: accept, ...guard?.withReceipt({}) }
+    // The page's passkey request is the dialog Chrome would show; only cancelling it is possible here.
+    if (!accept && cancelBrowserPasskeyRequests(webContentsId)) {
+      // A security key's account chooser belongs to the request being cancelled.
+      cancelBrowserWebAuthnAccountRequests(target.browserPageId)
+      return { accepted: false, ...guard?.withReceipt({}) }
+    }
+    const passkeyRequest = getBrowserPasskeyRequest(webContentsId)
+    throw new BrowserError(
+      'browser_no_dialog',
+      passkeyRequest
+        ? `No JavaScript dialog is open on this page. ${formatBrowserPasskeyRequest(passkeyRequest.origin, `orca dialog dismiss --page ${target.browserPageId}`)}`
+        : 'No JavaScript dialog is open on this page'
+    )
   }
 
   async storageLocalGet(
@@ -196,23 +215,29 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
     })
   }
 
   async forward(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
     })
   }
 
   async reload(worktreeId?: string, browserPageId?: string): Promise<BrowserReloadResult> {
     // Reload directly because a process swap can destroy the helper session mid-command.
-    return this.enqueuePageAction(worktreeId, browserPageId, async (_sessionName, target) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
+      }
+      if (browserGuestHasNothingToReload({ url: wc.getURL(), loading: wc.isLoading() })) {
+        throw new BrowserError(
+          'browser_error',
+          'Nothing to reload: this page never finished loading. Navigate to its URL instead.'
+        )
       }
       wc.reload()
       await new Promise<void>((resolve) => {
@@ -243,6 +268,14 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           fallbackTimer.unref()
         }
       })
+      // did-fail-load also ends the wait; the page then shows an error document, not a reload.
+      const loadError = this.browserManager.getBrowserPageLoadError(target.browserPageId)
+      if (loadError) {
+        throw new BrowserError(
+          'browser_error',
+          `Reload failed: ${loadError.description} (${loadError.code})`
+        )
+      }
       return { url: wc.getURL(), title: wc.getTitle() }
     })
   }

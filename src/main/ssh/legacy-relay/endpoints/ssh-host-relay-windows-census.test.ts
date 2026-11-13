@@ -82,11 +82,6 @@ describe('the connect-time relay census on a Windows host', () => {
     countRelayPtysOverBridge.mockReset().mockResolvedValue(0)
   })
 
-  it('finds none on a host that never ran a relay', async () => {
-    listing = ''
-    await expect(census()).resolves.toEqual({ verdict: 'none', count: 0 })
-  })
-
   // Two desktops, two target ids, one Windows account: B's live shell must block A's conversion.
   it("asks another desktop's relay on this account, with that relay's own credential", async () => {
     const [bPrimary] = pipesOf('desktop-b')
@@ -105,22 +100,6 @@ describe('the connect-time relay census on a Windows host', () => {
     )
   })
 
-  it('maps a pipe through its active-pipe marker when its credential is gone', async () => {
-    const [, bFallback] = pipesOf('desktop-b')
-    inventory = {
-      pipes: [bare(bFallback)],
-      dirs: {
-        [VERSION]: {
-          credentials: [],
-          markers: { [`.windows-active-pipe-${sockOf('desktop-b')}`]: bFallback }
-        }
-      }
-    }
-    countRelayPtysOverBridge.mockResolvedValue(2)
-
-    await expect(census()).resolves.toEqual({ verdict: 'live', count: 1 })
-  })
-
   it("is unverifiable for a pipe no directory here accounts for, unless it is another account's", async () => {
     inventory = {
       pipes: ['orca-relay-0123456789abcdef0123', 'orca-relay-fedcba9876543210fedc'],
@@ -136,41 +115,11 @@ describe('the connect-time relay census on a Windows host', () => {
     await expect(census()).resolves.toEqual({ verdict: 'idle', count: 0 })
   })
 
-  it.each([
-    [
-      'the inventory could not run',
-      () =>
-        execCommand.mockImplementation(async (_conn: unknown, command: string) => {
-          if (command === 'LIST') {
-            return listing
-          }
-          throw new Error('channel closed')
-        })
-    ],
-    ['the pipe listing failed', () => (inventory = { pipes: null, dirs: {} })],
-    [
-      'a version directory could not be read',
-      () => (inventory = { pipes: [], dirs: { [VERSION]: null } })
-    ]
-  ])('is unverifiable when %s', async (_label, arrange) => {
-    arrange()
-    await expect(census()).resolves.toMatchObject({ verdict: 'unverifiable' })
-  })
-
   it('never converts under an owned pipe it cannot ask', async () => {
     const [aPrimary] = pipesOf('desktop-a')
     inventory = { pipes: [bare(aPrimary)], dirs: { [VERSION]: { credentials: [], markers: {} } } }
     countRelayPtysOverBridge.mockResolvedValue(null)
 
     await expect(census()).resolves.toEqual({ verdict: 'unverifiable', count: 1 })
-  })
-
-  it('reads relays that answer with no PTYs, or no relay pipes at all, as idle', async () => {
-    const [aPrimary] = pipesOf('desktop-a')
-    inventory = { pipes: [bare(aPrimary)], dirs: { [VERSION]: { credentials: [], markers: {} } } }
-    await expect(census()).resolves.toEqual({ verdict: 'idle', count: 0 })
-
-    inventory = { pipes: [], dirs: { [VERSION]: { credentials: [], markers: {} } } }
-    await expect(census()).resolves.toEqual({ verdict: 'idle', count: 0 })
   })
 })

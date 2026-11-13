@@ -10,7 +10,7 @@ import type {
 } from '../../../../../shared/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
@@ -208,7 +208,7 @@ export function RemoteBrowserPageViewport({
             <ReopenBrowserPageOnServerButton
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={browserTab.url}
+              reopenUrl={browserTab.url}
               className="h-6 shrink-0 px-2 text-xs"
             />
           ) : null}

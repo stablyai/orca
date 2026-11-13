@@ -1,9 +1,8 @@
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
-  isClipboardTextByteLengthOverLimitWithYield,
-  measureClipboardTextByteLength
+  isClipboardTextByteLengthOverLimitWithYield
 } from '../../clipboard-text'
-import { getUtf8ChunkEndIndex } from '../../utf8-byte-limits'
+import { getUtf8ChunkEndIndex, measureUtf8ByteLength } from '../../utf8-byte-limits'
 
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = 16 * 1024
 export const TERMINAL_INPUT_MAX_BYTES = 16 * 1024 * 1024
@@ -11,7 +10,7 @@ export const TERMINAL_INPUT_TOO_LARGE_ERROR =
   'Terminal input is too large for a safe terminal send.'
 
 export function getTerminalInputByteLength(text: string): number {
-  return measureClipboardTextByteLength(text).byteLength
+  return measureUtf8ByteLength(text).byteLength
 }
 
 export function assertTerminalInputWithinLimit(
@@ -30,7 +29,7 @@ export function isTerminalInputTooLarge(
 ): boolean {
   return (
     text.length > maxBytes ||
-    measureClipboardTextByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
+    measureUtf8ByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
   )
 }
 
@@ -69,7 +68,7 @@ export function* iterateTerminalInputChunks(
     return
   }
   const normalizedMax = Number.isFinite(maxChunkBytes) && maxChunkBytes > 0 ? maxChunkBytes : 1
-  const measurement = measureClipboardTextByteLength(text, { stopAfterBytes: normalizedMax })
+  const measurement = measureUtf8ByteLength(text, { stopAfterBytes: normalizedMax })
   if (!measurement.exceededLimit) {
     yield text
     return

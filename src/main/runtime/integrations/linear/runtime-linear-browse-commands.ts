@@ -1,17 +1,26 @@
 import type { LinearCustomViewModel } from '../../../../shared/linear/project-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
-import { getIssueComments } from '../../../linear/linear-issue-comments'
-import { createProject, getProject, listProjects } from '../../../linear/linear-project-queries'
+import { getIssueComments } from '../../../linear/issues/linear-issue-comments'
+import {
+  createProject,
+  getProject,
+  listProjects
+} from '../../../linear/projects/linear-project-queries'
 import {
   getCustomView,
   listCustomViewIssues,
   listCustomViewProjects,
   listCustomViews
-} from '../../../linear/linear-custom-view-queries'
-import { listProjectIssues } from '../../../linear/linear-project-issue-queries'
-import type { LinearProjectCreateInput } from '../../../linear/linear-project-nodes'
-import { getTeamLabels, getTeamMembers, getTeamStates, listTeams } from '../../../linear/teams'
+} from '../../../linear/custom-views/linear-custom-view-queries'
+import { listProjectIssues } from '../../../linear/projects/linear-project-issue-queries'
+import type { LinearProjectCreateInput } from '../../../linear/collections/linear-collection-nodes'
+import {
+  getTeamLabels,
+  getTeamMembers,
+  getTeamStates,
+  listTeams
+} from '../../../linear/teams/linear-team-queries'
 
 export class RuntimeLinearBrowseCommands {
   linearIssueComments(issueId: string, workspaceId?: string): ReturnType<typeof getIssueComments> {

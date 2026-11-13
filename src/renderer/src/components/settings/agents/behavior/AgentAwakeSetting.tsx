@@ -41,7 +41,7 @@ export function AgentAwakeSetting({
       description={description}
       keywords={getAgentAwakeSearchKeywords(undefined, t)}
     >
-      <div className="flex items-start justify-between gap-4 py-3">
+      <div data-settings-row="" className="flex items-start justify-between gap-4 py-3">
         <div className="min-w-0 flex-1 space-y-0.5">
           <Label>{title}</Label>
           <p className="text-xs text-muted-foreground">{description}</p>

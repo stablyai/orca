@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { RuntimeClient } from '../../../src/cli/runtime-client'
+import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary

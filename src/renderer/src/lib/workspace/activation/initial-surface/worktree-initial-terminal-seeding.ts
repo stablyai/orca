@@ -7,14 +7,14 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
-import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
 import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
 import { useAppStore } from '@/store/index'
-import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
+import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
+import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
 import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
@@ -226,21 +226,22 @@ export function ensureWorktreeHasInitialTerminal(
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
-    if (existingTerminalTabId && (setup || issueCommand)) {
-      // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback setup.
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+    const queuedOnExisting = existingTerminalTabId !== null && Boolean(setup || issueCommand)
+    // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback
+    // setup. Editor- or browser-only workspaces run it in its own tab.
+    if (queuedOnExisting || setup) {
       queueSetupAndIssueCommands(
         store,
         worktreeId,
         existingTerminalTabId,
         setup,
-        issueCommand,
+        existingTerminalTabId ? issueCommand : undefined,
         wrappedSetupCommandStr,
         opts
       )
-      return existingTerminalTabId
     }
-    return null
+    return queuedOnExisting ? existingTerminalTabId : null
   }
 
   const templatedTabId = applyDefaultTerminalTabs(

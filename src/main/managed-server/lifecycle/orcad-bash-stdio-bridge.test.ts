@@ -1,12 +1,11 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess as Bridge } from '@orca/process-host/process-spec'
-import { OrcadStdioBridgeUnavailableError } from '../../orcad/orcad-host-unavailable'
+import { OrcadStdioBridgeUnavailableError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { checkOrcadStdioBridge, type OrcadStdioBridge } from './orcad-stdio-bridge'
 import { orcadBashStdioBridgeCommand } from './orcad-stdio-bridge-script'
 import { OrcadStdioBridgeDecoder } from './orcad-stdio-bridge-stream'
@@ -39,7 +38,10 @@ afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function spawnBridge(port: number, env: Partial<NodeJS.ProcessEnv> = {}): Bridge {
+function spawnBridge(
+  port: number,
+  env: Partial<NodeJS.ProcessEnv> = {}
+): ChildProcessWithoutNullStreams {
   return spawnProcess({
     program: '/bin/sh',
     args: ['-c', orcadBashStdioBridgeCommand(port)],
@@ -51,7 +53,7 @@ function realCat(): string {
   return spawnSync('sh', ['-c', 'command -v cat'], { encoding: 'utf8' }).stdout.trim()
 }
 
-function exitOf(child: Bridge): Promise<number | null> {
+function exitOf(child: ChildProcessWithoutNullStreams): Promise<number | null> {
   return new Promise((resolve) => child.once('exit', (code) => resolve(code)))
 }
 

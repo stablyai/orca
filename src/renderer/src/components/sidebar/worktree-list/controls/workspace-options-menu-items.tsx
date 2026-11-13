@@ -35,6 +35,7 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
+import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -46,7 +47,8 @@ export function useWorkspaceOptionsFilterBadge(): {
     () =>
       countActiveWorkspaceFilters(
         sidebarWorkspaceRowFilters(filterState),
-        repos.map((repo) => repo.id)
+        // A filter id with no listed copy filters nothing, so it does not count.
+        withoutHiddenRepos(repos).map((repo) => repo.id)
       ),
     [filterState, repos]
   )

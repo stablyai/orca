@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import { recomputeOn } from '@/lib/recompute-on'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.

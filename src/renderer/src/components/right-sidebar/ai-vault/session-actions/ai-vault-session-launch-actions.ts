@@ -1,47 +1,53 @@
 import { openAiVaultSessionHistoryChatForRow } from '../../ai-vault-session-history-chat-open'
 import {
+  notifyAiVaultSessionNoContinuationContext,
   notifyAiVaultSessionPreparationFailure,
   resolveAiVaultSessionLaunchTargetOrNotify
 } from './ai-vault-session-launch-feedback'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from '@/lib/agent-session/resume/history/ai-vault-resume-command'
-import type {
-  AiVaultResumeCommandSession,
-  AiVaultResumeStartup
-} from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import {
   assertAiVaultCopiedSessionLaunchAllowed,
   buildAiVaultCopiedSessionStartupForWorktree,
   buildAiVaultForkStartupForWorktree
 } from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
-import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
+import { launchAiVaultSessionAndReveal } from '@/lib/agent-session/resume/history/launch-ai-vault-session-and-reveal'
 import { useAppStore } from '@/store/index'
-import type {
-  AiVaultAgent,
-  AiVaultSession
-} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   dropDeletedRemoteResumeCwd,
   prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume
 } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 import { describeAiVaultCliForkFailure } from './ai-vault-session-cli-fork'
-import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
-import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import {
+  loadDatabaseAiVaultSessionContinuation,
+  prepareAiVaultSessionContinuation
+} from './ai-vault-session-continuation'
+import { isAiVaultDatabaseAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
+import type {
+  AiVaultResumeCommandSession,
+  AiVaultResumeStartup
+} from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import type {
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
@@ -54,8 +60,12 @@ export function useAiVaultSessionLaunchActions({
   targetState: AiVaultSessionResumeTargetState
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
 }) {
-  const [continuationRequest, setContinuationRequest] =
-    useState<AgentSessionContinuationRequest | null>(null)
+  // An open dialog whose request is null is still saving the conversation on its host.
+  const [continuation, setContinuation] = useState<{
+    request: AgentSessionContinuationRequest | null
+  } | null>(null)
+  // Only the latest Hand Off may fill or close the dialog.
+  const continuationAttempt = useRef<object | null>(null)
 
   const buildResumeCommand = useCallback(
     (session: AiVaultSession, worktreeId?: string | null): string =>
@@ -224,7 +234,7 @@ export function useAiVaultSessionLaunchActions({
         session,
         session.agent,
         worktreeId,
-        newAgentLaunchRequestId()
+        createNonSecureContextUuid()
       )
     },
     [activeWorktree?.id, activeWorktreeId]
@@ -256,20 +266,33 @@ export function useAiVaultSessionLaunchActions({
         )
         return
       }
-      setContinuationRequest(
-        prepareAiVaultSessionContinuation({
-          session,
-          targetWorktreeId: targetId.worktreeId,
-          targetWorkspacePath
-        })
-      )
+      const target = { session, targetWorktreeId: targetId.worktreeId, targetWorkspacePath }
+      const attempt = {}
+      continuationAttempt.current = attempt
+      if (!isAiVaultDatabaseAgent(session.agent)) {
+        setContinuation({ request: prepareAiVaultSessionContinuation(target) })
+        return
+      }
+      setContinuation({ request: null })
+      void loadDatabaseAiVaultSessionContinuation(target).then((request) => {
+        if (continuationAttempt.current !== attempt) {
+          return
+        }
+        if (request) {
+          setContinuation({ request })
+          return
+        }
+        setContinuation(null)
+        notifyAiVaultSessionNoContinuationContext()
+      })
     },
     [activeWorktree?.id, activeWorktreeId, targetState]
   )
 
   const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {
     if (!open) {
-      setContinuationRequest(null)
+      continuationAttempt.current = null
+      setContinuation(null)
     }
   }, [])
 
@@ -280,7 +303,8 @@ export function useAiVaultSessionLaunchActions({
     handleResumeInNewCli,
     handleResumeInNewChat,
     handleContinueInNewSession,
-    continuationRequest,
+    continuationOpen: continuation !== null,
+    continuationRequest: continuation?.request ?? null,
     handleContinuationDialogOpenChange
   }
 }

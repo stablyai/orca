@@ -9,7 +9,7 @@ import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-arg
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
@@ -27,7 +27,7 @@ import {
 } from './codex-skill-list'
 import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
-import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps

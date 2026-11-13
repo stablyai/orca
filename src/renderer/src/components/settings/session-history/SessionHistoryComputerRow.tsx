@@ -1,8 +1,8 @@
 import { Laptop, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 
 const NO_DETAILS: readonly string[] = []
 
@@ -73,11 +73,11 @@ export function SessionHistoryComputerRow({
         ))}
       </div>
       <div className="shrink-0">
-        <SettingsSwitch
+        <Switch
           checked={checked}
           disabled={disabled}
-          onChange={onToggle}
-          ariaLabel={t('sessionHistory.settings.rowSwitchLabel', 'Search sessions on {{host}}', {
+          onCheckedChange={onToggle}
+          aria-label={t('sessionHistory.settings.rowSwitchLabel', 'Search sessions on {{host}}', {
             host: name
           })}
         />

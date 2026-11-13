@@ -1,55 +1,22 @@
 // @vitest-environment happy-dom
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
-import {
-  mobileQueuedMessageCards,
-  type MobileQueuedMessageCard
-} from '../../mobile-structured-queued-message-cards'
+import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 
-import { createElement } from 'react'
-import type * as QueuedCardRowModule from '../../MobileQueuedMessageCardRow'
-import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
-import {
-  useMobileNativeChatLowerGeometry,
-  useMobileNativeChatLowerRegion
-} from '../mobile-native-chat-lower-region-context'
+import { createElement, type ReactElement } from 'react'
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
-import {
-  useMobileNativeChatComposerTray,
-  type MobileNativeChatComposerTray
-} from '../composer/use-mobile-native-chat-composer-tray'
-import { useMobileQueuedMessageComposerActions } from '../../use-mobile-queued-message-composer-actions'
-import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-agent-mutation'
-import type {
-  AgentSessionQueuedMessage,
-  AgentSessionQueuedMessageMoveResult
-} from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
-import {
-  MobileAgentMessageContext,
-  MobileAgentMessageOpenContext,
-  createMobileAgentMessageSource
-} from '../transcript/mobile-agent-message-context'
-import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
-import { formatOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../src/shared/orca-session-address-test-fixture'
+import type { ActionSheetAction } from '../../../components/ActionSheetModal'
+import { MobileNativeChatQueueAbovePromptContext } from '../mobile-native-chat-lower-region-context'
+import { createMobileQueuedHeadLight } from './mobile-queued-head-light'
+import { QUEUED_ROW_SHOW_SETTLE_MS } from './mobile-queued-row-frame'
+import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { pressedStyle } from '../../../theme/mobile-theme'
 
-const rowRenders = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../MobileQueuedMessageCardRow', async (importOriginal) => {
-  const original = await importOriginal<typeof QueuedCardRowModule>()
-  return {
-    MobileQueuedMessageCardRow: (
-      props: Parameters<typeof original.MobileQueuedMessageCardRow>[0]
-    ) => {
-      rowRenders.count++
-      return createElement(original.MobileQueuedMessageCardRow, props)
-    }
-  }
-})
 let fontScale = 1
+let windowWidth = 390
 vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
@@ -61,7 +28,7 @@ vi.mock('react-native-reanimated', async () => {
 })
 
 vi.mock('react-native', () => ({
-  useWindowDimensions: () => ({ fontScale }),
+  useWindowDimensions: () => ({ fontScale, width: windowWidth }),
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -78,7 +45,7 @@ vi.mock('lucide-react-native', () => ({
   ArrowUpRight: 'ArrowUpRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
-  ChevronRight: 'ChevronRight',
+  ChevronUp: 'ChevronUp',
   CornerDownRight: 'CornerDownRight',
   ListEnd: 'ListEnd',
   MoreHorizontal: 'MoreHorizontal',
@@ -97,7 +64,7 @@ vi.mock('./MobileNativeChatDockedTaskList', () => ({
   MobileNativeChatDockedTaskList: 'DockedTaskList'
 }))
 
-vi.mock('../../MobileQueuedMessageComposer', () => ({
+vi.mock('./MobileQueuedMessageComposer', () => ({
   MobileQueuedMessageComposer: 'QueuedMessageComposer'
 }))
 
@@ -122,21 +89,53 @@ describe('MobileNativeChatQueuedMessages', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks()
+    windowWidth = 390
     act(() => renderer?.unmount())
     renderer = null
     await activateMobileUiLocale('en')
   })
 
-  async function mount(
-    props: Parameters<typeof MobileNativeChatQueuedMessages>[0]
-  ): Promise<ReactTestRenderer> {
+  type Props = Parameters<typeof MobileNativeChatQueuedMessages>[0]
+
+  function element(props: Props, abovePrompt = false): ReactElement {
+    return createElement(
+      MobileNativeChatQueueAbovePromptContext,
+      { value: abovePrompt },
+      createElement(MobileNativeChatQueuedMessages, props)
+    )
+  }
+
+  async function mount(props: Props, abovePrompt = false): Promise<ReactTestRenderer> {
     const mounted = create(createElement('View'))
     renderer = mounted
     await act(async () => {
-      mounted.update(createElement(MobileNativeChatQueuedMessages, props))
+      mounted.update(element(props, abovePrompt))
     })
     return mounted
   }
+
+  function rows(mounted: ReactTestRenderer) {
+    return mounted.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.testID === 'queued-card-row'
+    )
+  }
+
+  function foldToggle(mounted: ReactTestRenderer) {
+    return mounted.root.find(
+      (node) => typeof node.type === 'string' && node.props.testID === 'queued-fold-toggle'
+    )
+  }
+
+  function menuAction(mounted: ReactTestRenderer, id: string) {
+    const actions: ActionSheetAction[] = sheet(mounted).props.actions
+    return actions.find((action) => action.id === id)
+  }
+
+  function dragList(mounted: ReactTestRenderer) {
+    return mounted.root.findAll((node) => String(node.type) === 'DragReorderList')
+  }
+
+  const three = () => [card({ messageId: 'a' }), card({ messageId: 'b' }), card({ messageId: 'c' })]
 
   function control(mounted: ReactTestRenderer, label: string, index = 0) {
     return mounted.root.findAll(
@@ -155,155 +154,13 @@ describe('MobileNativeChatQueuedMessages', () => {
     )
     expect(sheet(mounted).props.visible).toBe(true)
     await act(async () => {
-      mounted.update(
-        createElement(MobileNativeChatQueuedMessages, { cards: [card({ messageId: 'b' })] })
-      )
+      mounted.update(element({ cards: [card({ messageId: 'b' })] }))
     })
     expect(sheet(mounted).props.visible).toBe(false)
     await act(async () => {
-      mounted.update(
-        createElement(MobileNativeChatQueuedMessages, {
-          cards: [card({ messageId: 'a' }), card({ messageId: 'b' })]
-        })
-      )
+      mounted.update(element({ cards: [card({ messageId: 'a' }), card({ messageId: 'b' })] }))
     })
     expect(sheet(mounted).props.visible).toBe(false)
-  })
-
-  it("names a queued message's sender as its chat is now titled, and opens that chat", async () => {
-    const coord = testOrcaSessionId('coord-chat')
-    const from: AgentMessageSource = {
-      kind: 'agent',
-      senders: [
-        {
-          party: {
-            address: formatOrcaSessionAddress(coord),
-            terminalHandle: null,
-            orcaSessionId: coord
-          },
-          name: 'Codex Chat',
-          relation: 'coordinator'
-        }
-      ],
-      orchestration: null
-    }
-    const source = createMobileAgentMessageSource()
-    source.update(
-      [
-        {
-          type: 'agent-session',
-          id: `agent-session:${coord}`,
-          sessionId: coord,
-          agent: 'codex',
-          title: 'Release coordinator',
-          isActive: false
-        }
-      ],
-      [],
-      0
-    )
-    const open = vi.fn()
-    const mounted = create(createElement('View'))
-    renderer = mounted
-    await act(async () => {
-      mounted.update(
-        createElement(
-          MobileAgentMessageOpenContext.Provider,
-          { value: open },
-          createElement(
-            MobileAgentMessageContext.Provider,
-            { value: source },
-            createElement(MobileNativeChatQueuedMessages, {
-              cards: [card({ messageId: 'q', from })]
-            })
-          )
-        )
-      )
-    })
-    const sender = mounted.root.find(
-      (node) =>
-        String(node.type) === 'Pressable' &&
-        node.findAll((child) => child.children.includes('Release coordinator')).length > 0
-    )
-    expect(sender.props.accessibilityRole).toBe('button')
-    await act(async () => sender.props.onPress())
-    expect(open).toHaveBeenCalledWith(from, from.senders[0])
-  })
-
-  it('the empty chord presses only the head card where its own button would, and offers it only while that press would act, across chat switches', async () => {
-    let tray!: MobileNativeChatComposerTray
-    function Tray(props: Parameters<typeof useMobileNativeChatComposerTray>[0]['queued']) {
-      tray = useMobileNativeChatComposerTray({
-        queued: props,
-        taskList: null,
-        backgroundTasks: null
-      })
-      return createElement('View', null, tray.content)
-    }
-    const settles: ((accepted: boolean) => void)[] = []
-    const onSend = vi.fn(() => new Promise<boolean>((resolve) => settles.push(resolve)))
-    const chatA = { sessionKey: 'a', cards: [card({ messageId: 'a1' }), card({ messageId: 'a2' })] }
-    const chatB = { sessionKey: 'b', cards: [card({ messageId: 'b1' })] }
-    const show = async (
-      chat: typeof chatA,
-      props: Partial<Parameters<typeof Tray>[0]> = {}
-    ): Promise<void> => {
-      await act(async () => {
-        renderer ??= create(createElement('View'))
-        renderer.update(createElement(Tray, { ...chat, agentWorking: true, onSend, ...props }))
-      })
-    }
-    const press = (alternateSteers = true) => {
-      let pressed = false
-      act(() => {
-        pressed = tray.steerHead!.run(alternateSteers)
-      })
-      return pressed
-    }
-
-    await show(chatA)
-    expect(tray.steerHead!.steers(true)).toBe(true)
-    expect(press()).toBe(true)
-    expect(onSend).toHaveBeenLastCalledWith('a1')
-    // On its way: neither offered nor admitted again, like a second tap.
-    expect(tray.steerHead!.steers(true)).toBe(false)
-    expect(press()).toBe(false)
-
-    // Another chat's head is its own; A settling later must not clear B's hold.
-    await show(chatB)
-    expect(tray.steerHead!.steers(true)).toBe(true)
-    expect(press()).toBe(true)
-    await act(async () => settles[0]!(true))
-    expect(tray.steerHead!.steers(true)).toBe(false)
-    expect(press()).toBe(false)
-    await act(async () => settles[1]!(true))
-    expect(tray.steerHead!.steers(true)).toBe(true)
-
-    // Back to A, whose list remounts: an action started there still holds until it settles.
-    await show(chatA)
-    expect(press()).toBe(true)
-    await show(chatB)
-    await show(chatA)
-    expect(tray.steerHead!.steers(true)).toBe(false)
-    expect(press()).toBe(false)
-    await act(async () => settles[2]!(true))
-    expect(tray.steerHead!.steers(true)).toBe(true)
-
-    // No turn running (the paused queue after Stop): the head card's own Send.
-    await show(chatA, { agentWorking: false })
-    expect(tray.steerHead!.steers(false)).toBe(true)
-    const refusals: [Partial<Parameters<typeof Tray>[0]>, boolean][] = [
-      [{}, false],
-      [{ steerHeld: true }, true],
-      [{ cards: [card({ messageId: 'a1', command: true }), card({ messageId: 'a2' })] }, true]
-    ]
-    for (const [props, alternateSteers] of refusals) {
-      await show(chatA, props)
-      expect(tray.steerHead!.steers(alternateSteers)).toBe(false)
-      const sends = onSend.mock.calls.length
-      expect(press(alternateSteers)).toBe(false)
-      expect(onSend).toHaveBeenCalledTimes(sends)
-    }
   })
 
   it('runs one action per card at a time, however fast its controls are tapped', async () => {
@@ -311,17 +168,464 @@ describe('MobileNativeChatQueuedMessages', () => {
     const onSend = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
     const onDelete = vi.fn(async () => true)
     const mounted = await mount({ cards: [card({ messageId: 'w' })], onSend, onDelete })
+    await act(async () => control(mounted, 'More actions').props.onPress())
     // Tap all actions before disabled state renders to expose same-frame duplication.
     await act(async () => {
       control(mounted, 'Send this message').props.onPress()
       control(mounted, 'Send this message').props.onPress()
-      control(mounted, 'Delete this queued message').props.onPress()
+      menuAction(mounted, 'deleteMessage')!.onPress()
     })
     expect(onSend).toHaveBeenCalledTimes(1)
     expect(onDelete).not.toHaveBeenCalled()
     expect(control(mounted, 'More actions').props.disabled).toBe(true)
+    expect(menuAction(mounted, 'deleteMessage')!.disabled).toBe(true)
     await act(async () => answer(true))
     expect(control(mounted, 'Send this message').props.disabled).toBe(false)
+  })
+
+  it('folds to the first message above a prompt card and opens from the more row', async () => {
+    const mounted = await mount({ cards: three() }, true)
+    expect(rows(mounted)).toHaveLength(1)
+    expect(foldToggle(mounted).props.accessibilityState).toEqual({ expanded: false })
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(3)
+    expect(foldToggle(mounted).props.accessibilityState).toEqual({ expanded: true })
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(1)
+  })
+
+  it.each([390, 320])(
+    'lets the open list, not the fold row, give up height on a short %ipt screen',
+    async (width) => {
+      windowWidth = width
+      const mounted = await mount({ cards: three() }, true)
+      await act(async () => foldToggle(mounted).props.onPress())
+      const flat = (style: unknown): Record<string, unknown> =>
+        Object.assign({}, ...[style].flat(Infinity).filter(Boolean))
+      const box = mounted.root.find(
+        (node) => typeof node.type === 'string' && node.props.testID === 'queued-box'
+      )
+      const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+      // The box shrinks under a height limit; the list scrolls so Show less below it stays whole.
+      expect(flat(box.props.style)).toMatchObject({ flexShrink: 1, minHeight: 0 })
+      expect(flat(scroll.parent!.props.style)).toMatchObject({ flexShrink: 1, minHeight: 0 })
+      expect(flat(scroll.props.style)).toMatchObject({
+        maxHeight: width < 340 ? 264 : 212,
+        flexShrink: 1,
+        minHeight: 0
+      })
+      expect(flat(foldToggle(mounted).props.style({ pressed: false })).flexShrink).toBeUndefined()
+    }
+  )
+
+  it('opens by default above the composer, and folds again when a prompt card arrives', async () => {
+    const mounted = await mount({ cards: three() })
+    expect(rows(mounted)).toHaveLength(3)
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    expect(rows(mounted)).toHaveLength(1)
+  })
+
+  it('folds again for a later prompt after the person opened the list above an earlier one', async () => {
+    const mounted = await mount({ cards: three() }, true)
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(3)
+    await act(async () => mounted.update(element({ cards: three() })))
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    expect(rows(mounted)).toHaveLength(1)
+  })
+
+  it('opens for a message queued in the same render a prompt arrives', async () => {
+    const mounted = await mount({ cards: three() })
+    // Folded by hand above the composer, then a prompt and a new own message arrive together.
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(1)
+    await act(async () =>
+      mounted.update(element({ cards: [...three(), card({ messageId: 'd' })] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(4)
+  })
+
+  it('scrolls a message the person queues into a folded list into view', async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    await act(async () =>
+      mounted.update(element({ cards: [...three(), card({ messageId: 'd' })] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(4)
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      rows(mounted).forEach((row) =>
+        row.props.onLayout({ nativeEvent: { layout: { height: 60 } } })
+      )
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 240)
+    })
+    // The new last row spans 180–240 of a 100pt list.
+    expect(scrollTo).toHaveBeenLastCalledWith({ y: 140, animated: false })
+  })
+
+  it("opens a folded list for a message the person queues, not for an agent's or a delete", async () => {
+    const mounted = await mount({ cards: three() }, true)
+    await act(async () =>
+      mounted.update(
+        element(
+          {
+            cards: [
+              ...three(),
+              card({ messageId: 'x', from: { kind: 'agent', senders: [], orchestration: null } })
+            ]
+          },
+          true
+        )
+      )
+    )
+    expect(rows(mounted)).toHaveLength(1)
+    await act(async () => mounted.update(element({ cards: three().slice(0, 2) }, true)))
+    expect(rows(mounted)).toHaveLength(1)
+    await act(async () =>
+      mounted.update(element({ cards: [...three().slice(0, 2), card({ messageId: 'd' })] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(3)
+  })
+
+  it('opens a folded list for a failed message behind the fold, with its Send in reach', async () => {
+    const foldText = (mounted: ReactTestRenderer) =>
+      foldToggle(mounted)
+        .findAll((node) => String(node.type) === 'Text')
+        .flatMap((node) => node.props.children)
+        .join('')
+    const failed = (messageId: string) =>
+      card({ messageId, needsAttention: true, caption: "Couldn't send" })
+    const mounted = await mount(
+      {
+        cards: [card({ messageId: 'a' }), failed('b'), card({ messageId: 'c' })],
+        agentWorking: true
+      },
+      true
+    )
+    expect(rows(mounted)).toHaveLength(3)
+    // Mid-turn the others steer, but the failed card offers its retry, Send.
+    const pills = mounted.root.findAll(
+      (node) =>
+        typeof node.type === 'string' &&
+        typeof node.props.accessibilityLabel === 'string' &&
+        node.props.hitSlop !== undefined
+    )
+    expect(pills.map((node) => node.props.accessibilityLabel)).toEqual([
+      'Submit without interrupting the model',
+      'Send this message',
+      'Submit without interrupting the model'
+    ])
+    expect(pills[1]!.props.disabled).toBe(false)
+    expect(foldText(mounted)).not.toContain("Couldn't send")
+    // Folding is still the person's call, and the fold row only counts.
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(rows(mounted)).toHaveLength(1)
+    expect(foldText(mounted)).toBe('2 more')
+    expect(
+      foldToggle(mounted).findAll((node) => String(node.type) === 'Text')[0]!.props
+        .accessibilityLabel
+    ).toBe('2 more, a message needs attention')
+    // An agent's new message does not reopen it for a failure the person already folded away.
+    await act(async () =>
+      mounted.update(
+        element(
+          {
+            cards: [
+              card({ messageId: 'a' }),
+              failed('b'),
+              card({ messageId: 'c' }),
+              card({ messageId: 'z', from: { kind: 'agent', senders: [], orchestration: null } })
+            ]
+          },
+          true
+        )
+      )
+    )
+    expect(rows(mounted)).toHaveLength(1)
+    // A second card failing later opens it again.
+    await act(async () =>
+      mounted.update(element({ cards: [card({ messageId: 'a' }), failed('b'), failed('c')] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(3)
+  })
+
+  it('scrolls a failure that opens a short list into view', async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    await act(async () => mounted.update(element({ cards: three() }, true)))
+    const failedThird = [
+      card({ messageId: 'a' }),
+      card({ messageId: 'b' }),
+      card({ messageId: 'c', needsAttention: true, caption: "Couldn't send" })
+    ]
+    await act(async () => mounted.update(element({ cards: failedThird }, true)))
+    expect(rows(mounted)).toHaveLength(3)
+    // Rows report before the list knows its own size, as when it has just opened.
+    await act(async () => {
+      rows(mounted).forEach((row, index) =>
+        row.props.onLayout({ nativeEvent: { layout: { height: index === 2 ? 80 : 60 } } })
+      )
+    })
+    expect(scrollTo).not.toHaveBeenCalled()
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 200)
+    })
+    // The failed row spans 120–200 of a 100pt list, so the list scrolls to its end.
+    expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: false })
+  })
+
+  it('places a failed row by the current order after a reorder that lays nothing out', async () => {
+    vi.useFakeTimers()
+    try {
+      const scrollTo = vi.fn()
+      const mounted = create(createElement('View'), {
+        createNodeMock: (node) =>
+          node.type === 'ScrollView'
+            ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+            : null
+      })
+      renderer = mounted
+      const ids = (order: string) => [...order].map((messageId) => card({ messageId }))
+      await act(async () => mounted.update(element({ cards: ids('abcd') })))
+      const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+      await act(async () => {
+        scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+        scroll.props.onContentSizeChange(0, 240)
+        rows(mounted).forEach((row) =>
+          row.props.onLayout({ nativeEvent: { layout: { height: 60 } } })
+        )
+      })
+      // Equal-height rows reordered by transform: no row lays out again.
+      await act(async () => mounted.update(element({ cards: ids('bcda') })))
+      scrollTo.mockClear()
+      await act(async () =>
+        mounted.update(
+          element({
+            cards: [...ids('bcd'), card({ messageId: 'a', needsAttention: true })]
+          })
+        )
+      )
+      await act(async () => {
+        vi.advanceTimersByTime(QUEUED_ROW_SHOW_SETTLE_MS)
+      })
+      // a is now last, spanning 180–240 of a 100pt list, not first.
+      expect(scrollTo).toHaveBeenCalledWith({ y: 140, animated: false })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('scrolls to a failure the list mounts open for, and settles when no row lays out again', async () => {
+    vi.useFakeTimers()
+    try {
+      const scrollTo = vi.fn()
+      const mounted = create(createElement('View'), {
+        createNodeMock: (node) =>
+          node.type === 'ScrollView'
+            ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+            : null
+      })
+      renderer = mounted
+      const failed = (messageId: string) =>
+        card({ messageId, needsAttention: true, caption: "Couldn't send" })
+      const lay = async (heights: number[]) => {
+        const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+        await act(async () => {
+          scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+          scroll.props.onContentSizeChange(0, 200)
+          rows(mounted).forEach((row, index) =>
+            row.props.onLayout({ nativeEvent: { layout: { height: heights[index] } } })
+          )
+        })
+      }
+      // Mounted above a prompt with a failure behind the fold: open, and its row is shown.
+      const opened = [card({ messageId: 'a' }), card({ messageId: 'b' }), failed('c')]
+      await act(async () => mounted.update(element({ cards: opened }, true)))
+      expect(rows(mounted)).toHaveLength(3)
+      await lay([60, 60, 80])
+      expect(scrollTo).toHaveBeenLastCalledWith({ y: 100, animated: false })
+      // Open above the composer, a row fails without changing height: no row lays out again,
+      // so the request settles on the heights the list already has.
+      await act(async () =>
+        mounted.update(
+          element({
+            cards: [card({ messageId: 'p' }), card({ messageId: 'q' }), card({ messageId: 'r' })]
+          })
+        )
+      )
+      await lay([60, 60, 80])
+      scrollTo.mockClear()
+      await act(async () =>
+        mounted.update(
+          element({ cards: [card({ messageId: 'p' }), card({ messageId: 'q' }), failed('r')] })
+        )
+      )
+      expect(scrollTo).not.toHaveBeenCalled()
+      await act(async () => {
+        vi.advanceTimersByTime(QUEUED_ROW_SHOW_SETTLE_MS)
+      })
+      expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: false })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("places a failed row below an open inline editor at the editor's height", async () => {
+    const scrollTo = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (node) =>
+        node.type === 'ScrollView'
+          ? { scrollTo, scrollToEnd: vi.fn(), flashScrollIndicators: vi.fn() }
+          : null
+    })
+    renderer = mounted
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only messageId is read; the editor composer is mocked, so the RPC client is never touched.
+    const editor = { messageId: 'a' } as unknown as Props['editor']
+    const cards = [card({ messageId: 'a' }), card({ messageId: 'b' }), card({ messageId: 'c' })]
+    await act(async () => mounted.update(element({ cards, editor })))
+    await act(async () =>
+      mounted.update(
+        element({
+          cards: [cards[0]!, cards[1]!, card({ messageId: 'c', needsAttention: true })],
+          editor
+        })
+      )
+    )
+    const scroll = mounted.root.find((node) => String(node.type) === 'ScrollView')
+    await act(async () => {
+      // The editor row is 200pt tall; the compact rows 60pt.
+      rows(mounted).forEach((row, index) =>
+        row.props.onLayout({
+          nativeEvent: { layout: { x: 0, y: 0, width: 0, height: index === 0 ? 200 : 60 } }
+        })
+      )
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } })
+      scroll.props.onContentSizeChange(0, 320)
+    })
+    // The failed row spans 260–320, past the editor.
+    expect(scrollTo).toHaveBeenLastCalledWith({ y: 220, animated: false })
+  })
+
+  it("fills the head's Steer pill while the composer previews Steer queued", async () => {
+    const headLight = createMobileQueuedHeadLight()
+    const mounted = await mount({ cards: three(), agentWorking: true, headLight })
+    const pills = () =>
+      mounted.root.findAll(
+        (node) =>
+          typeof node.type === 'string' &&
+          node.props.accessibilityLabel === 'Submit without interrupting the model'
+      )
+    const label = (pill: ReturnType<typeof pills>[number]) =>
+      pill.find((node) => String(node.type) === 'Text').props.style
+    expect(pills()[0]!.props.style({ pressed: false })).not.toContain(styles.litAction)
+    await act(async () => headLight.set(true))
+    const [head, second] = pills()
+    expect(head!.props.style({ pressed: false })).toContain(styles.litAction)
+    expect(label(head!)).toContain(styles.litActionLabel)
+    // A press still dims the filled pill.
+    const pressed = head!.props.style({ pressed: true })
+    expect(pressed.indexOf(pressedStyle)).toBeGreaterThan(pressed.indexOf(styles.litAction))
+    expect(second!.props.style({ pressed: false })).not.toContain(styles.litAction)
+  })
+
+  it('keeps a folded list folded when a whole new queue replaces it', async () => {
+    const mounted = await mount({ cards: three() }, true)
+    await act(async () =>
+      mounted.update(element({ cards: [card({ messageId: 'p' }), card({ messageId: 'q' })] }, true))
+    )
+    expect(rows(mounted)).toHaveLength(1)
+  })
+
+  it('leads the first row with Queued and the spoken count, but not on a returned head', async () => {
+    const lead = (mounted: ReactTestRenderer) =>
+      mounted.root.findAll(
+        (node) => typeof node.type === 'string' && node.props.accessibilityLiveRegion === 'polite'
+      )
+    const mounted = await mount({ cards: three() })
+    const [label] = lead(mounted)
+    expect(label!.props.accessibilityLabel).toBe('3 queued messages')
+    expect(label!.props.children).toBe('Queued')
+    await act(async () => mounted.update(element({ cards: [card({ messageId: 'a' })] })))
+    expect(lead(mounted)[0]!.props.accessibilityLabel).toBe('1 queued message')
+    await act(async () =>
+      mounted.update(
+        element({ cards: [card({ messageId: 'a', state: 'returned', caption: 'Returned' })] })
+      )
+    )
+    expect(lead(mounted).some((node) => node.props.children === 'Queued')).toBe(false)
+  })
+
+  it('keeps an expanded message open across a fold and back', async () => {
+    const mounted = await mount({ cards: three() })
+    const text = () =>
+      mounted.root.findAll(
+        (node) => typeof node.type === 'function' && node.type.name === 'MobileQueuedCardText'
+      )
+    await act(async () => text()[0]!.props.onToggle())
+    expect(text()[0]!.props.expanded).toBe(true)
+    await act(async () => foldToggle(mounted).props.onPress())
+    await act(async () => foldToggle(mounted).props.onPress())
+    expect(text().map((node) => node.props.expanded)).toEqual([true, false, false])
+  })
+
+  it('draws one message as a single row with no fold row', async () => {
+    const mounted = await mount({ cards: [card({ messageId: 'a' })] }, true)
+    expect(rows(mounted)).toHaveLength(1)
+    expect(mounted.root.findAll((node) => node.props.testID === 'queued-fold-toggle')).toHaveLength(
+      0
+    )
+  })
+
+  it('offers drag only while two or more messages are open', async () => {
+    const onMove = vi.fn(async () => true)
+    const one = await mount({ cards: [card({ messageId: 'a' })], onMove })
+    expect(dragList(one)).toHaveLength(0)
+    act(() => one.unmount())
+    const folded = await mount({ cards: three(), onMove }, true)
+    expect(dragList(folded)).toHaveLength(0)
+    await act(async () => foldToggle(folded).props.onPress())
+    expect(dragList(folded)).toHaveLength(1)
+  })
+
+  it("moves Delete into the row's menu and keeps Edit off a goal", async () => {
+    const onDelete = vi.fn(async () => true)
+    const onEdit = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'goal', command: true }), card({ messageId: 'text' })],
+      onDelete,
+      onEdit
+    })
+    await act(async () => control(mounted, 'More actions', 0).props.onPress())
+    expect(menuAction(mounted, 'editMessage')).toBeUndefined()
+    await act(async () => menuAction(mounted, 'deleteMessage')!.onPress())
+    expect(onDelete).toHaveBeenCalledWith('goal')
+    await act(async () => control(mounted, 'More actions', 1).props.onPress())
+    await act(async () => menuAction(mounted, 'editMessage')!.onPress())
+    expect(onEdit).toHaveBeenCalledWith('text')
+  })
+
+  it('offers Clear all in the menu of a queue that still sends on its own', async () => {
+    const onClearAll = vi.fn(async () => true)
+    const mounted = await mount({ cards: three(), onClearAll, clearable: true })
+    await act(async () => control(mounted, 'More actions').props.onPress())
+    await act(async () => menuAction(mounted, 'clearAll')!.onPress())
+    expect(onClearAll).toHaveBeenCalledWith(['a', 'b', 'c'])
   })
 
   describe('a paused queue', () => {
@@ -337,71 +641,6 @@ describe('MobileNativeChatQueuedMessages', () => {
         ...props
       })
     }
-
-    it.each([100, 1000])('keeps pending work linear at %i cards', async (size) => {
-      let counting = false
-      let reads = 0
-      let memberships = 0
-      const ids = Array.from({ length: size }, (_, index) => `perf-card-${index}`)
-      const cards = ids.map((messageId) =>
-        Object.defineProperty(card({ messageId }), 'messageId', {
-          get: () => {
-            reads += Number(counting)
-            return messageId
-          }
-        })
-      )
-      const has = Set.prototype.has
-      const membership = vi.spyOn(Set.prototype, 'has')
-      membership.mockImplementation(function (this: Set<unknown>, key: unknown) {
-        if (counting && typeof key === 'string' && key.startsWith('perf-card-')) {
-          memberships++
-        }
-        return has.call(this, key)
-      })
-      const send = Promise.withResolvers<boolean>()
-      const clear = Promise.withResolvers<boolean>()
-      const onClearAll = vi.fn(() => clear.promise)
-      const onResume = vi.fn(async () => true)
-      const onSend = vi.fn(() => send.promise)
-      const mounted = await mountPaused({
-        cards,
-        pause: { reason: 'stopped' },
-        onClearAll,
-        onResume,
-        onSend
-      })
-      const labels = ['Delete every queued message', 'Resume sending the queued messages']
-      const steer = 'Send this message'
-      const trigger = async (action: () => void) => {
-        counting = true
-        await act(async () => action())
-        counting = false
-      }
-      // The last card forces the complete conflict scan; admission and settlement each rerender.
-      await trigger(() => control(mounted, steer, size - 1).props.onPress())
-      expect(onSend).toHaveBeenCalledExactlyOnceWith(ids.at(-1))
-      expect(control(mounted, labels[0]!).props.disabled).toBe(true)
-      await trigger(() => send.resolve(false))
-      // Same frame, before disabled state renders: the shared admission check refuses the rest.
-      await trigger(() => {
-        control(mounted, labels[0]!).props.onPress()
-        control(mounted, labels[1]!).props.onPress()
-        control(mounted, steer).props.onPress()
-      })
-      expect(onClearAll).toHaveBeenCalledExactlyOnceWith(ids)
-      expect([onResume.mock.calls.length, onSend.mock.calls.length]).toEqual([0, 1])
-      const greyed = () => [...labels, steer].map((label) => control(mounted, label).props.disabled)
-      expect(greyed()).toEqual([true, true, true])
-      await trigger(() => clear.resolve(false))
-      expect(greyed()).toEqual([false, false, false])
-      // Four pending/settled renders plus admission: fixed linear budgets, independent of N.
-      expect(reads).toBeGreaterThanOrEqual(4 * size)
-      expect(reads).toBeLessThanOrEqual(36 * size)
-      expect(memberships).toBeGreaterThanOrEqual(size)
-      expect(memberships).toBeLessThanOrEqual(18 * size)
-      console.info('queue operation counts', { cards: size, reads, memberships })
-    })
 
     function resumeButton(mounted: ReactTestRenderer) {
       return control(mounted, 'Resume sending the queued messages')
@@ -423,193 +662,4 @@ describe('MobileNativeChatQueuedMessages', () => {
       expect(onResume).toHaveBeenCalledTimes(2)
     })
   })
-
-  it('admits one queue move synchronously, preserves unrelated actions and releases after settlement', async () => {
-    const messages: AgentSessionQueuedMessage[] = ['a', 'b', 'c', 'd'].map(
-      (messageId, position) => ({
-        messageId,
-        position,
-        state: 'waiting',
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: messageId }] }
-      })
-    )
-    messages[2]!.body.from = { kind: 'agent', senders: [], orchestration: null }
-    type MoveReply = StructuredAgentSessionMutationResult<AgentSessionQueuedMessageMoveResult>
-    const first = Promise.withResolvers<MoveReply>()
-    const second = Promise.withResolvers<MoveReply>()
-    const mutate = vi
-      .fn<(...args: Parameters<MobileStructuredAgentMutate>) => Promise<MoveReply>>()
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-    const send = vi.fn(async () => true)
-    function Harness({ published = messages }: { published?: AgentSessionQueuedMessage[] }) {
-      const queue = useMobileQueuedMessageComposerActions({
-        messages: published,
-        sessionId: 's',
-        sessionKey: 's',
-        reorderCapable: true,
-        enabled: true,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Vitest erases the generic result signature; this hook only requests queuedMessageMove, and both deferred replies are checked as MoveReply.
-        mutate: mutate as MobileStructuredAgentMutate,
-        onSendError: () => {}
-      })
-      return createElement(MobileNativeChatQueuedMessages, {
-        cards: mobileQueuedMessageCards(queue.messages, []),
-        onMove: queue.move,
-        onSend: send
-      })
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    const list = () => renderer!.root.find((node) => String(node.type) === 'DragReorderList')
-    const ids = () => list().props.items.map((entry: MobileQueuedMessageCard) => entry.messageId)
-    const queuedMove = list().props.onMove
-    act(() => {
-      expect(queuedMove({ movedId: 'c', beforeId: 'a' })).toBe(true)
-      expect(queuedMove({ movedId: 'b', afterId: 'd' })).toBe(false)
-    })
-    expect(mutate).toHaveBeenCalledTimes(1)
-    expect(ids()).toEqual(['c', 'a', 'b', 'd'])
-    expect(list().props.canMove).toBeUndefined()
-    expect(list().props.items[0].from).toBeDefined()
-    expect(
-      list().props.items.every((entry: MobileQueuedMessageCard) =>
-        list().props.isMoveDisabled(entry)
-      )
-    ).toBe(true)
-    const movedRow = list().props.renderRow(list().props.items[0])
-    act(() => movedRow.props.onSend())
-    expect(send).not.toHaveBeenCalled()
-    const otherRow = list().props.renderRow(list().props.items[1])
-    await act(async () => otherRow.props.onSend())
-    expect(send).toHaveBeenCalledExactlyOnceWith('a')
-    await act(async () => {
-      first.resolve({
-        status: 'accepted',
-        value: { messageId: 'c', status: 'stale' },
-        sameFence: true
-      })
-      await first.promise
-    })
-    expect(ids()).toEqual(['a', 'b', 'c', 'd'])
-    expect(
-      list().props.items.every(
-        (entry: MobileQueuedMessageCard) => !list().props.isMoveDisabled(entry)
-      )
-    ).toBe(true)
-    act(() => expect(list().props.onMove({ movedId: 'b', afterId: 'd' })).toBe(true))
-    // The host republishes the moved order with fresh positions; cards sort by position.
-    const published = [0, 2, 3, 1].map((index, position) => ({ ...messages[index]!, position }))
-    await act(async () => renderer!.update(createElement(Harness, { published })))
-    expect(ids()).toEqual(['a', 'c', 'd', 'b'])
-    await act(async () => renderer!.unmount())
-    renderer = null
-    await act(async () => {
-      second.resolve({
-        status: 'accepted',
-        value: { messageId: 'b', status: 'moved' },
-        sameFence: true
-      })
-      await second.promise
-    })
-    expect(mutate).toHaveBeenCalledTimes(2)
-  })
 })
-
-for (const population of [10, 100]) {
-  it(`does no queue population work on geometry-only updates with ${population} cards`, async () => {
-    const root = document.createElement('div')
-    root.dataset.testid = 'native-chat-view'
-    const viewport = document.createElement('div')
-    const content = document.createElement('div')
-    root.append(viewport)
-    viewport.append(content)
-    document.body.append(root)
-    let height = 180
-    Object.defineProperties(viewport, {
-      clientHeight: { get: () => height },
-      clientWidth: { value: 300 },
-      scrollHeight: { value: 300 }
-    })
-    vi.spyOn(root, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 300, 500))
-    let visits = 0
-    let operationRenders = 0
-    let observedHeight = 0
-    function GeometryConsumer() {
-      observedHeight = useMobileNativeChatLowerGeometry().viewportHeight
-      return null
-    }
-    function OperationConsumer() {
-      useMobileNativeChatLowerRegion()
-      operationRenders++
-      return null
-    }
-    const cards = Array.from({ length: population }, (_, index) => {
-      const item = card({ messageId: `queued-${index}` })
-      Object.defineProperty(item, 'messageId', {
-        get: () => {
-          visits++
-          return `queued-${index}`
-        }
-      })
-      return item
-    })
-    let mounted: ReactTestRenderer | undefined
-    const paint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    const render = (items: MobileQueuedMessageCard[]) => (
-      <MobileNativeChatLowerRegion>
-        <GeometryConsumer />
-        <OperationConsumer />
-        <MobileNativeChatQueuedMessages cards={items} />
-      </MobileNativeChatLowerRegion>
-    )
-    try {
-      await act(async () => {
-        mounted = create(render(cards), {
-          createNodeMock: (element) => {
-            const props = element.props
-            if (
-              typeof props === 'object' &&
-              props !== null &&
-              'testID' in props &&
-              props.testID === 'native-chat-lower-scroll'
-            ) {
-              return { getScrollableNode: () => viewport }
-            }
-            return element.type === 'ScrollView' ? { scrollToEnd: () => {} } : content
-          }
-        })
-      })
-      await act(paint)
-      await act(paint)
-      expect(observedHeight).toBe(180)
-      visits = 0
-      operationRenders = 0
-      rowRenders.count = 0
-      await act(async () => {
-        height = 120
-        window.dispatchEvent(new Event('resize'))
-        await paint()
-      })
-      expect(observedHeight).toBe(120)
-      expect.soft(operationRenders).toBe(0)
-      expect.soft(rowRenders.count).toBe(0)
-      expect.soft(visits).toBe(0)
-      await act(async () =>
-        mounted!.update(
-          render([...cards, card({ messageId: 'appended', text: 'A real new message' })])
-        )
-      )
-      expect(rowRenders.count).toBeGreaterThan(0)
-      expect(visits).toBeGreaterThan(0)
-      expect(
-        mounted!.root.findAllByProps({ children: 'A real new message' }).length
-      ).toBeGreaterThan(0)
-    } finally {
-      await act(async () => mounted?.unmount())
-      root.remove()
-      vi.restoreAllMocks()
-    }
-  })
-}

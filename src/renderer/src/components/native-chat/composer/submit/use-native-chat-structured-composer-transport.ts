@@ -123,39 +123,49 @@ export function useNativeChatStructuredComposerTransport(args: {
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),
-      send: (text, attachments, ...request) =>
-        sendBlockedReason === null &&
-        sendThroughLaunch(
-          text,
+      send: (text, attachments, ...request) => {
+        if (sendBlockedReason !== null) {
+          return false
+        }
+        const requiresSession =
           attachments.length > 0 ||
-            request[0]?.prepareAttachments !== undefined ||
-            Boolean(request[0]?.skills?.length),
-          () =>
-            controller.send(
-              text,
-              attachments.map(({ path, connectionId }) => ({
-                path,
-                previewUri: path,
-                ...(connectionId ? { connectionId } : {})
-              })),
-              ...request
-            )
-        ),
-      dispatchCommand: (text: string) =>
-        dispatchStructuredAgentSessionComposerCommand(text, {
-          agent: props.agent,
-          snapshot: controller.optionSnapshot,
-          invokeAction: async (id) => {
-            setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
-            return true
+          request[0]?.prepareAttachments !== undefined ||
+          Boolean(request[0]?.skills?.length)
+        if (starting && requiresSession) {
+          onError(nativeChatSessionAttachmentNotReadyNotice(props.agent, true))
+          return false
+        }
+        return sendThroughLaunch(text, requiresSession, () =>
+          controller.send(
+            text,
+            attachments.map(({ path, connectionId }) => ({
+              path,
+              previewUri: path,
+              ...(connectionId ? { connectionId } : {})
+            })),
+            ...request
+          )
+        )
+      },
+      dispatchCommand: (text: string, onSent?: () => void) =>
+        dispatchStructuredAgentSessionComposerCommand(
+          text,
+          {
+            agent: props.agent,
+            snapshot: controller.optionSnapshot,
+            invokeAction: async (id) => {
+              setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
+              return true
+            },
+            setOption: controller.setStructuredOption,
+            sessionCommands: controller.sessionCommands,
+            conversationCommands: controller.conversationCommands,
+            compactInstructions: controller.compactInstructions,
+            runConversationCommand: controller.runConversationCommand,
+            ...(changeThreadGoal ? { changeThreadGoal } : {})
           },
-          setOption: controller.setStructuredOption,
-          sessionCommands: controller.sessionCommands,
-          conversationCommands: controller.conversationCommands,
-          compactInstructions: controller.compactInstructions,
-          runConversationCommand: controller.runConversationCommand,
-          ...(changeThreadGoal ? { changeThreadGoal } : {})
-        }).then(localizeStructuredComposerOutcome),
+          onSent
+        ).then(localizeStructuredComposerOutcome),
       ...(changeThreadGoal
         ? {
             threadGoal: {
@@ -163,7 +173,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           }
         : {}),
-      sendOut: controller.sendOut || starting,
+      sendOut: controller.sendOut,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,

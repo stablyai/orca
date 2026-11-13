@@ -25,8 +25,8 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
       (file.startsWith('src/renderer/src/components/editor/model-lifetime/identity/') ||
         [
           'src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts',
-          'src/renderer/src/lib/editor-file-operation-owner.ts',
-          'src/renderer/src/lib/editor-file-operation-provenance.ts'
+          'src/renderer/src/lib/editor/file-operations/editor-file-operation-owner.ts',
+          'src/renderer/src/lib/editor/file-operations/editor-file-operation-provenance.ts'
         ].includes(file))
   },
   {
@@ -51,7 +51,7 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
         ) ||
         [
           'src/main/ipc/filesystem/filesystem-read-handlers.ts',
-          'src/main/startup/privileged-custom-schemes.ts',
+          'src/main/startup/chromium-policy/privileged-custom-schemes.ts',
           'src/preload/api/fs-bridge.ts',
           'src/renderer/src/runtime/files/reads/runtime-file-range-preview.ts',
           'src/renderer/src/runtime/files/reads/runtime-file-read-client.ts',

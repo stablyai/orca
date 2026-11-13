@@ -1,12 +1,12 @@
 import React from 'react'
 import { GitPullRequest, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { chipStyle, labelChipColors, singleSelectChipColors } from './project-cell-chip-colors'
 import { formatRoadmapSpan } from './roadmap-tick-format'
-import type { RoadmapSpan } from '../../../../shared/github/project-roadmap-timeline'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { RoadmapSpan } from '../../../../shared/github/projects/project-roadmap-timeline'
+import type { GitHubProjectRow } from '../../../../shared/github/projects/project-types'
 
 const MIN_BAR_WIDTH_PX = 24
 

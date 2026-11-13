@@ -1,14 +1,15 @@
 import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { requireActiveEnvironment } from './web-runtime-session'
-import { requireGitHubWorkItemTargetDetails } from '../../../../shared/github/work-item-target'
+import { requireGitHubWorkItemTargetDetails } from '../../../../shared/github/work-items/work-item-target'
+import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
-import { GITHUB_WEB_RPC_METHODS } from './web-github-routes'
-import type { WebGitHubRuntimeMethod } from './web-github-routes'
+import { GITHUB_WEB_RPC_METHODS, type WebGitHubRuntimeMethod } from './web-github-routes'
+
 import { mapRepoPathArg } from '@/runtime/source-control/forge/runtime-repo-selector-params'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { noopUnsubscribe } from './web-storage'
@@ -28,10 +29,7 @@ export function createGitHubApi(): WebGitHubApi {
     prForBranch: ({ wakeWslDistro: _wake, ...args }) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate, reason, userRefresh }) => {
-      const acceptMergedFallbackPR =
-        candidate.linkedPRNumber == null &&
-        candidate.fallbackPRNumber != null &&
-        candidate.fallbackPRSource != null
+      const acceptMergedFallbackPR = shouldAcceptMergedFallbackPR(candidate)
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,

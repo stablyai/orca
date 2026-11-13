@@ -1,12 +1,13 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { WebContents } from 'electron'
-import type { BrowserActionEffects } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserActionEffects } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/browser-page-events'
 import { readRemoteCliAdmittedPage } from '../../routing/input-ownership/remote-cli-page-admission'
 import { readPageChange } from './agent-browser-snapshot-delta'
 import { isLoadingMainFrame } from '../commands/agent-browser-navigation-settle'
+import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 
 // Settle like ChatGPT's browser: wait for a started navigation, then for a short DOM-quiet window.
 const NAVIGATION_START_GRACE_MS = 50
@@ -170,6 +171,7 @@ async function settle(
     if (loadError && loadError !== start.loadError) {
       effects.loadError = clip(loadError)
     }
+    effects.passkeyRequest = getBrowserPasskeyRequest(current.id)
   }
 
   if (effects.page === undefined) {

@@ -13,18 +13,19 @@ import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
 } from './ReopenBrowserPageOnServerButton'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import '../../../../shared/protocol-version'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({
   runtimeEnvironmentId,
   worktreeId,
-  lastCommittedUrl,
+  reopenUrl,
   placementHostClientId
 }: {
   runtimeEnvironmentId: string
   worktreeId: string
-  lastCommittedUrl: string
+  reopenUrl: string
   placementHostClientId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
@@ -86,7 +87,7 @@ export function ClientHostedBrowserUnavailableNotice({
             <ReopenBrowserPageOnServerButton
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={lastCommittedUrl}
+              reopenUrl={reopenUrl}
             />
           </>
         ) : null}

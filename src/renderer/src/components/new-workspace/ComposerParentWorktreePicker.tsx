@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
@@ -5,15 +6,15 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeById,
   getIndexedWorktreeMap
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
@@ -68,11 +69,10 @@ type ComposerParentWorktreePickerProps = {
   activeFolderWorkspaceId?: string | null
 }
 
-type ParentWorktreeCandidateListProps = {
-  repoId: string
-  executionHostId?: ExecutionHostId | null
-  projectId?: string | null
-  value: string | null
+type ParentWorktreeCandidateListProps = Omit<
+  ComposerParentWorktreePickerProps,
+  'onChange' | 'disabled' | 'activeFolderWorkspaceId'
+> & {
   activeFolderWorkspaceId: string | null
   onSelect: (id: string | null) => void
 }
@@ -104,7 +104,9 @@ function ComposerParentWorktreePickerImpl({
           (row) => getWorktreeHostIdentity(row) === value
         )
       : getIndexedWorktreeById(selectWorktreesByRepo(s), value)
-    return parent && !parent.isArchived ? parent.displayName : null
+    return parent && !parent.isArchived && !isWorktreeRetiredByRemoval(parent)
+      ? parent.displayName
+      : null
   })
 
   // Close during render when the drawer disables its trigger; portaled content would otherwise linger through a stale-open frame.
@@ -251,6 +253,7 @@ function ParentWorktreeCandidateList({
       .filter(
         (candidate) =>
           !candidate.isArchived &&
+          !isWorktreeRetiredByRemoval(candidate) &&
           ((folderSubtreeIds === null && isCrossStoreCandidate(candidate)) ||
             (sharesWorktreeLineageBoundary(childBoundary, {
               ...candidate,

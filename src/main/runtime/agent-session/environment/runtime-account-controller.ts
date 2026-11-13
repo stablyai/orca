@@ -10,9 +10,9 @@ import type {
   ManagedDataAccountsState
 } from '../../../../shared/managed-account-types'
 import type { CodexAccountService } from '../../../codex-accounts/service'
-import type { CodexResetCreditRejectedBeforeProviderReason } from '../../../codex-accounts/codex-account-service-types'
+import type { CodexResetCreditRejectedBeforeProviderReason } from '../../../codex-accounts/account-management/codex-account-service-types'
 import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
-import type { RateLimitService } from '../../../rate-limits/service'
+import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type {
   HostAccountSignInChannel,
   HostAccountSignInProvider,
@@ -28,7 +28,7 @@ import {
   getClaudeSelectionTargetForAccount,
   getSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
-} from '../../../claude-accounts/runtime-selection'
+} from '../../../claude-accounts/selection/runtime-selection'
 import {
   hostAccountsManagedByDesktopMessage,
   type HostAccountLaunchEnv

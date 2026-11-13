@@ -304,9 +304,9 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
-    ...args
-  ) => this.sessions.observeConversationPublications(...args)
+  observeConversationPublications = this.sessions.observeConversationPublications
+  beginConversationTitleWait = (sessionId: string) =>
+    this.runtimeState.acquireAborts.begin(sessionId)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer

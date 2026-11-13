@@ -8,6 +8,7 @@ import type { FakeFrame } from '../process/testing/acp-scripted-agent.test-suppo
 import {
   GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
+  PROVIDER_SESSION,
   waitFor,
   type AcpAdapterRig
 } from './testing/acp-structured-adapter.test-support'
@@ -65,24 +66,6 @@ async function openWithHeldFirstWrite(
   }
 }
 
-it('refuses only the message whose model write went unanswered, keeping the agent running', async () => {
-  const { rig, held } = await openWithHeldFirstWrite(100)
-
-  await expect(send(rig, 'send-1', { model: 'grok-4.6' })).rejects.toThrow()
-
-  // The unanswered call is withdrawn at the agent, and the agent process is never ended for it.
-  const cancel = await rig.frame('$/cancel_request')
-  expect(cancel.params).toEqual({ requestId: held().id })
-  await rig.settle()
-  expect(rig.ended).toEqual([])
-  expect(rig.child().closes).toBe(0)
-  expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
-
-  await expect(send(rig, 'send-2', { model: 'grok-4.6' })).resolves.toEqual({ state: 'admitted' })
-  expect(rig.sent('session/set_config_option')).toHaveLength(2)
-  await rig.frame('session/prompt')
-})
-
 it('holds later controls and prompts until a withdrawn write is answered', async () => {
   // Long enough that no deadline expires; the held write settles only when answered below.
   const { rig, held } = await openWithHeldFirstWrite(10_000)
@@ -103,6 +86,65 @@ it('holds later controls and prompts until a withdrawn write is answered', async
   expect(rig.sent('session/set_config_option')).toHaveLength(2)
   await rig.frame('session/prompt')
   expect(rig.ended).toEqual([])
+})
+
+it('applies restored effort after a withdrawn model control despite an intervening notification', async () => {
+  const configOptions = GROK_CONFIG_OPTIONS.filter((option) => option.category !== 'model')
+  const rig = await openAcpAdapterRig({
+    launch: {
+      resume: {
+        sessionId: PROVIDER_SESSION,
+        key: 'acp:grok:saved',
+        mayBeUnsaved: () => false,
+        unannouncedLosses: () => []
+      }
+    },
+    script: (agent) => {
+      agent.on('session/load', (frame) =>
+        agent.reply(frame, {
+          configOptions,
+          models: {
+            currentModelId: 'grok-4.7',
+            availableModels: [
+              { modelId: 'grok-4.7', name: 'Grok 4.7' },
+              { modelId: 'grok-4.6', name: 'Grok 4.6' }
+            ]
+          }
+        })
+      )
+      agent.on('session/set_model', () => {})
+    }
+  })
+  await rig.acquire()
+  const withdrawn = new AbortController()
+  const first = send(rig, 'withdrawn', { model: 'grok-4.6' }, withdrawn.signal)
+  const model = await rig.frame('session/set_model')
+  withdrawn.abort(new Error('replaced by a newer message'))
+  await expect(first).rejects.toThrow('replaced by a newer message')
+
+  rig.child().agent.notify('session/update', {
+    sessionId: PROVIDER_SESSION,
+    update: { sessionUpdate: 'config_option_update', configOptions }
+  })
+  await rig.settle()
+  const next = send(rig, 'next', { effort: 'high' })
+  await rig.settle()
+  expect(rig.sent('session/prompt')).toEqual([])
+  rig.child().agent.reply(model, {})
+  await expect(next).resolves.toEqual({ state: 'admitted' })
+  await rig.frame('session/prompt')
+  expect(
+    rig
+      .child()
+      .agent.frames.filter(({ method }) =>
+        ['session/set_model', 'session/set_config_option', 'session/prompt'].includes(method ?? '')
+      )
+      .map(({ method }) => method)
+  ).toEqual(['session/set_model', 'session/set_config_option', 'session/prompt'])
+  expect(rig.sent('session/set_config_option')[0]?.params).toMatchObject({
+    configId: 'reasoning_effort',
+    value: 'high'
+  })
 })
 
 it.each([

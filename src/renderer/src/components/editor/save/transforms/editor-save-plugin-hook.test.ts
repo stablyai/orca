@@ -16,7 +16,9 @@ import {
 import { EditorSaveDeniedByPluginError } from './editor-save-plugin-hook'
 import { registerPendingEditorFlush } from '../flush/editor-pending-flush'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const PATH = '/repo/src/a.ts'

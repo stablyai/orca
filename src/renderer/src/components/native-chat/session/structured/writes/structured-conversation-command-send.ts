@@ -45,6 +45,8 @@ export async function sendStructuredConversationCommand(input: {
   send: (
     command: AgentSessionConversationCommand
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
+  /** The command passed every local hold and is on its way to the host. */
+  onSent?: () => void
 }): Promise<CommandOutcome> {
   const refused = (
     error: string | null,
@@ -75,7 +77,9 @@ export async function sendStructuredConversationCommand(input: {
   const restoreClear = input.command === 'clear' ? input.onClearSent?.() : undefined
   let accepted = false
   try {
-    const outcome = await input.send(input.command)
+    const sending = input.send(input.command)
+    input.onSent?.()
+    const outcome = await sending
     if (outcome.kind === 'not-done') {
       return { accepted: false, error: outcome.notice }
     }
@@ -126,7 +130,8 @@ export function structuredConversationCommandRunner(args: {
 }): {
   runConversationCommand: (
     command: AgentSessionConversationCommand,
-    instructions?: string
+    instructions?: string,
+    onSent?: () => void
   ) => Promise<CommandOutcome>
   commandRefusalCauses: StructuredConversationCommandCauses
 } {
@@ -141,7 +146,11 @@ export function structuredConversationCommandRunner(args: {
     sending: sendPending,
     retry: false
   }
-  const run = (command: AgentSessionConversationCommand, instructions?: string) => {
+  const run = (
+    command: AgentSessionConversationCommand,
+    instructions?: string,
+    onSent?: () => void
+  ) => {
     const waitsInLine =
       command === 'compact' &&
       args.commandsWait &&
@@ -162,6 +171,7 @@ export function structuredConversationCommandRunner(args: {
       causes,
       startFailures: () => agentSessionVisibleFailureFacts(args.items()),
       onClearSent: args.onClearSent,
+      onSent,
       send: (command) =>
         args.send(
           command,

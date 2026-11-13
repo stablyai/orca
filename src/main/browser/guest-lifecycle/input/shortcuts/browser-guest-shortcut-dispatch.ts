@@ -10,10 +10,14 @@ import type { BrowserFindTarget } from '../../../../../shared/browser-find-sourc
 import type { BrowserPageTabShortcut } from '../../../../../shared/browser-page-command-target'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
+import { textInputOwnsComposition } from '../../../../../shared/text-input-shortcut-policy'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
-export type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
+export type GuestShortcutInput = WindowShortcutInput & {
+  isAutoRepeat?: boolean
+  isComposing?: boolean
+}
 
 export type GuestShortcutForwardContext = {
   browserTabId: string
@@ -47,6 +51,11 @@ export function forwardGuestShortcutInput(
   } = ctx
   const page = ctx.browserPage !== false
   const keybindings = getKeybindings?.()
+  // An IME composition keeps the key, as in the main window.
+  const forwardsDictation =
+    action?.type === 'dictationKeyDown' &&
+    !textInputOwnsComposition(input) &&
+    shouldForwardDictationShortcut?.() === true
   if (action?.type === 'zoom') {
     if (!page) {
       // Why: a plugin frame has no page zoom; Orca zooms what it would with focus outside a pane.
@@ -59,8 +68,7 @@ export function forwardGuestShortcutInput(
   }
   if (input.isAutoRepeat) {
     if (
-      (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
-      action?.type === 'deleteCurrentWorkspace' ||
+      forwardsDictation ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -179,8 +187,6 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:toggleQuickCommandsMenu')
   } else if (action?.type === 'openNewWorkspace') {
     renderer.send('ui:openNewWorkspace')
-  } else if (action?.type === 'deleteCurrentWorkspace') {
-    renderer.send('ui:deleteCurrentWorkspace')
   } else if (action?.type === 'openWorkspaceBoard') {
     renderer.send('ui:openWorkspaceBoard')
   } else if (action?.type === 'openTasks') {
@@ -204,7 +210,7 @@ export function forwardGuestShortcutInput(
       renderer.send('ui:jumpToTabIndex', action.index)
     }
   } else if (action?.type === 'dictationKeyDown') {
-    if (!shouldForwardDictationShortcut?.()) {
+    if (!forwardsDictation) {
       return false
     }
     renderer.send('ui:dictationKeyDown')

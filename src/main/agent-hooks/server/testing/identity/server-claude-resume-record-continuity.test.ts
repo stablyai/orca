@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hook-server'
 import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from '../../program-status/hook-precedence'
-import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
+import { buildBody, ingestProgramStatusOsc, PANE, postHookEvent } from '../server.test-fixtures'
 
 const SESSION = '70efcb3f-ae17-4863-9318-649f5469408b'
 
@@ -54,14 +54,7 @@ it('keeps the start folder and effort when a terminal status row precedes the ne
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(Date.now() + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS)
   // Claude reports OSC 7501 `working` just before UserPromptSubmit.
-  server.ingestTerminalStatus({
-    paneKey: PANE,
-    tabId: 'tab-1',
-    worktreeId: 'wt-1',
-    connectionId: null,
-    fromProgramStatus: true,
-    payload: { prompt: '', state: 'working', agentType: 'claude' }
-  })
+  ingestProgramStatusOsc(server, '\x1b]7501;state=working:app=claude-code\x1b\\')
   await claudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'next', cwd: '/repo/sub' })
 
   expect(recordedSession()).toMatchObject({ id: SESSION, cwd: '/repo', effort: 'max' })
@@ -72,4 +65,21 @@ it('records where a resumed process really started over the folder its seed name
   await claudeHook({ hook_event_name: 'SessionStart', source: 'resume', cwd: '/elsewhere' })
 
   expect(recordedSession()?.cwd).toBe('/elsewhere')
+})
+
+it('names the pane session from a --fork-session start, which Claude 2.1.214+ reports as fork', async () => {
+  // Captured from Claude 2.1.321 `claude --resume <id> --fork-session` before any message.
+  await claudeHook({
+    session_id: 'b47ec7fc-07e4-4012-8b28-1d5daa938f52',
+    transcript_path:
+      '/Users/u/.claude/projects/-private-tmp-w39942fork/b47ec7fc-07e4-4012-8b28-1d5daa938f52.jsonl',
+    cwd: '/private/tmp/w39942fork',
+    hook_event_name: 'SessionStart',
+    source: 'fork'
+  })
+
+  expect(recordedSession()).toMatchObject({
+    id: 'b47ec7fc-07e4-4012-8b28-1d5daa938f52',
+    cwd: '/private/tmp/w39942fork'
+  })
 })

@@ -20,9 +20,12 @@ const {
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
+  normalizeElectronArchitecture,
   prunePackagedRuntimeNodeModules,
+  readPackage,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const { copyPackagedTranscribeCpp } = require('./packaged-transcribe-cpp.cjs')
 const {
   assertNoWindowsExecutablesInRuntimeNodeModules
 } = require('./packaged-windows-only-runtime-files.cjs')
@@ -171,19 +174,6 @@ const commonExtraResources = [
   nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
-// Native speech addons need real disk paths; copy only the artifact target’s variant.
-const macSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-darwin-${arch}',
-  to: 'node_modules/sherpa-onnx-darwin-${arch}'
-}
-const linuxSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-linux-${arch}',
-  to: 'node_modules/sherpa-onnx-linux-${arch}'
-}
-const winSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-win-x64',
-  to: 'node_modules/sherpa-onnx-win-x64'
-}
 // electron-builder replaces these defaults when `depends` is configured; retain
 // Electron's loader requirements alongside Orca's headless-host dependencies.
 const debElectronRuntimeDependencies = [
@@ -329,8 +319,8 @@ module.exports = {
     '!resources/native-chat-visuals/**',
     // extraResources already ships plugin bytes; exclude source duplicates.
     '!resources/plugins/launch/**',
-    // Platform extraResources selects speech natives; asar would duplicate it and ship other variants.
-    '!node_modules/sherpa-onnx*{,/**/*}',
+    // afterPack copies the target's speech engine to resources/node_modules; asar would duplicate it and ship other variants.
+    '!node_modules/{transcribe-cpp,@transcribe-cpp,koffi,@koromix}{,/**/*}',
     // CLI shim belongs beside resources/bin/orca.exe; unpacking source creates a second .cmd without its executable (#7351).
     '!resources/win32{,/**/*}'
   ],
@@ -351,31 +341,36 @@ module.exports = {
     'out/main/cursor/**',
     'out/main/droid/**',
     'out/main/gemini/**',
-    'out/main/gitlab/project-ref-parser.js',
+    'out/main/gitlab/projects/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/filesystem/asar-transparent-fs.js',
     'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
-    'out/main/plugins/plugin-authoring-checks.js',
+    'out/main/plugins/plugin-artifact-validation.js',
+    'out/main/plugins/plugin-content-hash.js',
+    'out/main/plugins/plugin-catalog-release-entry.js',
+    'out/main/environment-doctor/environment-doctor.js',
+    'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
     'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
-    'out/main/startup/http1-compatibility-marker.js',
+    'out/main/startup/network-compatibility/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
+    'out/main/agent-identity-worker-entry.js',
     'out/main/session-search-worker-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
-    'out/main/orcad/orcad-stale-lock-reclaim.js',
-    'out/main/orcad/orcad-host-identity-reset.js',
+    'out/main/orcad/instance-lock/orcad-stale-lock-reclaim.js',
+    'out/main/orcad/profile-state/orcad-host-identity-reset.js',
     'out/main/chunks/**',
     'out/renderer/**',
     'out/mobile-web/**',
@@ -448,6 +443,13 @@ module.exports = {
       writeMacBuildCompatibility(resourcesDir, { version, commit, architecture })
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
+    // Before the prune, which drops the copied packages' type declarations too.
+    copyPackagedTranscribeCpp(
+      readPackage,
+      resourcesDir,
+      context.electronPlatformName,
+      normalizeElectronArchitecture(context.arch)
+    )
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     // Gate native glibc floor after pruning foreign CPU variants; GLIBC_2.34 once broke Ubuntu 20.04 startup (#9902).
@@ -551,7 +553,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...windowsRuntimeResources,
-      winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -608,7 +609,8 @@ module.exports = {
         rank: 'Alternate'
       }))
     ],
-    // Bundled ONNX Runtime (speech) needs macOS 13.4 (#22690); the update-manifest gate reads this from Info.plist.
+    // Set for ONNX Runtime (#22690, #39135), now gone; transcribe-cpp needs 11.0, Electron 12.0. Kept until
+    // Kelvin decides. The update-manifest gate reads this from Info.plist.
     minimumSystemVersion: '13.4',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
@@ -631,7 +633,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
-      macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -696,7 +697,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
-      linuxSpeechNativeResource,
       {
         from: 'native/wayland-clipboard/.build/${arch}/orca-wayland-clipboard',
         to: 'bin/orca-wayland-clipboard'

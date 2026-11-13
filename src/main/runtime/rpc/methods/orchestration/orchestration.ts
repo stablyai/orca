@@ -1,4 +1,4 @@
-import { requiringOrcadFeature } from '../../orcad-feature-readiness'
+import { requiringOrcadFeature } from '../../startup/orcad-readiness'
 import { ORCHESTRATION_CREW_METHODS } from './crew-methods'
 import { ORCHESTRATION_RUN_METHODS } from './runs/runs'
 import { ORCHESTRATION_WORKER_METHODS } from './worker/worker-methods'
@@ -12,6 +12,7 @@ import { ORCHESTRATION_ASK_METHODS } from './messaging/ask-methods'
 import { ORCHESTRATION_GATE_METHODS } from './gates/gates'
 import { ORCHESTRATION_RESET_METHODS } from './runs/reset-methods'
 import { ORCHESTRATION_CALLER_METHODS } from './caller-show'
+import type { OrchestrationMethodAccessDeclaration } from './access/orchestration-method-access'
 
 // Every orchestration method reads the authority restored at startup.
 export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
@@ -28,4 +29,4 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_GATE_METHODS,
   ...ORCHESTRATION_RESET_METHODS,
   ...ORCHESTRATION_CALLER_METHODS
-])
+] satisfies readonly { readonly orchestrationAccess: OrchestrationMethodAccessDeclaration }[])

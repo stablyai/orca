@@ -8,7 +8,7 @@ import type {
   BrowserClearResult,
   BrowserSelectAllResult,
   BrowserPdfResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import {
   FILE_INPUT_FRAME_URL_FUNCTION,
@@ -35,7 +35,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserHoverResult> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -115,7 +115,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           await chooser.release()
         }
       },
-      { elements: [element] }
+      { elements: [element], blockFileChooser: false }
     )
   }
 

@@ -10,10 +10,14 @@ export function isGitHubPRSuppressed(
   return linkedPR === null && suppressedGitHubPR === prNumber
 }
 
+/** Selecting a PR lifts a suppression; restating the already-selected PR leaves it alone. */
 export function normalizeGitHubPRSuppressionUpdate(
-  updates: Partial<WorktreeMeta>
+  updates: Partial<WorktreeMeta>,
+  currentLinkedPR?: number | null
 ): Partial<WorktreeMeta> {
-  return typeof updates.linkedPR === 'number' && updates.linkedPR > 0
+  return typeof updates.linkedPR === 'number' &&
+    updates.linkedPR > 0 &&
+    updates.linkedPR !== currentLinkedPR
     ? { ...updates, suppressedGitHubPR: null }
     : updates
 }

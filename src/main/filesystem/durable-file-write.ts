@@ -3,11 +3,17 @@
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
+import { publishFileWithoutOverwrite } from './atomic-file-publication'
 import {
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync
 } from '../../shared/windows-retry-file-operations'
+
+export type DurableFilePayload =
+  | string
+  | Uint8Array
+  | Iterable<string | Uint8Array>
+  | AsyncIterable<string | Uint8Array>
 
 /** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
 async function syncDirectory(directory: string): Promise<void> {
@@ -64,7 +70,7 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
 /** Make content durable without publishing, allowing backup rotation before replacement. */
 export async function writeTempFileDurable(
   tmpPath: string,
-  payload: string | Uint8Array,
+  payload: DurableFilePayload,
   mode?: number
 ): Promise<void> {
   const handle = await open(tmpPath, 'w', mode)
@@ -79,7 +85,7 @@ export async function writeTempFileDurable(
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array,
+  payload: DurableFilePayload,
   mode?: number
 ): Promise<void> {
   await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true, mode)
@@ -89,7 +95,7 @@ export async function writeFileDurable(
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array,
+  payload: DurableFilePayload,
   isCurrent: () => boolean,
   /** Creation mode for the new temp file, e.g. 0o600 for state other users must not read. */
   mode?: number

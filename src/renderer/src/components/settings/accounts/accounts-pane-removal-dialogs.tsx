@@ -65,7 +65,7 @@ export function renderAccountsRemovalDialogs(
                 )
               }}
             >
-              {t('auto.components.settings.AccountsPane.c2d2751587', 'Remove Account')}
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -105,7 +105,7 @@ export function renderAccountsRemovalDialogs(
                 )
               }}
             >
-              {t('auto.components.settings.AccountsPane.c2d2751587', 'Remove Account')}
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
             </Button>
           </DialogFooter>
         </DialogContent>

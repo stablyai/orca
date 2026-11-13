@@ -54,6 +54,7 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer,
   browserOverlayViewport,
   worktreeId,
+  importProfileId,
   grab,
   annotationSend,
   grabAnnotations
@@ -79,6 +80,7 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer: HTMLDivElement | null
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  importProfileId: string | null
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
@@ -137,7 +139,13 @@ export function BrowserPageViewportOverlays({
           }}
         />
       ) : null}
-      {isBlankTab ? <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} /> : null}
+      {isBlankTab ? (
+        <BrowserNewTabPage
+          worktreeId={worktreeId}
+          onOpenUrl={navigateToUrl}
+          importProfileId={importProfileId}
+        />
+      ) : null}
     </>
   )
 }

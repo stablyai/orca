@@ -18,25 +18,39 @@ import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 
 /** A usage-limited turn whose reset is a minute after `clock`; tie it to a turn the rewind keeps. */
-export async function appendRewindUsageLimitedTurn(journal: AgentSessionJournal, clock: number) {
-  const key = { provider: 'orca' as const, clientMessageId: 'limited-before-rewind' }
+export function appendRewindUsageLimitedTurn(journal: AgentSessionJournal, clock: number) {
+  return appendUsageLimitedTurn(journal, clock, 'kept')
+}
+
+/** A root turn, opened by `userItemId` when given, that a usage limit ended; it resets a minute after `clock`. */
+export async function appendUsageLimitedTurn(
+  journal: AgentSessionJournal,
+  clock: number,
+  name: string,
+  userItemId?: string
+) {
+  const key = {
+    provider: 'orca' as const,
+    clientMessageId: name === 'kept' ? 'limited-before-rewind' : `limited-${name}`
+  }
   const turnItemId = agentJournalItemKey(key)
   await journal.appendItem(
     key,
     {
       kind: 'turn',
-      turnId: 'kept',
-      providerTurnId: 'kept',
+      turnId: name,
+      providerTurnId: name,
       state: 'completed',
       outcome: 'failure',
       startedAt: clock,
-      completedAt: clock
+      completedAt: clock,
+      ...(userItemId ? { userItemId } : {})
     },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const resetsAt = clock + 60_000
   await journal.appendItem(
-    { provider: 'orca', clientMessageId: 'kept-limit' },
+    { provider: 'orca', clientMessageId: `${name}-limit` },
     {
       kind: 'status',
       ...agentSessionFailureWords(

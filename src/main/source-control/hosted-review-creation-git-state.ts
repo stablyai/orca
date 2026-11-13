@@ -5,10 +5,10 @@ import {
 } from '../../shared/source-control/hosted-review/hosted-review-refs'
 import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
 import type { GitUpstreamStatus } from '../../shared/git/status/git-status-types'
-import { gitExecFileAsync } from '../github/gh-utils'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
-import { probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
-import { gitOptionalLocksDisabledEnv } from '../git/runner'
+import { probeExactRefsViaForEachRef } from '../git/refs/resolution/exact-ref-probe'
+import { gitOptionalLocksDisabledEnv } from '../git/command-runner/git-environment/git-process-env'
 import {
   parsePorcelainV1Records,
   type PorcelainV1Record

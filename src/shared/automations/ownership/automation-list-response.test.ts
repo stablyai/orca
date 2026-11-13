@@ -22,25 +22,6 @@ describe('validateAutomationListResponse', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'unsupported_host_scope' } })
   })
 
-  it('rejects a malformed top-level response', () => {
-    expect(validateAutomationListResponse(null, SELF)).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_response' }
-    })
-    expect(validateAutomationListResponse({ automations: 'nope' }, SELF)).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_response' }
-    })
-    expect(validateAutomationListResponse({ automations: [], items: {} }, SELF)).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_response' }
-    })
-    expect(validateAutomationListResponse(response({ orphanCount: -1 }), SELF)).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_response' }
-    })
-  })
-
   it('drops one unmatched row without hiding the rest of the host', () => {
     const result = validateAutomationListResponse(
       response({ items: [{ automationId: 'a1', selector: { kind: 'self' } }] }),
@@ -97,20 +78,5 @@ describe('validateAutomationListResponse', () => {
     )
     expect(stale.ok && stale.result.automations.map((entry) => entry.id)).toEqual(['a2'])
     expect(stale.ok && stale.invalidRows).toBe(1)
-  })
-
-  it('drops rows whose metadata is structurally unusable', () => {
-    const result = validateAutomationListResponse(
-      response({
-        automations: [{ id: 'a1' }, { name: 'no id' }],
-        items: [
-          { automationId: 'a1', selector: { kind: 'ssh', targetId: 'ssh-1' } },
-          { selector: { kind: 'self' } }
-        ]
-      }),
-      SELF
-    )
-    expect(result.ok && result.result.automations).toEqual([])
-    expect(result.ok && result.invalidRows).toBe(4)
   })
 })

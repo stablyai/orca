@@ -8,7 +8,7 @@ import {
   resumeInvocationFromOptions,
   type StructuredAgentCliConversations,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 const ZCODE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   // One store per account home: the launch already pinned where the chat runs.
