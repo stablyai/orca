@@ -733,6 +733,10 @@ import {
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
 import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
+import {
+  WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupRunNowParams
+} from './workspace-cleanup-runner-params'
 import { WorkspaceCleanupScanParams } from './workspace-cleanup-scan-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
@@ -1637,6 +1641,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
+  'workspaceCleanup.report': null,
+  'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,

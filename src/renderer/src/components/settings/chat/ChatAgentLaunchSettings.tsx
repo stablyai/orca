@@ -17,7 +17,6 @@ import {
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
-import { Card, CardContent } from '../../ui/card'
 import {
   AgentOpensAsControl,
   chatUnavailableOnThisDesktop,
@@ -29,7 +28,7 @@ import {
 } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
 import { managedRuntimeInstallPending } from '../../managed-runtime/managed-runtime-install-view'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -65,44 +64,32 @@ export function ChatAgentLaunchSettings({
   )
   const entry = getChatLaunchEntriesByKey(t).agents
   return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader title={entry.title} description={entry.description} />
-      <Card size="list">
-        <CardContent>
-          <div className="divide-y divide-border">
-            {getAgentCatalog().map((agent) => {
-              const opensAs = recomputeOn([hostAgentsVersion], () =>
-                buildAgentOpensAs({
-                  agent: agent.id,
-                  cliDetected: detected === null ? null : detected.includes(agent.id),
-                  chatProgramHere: chatOnly.has(agent.id),
-                  settings,
-                  updateSettings
-                })
-              )
-              if (!opensAs) {
-                return null
-              }
-              return managedChatAgents.has(agent.id) && !chatUnavailableOnThisDesktop(agent.id) ? (
-                <ManagedChatAgentRow
-                  key={agent.id}
-                  agent={agent.id}
-                  label={agent.label}
-                  opensAs={opensAs}
-                />
-              ) : (
-                <ChatAgentRow
-                  key={agent.id}
-                  agent={agent.id}
-                  label={agent.label}
-                  opensAs={opensAs}
-                />
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-    </section>
+    <SettingsGroup title={entry.title} description={entry.description}>
+      {getAgentCatalog().map((agent) => {
+        const opensAs = recomputeOn([hostAgentsVersion], () =>
+          buildAgentOpensAs({
+            agent: agent.id,
+            cliDetected: detected === null ? null : detected.includes(agent.id),
+            chatProgramHere: chatOnly.has(agent.id),
+            settings,
+            updateSettings
+          })
+        )
+        if (!opensAs) {
+          return null
+        }
+        return managedChatAgents.has(agent.id) && !chatUnavailableOnThisDesktop(agent.id) ? (
+          <ManagedChatAgentRow
+            key={agent.id}
+            agent={agent.id}
+            label={agent.label}
+            opensAs={opensAs}
+          />
+        ) : (
+          <ChatAgentRow key={agent.id} agent={agent.id} label={agent.label} opensAs={opensAs} />
+        )
+      })}
+    </SettingsGroup>
   )
 }
 
@@ -116,7 +103,7 @@ function ChatAgentRow({
   actions = null
 }: ChatAgentRowProps & { line?: React.ReactNode; actions?: React.ReactNode }): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 py-3">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
         <AgentIcon agent={agent} size={16} />
         <div className="min-w-0">

@@ -7243,8 +7243,6 @@
             "ba1d9a0607": "边栏色调"
           },
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出",
-          "interfaceDefaultFont": "默认字体",
-          "terminalDefaultFont": "默认字体",
           "interfaceTitle": "界面",
           "terminalTitle": "终端",
           "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",
@@ -16093,7 +16091,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "删除链接",
           "cdfe166f6f": "编辑链接",
-          "bfc813e909": "打开链接",
           "7b0b945fdc": "粘贴或输入链接...",
           "copyLink": "复制链接"
         },
@@ -20319,7 +20316,7 @@
         "turnDiffsSearchChangedFiles": "已更改文件",
         "turnDiffsSearchEdits": "编辑",
         "markNewMessagesTitle": "返回聊天时标记新消息",
-        "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
+        "markNewMessagesCopy": "返回聊天时，如果错过的内容很长或有其他人发了消息，会用“新消息”分隔线标出你错过的内容并滚动到那里。看过之后它会淡出。",
         "markNewMessagesSearchUnread": "未读"
       },
       "voice": {

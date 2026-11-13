@@ -5825,8 +5825,6 @@
             "df205a675e": "Intensidade da Tonalidade",
             "ba1d9a0607": "Tonalidade da Barra Lateral"
           },
-          "interfaceDefaultFont": "Fonte padrão",
-          "terminalDefaultFont": "Fonte padrão",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de status e explorador de arquivos",
@@ -13759,7 +13757,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Remover link",
           "cdfe166f6f": "Editar link",
-          "bfc813e909": "Abrir link",
           "7b0b945fdc": "Cole ou digite um link…",
           "copyLink": "Copiar link"
         },
@@ -22221,7 +22218,7 @@
         "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
         "scrollToLatestOnSendSearchPosition": "posição",
         "markNewMessagesTitle": "Marcar mensagens novas ao voltar para um chat",
-        "markNewMessagesCopy": "Ao voltar para um chat, uma linha Novas aparece acima do que chegou enquanto você estava fora, e o chat rola até ela se você estava lendo as mais recentes.",
+        "markNewMessagesCopy": "Quando você volta para um chat, uma linha Novas marca o que você perdeu se for longo ou se outra pessoa escreveu, e rola até lá. Ela esmaece depois que você a vê.",
         "markNewMessagesSearchUnread": "não lida",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",

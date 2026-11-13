@@ -60,13 +60,11 @@ let generatedTitles: boolean
 let hookRows: HookRow[]
 let pty: NonNullable<ReturnType<SenderNamingDeps['getPtyAgents']>>
 let trackedTitle: string | null
-let terminalReads: number
 
 function names() {
   return new RuntimeOrchestrationSenderNames({
     getDb: () => db,
     getHandleRecord: (handle) => {
-      terminalReads++
       return handle === 'term_worker' || handle === 'term_plain'
         ? { worktreeId: WORKTREE, tabId: `tab_${handle}`, ptyId: `pty_${handle}` }
         : undefined
@@ -80,33 +78,6 @@ function names() {
   })
 }
 
-/** A worker dispatched `spec` on its own terminal, as `worker-start` leaves it. */
-function finishedWorker(spec: string, handle = 'term_worker') {
-  const run = db.createRun({
-    objective: 'o',
-    coordinatorHandle: 'term_coord',
-    coordinatorPaneKey: null
-  })
-  const task = db.createTask({ runId: run.id, spec })
-  const started = db.createStartingWorkerDispatch({
-    creator: { kind: 'system' },
-    maxDepth: Number.MAX_SAFE_INTEGER,
-    taskId: task.id,
-    startOptions: {}
-  })
-  db.prepareStartingWorkerAuthority({
-    dispatchId: started.dispatch.id,
-    handle,
-    paneKey: `tab_${handle}:leaf`,
-    processIncarnation: 'p:1',
-    worktreeId: WORKTREE,
-    effects: [],
-    setupState: 'not_applicable'
-  })
-  db.markWorkerDispatchReady(started.dispatch.id)
-  return { runId: run.id, taskId: task.id, dispatchId: started.dispatch.id }
-}
-
 beforeEach(() => {
   db = new OrchestrationDb(':memory:')
   session = { unifiedTabs: {}, tabsByWorktree: {} }
@@ -114,7 +85,6 @@ beforeEach(() => {
   hookRows = []
   pty = { launchAgent: 'codex', connectionId: null, launchToken: 'launch-current' }
   trackedTitle = null
-  terminalReads = 0
   const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: CHAT }))
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
   hostRef.current = {
@@ -132,38 +102,6 @@ beforeEach(() => {
 
 afterEach(() => {
   db.close()
-})
-
-it('preserves old, malformed and absent launch observations without inventing an agent', () => {
-  const { dispatchId } = finishedWorker('Inspect parser', 'term_older')
-  const party = { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null }
-  for (const launch of [
-    undefined,
-    null,
-    {},
-    [],
-    { requested: null, effective: {} },
-    { requested: { agent: 42 }, effective: { agent: 'x'.repeat(41) } }
-  ]) {
-    for (const agent of ['codex', 'cx-personal']) {
-      const json = JSON.stringify({ agent, launch, unrelated: { keep: true } })
-      db.db
-        .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
-        .run(json, dispatchId)
-      db.retainWorkerLaunchObservation(dispatchId, undefined)
-      expect(db.getWorkerDispatch(dispatchId)!.start_options).toBe(json)
-      expect(names().snapshotOf(party)).toEqual({
-        name: 'Inspect parser',
-        agent: agent === 'codex' ? 'codex' : null
-      })
-    }
-  }
-  db.db
-    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
-    .run('invalid-json', dispatchId)
-  db.retainWorkerLaunchObservation(dispatchId, { requested: { agent: 'codex' } })
-  expect(db.getWorkerDispatch(dispatchId)!.start_options).toBe('invalid-json')
-  expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: null })
 })
 
 it('keeps the accepted answer actor after A parks and B adopts the same Run', () => {

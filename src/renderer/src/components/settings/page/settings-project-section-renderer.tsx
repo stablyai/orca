@@ -33,7 +33,6 @@ export function renderProjectSettingsSections(
           <SettingsSection
             key={id}
             id={id}
-            grouped
             title={t('settings.groupHooks.title', 'Project Settings > {{name}}', {
               name: group.settingsLabel ?? group.name
             })}
@@ -71,7 +70,6 @@ export function renderProjectSettingsSections(
           <SettingsSection
             key={repoSectionId}
             id={repoSectionId}
-            grouped
             title={t(
               'auto.components.settings.Settings.3bf149e873',
               'Project Settings > {{value0}}',
