@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  OrcaBillingDenyReason,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
@@ -38,7 +39,17 @@ afterEach(() => {
 
 function renderBlocker(
   kind: BillingBlockKind,
-  { canManageBilling = true, capCents = 2500, offers = true } = {}
+  {
+    canManageBilling = true,
+    capCents = 2500,
+    offers = true,
+    reason
+  }: {
+    canManageBilling?: boolean
+    capCents?: number
+    offers?: boolean
+    reason?: OrcaBillingDenyReason | null
+  } = {}
 ): {
   onContinue: ReturnType<typeof vi.fn>
   onBackToDraft: ReturnType<typeof vi.fn>
@@ -53,7 +64,8 @@ function renderBlocker(
       entitlement={{
         ...sampleTeam,
         offers: offers ? sampleTeam.offers : null,
-        overage: { ...sampleTeam.overage, spendCapCents: capCents }
+        overage: { ...sampleTeam.overage, spendCapCents: capCents },
+        ...(reason !== undefined ? { reason } : {})
       }}
       onContinue={onContinue}
       onBackToDraft={onBackToDraft}
@@ -146,6 +158,24 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     expect(requestOrcaCloudAfterCheckout).toHaveBeenCalledWith({ kind: 'retry', creationId: 'c1' })
     expect(openPlansPage).toHaveBeenCalledWith('sandbox')
   })
+
+  it.each([
+    ['subscription_inactive', true, 'Your team’s plan has ended.'],
+    ['trial_used_up', true, 'Your trial is used up.'],
+    ['trial_used_up', false, 'Your team’s trial is used up.'],
+    ['no_subscription', true, 'Your team doesn’t have a plan yet.'],
+    ['trial_unavailable', true, 'This account or team already used its trial.'],
+    [null, true, 'Your team needs a plan to use Orca Cloud.']
+  ] as const)(
+    'no plan (%s, admin=%s): only a plan that existed has "ended" (EP-11)',
+    (reason, admin, body) => {
+      renderBlocker('plan', { reason, canManageBilling: admin })
+      expect(screen.getByText(body)).toBeTruthy()
+      if (reason !== 'subscription_inactive') {
+        expect(screen.queryByText('Your team’s plan has ended.')).toBeNull()
+      }
+    }
+  )
 
   it.each([
     ['hoursUsed', 'Ask an owner or admin to add hours.'],

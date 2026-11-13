@@ -41,6 +41,43 @@ export const cloudPlanRequired = cloudFailure(
   ''
 )
 
+// EP-11: the plan blocker's body follows billing's reason; only a plan that existed has "ended".
+export const cloudPlanRequiredNeverPaid = cloudFailure(
+  'cloudPlanRequired',
+  'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+  '',
+  { plan: null, status: 'none', reason: 'no_subscription' }
+)
+
+export const cloudPlanRequiredEnded = cloudFailure(
+  'cloudPlanRequired',
+  'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+  '',
+  { status: 'canceled', reason: 'subscription_inactive' }
+)
+
+export const cloudPlanRequiredTrialUsedUp = cloudFailure(
+  'cloudPlanRequired',
+  'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+  '',
+  { plan: null, status: 'trial', reason: 'trial_used_up' }
+)
+
+export const cloudPlanRequiredTrialUsedUpMember = defineFixture({
+  ...cloudPlanRequiredTrialUsedUp,
+  setup: () => {
+    seedFixtureRepo()
+    stubBillingRole(false, { plan: null, status: 'trial', reason: 'trial_used_up' })
+  }
+})
+
+export const cloudPlanRequiredTrialUnavailable = cloudFailure(
+  'cloudPlanRequired',
+  'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+  '',
+  { plan: null, status: 'none', reason: 'trial_unavailable' }
+)
+
 export const cloudConcurrencyLimit = cloudFailure(
   'cloudConcurrencyLimit',
   'You already have as many Orca Cloud workspaces running as your plan allows.',

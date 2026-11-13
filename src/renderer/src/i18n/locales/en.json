@@ -29694,7 +29694,12 @@
       "plan": {
         "title": "Choose a plan",
         "ask": "Ask an owner or admin to choose a plan.",
-        "body2": "Your team’s plan has ended."
+        "body2": "Your team’s plan has ended.",
+        "bodyTrialUsedUp": "Your team’s trial is used up.",
+        "bodyNoPlan": "Your team doesn’t have a plan yet.",
+        "bodyNeedsPlan": "Your team needs a plan to use Orca Cloud.",
+        "bodyTrialUsedUpAdmin": "Your trial is used up.",
+        "bodyTrialUnavailable": "This account or team already used its trial."
       },
       "hours": {
         "title": "Out of sandbox hours",

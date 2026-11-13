@@ -22,20 +22,57 @@ export type BillingBlockerPhase =
   /** A fix in the browser (portal): re-check on return, or with Check again. */
   | { kind: 'browser'; checking: boolean; stillBlocked: boolean }
 
+/** Why there is no plan, in billing's words: only a plan that existed has "ended" (EP-11). */
+function planBlockBody(
+  reason: string | null | undefined,
+  t: Translate,
+  canManageBilling: boolean | undefined
+): string {
+  switch (reason) {
+    case 'subscription_inactive':
+      return t('worktreeCreation.billingBlock.plan.body2', 'Your team’s plan has ended.')
+    case 'trial_used_up':
+      // Glossary (Trial used up): the person who can choose a plan reads "Your trial"; members
+      // read their team's. An unknown role gets the team form.
+      return canManageBilling === true
+        ? t('worktreeCreation.billingBlock.plan.bodyTrialUsedUpAdmin', 'Your trial is used up.')
+        : t('worktreeCreation.billingBlock.plan.bodyTrialUsedUp', 'Your team’s trial is used up.')
+    case 'trial_unavailable':
+      // Glossary: not eligible for a trial (one was already used); the title carries the action.
+      return t(
+        'worktreeCreation.billingBlock.plan.bodyTrialUnavailable',
+        'This account or team already used its trial.'
+      )
+    case 'no_subscription':
+      return t(
+        'worktreeCreation.billingBlock.plan.bodyNoPlan',
+        'Your team doesn’t have a plan yet.'
+      )
+    case null:
+    case undefined:
+    default:
+      // Missing (older service) or a reason this build doesn't know.
+      return t(
+        'worktreeCreation.billingBlock.plan.bodyNeedsPlan',
+        'Your team needs a plan to use Orca Cloud.'
+      )
+  }
+}
+
 /** The blocker's words per refusal; also the waking card's, so a refused wake says the same. */
 export function blockerCopy(
   kind: BillingBlockKind,
-  t: Translate
+  t: Translate,
+  /** Billing's refusal reason: says whether a plan ended, a trial ran out, or there never was one (EP-11). */
+  reason?: string | null,
+  /** Owners/admins read "Your trial…"; members their team's (glossary). */
+  canManageBilling?: boolean
 ): { title: string; body: string; ask: string } {
   switch (kind) {
     case 'plan':
       return {
         title: t('worktreeCreation.billingBlock.plan.title', 'Choose a plan'),
-        body: t(
-          // Only teams that had Orca Cloud reach the sheet; a never-planned team gets setup.
-          'worktreeCreation.billingBlock.plan.body2',
-          'Your team’s plan has ended.'
-        ),
+        body: planBlockBody(reason, t, canManageBilling),
         ask: t('worktreeCreation.billingBlock.plan.ask', 'Ask an owner or admin to choose a plan.')
       }
     case 'hoursUsed':
@@ -73,6 +110,8 @@ export function blockerCopy(
 
 export type VmBuildBillingBlockerViewProps = {
   kind: BillingBlockKind
+  /** Billing's refusal reason (plan blocks word "ended" vs "no plan yet" from it). */
+  reason?: string | null
   canManageBilling: boolean
   phase: BillingBlockerPhase
   /** Spend cap reached: the field's starting value, in whole dollars. */
@@ -93,6 +132,7 @@ export type VmBuildBillingBlockerViewProps = {
  */
 export function VmBuildBillingBlockerView({
   kind,
+  reason,
   canManageBilling,
   phase,
   suggestedCapDollars,
@@ -106,7 +146,7 @@ export function VmBuildBillingBlockerView({
 }: VmBuildBillingBlockerViewProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const copy = blockerCopy(kind, t)
+  const copy = blockerCopy(kind, t, reason, canManageBilling)
   const capId = React.useId()
   const [cap, setCap] = React.useState(String(suggestedCapDollars))
   const headingRef = React.useRef<HTMLHeadingElement>(null)
@@ -340,6 +380,7 @@ export function VmBuildBillingBlocker({
   return (
     <VmBuildBillingBlockerView
       kind={kind}
+      reason={entitlement?.reason ?? null}
       canManageBilling={canManageBilling}
       phase={phase}
       suggestedCapDollars={suggestedCapDollars}
