@@ -10,6 +10,7 @@ import {
   abandonRemoteSessionScanOnCancel
 } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import { EMPTY_CONTENT_HASH, foldContentHash } from '../storage/session-search-content-hash'
+import { sessionSearchFailureStat } from '../storage/session-search-file-cursor'
 import { searchMessageRows } from '../storage/session-search-message-rows'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
 import type {
@@ -67,7 +68,11 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
         .then((response) => {
           if (response.failure === 'write' && !failed) {
             failed = true
-            this.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+            this.setFileState(
+              candidate.file.path,
+              'failed',
+              sessionSearchFailureStat(candidate.file)
+            )
             for (const [dependent, path] of this.invalidations) {
               if (dependent !== owner && path === candidate.file.path) {
                 dependent.abort()
@@ -184,6 +189,8 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           state: 'current',
           failCount: 0,
           failedMtimeMs: null,
+          failedSidecarMtimeMs: null,
+          failedSidecarSizeBytes: null,
           byteOffset: outcome.byteOffset,
           prefixHash: outcome.prefixHash ?? null,
           agent: old?.agent ?? candidate.agent,

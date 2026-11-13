@@ -11,7 +11,7 @@ import {
   type TranscriptReadStart
 } from '../../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
-import { fileIdentity } from '../storage/session-search-file-cursor'
+import { fileIdentity, sessionSearchFailureStat } from '../storage/session-search-file-cursor'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
 import type {
   SessionSearchResumableCursor,
@@ -187,8 +187,10 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.store.writeCommitted(candidate)
       return
     }
-    // Stamp and count repeated read failures so unchanged unreadable files can be held out.
-    this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+    // Stamp and count repeated read failures so unchanged unreadable files can be held out. The
+    // sidecar travels with the stamp: a transcript that grows past a failed read must retry even
+    // when the metadata mtime stays put.
+    this.store.setFileState(candidate.file.path, 'failed', sessionSearchFailureStat(candidate.file))
   }
 }
 

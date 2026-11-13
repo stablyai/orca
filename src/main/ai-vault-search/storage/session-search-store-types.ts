@@ -14,7 +14,10 @@ export type SessionSearchFileRow = {
   sidecarSizeBytes: number | null
   state: SessionSearchFileState
   failCount: number
+  /** Stat the last failed read observed; the holdout ends when this file's or its sidecar's stat moves. */
   failedMtimeMs: number | null
+  failedSidecarMtimeMs: number | null
+  failedSidecarSizeBytes: number | null
 }
 
 export type SessionSearchResumableCursor = { byteOffset: number; prefixHash: string }

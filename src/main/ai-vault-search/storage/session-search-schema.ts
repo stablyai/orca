@@ -48,8 +48,10 @@ CREATE TABLE IF NOT EXISTS files(
   -- current covers the recorded stat; due needs a whole read; failed did not commit.
   state TEXT NOT NULL DEFAULT 'current',
   fail_count INTEGER NOT NULL DEFAULT 0,
-  -- Retry held-out failures only after the source mtime changes.
+  -- Retry held-out failures only after the source stat — this file's or the sidecar's — changes.
   failed_mtime_ms REAL,
+  failed_sidecar_mtime_ms REAL,
+  failed_sidecar_size_bytes INTEGER,
   -- SHA-256 of bytes [0, byte_offset); lets a reread after restart append instead of replace.
   prefix_hash TEXT,
   -- Stat of the sidecar that supplied messages, so an append there is not missed when the
@@ -99,38 +101,38 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
           AND EXISTS (SELECT 1 FROM files WHERE files.path = sessions.file_path
             AND files.session_row_id = sessions.id)
       `)
-      addSessionSearchPrefixHashColumn(db)
-      addSessionSearchSidecarStatColumns(db)
+      addSessionSearchFileColumns(db)
     }
   })
 }
 
-/** Version 8 indexes predate the column; check under the write lock so concurrent openers add it once. */
-export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    const columns = db.prepare('PRAGMA table_info(files)').all()
-    if (!columns.some((column) => asRecord(column)?.name === 'prefix_hash')) {
-      db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
-    }
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
-}
+/** Columns this file's rows gained after the version 8 tables; rows predating one read back as null. */
+const SESSION_SEARCH_ADDED_COLUMNS = [
+  // Lets a reread after restart append instead of replace.
+  ['prefix_hash', 'TEXT'],
+  // Stat of the sidecar that supplied messages, so an append there is not missed when the
+  // metadata file this row was keyed on stays untouched.
+  ['sidecar_mtime_ms', 'REAL'],
+  ['sidecar_size_bytes', 'INTEGER'],
+  // Stat the last failed read observed; a sidecar-only change must release a held-out metadata row.
+  ['failed_sidecar_mtime_ms', 'REAL'],
+  ['failed_sidecar_size_bytes', 'INTEGER']
+] as const
 
-/** Version 8 indexes predate the columns; rows read back as null, which misses on the next sidecar. */
-export function addSessionSearchSidecarStatColumns(db: SyncDatabase): void {
+/** Older indexes lack the columns; check under the write lock so concurrent openers add them once. */
+export function addSessionSearchFileColumns(db: SyncDatabase): void {
   db.exec('BEGIN IMMEDIATE')
   try {
-    const columns = db.prepare('PRAGMA table_info(files)').all()
-    const names = new Set(columns.map((column) => asRecord(column)?.name))
-    if (!names.has('sidecar_mtime_ms')) {
-      db.exec('ALTER TABLE files ADD COLUMN sidecar_mtime_ms REAL')
-    }
-    if (!names.has('sidecar_size_bytes')) {
-      db.exec('ALTER TABLE files ADD COLUMN sidecar_size_bytes INTEGER')
+    const names = new Set(
+      db
+        .prepare('PRAGMA table_info(files)')
+        .all()
+        .map((column) => asRecord(column)?.name)
+    )
+    for (const [name, type] of SESSION_SEARCH_ADDED_COLUMNS) {
+      if (!names.has(name)) {
+        db.exec(`ALTER TABLE files ADD COLUMN ${name} ${type}`)
+      }
     }
     db.exec('COMMIT')
   } catch (error) {

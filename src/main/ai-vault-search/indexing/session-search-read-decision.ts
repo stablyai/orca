@@ -34,7 +34,7 @@ export function sessionSearchReadDecision(args: {
   if (!row) {
     return 'any'
   }
-  if (heldOut(row, file.mtimeMs)) {
+  if (heldOut(row, file)) {
     return 'skip'
   }
   if (row.state === 'due') {
@@ -79,12 +79,30 @@ function sidecarStatMatches(
   return row.sidecarMtimeMs === sidecar.mtimeMs && row.sidecarSizeBytes === sidecar.sizeBytes
 }
 
-/** A held-out file is retried only when its mtime changes. */
-function heldOut(row: SessionSearchFileRow, mtimeMs: number): boolean {
+/**
+ * A held-out file is retried when its own stat or the sidecar stat its last read saw has moved.
+ * Stamping only the metadata mtime would silence an agent whose metadata never changes again while
+ * its transcript keeps growing, and a null sidecar stamp (a pre-column row, or a read that saw no
+ * sidecar) must miss once so a sidecar append cannot stay invisible forever.
+ */
+function heldOut(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
   return (
     row.state === 'failed' &&
     row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
-    row.failedMtimeMs === mtimeMs
+    row.failedMtimeMs === file.mtimeMs &&
+    failedSidecarMatches(row, file.sidecar)
+  )
+}
+
+function failedSidecarMatches(
+  row: SessionSearchFileRow,
+  sidecar: SessionFileCandidate['file']['sidecar']
+): boolean {
+  if (sidecar === undefined || sidecar === 'none' || sidecar === 'unknown') {
+    return row.failedSidecarMtimeMs === null && row.failedSidecarSizeBytes === null
+  }
+  return (
+    row.failedSidecarMtimeMs === sidecar.mtimeMs && row.failedSidecarSizeBytes === sidecar.sizeBytes
   )
 }
 

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,6 +7,9 @@ import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-f
 import type { TranscriptMessage } from '../../transcripts/session-transcript-consumers'
 import { parseAnteSessionFile } from './session-scanner-ante-parser'
 import { writeAnteScannerFixture } from './session-scanner-ante-fixture'
+
+// chmod cannot lock out root, and Windows ignores the mode bits.
+const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 
 let tempRoots: string[] = []
 
@@ -74,6 +77,52 @@ describe('scanAiVaultSessions ante', () => {
     expect(result.sessions[0]?.createdAt).toBe('2026-05-01T10:11:00.000Z')
     expect(result.sessions[0]?.updatedAt).toBe('2026-05-01T10:11:02.000Z')
   })
+
+  it.skipIf(!CAN_DENY_READ)(
+    'fails an Ante parse whose transcript exists but cannot be read instead of publishing metadata alone',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ante-'))
+      tempRoots.push(root)
+      const roots = isolatedScanRoots(root)
+      const metadataFile = await writeAnteScannerFixture(roots.anteSessionsDir)
+      const transcript = join(roots.anteSessionsDir, 'ante-session', 'events.jsonl')
+      await chmod(transcript, 0o000)
+      try {
+        // A fold this short cannot replace the indexed turns search already holds.
+        await expect(
+          parseAnteSessionFile(
+            { path: metadataFile, mtimeMs: 1, modifiedAt: '2026-05-01T10:11:00.000Z' },
+            'darwin'
+          )
+        ).rejects.toMatchObject({ code: 'EACCES' })
+      } finally {
+        await chmod(transcript, 0o0644)
+      }
+    }
+  )
+
+  it.skipIf(!CAN_DENY_READ)(
+    'fails an Ante parse whose meta.json exists but cannot be read instead of listing it as absent',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ante-'))
+      tempRoots.push(root)
+      const roots = isolatedScanRoots(root)
+      const metadataFile = await writeAnteScannerFixture(roots.anteSessionsDir)
+      await chmod(metadataFile, 0o000)
+      try {
+        // Absence ends a row; a denial must not, or the search index would replace proven rows
+        // with a fold that has no identity and could never be repaired.
+        await expect(
+          parseAnteSessionFile(
+            { path: metadataFile, mtimeMs: 1, modifiedAt: '2026-05-01T10:11:00.000Z' },
+            'darwin'
+          )
+        ).rejects.toMatchObject({ code: 'EACCES' })
+      } finally {
+        await chmod(metadataFile, 0o0644)
+      }
+    }
+  )
 
   it('publishes turns past the old preview window and dates the row from the transcript tail', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ante-'))

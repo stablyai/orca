@@ -11,6 +11,7 @@ import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../../ai-vault/transcripts/session-transcript-consumers'
 import {
   fileIdentity,
+  type SessionSearchFailureStat,
   type SessionSearchFileIdentity,
   type SessionSearchIndexedFile
 } from './session-search-file-cursor'
@@ -204,32 +205,49 @@ export class SessionSearchStore {
           `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
                   mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
                   sidecar_mtime_ms AS sidecarMtimeMs, sidecar_size_bytes AS sidecarSizeBytes,
-                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
+                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs,
+                  failed_sidecar_mtime_ms AS failedSidecarMtimeMs,
+                  failed_sidecar_size_bytes AS failedSidecarSizeBytes
            FROM files`
         )
         .all()
     )
   }
 
-  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    failure?: SessionSearchFailureStat
+  ): void {
     try {
       if (state === 'failed') {
-        // Persist initial failures too, or unreadable new files retry forever.
+        // Persist initial failures too, or unreadable new files retry forever. The sidecar stamp
+        // belongs here because an unchanged metadata file cannot release a held-out sidecar append.
         this.db
           .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
-             VALUES (?, 0, ?, 'failed', 1, ?)
+            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms,
+                               failed_sidecar_mtime_ms, failed_sidecar_size_bytes)
+             VALUES (?, 0, ?, 'failed', 1, ?, ?, ?)
              ON CONFLICT(path) DO UPDATE SET
                state = 'failed',
                fail_count = files.fail_count + 1,
-               failed_mtime_ms = excluded.failed_mtime_ms`
+               failed_mtime_ms = excluded.failed_mtime_ms,
+               failed_sidecar_mtime_ms = excluded.failed_sidecar_mtime_ms,
+               failed_sidecar_size_bytes = excluded.failed_sidecar_size_bytes`
           )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+          .run(
+            path,
+            failure?.mtimeMs ?? 0,
+            failure?.mtimeMs ?? null,
+            failure?.sidecarMtimeMs ?? null,
+            failure?.sidecarSizeBytes ?? null
+          )
         return
       }
       this.db
         .prepare(
-          'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
+          `UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL,
+           failed_sidecar_mtime_ms = NULL, failed_sidecar_size_bytes = NULL WHERE path = ?`
         )
         .run(state, path)
     } catch (error) {

@@ -6,7 +6,6 @@ import {
   openTranscriptReadStream,
   wslGatedReadFile
 } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { anteTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
@@ -23,6 +22,7 @@ import { extractString } from '../../../../shared/trimmed-string'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { isMissingTranscriptPathError } from '../../discovery/session-path-absence'
 import { anteSessionIdFromMetadataPath } from './session-scanner-ante-paths'
 
 // `events.jsonl` is append-only and one turn emits several records, so the fold reads every line:
@@ -103,14 +103,12 @@ async function readAnteMetadata(
     return anteMetadata(content)
   } catch (error) {
     throwIfAiVaultScanCancelled(signal)
-    // WSL refusal must propagate so an unreadable session is not cached as absent.
-    if (
-      error instanceof WslTranscriptFsError ||
-      (error instanceof Error && error.name === 'AbortError')
-    ) {
-      throw error
+    // Absence and a torn write both end a row: a read that completed still matches the byte
+    // cursor search recorded, so the next rewrite reindexes. A denied read proves nothing about it.
+    if (error instanceof SyntaxError || isMissingTranscriptPathError(error)) {
+      return null
     }
-    return null
+    throw error
   }
 }
 
@@ -136,13 +134,12 @@ async function consumeAnteEvents(
     }
   } catch (error) {
     throwIfAiVaultScanCancelled(signal)
-    // A missing or unreadable transcript still lists from `meta.json`; WSL refusal must propagate.
-    if (
-      error instanceof WslTranscriptFsError ||
-      (error instanceof Error && error.name === 'AbortError')
-    ) {
-      throw error
+    // Only absence proves an empty transcript, which still lists from `meta.json`. A denied or
+    // truncated read would publish a fold the index could never repair, so it must propagate.
+    if (isMissingTranscriptPathError(error)) {
+      return
     }
+    throw error
   } finally {
     // readline.close() leaves its input open; destroy the gated stream after read failures too.
     lines.close()

@@ -31,7 +31,9 @@ export function readSessionSearchFileRows(rows: readonly SqliteRow[]): SessionSe
       sidecarSizeBytes: numberOrNull(row.sidecarSizeBytes),
       state,
       failCount: numberOrNull(row.failCount) ?? 0,
-      failedMtimeMs: numberOrNull(row.failedMtimeMs)
+      failedMtimeMs: numberOrNull(row.failedMtimeMs),
+      failedSidecarMtimeMs: numberOrNull(row.failedSidecarMtimeMs),
+      failedSidecarSizeBytes: numberOrNull(row.failedSidecarSizeBytes)
     })
   }
   return files
