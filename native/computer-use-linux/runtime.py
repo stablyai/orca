@@ -305,7 +305,7 @@ def require_keyboard_focus(app, window, operation, verb):
         restore_window(app, window)
         if wait_window_focused(window):
             return
-        raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused; bring it forward manually or check desktop permissions")
+        raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused, so nothing was sent; ask the user to bring it forward or check desktop permissions")
     raise RuntimeError(f"background_unavailable: {verb} sends keys to the focused window, and the target window is "
                        "not focused; nothing was sent. To enter text use type-text --element-index or set-value, "
                        f"which work in the background. {RESTORE_HINT}")
@@ -1062,7 +1062,7 @@ def kwin_window_rect(report, pid, title, bounds):
         above = other.get("stackingOrder")
         frame = finite_rect(other.get("frame"))
         if (isinstance(above, bool) or not isinstance(above, (int, float)) or above > order) and frame and overlaps(frame, rect):
-            return None, "another window covers part of it; bring it to the front and retry"
+            return None, "another window covers part of it"
     return (rect, workspace), None
 
 
