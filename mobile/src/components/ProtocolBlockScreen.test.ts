@@ -17,7 +17,10 @@ const wallUpdate = vi.hoisted(() => {
 })
 
 // The release the installed app's update check found; the real hook imports the checker module.
-vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => wallUpdate.current }))
+vi.mock('../app-update/use-wall-app-update', () => ({
+  isGooglePlayBuild: false,
+  useWallAppUpdate: () => wallUpdate.current
+}))
 
 vi.mock('react-native', () => ({
   Linking: { openURL: nativeTestState.openUrl },

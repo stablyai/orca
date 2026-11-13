@@ -15,10 +15,14 @@ import { githubReleaseUpdateSource } from './github-release-update-source'
 // expoConfig is embedded binary manifest because app does not use expo-updates; SDK 55 removed nativeAppVersion. Revisit version source if adopting OTA updates.
 export const installedAppVersion: string | null = Constants.expoConfig?.version ?? null
 
+/** Set by app.config.js for the Play AAB; Play delivers its own updates and forbids other channels. */
+export const isGooglePlayBuild =
+  Platform.OS === 'android' && Constants.expoConfig?.extra?.androidDistribution === 'play'
+
 /** The channel that installed this binary. */
 function resolveAppUpdateSource(): AppUpdateSource | null {
   if (Platform.OS === 'android') {
-    return githubReleaseUpdateSource
+    return isGooglePlayBuild ? null : githubReleaseUpdateSource
   }
   if (Platform.OS === 'ios') {
     return appStoreUpdateSource
@@ -26,8 +30,13 @@ function resolveAppUpdateSource(): AppUpdateSource | null {
   return null
 }
 
+const appUpdateSource = resolveAppUpdateSource()
+
+/** False where no channel can be asked, so there is nothing to check by hand. */
+export const canCheckForAppUpdates = appUpdateSource !== null
+
 export const appUpdateChecker = createAppUpdateChecker({
-  source: resolveAppUpdateSource(),
+  source: appUpdateSource,
   installedVersion: installedAppVersion,
   now: () => Date.now(),
   setTimer: (run, delayMs) => setTimeout(run, delayMs),

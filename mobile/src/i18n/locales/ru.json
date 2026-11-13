@@ -1019,8 +1019,10 @@
       "desktopTooOldBody": "Версия Orca на сопряжённом компьютере устарела и несовместима с текущей версией Orca Mobile. Обновите Orca на компьютере, затем снова подключитесь к этому серверу.",
       "getVersion": "Скачать Orca {{version}}",
       "mobileTooOldAppStore": "Для работы с Orca на этом компьютере нужна более новая версия Orca Mobile. Обновите Orca Mobile через App Store, затем снова подключитесь к этому серверу.",
+      "mobileTooOldGooglePlay": "Для работы с Orca на этом компьютере нужна более новая версия Orca Mobile. Обновите Orca Mobile через Google Play, затем снова подключитесь к этому серверу.",
       "mobileTooOldGitHubReleases": "Для работы с Orca на этом компьютере нужна более новая версия Orca Mobile. Обновите Orca Mobile через GitHub Releases, затем снова подключитесь к этому серверу.",
       "openAppStore": "Открыть App Store",
+      "openGooglePlay": "Открыть Google Play",
       "openGitHubReleases": "Открыть GitHub Releases",
       "refreshRecoveryNote": "Если сообщение не исчезнет, удалите этот сервер и выполните сопряжение заново.",
       "refreshWorkspaceBody": "Версия рабочего пространства этого сервера в кэше старее той, которую ожидает Orca на компьютере. Подключитесь к этому серверу заново, чтобы загрузить актуальную версию.",
@@ -1029,6 +1031,7 @@
       "updateMobileTitle": "Обновите Orca Mobile",
       "updateRecoveryNote": "Уже обновили? Вернитесь в раздел «Серверы» и обновите подключение. Если сообщение не исчезнет, удалите этот сервер и выполните сопряжение заново.",
       "workspaceNeedsUpdateAppStore": "Для мобильного рабочего пространства этого компьютера нужна более новая версия Orca Mobile. Обновите Orca Mobile через App Store, затем снова подключитесь к этому серверу.",
+      "workspaceNeedsUpdateGooglePlay": "Для мобильного рабочего пространства этого компьютера нужна более новая версия Orca Mobile. Обновите Orca Mobile через Google Play, затем снова подключитесь к этому серверу.",
       "workspaceNeedsUpdateGitHubReleases": "Для мобильного рабочего пространства этого компьютера нужна более новая версия Orca Mobile. Обновите Orca Mobile через GitHub Releases, затем снова подключитесь к этому серверу."
     },
     "richMarkdownEditor": {
