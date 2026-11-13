@@ -1,0 +1,161 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
+import { runTaskPageGitHubLandingRefresh } from './task-page-github-landing-refresh-run'
+import type { TaskPageGitHubLandingRefreshModel } from './task-page-github-landing-refresh-model'
+
+const QUERY = 'is:pr is:open author:@me'
+
+function repo(id: string): Repo {
+  return { id, path: `/repos/${id}`, displayName: id, badgeColor: '#000000', addedAt: 0 }
+}
+
+function pr(repoId: string, number: number): GitHubWorkItem {
+  return {
+    id: `pr:${number}`,
+    type: 'pr',
+    number,
+    title: `PR ${number}`,
+    state: 'open',
+    url: `https://github.com/acme/${repoId}/pull/${number}`,
+    labels: [],
+    updatedAt: '2026-11-01T00:00:00Z',
+    author: 'octocat',
+    repoId
+  }
+}
+
+type FetchResult = { items: GitHubWorkItem[]; failedCount: number; githubUnavailable: boolean }
+type Deferred = { resolve: (result: FetchResult) => void }
+
+// A filter click sets tasksFiltering, bumps the refresh nonce and changes the query; this is the landing run that follows.
+function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
+  const state = { filtering: true, loading: false, refreshing: false }
+  const selectedRepos = Object.keys(cache).map(repo)
+  const fetches: Deferred[] = []
+  const pending = () => new Promise<never>(() => {})
+  const pagesRef = { current: [] as (GitHubWorkItem[] | null)[] }
+  const model = {
+    fetchWorkItemsAcrossRepos: vi.fn(
+      () =>
+        new Promise<FetchResult>((resolve) => {
+          fetches.push({ resolve })
+        })
+    ),
+    fetchWorkItemsNextPage: vi.fn(pending),
+    countWorkItemsAcrossRepos: vi.fn(pending),
+    getCachedWorkItems: (repoId: string) => cache[repoId] ?? null,
+    workItemsInvalidationNonce: 0,
+    selectedRepos,
+    selectedReposKey: selectedRepos.map((r) => r.id).join(','),
+    taskSource: 'github',
+    taskResumeApplied: true,
+    githubMode: 'items',
+    appliedTaskSearch: QUERY,
+    taskRefreshNonce: 1,
+    setTasksLoading: (next: boolean) => {
+      state.loading = next
+    },
+    setTasksRefreshing: (next: boolean) => {
+      state.refreshing = next
+    },
+    setTasksFiltering: (next: boolean) => {
+      state.filtering = next
+    },
+    setTasksError: vi.fn(),
+    setFailedCount: vi.fn(),
+    setGithubUnavailable: vi.fn(),
+    lastFetchedNonceRef: { current: 0 },
+    lastFetchedInvalidationNonceRef: { current: 0 },
+    paginationGenerationRef: { current: 0 },
+    landingGitHubRefreshKeysRef: { current: new Set<string>() },
+    githubPerRepoPageLimit: 30,
+    githubPageSize: 30,
+    githubResumeContextKey: 'mine',
+    setPages: (
+      next:
+        | (GitHubWorkItem[] | null)[]
+        | ((previous: (GitHubWorkItem[] | null)[]) => (GitHubWorkItem[] | null)[])
+    ) => {
+      pagesRef.current = typeof next === 'function' ? next(pagesRef.current) : next
+    },
+    setCurrentPage: vi.fn(),
+    pagesRef,
+    currentPageRef: { current: 0 },
+    githubResumeConsumedRef: { current: true },
+    githubResumeContextRef: { current: 'open' },
+    pendingGithubScrollRestoreRef: { current: null },
+    setPaginationLoading: vi.fn(),
+    setLoadingTargetPage: vi.fn(),
+    setCountedTotalPages: vi.fn(),
+    setProvenPageLimit: vi.fn(),
+    countedTotalPagesRef: { current: null },
+    hardRefreshEpochRef: { current: 0 },
+    retryingSourceKeys: new Set<string>(),
+    setRetryingSourceKeys: vi.fn(),
+    githubWorkItemMutationQueryKey: QUERY,
+    setLandingRequestKey: vi.fn()
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every field the landing run reads.
+  const cancel = runTaskPageGitHubLandingRefresh(
+    model as unknown as TaskPageGitHubLandingRefreshModel
+  )
+  const rows = () => pagesRef.current[0]?.map((row) => row.number)
+  const answer = async (items: GitHubWorkItem[]) => {
+    fetches[0]?.resolve({ items, failedCount: 0, githubUnavailable: false })
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+  return { state, model, rows, answer, cancel }
+}
+
+describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
+  it('shows the cached rows and refetches them when every selected repo has the query cached', () => {
+    const { state, model, rows } = landAfterFilterChange({ a: [pr('a', 7)], b: [pr('b', 9)] })
+
+    expect(state).toEqual({ filtering: false, loading: false, refreshing: true })
+    expect(rows()).toEqual([9, 7])
+    expect(model.fetchWorkItemsAcrossRepos).toHaveBeenCalledWith(
+      expect.anything(),
+      30,
+      30,
+      QUERY,
+      expect.objectContaining({ force: true, noCache: true })
+    )
+  })
+
+  it('shows a cached empty answer as empty rather than the skeleton', () => {
+    const { state, rows } = landAfterFilterChange({ a: [], b: [] })
+
+    expect(state.filtering).toBe(false)
+    expect(rows()).toEqual([])
+  })
+
+  it('keeps the skeleton while a selected repo has no cached rows, including after a failed fetch', () => {
+    // A failed fetch caches only its error, so getCachedWorkItems reads null for it.
+    const { state } = landAfterFilterChange({ a: [pr('a', 7)], b: null })
+
+    expect(state).toEqual({ filtering: true, loading: true, refreshing: true })
+  })
+
+  it('replaces stale cached rows in place when the forced refetch lands', async () => {
+    const { state, rows, answer } = landAfterFilterChange({ a: [pr('a', 7), pr('a', 5)] })
+
+    await answer([pr('a', 8), pr('a', 7)])
+
+    expect(rows()).toEqual([8, 7])
+    expect(state).toEqual({ filtering: false, loading: false, refreshing: false })
+  })
+
+  it('leaves a newer filter alone when a superseded landing run settles', async () => {
+    const { state, rows, answer, cancel } = landAfterFilterChange({ a: [pr('a', 7)] })
+    cancel?.()
+    // The next filter click re-arms the skeleton before its own landing run.
+    state.filtering = true
+
+    await answer([pr('a', 8)])
+
+    expect(state.filtering).toBe(true)
+    expect(rows()).toEqual([7])
+  })
+})
