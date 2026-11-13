@@ -83,7 +83,6 @@
       "config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts": 31,
       "config/scripts/skills/bundle-generation/generate-skill-bundle-manifest.test.mjs": 956,
       "config/scripts/workspace-package-build/generated-artifact-line-ending-pin.test.mjs": 61,
-      "config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.test.mjs": 959,
       "config/scripts/ci/workflow-contracts/hourly-preflight-workflow.test.mjs": 158,
       "config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs": 55,
       "config/scripts/static-analysis/oxlint-contracts/ime-enter-guard-plugin.test.mjs": 222,
