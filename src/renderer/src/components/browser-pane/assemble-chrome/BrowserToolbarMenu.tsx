@@ -36,6 +36,8 @@ type BrowserToolbarMenuProps = {
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu, built by the toolbar that owns the pinned buttons. */
   extensionsSub: React.ReactNode
+  /** Set where switching profiles cannot rebuild this surface's page; the Profile entry renders disabled with this reason. */
+  profileUnavailableReason?: string
   overflow: BrowserChromeOverflowMenuProps
 }
 
@@ -49,6 +51,7 @@ export function BrowserToolbarMenu({
   isBlankTab,
   pageActions,
   extensionsSub,
+  profileUnavailableReason,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
@@ -265,20 +268,24 @@ export function BrowserToolbarMenu({
         browserPageId={browserPageId}
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
-        profile={{
-          browserPageId,
-          allProfiles,
-          effectiveProfileId,
-          onSwitchProfile: handleSwitchProfile,
-          onNewProfile: () => setNewProfileDialogOpen(true),
-          detectedBrowsers,
-          onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
-          browserSessionImportState,
-          onImportFromBrowser: (browserFamily, browserProfile) =>
-            void handleImportFromBrowser(browserFamily, browserProfile),
-          onImportFromFile: () => void handleImportFromFile(),
-          forceOpen: shouldForceMenuOpen
-        }}
+        profile={
+          profileUnavailableReason
+            ? { unavailableReason: profileUnavailableReason }
+            : {
+                browserPageId,
+                allProfiles,
+                effectiveProfileId,
+                onSwitchProfile: handleSwitchProfile,
+                onNewProfile: () => setNewProfileDialogOpen(true),
+                detectedBrowsers,
+                onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
+                browserSessionImportState,
+                onImportFromBrowser: (browserFamily, browserProfile) =>
+                  void handleImportFromBrowser(browserFamily, browserProfile),
+                onImportFromFile: () => void handleImportFromFile(),
+                forceOpen: shouldForceMenuOpen
+              }
+        }
         pageActions={pageActions}
         extensionsSub={extensionsSub}
         viewportPresetId={viewportPresetId}

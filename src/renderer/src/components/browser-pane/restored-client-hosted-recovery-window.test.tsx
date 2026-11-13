@@ -90,6 +90,7 @@ function paneElement(): React.JSX.Element {
     <TooltipProvider>
       <ClientHostedBrowserPagePane
         browserTab={page()}
+        sessionProfileId={null}
         workspaceId="workspace-a"
         chromeShortcutScope="focused"
         runtimeEnvironmentId={ENVIRONMENT_ID}

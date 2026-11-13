@@ -149,6 +149,8 @@ export type BrowserPagePaneProps = {
 
 export type ClientHostedBrowserPagePaneProps = {
   browserTab: BrowserPageState
+  /** The workspace's active browser profile; the menu switches it and destroys the page's webview. Absent in fixtures that never open it. */
+  sessionProfileId?: string | null
   workspaceId: string
   runtimeEnvironmentId: string
   worktreeId: string
