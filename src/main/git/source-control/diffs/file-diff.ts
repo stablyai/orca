@@ -153,6 +153,7 @@ async function loadDiff(
   let modifiedIsBinary = false
   let modifiedDeleted = false
   let readFailed = false
+  let originalReadFailed = false
   let tooLarge = false
   const conversion = blobConversion(
     worktreePath,
@@ -184,7 +185,8 @@ async function loadDiff(
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists && !rightBlob.failed
-      readFailed = leftBlob.failed === true || rightBlob.failed === true
+      originalReadFailed = leftBlob.failed === true
+      readFailed = originalReadFailed || rightBlob.failed === true
       tooLarge = leftBlob.tooLarge === true || rightBlob.tooLarge === true
     } else {
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
@@ -203,21 +205,27 @@ async function loadDiff(
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
-      readFailed = leftBlob.failed === true || workingTreeBlob.failed === true
+      originalReadFailed = leftBlob.failed === true
+      readFailed = originalReadFailed || workingTreeBlob.failed === true
       tooLarge = leftBlob.tooLarge === true || workingTreeBlob.tooLarge === true
     }
   } catch {
     readFailed = true
+    originalReadFailed = true
   }
 
-  const result = buildDiffResult(
-    originalContent,
-    modifiedContent,
-    originalIsBinary,
-    modifiedIsBinary,
-    filePath,
-    tooLarge
-  )
+  // Why: an empty original is otherwise ambiguous between an empty blob and a read that failed.
+  const result: GitDiffResult = {
+    ...buildDiffResult(
+      originalContent,
+      modifiedContent,
+      originalIsBinary,
+      modifiedIsBinary,
+      filePath,
+      tooLarge
+    ),
+    originalReadFailed
+  }
   // Converted output depends on config, keys and tools the stamp doesn't cover.
   const reusable = !readFailed && !(await conversion.hasDriver) && !(await leftConversion.hasDriver)
   // Mark proven deletions so previewers can distinguish them from failed empty reads.

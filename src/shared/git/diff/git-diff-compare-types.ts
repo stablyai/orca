@@ -44,7 +44,10 @@ export type GitCommitCompareResult = {
   entries: GitBranchChangeEntry[]
 }
 
-export type GitDiffTextResult = {
+/** Whether the `originalContent` read failed: false means the side is proven, even when empty. Hosts that predate the flag omit it. */
+type GitDiffOriginalRead = { originalReadFailed?: boolean }
+
+export type GitDiffTextResult = GitDiffOriginalRead & {
   kind: 'text'
   originalContent: string
   modifiedContent: string
@@ -53,7 +56,7 @@ export type GitDiffTextResult = {
   largeDiffRenderLimit?: LargeDiffRenderLimit
 }
 
-export type GitDiffBinaryResult = {
+export type GitDiffBinaryResult = GitDiffOriginalRead & {
   kind: 'binary'
   originalContent: string
   modifiedContent: string
@@ -66,8 +69,8 @@ export type GitDiffBinaryResult = {
   /** A side passed the 10 MiB read cap: too large to diff, not necessarily binary. Older clients show it as binary. */
   tooLarge?: boolean
 } & (
-  | { originalIsBinary: true; modifiedIsBinary: boolean }
-  | { originalIsBinary: boolean; modifiedIsBinary: true }
-)
+    | { originalIsBinary: true; modifiedIsBinary: boolean }
+    | { originalIsBinary: boolean; modifiedIsBinary: true }
+  )
 
 export type GitDiffResult = GitDiffTextResult | GitDiffBinaryResult

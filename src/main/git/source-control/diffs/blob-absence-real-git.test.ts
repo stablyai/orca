@@ -77,6 +77,32 @@ describe('real Git missing paths and failed blob reads', () => {
     expect(settledDiffCache.stats().entries).toBe(1)
   })
 
+  it('reports an empty HEAD blob as a proven original', async () => {
+    await writeFile(path.join(repo, 'file.txt'), '')
+    gitCommit(repo, 'initial')
+    await writeFile(path.join(repo, 'file.txt'), 'working\n')
+
+    expect(await getDiff(repo, 'file.txt', false, true)).toMatchObject({
+      originalContent: '',
+      modifiedContent: 'working\n',
+      originalReadFailed: false
+    })
+  })
+
+  it('reports a failed HEAD read instead of passing it off as an empty original', async () => {
+    await writeFile(path.join(repo, 'file.txt'), 'committed\n')
+    gitCommit(repo, 'initial')
+    const oid = (await git(['rev-parse', 'HEAD:file.txt'])).trim()
+    await writeFile(path.join(repo, 'file.txt'), 'working\n')
+    await unlink(path.join(repo, '.git', 'objects', oid.slice(0, 2), oid.slice(2)))
+
+    expect(await getDiff(repo, 'file.txt', false, true)).toMatchObject({
+      originalContent: '',
+      modifiedContent: 'working\n',
+      originalReadFailed: true
+    })
+  })
+
   it('retains added paths on an unborn branch', async () => {
     await writeFile(path.join(repo, 'file.txt'), 'new file\n')
     await git(['add', 'file.txt'])
