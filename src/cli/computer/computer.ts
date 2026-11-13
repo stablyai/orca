@@ -33,8 +33,10 @@ import {
   getComputerScrollActionFlags,
   getComputerSecondaryActionFlags,
   getComputerSetValueActionFlags,
-  getComputerTextActionFlags
+  getComputerTextActionFlags,
+  getComputerTypeTextActionFlags
 } from './computer-action-flags'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer capabilities': async ({ client, json }) => {
@@ -169,8 +171,19 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer type-text': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
-    const actionParams = await getComputerTextActionFlags(flags)
+    const actionParams = await getComputerTypeTextActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    if (actionParams.elementIndex !== undefined) {
+      // Why: older runtimes strip elementIndex, so ask first rather than type into the focused field.
+      const capabilities = await client.call<ComputerProviderCapabilities>(
+        'computer.capabilities',
+        {}
+      )
+      const unsupported = computerTypeTextTargetUnsupportedMessage(capabilities.result)
+      if (unsupported) {
+        throw new RuntimeClientError('unsupported_capability', unsupported)
+      }
+    }
     const result = await client.call<ComputerActionResult>('computer.typeText', {
       ...target,
       ...actionParams,
