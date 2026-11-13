@@ -9,7 +9,10 @@ async function settle(): Promise<void> {
   }
 }
 
-function fakeConnection(timeline: () => Promise<unknown> = async () => ({ data: [] })) {
+function fakeConnection(
+  timeline: () => Promise<unknown> = async () => ({ data: [] }),
+  overrides: { turns?: unknown[]; stop?: () => Promise<unknown> } = {}
+) {
   const requests: { method: string; params: Record<string, unknown> | undefined }[] = []
   let closed = false
   const connection = {
@@ -30,6 +33,12 @@ function fakeConnection(timeline: () => Promise<unknown> = async () => ({ data: 
             defaultV2: 'marin'
           }
         }
+      }
+      if (method === 'thread/realtime/stop' && overrides.stop) {
+        return overrides.stop()
+      }
+      if (method === 'thread/turns/list') {
+        return { data: overrides.turns ?? [] }
       }
       return method === 'thread/timeline/list' ? timeline() : {}
     },
@@ -155,4 +164,88 @@ it('starts with the preferred voice only when this Codex lists it for v3', async
   expect(startParams()).not.toHaveProperty('voice')
   expect(unlisted.events).toEqual([{ type: 'voice-unavailable', voice: 'marin' }])
   expect(await voice.listVoices({ connection, ended: false })).toEqual(['juniper', 'cove', 'maple'])
+})
+
+it('asks again when Codex refuses a stop, and lets the idle sweep retire that child', async () => {
+  let refuseStop = true
+  const voice = new CodexRealtimeVoice()
+  const { connection, methods } = fakeConnection(undefined, {
+    stop: async () => {
+      if (refuseStop) {
+        throw new Error('stop failed')
+      }
+      return {}
+    }
+  })
+  const notify = (method: string, params: Record<string, unknown>) =>
+    voice.observe('session-1', connection, method, { threadId: 'thread-1', ...params })
+
+  const first = attempt(voice, connection)
+  await settle()
+  expect(voice.confirmIdle('session-1')).toBeDefined()
+  first.handle.stop()
+  await settle()
+  expect(voice.confirmIdle('session-1')).toBeUndefined()
+
+  refuseStop = false
+  const blocked = attempt(voice, connection)
+  expect(blocked.events).toEqual([{ type: 'refused', reason: 'busy' }])
+  expect(methods().filter((method) => method === 'thread/realtime/stop')).toHaveLength(2)
+  notify('thread/realtime/closed', { reason: 'requested' })
+
+  const next = attempt(voice, connection)
+  await settle()
+  notify('thread/realtime/sdp', { sdp: 'v=0 answer' })
+  expect(next.events).toEqual([{ type: 'answer', sdp: 'v=0 answer' }])
+})
+
+it('seeds the next call with what this one heard when Codex cannot list voice history', async () => {
+  const voice = new CodexRealtimeVoice()
+  const turn = (id: string, startedAt: number, asked: string, answered: string) => ({
+    id,
+    startedAt,
+    items: [
+      { type: 'userMessage', id: `${id}-u`, content: [{ type: 'text', text: asked }] },
+      { type: 'agentMessage', id: `${id}-a`, text: answered, phase: 'final_answer' }
+    ]
+  })
+  const { connection, requests } = fakeConnection(
+    async () => {
+      throw new Error('thread/timeline/list is not supported yet')
+    },
+    {
+      // Newest first, stamped in Unix seconds: one turn long before this test, one long after.
+      turns: [
+        turn('t2', 4_000_000_000, 'Ship it?', 'Shipped.'),
+        turn('t1', 1, 'Plan the cache', 'Use LRU.')
+      ]
+    }
+  )
+  const notify = (method: string, params: Record<string, unknown>) =>
+    voice.observe('session-1', connection, method, { threadId: 'thread-1', ...params })
+  const segment = (id: string, role: string, text: string) =>
+    notify('thread/realtime/item/completed', {
+      item: { type: 'transcriptSegment', id, role, text }
+    })
+
+  const first = attempt(voice, connection)
+  await settle()
+  notify('thread/realtime/sdp', { sdp: 'v=0 answer' })
+  segment('s1', 'user', 'Does LRU fit?')
+  segment('s2', 'assistant', 'Yes, at this size.')
+  first.handle.stop()
+  notify('thread/realtime/closed', { reason: 'requested' })
+
+  attempt(voice, connection)
+  await settle()
+  expect(
+    requests.findLast((request) => request.method === 'thread/realtime/start')?.params?.initialItems
+  ).toEqual([
+    { role: 'user', text: 'Plan the cache' },
+    { role: 'assistant', text: 'Use LRU.' },
+    { role: 'user', text: 'Does LRU fit?' },
+    { role: 'assistant', text: 'Yes, at this size.' },
+    { role: 'user', text: 'Ship it?' },
+    { role: 'assistant', text: 'Shipped.' }
+  ])
 })

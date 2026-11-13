@@ -5,10 +5,11 @@ import type {
 } from '../session-lifecycle/codex-structured-session-state'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import { readCodexVoiceInitialItems } from './codex-realtime-voice-context'
-import {
-  AGENT_SESSION_VOICE_NAME_PATTERN,
-  type AgentSessionVoiceEndReason,
-  type AgentSessionVoiceEvent
+import { CodexVoiceSpokenHistory } from './codex-realtime-voice-spoken-history'
+import { listV3Voices, offeredVoice } from './codex-realtime-voices'
+import type {
+  AgentSessionVoiceEndReason,
+  AgentSessionVoiceEvent
 } from '../../../../shared/agent-session/agent-session-voice-conversation'
 
 const ANSWER_TIMEOUT_MS = 30_000
@@ -28,6 +29,8 @@ type Slot = {
   emit: ((event: AgentSessionVoiceEvent) => void) | null
   answerTimer: ReturnType<typeof setTimeout> | null
   captions: Map<string, Caption>
+  /** Codex refused our stop, so no requested close is coming; the next start asks again. */
+  stopFailed: boolean
 }
 
 /**
@@ -39,10 +42,13 @@ type Slot = {
  */
 export class CodexRealtimeVoice {
   private readonly slots = new Map<string, Slot>()
+  private readonly spoken = new CodexVoiceSpokenHistory()
 
-  /** An open voice session is live work: the idle sweep must not stop its child. */
+  /** An open voice session is live work: the idle sweep must not stop its child. A child whose
+   *  stop failed may be retired, which ends the attempt for certain. */
   confirmIdle(sessionId: string): Promise<'busy'> | undefined {
-    return this.slots.has(sessionId) ? Promise.resolve('busy') : undefined
+    const slot = this.slots.get(sessionId)
+    return slot && !slot.stopFailed ? Promise.resolve('busy') : undefined
   }
 
   /** Adapter deps whose child-ended events also end that child's voice session. */
@@ -86,7 +92,11 @@ export class CodexRealtimeVoice {
       input.emit({ type: 'refused', reason: 'not-running' })
       return { stop: () => {} }
     }
-    if (this.slots.has(sessionId)) {
+    const held = this.slots.get(sessionId)
+    if (held) {
+      if (held.stopFailed) {
+        this.requestStop(sessionId, held)
+      }
       input.emit({ type: 'refused', reason: 'busy' })
       return { stop: () => {} }
     }
@@ -97,7 +107,8 @@ export class CodexRealtimeVoice {
       phase: 'starting',
       emit: input.emit,
       answerTimer: null,
-      captions: new Map()
+      captions: new Map(),
+      stopFailed: false
     }
     this.slots.set(sessionId, slot)
     slot.answerTimer = setTimeout(
@@ -106,7 +117,7 @@ export class CodexRealtimeVoice {
     )
     const pending = () => this.slots.get(sessionId) === slot && slot.phase === 'starting'
     void Promise.all([
-      readCodexVoiceInitialItems(connection, session.threadId),
+      readCodexVoiceInitialItems(connection, session.threadId, this.spoken.of(session.threadId)),
       offeredVoice(connection, input.voice)
     ])
       .then(([initialItems, voice]) => {
@@ -231,7 +242,12 @@ export class CodexRealtimeVoice {
       this.slots.delete(sessionId)
       return
     }
-    // Stop always answers with closed(requested), even when the core never started a session.
+    this.requestStop(sessionId, slot)
+  }
+
+  // Stop always answers with closed(requested), even when the core never started a session.
+  private requestStop(sessionId: string, slot: Slot): void {
+    slot.stopFailed = false
     slot.connection
       .request(
         'thread/realtime/stop',
@@ -239,8 +255,13 @@ export class CodexRealtimeVoice {
         { timeoutMs: REQUEST_TIMEOUT_MS }
       )
       .catch(() => {
-        if (slot.connection.closed && this.slots.get(sessionId) === slot) {
+        if (this.slots.get(sessionId) !== slot) {
+          return
+        }
+        if (slot.connection.closed) {
           this.slots.delete(sessionId)
+        } else {
+          slot.stopFailed = true
         }
       })
   }
@@ -273,6 +294,9 @@ export class CodexRealtimeVoice {
     const caption: Caption = { role, text: boundCaption(readString(item, 'text') ?? '') }
     const final = method === 'thread/realtime/item/completed'
     slot.captions.delete(itemId)
+    if (final && caption.text) {
+      this.spoken.remember(slot.threadId, { ...caption, atMs: Date.now() })
+    }
     if (!final) {
       slot.captions.set(itemId, caption)
       for (const oldest of slot.captions.keys()) {
@@ -284,34 +308,6 @@ export class CodexRealtimeVoice {
     }
     deliver(slot, { type: 'transcript', itemId, ...caption, final })
   }
-}
-
-/** Orca always starts v3; a Codex without a v3 list cannot take a voice choice. */
-async function listV3Voices(connection: CodexAppServerConnection): Promise<string[] | null> {
-  const listing = readRecord(
-    readRecord(
-      await connection.request('thread/realtime/listVoices', {}, { timeoutMs: REQUEST_TIMEOUT_MS })
-    ).voices
-  )
-  if (!Array.isArray(listing.v3)) {
-    return null
-  }
-  return listing.v3.filter(
-    (voice): voice is string =>
-      typeof voice === 'string' && AGENT_SESSION_VOICE_NAME_PATTERN.test(voice)
-  )
-}
-
-/** The preferred voice when this child offers it; a failed listing falls back to the default. */
-async function offeredVoice(
-  connection: CodexAppServerConnection,
-  voice: string | undefined
-): Promise<string | undefined> {
-  if (!voice) {
-    return undefined
-  }
-  const voices = await listV3Voices(connection).catch(() => null)
-  return voices?.includes(voice) ? voice : undefined
 }
 
 /** A client that vanished must not keep the provider's session from being stopped. */

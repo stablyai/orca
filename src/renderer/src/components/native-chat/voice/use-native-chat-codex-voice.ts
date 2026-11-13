@@ -28,28 +28,42 @@ export function useNativeChatCodexVoiceControl(): NativeChatCodexVoice | null {
   return useContext(NativeChatCodexVoiceContext)
 }
 
+// An unreachable host is not a "no": ask again, since its recovery keeps the same environment.
+const UNREACHABLE_PROBE_RETRY_MS = 30_000
+
 function useVoiceRelayAvailability(
   environmentId: string | null
 ): NativeChatCodexVoice['availability'] {
   const [remote, setRemote] = useState<{ id: string; supported: boolean } | null>(null)
+  const [probe, setProbe] = useState(0)
   useEffect(() => {
     if (environmentId === null) {
       return
     }
     let current = true
+    let retry: ReturnType<typeof setTimeout> | null = null
     void runtimeEnvironmentSupportsCapabilities(environmentId, [
       AGENT_SESSION_CODEX_VOICE_RUNTIME_CAPABILITY
-    ])
-      .catch(() => [false])
-      .then(([supported]) => {
+    ]).then(
+      ([supported]) => {
         if (current) {
           setRemote({ id: environmentId, supported: supported === true })
         }
-      })
+      },
+      () => {
+        if (current) {
+          setRemote({ id: environmentId, supported: false })
+          retry = setTimeout(() => setProbe((count) => count + 1), UNREACHABLE_PROBE_RETRY_MS)
+        }
+      }
+    )
     return () => {
       current = false
+      if (retry !== null) {
+        clearTimeout(retry)
+      }
     }
-  }, [environmentId])
+  }, [environmentId, probe])
   if (environmentId === null) {
     return 'available'
   }

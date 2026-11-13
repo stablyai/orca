@@ -343,6 +343,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           )}
         </NativeChatContextClearFade>
       </NativeChatCrewFrame>
+      {readFailure?.final ? <NativeChatCodexVoiceStripSlot /> : null}
       {readFailure?.final ? null : (
         <>
           {/* Keep queued drafts outside the transcript and above the background-task dock. */}
@@ -362,7 +363,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             target={props.target}
             isVisible={props.isVisible}
           />
-          <NativeChatCodexVoiceStripSlot awaitingApproval={prompt !== null} />
+          <NativeChatCodexVoiceStripSlot promptKind={prompt?.body.kind} />
           {prompt || subagentOpen ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}

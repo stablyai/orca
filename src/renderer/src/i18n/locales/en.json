@@ -21667,6 +21667,7 @@
         "unmute": "Unmute microphone",
         "mute": "Mute microphone",
         "awaitingApproval": "Waiting for your approval in the chat",
+        "awaitingAnswer": "Waiting for your answer in the chat",
         "you": "You",
         "disclosure": "Speech runs on Codex's OpenAI voice service; the work continues in this chat's Codex.",
         "voice": "Voice",

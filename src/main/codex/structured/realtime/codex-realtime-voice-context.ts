@@ -8,6 +8,9 @@ import { codexRealtimeDelegationInput } from '../items/codex-realtime-delegation
 
 export type CodexVoiceInitialItem = { role: 'user' | 'assistant'; text: string }
 
+/** A finished voice segment this process heard, kept for Codex builds whose timeline lacks it. */
+export type CodexVoiceSpokenSegment = CodexVoiceInitialItem & { atMs: number }
+
 const TIMELINE_PAGE = 80
 // Codex accepts 128 items and about 8,192 tokens; stay far below both.
 const MAX_ITEMS = 24
@@ -19,7 +22,8 @@ const TURNS_PAGE = 12
 /** Best effort: without readable history the voice starts empty; the executor keeps it all. */
 export async function readCodexVoiceInitialItems(
   connection: CodexAppServerConnection,
-  threadId: string
+  threadId: string,
+  spoken: readonly CodexVoiceSpokenSegment[] = []
 ): Promise<CodexVoiceInitialItem[]> {
   const read = (method: string, params: Record<string, unknown>) =>
     connection
@@ -39,23 +43,44 @@ export async function readCodexVoiceInitialItems(
       sortDirection: 'desc',
       itemsView: 'full'
     })
-    return Array.isArray(turns) ? codexVoiceInitialItemsFromTimeline(timelineFromTurns(turns)) : []
+    return codexVoiceInitialItemsFromTimeline(
+      timelineFromTurns(Array.isArray(turns) ? turns : [], spoken)
+    )
   } catch {
-    return []
+    return codexVoiceInitialItemsFromTimeline(timelineFromTurns([], spoken))
   }
 }
 
-/** Newest-first turns as the oldest-first entries the timeline would list, without voice items. */
-function timelineFromTurns(turns: readonly unknown[]): unknown[] {
-  return turns.toReversed().flatMap((raw) => {
+/** Newest-first turns as the oldest-first entries the timeline would list. Turns carry no voice,
+ *  so the segments this process heard go before the first turn that started after them. */
+function timelineFromTurns(
+  turns: readonly unknown[],
+  spoken: readonly CodexVoiceSpokenSegment[]
+): unknown[] {
+  let next = 0
+  const spokenUntil = (atMs: number) => {
+    const from = next
+    while (next < spoken.length && spoken[next].atMs < atMs) {
+      next += 1
+    }
+    return spoken.slice(from, next).map(({ role, text }) => ({
+      type: 'realtime',
+      item: { type: 'transcriptSegment', role, text }
+    }))
+  }
+  const entries = turns.toReversed().flatMap((raw) => {
     const turn = readRecord(raw)
     const turnId = readString(turn, 'id') ?? ''
     const items = Array.isArray(turn.items) ? turn.items : []
+    // Whole seconds: speech in the turn's own second is the hand-off that started it.
+    const startedAt = turn.startedAt
     return [
+      ...(typeof startedAt === 'number' ? spokenUntil((startedAt + 1) * 1_000) : []),
       ...items.map((item: unknown) => ({ type: 'item', turnId, item })),
       { type: 'turnCompleted', turnId }
     ]
   })
+  return [...entries, ...spokenUntil(Number.POSITIVE_INFINITY)]
 }
 
 /** Timeline entries arrive oldest first; the newest exchanges win the budget. */
@@ -63,8 +88,10 @@ export function codexVoiceInitialItemsFromTimeline(
   entries: readonly unknown[]
 ): CodexVoiceInitialItem[] {
   const ordered: CodexVoiceInitialItem[] = []
-  // A legacy model may leave its answer unphased; the turn's last message is then the answer.
+  // A legacy model may leave its answer unphased; the turn's last message is then the answer,
+  // unless the turn also gave a final answer.
   const unphasedAnswer = new Map<string, string>()
+  const answeredTurns = new Set<string>()
   const spokenByUser = new Set<string>()
   for (const raw of entries) {
     const entry = readRecord(raw)
@@ -91,12 +118,19 @@ export function codexVoiceInitialItemsFromTimeline(
       const text = readString(item, 'text')
       if (text && item.phase === 'final_answer') {
         ordered.push({ role: 'assistant', text })
-      } else if (text && (item.phase === null || item.phase === undefined)) {
+        answeredTurns.add(turnId)
+        unphasedAnswer.delete(turnId)
+      } else if (
+        text &&
+        (item.phase === null || item.phase === undefined) &&
+        !answeredTurns.has(turnId)
+      ) {
         unphasedAnswer.set(turnId, text)
       }
     } else if (entry.type === 'turnCompleted') {
       const text = unphasedAnswer.get(turnId)
       unphasedAnswer.delete(turnId)
+      answeredTurns.delete(turnId)
       if (text) {
         ordered.push({ role: 'assistant', text })
       }

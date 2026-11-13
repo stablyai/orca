@@ -110,3 +110,19 @@ it('falls back to the newest turns, oldest first, when Codex cannot list the tim
     { role: 'assistant', text: 'Five minutes.' }
   ])
 })
+
+it('keeps a single answer when a turn holds both an unphased message and a final answer', () => {
+  const answer = (id: string, text: string, phase: string | null) => ({
+    type: 'item',
+    turnId: 't1',
+    item: { type: 'agentMessage', id, text, phase }
+  })
+  expect(
+    codexVoiceInitialItemsFromTimeline([
+      answer('a1', 'Looking at it.', null),
+      answer('a2', 'It is fixed.', 'final_answer'),
+      answer('a3', 'Anything else?', null),
+      { type: 'turnCompleted', turnId: 't1' }
+    ])
+  ).toEqual([{ role: 'assistant', text: 'It is fixed.' }])
+})

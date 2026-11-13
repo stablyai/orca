@@ -81,7 +81,8 @@ function statusText(t: Translate, call: CodexVoiceCallState): string {
 /** The live call's state and controls, on the composer's top edge like the goal strip. */
 export function NativeChatCodexVoiceStrip(props: {
   call: CodexVoiceCallState
-  awaitingApproval: boolean
+  /** The chat's open prompt, which the call waits on. */
+  awaitingInput: 'approval' | 'question' | null
   onMute: (muted: boolean) => void
   onEnd: () => void
   onDismiss: () => void
@@ -132,9 +133,11 @@ export function NativeChatCodexVoiceStrip(props: {
           {call.unavailableVoice && caption
             ? ` · ${t('components.native-chat.voice.defaultVoiceSpeaking', 'Codex default voice')}`
             : null}
-          {props.awaitingApproval
+          {props.awaitingInput === 'approval'
             ? ` · ${t('components.native-chat.voice.awaitingApproval', 'Waiting for your approval in the chat')}`
-            : null}
+            : props.awaitingInput === 'question'
+              ? ` · ${t('components.native-chat.voice.awaitingAnswer', 'Waiting for your answer in the chat')}`
+              : null}
         </span>
         <span className="block truncate text-2xs">
           {caption
