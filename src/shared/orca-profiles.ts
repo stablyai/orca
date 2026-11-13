@@ -1,3 +1,4 @@
+import type { OrcaOrgMemberMfaFields } from './orca-account-mfa'
 import './constants'
 import { ORCA_BROWSER_PARTITION } from './browser/browser-session-partition'
 import type { ExecutionHostId } from './execution-host'
@@ -250,7 +251,8 @@ export type RefreshCurrentOrcaProfileAuthResult =
 // Mirror the server’s fixed role enum so UI options cannot drift from accepted API values.
 export type OrcaOrgRole = 'owner' | 'admin' | 'member'
 
-export type OrcaOrgMember = {
+// Two-factor state (owners and admins only) lives in OrcaOrgMemberMfaFields.
+export type OrcaOrgMember = OrcaOrgMemberMfaFields & {
   // Provisioned teammates without sign-in have no userId; disable mutations requiring that key.
   userId: string | null
   email: string
@@ -258,17 +260,7 @@ export type OrcaOrgMember = {
   /** Profile picture from the identity provider (https only); avatars fall back to initials. */
   pictureUrl?: string
   role: OrcaOrgRole
-  /**
-   * Whether the member has two-factor authentication. The server sends it to owners and admins
-   * only, so it is absent for everyone else, and for a member the provider said nothing about.
-   * 'pending': a team policy requires it by `mfaDeadline` and the member has not set it up.
-   */
-  mfa?: OrcaOrgMemberMfa
-  /** Epoch ms the member must have MFA by; only with `mfa: 'pending'`. */
-  mfaDeadline?: number
 }
-
-export type OrcaOrgMemberMfa = 'on' | 'off' | 'pending'
 
 export type OrcaOrgPendingInvite = {
   email: string

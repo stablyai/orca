@@ -160,9 +160,8 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       createOrcaProfileOrg(getProfileUserDataPath(), { name: orgCreateNameFromUnknown(rawArgs) })
   )
 
-  ipcMain.handle(
-    'orcaProfiles:accountMfa',
-    async (): Promise<OrcaAccountMfaResult> => getOrcaProfileAccountMfa(getProfileUserDataPath())
+  ipcMain.handle('orcaProfiles:accountMfa', async (): Promise<OrcaAccountMfaResult> =>
+    getOrcaProfileAccountMfa(getProfileUserDataPath())
   )
 
   ipcMain.handle(
@@ -175,15 +174,15 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
     'orcaProfiles:teamMfaPolicySet',
     async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPolicySetResult> => {
       const { orgId, record } = orgMembersScopedArgs(rawArgs)
-      const enforce = record.enforce
       // Only the fixed choices cross to the server; anything else is refused here.
-      if (enforce !== 'off' && !ORCA_TEAM_MFA_GRACE_CHOICES.some((choice) => choice === enforce)) {
+      const enforce: OrcaTeamMfaGrace | 'off' | undefined =
+        record.enforce === 'off'
+          ? 'off'
+          : ORCA_TEAM_MFA_GRACE_CHOICES.find((choice) => choice === record.enforce)
+      if (enforce === undefined) {
         return { status: 'failed', error: 'invalid_enforce' }
       }
-      return setOrcaTeamMfaPolicy(getProfileUserDataPath(), {
-        orgId,
-        enforce: enforce as OrcaTeamMfaGrace | 'off'
-      })
+      return setOrcaTeamMfaPolicy(getProfileUserDataPath(), { orgId, enforce })
     }
   )
 

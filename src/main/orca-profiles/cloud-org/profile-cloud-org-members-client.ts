@@ -1,6 +1,6 @@
+import type { OrcaOrgMemberMfa } from '../../../shared/orca-account-mfa'
 import type {
   OrcaOrgMember,
-  OrcaOrgMemberMfa,
   OrcaOrgMembersRoster,
   OrcaOrgPendingInvite,
   OrcaOrgRole

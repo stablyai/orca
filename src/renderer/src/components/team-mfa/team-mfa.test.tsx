@@ -212,8 +212,8 @@ describe('Require MFA row', () => {
 
 describe('the server refusal in cloud workspace errors', () => {
   it('says to set up MFA, never to sign in again', () => {
-    for (const describe of [describeError, describeInlineError]) {
-      const message = describe('unauthorized', 'mfa_required', translate)
+    for (const explain of [describeError, describeInlineError]) {
+      const message = explain('unauthorized', 'mfa_required', translate)
       expect(message).toContain('requires two-factor authentication')
       expect(message).not.toMatch(/sign in/i)
     }

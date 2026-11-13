@@ -11,3 +11,17 @@ export type OrcaAccountMfaResult =
   /** `unsupported`: this Orca Cloud deployment (or local dev auth) has no MFA status. */
   | { status: 'unconfigured' | 'reconnect-required' | 'unsupported' }
   | { status: 'failed'; error: string }
+
+/**
+ * A team member's two-factor state as owners and admins see it. Absent for everyone else, and
+ * for a member the provider said nothing about. 'pending': a team policy requires it by the
+ * member's `mfaDeadline` and they have not set it up.
+ */
+export type OrcaOrgMemberMfa = 'on' | 'off' | 'pending'
+
+/** The two-factor fields of a team member (OrcaOrgMember in orca-profiles.ts). */
+export type OrcaOrgMemberMfaFields = {
+  mfa?: OrcaOrgMemberMfa
+  /** Epoch ms the member must have MFA by; only with `mfa: 'pending'`. */
+  mfaDeadline?: number
+}

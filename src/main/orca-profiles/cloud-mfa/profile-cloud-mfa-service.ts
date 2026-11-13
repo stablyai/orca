@@ -15,7 +15,8 @@ import { ensureActiveOrcaProfile } from '../profile-index-store'
  * a compromised or misconfigured answer cannot send the person to another site to "set up MFA".
  */
 export function normalizeAccountMfa(value: unknown, apiBaseUrl: string): OrcaAccountMfa {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const record: Record<string, unknown> =
+    typeof value === 'object' && value !== null ? { ...value } : {}
   const mfa = record.mfa === 'on' || record.mfa === 'off' ? record.mfa : null
   let setupUrl: URL | null = null
   try {
@@ -46,10 +47,13 @@ async function fetchAccountMfa(
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
-  return normalizeAccountMfa((await response.json()) as unknown, config.apiBaseUrl)
+  const body: unknown = await response.json()
+  return normalizeAccountMfa(body, config.apiBaseUrl)
 }
 
-export async function getOrcaProfileAccountMfa(userDataPath: string): Promise<OrcaAccountMfaResult> {
+export async function getOrcaProfileAccountMfa(
+  userDataPath: string
+): Promise<OrcaAccountMfaResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   // Local dev auth has no server and no factor to enrol.
   if (isOrcaCloudDevAuthEnabled()) {

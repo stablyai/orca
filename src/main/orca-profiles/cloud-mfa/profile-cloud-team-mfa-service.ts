@@ -25,6 +25,10 @@ import {
 } from '../cloud-org/profile-cloud-org-members-service'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 const SELF_STATES: readonly OrcaTeamMfaSelfState[] = ['on', 'off', 'pending', 'blocked', 'unknown']
 
 function finiteNumber(value: unknown): number | null {
@@ -47,27 +51,25 @@ export function sameOriginUrl(value: unknown, apiBaseUrl: string): string | null
 }
 
 function normalizeDeadline(value: unknown): { enforceAt: number; setAt: number } | null {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const record = isRecord(value) ? value : null
   const enforceAt = finiteNumber(record?.enforceAt)
   const setAt = finiteNumber(record?.setAt)
   return enforceAt !== null && setAt !== null ? { enforceAt, setAt } : null
 }
 
 export function normalizeTeamMfaPolicy(value: unknown, apiBaseUrl: string): OrcaTeamMfaPolicy {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const record = isRecord(value) ? value : null
   const setupUrl = sameOriginUrl(record?.setupUrl, apiBaseUrl)
   if (!record || !setupUrl) {
     throw new Error('invalid_orca_team_mfa_policy')
   }
-  const selfRecord =
-    record.self && typeof record.self === 'object' ? (record.self as Record<string, unknown>) : {}
+  const selfRecord = isRecord(record.self) ? record.self : {}
   // An unrecognized state is "unknown", never "blocked": only the server's word blocks anyone.
   const self = SELF_STATES.find((state) => state === selfRecord.mfa) ?? 'unknown'
   const pendingMembers = finiteNumber(record.pendingMembers)
-  const inactive =
-    record.inactivePolicy && typeof record.inactivePolicy === 'object'
-      ? finiteNumber((record.inactivePolicy as Record<string, unknown>).enforceAt)
-      : null
+  const inactive = isRecord(record.inactivePolicy)
+    ? finiteNumber(record.inactivePolicy.enforceAt)
+    : null
   return {
     policy: normalizeDeadline(record.policy),
     self,
@@ -86,10 +88,10 @@ export function normalizeTeamMfaPolicy(value: unknown, apiBaseUrl: string): Orca
 }
 
 export function normalizePendingMembers(value: unknown): OrcaTeamMfaPendingMember[] {
-  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const record = isRecord(value) ? value : null
   const members = Array.isArray(record?.members) ? record.members : []
   return members.flatMap((entry): OrcaTeamMfaPendingMember[] => {
-    const member = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null
+    const member = isRecord(entry) ? entry : null
     const email = typeof member?.email === 'string' ? member.email.trim() : ''
     if (!member || !email) {
       return []
@@ -111,7 +113,8 @@ async function request(url: string, init: RequestInit): Promise<unknown> {
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
-  return (await response.json()) as unknown
+  const body: unknown = await response.json()
+  return body
 }
 
 type Unavailable = Extract<
@@ -203,7 +206,8 @@ export async function setOrcaTeamMfaPolicy(
         args.enforce === 'off'
           ? { ...requestInit('GET', token), method: 'DELETE' }
           : { ...requestInit('POST', token, { enforce: args.enforce }), method: 'PUT' }
-      const body = (await request(url('/mfa-policy'), init)) as Record<string, unknown> | null
+      const answer = await request(url('/mfa-policy'), init)
+      const body = isRecord(answer) ? answer : null
       return {
         policy: normalizeDeadline(body?.policy),
         pendingMembers: finiteNumber(body?.pendingMembers) ?? 0
@@ -254,10 +258,11 @@ export async function remindOrcaTeamMfa(
   const result = await call(
     userDataPath,
     async (_apiBaseUrl, token, url) => {
-      const body = (await request(
+      const answer = await request(
         url('/mfa-policy/remind'),
         requestInit('POST', token, args.userId ? { userId: args.userId } : {})
-      )) as Record<string, unknown> | null
+      )
+      const body = isRecord(answer) ? answer : null
       const delivery: 'log' | 'test-inbox' | 'unknown' =
         body?.delivery === 'log' || body?.delivery === 'test-inbox' ? body.delivery : 'unknown'
       return { recipients: finiteNumber(body?.recipients) ?? 0, delivery }

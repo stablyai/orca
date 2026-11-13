@@ -28,8 +28,13 @@ export const MFA_REQUIRED_REASON = 'mfa_required'
 /** Reads a copy of the body, so the caller can still read the response. */
 export async function isMfaRequiredRefusal(response: Response): Promise<boolean> {
   try {
-    const body = (await response.clone().json()) as { error?: unknown } | null
-    return body?.error === MFA_REQUIRED_REASON
+    const body: unknown = await response.clone().json()
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      body.error === MFA_REQUIRED_REASON
+    )
   } catch {
     return false
   }

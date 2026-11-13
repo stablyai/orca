@@ -126,7 +126,7 @@ describe('isMfaRequiredRefusal', () => {
       { status: 403 }
     )
     expect(await isMfaRequiredRefusal(response)).toBe(true)
-    expect(((await response.json()) as { orgId: string }).orgId).toBe('org_1')
+    expect(await response.json()).toMatchObject({ orgId: 'org_1' })
   })
 
   it('is false for other refusals and for bodies that are not JSON', async () => {
