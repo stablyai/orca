@@ -5,26 +5,13 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
-import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-
-const worktreesById = new WeakMap<readonly ResolvedWorktree[], Map<string, ResolvedWorktree>>()
-
-function resolvedWorktreeById(
-  worktrees: readonly ResolvedWorktree[] | undefined,
-  worktreeId: string
-): ResolvedWorktree | undefined {
-  if (!worktrees) {
-    return undefined
-  }
-  let byId = worktreesById.get(worktrees)
-  if (!byId) {
-    byId = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
-    worktreesById.set(worktrees, byId)
-  }
-  return byId.get(worktreeId)
-}
+import type { RuntimeWorkspaceSelectors } from '../workspace-selectors'
 
 export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope {
+  protected abstract buildResolvedWorktreeForHost(
+    ...args: Parameters<RuntimeWorkspaceSelectors['buildResolvedWorktreeForHost']>
+  ): ReturnType<RuntimeWorkspaceSelectors['buildResolvedWorktreeForHost']>
+
   getRuntimeId(): string {
     return this.runtimeId
   }
@@ -78,22 +65,25 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     )
   }
 
-  /** One workspace's labels as `agent list` shows them, by key: its row in the cached resolved
-   *  worktree list (indexed once per list), else its saved record; never a scan of every
-   *  workspace. */
-  getWorkspaceLabel(worktreeId: string): { workspace: string; repo?: string } | null {
+  /** One place's labels as `agent list` shows them, from that host's records by key: its row in
+   *  the published catalog, else its own repo and metadata. Never another host's same-id
+   *  workspace, and never a scan of every workspace or repo. */
+  getWorkspaceLabel(
+    worktreeId: string,
+    hostId: ExecutionHostId
+  ): { workspace: string; repo?: string } | null {
     const folder = parseWorkspaceKey(worktreeId)
     if (folder?.type === 'folder') {
       const name = this.store?.getFolderWorkspace?.(folder.folderWorkspaceId)?.name
       return name ? { workspace: name } : null
     }
     const worktree =
-      resolvedWorktreeById(this.resolvedWorktrees.peek()?.worktrees, worktreeId) ??
-      this.buildResolvedWorktreeFromId(worktreeId)
+      this.resolvedWorktrees.lookup(hostId, worktreeId) ??
+      this.buildResolvedWorktreeForHost(worktreeId, hostId)
     if (!worktree?.displayName) {
       return null
     }
-    const repo = this.store?.getRepo(worktree.repoId)
+    const repo = this.store?.getRepoForHost?.(worktree.repoId, hostId)
     return { workspace: worktree.displayName, repo: repo?.displayName ?? worktree.repoId }
   }
 

@@ -13,7 +13,15 @@ import type {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import {
+  createRepoRowExecutionHostLookup,
+  type RepoRowExecutionHostLookup
+} from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { normalizeProjectRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
@@ -38,7 +46,28 @@ export type ProjectHostMutationOperations = {
 }
 
 export class ProjectHostPersistenceOperations {
+  /** Repo rows by id, for keyed reads; dropped by every `repos` write and rebuilt on next use. */
+  private repoIndex: { source: Repo[]; lookup: RepoRowExecutionHostLookup<Repo> } | null = null
+
   constructor(private readonly operations: ProjectHostMutationOperations) {}
+
+  /** A write changed the repo collection (membership, order or a row's host). */
+  invalidateRepoIndex(): void {
+    this.repoIndex = null
+  }
+
+  /** The repo registered under `id` on `hostId`, by key: never a pass over every registration. */
+  getRepoForHost(id: string, hostId: ExecutionHostId): Repo | undefined {
+    // A replaced collection is a new array, even with no write notice.
+    if (this.repoIndex?.source !== this.state.repos) {
+      this.repoIndex = {
+        source: this.state.repos,
+        lookup: createRepoRowExecutionHostLookup(this.state.repos)
+      }
+    }
+    const repo = this.repoIndex.lookup.byHost(id, hostId)
+    return repo ? this.hydrateRepo(repo) : undefined
+  }
 
   private get state(): PersistedState {
     return this.operations.state

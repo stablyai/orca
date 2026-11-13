@@ -164,8 +164,12 @@ it('takes a cursor ahead of the journal to the reader, not as an empty read', as
 })
 
 it.each([
-  ['heard without its WSL relay', '', 'without its WSL relay'],
-  ['heard through its WSL relay', 'Ubuntu', null]
+  [
+    'saved with no distro',
+    '',
+    "Orca can't read Claude agent claude_dd9b33e3's transcript because its saved location doesn't identify which WSL distro holds it. Run `orca agent show claude_dd9b33e3` to find any open terminal for this agent and view it there."
+  ],
+  ['saved with its distro', 'Ubuntu', null]
 ])(
   'reads a WSL terminal agent %s only when a distro was attested',
   async (_, wslDistro, refusal) => {

@@ -12,6 +12,8 @@ import {
 import { resolveLineageRunningSession } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { connectionEvidenceHostId } from '../workspaces/process-listing/runtime-worktree-summary-paths'
 
 /** `worktree.ps` agent rows as one flat list of chats and terminal agents, oldest state first. */
 export function projectAgentConversationList(
@@ -56,7 +58,12 @@ export function projectAgentConversationList(
 /** Where one resolved conversation is open now, from its own keyed status rows: never a listing
  *  of every workspace. A closed chat or a terminal agent with no live pane has none. */
 export async function agentConversationPlaces(
-  runtime: { getWorkspaceLabel(worktreeId: string): { workspace: string; repo?: string } | null },
+  runtime: {
+    getWorkspaceLabel(
+      worktreeId: string,
+      hostId: ExecutionHostId
+    ): { workspace: string; repo?: string } | null
+  },
   resolved: ResolvedAgentConversation
 ): Promise<AgentConversationRow[]> {
   const { orcaSessionId } = resolved
@@ -85,6 +92,9 @@ export async function agentConversationPlaces(
         resolved.kind === 'chat'
           ? status.structuredHost !== undefined
           : status.orcaSessionId === orcaSessionId
+      // The place's own host, from the row's connection evidence, so a same-id workspace on
+      // another host never lends its name.
+      const hostId = connectionEvidenceHostId(status.connectionId)
       return worktreeId && ours
         ? [
             {
@@ -93,7 +103,8 @@ export async function agentConversationPlaces(
               agent: status.agentType ?? null,
               state: status.state,
               worktreeId,
-              ...(runtime.getWorkspaceLabel(worktreeId) ?? { workspace: worktreeId }),
+              ...(runtime.getWorkspaceLabel(worktreeId, hostId) ?? { workspace: worktreeId }),
+              hostId,
               paneKey: status.paneKey,
               title: null,
               lastAssistantMessage: status.lastAssistantMessage ?? null,

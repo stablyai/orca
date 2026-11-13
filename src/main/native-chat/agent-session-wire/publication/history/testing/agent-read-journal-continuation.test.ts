@@ -3,6 +3,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
+import { rewindRefusalBehindClear } from '../../../rewind/structured-rewind-refusal'
+import { agentSessionJournalProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isMobileE2EETextPayloadWithinLimit } from '../../../../../runtime/rpc/mobile/e2ee/mobile-e2ee-outbound-admission'
 import {
   readAgentJournalPage,
@@ -390,11 +392,11 @@ it('resumes a row read in part after the journal reopens, and refuses a cursor c
   expect(resume(first.next)).toEqual({ ok: false })
 })
 
-const clear = (journal: AgentSessionJournal, operationId: string) =>
-  journal.context.clear(
-    { operationId, afterFence: 1, clearedAt: 1_000 },
-    { write: () => {}, committed: () => {} }
-  )
+const clear = (
+  journal: AgentSessionJournal,
+  operationId: string,
+  receipt = { write: () => {}, committed: () => {} }
+) => journal.context.clear({ operationId, afterFence: 1, clearedAt: 1_000 }, receipt)
 const CLEARED = { kind: 'message', role: 'system', text: 'Context cleared' } as const
 
 /** APPLE and BANANA, then `/clear`, then CHERRY, with cursors cut before the clear. */
@@ -587,3 +589,68 @@ it.fails.each([
     limited: false
   })
 })
+
+it('leaves the read untouched when a clear commits no divider', async () => {
+  const { journal } = await clearedChat()
+  await write(journal, 'cherry', [['cherry', 'CHERRY']])
+  const before = tail(journal, 100)
+  const head = journal.cursor()
+
+  // The receipt's write failing rolls the clear back: no divider is committed.
+  await expect(
+    clear(journal, 'refused', {
+      write: () => {
+        throw new Error('refused-clear')
+      },
+      committed: () => {}
+    })
+  ).rejects.toThrow('refused-clear')
+
+  expect(journal.cursor()).toEqual(head)
+  expect(tail(journal, 100)).toEqual(before)
+  expect(readAgentJournalPage(journal, { limit: 5, after: before.next }, waiting)).toMatchObject({
+    ok: true,
+    entries: []
+  })
+})
+
+it.each(['plain', 'forked'] as const)(
+  'rewinds within the current context (%s), keeping its divider, and refuses a target before it',
+  async (kind) => {
+    const { journal } = await clearedChat()
+    await write(journal, 'cherry', [['cherry', 'CHERRY']])
+    const before = tail(journal, 100)
+    const floor = before.next.floor ?? 0
+    const work = resetWork(journal)
+
+    // A rewind to an item before the divider is refused before any agent runs.
+    const epoch = journal.cursor().epoch
+    expect(
+      rewindRefusalBehindClear(journal, { itemId: 'banana', expectedEpoch: epoch })
+    ).not.toBeNull()
+    expect(rewindRefusalBehindClear(journal, { itemId: 'cherry', expectedEpoch: epoch })).toBeNull()
+    expect(tail(journal, 100)).toEqual(before)
+
+    await journal.context.rewind(
+      { epoch, sequence: floor },
+      1,
+      [],
+      () => ({ write: () => {}, committed: () => {} }),
+      // A provider that forked its history starts a new epoch, as structured rewind recovery does.
+      kind === 'forked'
+        ? { reason: 'handle_forked', providerHandle: agentSessionJournalProviderHandle(identity) }
+        : undefined
+    )
+
+    expect(tail(journal, 100)).toMatchObject({ entries: [CLEARED], limited: false })
+    const old = readAgentJournalPage(journal, { limit: 5, after: before.next }, waiting)
+    if (kind === 'forked') {
+      // A new epoch: pre-rewind cursors are refused and the owner rebuilds from what survived.
+      expect(old).toEqual({ ok: false })
+      expect(work.builds).toBe(1)
+    } else {
+      // The same epoch: an old cursor reads the removal as nothing new, at the head.
+      expect(old).toMatchObject({ ok: true, entries: [], limited: false, next: { floor } })
+    }
+  }
+)

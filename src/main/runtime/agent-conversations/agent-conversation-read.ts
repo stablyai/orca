@@ -20,6 +20,7 @@ import { createWorkerOutputSourceIdentity } from '../orchestration/workers/trans
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
 import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
+import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { needsWslHostTranslation } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import {
   isReverseLookupUnavailable,
@@ -175,10 +176,10 @@ async function readTerminalTranscript(
     providerSession.transcriptPath &&
     needsWslHostTranslation(providerSession.transcriptPath)
   ) {
-    // Hooks that skipped the WSL relay never said which distro holds this guest path.
+    // A saved guest path with no distro names no file this host can open.
     throw new AgentConversationRefusal(
       CODES.noTranscript,
-      `Agent ${orcaSessionId}'s transcript is inside WSL, but Orca heard from it without its WSL relay, so it can't tell which distro to read it from.`
+      `Orca can't read ${tuiAgentDisplayName(key.agent) ?? key.agent} agent ${orcaSessionId}'s transcript because its saved location doesn't identify which WSL distro holds it. Run \`orca agent show ${orcaSessionId}\` to find any open terminal for this agent and view it there.`
     )
   }
   const transcript = await readWorkerTranscript({
