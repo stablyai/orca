@@ -27,7 +27,7 @@ import {
   isDefaultBranchWorkspace,
   isDetachedHeadWorkspace
 } from '../../../../../../shared/worktree/visibility/workspace-kinds'
-import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/host-filtering'
+import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse

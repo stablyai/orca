@@ -8,11 +8,11 @@ import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
 import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
 import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/store'
-import { DesktopSidebarFactsSchema } from '../../src/shared/sidebar-list/desktop-sidebar-facts'
+import { DesktopSidebarFactsSchema } from '../../src/shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import {
   WorkspaceRowsSnapshotSchema,
   type WorkspaceRow
-} from '../../src/shared/sidebar-list/workspace-rows'
+} from '../../src/shared/sidebar-list/feed-facts/workspace-rows'
 
 test.skip(
   !SIDEBAR_INPUTS_BUILD,

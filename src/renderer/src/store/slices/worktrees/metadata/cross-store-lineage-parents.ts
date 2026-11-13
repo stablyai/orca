@@ -9,7 +9,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   resolveSidebarLineageParentIdentities,
   type SidebarLineageParentIdentities
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {

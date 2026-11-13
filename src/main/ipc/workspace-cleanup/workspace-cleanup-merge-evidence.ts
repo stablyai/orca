@@ -7,7 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import {
   readWorkspaceReviewPR,
   type PRCacheView
-} from '../../../shared/sidebar-list/workspace-review-facts'
+} from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { isFullGitObjectId } from '../../git/refs/resolution/commit-object-ref'
 import {
   resolveWorktreeAddBaseRef,
