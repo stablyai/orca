@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { Input } from '@/components/ui/input'
@@ -18,6 +17,7 @@ import {
 } from './plan-billing-usage-copy'
 import { formatCents, formatRateCents } from './plans/plans-pricing'
 import { capTooHighCopy } from './plan-billing-copy'
+import { OverageSaveStatus, useOverageSaveState } from './overage-save-state'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
 
 /** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
@@ -117,15 +117,19 @@ export function OverageControls({
   const capId = useId()
   const hintId = useId()
   const capErrorId = useId()
-  const savedRef = useRef<HTMLSpanElement>(null)
   const capInputRef = useRef<HTMLInputElement>(null)
-  // Set by Turn on: once the cap field appears, it takes focus (N-09).
-  const focusCapOnOpen = useRef(false)
+  const turnOnRef = useRef<HTMLButtonElement>(null)
+  // Set by Turn on / Turn off: once the card switches, focus lands on the new view's control (N-09).
+  const focusOnSwitch = useRef(false)
   const { overage } = entitlement
   useEffect(() => {
-    if (overage.optedIn && focusCapOnOpen.current) {
-      focusCapOnOpen.current = false
-      capInputRef.current?.focus()
+    if (focusOnSwitch.current) {
+      focusOnSwitch.current = false
+      if (overage.optedIn) {
+        capInputRef.current?.focus()
+      } else {
+        turnOnRef.current?.focus()
+      }
     }
   }, [overage.optedIn])
   // One field: the cap while overage is on, $0 while it's off.
@@ -133,20 +137,20 @@ export function OverageControls({
   // Billing's default cap; unknown (no catalog) sends none and billing applies its own.
   const defaultCapCents = entitlement.offers?.team.defaultSpendCapCents ?? null
   const [capDollars, setCapDollars] = useState(savedDollars)
-  // Shows "Saved" after a successful change until the field is edited again (review M13).
-  const [savedFlash, setSavedFlash] = useState(false)
   // Re-seed from the server whenever the saved values change (render-time adjustment, no effect).
   const [seededFrom, setSeededFrom] = useState(savedDollars)
   if (seededFrom !== savedDollars) {
     setSeededFrom(savedDollars)
     setCapDollars(savedDollars)
   }
-  const [seenFailures, setSeenFailures] = useState(failures)
-  if (seenFailures !== failures) {
-    setSeenFailures(failures)
-    setCapDollars(savedDollars)
-    setSavedFlash(false)
-  }
+  const { status, begin, clear } = useOverageSaveState({
+    overage,
+    busy,
+    failures,
+    // Roll back to what billing has.
+    onFailure: () => setCapDollars(savedDollars)
+  })
+  const saving = status === 'saving'
   const parsedCap = Number(capDollars)
   const maxCapCents = entitlement.offers?.team.maxSpendCapCents ?? null
   const capWhole = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
@@ -208,6 +212,7 @@ export function OverageControls({
   }
 
   const save = (enabled: boolean, cents: number | null): void => {
+    begin({ optedIn: enabled, capCents: enabled ? cents : null })
     onSetOverage(
       !enabled
         ? { enabled: false }
@@ -215,10 +220,9 @@ export function OverageControls({
           ? { enabled: true }
           : { enabled: true, spendCapCents: cents }
     )
-    setSavedFlash(true)
-    // The action turns into "Saving…" in place; move focus onto it.
-    window.requestAnimationFrame(() => savedRef.current?.focus())
   }
+  const blocked = busy || saving || paymentFailed
+  const statusLine = <OverageSaveStatus status={status} />
   const blockedReason = paymentFailed
     ? t(
         'auto.components.billing.overagePaymentFailed',
@@ -241,13 +245,13 @@ export function OverageControls({
     </p>
   )
   const turnOn = (): void => {
-    if (busy) {
+    if (blocked) {
       return
     }
     if (defaultCapCents !== null) {
       setCapDollars(String(Math.round(defaultCapCents / 100)))
     }
-    focusCapOnOpen.current = true
+    focusOnSwitch.current = true
     save(true, defaultCapCents)
   }
 
@@ -265,33 +269,24 @@ export function OverageControls({
             'Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.'
           )}
         </p>
+        {/* Turn on is always here, whatever the last change did (OVERAGE-REENABLE). */}
         <div className="flex flex-wrap items-center gap-2">
-          {savedFlash ? (
-            <span
-              ref={savedRef}
-              tabIndex={-1}
-              role="status"
-              className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
+          <SettingsDisabledControlTooltip reason={blockedReason}>
+            <Button
+              ref={turnOnRef}
+              type="button"
+              variant="outline"
+              aria-disabled={blocked || undefined}
+              onClick={paymentFailed ? undefined : turnOn}
             >
-              <Check className="size-3.5" />
-              {t('auto.components.billing.capSaving', 'Saving…')}
-            </span>
-          ) : (
-            <SettingsDisabledControlTooltip reason={blockedReason}>
-              <Button
-                type="button"
-                variant="outline"
-                aria-disabled={busy || paymentFailed || undefined}
-                onClick={paymentFailed ? undefined : turnOn}
-              >
-                {defaultCapCents === null
-                  ? t('auto.components.billing.overage.turnOnNoCap', 'Turn on overage')
-                  : t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
-                      cap: formatCents(defaultCapCents, locale)
-                    })}
-              </Button>
-            </SettingsDisabledControlTooltip>
-          )}
+              {defaultCapCents === null
+                ? t('auto.components.billing.overage.turnOnNoCap', 'Turn on overage')
+                : t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
+                    cap: formatCents(defaultCapCents, locale)
+                  })}
+            </Button>
+          </SettingsDisabledControlTooltip>
+          {statusLine}
         </div>
         <p className="text-xs text-muted-foreground">{hint}</p>
         {alertsNote}
@@ -310,8 +305,10 @@ export function OverageControls({
         className="flex flex-wrap items-start gap-2"
         onSubmit={(event) => {
           event.preventDefault()
-          if (changed && !busy && !paymentFailed) {
-            save(parsedCap > 0, parsedCap * 100)
+          if (changed && !blocked) {
+            save(true, parsedCap * 100)
+            // Save turns into the status in place; keep focus in the card on the field.
+            capInputRef.current?.focus()
           }
         }}
       >
@@ -339,7 +336,7 @@ export function OverageControls({
                 aria-describedby={capValid ? hintId : `${capErrorId} ${hintId}`}
                 onChange={(event) => {
                   setCapDollars(event.target.value)
-                  setSavedFlash(false)
+                  clear()
                 }}
               />
             </div>
@@ -354,23 +351,13 @@ export function OverageControls({
             </p>
           )}
         </div>
-        {savedFlash ? (
-          <span
-            ref={savedRef}
-            tabIndex={-1}
-            role="status"
-            className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
-          >
-            <Check className="size-3.5" />
-            {busy || changed
-              ? t('auto.components.billing.capSaving', 'Saving…')
-              : t('auto.components.billing.capSaved', 'Saved')}
-          </span>
-        ) : changed ? (
-          <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
+        {saving || !changed ? (
+          statusLine
+        ) : (
+          <Button type="submit" variant="outline" aria-disabled={blocked || undefined}>
             {t('auto.components.billing.saveCap', 'Save')}
           </Button>
-        ) : null}
+        )}
         <p id={hintId} className="basis-full text-xs text-muted-foreground">
           {hint}
         </p>
@@ -389,10 +376,11 @@ export function OverageControls({
           type="button"
           variant="link-muted"
           size="inline"
-          aria-disabled={busy || paymentFailed || undefined}
+          aria-disabled={blocked || undefined}
           onClick={() => {
-            if (!busy && !paymentFailed) {
-              save(false, 0)
+            if (!blocked) {
+              focusOnSwitch.current = true
+              save(false, null)
             }
           }}
         >

@@ -21289,6 +21289,7 @@
           "featureOverageNoRate": "Optional overage up to a monthly spend cap you set"
         },
         "capLabel2": "Monthly spend cap",
+        "capNotSaved": "Couldn’t save",
         "capSaved": "Saved",
         "checkout": {
           "attention2": "Stripe needs one more step",
