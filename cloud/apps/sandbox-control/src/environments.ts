@@ -255,6 +255,8 @@ export type BootSource = {
   region: string
   /** An automatic environment (auto-environments.ts): the caller's machine size stands. */
   auto?: boolean
+  /** When the build finished (ms): a just-made snapshot gets one retry on a provider 404 (lifecycle.ts). */
+  builtAt?: number | null
 }
 
 type BootBuildRow = {
@@ -264,6 +266,7 @@ type BootBuildRow = {
   status: string
   snapshot_id: string | null
   snapshot_deleted_at: number | null
+  finished_at: number | null
   result: string | null
   config: string
 }
@@ -286,7 +289,15 @@ function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): Boot
   } catch {
     // Default size.
   }
-  return { snapshotId: build.snapshot_id, environmentId: build.environment_id, buildId: build.id, repoDir: dir, machineSize, region: build.region }
+  return {
+    snapshotId: build.snapshot_id,
+    environmentId: build.environment_id,
+    buildId: build.id,
+    repoDir: dir,
+    machineSize,
+    region: build.region,
+    builtAt: build.finished_at
+  }
 }
 
 /**

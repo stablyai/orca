@@ -63,8 +63,8 @@ function serializable(value: unknown): unknown {
   return value
 }
 
-export type SecretLogSink = (line: string) => void
-let sink: SecretLogSink = (line) => console.log(line)
+export type SecretLogSink = (line: string, level?: 'error') => void
+let sink: SecretLogSink = (line, level) => (level === 'error' ? console.error(line) : console.log(line))
 
 /** Tests only: capture lines exactly as they would reach Workers logs. Returns a restore function. */
 export function setSecretLogSink(next: SecretLogSink): () => void {
@@ -76,12 +76,12 @@ export function setSecretLogSink(next: SecretLogSink): () => void {
 }
 
 /** One structured log line. `known`: values in scope at the call site that must never be written. */
-export function secretLog(event: string, fields: Record<string, unknown> = {}, known: Iterable<string> = []): void {
+export function secretLog(event: string, fields: Record<string, unknown> = {}, known: Iterable<string> = [], level?: 'error'): void {
   let line: string
   try {
     line = JSON.stringify({ event, ...fields }, (_key, value: unknown) => serializable(value))
   } catch {
     line = JSON.stringify({ event, unserializable: true })
   }
-  sink(redactLine(line, known))
+  sink(redactLine(line, known), level)
 }

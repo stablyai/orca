@@ -13,7 +13,7 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, KEYS_WITHHELD_BODY, compileNetworkPolicy, egressProxyMissing, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
 import { ensureEntryPoints } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
@@ -35,7 +35,8 @@ import {
   runningOrcad,
   startOrcad,
   type OrcadReady,
-  type StartInputs
+  type StartInputs,
+  START_TIMEOUT_MS
 } from './sandbox-vm-commands'
 import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
 import { resolveEnvironmentBoot, type BootSource } from './environments'
@@ -206,17 +207,41 @@ export type Ready = {
 /** Phase durations for one lifecycle call (logged + Server-Timing); counts only, no ids or secrets. */
 export function phaseTimer(now: () => number = Date.now) {
   const timings: Record<string, number> = {}
-  return {
+  const timer = {
     timings,
+    /** The first phase that threw, and how long it ran: names a create's failure (createFailureReason). */
+    failed: null as { phase: string; ms: number } | null,
     async time<T>(phase: string, work: () => Promise<T>): Promise<T> {
       const started = now()
       try {
         return await work()
+      } catch (error) {
+        timer.failed ??= { phase, ms: now() - started }
+        throw error
       } finally {
         timings[phase] = now() - started
       }
     }
   }
+  return timer
+}
+
+/**
+ * CREATE-BUILD-SNAPSHOT-404: a VM create from an environment build's snapshot can answer 404 just
+ * after the build (dev, 11-11 and 11-13: the same snapshot booted seconds before and after). Once,
+ * after a short wait, for a build under this age; never for goldens, old builds or other errors.
+ */
+const FRESH_BUILD_SNAPSHOT_MS = 15 * 60_000
+const FRESH_BUILD_RETRY_WAIT_MS = 5_000
+
+function freshBuildSnapshot404(error: unknown, source: BootSource | null, now: number): source is BootSource {
+  return (
+    error instanceof ProviderError &&
+    error.status === 404 &&
+    !!source &&
+    typeof source.builtAt === 'number' &&
+    now - source.builtAt < FRESH_BUILD_SNAPSHOT_MS
+  )
 }
 
 type BootPrep = {
@@ -262,13 +287,12 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
  */
 export function effectiveEgressPreset(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): EgressPreset {
   const preset = deps.config.egressPreset ?? DEFAULT_EGRESS_PRESET
-  if (preset === 'open' && !deps.config.egressProxyUrl && !LOCAL_ENVIRONMENTS.has(deps.config.environment)) {
+  if (preset === 'open' && egressProxyMissing(deps.config)) {
     console.error(JSON.stringify({ event: 'egress_open_without_proxy', sandboxId: row.id, environment: deps.config.environment, applied: 'limited' }))
     return 'limited'
   }
   return preset
 }
-const LOCAL_ENVIRONMENTS = new Set(['local', 'test'])
 
 /** Refuses up front (503 platform_hosts_misconfigured) when this create or boot would compile a limited policy. */
 export function assertEgressAllowlistUsable(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): void {
@@ -338,7 +362,28 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
           )
         )
       ]
-    : []
+    : // No proxy (EGRESS-SWAP-FAIL-CLOSED): keys were withheld and only placeholders reached the VM. The firewall
+      // answers them itself with a plain error, so agents say what happened instead of a provider auth failure.
+      [
+        ...egressAccountRoutes(row).flatMap(({ agent, host }): CredentialRoute[] => {
+          const provider = accountProvider(agent)
+          return provider
+            ? [{ host, header: provider.header, placeholders: [provider.format(provider.placeholder(row))], via: 'respond', statusCode: 403, body: KEYS_WITHHELD_BODY }]
+            : []
+        }),
+        ...egressSecretHosts(row).flatMap((entry) =>
+          Object.keys(entry.headers).map(
+            (header): CredentialRoute => ({
+              host: entry.host,
+              header,
+              placeholders: placeholderValues(entry, header, secretPlaceholder(row, entry.secret)),
+              via: 'respond',
+              statusCode: 403,
+              body: KEYS_WITHHELD_BODY
+            })
+          )
+        )
+      ]
   const all = [...git, ...credentials]
   if (effectiveEgressPreset(deps, row) === 'open') {
     // Every host is reachable; the credential claims (and their trailing 403s) still apply.
@@ -819,7 +864,7 @@ export async function createSandbox(
     } catch (error) {
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
-      await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error))
+      await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error, timer))
       // A boot that ran long (the start command timed out) would only time out again on a fresh VM,
       // doubling the wait the user sees: only a quick failure, which points at the pooled VM, retries.
       if (deps.now() - claimedAt > POOL_RETRY_WITHIN_MS) {
@@ -834,7 +879,7 @@ export async function createSandbox(
   let state: ProviderSandboxState
   try {
     // The full policy (repo token, model-key routes) goes in at create: no second policy round trip.
-    state = await timer.time('vm', () =>
+    const createVm = () =>
       deps.provider.createSandbox({
         name: row.provider_name,
         snapshotId: bootSnapshotId,
@@ -846,7 +891,25 @@ export async function createSandbox(
         snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
         tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
       })
-    )
+    state = await timer.time('vm', async () => {
+      try {
+        return await createVm()
+      } catch (error) {
+        if (!freshBuildSnapshot404(error, source, deps.now())) {
+          throw error
+        }
+        const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+        await sleep(FRESH_BUILD_RETRY_WAIT_MS)
+        try {
+          const retried = await createVm()
+          console.log(JSON.stringify({ event: 'fresh_build_snapshot_retry', buildId: source.buildId, ok: true }))
+          return retried
+        } catch (again) {
+          console.log(JSON.stringify({ event: 'fresh_build_snapshot_retry', buildId: source.buildId, ok: false, error: String(again).slice(0, 200) }))
+          throw again
+        }
+      }
+    })
   } catch (error) {
     await failAndRelease(deps, row, createFailureReason(error))
     // Only a create nothing pinned to a region moves on: no explicit region, no environment build.
@@ -867,13 +930,17 @@ export async function createSandbox(
     console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
     return cloning ? { ...ready, cloning } : ready
   } catch (error) {
-    await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error))
+    await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row, createFailureReason(error, timer))
     throw error
   }
 }
 
-/** last_error for a create that failed with `error`: the step that broke, never a message. */
-export function createFailureReason(error: unknown): string {
+/**
+ * last_error for a create that failed with `error`: the step that broke, never a message. An error of
+ * no known kind is named by the phase it broke (`timer`): orcad's start, at or past its 120 s budget,
+ * is `orcad_start_timeout` (CREATE-FAIL-LABELS), so D1 alone tells a hung start from the rest.
+ */
+export function createFailureReason(error: unknown, timer?: Pick<ReturnType<typeof phaseTimer>, 'failed'>): string {
   if (error instanceof VmCommandError) {
     return error.code
   }
@@ -882,6 +949,9 @@ export function createFailureReason(error: unknown): string {
   }
   if (error instanceof ProviderError) {
     return `provider_${error.status}`
+  }
+  if (timer?.failed?.phase === 'orcad') {
+    return timer.failed.ms >= START_TIMEOUT_MS ? 'orcad_start_timeout' : 'orcad_start_error'
   }
   return 'create_failed'
 }

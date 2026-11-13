@@ -269,7 +269,13 @@ export async function updateRegistry(db: D1Database, id: string, patch: Registry
  */
 export async function transferOwnership(db: D1Database, id: string, newOwnerId: string, now: number): Promise<SandboxRow | null> {
   const result = await db
-    .prepare(`UPDATE sandboxes SET user_id = ?, ownership_transferred_at = ? WHERE id = ? AND status IN ('suspended', 'archived')`)
+    // Unlike other registry edits this bumps `generation` on purpose: a wake that read the row just
+    // before (still the previous owner's, unmarked) must lose its compare-and-set, not boot a
+    // private environment for them under the new owner.
+    .prepare(
+      `UPDATE sandboxes SET user_id = ?, ownership_transferred_at = ?, generation = generation + 1
+       WHERE id = ? AND status IN ('suspended', 'archived')`
+    )
     .bind(newOwnerId, now, id)
     .run()
   return (result.meta.changes ?? 0) > 0 ? getSandbox(db, id) : null

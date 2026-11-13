@@ -408,7 +408,13 @@ describe('a hand-off to a teammate', () => {
     expect(await transferOwnership(t.h.env.SANDBOX_DB, t.id, 'mia', t.h.now())).toBeNull()
     expect(await t.row()).toMatchObject({ user_id: 'mallory', ownership_transferred_at: null })
     t.h.raw.prepare("UPDATE sandboxes SET status = 'suspended' WHERE id = ?").run(t.id)
+    const before = await t.row()
     expect(await transferOwnership(t.h.env.SANDBOX_DB, t.id, 'mia', t.h.now())).toMatchObject({ user_id: 'mia', ownership_transferred_at: t.h.now() })
+    // A wake that read the row before the hand-off loses its compare-and-set afterwards.
+    expect((await t.row()).generation).toBe(before.generation + 1)
+    const { transition } = await import('../src/store')
+    expect(await transition(t.h.env.SANDBOX_DB, before, { status: 'resuming' }, t.h.now())).toBeNull()
+    expect((await t.row()).status).toBe('suspended')
   })
 
   it('naming the current owner again is not a transfer', async () => {
