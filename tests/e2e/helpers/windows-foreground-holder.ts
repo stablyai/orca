@@ -46,6 +46,13 @@ export async function startWindowsForegroundHolder(): Promise<WindowsForegroundH
       replies.push(line)
     }
   })
+  // Why: a holder that dies mid-test should fail the waiting command by name, not crash the worker on EPIPE.
+  child.stdin.on('error', () => {})
+  child.on('exit', (code) => {
+    for (const waiter of waiters.splice(0)) {
+      waiter(`error holder exited with code ${code}`)
+    }
+  })
   const nextReply = (label: string): Promise<string> => {
     const queued = replies.shift()
     if (queued !== undefined) {
