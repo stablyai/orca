@@ -6,6 +6,10 @@ export type TccLogAccess = (typeof TCC_LOG_ACCESS_VALUES)[number]
 export const YES_NO_VALUES = ['yes', 'no'] as const
 export type YesNo = (typeof YES_NO_VALUES)[number]
 
+// `uncorrelated`: a failure for the shared app identifier that no line ties to this helper.
+export const REQUIREMENT_FAILURE_VALUES = ['yes', 'uncorrelated', 'no'] as const
+export type RequirementFailure = (typeof REQUIREMENT_FAILURE_VALUES)[number]
+
 export const TCC_ASKED_VALUES = ['yes', 'no', 'unknown'] as const
 export type TccAsked = (typeof TCC_ASKED_VALUES)[number]
 

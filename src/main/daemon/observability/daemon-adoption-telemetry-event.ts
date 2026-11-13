@@ -29,6 +29,7 @@ import {
 import {
   noteHelperFolderReadable,
   prepareTccDenialCapture,
+  releaseTccDenialCapture,
   runTccDenialCapture
 } from '../permissions/tcc-denial-capture'
 
@@ -146,6 +147,9 @@ export async function reportDaemonPtyCwdVerdict(args: {
         ? await prepareTccDenialCapture(args.daemonIdentity, tccFolderClass, deniedAtMs)
         : null
     if (!(await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon))) {
+      if (capture) {
+        releaseTccDenialCapture(capture)
+      }
       return
     }
     // Show the notice before waiting for the codesign probe.

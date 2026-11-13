@@ -8,14 +8,18 @@ import type {
   TccAuthReason,
   TccAuthValue,
   TccLogAccess,
+  RequirementFailure,
   TccService,
   YesNo
 } from '../../../shared/daemon-tcc-denial-capture'
 import { TCC_AUTH_REASONS } from '../../../shared/daemon-tcc-denial-capture'
 
-const LOG_LOOKBACK_MS = 10_000
+// A prompted request logs its attribution long before its result; 30 s keeps both in one window.
+const LOG_LOOKBACK_MS = 30_000
+// End near the denial so later requests of the same class cannot replace its verdict.
+const LOG_LOOKAHEAD_MS = 2_000
 const LOG_TIMEOUT_MS = 5_000
-const LOG_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+const LOG_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 const MAX_KEPT_LINES = 150
 const MAX_KEPT_LINE_CHARS = 1_500
 const LOG_PREDICATE = '(subsystem == "com.apple.TCC") OR (sender == "Sandbox")'
@@ -26,7 +30,7 @@ export type TccLogVerdict = {
   authValue: TccAuthValue
   authReason: TccAuthReason
   service: TccService
-  requirementFailure: YesNo
+  requirementFailure: RequirementFailure
   kernelDeny: YesNo
   /** Raw filtered lines for the local diagnostics file only; they carry paths. */
   lines: string[]
@@ -98,7 +102,8 @@ function toRecord(rawLine: string): LogRecord | null {
   }
 }
 
-function isRequirementFailure(message: string, subject: TccLogSubject): boolean {
+/** A failed requirement check for this code identity; the app and its hosts share it. */
+function isIdentityRequirementFailure(message: string, subject: TccLogSubject): boolean {
   if (REQUIREMENT_FAILURE_PATTERN.test(message)) {
     return (
       new RegExp(`\\bsubject ${subject.appId.replace(/\./g, '\\.')}\\b`).test(message) ||
@@ -160,16 +165,24 @@ export function parseTccLogVerdict(
 
   const kept: string[] = []
   let kernelDeny = false
-  let requirementFailure = false
+  let requirementFailure: RequirementFailure = 'no'
   for (const record of records) {
     const inRelevantGroup = record.msgId !== null && groups.get(record.msgId)?.relevant === true
     const deny = sandboxDeny.test(record.message)
-    const requirement = isRequirementFailure(record.message, subject)
-    if (!inRelevantGroup && !deny && !requirement && !namesHelper(record.message)) {
+    const helperRecord = inRelevantGroup || namesHelper(record.message)
+    const requirement = isIdentityRequirementFailure(record.message, subject)
+    if (!helperRecord && !deny && !requirement) {
       continue
     }
     kernelDeny ||= deny
-    requirementFailure ||= requirement
+    if (requirement) {
+      // Identifier-only evidence may be the app's or another host's check, so it is not blamed here.
+      requirementFailure = helperRecord
+        ? 'yes'
+        : requirementFailure === 'yes'
+          ? 'yes'
+          : 'uncorrelated'
+    }
     if (kept.length < MAX_KEPT_LINES) {
       kept.push(record.line)
     }
@@ -187,19 +200,19 @@ export function parseTccLogVerdict(
 
   return {
     logAccess,
-    // Only a complete read can show that tccd was never asked.
+    // "no" means no request tied to this helper in the window, and only from a complete read.
     tccdAsked: relevantGroups.length > 0 ? 'yes' : logAccess === 'ok' ? 'no' : 'unknown',
     authValue: chosen?.result ? (AUTH_VALUE_BY_NUMBER[chosen.result.authValue] ?? 'other') : 'none',
     authReason: authReasonOf(chosen?.result?.authReason),
     service: serviceName === null ? 'none' : (SERVICE_BY_NAME[serviceName] ?? 'other'),
-    requirementFailure: requirementFailure ? 'yes' : 'no',
+    requirementFailure,
     kernelDeny: kernelDeny ? 'yes' : 'no',
     lines: kept
   }
 }
 
-function formatLogStart(atMs: number): string {
-  // `log show --start` accepts "YYYY-MM-DD HH:MM:SS+ZZZZ".
+function formatLogTime(atMs: number): string {
+  // `log show --start/--end` accept "YYYY-MM-DD HH:MM:SS+ZZZZ".
   const iso = new Date(atMs).toISOString()
   return `${iso.slice(0, 10)} ${iso.slice(11, 19)}+0000`
 }
@@ -221,10 +234,14 @@ export async function readTccLogVerdict(
       program: '/usr/bin/log',
       args: [
         'show',
+        // Requirement checks (matchesCodeRequirement) are Info records.
+        '--info',
         '--style',
         'ndjson',
         '--start',
-        formatLogStart(denialAtMs - LOG_LOOKBACK_MS),
+        formatLogTime(denialAtMs - LOG_LOOKBACK_MS),
+        '--end',
+        formatLogTime(denialAtMs + LOG_LOOKAHEAD_MS),
         '--predicate',
         LOG_PREDICATE
       ],

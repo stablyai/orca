@@ -22,6 +22,7 @@ import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protoco
 import {
   noteHelperFolderReadable,
   prepareTccDenialCapture,
+  releaseTccDenialCapture,
   resetTccDenialCaptureForTests,
   runTccDenialCapture
 } from '../tcc-denial-capture'
@@ -58,6 +59,20 @@ describe('tcc denial capture', () => {
     expect(
       await prepareTccDenialCapture({ ...HELPER, launchNonce: 'n2' }, 'documents', 6_000, FOLDER)
     ).not.toBeNull()
+  })
+
+  it('probes the folder once for concurrent denials, and again only after a release', async () => {
+    const readFolder = vi.fn(FOLDER)
+    const starts = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        prepareTccDenialCapture(HELPER, 'documents', 5_000, readFolder)
+      )
+    )
+    expect(readFolder).toHaveBeenCalledTimes(1)
+    expect(starts.filter((start) => start !== null)).toHaveLength(1)
+
+    releaseTccDenialCapture(starts.find((start) => start !== null)!)
+    expect(await prepareTccDenialCapture(HELPER, 'documents', 6_000, readFolder)).not.toBeNull()
   })
 
   it('sends enums only, with earlier good reads of the same class on this helper', async () => {

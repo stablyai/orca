@@ -167,7 +167,20 @@ describe('parseTccLogVerdict', () => {
       157,
       'Failed to match existing code requirement for subject com.stablyai.orca and service kTCCServiceSystemPolicyDownloadsFolder'
     )
-    expect(parseTccLogVerdict(ndjson([failed]), SUBJECT, 'ok').requirementFailure).toBe('yes')
+    // The app and its hosts share the identifier, so this cannot be blamed on this helper.
+    expect(parseTccLogVerdict(ndjson([failed]), SUBJECT, 'ok').requirementFailure).toBe(
+      'uncorrelated'
+    )
+
+    const helperCheck = line(
+      '20:06:47.000000',
+      TCCD,
+      157,
+      `-[TCCDAccessIdentity matchesCodeRequirement:]: SecStaticCodeCheckValidity() static code (0x7cf9194300) from ${HELPER} : identifier "com.stablyai.orca" and anchor apple generic; status: -67050`
+    )
+    expect(
+      parseTccLogVerdict(ndjson([failed, helperCheck]), SUBJECT, 'ok').requirementFailure
+    ).toBe('yes')
   })
 
   it('ignores requirement failures for other apps', () => {
@@ -202,6 +215,26 @@ describe('parseTccLogVerdict', () => {
 })
 
 describe('readTccLogVerdict', () => {
+  it('asks for Info records in a window that ends at the denial', async () => {
+    let args: readonly string[] = []
+    await readTccLogVerdict(DENIED_AT_MS, SUBJECT, async (spec) => {
+      args = spec.args ?? []
+      return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+    })
+    expect(args).toEqual([
+      'show',
+      '--info',
+      '--style',
+      'ndjson',
+      '--start',
+      '2026-11-13 20:24:00+0000',
+      '--end',
+      '2026-11-13 20:24:32+0000',
+      '--predicate',
+      '(subsystem == "com.apple.TCC") OR (sender == "Sandbox")'
+    ])
+  })
+
   it('keeps what a timed-out log printed and reports the timeout', async () => {
     const verdict = await readTccLogVerdict(DENIED_AT_MS, SUBJECT, async () => ({
       code: null,

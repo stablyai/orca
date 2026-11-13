@@ -22,7 +22,7 @@ import { readTccFolderState, type TccFolderState } from './tcc-denial-folder-sta
 import { readTccLogVerdict } from './tcc-denial-log-verdict'
 import { checkHelperSignatures } from './tcc-denial-signature-checks'
 
-const MAX_TRACKED_KEYS = 64
+const MAX_TRACKED_KEYS = 256
 const CLASS_ROOT_NAME: Record<MacTccFolderClass, string> = {
   documents: 'Documents',
   desktop: 'Desktop',
@@ -55,7 +55,7 @@ export type TccDenialCaptureStart = {
 type GoodReads = { count: number; lastAtMs: number }
 
 const goodReads = new Map<string, GoodReads>()
-const capturedKeys = new Map<string, true>()
+const claimedKeys = new Map<string, 'preparing' | 'captured'>()
 
 function captureKey(identity: DaemonEndpointIdentity, cwdClass: MacTccFolderClass): string {
   return `${identity.pid}:${identity.startedAtMs}:${identity.launchNonce}:${cwdClass}`
@@ -64,7 +64,7 @@ function captureKey(identity: DaemonEndpointIdentity, cwdClass: MacTccFolderClas
 function remember<V>(map: Map<string, V>, key: string, value: V): void {
   map.delete(key)
   map.set(key, value)
-  // Long sessions see few helpers; drop the oldest so memory stays bounded anyway.
+  // Bounded memory: past 256 helper-class keys the oldest may be captured once more.
   for (const oldest of map.keys()) {
     if (map.size <= MAX_TRACKED_KEYS) {
       break
@@ -97,9 +97,11 @@ export async function prepareTccDenialCapture(
     return null
   }
   const key = captureKey(identity, cwdClass)
-  if (capturedKeys.has(key)) {
+  if (claimedKeys.has(key)) {
     return null
   }
+  // Claim before the first await: a burst of restored terminals in one folder probes once.
+  remember(claimedKeys, key, 'preparing')
   const reads = goodReads.get(key)
   const context: TccDenialCaptureStart['context'] = {
     good_reads_bucket: bucketGoodReadCount(reads?.count ?? 0),
@@ -113,6 +115,13 @@ export async function prepareTccDenialCapture(
     cwdClass
   ).catch(() => UNKNOWN_FOLDER_STATE)
   return { key, identity, cwdClass, denialAtMs, folderState, context }
+}
+
+/** The app was refused too, so nothing diverged: let a later denial on this helper capture. */
+export function releaseTccDenialCapture(start: TccDenialCaptureStart): void {
+  if (claimedKeys.get(start.key) === 'preparing') {
+    claimedKeys.delete(start.key)
+  }
 }
 
 async function readFullDiskAccess(): Promise<FullDiskAccessValue> {
@@ -138,10 +147,10 @@ function helperOriginOf(identity: DaemonEndpointIdentity): HelperOrigin {
 
 /** Never throws, never blocks a spawn; at most one capture per helper incarnation and folder class. */
 export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise<void> {
-  if (capturedKeys.has(start.key)) {
+  if (claimedKeys.get(start.key) === 'captured') {
     return
   }
-  remember(capturedKeys, start.key, true)
+  remember(claimedKeys, start.key, 'captured')
   try {
     const { identity, cwdClass, denialAtMs, folderState } = start
     const helperPath =
@@ -198,5 +207,5 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
 
 export function resetTccDenialCaptureForTests(): void {
   goodReads.clear()
-  capturedKeys.clear()
+  claimedKeys.clear()
 }
