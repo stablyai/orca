@@ -10,6 +10,7 @@ import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatToolRunWindowProvider } from './tools/runs/native-chat-tool-run-window-context'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -205,7 +206,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady
+    composerReady,
+    surfaceReady: shownPromptCard !== null
   })
 
   const pendingMessages = useMemo(
@@ -348,17 +350,19 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatMessageList
-            ref={messageListRef}
-            session={sessionWithPending}
-            isVisible={isVisible}
-            isWorking={turnActive}
-            expandSignal={false}
-            {...turnTiming}
-            awaitingInput={awaitingInput}
-            deliveryNotices={deliveryNotices}
-            runtimeContext={imageRuntimeContext}
-          />
+          <NativeChatToolRunWindowProvider isVisible={isVisible} find={find}>
+            <NativeChatMessageList
+              ref={messageListRef}
+              session={sessionWithPending}
+              isVisible={isVisible}
+              isWorking={turnActive}
+              expandSignal={false}
+              {...turnTiming}
+              awaitingInput={awaitingInput}
+              deliveryNotices={deliveryNotices}
+              runtimeContext={imageRuntimeContext}
+            />
+          </NativeChatToolRunWindowProvider>
         )}
       </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}

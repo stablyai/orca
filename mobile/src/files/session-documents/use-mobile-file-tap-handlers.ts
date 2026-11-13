@@ -2,14 +2,18 @@ import { isCommittedChatAttachmentCandidate } from '../../../../src/shared/nativ
 import { createMobileFilePreviewHref } from '../mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
+import { hostStackRouteHref } from '../../navigation/host-stack-navigation'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
 import { triggerSelection } from '../../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
+import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
 import { openMobileNativeChatFileTap } from '../../session/native-chat/visual/mobile-native-chat-open-file'
+import { createClientAuthorityEpoch } from '../../transport/connection/client-authority-epoch'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
-  client: UnvalidatedRpcRequestPort | null
+  client: (UnvalidatedRpcRequestPort & { getGeneration?: () => number }) | null
   hostId: string
   worktreeId: string
   worktreeName?: string
@@ -56,11 +60,14 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   } = options
   const router = useWorkspaceRouteHandoff()
   const routerRef = useRef(router)
+  const executionHost = useWorkspaceExecutionHost()
+  const authorityRef = useRef(createClientAuthorityEpoch())
   const optionsRef = useRef(options)
   const activationSeqRef = useRef(0)
 
   useLayoutEffect(() => {
     routerRef.current = router
+    authorityRef.current.update({ client, hostId, executionHost, worktreeId })
     optionsRef.current = {
       activeHandleRef,
       client,
@@ -83,6 +90,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   }, [
     activeHandleRef,
     client,
+    executionHost,
     fetchSessionTabs,
     getActiveSessionTabId,
     getActiveSessionTabType,
@@ -113,6 +121,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       }
       const activationSeq = ++activationSeqRef.current
       const sourceNavigationGeneration = current.getSendCompletionGeneration()
+      const sourceAuthority = authorityRef.current.token()
       openMobileFileTap<T>({
         client: current.client,
         hostId: current.hostId,
@@ -133,6 +142,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
           latestActivationSeq: activationSeqRef.current,
           sourceNavigationGeneration,
           activeNavigationGeneration: current.getSendCompletionGeneration(),
+          sourceAuthorityCurrent: authorityRef.current.isCurrent(sourceAuthority),
           sourceTerminalHandle: handle,
           activeTerminalHandle: current.activeHandleRef.current,
           activeTabType: current.getActiveSessionTabType()
@@ -171,6 +181,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     }
     const activationSeq = ++activationSeqRef.current
     const sourceNavigationGeneration = current.getSendCompletionGeneration()
+    const sourceAuthority = authorityRef.current.token()
     openMobileNativeChatFileTap<T>({
       client: current.client,
       hostId: current.hostId,
@@ -182,6 +193,13 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
           ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }
           : null,
       pushPreviewRoute: (href) => routerRef.current.push(href),
+      // Chat only: terminal output is full of bare directory paths, so a mis-tap there would jump workspaces.
+      openWorkspace: (linkedWorktreeId) =>
+        routerRef.current.push(
+          hostStackRouteHref(
+            mobileSessionRouteTarget({ hostId: current.hostId, worktreeId: linkedWorktreeId })
+          )
+        ),
       openBrowser: current.openBrowser,
       triggerOpenFeedback: triggerSelection,
       fetchSessionTabs: current.fetchSessionTabs,
@@ -193,6 +211,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         latestActivationSeq: activationSeqRef.current,
         sourceNavigationGeneration,
         activeNavigationGeneration: current.getSendCompletionGeneration(),
+        sourceAuthorityCurrent: authorityRef.current.isCurrent(sourceAuthority),
         sourceTerminalHandle,
         activeTerminalHandle: current.activeHandleRef.current,
         sourceSessionTabId: nativeChatTabId,

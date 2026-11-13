@@ -7,7 +7,7 @@ import {
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
-} from '../../native-chat/structured-agent-command-resolution'
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
 import {
@@ -16,19 +16,20 @@ import {
 } from '../../../shared/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
+import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../native-chat/agent-cli-installation-error'
+import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { JournalLoad } from '../../native-chat/agent-session-journal/replay/journal-open'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
-} from '../../native-chat/native-chat-visuals-delivery'
+} from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import { nothingExchangedOn } from '../session/acp-structured-resume-history'
@@ -121,6 +122,10 @@ async function readAcpLaunchInvocation(
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
+  if (spec.agent === 'antigravity' && spec.managedRuntime) {
+    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
+    assertStructuredAgentResolutionCurrent(deps.operation)
+  }
   Object.assign(env, spec.env)
   const commandSettings = deps.resolveCommandSettings?.()
   // Orca's account-type setting selects only the managed server's sign-in.

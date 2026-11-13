@@ -32,8 +32,11 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const APPEARANCE_EDITOR_THEME_SETTING_ID = 'appearance-editor-theme'
+
 export const getCodeEditorThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
+    targetSectionId: APPEARANCE_EDITOR_THEME_SETTING_ID,
     title: translate('settings.appearance.editorTheme.title', 'Editor theme'),
     description: translate(
       'settings.appearance.editorTheme.description',

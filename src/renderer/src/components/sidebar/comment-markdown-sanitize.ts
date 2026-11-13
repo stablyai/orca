@@ -1,6 +1,6 @@
 import { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import { defaultUrlTransform, type Options as MarkdownOptions } from 'react-markdown'
-import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../shared/github/github-callouts'
+import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../shared/github/markdown/github-callouts'
 import { jiraImageReference } from '../../../../shared/jira/jira-attachment-image'
 
 export function isTrustedCompactImageSrc(src: string | undefined): src is string {

@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   PLUGIN_AGENT_LIST_LIMIT,
+  PLUGIN_AGENT_TASK_TITLE_MAX,
   pluginAgentSessionIdSchema
 } from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
 import {
@@ -136,21 +137,27 @@ export function terminalForPane(
 export function projectPluginWorkspaceAgents(
   worktreeId: string,
   terminals: readonly PluginWorkspaceTerminal[],
-  rows: readonly PluginAgentStatusRow[]
+  rows: readonly PluginAgentStatusRow[],
+  readTaskTitles: () => ReadonlyMap<string, string> = () => new Map()
 ) {
-  return rows
+  const listed = rows
     .filter((row) => row.worktreeId === worktreeId && row.providerSessionOnly !== true)
     .toSorted((a, b) => b.stateStartedAt - a.stateStartedAt)
     .slice(0, PLUGIN_AGENT_LIST_LIMIT)
-    .map((row) => {
-      const terminal = terminalForPane(terminals, row)
-      return {
-        terminalId: terminal?.id ?? null,
-        title: terminal?.title ?? null,
-        agent: row.agentType?.slice(0, 128) ?? null,
-        state: row.state,
-        stateStartedAt: row.stateStartedAt,
-        sessionId: pluginAgentSessionId(row.providerSession) ?? null
-      }
-    })
+  const taskTitles = listed.length > 0 ? readTaskTitles() : new Map<string, string>()
+  return listed.map((row) => {
+    const terminal = terminalForPane(terminals, row)
+    const taskTitle = taskTitles.get(row.paneKey)
+    return {
+      terminalId: terminal?.id ?? null,
+      title: terminal?.title ?? null,
+      agent: row.agentType?.slice(0, 128) ?? null,
+      state: row.state,
+      stateStartedAt: row.stateStartedAt,
+      sessionId: pluginAgentSessionId(row.providerSession) ?? null,
+      // Only that it is a dispatched task, and its title: never the dispatch's own records.
+      task:
+        taskTitle === undefined ? null : { title: taskTitle.slice(0, PLUGIN_AGENT_TASK_TITLE_MAX) }
+    }
+  })
 }

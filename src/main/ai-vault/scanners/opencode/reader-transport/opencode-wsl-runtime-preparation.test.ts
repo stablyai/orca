@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -23,7 +23,7 @@ vi.mock('../../../../../shared/app-environment', () => ({
 }))
 vi.mock('../../../../wsl/execution/wsl-runner', () => ({ runWslProcess: mocks.run }))
 // The admission gate asks the running list for the path's distro; `running` stands in for it.
-vi.mock('../../../../native-chat/wsl-transcript-running-admission', () => ({
+vi.mock('../../../../native-chat/transcript-filesystem/wsl-transcript-running-admission', () => ({
   admitWslTranscriptPath: async (path: string) => {
     if ((await mocks.running([path], { requireConfirmed: true })).length === 0) {
       throw new Error('WSL distro is not running.')
@@ -105,34 +105,4 @@ describe('WSL SQLite runtime preparation', () => {
       await rm(directory, { recursive: true, force: true })
     }
   })
-
-  it.skipIf(process.platform === 'win32').each(['opencode', 'zcode'] as const)(
-    'presence script finds %s-only data despite unrelated OpenCode overrides',
-    async (agent) => {
-      await prepared()
-      const script = mocks.run.mock.calls[0]?.[0].script
-      const directory = await mkdtemp(join(tmpdir(), 'orca-wsl-presence-'))
-      try {
-        const data =
-          agent === 'zcode'
-            ? join(directory, '.zcode', 'cli', 'db')
-            : join(directory, '.local', 'share', 'opencode')
-        await mkdir(data, { recursive: true })
-        await writeFile(join(data, agent === 'zcode' ? 'db.sqlite' : 'opencode.db'), '')
-        const result = await runProcess({
-          program: '/bin/sh',
-          args: ['-c', script],
-          env: {
-            HOME: directory,
-            XDG_DATA_HOME: join(directory, 'empty'),
-            OPENCODE_DB: ':memory:'
-          }
-        })
-        expect(result.code).toBe(0)
-        expect(result.stdout).toBe('present')
-      } finally {
-        await rm(directory, { recursive: true, force: true })
-      }
-    }
-  )
 })

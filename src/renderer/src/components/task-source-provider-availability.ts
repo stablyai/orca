@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { TaskProvider } from '../../../shared/work-items/task-providers'
-import type { PreflightStatus } from '../../../preload/api-types'
+import type { PreflightStatus } from '../../../preload/api/preflight-api'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { TaskSourceHostAvailability } from './task-source-context-summary'
 

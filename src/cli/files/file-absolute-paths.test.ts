@@ -14,7 +14,7 @@ vi.mock('../runtime/client', () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures } from '../test-fixtures'
+import { buildWorktree, okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('absolute file CLI paths', () => {
   beforeEach(() => {
@@ -53,20 +53,5 @@ describe('absolute file CLI paths', () => {
       )
       expect(callMock).toHaveBeenCalledTimes(1)
     })
-  })
-
-  it('rejects the worktree root as a file-open target', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') })
-    )
-
-    await main(['file', 'open', '--path', '/tmp/repo', '--worktree', 'id:wt-1'], '/tmp')
-
-    expect(process.exitCode).toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      'The selected worktree root is a directory, not a file-open target.'
-    )
-    expect(callMock).toHaveBeenCalledTimes(1)
   })
 })

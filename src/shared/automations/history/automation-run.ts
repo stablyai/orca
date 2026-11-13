@@ -26,6 +26,19 @@ export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean
   )
 }
 
+/** Folded runs keep their first occurrence's timestamps, so the latest occurrence is when it last ran. */
+export function getAutomationRunLastRunAt(
+  run: Pick<
+    AutomationRun,
+    'dispatchedAt' | 'startedAt' | 'createdAt' | 'occurrenceCount' | 'lastOccurrenceAt'
+  >
+): number {
+  const at = run.dispatchedAt ?? run.startedAt ?? run.createdAt
+  return (run.occurrenceCount ?? 1) > 1 && run.lastOccurrenceAt && run.lastOccurrenceAt > at
+    ? run.lastOccurrenceAt
+    : at
+}
+
 export type AutomationRunUsageProvider = 'claude' | 'codex'
 
 export type AutomationRunUsageStatus = 'known' | 'unavailable'

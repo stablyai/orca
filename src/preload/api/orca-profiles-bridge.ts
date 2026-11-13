@@ -8,8 +8,8 @@ import {
   type SwitchOrcaProfileResult,
   type TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
-import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
-import { awaitBeforeUnloadCheckpoint } from '../preload-runtime-support'
+import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
+import { awaitBeforeUnloadCheckpoint } from '../renderer/renderer-runtime'
 
 export const orcaProfilesApi = {
   list: () => ipcRenderer.invoke('orcaProfiles:list'),

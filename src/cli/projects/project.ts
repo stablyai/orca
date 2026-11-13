@@ -13,7 +13,7 @@ import type {
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
-import type { CommandHandler, HandlerContext } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -22,13 +22,17 @@ import {
   formatProjectHostSetupUpdateResult,
   formatProjectList
 } from './project-format'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 import {
   hostFilterMatchesHostId,
   parseHostFlag,
   resolveHostFlagTarget
 } from '../hosts/execution-host-flag'
-import { getOptionalRepoKind, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalRepoKind,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../arguments/flags'
 import { findProjectSetups, resolveProjectIdSelector } from './project-selector'
 import { resolveRepoPathArgument } from './repo-path-arguments'
 import { RuntimeClientError } from '../runtime/types'

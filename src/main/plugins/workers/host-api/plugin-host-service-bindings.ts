@@ -49,6 +49,8 @@ export type PluginRuntimeDelegate = {
   }): Promise<{ delivered: boolean }>
   /** The hook server's agent rows; absent where no hook server runs. */
   listAgentStatuses?(): readonly PluginAgentStatusRow[]
+  /** Dispatched orchestration task titles by pane key; absent where no runtime dispatches tasks. */
+  listAgentTaskTitles?(): ReadonlyMap<string, string>
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
 }
@@ -110,6 +112,14 @@ export function bindPluginHostServices(input: {
       }))
     },
     listAgentStatuses: () => delegate.listAgentStatuses?.() ?? [],
+    listAgentTaskTitles: () => {
+      try {
+        return delegate.listAgentTaskTitles?.() ?? new Map()
+      } catch {
+        // Task titles are optional; an orchestration read failure must not lose the agent rows.
+        return new Map()
+      }
+    },
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })
       return { accepted: result.accepted }

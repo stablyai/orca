@@ -1,7 +1,7 @@
 import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
-} from '../../mobile-cloud-relay/relay-revoke-outbox'
+} from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult

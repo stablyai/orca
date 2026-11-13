@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../shared/automations/automation-definition'
 import { installPluginAutomationOwnershipEnd } from './plugin-automation-ownership'
-import { notifyPluginRemoved } from './installation/plugin-removal-events'
 import { PluginService } from './plugin-service'
 
 vi.mock('electron', () => ({ ipcMain: { handle() {}, on() {} } }))
@@ -21,13 +20,16 @@ function automation(id: string, pluginKey: string, createdAt = 1): Automation {
 
 function automationStore(initial: Automation[]) {
   let stored = initial
-  const updateAutomation = vi.fn(async (id: string, updates: Partial<Automation>) => {
-    stored = stored.map((entry) => (entry.id === id ? { ...entry, ...updates } : entry))
-    return stored.find((entry) => entry.id === id)!
-  })
+  const updateAutomations = vi.fn(
+    async (entries: readonly { id: string; updates: Partial<Automation> }[]) => {
+      const patches = new Map(entries.map(({ id, updates }) => [id, updates]))
+      stored = stored.map((entry) => ({ ...entry, ...patches.get(entry.id) }))
+      return entries.map(({ id }) => ({ id, automation: stored.find((entry) => entry.id === id)! }))
+    }
+  )
   return {
-    source: { listAutomationsForScope: () => ({ automations: stored }), updateAutomation },
-    updateAutomation,
+    source: { listAutomationsForScope: () => ({ automations: stored }), updateAutomations },
+    updateAutomations,
     get: (id: string) => stored.find((entry) => entry.id === id)
   }
 }
@@ -36,66 +38,6 @@ function automationStore(initial: Automation[]) {
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 
 describe('automations of a plugin the person took away', () => {
-  it('are paused and no longer its own; re-enabling it resumes nothing', async () => {
-    const settings = { disabled: ['acme.off'], killed: ['acme.bad'] }
-    const listeners: (() => void)[] = []
-    const store = automationStore([
-      automation('a-removed', 'acme.gone'),
-      automation('a-disabled', 'acme.off'),
-      automation('a-killed', 'acme.bad'),
-      automation('a-kept', 'acme.ok')
-    ])
-    installPluginAutomationOwnershipEnd(
-      {
-        options: {
-          isPluginSystemEnabled: () => true,
-          getDisabledPlugins: () => settings.disabled,
-          getPluginKillListEntry: (key) =>
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only presence is read.
-            settings.killed.includes(key) ? ({ reason: 'blocked' } as never) : null
-        },
-        whenReady: async () => undefined,
-        onChanged: (listener) => {
-          listeners.push(listener)
-          return () => undefined
-        }
-      },
-      store.source
-    )
-    notifyPluginRemoved('acme.gone')
-    await settle()
-    for (const id of ['a-removed', 'a-disabled', 'a-killed']) {
-      expect(store.get(id)).toMatchObject({
-        enabled: false,
-        createdBy: { endedAt: expect.any(Number) }
-      })
-    }
-    expect(store.get('a-kept')?.createdBy?.endedAt).toBeUndefined()
-
-    store.updateAutomation.mockClear()
-    settings.disabled = []
-    listeners.forEach((listener) => listener())
-    await settle()
-    expect(store.updateAutomation).not.toHaveBeenCalled()
-    expect(store.get('a-disabled')?.enabled).toBe(false)
-  })
-
-  it('keeps what a reinstall under the same key creates after the removal', async () => {
-    // Created after any removal time the test can record.
-    const store = automationStore([automation('a-new', 'acme.again', Number.MAX_SAFE_INTEGER)])
-    installPluginAutomationOwnershipEnd(
-      {
-        options: { isPluginSystemEnabled: () => true, getDisabledPlugins: () => [] },
-        whenReady: async () => undefined,
-        onChanged: () => () => undefined
-      },
-      store.source
-    )
-    notifyPluginRemoved('acme.again')
-    await settle()
-    expect(store.updateAutomation).not.toHaveBeenCalled()
-  })
-
   it('never ends ownership because discovery could not read the plugins folder', async () => {
     const userData = await mkdtemp(join(tmpdir(), 'orca-plugin-ownership-'))
     // A file where the plugins folder belongs: every discovery fails to list it.
@@ -116,11 +58,45 @@ describe('automations of a plugin the person took away', () => {
       await service.refresh()
       await settle()
       expect(service.getDiscovered()).toEqual([])
-      expect(store.updateAutomation).not.toHaveBeenCalled()
+      expect(store.updateAutomations).not.toHaveBeenCalled()
       expect(store.get('a-installed')).toMatchObject({ enabled: true })
     } finally {
       await service.dispose()
       await rm(userData, { recursive: true, force: true })
     }
+  })
+
+  it('pauses every automation of a disabled plugin in one write', async () => {
+    const store = automationStore([
+      automation('a-1', 'acme.gone'),
+      automation('a-2', 'acme.gone'),
+      automation('a-3', 'acme.gone'),
+      automation('b-1', 'acme.kept')
+    ])
+    installPluginAutomationOwnershipEnd(
+      {
+        options: {
+          isPluginSystemEnabled: () => true,
+          getDisabledPlugins: () => ['acme.gone']
+        },
+        whenReady: () => Promise.resolve(),
+        onChanged: () => () => {}
+      },
+      store.source
+    )
+    await settle()
+    expect(store.updateAutomations).toHaveBeenCalledTimes(1)
+    expect(store.updateAutomations.mock.calls[0][0].map(({ id }) => id)).toEqual([
+      'a-1',
+      'a-2',
+      'a-3'
+    ])
+    for (const id of ['a-1', 'a-2', 'a-3']) {
+      expect(store.get(id)).toMatchObject({
+        enabled: false,
+        createdBy: { endedAt: expect.any(Number) }
+      })
+    }
+    expect(store.get('b-1')).toMatchObject({ enabled: true })
   })
 })

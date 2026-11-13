@@ -40,7 +40,7 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
 }))
 
 const checkingShell = vi.hoisted(() => ({ path: '/fixture', next: '/fixture' }))
-vi.mock('../startup/login-shell-environment', () => ({
+vi.mock('../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
     if (options?.startedAfter !== undefined) {
       checkingShell.path = checkingShell.next

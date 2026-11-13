@@ -27,7 +27,7 @@ import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtim
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
 import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
-import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
+import { MOBILE_SETTING_ANCHORS, shouldOpenMobilePairingAddress } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
   const t = useTranslate()
@@ -349,7 +349,7 @@ export function MobilePane(): React.JSX.Element {
         <MachineNameField id="mobile-machine-name" />
       </div>
 
-      <div data-settings-row="" className="space-y-6 py-4">
+      <div id={MOBILE_SETTING_ANCHORS.pairing} data-settings-row="" className="space-y-6 py-4">
         <MobilePairingSetupSection
           connectionMode={connectionMode}
           canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
@@ -416,7 +416,7 @@ export function MobilePane(): React.JSX.Element {
         />
       </div>
 
-      <div data-settings-row="" className="py-4">
+      <div id={MOBILE_SETTING_ANCHORS.devices} data-settings-row="" className="py-4">
         <MobilePairedDevicesSection
           devices={devices}
           hasQrCode={qrDataUrl != null}

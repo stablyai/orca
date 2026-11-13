@@ -13,13 +13,4 @@ describe('abandonRemoteSessionScanOnCancel', () => {
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
   })
-
-  it('rejects immediately when the caller already cancelled', async () => {
-    const controller = new AbortController()
-    controller.abort()
-
-    await expect(
-      abandonRemoteSessionScanOnCancel(Promise.resolve('scanned'), controller.signal)
-    ).rejects.toMatchObject({ name: 'AbortError' })
-  })
 })

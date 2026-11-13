@@ -7,8 +7,8 @@ import {
 import { parseOrcadMigrationManifest } from '../../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../../../../../shared/orcad-migration/orcad-migration-scrollback'
 import { OrcadMigrationBlobChunkRequestSchema } from '../../../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { assertOrcadMigrationManifestDigest } from '../../../../orcad/orcad-migration-manifest-digest'
-import { assertOrcadMigrationSourceServedHere } from '../../../../orcad/orcad-migration-wsl-destination'
+import { assertOrcadMigrationManifestDigest } from '../../../../orcad/migration/orcad-migration-manifest-digest'
+import { assertOrcadMigrationSourceServedHere } from '../../../../orcad/migration/orcad-migration-wsl-destination'
 import { defineMethod, type RpcContext } from '../../core'
 
 export const ORCAD_MIGRATION_METHODS = [

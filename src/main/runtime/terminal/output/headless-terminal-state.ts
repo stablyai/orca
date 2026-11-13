@@ -269,6 +269,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why on the chain: the ground must land after every PTY chunk already queued.
     const completion = state.writeChain.then(async () => {
       await state.emulator.write(state.ownership.groundInputModes())
+      state.rendererSeedEscapeTail = undefined
     })
     state.writeChain = completion.catch(() => {})
     await completion

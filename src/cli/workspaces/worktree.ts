@@ -7,12 +7,12 @@ import type {
   RuntimeWorktreeSetResult,
   RuntimeWorktreeCreateResult
 } from '../../shared/runtime-worktree-contracts'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow } from './workspace-format'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
@@ -24,7 +24,7 @@ import {
   getOptionalStringFlagAllowingEmpty,
   getPresentStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import {
   getRequiredWorktreeSelector,
   resolveWorktreeCreateCwdContext,
@@ -62,7 +62,7 @@ import {
   assertReferenceWritesSupported,
   getCreateReferenceInputs,
   resolveReferenceInputs
-} from '../reference-input'
+} from '../references/reference-input'
 
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')

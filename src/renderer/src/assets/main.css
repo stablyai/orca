@@ -101,6 +101,9 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-question-card-border: var(--question-card-border);
+  --color-question-option-border: var(--question-option-border);
+  --color-chat-focus-ring: var(--chat-focus-ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -176,6 +179,7 @@
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+  --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -262,7 +266,10 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
-  /* PR-state hues stay the same in light and dark; a plugin theme may set its own. */
+  /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
+  --question-card-border-mix: 14%;
+  --question-option-border-mix: 16%;
+  /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -379,6 +386,8 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --question-card-border-mix: 16%;
+  --question-option-border-mix: 12%;
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -542,6 +551,52 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
+   App themes replace the surface, secondary and muted colors with readable hex (notice-surface-tokens.ts). */
+:root {
+  --notice-muted: var(--muted);
+  --notice-muted-foreground: var(--muted-foreground);
+  --notice-secondary-edge: transparent;
+  --notice-surface: var(--popover);
+  --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
+  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+}
+
+.dark {
+  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  --notice-shadow:
+    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
+   and every remapped foreground keeps its surface (outline buttons paint text-foreground on bg-background). */
+[data-sonner-toaster],
+.notification-card-stack {
+  --popover: var(--notice-surface);
+  --card: var(--notice-surface);
+  --background: var(--notice-surface);
+  --foreground: var(--popover-foreground);
+  --card-foreground: var(--popover-foreground);
+  --muted: var(--notice-muted);
+  --muted-foreground: var(--notice-muted-foreground);
+  --secondary: var(--notice-secondary);
+  --secondary-foreground: var(--popover-foreground);
+}
+
+/* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
+:is([data-sonner-toaster], .notification-card-stack)
+  :is(
+    [data-slot='button'][data-variant='secondary'],
+    [data-sonner-toast] [data-button][data-cancel]
+  ) {
+  outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
+}
+
 [data-sonner-toaster] {
   font-family: var(--font-sans);
   /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
@@ -564,7 +619,7 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: var(--shadow-floating);
+  box-shadow: var(--notice-shadow);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -649,28 +704,21 @@ body[data-modal-overlay-open]
   pointer-events: auto;
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
   /* Override Sonner’s dark defaults so the close icon contrasts in both themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
+  border-color: var(--notice-border);
 }
 
-[data-sonner-toaster][data-sonner-theme='dark']
+[data-sonner-toaster][data-sonner-theme]
   [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  [data-close-button]:hover {
   color: var(--accent-foreground);
   background: var(--accent);
+  border-color: var(--notice-border);
 }
 
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */
@@ -743,6 +791,17 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-composer-border-mix),
     transparent
   );
+  /* From the chat's own foreground, so the edges stay visible when chat follows the terminal's colors. */
+  --question-card-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-card-border-mix),
+    transparent
+  );
+  --question-option-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-option-border-mix),
+    transparent
+  );
   /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
   --chat-focus-ring: color-mix(in srgb, var(--chat-source-foreground) 50%, var(--chat-canvas));
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
@@ -808,6 +867,25 @@ body[data-modal-overlay-open]
 
   :where(button:disabled) {
     cursor: default;
+  }
+}
+
+@utility control-interaction {
+  @media (hover: hover) {
+    &:not(:disabled, [aria-disabled='true']):hover {
+      outline: 1px solid var(--ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &:not(:disabled, [aria-disabled='true']):focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  &:not(:disabled, [aria-disabled='true']):active {
+    outline: 2px solid var(--ring);
+    outline-offset: 0;
   }
 }
 
@@ -1595,6 +1673,7 @@ html.native-shell .app-layout {
 
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
+[data-worktree-family-segment='primary'],
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1607,6 +1686,7 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
+.dark [data-worktree-family-segment='primary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1632,16 +1712,32 @@ html.native-shell .app-layout {
   }
 }
 
+[data-worktree-family-segment='secondary'],
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
+.dark [data-worktree-family-segment='secondary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Family paint owns the surface in both themes, including secondary occurrences. */
+.worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
+.dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
+[data-worktree-family-segment],
+.dark [data-worktree-family-segment] {
+  box-shadow: none;
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
@@ -2150,6 +2246,38 @@ html.native-shell .app-layout {
 
   100% {
     opacity: 0;
+  }
+}
+
+/* Search and deep-link target: a tint out to the enclosing card's edges that fades.
+   An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
+   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+.settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 100vmax var(--settings-target-tint),
+    calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-target-highlight {
+    animation: settings-target-highlight-fade 3s ease-out forwards;
+  }
+}
+
+@keyframes settings-target-highlight-fade {
+  60% {
+    box-shadow:
+      inset 0 0 0 100vmax var(--settings-target-tint),
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 100vmax transparent,
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
+      var(--settings-target-bleed-right, 0px) 0 0 transparent;
   }
 }
 
