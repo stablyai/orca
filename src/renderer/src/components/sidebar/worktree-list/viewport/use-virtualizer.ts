@@ -97,9 +97,13 @@ export function useWorktreeListVirtualizer(args: {
           activeStickyHeaderIndexRef.current
         )
       }
-      const measured = measureVirtualElementSize(element, entry, instance)
       const row = index === null ? undefined : renderRows[index]
-      return measured + (row?.type === 'item' || row?.type === 'folder-workspace' ? 0 : 6)
+      if (row?.type === 'item' || row?.type === 'folder-workspace') {
+        return measureVirtualElementSize(element, entry, instance)
+      }
+      // Why: TanStack returns the cached slot size for entry-less measures, so the gap must be added to the DOM box or it compounds on every remeasure.
+      const box = entry?.borderBoxSize?.[0]
+      return Math.round(box ? box.blockSize : element.offsetHeight) + 6
     },
     [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
   )

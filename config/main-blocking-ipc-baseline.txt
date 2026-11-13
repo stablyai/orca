@@ -4,6 +4,6 @@
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
 1 src/main/ipc/settings.ts
 1 src/preload/api/app-bridge.ts
-1 src/preload/api/native-chat-bridge.ts
-1 src/preload/api/settings-bridge.ts
+1 src/preload/api/native-chat/native-chat-bridge.ts
+1 src/preload/api/preferences/settings-bridge.ts
 1 src/preload/native-chat/native-chat-visual-guest-theme.ts

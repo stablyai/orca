@@ -18,21 +18,7 @@ export async function submitBrowserHostCommandResult(
   const result = BrowserClientHostCommandResult.parse(candidate)
   const response = await sendRequest(
     'browser.clientHost.commandResult',
-    {
-      pageCommandProtocolVersion: command.pageCommandProtocolVersion,
-      ...(command.pageReconciliationProtocolVersion
-        ? { pageReconciliationProtocolVersion: command.pageReconciliationProtocolVersion }
-        : {}),
-      authorityRuntimeId: command.authorityRuntimeId,
-      authorityEpoch: command.authorityEpoch,
-      browserHostClientId: command.browserHostClientId,
-      browserHostGeneration: command.browserHostGeneration,
-      browserPageId: command.browserPageId,
-      pageHostGeneration: command.pageHostGeneration,
-      commandSequence: command.commandSequence,
-      commandId: command.commandId,
-      result
-    },
+    { ...browserHostCommandResultIdentity(command), result },
     timeoutMs
   )
   if (!response.ok) {
@@ -43,5 +29,23 @@ export async function submitBrowserHostCommandResult(
     !BrowserClientHostCommandResultAck.safeParse(response.result).success
   ) {
     throw new Error('Invalid browser host command result acknowledgement')
+  }
+}
+
+/** The command identity a result, or a chunk of one, is filed under. */
+export function browserHostCommandResultIdentity(command: BrowserClientHostCommandEvent) {
+  return {
+    pageCommandProtocolVersion: command.pageCommandProtocolVersion,
+    ...(command.pageReconciliationProtocolVersion
+      ? { pageReconciliationProtocolVersion: command.pageReconciliationProtocolVersion }
+      : {}),
+    authorityRuntimeId: command.authorityRuntimeId,
+    authorityEpoch: command.authorityEpoch,
+    browserHostClientId: command.browserHostClientId,
+    browserHostGeneration: command.browserHostGeneration,
+    browserPageId: command.browserPageId,
+    pageHostGeneration: command.pageHostGeneration,
+    commandSequence: command.commandSequence,
+    commandId: command.commandId
   }
 }

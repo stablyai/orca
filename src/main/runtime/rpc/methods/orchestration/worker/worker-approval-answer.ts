@@ -1,5 +1,5 @@
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration-approval-answer-params'
+import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
 import {

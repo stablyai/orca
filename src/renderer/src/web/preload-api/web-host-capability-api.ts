@@ -1,4 +1,7 @@
-import type { PreflightStatus, RefreshAgentsResult } from '../../../../preload/api/preflight-api'
+import type {
+  PreflightStatus,
+  RefreshAgentsResult
+} from '../../../../preload/api/preflight/preflight-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ComputerUsePermissionSetupResult,

@@ -219,6 +219,10 @@ export function isLocallyRemovableWorktreeMetadataRow(
     return false
   }
   const canonical = identityKeys?.[0] ? state.worktreeMetaByIdentity?.[identityKeys[0]] : undefined
+  // An archived workspace's checkout is missing on purpose; its row is the workspace.
+  if (legacy?.archivedCheckout || canonical?.archivedCheckout) {
+    return false
+  }
   return !(
     (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
     (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||

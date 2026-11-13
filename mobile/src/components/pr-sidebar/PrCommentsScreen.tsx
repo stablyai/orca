@@ -18,7 +18,7 @@ import { useMobileLaunchAgentLabel } from '../../session/agent-launch/use-mobile
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { NavBarButton } from '../nav-bar/NavBarButton'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'

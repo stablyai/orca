@@ -1,0 +1,161 @@
+import { useCallback, useMemo, useRef, useState } from 'react'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
+import { translate } from '../../i18n/mobile-i18n'
+import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { launchAgentWithPrompt, promptedLaunchNotice } from '../review/pr-ai-triage-launch'
+import type { LaunchedAgentOpens } from '../../session/agent-launch/launched-agent-opener'
+import { resolveMobileAgentLaunchAvailability } from '../../session/agent-launch/mobile-agent-launch-availability'
+import {
+  buildFixCommitFailurePrompt,
+  hasExpandedCommitFailureDetails,
+  summarizeCommitFailure
+} from '../../../../src/shared/source-control/recovery/source-control-commit-failure'
+import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
+
+type Params = {
+  client: RpcClient | null
+  connState: ConnectionState
+  worktreeId: string
+  workspaceLabel: string | null
+  failure: MobileCommitFailureRecovery | null
+}
+
+export function useMobileCommitFailureRecovery({
+  client,
+  connState,
+  worktreeId,
+  workspaceLabel,
+  failure
+}: Params) {
+  const hostStatus = useHostProtocolGates()
+  const { hostCapabilities } = hostStatus
+  const [launching, setLaunching] = useState(false)
+  // Guard synchronously: launching state commits next render, leaving a gap for duplicate taps.
+  const inFlightRef = useRef(false)
+  const [launchError, setLaunchError] = useState<string | null>(null)
+  // Retain prompts for manual paste after launch failure; key by failed commit so a new failure cannot inherit them.
+  const [undelivered, setUndelivered] = useState<{
+    failure: MobileCommitFailureRecovery
+    prompt: string
+  } | null>(null)
+  const undeliveredPrompt = undelivered?.failure === failure ? undelivered.prompt : null
+  const [warning, setWarning] = useState<{
+    failure: MobileCommitFailureRecovery
+    text: string
+  } | null>(null)
+  const launchWarning = warning?.failure === failure ? warning.text : null
+  const [success, setSuccess] = useState<{
+    failure: MobileCommitFailureRecovery
+    text: string
+  } | null>(null)
+  const launchSuccess = success?.failure === failure ? success.text : null
+  const [opened, setOpened] = useState<{
+    failure: MobileCommitFailureRecovery
+    opens: LaunchedAgentOpens
+  } | null>(null)
+  const launchOpens = opened?.failure === failure ? opened.opens : null
+  const summary = useMemo(() => (failure ? summarizeCommitFailure(failure.error) : null), [failure])
+  const availability = resolveMobileAgentLaunchAvailability(hostStatus)
+
+  const [launchErrorFailure, setLaunchErrorFailure] = useState(failure)
+  if (launchErrorFailure !== failure) {
+    setLaunchErrorFailure(failure)
+    setLaunchError(null)
+  }
+
+  const hasDetails = useMemo(
+    () => (failure && summary ? hasExpandedCommitFailureDetails(failure.error, summary) : false),
+    [failure, summary]
+  )
+  const prompt = useMemo(
+    () =>
+      failure && summary
+        ? buildFixCommitFailurePrompt({
+            summary,
+            error: failure.error,
+            entries: failure.stagedEntries,
+            worktreePath: null,
+            commitMessage: failure.commitMessage
+          })
+        : null,
+    [failure, summary]
+  )
+
+  const launch = useCallback(async (): Promise<boolean> => {
+    if (inFlightRef.current || launching || !prompt) {
+      return false
+    }
+    if (!client || connState !== 'connected') {
+      setLaunchError(
+        translate(
+          'sourceControl.useMobileCommitFailureRecovery.waitingForDesktop',
+          'Waiting for desktop...'
+        )
+      )
+      triggerError()
+      return false
+    }
+    inFlightRef.current = true
+    setLaunching(true)
+    setLaunchError(null)
+    setWarning(null)
+    setSuccess(null)
+    setOpened(null)
+    setUndelivered(null)
+    try {
+      const result = await launchAgentWithPrompt({
+        client,
+        hostCapabilities,
+        worktreeId,
+        prompt,
+        actionId: 'fixCommitFailure',
+        launchSource: 'source_control_recovery'
+      })
+      const notice = promptedLaunchNotice(result, workspaceLabel)
+      if (notice.succeeded) {
+        triggerSuccess()
+      } else {
+        triggerError()
+      }
+      setLaunchError(notice.error)
+      setWarning(failure && notice.warning ? { failure, text: notice.warning } : null)
+      setSuccess(failure && notice.success ? { failure, text: notice.success } : null)
+      setOpened(failure && notice.opens ? { failure, opens: notice.opens } : null)
+      setUndelivered(
+        failure && notice.undeliveredPrompt ? { failure, prompt: notice.undeliveredPrompt } : null
+      )
+      return notice.succeeded
+    } catch (err) {
+      triggerError()
+      setLaunchError(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'sourceControl.useMobileCommitFailureRecovery.launchFailed',
+              'Failed to launch agent'
+            )
+      )
+      return false
+    } finally {
+      inFlightRef.current = false
+      setLaunching(false)
+    }
+  }, [client, connState, failure, hostCapabilities, launching, prompt, workspaceLabel, worktreeId])
+
+  return {
+    summary,
+    hasDetails,
+    launching,
+    availability,
+    launchError,
+    launchWarning,
+    launchSuccess,
+    launchOpens,
+    undeliveredPrompt,
+    launch
+  }
+}
+
+export type MobileCommitFailureRecoveryAction = ReturnType<typeof useMobileCommitFailureRecovery>

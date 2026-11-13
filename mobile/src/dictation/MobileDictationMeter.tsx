@@ -6,7 +6,7 @@ import {
   type MobileDictationMeter
 } from '../hooks/mobile-dictation-meter'
 import { useNow } from '../hooks/use-now'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { colors, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

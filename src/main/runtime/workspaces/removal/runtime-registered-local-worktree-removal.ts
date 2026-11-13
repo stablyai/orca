@@ -74,6 +74,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   requestedDeleteBranch?: boolean
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
   stopPtys: () => Promise<void>
+  /** Runs after every refusal and the teardown, before any checkout file is deleted. */
+  beforeCheckoutDelete?: (worktree: GitWorktreeInfo) => Promise<void>
   closeWatchers: (path: string) => Promise<void>
   preserveBranchHead: (
     result: RemoveWorktreeResult | undefined,
@@ -178,6 +180,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   let accepted = false
   try {
     await args.stopPtys()
+    await args.beforeCheckoutDelete?.(refreshed)
     if (!markerMissing && linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }

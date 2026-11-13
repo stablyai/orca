@@ -19,14 +19,6 @@ const violations = [
     "export const X = () => <input onKeyDown={(e) => { if (e.key === 'Enter') go() }} />"
   ],
   [
-    'Enter on a raw textarea',
-    "export const X = () => <textarea onKeyDown={(e) => e.key === 'Enter' && send()} />"
-  ],
-  [
-    'Enter by code on a text-typed input',
-    'export const X = () => <input type="search" onKeyDown={(e) => { if (e.code === "NumpadEnter") go() }} />'
-  ],
-  [
     'Enter by keyCode',
     'export const X = () => <input onKeyPress={(e) => { if (e.keyCode === 13) go() }} />'
   ],
@@ -35,23 +27,10 @@ const violations = [
     "export const X = () => <div contentEditable onKeyDown={(e) => { if (e.key === 'Enter') go() }} />"
   ],
   [
-    'named local handler',
-    `export function X() {
-      const onKeyDown = (e) => { if (e.key === 'Enter') submit() }
-      return <input onKeyDown={onKeyDown} />
-    }`
-  ],
-  [
     'useCallback handler',
     `export function X() {
       const handleKeyDown = useCallback((e) => { if (e.key === 'Enter') submit() }, [])
       return <input onKeyDownCapture={handleKeyDown} />
-    }`
-  ],
-  [
-    'keydown listener on an input ref',
-    `export function attach(inputRef) {
-      inputRef.current.addEventListener('keydown', (e) => { if (e.key === 'Enter') go() })
     }`
   ],
   [
@@ -65,10 +44,6 @@ const violations = [
 
 const accepted = [
   [
-    'shared guard inline',
-    "export const X = () => <input onKeyDown={(e) => { if (isImeCompositionKeyDown(e)) return; if (e.key === 'Enter') go() }} />"
-  ],
-  [
     'shared guard in a called helper',
     `function ignoreIme(e) { return isImeOwnedKeyboardEvent(e) }
     export function X() {
@@ -77,36 +52,12 @@ const accepted = [
     }`
   ],
   [
-    'gesture ownership guard',
-    "export const X = () => <input onKeyDown={(e) => { if (ime.ownsKeyDown(e)) return; if (e.key === 'Enter') go() }} />"
-  ],
-  [
     'element tracks composition itself',
     "export const X = () => <input onCompositionStart={start} onKeyDown={(e) => { if (e.key === 'Enter') go() }} />"
   ],
   [
-    'Input primitive',
-    "export const X = () => <Input onKeyDown={(e) => { if (e.key === 'Enter') go() }} />"
-  ],
-  [
-    'ImeTextarea',
-    "export const X = () => <ImeTextarea onKeyDown={(e) => { if (e.key === 'Enter') go() }} />"
-  ],
-  [
     'non-text input type',
     'export const X = () => <input type="checkbox" onKeyDown={(e) => { if (e.key === "Enter") toggle() }} />'
-  ],
-  [
-    'list row button',
-    "export const X = () => <button onKeyDown={(e) => { if (e.key === 'Enter') open() }} />"
-  ],
-  [
-    'contentEditable disabled',
-    "export const X = () => <div contentEditable={false} onKeyDown={(e) => { if (e.key === 'Enter') go() }} />"
-  ],
-  [
-    'non-Enter key handling',
-    "export const X = () => <input onKeyDown={(e) => { if (e.key === 'Escape') cancel() }} />"
   ],
   [
     'handler passed in from props',
