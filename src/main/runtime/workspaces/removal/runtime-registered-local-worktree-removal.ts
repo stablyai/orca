@@ -29,12 +29,13 @@ import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/remov
 import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval,
-  waitForPendingWorktreeRemoval
+  waitForPendingWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
 
@@ -44,11 +45,14 @@ export function removeRuntimeRegisteredLocalWorktree(
 ): Promise<RemoveWorktreeResult & { warning?: string }> {
   return runSerializedWorktreeRemovalAcceptance(
     args.repo.path,
-    async (): Promise<RemoveWorktreeResult & { warning?: string }> =>
+    async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
       // Recheck after queue wait: another client may already have accepted this deletion.
-      waitForPendingWorktreeRemoval(args.target.id, undefined, args.requestedDeleteBranch)
-        ? { removing: true }
-        : acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+      if (waitForPendingWorktreeRemoval(args.target.id, undefined, args.requestedDeleteBranch)) {
+        await waitForWorktreeRemovalAcceptance(args.target.id)
+        return { removing: true }
+      }
+      return acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+    }
   )
 }
 
@@ -101,7 +105,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       canonicalPath,
       repo,
       undefined,
-      args.hasLocalOptions ? localOptions : undefined
+      args.hasLocalOptions ? localOptions : undefined,
+      { identity: { worktreeId: args.target.id } }
     )
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,
@@ -207,8 +212,10 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       return result
     },
     publish: () => args.publish(),
+    admissionFailed: () => gate.finish(false),
     cleanupPushTargetRemote: () => cleanupRemovedWorktreePushTarget(args)
   })
+  await waitForWorktreeRemovalAcceptance(args.target.id)
   return { removing: true, ...acceptedFields }
 }
 

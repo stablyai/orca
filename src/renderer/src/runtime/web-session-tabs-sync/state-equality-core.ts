@@ -66,8 +66,10 @@ export function agentStatusEntryEqual(
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    a.launchAttested === b.launchAttested &&
     programStatusFacetsEqual(a.programStatus, b.programStatus) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
+    a.orcaSessionId === b.orcaSessionId &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }

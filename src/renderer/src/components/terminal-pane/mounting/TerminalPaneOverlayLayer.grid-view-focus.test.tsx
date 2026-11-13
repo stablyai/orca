@@ -66,7 +66,7 @@ vi.mock('./TerminalOverlaySlot', () => ({
     return null
   }
 }))
-vi.mock('../../native-chat/use-native-chat-toggle-shortcut', () => ({
+vi.mock('../../native-chat/pane/routing/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: (_worktreeId: string, enabled: boolean) => {
     mocks.chatShortcutEnabled.push(enabled)
   }

@@ -4,9 +4,9 @@ import type {
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   assertBrowserClientPageCommandNotAborted,
-  assertCurrentBrowserClientPageRenderer,
-  browserClientPageIdentity
+  assertCurrentBrowserClientPageRenderer
 } from '../execution/browser-client-page-command-admission'
+import { browserClientPageIdentity } from '../renderer/browser-client-page-renderer-contract'
 import { sameBrowserClientPageAuthority } from '../../client-hosts/commands/browser-client-host-command-authority'
 import { BrowserClientPageCommandError } from '../execution/browser-client-page-command-failure'
 import {
@@ -17,7 +17,7 @@ import type {
   BrowserClientPageLifecycleRegistry,
   BrowserClientRetainedPage
 } from './browser-client-page-retained-state'
-import type { BrowserClientPageRendererIdentity } from './browser-client-page-cleanup'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 type BrowserClientPageReconciliationContext = {
   pages: Map<string, BrowserClientRetainedPage>
@@ -29,7 +29,7 @@ type BrowserClientPageReconciliationContext = {
   retirePage: (browserPageId: string, pageHostGeneration: number) => Promise<boolean>
   cleanupPage: (
     page: BrowserClientRetainedPage,
-    previousRendererPage?: BrowserClientPageRendererIdentity
+    previousRendererPage?: Readonly<BrowserClientPageRendererIdentity>
   ) => Promise<void>
 }
 
@@ -200,7 +200,7 @@ async function failClosedRekeyedPage(
   context: BrowserClientPageReconciliationContext,
   page: BrowserClientRetainedPage,
   error: unknown,
-  previousRendererPage?: BrowserClientPageRendererIdentity
+  previousRendererPage?: Readonly<BrowserClientPageRendererIdentity>
 ): Promise<never> {
   page.reconciling = false
   page.retiring ??= context.cleanupPage(page, previousRendererPage)

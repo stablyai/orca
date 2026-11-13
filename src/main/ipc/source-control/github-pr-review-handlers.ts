@@ -1,8 +1,8 @@
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github-repo-target-params'
 import { ipcMain } from 'electron'
-import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import {
   addPRReviewComment,
   addPRReviewCommentReply

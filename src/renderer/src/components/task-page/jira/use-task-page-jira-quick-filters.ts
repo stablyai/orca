@@ -10,6 +10,7 @@ import {
 } from '../../../../../shared/jira/jira-quick-filters'
 import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_QUICK_FILTER_STATE: JiraQuickFilterState = { statuses: [] }
 type JiraQuickFilterModel = Pick<
@@ -18,6 +19,7 @@ type JiraQuickFilterModel = Pick<
 >
 
 export function useTaskPageJiraQuickFilters(model: JiraQuickFilterModel) {
+  const t = useTranslate()
   const ownerKey = model.jiraTaskSourceContext?.hostId ?? model.accountBackedTaskSourceHostId
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(ownerKey), [ownerKey])
   const [snapshot, setSnapshot] = useState({
@@ -100,7 +102,7 @@ export function useTaskPageJiraQuickFilters(model: JiraQuickFilterModel) {
         setError(
           reason instanceof Error
             ? reason.message
-            : translate('jira.statusFilters.saveFailed', 'Could not save Jira status filters.')
+            : t('jira.statusFilters.saveFailed', 'Could not save Jira status filters.')
         )
       }
       throw reason

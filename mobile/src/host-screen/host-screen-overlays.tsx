@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native'
 import { Edit3, Moon, Pin, PinOff } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
-import { useWorkspaceServer } from '../transport/workspace-server'
+import { useWorkspaceServer } from '../worktree/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
@@ -31,6 +31,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     connState,
     existingWorktreePaths,
     hostCapabilities,
+    hostDisplay,
     hostId,
     state
   } = controller
@@ -60,9 +61,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           {state.confirmDelete ? (
             <View>
               <View style={styles.confirmContent}>
-                <Text style={styles.confirmTitle}>
-                  {t('hostScreen.hostScreenOverlays.deleteWorktree', 'Delete Worktree')}
-                </Text>
+                <Text style={styles.confirmTitle}>{t('common.delete', 'Delete')}</Text>
                 <Text style={styles.confirmMessage}>
                   {t(
                     'hostScreen.hostScreenOverlays.deleteConfirmMessage',
@@ -73,6 +72,21 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                     }
                   )}
                 </Text>
+                {state.confirmDelete.recipeEnvironment ? (
+                  <Text style={styles.confirmMessage}>
+                    {state.confirmDelete.recipeEnvironment.destroys === false
+                      ? t(
+                          'hostScreen.hostScreenOverlays.deleteKeepsEnvironment',
+                          'The environment "{{environment}}" that Orca created for it keeps running: its recipe has no destroy step.',
+                          { environment: state.confirmDelete.recipeEnvironment.name }
+                        )
+                      : t(
+                          'hostScreen.hostScreenOverlays.deleteDestroysEnvironment',
+                          'This also destroys the environment "{{environment}}" that Orca created for it, with any uncommitted work and running terminals on it.',
+                          { environment: state.confirmDelete.recipeEnvironment.name }
+                        )}
+                  </Text>
+                ) : null}
               </View>
               <View style={styles.confirmButtons}>
                 <Pressable
@@ -107,8 +121,11 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             </View>
           ) : actionTarget && renameTarget === actionTarget ? (
             <WorkspaceRenameSheet
+              hostId={hostId ?? ''}
+              hostName={hostDisplay.title}
               row={actionTarget}
               rename={actions.renameWorktree}
+              blockedOffline={actions.workspaceRenameWrite.blockedOffline}
               onClose={closeActionSheet}
             />
           ) : (
@@ -206,7 +223,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               actions.archiveHookFailure?.item.displayName || actions.archiveHookFailure?.item.repo
           })}
           message={actions.archiveHookFailure?.message}
-          confirmLabel={t('hostScreen.hostScreenOverlays.deleteAnyway', 'Delete Anyway')}
+          confirmLabel={t('common.delete', 'Delete')}
           destructive
           onConfirm={actions.deleteDespiteArchiveHookFailure}
           onCancel={actions.dismissArchiveHookFailure}

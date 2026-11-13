@@ -6,7 +6,7 @@ import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace-
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-terminal-contracts'
 import type { WorktreeTerminalStopOptions } from './worktree-terminal-stop-options'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeTerminalMutationKind } from '../../workspaces/lifecycle/worktree-terminal-mutation-lock'

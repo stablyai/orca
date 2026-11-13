@@ -1,3 +1,7 @@
+import { AgentSessionJournal } from '../journal-store'
+import { openAgentSessionJournal } from '../journal-store-factory'
+import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-database-test-support'
+import { structuredSendAnswer } from '../../agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -42,42 +46,43 @@ export function registerJournalUnsentSendHoldQueueTests(
       }
     )
 
-    it('a run a crash cut short is placed again with the rest, in acceptance order', async () => {
-      const interrupted = await fixture.afterRestart(async (earlier) => {
-        await earlier.queuedMessages.insert({
-          messageId: 'C',
-          body: fixture.message('C')
-        })
-        await fixture.accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
-        await fixture.accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
-      })
-      const resolve = interrupted.resolveDispatch.bind(interrupted)
+    it('finishes the same conversion after a crash between kept rows, then atomically advances the format', async () => {
+      const resolve = AgentSessionJournal.prototype.resolveDispatch
       const fault = vi
-        .spyOn(interrupted, 'resolveDispatch')
-        .mockImplementation((...args) =>
-          args[0].clientMessageId === 'B'
-            ? Promise.reject(new Error('keep and fallback unavailable'))
-            : resolve(...args)
-        )
+        .spyOn(AgentSessionJournal.prototype, 'resolveDispatch')
+        .mockImplementation(function (this: AgentSessionJournal, ...args) {
+          return args[0].clientMessageId === 'B'
+            ? Promise.reject(new Error('conversion interrupted'))
+            : resolve.apply(this, args)
+        })
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       try {
-        await expect(fixture.hold(interrupted)).rejects.toThrow('settling unsent sends failed')
-        expect(interrupted.submission('A')).toMatchObject({
-          dispatchState: 'rejected',
-          keptAsQueuedMessageId: 'A'
-        })
-        expect(interrupted.submission('B')?.dispatchState).toBe('pending')
-        expect(interrupted.queuedMessages.get('A')?.position).toBe(0)
-        expect(interrupted.queuedMessages.get('C')?.position).toBe(2)
+        await expect(
+          fixture.afterRestart(async (earlier) => {
+            await earlier.queuedMessages.insert({ messageId: 'C', body: fixture.message('C') })
+            await fixture.accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
+            await fixture.accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
+          })
+        ).rejects.toThrow('settling unsent sends failed')
+        expect(
+          openTestJournalHostDatabase(fixture.root)
+            .db.prepare('SELECT format FROM journal_outcome_epochs')
+            .get()?.format
+        ).toBe(2)
       } finally {
         fault.mockRestore()
         warn.mockRestore()
       }
-      await interrupted.close()
       const journal = await fixture.open()
-      await fixture.hold(journal)
-
       expect(fixture.cardOrder(journal)).toEqual(['A', 'B', 'C'])
+      await journal.appendQueueResume(0)
+      expect(
+        openTestJournalHostDatabase(fixture.root)
+          .db.prepare('SELECT format FROM journal_outcome_epochs')
+          .get()?.format
+      ).toBe(3)
+      await journal.close()
+      expect(fixture.cardOrder(await fixture.open())).toEqual(['A', 'B', 'C'])
     })
   })
 
@@ -112,26 +117,116 @@ export function registerJournalUnsentSendHoldQueueTests(
     })
   })
 
-  describe('the order kept cards stand in', () => {
-    it('a card kept before the epoch rolled stays ahead of one kept after it', async () => {
+  describe('old saved queues', () => {
+    it.each(['stopped', 'reserved-command', 'moved-command'] as const)(
+      'preserves the %s ordering boundary',
+      async (shape) => {
+        const journal = await fixture.afterRestart(async (earlier) => {
+          if (shape === 'stopped') {
+            await earlier.queuedMessages.insert({ messageId: 'W', body: fixture.message('W') })
+            await earlier.appendStopEvent({ reason: 'user-stop' }, 0)
+            await fixture.accept(earlier, 'S', { origin: 'client', source: USER_MESSAGE_SOURCE })
+            return
+          }
+          await earlier.queuedMessages.insert({
+            messageId: 'C1',
+            body: { ...fixture.message('/compact'), command: { name: 'compact' as const } }
+          })
+          await fixture.accept(earlier, 'S', { origin: 'client', source: USER_MESSAGE_SOURCE })
+          await earlier.queuedMessages.insert({ messageId: 'C2', body: fixture.message('C2') })
+          await earlier.queuedMessages.move({ messageId: 'C2', beforeMessageId: 'C1' })
+          if (shape === 'reserved-command') {
+            await earlier.appendSubmission(
+              {
+                clientMessageId: 'command-attempt',
+                origin: 'client',
+                body: { ...fixture.message('/compact'), command: { name: 'compact' as const } },
+                payloadFingerprint: fixture.fingerprint({
+                  ...fixture.message('/compact'),
+                  command: { name: 'compact' as const }
+                }),
+                handoverRecorded: true,
+                fence: 0
+              },
+              { messageId: 'C1', expect: 'waiting' }
+            )
+            await earlier.resolveDispatch({
+              clientMessageId: 'command-attempt',
+              state: 'pending',
+              turnScope: { kind: 'thread' },
+              fence: 0
+            })
+          }
+        })
+        expect(fixture.cardOrder(journal)).toEqual(
+          shape === 'stopped'
+            ? ['S', 'W']
+            : shape === 'reserved-command'
+              ? ['C2', 'S']
+              : ['C2', 'C1', 'S']
+        )
+      }
+    )
+    it('keeps unsent mail in custody as waiting across restart', async () => {
       const journal = await fixture.afterRestart(async (earlier) => {
-        for (const id of ['m1', 'm2', 'm3']) {
-          await fixture.accept(earlier, id, { origin: 'host', source: fixture.MAIL_SOURCE })
-        }
-        await fixture.accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
+        await fixture.accept(earlier, 'mail', {
+          origin: 'host',
+          source: { kind: 'agent' },
+          body: { ...fixture.message('mail'), from: fixture.MAIL_SOURCE }
+        })
       })
-      await fixture.hold(journal)
-      await journal.rollEpoch('handle_forked', 0)
-      await fixture.accept(journal, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
-      await journal.close()
-      const reopened = await fixture.open()
-      await fixture.hold(reopened)
-
-      const a = reopened.queuedMessages.get('A')!.queuedAt!
-      const b = reopened.queuedMessages.get('B')!.queuedAt!
-      expect(a.epoch).toBe(b.epoch)
-      expect(a.sequence).toBeLessThan(b.sequence)
-      expect(fixture.cardOrder(reopened)).toEqual(['A', 'B'])
+      expect(
+        structuredSendAnswer(
+          journal,
+          () => ({ verdict: 'absent' }),
+          fixture.IDENTITY.sessionId,
+          'mail'
+        )
+      ).toEqual({ kind: 'waiting' })
+      expect(fixture.cardOrder(journal)).toEqual(['mail'])
     })
+  })
+
+  it('retains queued and legacy chat tasks at restart while withdrawing a derived preamble', async () => {
+    const database = openTestJournalHostDatabase(fixture.root)
+    const open = async () =>
+      fixture.journals.track(
+        await openAgentSessionJournal({
+          identity: fixture.IDENTITY,
+          database,
+          now: () => (fixture.clock += 1),
+          mintEpoch: () => 'task-epoch'
+        })
+      )
+    const earlier = await open()
+    const body = {
+      ...fixture.message('dispatched task'),
+      from: {
+        ...fixture.MAIL_SOURCE,
+        orchestration: {
+          message: 'task' as const,
+          runId: 'run',
+          taskId: 'task',
+          dispatchId: 'dispatch'
+        }
+      }
+    }
+    await earlier.queuedMessages.insert({ messageId: 'legacy-task', body })
+    await earlier.queuedMessages.insert({
+      messageId: 'queued-task',
+      body,
+      deliveryMode: 'queue',
+      unattended: true
+    })
+    await earlier.queuedMessages.insert({
+      messageId: 'derived-preamble',
+      body,
+      deliveryMode: 'steer',
+      unattended: true
+    })
+    await earlier.close()
+    const reopened = await open()
+    expect(fixture.cardOrder(reopened)).toEqual(['legacy-task', 'queued-task'])
+    expect(reopened.queuedMessages.get('derived-preamble')?.state).toBe('withdrawn')
   })
 }

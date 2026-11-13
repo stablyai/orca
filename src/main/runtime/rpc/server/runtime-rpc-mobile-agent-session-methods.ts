@@ -37,6 +37,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.readVisual',
   // One item whole, for "Show full output" and "Show full message".
   'agentSession.item',
+  // Whether the host recorded a send, for one the phone lost track of; gated on agent-session.send-recorded.v1.
+  'agentSession.sendRecorded',
   // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
   'agentSession.rewind',
   // "Don't continue" on a usage-limit row the host will continue at its reset.

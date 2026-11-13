@@ -6,26 +6,29 @@ import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
-import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '@/lib/monospace-font-family'
-import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
-import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
-import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
+import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
+import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-protocol/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/webview-drag-passthrough'
 import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-click'
 import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'
 import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
 import { formatTerminalUrlTooltip } from '../links/terminal-url-tooltip'
-import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
+import {
+  reportActiveRendererPtyForPane,
+  syncPaneOutputCadences
+} from '../pty-transport/renderer-active-pty'
 import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
@@ -74,6 +77,7 @@ export function createTerminalPaneManagerOptions(
         context.deps.persistLayoutSnapshot()
       }
       reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+      syncPaneOutputCadences(panePtyBindingsRef.current)
       const focusedBinding = panePtyBindingsRef.current.get(pane.id) as
         | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
         | undefined

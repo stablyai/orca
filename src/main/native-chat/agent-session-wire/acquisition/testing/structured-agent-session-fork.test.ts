@@ -1,33 +1,18 @@
-import { copyAcpConversation } from '../../../../acp/acp-conversation-copy'
-import { acpLaunchSpecFor } from '../../../../acp/acp-launch-specs'
-import type { AcpStructuredConnection } from '../../../../acp/acp-structured-connection'
-import { PI_CWD_BUCKET_LAYOUT } from '../../../../ai-vault/session-cwd-bucket-layouts'
+import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
+import { forkTestSource } from './structured-agent-session-fork.test-fixture'
+import { resolveUncommittedStructuredCreate } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-precommit-refusal'
 import { handleStructuredAgentSessionCreate } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create-handler'
-import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { appendFile, mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
-import {
-  claudeProviderHandle,
-  codexProviderHandle
-} from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionRecordFixture } from '../../../testing/agent-session-record-test-fixture'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'
-import type { StructuredAgentSessionHost } from '../../host/structured-agent-session-host'
 import {
   createRestTestRig,
   type RestTestRig
 } from '../../host/testing/structured-agent-session-rest-test-rig'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
+
 import { setStructuredAgentSessionHost } from '../../host/structured-agent-session-registry'
-import {
-  hostTestMessage,
-  hostTestOperationId
-} from '../../host/testing/structured-agent-session-host-test-data'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
 const COPY = '019e6b26-18e2-7103-b7a0-7ba6bb071124'
@@ -41,295 +26,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function source(agent: 'claude' | 'codex' = 'codex') {
-  let admissions = 0
-  let capability: 'checkpoint' | 'tip' = 'checkpoint'
-  const record = agentSessionRecordFixture({
-    sessionId: 'source-chat',
-    provider: agent,
-    accountHome: {
-      variable: agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
-      path: join(rig.root, 'source-account')
-    },
-    options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
-    permissionMode: 'accept-edits',
-    launchArgs: ['--no-daemon'],
-    launchDirectory: rig.root,
-    providerHandleChain: [
-      {
-        linkId: 'source-head',
-        origin: 'created',
-        mintedAtFence: 1,
-        observedAt: 1,
-        handle:
-          agent === 'claude' ? claudeProviderHandle(SOURCE, 'answer') : codexProviderHandle(SOURCE)
-      }
-    ]
-  })
-  const snapshot: AgentJournalSnapshot = {
-    sessionId: record.sessionId,
-    cursor: { epoch: 'source-epoch', sequence: 5 },
-    submissions: [],
-    items: [
-      {
-        itemId: agentJournalItemKey({
-          provider: 'codex',
-          threadId: SOURCE,
-          turnId: 'completed-turn',
-          ordinal: 0
-        }),
-        sequence: 1,
-        revision: 1,
-        observedAt: 1,
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'Remember the nonce 57319' }]
-        }
-      },
-      {
-        itemId: 'ended-root',
-        sequence: 2,
-        revision: 1,
-        observedAt: 2,
-        body: { kind: 'turn', turnId: 'completed-turn', state: 'completed' }
-      },
-      {
-        itemId: 'selected-response',
-        sequence: 3,
-        revision: 1,
-        observedAt: 3,
-        turnScope: { kind: 'turn', turnItemId: 'ended-root' },
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
-      },
-      {
-        itemId: 'running-root',
-        sequence: 3,
-        revision: 1,
-        observedAt: 3,
-        body: { kind: 'turn', turnId: 'active-turn', state: 'running' }
-      },
-      {
-        itemId: 'ended-child',
-        sequence: 4,
-        revision: 1,
-        observedAt: 4,
-        agentId: 'child',
-        body: { kind: 'turn', turnId: 'child-turn', state: 'completed' }
-      }
-    ]
-  }
-  const copy = vi.fn(
-    async (
-      _input: Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
-    ): ReturnType<NonNullable<StructuredAgentSessionAdapter['copyConversation']>> => {
-      const dir =
-        agent === 'claude'
-          ? join(rig.root, 'source-account', 'projects', 'workspace')
-          : join(rig.root, 'source-account', 'sessions', '2026', '11', '03')
-      await mkdir(dir, { recursive: true })
-      const filePath = join(
-        dir,
-        agent === 'claude' ? `${COPY}.jsonl` : `rollout-2026-11-03T19-00-00-${COPY}.jsonl`
-      )
-      if (agent === 'claude') {
-        await writeFile(
-          filePath,
-          `${[
-            {
-              type: 'user',
-              uuid: 'prompt',
-              parentUuid: null,
-              sessionId: COPY,
-              timestamp: '2026-11-03T19:00:00.000Z',
-              cwd: rig.root,
-              message: { role: 'user', content: 'Remember the nonce 57319' }
-            },
-            {
-              type: 'assistant',
-              uuid: 'answer',
-              parentUuid: 'prompt',
-              sessionId: COPY,
-              timestamp: '2026-11-03T19:00:01.000Z',
-              message: {
-                id: 'msg_answer',
-                role: 'assistant',
-                model: 'claude-opus-5-5',
-                content: [{ type: 'text', text: 'Remembered' }],
-                stop_reason: 'end_turn'
-              }
-            }
-          ]
-            .map((row) => JSON.stringify(row))
-            .join('\n')}\n`
-        )
-        return { sessionId: COPY, filePath }
-      }
-      await writeFile(
-        filePath,
-        `${[
-          {
-            type: 'session_meta',
-            payload: { id: COPY, timestamp: '2026-11-03T19:00:00.000Z', cwd: rig.root }
-          },
-          {
-            type: 'response_item',
-            timestamp: '2026-11-03T19:00:01.000Z',
-            payload: { type: 'message', role: 'user', content: 'Remember the nonce 57319' }
-          }
-        ]
-          .map((row) => JSON.stringify(row))
-          .join('\n')}\n`
-      )
-      return { sessionId: COPY, filePath }
-    }
-  )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation reads only these source/store/adapter facets; destination founding uses the real rig host below.
-  const host = {
-    deps: {
-      store: {
-        selectWritableRecord: () => ({ kind: 'writable' }),
-        requireWritableRecord: () => record,
-        listConversations: () => [],
-        admittedSendCount: () => admissions
-      },
-      agents: { capabilities: () => ({ fork: capability }) },
-      adapter: { copyConversation: copy },
-      logger: { warn: vi.fn() },
-      resolveWorkspacePath: async () => rig.root
-    },
-    journalSnapshot: async () => snapshot
-  } as unknown as StructuredAgentSessionHost
-  const intent = structuredAgentSessionCreateParams({
-    sessionId: `${agent}_independent_child`,
-    agent,
-    worktree: 'id:workspace-1',
-    forkFrom: { sessionId: record.sessionId, throughItemId: 'selected-response' },
-    now: rig.clock.now,
-    randomUuid: () => '00000000-0000-0000-0000-000000000123'
-  })
-  const prepare = () =>
-    prepareStructuredAgentSessionFork({
-      host,
-      sessionId: record.sessionId,
-      throughItemId: 'selected-response',
-      agent,
-      location: record.location,
-      envelope: intent.envelope
-    })
-  return {
-    record,
-    snapshot,
-    copy,
-    host,
-    intent,
-    prepare,
-    admit: () => {
-      admissions++
-    },
-    tip: () => {
-      capability = 'tip'
-      snapshot.items = snapshot.items.filter((item) => item.itemId !== 'running-root')
-    }
-  }
-}
-
-it('keeps captured Codex options over native imported effort through reload and send', async () => {
-  const test = source('codex')
-  test.record.options = { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
-  const copy = test.copy.getMockImplementation()!
-  test.copy.mockImplementationOnce(async (input) => {
-    const result = await copy(input)
-    await appendFile(
-      result.filePath!,
-      `${JSON.stringify({
-        type: 'turn_context',
-        timestamp: '2026-11-03T19:00:01.000Z',
-        payload: {
-          turn_id: 'completed-turn',
-          cwd: rig.root,
-          model: 'gpt-6.1-sol',
-          effort: 'low'
-        }
-      })}\n`
-    )
-    return result
-  })
-  const params = await test.prepare()
-  expect(await rig.host.create({ callerKey: 'device-1' }, params)).toMatchObject({ ok: true })
-  const sessionId = test.intent.envelope.sessionId
-  expect(rig.store.getRecord(sessionId)?.options).toEqual({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: 'false'
-  })
-  expect((await rig.host.readOptions(sessionId)).current).toMatchObject({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: false
-  })
-  await rig.restart()
-  expect(rig.store.getRecord(sessionId)?.options).toEqual({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: 'false'
-  })
-  expect((await rig.host.readOptions(sessionId)).current).toMatchObject({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: false
-  })
-  rig.adapter.acquire.mockImplementation(async (input) => ({
-    acquisitionGeneration: 'fork-generation',
-    process: {
-      hostId: 'local',
-      pid: 4242,
-      processStartTimeMs: rig.clock.now,
-      spawnToken: input.spawnToken
-    },
-    link: {
-      linkId: 'fork-resume',
-      origin: 'resumed',
-      mintedAtFence: input.fence,
-      observedAt: rig.clock.now,
-      handle: codexProviderHandle(COPY)
-    }
-  }))
-  const dispatched =
-    Promise.withResolvers<Parameters<StructuredAgentSessionAdapter['dispatch']>[0]>()
-  rig.adapter.dispatch.mockImplementation(async (input) => {
-    dispatched.resolve(input)
-    return { state: 'unknown', reason: 'test' }
-  })
-  const body = hostTestMessage('Continue with the same settings')
-  expect(
-    await rig.host.send(
-      { callerKey: 'device-1' },
-      {
-        body,
-        envelope: {
-          sessionId,
-          clientOperationId: hostTestOperationId(),
-          expectedRuntimeFence: 1,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.send',
-            sessionId,
-            fields: { body }
-          })
-        }
-      }
-    )
-  ).toMatchObject({ ok: true })
-  expect(await dispatched.promise).toMatchObject({
-    sessionId,
-    executionOptions: { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
-  })
-  expect(rig.adapter.acquire).toHaveBeenCalledWith(
-    expect.objectContaining({
-      options: { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
-    })
-  )
-})
+const source = (agent: 'claude' | 'codex' = 'codex') => forkTestSource(rig, agent)
 
 it('rejects a tip-only copy if a same-head send is admitted during capture', async () => {
   const test = source()
@@ -372,7 +69,7 @@ it('keeps an earlier immutable response available while an unrelated later turn 
       sequence: 5,
       revision: 1,
       observedAt: 5,
-      turnScope: { kind: 'turn', turnItemId: 'running-root' },
+      turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:running-root' },
       body: {
         kind: 'message',
         role: 'assistant',
@@ -381,7 +78,9 @@ it('keeps an earlier immutable response available while an unrelated later turn 
     })
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('keeps a checkpoint copy valid across a same-root source relaunch', async () => {
@@ -400,7 +99,9 @@ it('keeps a checkpoint copy valid across a same-root source relaunch', async () 
     ]
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('refuses a tip copy after its source head relaunches', async () => {
@@ -420,12 +121,14 @@ it('refuses a tip copy after its source head relaunches', async () => {
     ]
     return nativeCopy(input)
   })
-  await expect(test.prepare()).rejects.toMatchObject({
+  const result = await resolveUncommittedStructuredCreate(test.prepare)
+  expect(result).toMatchObject({
     refusal: {
       code: 'agent_session_operation_invalid',
       details: { reason: 'savedConversationMissing' }
     }
   })
+  expect(result).not.toHaveProperty('refusal.createAttemptRefusedBeforeCommit')
 })
 
 it('coalesces concurrent fork create replay and refuses a conflicting fork intent', async () => {
@@ -487,122 +190,129 @@ it('coalesces concurrent fork create replay and refuses a conflicting fork inten
   })
 })
 
-async function prepareImportedAcpTip(stopReason: 'stop' | undefined) {
+it('forks an inherited Codex reply through its original and refuses it after the original rewinds', async () => {
+  const test = source()
+  test.snapshot.items[2]!.itemId = 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1'
+  const first = agentSessionRecordFixture({
+    ...test.record,
+    sessionId: 'first-fork',
+    providerHandleChain: [
+      { ...test.record.providerHandleChain[0]!, handle: codexProviderHandle(COPY) }
+    ],
+    forkedFrom: {
+      sessionId: 'source-chat',
+      itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1',
+      childBoundary: {
+        kind: 'item',
+        itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071124:completed-turn:1'
+      }
+    }
+  })
+  const second = agentSessionRecordFixture({
+    ...first,
+    sessionId: 'second-fork',
+    providerHandleChain: [
+      {
+        ...first.providerHandleChain[0]!,
+        handle: codexProviderHandle('019e6b26-18e2-7103-b7a0-7ba6bb071125')
+      }
+    ],
+    forkedFrom: {
+      sessionId: 'first-fork',
+      itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071124:completed-turn:1',
+      childBoundary: {
+        kind: 'item',
+        itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071125:completed-turn:1'
+      }
+    }
+  })
+  const records = new Map([test.record, first, second].map((record) => [record.sessionId, record]))
+  Object.assign(test.host.deps.store, {
+    getRecord: (id: string) => records.get(id) ?? null,
+    selectWritableRecord: (id: string) => ({ kind: records.has(id) ? 'writable' : 'missing' }),
+    requireWritableRecord: (id: string) => records.get(id)!
+  })
+  test.host.journalSnapshot = async (id) => {
+    if (id === 'source-chat') {
+      return test.snapshot
+    }
+    const thread = id === 'first-fork' ? COPY : '019e6b26-18e2-7103-b7a0-7ba6bb071125'
+    return {
+      ...test.snapshot,
+      sessionId: id,
+      items: test.snapshot.items.map((item) => ({
+        ...item,
+        itemId: item.itemId.replace(SOURCE, thread)
+      }))
+    }
+  }
+  const prepare = () =>
+    prepareStructuredAgentSessionFork({
+      host: test.host,
+      sessionId: 'second-fork',
+      throughItemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071125:completed-turn:1',
+      agent: 'codex',
+      location: test.record.location,
+      envelope: test.intent.envelope
+    })
+  expect((await prepare()).fork).toMatchObject({
+    sessionId: 'source-chat',
+    itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1'
+  })
+  expect(test.copy.mock.calls[0]![0]).toMatchObject({
+    record: { sessionId: 'source-chat' },
+    providerSessionId: '019e6b26-18e2-7103-b7a0-7ba6bb071123',
+    checkpoint: { selectedItemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1' }
+  })
+  const retainedCopies = new Map([
+    ['first-fork', await test.host.journalSnapshot('first-fork')],
+    ['second-fork', await test.host.journalSnapshot('second-fork')]
+  ])
+  test.host.journalSnapshot = async (id) => retainedCopies.get(id) ?? test.snapshot
+  test.snapshot.items = test.snapshot.items.slice(0, 1)
+  expect(await resolveUncommittedStructuredCreate(prepare)).toMatchObject({
+    refusal: {
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'savedConversationMissing' },
+      createAttemptRefusedBeforeCommit: true
+    }
+  })
+  records.delete('source-chat')
+  expect(await resolveUncommittedStructuredCreate(prepare)).toMatchObject({
+    refusal: {
+      code: 'agent_session_identity_required',
+      details: { reason: 'recordMissing' },
+      createAttemptRefusedBeforeCommit: true
+    }
+  })
+})
+
+it('checks an inherited tip against the original and refuses after the original advances', async () => {
   const test = source()
   test.tip()
-  const home = join(rig.root, 'omp-account')
-  const sessions = join(home, 'sessions')
-  const directory = join(sessions, `${PI_CWD_BUCKET_LAYOUT.encodeScopePrefixes(rig.root)[0]}--`)
-  await mkdir(directory, { recursive: true })
-  const transcript = (id: string) =>
-    `${[
-      { type: 'session', version: 3, id, cwd: rig.root },
-      {
-        type: 'message',
-        id: 'prompt',
-        parentId: null,
-        message: { role: 'user', content: 'Remember 57319' }
-      },
-      {
-        type: 'message',
-        id: 'response',
-        parentId: 'prompt',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Remembered' }],
-          stopReason
-        }
-      }
-    ]
-      .map((row) => JSON.stringify(row))
-      .join('\n')}\n`
-  await writeFile(join(directory, `${SOURCE}.jsonl`), transcript(SOURCE))
-  test.record.provider = 'omp'
-  test.record.accountHome = { variable: 'PI_CODING_AGENT_DIR', path: home }
-  test.record.providerHandleChain = [
-    {
-      ...test.record.providerHandleChain[0]!,
-      handle: { transport: 'acp', agent: 'omp', nativeId: SOURCE }
+  const inherited = structuredClone(test.snapshot)
+  test.record.forkedFrom = {
+    sessionId: 'original',
+    itemId: 'legacy:codex:source:selected-response',
+    childBoundary: { kind: 'item', itemId: 'legacy:codex:source:selected-response' }
+  }
+  const original = { ...test.record, sessionId: 'original', forkedFrom: undefined }
+  test.host.deps.store.requireWritableRecord = (id) => (id === 'original' ? original : test.record)
+  test.host.deps.store.getRecord = (id) => (id === 'original' ? original : test.record)
+  test.host.journalSnapshot = async (id) => (id === 'original' ? test.snapshot : inherited)
+  expect((await test.prepare()).fork?.sessionId).toBe('original')
+  test.snapshot.items.push({
+    itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:later-user:0',
+    sequence: 10,
+    revision: 1,
+    observedAt: 10,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'new original prompt' }] }
+  })
+  expect(await resolveUncommittedStructuredCreate(test.prepare)).toMatchObject({
+    refusal: {
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'turnActive' },
+      createAttemptRefusedBeforeCommit: true
     }
-  ]
-  const selected = agentJournalItemKey({
-    provider: 'legacy',
-    agent: 'omp',
-    sessionId: SOURCE,
-    recordId: 'response'
-  })
-  test.snapshot.items = [
-    {
-      itemId: agentJournalItemKey({
-        provider: 'legacy',
-        agent: 'omp',
-        sessionId: SOURCE,
-        recordId: 'prompt'
-      }),
-      sequence: 1,
-      revision: 0,
-      observedAt: 1,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Remember 57319' }] }
-    },
-    {
-      itemId: selected,
-      sequence: 2,
-      revision: 0,
-      observedAt: 2,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
-    }
-  ]
-  const env = { PI_CODING_AGENT_DIR: home, OMP_CODING_AGENT_DIR: sessions }
-  test.host.deps.resolveLaunchEnv = async () => env
-  const spec = acpLaunchSpecFor('omp')!
-  const initialize = vi.fn(async () => ({
-    protocolVersion: 1,
-    agentCapabilities: { sessionCapabilities: { fork: {} } }
-  }))
-  const forkSession = vi.fn(async () => {
-    await writeFile(join(directory, `${COPY}.jsonl`), transcript(COPY))
-    return COPY
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native copy uses only initialize/forkSession/close on its short-lived connection.
-  const connection = {
-    initialize,
-    forkSession,
-    close: async () => true
-  } as unknown as AcpStructuredConnection
-  test.copy.mockImplementation((input) =>
-    copyAcpConversation(
-      {
-        spec,
-        dataDirectory: rig.root,
-        readLaunch: async () => ({
-          spec,
-          command: 'omp',
-          prefixArgs: [],
-          args: ['acp'],
-          cwd: rig.root,
-          env,
-          envToDelete: [],
-          fullAccess: false,
-          resume: null
-        }),
-        connect: () => connection
-      },
-      input,
-      { track: () => {} }
-    )
-  )
-  return prepareStructuredAgentSessionFork({
-    host: test.host,
-    agent: 'omp',
-    sessionId: 'source-chat',
-    throughItemId: selected,
-    location: test.record.location,
-    envelope: test.intent.envelope
-  })
-}
-
-it('refuses an imported ACP tip with assistant prose but no native terminal evidence', async () => {
-  await expect(prepareImportedAcpTip(undefined)).rejects.toMatchObject({
-    refusal: { details: { reason: 'turnActive' } }
   })
 })

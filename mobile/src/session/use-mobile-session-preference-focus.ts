@@ -3,7 +3,7 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { loadTerminalLinkOpenMode, loadTerminalTextScale } from '../storage/preferences'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 
 export function useMobileSessionPreferenceFocus(
   scope: Pick<

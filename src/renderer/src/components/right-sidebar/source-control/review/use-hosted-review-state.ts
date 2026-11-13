@@ -10,6 +10,7 @@ import type {
   HostedReviewCreationRequestState,
   HostedReviewCreationState
 } from './hosted-review-creation-state'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Scope both cached reviews and eligibility so previous-target responses are ignored. */
 export function useSourceControlHostedReviewState({
@@ -33,6 +34,7 @@ export function useSourceControlHostedReviewState({
   linkedPR: number | null
   suppressedGitHubPR: number | null
 }) {
+  const t = useTranslate()
   const [hostedReviewCreationState, setHostedReviewCreationState] =
     useState<HostedReviewCreationState | null>(null)
   const [hostedReviewCreationRequestState, setHostedReviewCreationRequestState] =
@@ -90,7 +92,7 @@ export function useSourceControlHostedReviewState({
   const hostedReviewCreateProvider = resolveHostedReviewCreationProvider(
     hostedReviewCreation?.provider
   )
-  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider, t)
 
   return {
     currentPrFromQueue,

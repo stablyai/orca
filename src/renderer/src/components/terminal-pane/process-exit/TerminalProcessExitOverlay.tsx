@@ -1,6 +1,6 @@
 import { RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PaneProcessExit } from './pane-process-exit'
 
 export function TerminalProcessExitOverlay({
@@ -12,22 +12,20 @@ export function TerminalProcessExitOverlay({
   onRestart: () => void
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const capacityError = processExit.reason === 'git-bash-console-capacity'
   const title = capacityError
-    ? translate(
+    ? t(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityTitle',
         'Git Bash console limit reached'
       )
-    : translate(
-        'auto.components.terminal.pane.TerminalProcessExitOverlay.failedTitle',
-        'Terminal exited'
-      )
+    : t('auto.components.terminal.pane.TerminalProcessExitOverlay.failedTitle', 'Terminal exited')
   const detail = capacityError
-    ? translate(
+    ? t(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityDetail',
         'Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.'
       )
-    : translate(
+    : t(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.failedDetail',
         'The shell process ended with exit code {{code}}. Its output is preserved.'
       ).replace('{{code}}', String(processExit.exitCode))
@@ -45,14 +43,11 @@ export function TerminalProcessExitOverlay({
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             <X />
-            {translate('auto.components.terminal.pane.TerminalProcessExitOverlay.close', 'Close')}
+            {t('auto.components.terminal.pane.TerminalProcessExitOverlay.close', 'Close')}
           </Button>
           <Button type="button" size="sm" onClick={onRestart}>
             <RotateCw />
-            {translate(
-              'auto.components.terminal.pane.TerminalProcessExitOverlay.restart',
-              'Restart'
-            )}
+            {t('auto.components.terminal.pane.TerminalProcessExitOverlay.restart', 'Restart')}
           </Button>
         </div>
       </div>

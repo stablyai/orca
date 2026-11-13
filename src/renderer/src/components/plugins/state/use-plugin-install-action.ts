@@ -3,12 +3,12 @@ import { toast } from 'sonner'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
 import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
-import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
+import { confirmPluginInstallTrust } from '@/store/plugins/installation/plugin-install-trust-request'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { applyPluginThemesNow } from './plugin-theme-apply'
 import { pluginTryAction } from './plugin-try-action'

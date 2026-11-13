@@ -9,7 +9,7 @@ import { projectTurnItemEvent } from '../history/structured-agent-session-turn-i
 import { requireInstalledStructuredHost as requireInstalledHost } from '../creation/structured-agent-session-gate'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
 import { structuredAgentSessionSubscriptionId as subscriptionIdFor } from './structured-agent-session-subscription-id'
-import { SubscribeParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
+import { SubscribeParams } from '../../../../../../shared/rpc-contract/structured-agent-session-subscribe-params'
 import * as queuedImages from '../attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
 
@@ -18,7 +18,9 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   permission: 'workspace',
   params: SubscribeParams,
   handler: async (params, ctx, emitFrame) => {
-    const emit = params.capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame) : emitFrame
+    const { capabilities } = params
+    const emit =
+      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
     const host = await requireInstalledHost(ctx, params.sessionId)
     const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
     // A stream reads; it never keeps an agent alive or starts one.
@@ -47,6 +49,18 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
             ctx
           )
         ),
+      end: (cause) => {
+        if (stream.isClosed()) {
+          return
+        }
+        console.warn('[agent-session] ending stream after a failed frame', params.sessionId, cause)
+        try {
+          emitFrame({ type: 'end' })
+        } catch {
+          // The transport is gone; releasing the stream below is all that is left to do.
+        }
+        stream.close()
+      },
       ...(params.cursor ? { cursor: params.cursor } : {}),
       snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
       // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.

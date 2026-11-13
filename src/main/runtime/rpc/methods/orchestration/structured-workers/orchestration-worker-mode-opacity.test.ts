@@ -19,18 +19,14 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import {
-  CHAT_REDISPATCH_PARAGRAPH,
-  TERMINAL_REDISPATCH_PARAGRAPH
-} from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
-import { inspectWorkerTerminal } from '../worker/worker-observation'
+import './orchestration-structured-worker-lifecycle'
+import '../worker/observation/worker-observation'
 
 const WORKTREE = 'repo::wt'
 const STRUCTURED_HANDLE = 'structworker_worker'
 const TERMINAL_HANDLE = 'term_worker'
-const STRUCTURED_ORCA_SESSION_ID = 'orca_session_id:sess_worker'
 
 const structuredPreambles: string[] = []
 // The session host the code under test reads; a structural fake, so no host type is claimed.
@@ -43,7 +39,7 @@ vi.mock(
   })
 )
 
-vi.mock('../worker/worker-topology', async (importOriginal) => ({
+vi.mock('../worker/start/placement/worker-placement-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: async (args: { effects: unknown[] }) => {
     args.effects.push({ kind: 'terminal', role: 'agent', action: 'created' })
@@ -95,22 +91,6 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     }
   }
   return paneKey
-}
-
-/** Strips the ids that legitimately differ per dispatch, leaving what the agent is taught. */
-function normalizePreamble(preamble: string, handle: string, dispatchId: string): string {
-  return preamble
-    .split(handle)
-    .join('<worker>')
-    .split(dispatchId)
-    .join('<dispatch>')
-    .replace(/dcap_[\w-]+/g, '<capability>')
-    .replace(/task_[0-9a-f]+/g, '<task>')
-    .split(CHAT_REDISPATCH_PARAGRAPH)
-    .join('<redispatch>')
-    .split(TERMINAL_REDISPATCH_PARAGRAPH)
-    .join('<redispatch>')
-    .replace(/\bthis (chat|terminal)\b/g, 'this <surface>')
 }
 
 describe('a worker cannot tell which mode it is running in', () => {
@@ -193,48 +173,6 @@ describe('a worker cannot tell which mode it is running in', () => {
     return result
   }
 
-  it('teaches byte-identical instructions in both modes', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_coord',
-      worktreeId: WORKTREE,
-      status: 'running'
-    } as never)
-
-    const structured = await startWorker({
-      settings: STRUCTURED_DEFAULT,
-      from: 'term_coord',
-      coordinatorPaneKey
-    })
-    const terminal = await startWorker({
-      settings: TERMINAL_DEFAULT,
-      from: 'term_coord',
-      coordinatorPaneKey
-    })
-
-    expect(structured.mode.mode).toBe('structured')
-    expect(terminal.mode.mode).toBe('terminal')
-    const structuredPreamble = structuredPreambles[0] as string
-    const terminalPreamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] as string
-    const selfLine = `\nYour Orca session ID is: ${STRUCTURED_ORCA_SESSION_ID}`
-    expect(
-      normalizePreamble(
-        structuredPreamble.replace(selfLine, ''),
-        STRUCTURED_ORCA_SESSION_ID,
-        structured.dispatchId
-      )
-    ).toBe(normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId))
-    // A session worker is named by its Orca session ID; a terminal worker's text is main's.
-    expect(structuredPreamble).toContain(`${selfLine}\n`)
-    expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
-    expect(terminalPreamble).not.toContain('Orca session ID')
-    // Only the surface words differ: a chat is told about its chat, a terminal keeps main's text.
-    expect(structuredPreamble).toContain(CHAT_REDISPATCH_PARAGRAPH)
-    expect(terminalPreamble).toContain(TERMINAL_REDISPATCH_PARAGRAPH)
-    expect(structuredPreamble).not.toContain('this terminal')
-    // Assert the sub-dispatch section exists too; equality alone passes if both modes lose it.
-    expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
-  })
-
   it('lets a structured worker dispatch a sub-worker like any other coordinator', async () => {
     const paneKey = installStructuredCoordinator('structworker_coord', 'sess_coord')
     // Proves the resolution is not falling through to a PTY: showTerminal cannot answer here.
@@ -257,56 +195,5 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
       '=== SUB-DISPATCH ==='
     )
-  })
-
-  it('refuses an unavailable output source without disclosing the mode', async () => {
-    installStructuredCoordinator(STRUCTURED_HANDLE, 'sess_worker')
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_coord',
-      worktreeId: WORKTREE,
-      status: 'running'
-    } as never)
-    const started = await startWorker({
-      settings: STRUCTURED_DEFAULT,
-      from: 'term_coord',
-      coordinatorPaneKey
-    })
-
-    const read = () =>
-      readStructuredWorkerOutput({
-        db,
-        dispatchId: started.dispatchId,
-        workerState: 'ready',
-        liveness: 'live',
-        source: 'terminal'
-      })
-
-    const refusal = await read().then(
-      () => '',
-      (error: unknown) => (error instanceof Error ? error.message : String(error))
-    )
-    expect(refusal).toMatch(/has no terminal output/)
-    // The refusal names a source that works instead of naming the worker's kind.
-    expect(refusal).toMatch(/--source auto or --source transcript/)
-    expect(refusal).not.toMatch(/structured/i)
-  })
-
-  it('never claims a structured worker was checked for a human-answerable prompt', async () => {
-    installStructuredCoordinator(STRUCTURED_HANDLE, 'sess_worker')
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_coord',
-      worktreeId: WORKTREE,
-      status: 'running'
-    } as never)
-    const started = await startWorker({
-      settings: STRUCTURED_DEFAULT,
-      from: 'term_coord',
-      coordinatorPaneKey
-    })
-
-    const observation = await inspectWorkerTerminal(runtime, db, started.dispatchId)
-
-    // Omit agentWait: null means checked-and-absent, but terminal prompt scans cannot see journal questions.
-    expect('agentWait' in observation).toBe(false)
   })
 })

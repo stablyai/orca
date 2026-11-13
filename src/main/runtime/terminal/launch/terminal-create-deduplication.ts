@@ -5,7 +5,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { Repo } from '../../../../shared/repo-types'
 
 import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../workspaces/creation/worktree-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'

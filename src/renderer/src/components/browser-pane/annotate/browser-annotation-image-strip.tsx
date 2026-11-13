@@ -1,5 +1,5 @@
-import { NativeChatImageAttachmentPreview } from '@/components/native-chat/NativeChatImageAttachmentPreview'
-import type { NativeChatComposerImageAttachment } from '@/components/native-chat/NativeChatComposerField'
+import { NativeChatImageAttachmentPreview } from '@/components/native-chat/attachments/chips/NativeChatImageAttachmentPreview'
+import type { NativeChatComposerImageAttachment } from '@/components/native-chat/attachments/chips/native-chat-image-attachment'
 
 export function BrowserAnnotationImageStrip({
   images,

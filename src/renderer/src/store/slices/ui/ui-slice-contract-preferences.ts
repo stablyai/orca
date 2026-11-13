@@ -1,12 +1,15 @@
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../../shared/agents-view-thread-filters'
+import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
-  ThreadReadFilter,
   WorktreeCardMode,
   WorktreeCardProperty,
   WorkspaceHostOrder,
@@ -14,14 +17,14 @@ import type {
   VisibleWorkspaceHostIds
 } from '../../../../../shared/ui-chrome-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import type { AutomationHostFilter } from '../../../../../shared/automation-host-filter'
+import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
 import type { CustomPet } from '../../../../../shared/pet-types'
 import type { ReleaseChannel } from '../../../../../shared/release-channel'
 import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 
 export type UISlicePreferences = {
@@ -123,6 +126,8 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  statusBarUsageFormat: StatusBarUsageFormat
+  setStatusBarUsageFormat: (format: StatusBarUsageFormat) => void
 }
 
 export type UISliceSurfaces = {

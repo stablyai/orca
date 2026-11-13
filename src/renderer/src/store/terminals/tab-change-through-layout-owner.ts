@@ -1,5 +1,8 @@
 import type { Tab } from '../../../../shared/tab-types'
-import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
+import {
+  sendLayoutApply,
+  type WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 

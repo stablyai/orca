@@ -5,12 +5,7 @@ import {
   resetAgentCompletionCoordinatorIdentitiesForTest,
   getAgentCompletionCoordinatorIdentityCountForTest
 } from './agent-completion-identity-store'
-import type {
-  AgentCompletionCoordinatorOptions,
-  AgentCompletionStatusSnapshot
-} from './agent-completion-coordinator-types'
-
-const HOOK_DONE_QUIET_MS = 1_500
+import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
 function makeOptions(paneKey: string, live: { value: boolean }): AgentCompletionCoordinatorOptions {
   return {
@@ -22,28 +17,6 @@ function makeOptions(paneKey: string, live: { value: boolean }): AgentCompletion
   }
 }
 
-// Complete a stamped working→done turn to populate the shared identity map.
-function driveCompletion(
-  paneKey: string,
-  live: { value: boolean }
-): ReturnType<typeof createAgentCompletionCoordinator> {
-  const coordinator = createAgentCompletionCoordinator(makeOptions(paneKey, live))
-  coordinator.observeHookStatus({
-    state: 'working',
-    prompt: '',
-    agentType: 'codex',
-    stateStartedAt: 1000
-  } as AgentCompletionStatusSnapshot)
-  coordinator.observeHookStatus({
-    state: 'done',
-    prompt: '',
-    agentType: 'codex',
-    stateStartedAt: 2000
-  } as AgentCompletionStatusSnapshot)
-  vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
-  return coordinator
-}
-
 describe('agent completion coordinator identity map stays bounded (leak regression)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -53,49 +26,6 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
   afterEach(() => {
     resetAgentCompletionCoordinatorIdentitiesForTest()
     vi.useRealTimers()
-  })
-
-  it('writes an identity on completion and clears it on genuine teardown', () => {
-    const live = { value: true }
-    const coordinator = driveCompletion('tab-1:leaf-x', live)
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
-
-    live.value = false
-    coordinator.dispose()
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
-  })
-
-  it('retains the identity across a live remount (dispose while still live)', () => {
-    // Retain identity across remount while the same pane stream stays live.
-    const live = { value: true }
-    const coordinator = driveCompletion('tab-1:leaf-remount', live)
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
-
-    coordinator.dispose() // isLive() still true -> remount, not teardown
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
-  })
-
-  it('clears per-coordinator working boundaries on reset and dispose', () => {
-    const live = { value: true }
-    const coordinator = createAgentCompletionCoordinator(
-      makeOptions('tab-1:leaf-working-boundary', live)
-    )
-    const working = {
-      state: 'working' as const,
-      prompt: '',
-      agentType: 'claude' as const,
-      stateStartedAt: 1_000
-    }
-
-    coordinator.observeHookStatus(working)
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
-    coordinator.resetCompletionState()
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
-
-    coordinator.observeHookStatus(working)
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
-    coordinator.dispose()
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
   })
 
   it('retains stamped replay state when a mounted sibling disposes before remount', () => {

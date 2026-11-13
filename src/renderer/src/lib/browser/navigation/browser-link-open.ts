@@ -2,21 +2,26 @@ import { focusOpenedBrowserLink } from './browser-link-focus'
 import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { createBrowserLinkHostMatcher } from './browser-link-owner'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
-import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import { activateBrowserWorkspaceTab } from '../workspace/browser-workspace-tab-activation'
 import {
   browserLinkPageMatches,
   currentBrowserLinkMatch,
   browserOpenResultForPage,
-  selectBrowserLinkDestination,
-  type BrowserLinkDestination,
-  type BrowserLinkOpenContext,
-  type BrowserOpenOutcome
+  selectBrowserLinkDestination
 } from './browser-link-destination'
-import { isLiveLinkOpenGroup } from '../../link-open-intent'
-import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import type {
+  BrowserLinkDestination,
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from './browser-link-destination'
+import { isLiveLinkOpenGroup } from '../../links/placement/link-open-intent'
+import {
+  afterPendingEntityTabs,
+  hasPendingEntityTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { captureBrowserLinkReveal } from './browser-link-reveal'
+import type { AppState } from '@/store/types'
+import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 
 export class BrowserLinkPlacementRefused extends Error {}
 

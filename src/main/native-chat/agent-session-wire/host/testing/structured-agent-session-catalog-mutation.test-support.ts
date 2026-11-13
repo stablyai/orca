@@ -1,4 +1,4 @@
-import { resolveHiddenProbeCwd } from '../../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../../lib/hidden-probe-cwd'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'

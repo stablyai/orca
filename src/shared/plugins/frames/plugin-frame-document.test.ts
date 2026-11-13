@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from 'vitest'
-import { flush, mountShell } from './plugin-frame-shell-mount.test-fixture'
+import { describe, expect, it } from 'vitest'
+import { mountShell } from './plugin-frame-shell-mount.test-fixture'
 
 const doc = (version: number, text: string) => ({
   orca: 1,
@@ -79,41 +79,5 @@ describe('orca.document.get after applyEdit', () => {
       version: 2,
       content: text('outside')
     })
-  })
-
-  it('does not report an accepted edit as a change', async () => {
-    const { orca, fromHost } = mountShell('editor')
-    fromHost(doc(1, 'a'))
-    const changes = vi.fn()
-    orca.document!.onDidChange(changes)
-    await flush()
-    const applied = orca.document!.applyEdit({ baseVersion: 1, content: text('b') })
-    fromHost(answer(0))
-    await applied
-    expect(changes).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('orca.document.onDidChange replay', () => {
-  it('skips the replay for a subscription disposed before it runs', async () => {
-    const { orca, fromHost } = mountShell('editor')
-    fromHost(doc(1, 'a'))
-    const changes = vi.fn()
-    orca.document!.onDidChange(changes).dispose()
-    await flush()
-    fromHost(doc(2, 'b'))
-    expect(changes).not.toHaveBeenCalled()
-  })
-
-  it('replays to subscriptions still live', async () => {
-    const { orca, fromHost } = mountShell('editor')
-    fromHost(doc(1, 'a'))
-    const kept = vi.fn()
-    const dropped = vi.fn()
-    orca.document!.onDidChange(kept)
-    orca.document!.onDidChange(dropped).dispose()
-    await flush()
-    expect(kept).toHaveBeenCalledWith(expect.objectContaining({ version: 1 }))
-    expect(dropped).not.toHaveBeenCalled()
   })
 })

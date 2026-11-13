@@ -9,7 +9,7 @@ import {
   withProviderNaming
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-naming'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { scheduleNativeChatVisualsSweep } from '../../../native-chat/native-chat-visuals-sweep'
+import { scheduleNativeChatVisualsSweep } from '../../../native-chat/conversation-files/native-chat-visuals-sweep'
 import type { InstalledRuntime } from '../structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from '../records/agent-session-recovery-capsule'
 import type { OpenedAgentSessionRecordStore } from '../records/agent-session-record-store-slot'
@@ -25,6 +25,7 @@ import { createStructuredAgentSessionDispatchFollowUps } from '../structured-age
 import type { CatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { observePRWatchCommittedRows } from '../pr-watch-runtime'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -82,6 +83,7 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+    observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
@@ -112,41 +114,49 @@ export async function installOnJournal(
       onState: delivery.reconcile
     })
   }
-  if (deps.onTurnAttention) {
-    const installed = host
-    const onTurnAttention = deps.onTurnAttention
-    installed.subscribeTurnCompletions({
-      id: 'host-turn-attention',
-      includePrompts: true,
-      emit: (event) => onTurnAttention(event, installed.readStatusSummary)
-    })
-  }
-  // Prewarm catalogs at runtime start for local and remote hosts.
-  const modelCatalog = host.deps.modelCatalog
-  installAgentSessionAttachments({
-    stateDirectory: deps.stateDirectory,
-    store,
-    journalDatabase,
-    logger: deps.logger
-  })
-  const stopVisualsSweep = deps.nativeChatVisuals
-    ? scheduleNativeChatVisualsSweep({
-        stateDirectory: deps.stateDirectory,
-        listHeldSessionIds: () => (store.readOnly ? null : store.listHeldSessionIds()),
-        logger: deps.logger
-      })
-    : undefined
-  const stopCommands = bindAtRestCommandContexts(
-    registrations.map(({ adapter }) => adapter.atRestCommands)
-  )
+  let turnAttention:
+    | ReturnType<NonNullable<StructuredAgentSessionRuntimeDeps['createTurnAttention']>>
+    | undefined
+  let stopTurnAttention: (() => void) | undefined
+  let stopVisualsSweep: (() => void) | undefined
+  let stopCommands: (() => void) | undefined
   let detachCatalog: (() => void) | undefined
   try {
+    turnAttention = deps.createTurnAttention?.()
+    if (turnAttention) {
+      const installed = host
+      const onTurnAttention = turnAttention.onTurnAttention
+      stopTurnAttention = installed.subscribeTurnCompletions({
+        id: 'host-turn-attention',
+        includePrompts: true,
+        emit: (event) => onTurnAttention(event, installed.readStatusSummary)
+      })
+    }
+    installAgentSessionAttachments({
+      stateDirectory: deps.stateDirectory,
+      store,
+      journalDatabase,
+      logger: deps.logger
+    })
+    stopVisualsSweep = deps.nativeChatVisuals
+      ? scheduleNativeChatVisualsSweep({
+          stateDirectory: deps.stateDirectory,
+          listHeldSessionIds: () => (store.readOnly ? null : store.listHeldSessionIds()),
+          logger: deps.logger
+        })
+      : undefined
+    stopCommands = bindAtRestCommandContexts(
+      registrations.map(({ adapter }) => adapter.atRestCommands)
+    )
     detachCatalog = catalogOwner.attach({ store, host })
-    void modelCatalog?.prewarm()
+    void host.deps.modelCatalog?.prewarm()
     setStructuredAgentSessionHost(host)
+    turnAttention?.start()
   } catch (error) {
+    turnAttention?.stop()
+    stopTurnAttention?.()
     detachCatalog?.()
-    stopCommands()
+    stopCommands?.()
     stopVisualsSweep?.()
     await providerNaming.stop()
     throw error
@@ -157,9 +167,11 @@ export async function installOnJournal(
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
+      turnAttention?.stop()
+      stopTurnAttention?.()
       const namingStopped = providerNaming.stop()
       detachCatalog?.()
-      stopCommands()
+      stopCommands?.()
       stopVisualsSweep?.()
       return namingStopped
     }

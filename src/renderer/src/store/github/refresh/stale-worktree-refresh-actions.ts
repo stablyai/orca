@@ -2,11 +2,11 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
+import { rightSidebarShowsPullRequestData } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { issueCacheKey } from '../cache/cache-identity'
 import { CACHE_TTL } from '../cache/cache-policy'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
-import { selectWorktreesByRepo } from '../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 export const createStaleWorktreeRefreshActions = (
   get: Parameters<StateCreator<AppState>>[1]

@@ -9,7 +9,7 @@ import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
-} from '../runtime/sync-runtime-graph'
+} from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
 
 /** Keeps the mobile runtime graph republished as the store's session-visible state changes. */

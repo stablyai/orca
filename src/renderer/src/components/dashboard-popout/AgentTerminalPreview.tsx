@@ -1,6 +1,4 @@
-import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ITheme, Terminal } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
@@ -13,27 +11,25 @@ import {
   previewAdvertisesKittyKeyboard
 } from './preview-terminal-options'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
-import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
-import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { usePluginFontReady } from '@/store/plugin-fonts'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal/appearance/terminal-theme'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
-import {
-  openStandaloneTerminal,
-  type StandaloneTerminal
-} from '../standalone-terminal/open-standalone-terminal'
-import type { TerminalPreviewDataPayload } from '../../../../shared/terminal/replay/terminal-preview'
+import { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
+import type { StandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
 import { terminalPreviewApiFor } from './terminal-preview-api'
-
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import {
-  closeLinkActionRequest,
-  type LinkActionRequest
-} from '@/components/link-actions/link-action-request'
+import { closeLinkActionRequest } from '@/components/link-actions/link-action-request'
+import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import { installDashboardPreviewLinkInteraction } from './dashboard-preview-link-interaction'
+import { useTranslate } from '@/i18n/use-translate'
+import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
+import type { ITheme, Terminal } from '@xterm/xterm'
+import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
+import type { TerminalPreviewDataPayload } from '../../../../shared/terminal/replay/terminal-preview'
 import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
@@ -64,6 +60,7 @@ export function AgentTerminalPreview({
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const [linkRequest, setLinkRequest] = useState<LinkActionRequest | null>(null)
@@ -383,7 +380,7 @@ export function AgentTerminalPreview({
       ) : null}
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ ptyId })}
+          {terminalPreviewUnavailableMessage({ ptyId }, t)}
         </div>
       ) : null}
       <div

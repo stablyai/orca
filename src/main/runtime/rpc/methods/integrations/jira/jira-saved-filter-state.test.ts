@@ -1,5 +1,4 @@
 import { MOBILE_RPC_METHOD_ROUTES } from '../../../server/runtime-rpc-mobile-method-routing'
-import '../../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../../../shared/constants'
 import type { PersistedUIState } from '../../../../../../shared/persisted-ui-state-types'
@@ -77,11 +76,6 @@ describe('Jira saved-filter runtime UI state', () => {
     ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(updateUIState).not.toHaveBeenCalled()
   })
-})
-
-it('routes mobile saved-filter persistence to the execution host', () => {
-  expect(MOBILE_RPC_METHOD_ROUTES.get('ui.getJiraSavedFilters')).toBe('execution-host')
-  expect(MOBILE_RPC_METHOD_ROUTES.get('ui.mutateJiraSavedFilters')).toBe('execution-host')
 })
 
 it('persists quick filters on the execution host without rewriting saved JQL or resume fields', async () => {

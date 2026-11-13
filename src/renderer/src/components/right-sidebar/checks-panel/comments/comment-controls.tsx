@@ -17,29 +17,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../../shared/source-control/review-comments/pr-comment-audience'
-import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
+import { setPRBotAuthorOverride } from '@/lib/source-control/review/pr-bot-author-overrides'
 import { normalizePRCommentAuthorLogin } from '../../../../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function CopyButton({
   text,
-  title = translate(
-    'auto.components.right.sidebar.checks.panel.content.copyComment',
-    'Copy comment'
-  )
+  title: titleOverride
 }: {
   text: string
   title?: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  const title =
+    titleOverride ??
+    t('auto.components.right.sidebar.checks.panel.content.copyComment', 'Copy comment')
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   // Clipboard IPC may settle after unmount; do not start a reset timer then.
@@ -101,6 +102,7 @@ export function ResolveButton({
   isResolved: boolean
   onResolve: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [loading, setLoading] = useState(false)
   // Why: the optimistic move remounts this button in the other section, losing local loading state.
   const inFlight = useAppStore((s) => isReviewThreadResolutionInFlight(s, threadId))
@@ -142,11 +144,8 @@ export function ResolveButton({
           onClick={handleClick}
         >
           {isResolved
-            ? translate(
-                'auto.components.right.sidebar.checks.panel.content.365254cc1b',
-                'Unresolve'
-              )
-            : translate('auto.components.right.sidebar.checks.panel.content.0c96cd25e5', 'Resolve')}
+            ? t('auto.components.right.sidebar.checks.panel.content.365254cc1b', 'Unresolve')
+            : t('auto.components.right.sidebar.checks.panel.content.0c96cd25e5', 'Resolve')}
         </button>
       )}
     </span>
@@ -216,6 +215,7 @@ export function CommentMoreMenu({
   onDelete?: () => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const authorLogin = normalizePRCommentAuthorLogin(comment.author)
   const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
   // Offer the bot override only for authors heuristics miss or users already overrode.
@@ -234,11 +234,11 @@ export function CommentMoreMenu({
         <button
           type="button"
           className="shrink-0 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-accent hover:text-foreground"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.checks.panel.content.74c6885b8a',
             'More comment actions'
           )}
-          title={translate('auto.components.right.sidebar.checks.panel.content.1abb17aac9', 'More')}
+          title={t('auto.components.right.sidebar.checks.panel.content.1abb17aac9', 'More')}
           onClick={(event) => event.stopPropagation()}
         >
           <MoreHorizontal className="size-3" />
@@ -248,20 +248,14 @@ export function CommentMoreMenu({
         {hasQueue ? (
           <DropdownMenuItem onSelect={() => onQueueForAgent?.()}>
             <Sparkles />
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
-              'Queue for agent'
-            )}
+            {t('auto.components.right.sidebar.checks.panel.content.f8a2c91d04', 'Queue for agent')}
           </DropdownMenuItem>
         ) : null}
         {hasQueue && (hasGoToComment || hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
         {hasGoToComment && (
           <DropdownMenuItem onSelect={() => openAppHttpLink(comment.url)}>
             <ExternalLink />
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.d3923d18fe',
-              'Go to comment'
-            )}
+            {t('auto.components.right.sidebar.checks.panel.content.d3923d18fe', 'Go to comment')}
           </DropdownMenuItem>
         )}
         {hasGoToComment && (hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
@@ -273,13 +267,13 @@ export function CommentMoreMenu({
             }}
           >
             <Pencil />
-            {translate('auto.components.right.sidebar.checks.panel.content.03ca88f623', 'Edit')}
+            {t('auto.components.right.sidebar.checks.panel.content.03ca88f623', 'Edit')}
           </DropdownMenuItem>
         ) : null}
         {hasDelete ? (
           <DropdownMenuItem variant="destructive" onSelect={() => void onDelete?.()}>
             <Trash />
-            {translate('auto.components.right.sidebar.checks.panel.content.6cc6eace26', 'Delete')}
+            {t('auto.components.right.sidebar.checks.panel.content.6cc6eace26', 'Delete')}
           </DropdownMenuItem>
         ) : null}
         {hasMarkAsBot ? (
@@ -290,11 +284,11 @@ export function CommentMoreMenu({
             >
               <Bot />
               {isOverriddenBot
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.checks.panel.content.b3195cba33',
                     'Unmark author as bot'
                   )
-                : translate(
+                : t(
                     'auto.components.right.sidebar.checks.panel.content.f588b46a6c',
                     'Mark author as bot'
                   )}
@@ -322,7 +316,8 @@ export function QueueForAgentButton({
   className?: string
   onQueueForAgent: () => void
 }): React.JSX.Element {
-  const label = translate(
+  const t = useTranslate()
+  const label = t(
     'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
     'Queue for agent'
   )
@@ -341,7 +336,7 @@ export function QueueForAgentButton({
       }}
     >
       <Sparkles className="size-3 shrink-0" />
-      {translate('auto.components.right.sidebar.checks.panel.content.a7f0c7e8d1', 'Queue')}
+      {t('auto.components.right.sidebar.checks.panel.content.a7f0c7e8d1', 'Queue')}
     </button>
   )
 }
@@ -355,17 +350,18 @@ export function PRCommentActionBadge({
   isQueued: boolean
   presentation: PRCommentPresentationClasses
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (isQueued) {
     return (
       <span className={presentation.statusBadgeQueued}>
-        {translate('auto.components.right.sidebar.checks.panel.content.b4e8a1c902', 'Queued')}
+        {t('auto.components.right.sidebar.checks.panel.content.b4e8a1c902', 'Queued')}
       </span>
     )
   }
   if (actionState === 'resolved') {
     return (
       <span className={presentation.statusBadgeResolved}>
-        {translate('auto.components.right.sidebar.checks.panel.content.8987d5a3dd', 'Resolved')}
+        {t('auto.components.right.sidebar.checks.panel.content.8987d5a3dd', 'Resolved')}
       </span>
     )
   }

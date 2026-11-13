@@ -1,3 +1,4 @@
+import { heldLaunchConfig } from '../launch/launch-evidence'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
@@ -23,7 +24,7 @@ import {
   type ActiveWorkspaceContext,
   type PairedWorkspaceContextSource
 } from './active-worktree-context-fallback'
-import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
+import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -38,7 +39,7 @@ import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
+import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
@@ -64,8 +65,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined>
 
   abstract getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus>
-
-  protected abstract getLeafKey(tabId: string, leafId: string): string
 
   protected abstract getPtyRecordForPaneKey(
     paneKey: string,
@@ -172,6 +171,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`, scope)
         return {
           worktreeId: resolved.id,
+          ...(resolved.identity ? { identityKey: resolved.identity.key } : {}),
           path: resolved.git.path,
           branch: resolved.git.branch,
           displayName: resolved.displayName
@@ -200,9 +200,10 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     let connectionId: string | null | undefined
     let launchToken: string | null | undefined
     let wslDistro: string | undefined
+    let pty: RuntimePtyWorktreeRecord | undefined
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
-      const pty = this.ptysById.get(ptyId)
+      pty = this.ptysById.get(ptyId)
       connectionId = pty?.connectionId ?? null
       launchToken = pty?.launchToken ?? null
       // A WSL pane's PTY is local, so its hook events only match once the distro is supplied.
@@ -212,7 +213,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
     }
-    return selectExactWorkerProviderSession({
+    const session = selectExactWorkerProviderSession({
       paneKey,
       processIncarnation,
       connectionId,
@@ -221,6 +222,8 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
     })
+    const launchConfig = session ? heldLaunchConfig(pty, session.agent) : undefined
+    return session && launchConfig ? { ...session, launchConfig } : session
   }
 
   resolveOrchestrationAgentLauncher(

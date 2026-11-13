@@ -161,8 +161,9 @@ function createStubRequest(
 }
 
 const MANAGED_COMMAND = "/bin/sh '/tmp/orca/codex-hook.sh'"
-// Allow loaded hosts to start the supervisor and stub before the spawn-time deadline expires.
-const STUB_START_DEADLINE_MS = 8_000
+// Allow loaded hosts to start the supervisor and stub before the spawn-time deadline expires
+// (they arm in well under 100ms on a loaded dev host; this is ~50x that).
+const STUB_START_DEADLINE_MS = 5_000
 
 function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
   return { key, command: MANAGED_COMMAND, currentHash: `sha256:hash-of-${key}`, trustStatus }

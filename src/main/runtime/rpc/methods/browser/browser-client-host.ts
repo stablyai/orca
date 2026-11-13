@@ -2,7 +2,7 @@ import '../../../../../shared/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-} from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { BrowserClientPageMetadataParams } from '../../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import {
   BROWSER_CLIENT_HOST_REQUEST_CAPABILITY,
@@ -11,8 +11,10 @@ import {
 import {
   BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
   BrowserClientHostAttachParams,
+  BrowserClientHostCommandResultChunkParams,
   BrowserClientHostCommandResultParams
 } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD } from '../../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserError } from '../../../../browser/browser-error'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
@@ -20,7 +22,7 @@ import { adoptRuntimeBrowserClientPagesFromInventory } from '../../../browser/cl
 import { recoverUnavailableRuntimeBrowserClientPages } from '../../../browser/client-pages/runtime-browser-client-page-recovery'
 import { releaseRuntimeBrowserClientPageRecord } from '../../../browser/client-pages/runtime-browser-client-page-release'
 import { getBrowserHostRequestRegistry } from '../../../browser-host/leases/browser-host-request-registry'
-import { defineMethod, defineStreamingMethod } from '../../core'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 
 export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
@@ -169,33 +171,23 @@ export const BROWSER_CLIENT_HOST_METHODS = [
     name: 'browser.clientHost.commandResult',
     permission: 'workspace',
     params: BrowserClientHostCommandResultParams,
-    handler: (
-      params,
-      { runtime, pairedDeviceId, connectionId, clientKind, clientCapabilities }
-    ) => {
-      if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
-        throw new Error('authenticated_browser_client_host_required')
-      }
-      if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
-        throw new Error('browser_client_host_capability_required')
-      }
-      if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
-        throw new BrowserError(
-          BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
-          BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
-        )
-      }
-      const accepted = getBrowserHostLeaseRegistry(runtime).settleClientPageCommand(
-        {
-          authorityEpoch: params.authorityEpoch,
-          browserHostClientId: params.browserHostClientId,
-          browserHostGeneration: params.browserHostGeneration,
-          pairedDeviceId,
-          connectionId
-        },
+    handler: (params, context) => {
+      const accepted = getBrowserHostLeaseRegistry(context.runtime).settleClientPageCommand(
+        requireCommandResultIdentity(params, context),
         params
       )
       return { accepted }
+    }
+  }),
+  defineMethod({
+    name: BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD,
+    permission: 'workspace',
+    params: BrowserClientHostCommandResultChunkParams,
+    handler: (params, context) => {
+      getBrowserHostLeaseRegistry(context.runtime)
+        .requireCommandResultLedger(requireCommandResultIdentity(params, context))
+        .stageResultChunk(params)
+      return { accepted: true }
     }
   }),
   defineMethod({
@@ -256,3 +248,37 @@ export const BROWSER_CLIENT_HOST_METHODS = [
     }
   })
 ]
+
+function requireCommandResultIdentity(
+  params: {
+    authorityRuntimeId: string
+    authorityEpoch: string
+    browserHostClientId: string
+    browserHostGeneration: number
+  },
+  context: Pick<
+    RpcContext,
+    'runtime' | 'pairedDeviceId' | 'connectionId' | 'clientKind' | 'clientCapabilities'
+  >
+) {
+  const { runtime, pairedDeviceId, connectionId, clientKind, clientCapabilities } = context
+  if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
+    throw new Error('authenticated_browser_client_host_required')
+  }
+  if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
+    throw new Error('browser_client_host_capability_required')
+  }
+  if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
+    throw new BrowserError(
+      BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
+      BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
+    )
+  }
+  return {
+    authorityEpoch: params.authorityEpoch,
+    browserHostClientId: params.browserHostClientId,
+    browserHostGeneration: params.browserHostGeneration,
+    pairedDeviceId,
+    connectionId
+  }
+}

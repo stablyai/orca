@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../../node-bounded-file-reader'
-import { writeSecureJsonFile } from '../../../secure-file'
+import { readNodeFileSyncWithinLimit } from '../../../file-content/node-bounded-file-reader'
+import { writeSecureJsonFile } from '../../../secure-storage/secure-file'
 import type { PairedE2EEV2LatchStore } from '../paired-e2ee-framing-policy'
 
 export type NodeE2EEV2HostLatchStore = PairedE2EEV2LatchStore & {

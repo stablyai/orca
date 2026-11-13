@@ -1,21 +1,27 @@
-import { withGitHubRepoExecution } from '../../github-repository-identity'
+import {
+  withGitHubRepoExecution,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import { acquire, release, classifyGhError, type LocalGitExecOptions } from '../../gh-utils'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { classifyGhError } from '../../api/gh-error-classification'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+
 import {
   resolveGitHubApiRepository,
   resolveGitHubApiRepositoryCandidates,
-  resolveIssueGitHubApiRepositorySource,
-  type GitHubApiRepository
-} from '../../github-api-repository'
+  resolveIssueGitHubApiRepositorySource
+} from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
-} from '../../../../shared/github/repository-identity-key'
+} from '../../../../shared/github/repositories/repository-identity-key'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import {
   getIssueDetailsViaGraphQL,
   type CollapsedIssueDetails
-} from '../../issue-work-item-details'
+} from '../../issues/issue-work-item-details'
 import {
   fetchIssueWorkItem,
   fetchWorkItemPreview,
@@ -214,7 +220,12 @@ export async function getWorkItemByOwnerRepo(
         connectionId,
         localGitOptions
       )
-    } catch {
+    } catch (err) {
+      // Only the failure class is logged: stderr and the command line name the repository.
+      const stderr = extractExecError(err).stderr || (err instanceof Error ? err.message : '')
+      console.warn(
+        `getWorkItemByOwnerRepo ${options.preview ? 'preview' : type} lookup failed: ${classifyGhError(stderr).type}`
+      )
       return null
     } finally {
       release()

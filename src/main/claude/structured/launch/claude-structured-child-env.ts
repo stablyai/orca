@@ -1,17 +1,20 @@
+import { withOrcaClaudeChatEntrypoint } from '../../../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 // What a structured Claude child's environment is built from, shared by its launch and the
 // `--version` probe that runs the same binary.
 
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
-import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
-import { withoutInheritedClaudeConfigDir } from '../../claude-config-dir-pin'
+import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}
@@ -54,7 +57,8 @@ export function resolveClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<Claud
     () => readClaudeChildEnvSources(deps),
     deps.refreshEnvironmentAfterMiss,
     {
-      env: ({ inheritedEnv, overlay }) => ({ ...inheritedEnv, ...overlay }),
+      env: ({ inheritedEnv, overlay }) =>
+        overlayEnvironmentVariables(inheritedEnv, overlay, process.platform),
       cwd: deps.resolveWorkingDirectory,
       signal: deps.signal
     },
@@ -64,14 +68,20 @@ export function resolveClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<Claud
 
 async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChildEnvSources> {
   assertStructuredAgentResolutionCurrent(deps.operation)
-  const overlay = await waitForPromiseWithSignal(Promise.resolve(deps.resolveEnv?.()), deps.signal)
+  const configured = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveEnv?.()),
+    deps.signal
+  )
+  const overlay = configured
+    ? overlayEnvironmentVariables({}, cloneDefinedEnv(configured), process.platform)
+    : undefined
   assertStructuredAgentResolutionCurrent(deps.operation)
   const inheritedEnv = deps.resolveInheritedEnv
     ? await waitForPromiseWithSignal(deps.resolveInheritedEnv(), deps.signal)
     : cloneDefinedEnv(process.env)
   assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
-  const effectiveEnv = { ...inheritedEnv, ...overlay }
+  const effectiveEnv = overlayEnvironmentVariables(inheritedEnv, overlay, process.platform)
   const options = {
     pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,
     homePath: effectiveEnv.HOME ?? effectiveEnv.USERPROFILE
@@ -89,10 +99,9 @@ export function claudeChildEnv(
   /** False when the session's seal pairs the CLI runtime itself, behind this app's CLI. */
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
-  const env = decorateEnv({
-    ...withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-    ...sources.overlay
-  })
+  const inherited = withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform)
+  stripInheritedAgentSessionEnv(inherited)
+  const env = decorateEnv(overlayEnvironmentVariables(inherited, sources.overlay, process.platform))
   return runtimeOnPath
     ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })
     : env
@@ -100,12 +109,12 @@ export function claudeChildEnv(
 
 // Version probes need the launch runtime and PATH, without auth credentials.
 export function claudeProbeEnv(sources: ClaudeChildEnvSources): Record<string, string> {
-  return applyClaudeEnvPatch(
-    claudeChildEnv(sources),
-    {},
-    {
-      stripAuthEnv: true,
-      platform: process.platform
-    }
+  return withOrcaClaudeChatEntrypoint(
+    applyClaudeEnvPatch(
+      claudeChildEnv(sources),
+      {},
+      { stripAuthEnv: true, platform: process.platform }
+    ),
+    process.platform
   )
 }

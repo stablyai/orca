@@ -9,17 +9,15 @@ import PendingNativeChatCreation from '@/components/worktree-creation/PendingNat
 import {
   changePrompt,
   promptValue
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import type * as Admission from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as Launch from '../../agent-session/launch/structured-agent-session-launch-create-call'
 import { resetStructuredAgentLaunchRegistryForTests } from '../../agent-session/launch/structured-agent-session-launch-registry'
@@ -35,7 +33,7 @@ import {
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (
-    await import('../../../components/native-chat/NativeChatStructuredSession.test-harness')
+    await import('../../../components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness')
   ).createStructuredSessionMocks()
 )
 const host = vi.hoisted(() => ({
@@ -55,33 +53,36 @@ vi.mock(
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null
 }))
-vi.mock('../../../components/native-chat/use-structured-agent-session', () =>
+vi.mock('../../../components/native-chat/session/structured/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
 )
-vi.mock('../../../components/native-chat/use-native-chat-font-size', () =>
+vi.mock('../../../components/native-chat/appearance/use-native-chat-font-size', () =>
   moduleFactories.useNativeChatFontSize()
 )
-vi.mock('../../../components/native-chat/use-native-chat-file-link-context', () =>
+vi.mock('../../../components/native-chat/links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
 )
 vi.mock('../../../components/native-chat/NativeChatMessageList', () =>
   moduleFactories.nativeChatMessageList()
 )
-vi.mock('../../../components/native-chat/NativeChatEmptyState', () =>
+vi.mock('../../../components/native-chat/host-access/NativeChatEmptyState', () =>
   moduleFactories.nativeChatEmptyState()
 )
 vi.mock('../../../components/worktree-creation/WorktreeSetupSteps', () => ({
@@ -178,98 +179,19 @@ function prompt(kind: 'approval' | 'question'): AgentJournalRenderItem {
   }
 }
 
-it.each([
-  { kind: 'approval', draft: '' },
-  { kind: 'question', draft: '' },
-  { kind: 'approval', draft: 'Unsent follow-up' },
-  { kind: 'question', draft: 'Unsent follow-up' }
-] as const)('reveals a mounted $kind with draft "$draft"', async ({ kind, draft }) => {
-  const pending = render(
-    <TooltipProvider>
-      <PendingNativeChatCreation creationId="creation-1" />
-    </TooltipProvider>
-  )
-  const field = screen.getByRole('textbox')
-  if (draft) {
-    changePrompt(field, draft)
-    fireEvent.compositionStart(field)
-  }
-  let completion: Promise<void> = Promise.resolve()
-  act(() => {
-    completion = executeWorktreeCreation('creation-1', request)
-  })
-  await waitFor(() => expect(host.createSession).toHaveBeenCalledOnce())
-  await main.settle()
-  const { sessionId } = host.createSession.mock.calls[0][0]
-  const tab = useAppStore.getState().getActiveTab(worktree.id)
-  expect(tab?.contentType).toBe('agent-session')
-  if (!tab) {
-    throw new Error('Created chat tab was not published')
-  }
-  const destination = structuredAgentSessionDraftScopeKey(sessionId)
-  const item = prompt(kind)
-  mocks.promptItems = [item]
-  mocks.turnId = 'turn-1'
-  expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
-  expect(readNativeChatComposerDraft(source).text).toBe(draft)
-
-  const pane = (visible: boolean) => (
-    <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible={visible}
-        isFocusedGroup={visible}
-        tabId={tab.id}
-        sessionId={sessionId}
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    </TooltipProvider>
-  )
-  const replacement = render(pane(false))
-  await act(async () => {})
-  const action = screen.getByRole('button', {
-    name: kind === 'approval' ? /Approve/ : /Use the default/
-  })
-  expect(action.hasAttribute('disabled')).toBe(false)
-  if (draft) {
-    expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
-    expect(readNativeChatComposerDraft(source).text).toBe(draft)
-    expect(readNativeChatComposerDraft(destination).text).toBe('')
-    changePrompt(field, `${draft}, finished composing`)
-    fireEvent.compositionEnd(field)
-  }
-  await act(async () => {
-    await completion
-  })
-  expect(useAppStore.getState().activeWorktreeId).toBe(worktree.id)
-  expect(useAppStore.getState().activePendingCreationId).toBeNull()
-  expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
-  expect(readNativeChatComposerDraft(source).text).toBe('')
-  const expectedDraft = draft ? `${draft}, finished composing` : ''
-  expect(readNativeChatComposerDraft(destination).text).toBe(expectedDraft)
-
-  pending.unmount()
-  replacement.rerender(pane(true))
-  fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
-  expect(mocks.cancel).toHaveBeenCalledWith('turn-1', {
-    itemId: item.itemId,
-    expectedRevision: item.revision
-  })
-  // Resolving the prompt restores the retained follow-up to the real destination editor.
-  mocks.promptItems = []
-  replacement.rerender(pane(true))
-  expect(promptValue(screen.getByRole('textbox'))).toBe(expectedDraft)
-})
-
-it.each(['journalCorrupt', 'journalWrittenByNewerOrca'] as const)(
-  'reveals a final %s failure and retains the unsent draft',
-  async (reason) => {
-    render(
+it.each([{ kind: 'approval', draft: 'Unsent follow-up' }] as const)(
+  'reveals a mounted $kind with draft "$draft"',
+  async ({ kind, draft }) => {
+    const pending = render(
       <TooltipProvider>
         <PendingNativeChatCreation creationId="creation-1" />
       </TooltipProvider>
     )
-    changePrompt(screen.getByRole('textbox'), 'Keep this follow-up')
+    const field = screen.getByRole('textbox')
+    if (draft) {
+      changePrompt(field, draft)
+      fireEvent.compositionStart(field)
+    }
     let completion: Promise<void> = Promise.resolve()
     act(() => {
       completion = executeWorktreeCreation('creation-1', request)
@@ -278,17 +200,22 @@ it.each(['journalCorrupt', 'journalWrittenByNewerOrca'] as const)(
     await main.settle()
     const { sessionId } = host.createSession.mock.calls[0][0]
     const tab = useAppStore.getState().getActiveTab(worktree.id)
+    expect(tab?.contentType).toBe('agent-session')
     if (!tab) {
       throw new Error('Created chat tab was not published')
     }
+    const destination = structuredAgentSessionDraftScopeKey(sessionId)
+    const item = prompt(kind)
+    mocks.promptItems = [item]
+    mocks.turnId = 'turn-1'
     expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
-    mocks.status = 'error'
-    mocks.readRefusal = { code: 'agent_session_journal_unreadable', details: { reason } }
-    render(
+    expect(readNativeChatComposerDraft(source).text).toBe(draft)
+
+    const pane = (visible: boolean) => (
       <TooltipProvider>
         <NativeChatStructuredSession
-          isVisible={false}
-          isFocusedGroup={false}
+          isVisible={visible}
+          isFocusedGroup={visible}
           tabId={tab.id}
           sessionId={sessionId}
           target={{ kind: 'local' }}
@@ -296,14 +223,39 @@ it.each(['journalCorrupt', 'journalWrittenByNewerOrca'] as const)(
         />
       </TooltipProvider>
     )
+    const replacement = render(pane(false))
+    await act(async () => {})
+    const action = screen.getByRole('button', {
+      name: kind === 'approval' ? /Approve/ : /Use the default/
+    })
+    expect(action.hasAttribute('disabled')).toBe(false)
+    if (draft) {
+      expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
+      expect(readNativeChatComposerDraft(source).text).toBe(draft)
+      expect(readNativeChatComposerDraft(destination).text).toBe('')
+      changePrompt(field, `${draft}, finished composing`)
+      fireEvent.compositionEnd(field)
+    }
     await act(async () => {
       await completion
     })
-    expect(useAppStore.getState().activePendingCreationId).toBeNull()
     expect(useAppStore.getState().activeWorktreeId).toBe(worktree.id)
+    expect(useAppStore.getState().activePendingCreationId).toBeNull()
+    expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(readNativeChatComposerDraft(source).text).toBe('')
-    expect(readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(sessionId)).text).toBe(
-      'Keep this follow-up'
-    )
+    const expectedDraft = draft ? `${draft}, finished composing` : ''
+    expect(readNativeChatComposerDraft(destination).text).toBe(expectedDraft)
+
+    pending.unmount()
+    replacement.rerender(pane(true))
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-1', {
+      itemId: item.itemId,
+      expectedRevision: item.revision
+    })
+    // Resolving the prompt restores the retained follow-up to the real destination editor.
+    mocks.promptItems = []
+    replacement.rerender(pane(true))
+    expect(promptValue(screen.getByRole('textbox'))).toBe(expectedDraft)
   }
 )

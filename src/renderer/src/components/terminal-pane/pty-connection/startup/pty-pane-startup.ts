@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { EventProps } from '../../../../../../shared/telemetry-event-classification'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -10,7 +11,8 @@ import type { SessionOptionValue } from '../../../../../../shared/native-chat/in
 import type { AgentPaneLaunchRequest } from '../../../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
-  command: string
+  /** Absent when the startup carries only spawn env, e.g. a paired viewer's plain terminal (#39852). */
+  command?: string
   /** Renderer-delivered startup input for callers that need xterm paste
    *  semantics before the submit Enter. */
   delivery?: 'terminal-paste'
@@ -26,6 +28,7 @@ export type PtyPaneStartup = {
   launchAgent?: TuiAgent
   /** The agent launch the pane's own spawn starts, instead of `command`. */
   agentLaunch?: AgentPaneLaunchRequest
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
   agentArgsOverride?: string | null
   draftPrompt?: string

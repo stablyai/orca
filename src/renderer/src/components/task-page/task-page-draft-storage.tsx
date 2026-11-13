@@ -1,12 +1,12 @@
 import type { TaskPageRepoSourceState } from '@/components/task-page/task-page-cache-selectors'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   type NewLinearProjectDraft,
   isTaskCreationDraftContentful,
   type NewLinearIssueDraft,
   type NewJiraIssueDraft
-} from '@/store/slices/task-creation-drafts'
+} from '@/store/slices/task-creation/task-creation-drafts'
 import { useAppStore } from '@/store/index'
 export const hasDivergentSources = (
   s: TaskPageRepoSourceState

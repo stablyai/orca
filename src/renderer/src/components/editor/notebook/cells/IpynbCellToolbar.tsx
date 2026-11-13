@@ -26,17 +26,18 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { IpynbCellKind } from '../document/ipynb-parse'
 
 const CELL_KINDS: readonly IpynbCellKind[] = ['code', 'markdown', 'raw']
 
-function cellKindLabel(kind: IpynbCellKind): string {
+function cellKindLabel(kind: IpynbCellKind, t: Translate = translate): string {
   return kind === 'code'
-    ? translate('auto.components.editor.IpynbViewer.7005960d73', 'Code')
+    ? t('auto.components.editor.IpynbViewer.7005960d73', 'Code')
     : kind === 'markdown'
-      ? translate('auto.components.editor.IpynbViewer.1833dbbc43', 'Markdown')
-      : translate('auto.components.editor.IpynbViewer.3e4cbf15ea', 'Raw')
+      ? t('auto.components.editor.IpynbViewer.1833dbbc43', 'Markdown')
+      : t('auto.components.editor.IpynbViewer.3e4cbf15ea', 'Raw')
 }
 
 export function IpynbToolbarButton({
@@ -106,6 +107,7 @@ export function IpynbRunPrompt({
   duration: string | null
   onRun: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col items-center">
       {/* Match the first code line’s height to align its count. */}
@@ -119,7 +121,7 @@ export function IpynbRunPrompt({
         )}
       >
         <IpynbToolbarButton
-          label={translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
+          label={t('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
           disabled={state !== 'idle'}
           onClick={onRun}
         >
@@ -156,24 +158,25 @@ export function IpynbCellToolbar({
   onMove: (direction: -1 | 1) => void
   onDelete: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="absolute -top-2 right-1 z-10 flex items-center rounded-md border border-border bg-background opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
       <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.fd8ac707bc', 'Move cell up')}
+        label={t('auto.components.editor.IpynbViewer.fd8ac707bc', 'Move cell up')}
         disabled={!canMoveUp}
         onClick={() => onMove(-1)}
       >
         <MoveUp />
       </IpynbToolbarButton>
       <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.27e064e2db', 'Move cell down')}
+        label={t('auto.components.editor.IpynbViewer.27e064e2db', 'Move cell down')}
         disabled={!canMoveDown}
         onClick={() => onMove(1)}
       >
         <MoveDown />
       </IpynbToolbarButton>
       <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.781abd6926', 'Delete cell')}
+        label={t('auto.components.editor.IpynbViewer.781abd6926', 'Delete cell')}
         onClick={onDelete}
       >
         <Trash2 />
@@ -186,45 +189,36 @@ export function IpynbCellToolbar({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate(
-                  'auto.components.editor.IpynbViewer.8dbe39a152',
-                  'More cell actions'
-                )}
+                aria-label={t('auto.components.editor.IpynbViewer.8dbe39a152', 'More cell actions')}
               >
                 <Ellipsis />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('auto.components.editor.IpynbViewer.8dbe39a152', 'More cell actions')}
+            {t('auto.components.editor.IpynbViewer.8dbe39a152', 'More cell actions')}
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => onInsert(0, 'code')}>
             <ArrowUpToLine />
-            {translate('auto.components.editor.IpynbViewer.53b839b8a0', 'Insert code cell above')}
+            {t('auto.components.editor.IpynbViewer.53b839b8a0', 'Insert code cell above')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onInsert(1, 'code')}>
             <ArrowDownToLine />
-            {translate('auto.components.editor.IpynbViewer.b4208cad7e', 'Insert code cell below')}
+            {t('auto.components.editor.IpynbViewer.b4208cad7e', 'Insert code cell below')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onInsert(0, 'markdown')}>
             <ArrowUpToLine />
-            {translate(
-              'auto.components.editor.IpynbViewer.ffc1ac2699',
-              'Insert markdown cell above'
-            )}
+            {t('auto.components.editor.IpynbViewer.ffc1ac2699', 'Insert markdown cell above')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onInsert(1, 'markdown')}>
             <ArrowDownToLine />
-            {translate(
-              'auto.components.editor.IpynbViewer.b42f6a9547',
-              'Insert markdown cell below'
-            )}
+            {t('auto.components.editor.IpynbViewer.b42f6a9547', 'Insert markdown cell below')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>
-            {translate('auto.components.editor.IpynbViewer.fa8fd99cf1', 'Cell type')}
+            {t('auto.components.editor.IpynbViewer.fa8fd99cf1', 'Cell type')}
           </DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={kind}
@@ -237,7 +231,7 @@ export function IpynbCellToolbar({
           >
             {CELL_KINDS.map((candidate) => (
               <DropdownMenuRadioItem key={candidate} value={candidate}>
-                {cellKindLabel(candidate)}
+                {cellKindLabel(candidate, t)}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>

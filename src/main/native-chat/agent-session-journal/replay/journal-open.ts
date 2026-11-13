@@ -1,3 +1,8 @@
+import {
+  restoreHistoricalPersonAcceptance,
+  restoredJournalPersonAcceptance
+} from './journal-historical-inputs'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { restoreRetainedJournalInputs } from './journal-retained-inputs'
 import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
@@ -63,7 +68,17 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
-      return foldJournalFromState(db, empty)
+      const loaded = foldJournalFromState(db, empty)
+      if (!loaded.newer && !loaded.damage) {
+        const personal = restoredJournalPersonAcceptance(db, loaded.state)
+        const owner = journalInputOrder(loaded.state)
+        for (const input of loaded.state.submissions.values()) {
+          if (input.dispatchState === 'accepted' && personal(input)) {
+            owner.seedPersonAcceptance(input.acceptedSequence ?? 0)
+          }
+        }
+      }
+      return loaded
     }
     let baseline: JournalReducerState | undefined
     if (source.prefix > 0) {
@@ -80,10 +95,14 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
       }
       baseline = prefix.state
     }
+    let acceptedPrefix = new Map<string, AgentJournalSubmission>()
     const prefixRevisions =
       baseline &&
       new Map(
-        [...baseline.submissions.keys()].map((id) => {
+        [...baseline.submissions].map(([id, submission]) => {
+          if (submission.dispatchState === 'accepted') {
+            acceptedPrefix.set(id, submission)
+          }
           const key = agentJournalSubmissionKey(id)
           return [
             key,
@@ -105,8 +124,10 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
       // Admission evidence cannot resurrect common keys retired by the frozen decoder or tail.
       state.inputs = observations.state.inputs
       state.inputs.candidates.clear()
+      acceptedPrefix = observations.state.submissions
     }
-    restoreRetainedJournalInputs(db, state, source, prefixRevisions)
+    restoreRetainedJournalInputs(db, state, source, prefixRevisions, acceptedPrefix)
+    restoreHistoricalPersonAcceptance(db, state, source)
     return { state, newer: null, damage: null }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
@@ -210,7 +231,7 @@ export function startJournalRowFold(
   const finish = (): JournalLoad => {
     if (!input.deferNativeCleanup) {
       journalInputOrder(state).finishReconstruction(state)
-      journalInputOrder(state).lineage.restoreFrontier(
+      journalInputOrder(state).legacy?.lineage.restoreFrontier(
         state.lastSequence,
         state.inputEntries.values()
       )

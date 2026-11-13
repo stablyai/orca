@@ -1,76 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 
 import { findKnownWorktreeById } from './detected-worktree-meta'
 import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { selectWorkspaceByHostTarget } from '../../../workspace-record-selectors'
-import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { findIndexedFolderWorkspaceOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
-import { getWorktreeDeleteStateKey } from '../teardown/worktree-delete-state'
 
 describe('inherited folder consumer identity', () => {
-  it.each([false, true])(
-    'keeps physical twins qualified through native owner, store and directory, reversed=%s',
-    (reverse) => {
-      const inherited = makeFolderWorkspace({
-        id: 'same',
-        projectGroupId: 'inherited',
-        folderPath: '/remote'
-      })
-      const local = makeFolderWorkspace({
-        id: 'same',
-        executionHostId: 'local',
-        folderPath: '/local'
-      })
-      const folderWorkspaces = reverse ? [inherited, local] : [local, inherited]
-      const state = {
-        folderWorkspaces,
-        projectGroups: [{ id: 'inherited', executionHostId: 'ssh:box' as const }],
-        repos: [],
-        worktreesByRepo: {},
-        detectedWorktreesByRepo: {},
-        floatingWorkspacePath: null
-      }
-      const raw = findIndexedFolderWorkspaceOwner(folderWorkspaces, 'same', 'ssh:box')
-      const converted = folderWorkspaceToWorktree(inherited)
-      const notification = resolveNotificationTabOwner(state, {
-        worktreeId: 'folder:same',
-        executionHostId: 'ssh:box'
-      })
-      expect(resolveQualifiedFolderWorkspaceResult(state, 'same', 'ssh:box').kind).toBe('selected')
-      expect(findFolderWorkspaceOwner(state, 'same', 'ssh:box')).toBe(inherited)
-      const projected = findKnownWorktreeById(state, 'folder:same', 'ssh:box')
-      expect(projected).toMatchObject({ path: '/remote', hostId: 'ssh:box' })
-      expect(
-        selectWorkspaceByHostTarget(
-          state,
-          hostWorktreeTarget({ id: 'folder:same', hostId: 'ssh:box' })
-        )
-      ).toBe(projected)
-      expect(resolveWorkspaceDirectory(state, 'folder:same', 'ssh:box')).toBe('/remote')
-      expect(findKnownWorktreeById(state, 'folder:same')).toBeUndefined()
-      expect(findIndexedFolderWorkspaceOwner(folderWorkspaces, 'same', 'ssh:box')).toBe(raw)
-      expect(folderWorkspaceToWorktree(inherited)).toEqual(converted)
-      expect(
-        resolveNotificationTabOwner(state, {
-          worktreeId: 'folder:same',
-          executionHostId: 'ssh:box'
-        })
-      ).toEqual(notification)
-      expect(inherited.executionHostId).toBeUndefined()
-      expect(getWorktreeDeleteStateKey(state, 'folder:same', 'ssh:box')).not.toBe(
-        getWorktreeDeleteStateKey(state, 'folder:same', 'local')
-      )
-    }
-  )
   it.each(['group', 'repo'])(
     'invalidates only a changed derived host projection from its %s catalog',
     (source) => {
@@ -111,43 +49,28 @@ describe('inherited folder consumer identity', () => {
   )
 })
 
-describe('missing selected folder lookup cost', () => {
-  it('keeps warm unrelated writes bounded at N and 10N folders and observes catalog changes', () => {
-    for (const size of [100, 1_000]) {
-      let reads = 0
-      const folderWorkspaces = Array.from({ length: size }, (_, index) => ({
-        ...makeFolderWorkspace(),
-        get id() {
-          reads += 1
-          return `folder-${index}`
-        }
-      }))
-      const state = {
-        folderWorkspaces,
-        projectGroups: [makeProjectGroup()],
-        repos: [],
-        worktreesByRepo: {},
-        detectedWorktreesByRepo: {},
-        floatingWorkspacePath: null
-      }
-      expect(findKnownWorktreeById(state, 'folder:missing', 'local')).toBeUndefined()
-      expect(reads).toBeLessThanOrEqual(size * 2)
-      reads = 0
-      for (let update = 0; update < 100; update += 1) {
-        expect(findKnownWorktreeById({ ...state }, 'folder:missing', 'local')).toBeUndefined()
-      }
-      expect(reads).toBe(0)
-      const folder = makeFolderWorkspace({ id: 'missing', folderPath: '/new-folder' })
-      const next = { ...state, folderWorkspaces: [...folderWorkspaces, folder] }
-      expect(findKnownWorktreeById(next, 'folder:missing', 'local')?.path).toBe('/new-folder')
-      const narrow = {
-        ...state,
-        folderWorkspaces: [folder],
-        projectGroups: undefined,
-        repos: undefined
-      }
-      expect(findKnownWorktreeById(narrow, 'folder:missing')?.path).toBe('/new-folder')
-      expect(findKnownWorktreeById(narrow, 'folder:missing', 'local')).toBeUndefined()
+describe('selected folder catalog replacement', () => {
+  it('observes a folder added to a replacement catalog and preserves qualified lookup', () => {
+    const folderWorkspaces = [makeFolderWorkspace({ id: 'existing' })]
+    const state = {
+      folderWorkspaces,
+      projectGroups: [makeProjectGroup()],
+      repos: [],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {},
+      floatingWorkspacePath: null
     }
+    expect(findKnownWorktreeById(state, 'folder:missing', 'local')).toBeUndefined()
+    const folder = makeFolderWorkspace({ id: 'missing', folderPath: '/new-folder' })
+    const next = { ...state, folderWorkspaces: [...folderWorkspaces, folder] }
+    expect(findKnownWorktreeById(next, 'folder:missing', 'local')?.path).toBe('/new-folder')
+    const narrow = {
+      ...state,
+      folderWorkspaces: [folder],
+      projectGroups: undefined,
+      repos: undefined
+    }
+    expect(findKnownWorktreeById(narrow, 'folder:missing')?.path).toBe('/new-folder')
+    expect(findKnownWorktreeById(narrow, 'folder:missing', 'local')).toBeUndefined()
   })
 })

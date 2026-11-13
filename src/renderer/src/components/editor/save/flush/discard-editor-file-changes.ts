@@ -1,9 +1,10 @@
 import { useAppStore } from '@/store/index'
 import {
   editorBufferIdOfView,
+  editorBufferSiblingViewIds,
   isLastEditorBufferView
 } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { bumpEditorDiscardEpoch } from './editor-discard-epoch'
+import { discardEditorGenerations } from './editor-discard-epoch'
 import { requestEditorSaveQuiesce } from '../../autosave/editor-autosave'
 import { flushPendingEditorBuffer } from './editor-pending-flush'
 
@@ -14,7 +15,11 @@ export async function discardEditorBuffer(fileId: string): Promise<() => void> {
     return release
   }
   // Fence pending edits before flushing so intentional discards stay silent.
-  bumpEditorDiscardEpoch(editorBufferIdOfView(useAppStore.getState(), fileId))
+  const before = useAppStore.getState()
+  discardEditorGenerations(
+    editorBufferIdOfView(before, fileId),
+    editorBufferSiblingViewIds(before, fileId)
+  )
   try {
     flushPendingEditorBuffer(useAppStore.getState(), fileId)
   } catch (error) {

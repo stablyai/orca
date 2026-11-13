@@ -26,9 +26,8 @@ import type {
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import {
   type AgentSessionTurnContext,
-  agentSessionAttachmentExpiredRefusal
+  agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
-import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import {
@@ -44,6 +43,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   ctx: Pick<
     AgentSessionTurnContext,
     | 'sessionId'
+    | 'logger'
     | 'journal'
     | 'fence'
     | 'operationReceipt'
@@ -69,13 +69,6 @@ export async function maybeQueueStructuredAgentSessionSend(
   | null
 > {
   const clientMessageId = params.envelope.clientOperationId
-  if (
-    params.delivery !== 'queue-if-active' ||
-    (params.queuedImageCards === false &&
-      params.body.blocks.some((block) => block.type === 'image-ref'))
-  ) {
-    return null
-  }
   // Reconstruct queued replay by card linkage; its fresh handoff ID cannot guard this original ID.
   const queuedBefore = queuedSendAnswer(ctx.journal, clientMessageId)
   if (queuedBefore) {
@@ -113,16 +106,15 @@ export async function maybeQueueStructuredAgentSessionSend(
       {
         messageId: clientMessageId,
         body: params.body,
+        deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
+        unattended: !params.userSend && !params.personsMessage,
         options: captured.options,
         ...(params.userSend ? { requireAttachments: true } : {})
       },
       ctx.operationReceipt
     )
   } catch (error) {
-    if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal(error)
-    }
-    throw error
+    return agentSessionAdmissionWriteRefusal(ctx, error)
   }
   return {
     ok: true,

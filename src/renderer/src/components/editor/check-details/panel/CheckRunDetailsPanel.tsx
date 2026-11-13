@@ -3,9 +3,10 @@ import { ExternalLink, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type * as GitHubChecks from '../../../../../../shared/github/checks/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control/panel/source-control-fix-split-button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useCheckRunDetailsFixWithAI } from '../actions/check-run-details-fix-with-ai'
 import { formatCheckRunOutputForClipboard } from '../actions/check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
@@ -15,7 +16,10 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
-function formatCheckTimestamp(value: string | null | undefined): string | null {
+function formatCheckTimestamp(
+  value: string | null | undefined,
+  intlLocale: string = getIntlLocale()
+): string | null {
   if (!value) {
     return null
   }
@@ -23,7 +27,7 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (Number.isNaN(parsed.getTime())) {
     return value
   }
-  return parsed.toLocaleString(getIntlLocale(), {
+  return parsed.toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -32,36 +36,37 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
 }
 
 type CheckStatusLike = {
-  status: PRCheckDetail['status'] | (string & {}) | null | undefined
-  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null | undefined
+  gitlabAllowedFailure?: boolean
+  status: GitHubChecks.PRCheckDetail['status'] | (string & {}) | null | undefined
+  conclusion: GitHubChecks.PRCheckDetail['conclusion'] | (string & {}) | null | undefined
 }
 
-function getCheckStatusLabel(check: CheckStatusLike): string {
+function getCheckStatusLabel(check: CheckStatusLike, t: Translate = translate): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return t('checks.gitlabAllowedFailure', 'Allowed to fail')
+  }
   const conclusion = check.conclusion ?? 'pending'
   switch (conclusion) {
     case 'success':
-      return translate('auto.components.editor.CheckRunDetailsPanel.8f2d0f5a91', 'Passed')
+      return t('auto.components.editor.CheckRunDetailsPanel.8f2d0f5a91', 'Passed')
     case 'failure':
-      return translate('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
+      return t('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
     case 'cancelled':
-      return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+      return t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
     case 'timed_out':
-      return translate('auto.components.editor.CheckRunDetailsPanel.2f6d8a1c45', 'Timed out')
+      return t('auto.components.editor.CheckRunDetailsPanel.2f6d8a1c45', 'Timed out')
     case 'action_required':
-      return translate(
-        'auto.components.editor.CheckRunDetailsPanel.actionRequired',
-        'Action required'
-      )
+      return t('auto.components.editor.CheckRunDetailsPanel.actionRequired', 'Action required')
     case 'skipped':
-      return translate('auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12', 'Skipped')
+      return t('auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12', 'Skipped')
     case 'neutral':
-      return translate('auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67', 'Neutral')
+      return t('auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67', 'Neutral')
     case 'pending':
-      return translate('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
+      return t('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
     default:
       return isFailureState(conclusion)
-        ? translate('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
-        : translate('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
+        ? t('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
+        : t('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
   }
 }
 
@@ -89,8 +94,8 @@ export function CheckRunDetailsPanel({
   viewStateScopeId,
   contextKey
 }: {
-  check: PRCheckDetail
-  details: PRCheckRunDetails | null
+  check: GitHubChecks.PRCheckDetail
+  details: GitHubChecks.PRCheckRunDetails | null
   loading: boolean
   error: string | null
   openUrl: string | null | undefined
@@ -100,6 +105,8 @@ export function CheckRunDetailsPanel({
   viewStateScopeId?: string
   contextKey?: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const {
     canFixWithAI,
     disabledReason,
@@ -135,8 +142,8 @@ export function CheckRunDetailsPanel({
       setShowProgress(false)
     }
   }, [loading, tabId, viewStateScopeId, contextKey])
-  const startedAt = formatCheckTimestamp(details?.startedAt)
-  const completedAt = formatCheckTimestamp(details?.completedAt)
+  const startedAt = formatCheckTimestamp(details?.startedAt, intlLocale)
+  const completedAt = formatCheckTimestamp(details?.completedAt, intlLocale)
   const detailsStatusCheck: CheckStatusLike = {
     ...check,
     status: details?.status ?? check.status,
@@ -163,37 +170,34 @@ export function CheckRunDetailsPanel({
           <div className="flex shrink-0 items-center gap-2">
             {canFixWithAI && (
               <SourceControlFixSplitButton
-                label={translate(
-                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
-                  'Fix with AI'
-                )}
+                label={t('auto.components.editor.CheckRunDetailsPanel.834cb3f23d', 'Fix with AI')}
                 actionId="fixChecks"
-                dialogTitle={translate(
+                dialogTitle={t(
                   'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
                   'Fix with AI'
                 )}
-                dialogDescription={translate(
+                dialogDescription={t(
                   'auto.components.editor.CheckRunDetailsPanel.c8f1a2d4e7',
                   'Choose the agent and edit the full command input before launch.'
                 )}
                 launchSource="task_page"
-                contextUnavailableLabel={translate(
+                contextUnavailableLabel={t(
                   'auto.components.editor.CheckRunDetailsPanel.b3e7f9a1c2',
                   'Check fix context unavailable'
                 )}
-                primaryTitle={translate(
+                primaryTitle={t(
                   'auto.components.editor.CheckRunDetailsPanel.d5a8c2f1b9',
                   'Start the default AI agent to fix this check'
                 )}
-                primaryAriaLabel={translate(
+                primaryAriaLabel={t(
                   'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
                   'Fix with AI'
                 )}
-                chevronTitle={translate(
+                chevronTitle={t(
                   'auto.components.editor.CheckRunDetailsPanel.e2b4d7c8a1',
                   'Choose an agent for this check'
                 )}
-                chevronAriaLabel={translate(
+                chevronAriaLabel={t(
                   'auto.components.editor.CheckRunDetailsPanel.f1c9e3a6d4',
                   'Choose agent to fix check'
                 )}
@@ -218,7 +222,7 @@ export function CheckRunDetailsPanel({
                 onFixWithDefaultAgent={fixWithAI}
                 onPromptDelivered={() =>
                   toast.success(
-                    translate(
+                    t(
                       'auto.components.editor.check.run.details.fix.with.ai.2ef90c9819',
                       'Started an AI agent for this check.'
                     )
@@ -243,37 +247,36 @@ export function CheckRunDetailsPanel({
                     <RefreshCw className="size-3.5" />
                   )}
                 </span>
-                {translate('auto.components.editor.CheckRunDetailsPanel.b7f5e2c91a', 'Refresh')}
+                {t('auto.components.editor.CheckRunDetailsPanel.b7f5e2c91a', 'Refresh')}
               </Button>
             )}
           </div>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>
-            {translate('auto.components.editor.CheckRunDetailsPanel.a54ae21c6f', 'Status:')}{' '}
-            {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+            {t('auto.components.editor.CheckRunDetailsPanel.a54ae21c6f', 'Status:')}{' '}
+            {details ? getCheckStatusLabel(detailsStatusCheck, t) : getCheckStatusLabel(check, t)}
           </span>
           {startedAt && (
             <span>
-              {translate('auto.components.editor.CheckRunDetailsPanel.fd46a70f1a', 'Started')}{' '}
-              {startedAt}
+              {t('auto.components.editor.CheckRunDetailsPanel.fd46a70f1a', 'Started')} {startedAt}
             </span>
           )}
           {completedAt && (
             <span>
-              {translate('auto.components.editor.CheckRunDetailsPanel.00e1c1658a', 'Completed')}{' '}
+              {t('auto.components.editor.CheckRunDetailsPanel.00e1c1658a', 'Completed')}{' '}
               {completedAt}
             </span>
           )}
           {check.checkRunId && (
             <span className="font-mono">
-              {translate('auto.components.editor.CheckRunDetailsPanel.aa8494ae3c', 'check #')}
+              {t('auto.components.editor.CheckRunDetailsPanel.aa8494ae3c', 'check #')}
               {check.checkRunId}
             </span>
           )}
           {check.workflowRunId && (
             <span className="font-mono">
-              {translate('auto.components.editor.CheckRunDetailsPanel.2dd5ddabc4', 'workflow #')}
+              {t('auto.components.editor.CheckRunDetailsPanel.2dd5ddabc4', 'workflow #')}
               {check.workflowRunId}
             </span>
           )}
@@ -291,7 +294,7 @@ export function CheckRunDetailsPanel({
             aria-live="polite"
             className="break-words text-xs text-muted-foreground"
           >
-            {translate('githubChecks.refreshingDetails', 'Refreshing check details…')}
+            {t('githubChecks.refreshingDetails', 'Refreshing check details…')}
           </div>
         ) : null}
       </div>
@@ -307,10 +310,7 @@ export function CheckRunDetailsPanel({
             className="flex items-center gap-2 py-4 text-sm text-muted-foreground"
           >
             <LoadingSpinner className="size-4" />
-            {translate(
-              'auto.components.editor.CheckRunDetailsPanel.1f2b980522',
-              'Loading check details…'
-            )}
+            {t('auto.components.editor.CheckRunDetailsPanel.1f2b980522', 'Loading check details…')}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
@@ -322,6 +322,7 @@ export function CheckRunDetailsPanel({
                 return hasJobs ? (
                   <CheckRunJobs
                     key="jobs"
+                    check={check}
                     jobs={jobs}
                     hasFailedJobs={failedJobs.length > 0}
                     positionOwner={positionOwner}
@@ -341,14 +342,11 @@ export function CheckRunDetailsPanel({
                 <section key="output" className="rounded-md border border-border bg-background">
                   <div className="flex items-center justify-between border-b border-border px-3 py-2">
                     <div className="text-sm font-medium">
-                      {translate(
-                        'auto.components.editor.CheckRunDetailsPanel.d098e5529a',
-                        'Output'
-                      )}
+                      {t('auto.components.editor.CheckRunDetailsPanel.d098e5529a', 'Output')}
                     </div>
                     <CheckRunCopyButton
                       text={outputClipboardText}
-                      label={translate(
+                      label={t(
                         'auto.components.editor.CheckRunDetailsPanel.copyOutput',
                         'Copy output'
                       )}
@@ -381,7 +379,7 @@ export function CheckRunDetailsPanel({
 
             {!error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.editor.CheckRunDetailsPanel.07eccfa397',
                   'No details are available for this check.'
                 )}
@@ -399,7 +397,7 @@ export function CheckRunDetailsPanel({
             size="sm"
             onClick={(event) => openAppHttpLink(openUrl, { worktreeId, event })}
           >
-            {translate('auto.components.editor.CheckRunDetailsPanel.a916648574', 'Open details')}
+            {t('auto.components.editor.CheckRunDetailsPanel.a916648574', 'Open details')}
             <ExternalLink className="size-3.5" />
           </Button>
         </div>

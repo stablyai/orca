@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()

@@ -5,13 +5,15 @@ import type {
 } from '../../../../shared/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import { safeOrigin, type BrowserPopupPage } from './browser-manager-types'
-import { BrowserManagerRegistration } from './browser-manager-registration'
+import { safeOrigin } from '../browser-event-origin'
+import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
+import { BrowserManagerRegistration } from './registration/browser-manager-registration'
 import {
   isBrowserRouteGuestPopup,
   listBrowserRouteGuestPopups
 } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
+import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   getGuestWebContentsId(browserTabId: string): number | null {
@@ -112,6 +114,24 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)
   }
 
+  getBrowserPageRemoteTabFaviconUrl(browserPageId: string): string | null {
+    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    return webContentsId === undefined
+      ? null
+      : (this.remoteTabFaviconUrlByGuestId.get(webContentsId) ?? null)
+  }
+
+  getBrowserPageNavigationState(
+    browserPageId: string
+  ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
+    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      return null
+    }
+    return { loading: guest.isLoadingMainFrame(), ...readGuestNavigationState(guest) }
+  }
+
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
     return this.certificateTrustController?.getFailure(browserPageId) ?? null
   }
@@ -173,6 +193,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   protected notifyBrowserGuestStateChanged(webContentsId: number): void {
+    this.offscreenGuestStateNotices.cancel(String(webContentsId))
     if (!this.offscreenGuestIds.has(webContentsId)) {
       return
     }

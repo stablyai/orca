@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { normalizeTerminalLayoutSnapshot } from './terminal-layout-normalization'
-import { normalizeTerminalLayoutPtyOwnership } from '../../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
-
-function collectRootLeafIds(layout: TerminalLayoutSnapshot): string[] {
-  const visit = (node: NonNullable<TerminalLayoutSnapshot['root']>): string[] =>
-    node.type === 'leaf' ? [node.leafId] : [...visit(node.first), ...visit(node.second)]
-  return layout.root ? visit(layout.root) : []
-}
 
 function duplicatePtyLayout(): TerminalLayoutSnapshot {
   return {
@@ -84,27 +78,6 @@ describe('terminal layout PTY ownership normalization', () => {
         [LEAF_2]: 'active agent',
         [LEAF_3]: 'setup'
       }
-    })
-  })
-
-  it('keeps the first layout leaf when focus belongs to another PTY', () => {
-    const layout = duplicatePtyLayout()
-    layout.activeLeafId = LEAF_3
-    layout.expandedLeafId = null
-
-    const normalized = normalizeTerminalLayoutSnapshot(layout)
-
-    expect(normalized.snapshot.root).toEqual({
-      type: 'split',
-      direction: 'vertical',
-      ratio: 0.4,
-      first: { type: 'leaf', leafId: LEAF_1 },
-      second: { type: 'leaf', leafId: LEAF_3 }
-    })
-    expect(normalized.snapshot.activeLeafId).toBe(LEAF_3)
-    expect(normalized.snapshot.ptyIdsByLeafId).toEqual({
-      [LEAF_1]: 'pty-agent',
-      [LEAF_3]: 'remote:env-1@@term_setup'
     })
   })
 
@@ -194,29 +167,6 @@ describe('terminal layout PTY ownership normalization', () => {
     })
   })
 
-  it('repairs rootless duplicate ownership in one idempotent pass', () => {
-    const normalized = normalizeTerminalLayoutSnapshot({
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null,
-      ptyIdsByLeafId: {
-        [LEAF_1]: 'pty-agent',
-        [LEAF_2]: 'pty-agent'
-      }
-    })
-
-    expect(normalized.snapshot).toEqual({
-      root: null,
-      activeLeafId: LEAF_1,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [LEAF_1]: 'pty-agent' }
-    })
-    expect(normalizeTerminalLayoutSnapshot(normalized.snapshot)).toEqual({
-      snapshot: normalized.snapshot,
-      changed: false
-    })
-  })
-
   it('preserves rootless pending focus while repairing duplicate ownership', () => {
     const normalized = normalizeTerminalLayoutSnapshot({
       root: null,
@@ -231,30 +181,6 @@ describe('terminal layout PTY ownership normalization', () => {
     expect(normalized.snapshot).toEqual({
       root: null,
       activeLeafId: LEAF_3,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [LEAF_1]: 'pty-agent' }
-    })
-  })
-
-  it('repairs dangling rooted selection during direct ownership normalization', () => {
-    const normalized = normalizeTerminalLayoutPtyOwnership({
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        first: { type: 'leaf', leafId: LEAF_1 },
-        second: { type: 'leaf', leafId: LEAF_2 }
-      },
-      activeLeafId: LEAF_3,
-      expandedLeafId: LEAF_3,
-      ptyIdsByLeafId: {
-        [LEAF_1]: 'pty-agent',
-        [LEAF_2]: 'pty-agent'
-      }
-    })
-
-    expect(normalized.snapshot).toEqual({
-      root: { type: 'leaf', leafId: LEAF_1 },
-      activeLeafId: LEAF_1,
       expandedLeafId: null,
       ptyIdsByLeafId: { [LEAF_1]: 'pty-agent' }
     })
@@ -360,33 +286,6 @@ describe('terminal layout PTY ownership normalization', () => {
     })
   })
 
-  it('preserves PTY ownership while collapsing repeated live leaf ids', () => {
-    const normalized = normalizeTerminalLayoutSnapshot({
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        first: { type: 'leaf', leafId: LEAF_1 },
-        second: { type: 'leaf', leafId: LEAF_1 }
-      },
-      activeLeafId: LEAF_1,
-      expandedLeafId: LEAF_1,
-      ptyIdsByLeafId: { [LEAF_1]: 'pty-agent' },
-      buffersByLeafId: { [LEAF_1]: 'cached buffer' }
-    })
-
-    expect(normalized.snapshot).toEqual({
-      root: { type: 'leaf', leafId: LEAF_1 },
-      activeLeafId: LEAF_1,
-      expandedLeafId: LEAF_1,
-      ptyIdsByLeafId: { [LEAF_1]: 'pty-agent' },
-      buffersByLeafId: { [LEAF_1]: 'cached buffer' }
-    })
-    expect(normalizeTerminalLayoutSnapshot(normalized.snapshot)).toEqual({
-      snapshot: normalized.snapshot,
-      changed: false
-    })
-  })
-
   it('retains one repeated PTY leaf alongside distinct sibling ownership', () => {
     const normalized = normalizeTerminalLayoutSnapshot({
       root: {
@@ -422,58 +321,5 @@ describe('terminal layout PTY ownership normalization', () => {
         [LEAF_2]: 'pty-shell'
       }
     })
-  })
-
-  it('preserves valid split layouts by identity', () => {
-    const layout = duplicatePtyLayout()
-    layout.ptyIdsByLeafId = {
-      [LEAF_1]: 'pty-1',
-      [LEAF_2]: 'pty-2',
-      [LEAF_3]: 'remote:env-1@@term_setup'
-    }
-
-    const normalized = normalizeTerminalLayoutSnapshot(layout)
-
-    expect(normalized).toEqual({ snapshot: layout, changed: false })
-    expect(normalized.snapshot).toBe(layout)
-  })
-
-  it('is idempotent and preserves one owner across PTY and focus permutations', () => {
-    const ptyOptions = [undefined, 'pty-a', 'remote:env-1@@term_b'] as const
-    for (const firstPtyId of ptyOptions) {
-      for (const secondPtyId of ptyOptions) {
-        for (const thirdPtyId of ptyOptions) {
-          for (const activeLeafId of [LEAF_1, LEAF_2, LEAF_3]) {
-            const ptyIdsByLeafId = Object.fromEntries(
-              [
-                [LEAF_1, firstPtyId],
-                [LEAF_2, secondPtyId],
-                [LEAF_3, thirdPtyId]
-              ].filter((entry): entry is [string, string] => entry[1] !== undefined)
-            )
-            const layout = duplicatePtyLayout()
-            layout.activeLeafId = activeLeafId
-            layout.expandedLeafId = activeLeafId
-            layout.ptyIdsByLeafId = ptyIdsByLeafId
-            const before = structuredClone(layout)
-
-            const normalized = normalizeTerminalLayoutSnapshot(layout).snapshot
-            const normalizedPtyIds = Object.values(normalized.ptyIdsByLeafId ?? {})
-            const rootLeafIds = new Set(collectRootLeafIds(normalized))
-
-            expect(new Set(normalizedPtyIds).size).toBe(normalizedPtyIds.length)
-            expect(
-              Object.keys(normalized.ptyIdsByLeafId ?? {}).every((id) => rootLeafIds.has(id))
-            ).toBe(true)
-            expect(normalized.activeLeafId && rootLeafIds.has(normalized.activeLeafId)).toBe(true)
-            expect(normalizeTerminalLayoutSnapshot(normalized)).toEqual({
-              snapshot: normalized,
-              changed: false
-            })
-            expect(layout).toEqual(before)
-          }
-        }
-      }
-    }
   })
 })

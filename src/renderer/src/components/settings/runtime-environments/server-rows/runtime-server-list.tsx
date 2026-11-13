@@ -7,14 +7,14 @@ import {
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
-import { translate } from '@/i18n/i18n'
-import { duplicatePairedServerNames } from '@/lib/duplicate-paired-servers'
+import { useTranslate } from '@/i18n/use-translate'
+import { duplicatePairedServerNames } from '@/lib/workspace/ownership/duplicate-paired-servers'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { migrationPhaseLabel } from '../managed-servers/managed-server-copy'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'
 import { RuntimeServerRow } from './runtime-server-row'
-import { ServerListRow } from './runtime-server-list-row'
+import { ServerListRow } from '../../host-rows/ServerListRow'
 import type { ManagedServerCatalog } from '../managed-servers/use-managed-server-catalog'
 import { useManagedServerLifecycle } from '../managed-servers/use-managed-server-lifecycle'
 
@@ -77,6 +77,7 @@ export function RuntimeServerList({
   rechecking,
   onChanged
 }: RuntimeServerListProps): React.JSX.Element {
+  const t = useTranslate()
   const { api, pending, targets, resumingId, resume, reload } = managedCatalog
 
   if (environments.length === 0 && pending.length === 0) {
@@ -87,10 +88,10 @@ export function RuntimeServerList({
         </span>
         <div className="space-y-1">
           <div className="text-sm font-medium">
-            {translate('auto.components.settings.serverList.noSavedServers', 'No saved servers')}
+            {t('auto.components.settings.serverList.noSavedServers', 'No saved servers')}
           </div>
           <p className="max-w-sm text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.serverList.emptyDescription',
               'Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.'
             )}
@@ -150,9 +151,9 @@ export function RuntimeServerList({
         <ServerListRow
           key={row.migrationId}
           name={targets.find((target) => target.id === row.sshTargetId)?.label ?? row.name}
-          meta={<span className="truncate">{migrationPhaseLabel(row.phase)}</span>}
+          meta={<span className="truncate">{migrationPhaseLabel(row.phase, t)}</span>}
           status={{
-            label: translate('auto.components.settings.serverList.movePaused', 'Move paused'),
+            label: t('auto.components.settings.serverList.movePaused', 'Move paused'),
             tone: 'muted'
           }}
           primaryAction={
@@ -164,7 +165,7 @@ export function RuntimeServerList({
               onClick={() => void resume(row)}
             >
               {resumingId === row.migrationId ? <LoadingSpinner className="size-3" /> : null}
-              {translate('auto.components.settings.managedServers.pending.resume', 'Resume')}
+              {t('auto.components.settings.managedServers.pending.resume', 'Resume')}
             </Button>
           }
         />

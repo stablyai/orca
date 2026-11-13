@@ -11,11 +11,11 @@ import {
   requiredString
 } from './rpc-param-primitives'
 import { normalizeExecutionHostId } from '../execution-host'
-import { isValidAutomationSchedule } from '../automation-schedule-parsing'
+import { isValidAutomationSchedule } from '../automations/scheduling/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
-} from '../automation-precheck'
+} from '../automations/launch/automation-precheck'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'

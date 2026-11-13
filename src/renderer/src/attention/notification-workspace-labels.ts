@@ -1,12 +1,12 @@
 import type { useAppStore } from '../store/index'
-import { getRepoMapFromState } from '../store/selectors'
-import { getIndexedWorktreesById } from '../store/worktree-repo-index'
+import { getIndexedRepoMap } from '../store/repos/repository-catalog-index'
+import { getIndexedWorktreesById } from '../store/slices/worktrees/listing/worktree-catalog-index'
 import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from '../store/slices/worktrees/listing/worktree-host-ownership'
-import { getResolvedExecutionHostIdForWorktree } from '../lib/resolved-worktree-execution-host'
-import { getActiveWorkspaceExecutionHostId } from '../lib/active-workspace-host'
+import { getResolvedExecutionHostIdForWorktree } from '../lib/workspace/ownership/resolved-worktree-execution-host'
+import { getActiveWorkspaceExecutionHostId } from '../lib/workspace/ownership/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
@@ -15,12 +15,15 @@ import {
   findIndexedRepoOwnerForHost,
   resolveIndexedRepoOwner
 } from '../lib/workspace/ownership/repo-owner-index'
-import { getCatalogOwnerHostId } from '../lib/workspace/ownership/workspace-catalog-owner-index'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import '../lib/workspace/ownership/workspace-catalog-owner-index'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../store/workspaces/catalog/workspace-record-fields'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -53,7 +56,7 @@ function findNotificationRepo(
 ): Repo | undefined {
   // One owner for the id means the id-keyed map already names it, at no extra cost.
   if (resolveIndexedRepoOwner(state.repos, repoId).kind !== 'ambiguous') {
-    return getRepoMapFromState(state).get(repoId)
+    return getIndexedRepoMap(state.repos).get(repoId)
   }
   const owningHost = hostId ?? getResolvedExecutionHostIdForWorktree(state, worktreeId)
   if (!owningHost) {
@@ -80,7 +83,7 @@ export function getNotificationWorkspaceLabels(
       findIndexedProjectGroupOwner(
         state.projectGroups,
         folder.projectGroupId,
-        getCatalogOwnerHostId(folder)
+        getRepoExecutionHostId(folder)
       )
     return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
   }

@@ -1,12 +1,12 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
+import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
 import {
   settleSiblingProviderResult,
   type SettledProviderResult
 } from './service-sibling-provider-result'
-import { disabledUsageSnapshot } from '../disabled-usage-snapshot'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
-import type { ProviderRateLimits } from './service-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 function hasKnownProvenanceChange(
   previous: ProviderRateLimits | null,
@@ -174,9 +174,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
+      const home = prepared.claudeAuthPreparation?.configDir
+      this.rememberUsageReadingAccount('claude', claudeTarget, home, claudeProvenance)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
+      const home = prepared.codexHomePath
+      this.rememberUsageReadingAccount('codex', codexTarget, home, codexProvenance)
     }
     this.trackActiveFailureStreak('gemini', gemini)
     if (shouldApplyOpencode) {

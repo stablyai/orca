@@ -8,7 +8,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type {
   RuntimeTerminalCreate,
   RuntimeTerminalListResult,

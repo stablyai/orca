@@ -10,7 +10,8 @@ import { activeProviderContext } from '../../../../../shared/agent-session/agent
 import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   openTestJournalHostDatabase,
-  readTestQueueChanges
+  readTestQueueChanges,
+  seedLegacyTestJournal
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
@@ -46,17 +47,21 @@ export const words = (fact: 'providerRejected' | 'cancelled') =>
     { surface: 'rejection' }
   )
 
-export function journalFor(sessionId: string): AgentSessionJournal {
-  return new AgentSessionJournal({
+export function journalFor(sessionId: string, legacyInputs = false): AgentSessionJournal {
+  const options = {
     database: openTestJournalHostDatabase(rig.root),
     identity: {
       sessionId,
       workspaceId: 'workspace-1',
       hostId: 'local',
-      agent: 'codex',
+      agent: 'codex' as const,
       providerHandle: activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle
     }
-  })
+  }
+  if (legacyInputs) {
+    seedLegacyTestJournal(options.database, options)
+  }
+  return new AgentSessionJournal(options)
 }
 
 export async function handOff(

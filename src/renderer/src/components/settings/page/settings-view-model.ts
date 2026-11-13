@@ -1,14 +1,22 @@
 import { useCallback } from 'react'
-import type { SettingsNavGroup } from '@/lib/settings-navigation-types'
+import type { SettingsNavGroup } from '@/components/settings/navigation/settings-navigation-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsNavigationModel } from '../navigation/use-settings-navigation-model'
-import { getSettingsNavGroupDefinitionsForSearch } from '../navigation/settings-navigation-foundations'
+import {
+  cancelPendingSettingsDeepLinkTargetWatch,
+  getSettingsNavGroupDefinitionsForSearch
+} from '../navigation/settings-navigation-foundations'
+import type { SettingsSearchResult } from '../navigation/settings-search-results'
 
 export function useSettingsNavigationActions(
   model: Pick<
     SettingsStoreModel,
+    | 'setHighlightedSettingsTarget'
+    | 'generalSubPage'
+    | 'setGeneralSubPage'
     | 'activeSectionId'
     | 'setActiveSectionId'
     | 'setPendingNavRequestTick'
@@ -20,6 +28,8 @@ export function useSettingsNavigationActions(
 ) {
   const {
     activeSectionId,
+    setHighlightedSettingsTarget,
+    setGeneralSubPage,
     setActiveSectionId,
     setPendingNavRequestTick,
     setSettingsSearchQuery,
@@ -30,7 +40,8 @@ export function useSettingsNavigationActions(
     confirmDiscardSourceControlAiPromptChanges,
     contentScrollRef,
     pendingNavSectionRef,
-    pendingScrollTargetRef
+    pendingScrollTargetRef,
+    pendingScrollTargetWatchRef
   } = interactions
   const scrollToSection = useCallback(
     async (sectionId: string): Promise<void> => {
@@ -45,6 +56,12 @@ export function useSettingsNavigationActions(
         // Clear stale filtering when selecting a result’s pane.
         setSettingsSearchQuery('')
       }
+      // A plain pane pick supersedes any search or deep-link jump still waiting for its row.
+      pendingNavSectionRef.current = null
+      pendingScrollTargetRef.current = null
+      cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
+      setHighlightedSettingsTarget(null)
+      setGeneralSubPage(null)
       releaseNativeAccounts()
       setActiveSectionId(sectionId)
     },
@@ -53,9 +70,40 @@ export function useSettingsNavigationActions(
       releaseNativeAccounts,
       confirmDiscardSourceControlAiPromptChanges,
       contentScrollRef,
+      pendingNavSectionRef,
+      pendingScrollTargetRef,
+      pendingScrollTargetWatchRef,
       setActiveSectionId,
+      setGeneralSubPage,
+      setHighlightedSettingsTarget,
       setSettingsSearchQuery,
       settingsSearchQuery
+    ]
+  )
+
+  const openSettingsSearchResult = useCallback(
+    async (result: SettingsSearchResult): Promise<void> => {
+      const sectionId = result.section.id
+      if (sectionId !== activeSectionId) {
+        if (!(await confirmDiscardSourceControlAiPromptChanges())) {
+          return
+        }
+        releaseNativeAccounts()
+      }
+      setHighlightedSettingsTarget(null)
+      pendingNavSectionRef.current = sectionId
+      pendingScrollTargetRef.current = result.targetId
+      // Pending refs cannot schedule the jump effect; trigger a render.
+      setPendingNavRequestTick((tick) => tick + 1)
+    },
+    [
+      activeSectionId,
+      confirmDiscardSourceControlAiPromptChanges,
+      pendingNavSectionRef,
+      pendingScrollTargetRef,
+      releaseNativeAccounts,
+      setHighlightedSettingsTarget,
+      setPendingNavRequestTick
     ]
   )
 
@@ -80,14 +128,15 @@ export function useSettingsNavigationActions(
     settingsSearchQuery
   ])
 
-  return { scrollToSection, openComputerUseFromBrowser }
+  return { scrollToSection, openSettingsSearchResult, openComputerUseFromBrowser }
 }
 
 export type SettingsNavigationActions = ReturnType<typeof useSettingsNavigationActions>
 
 export function buildSettingsViewModel(
   model: SettingsStoreModel,
-  navigation: SettingsNavigationModel
+  navigation: SettingsNavigationModel,
+  t: Translate = translate
 ) {
   const generalNavSections = navigation.visibleNavSections.filter(
     (section) => !section.id.startsWith('repo-')
@@ -99,7 +148,7 @@ export function buildSettingsViewModel(
   const generalNavGroups: SettingsNavGroup[] = generalNavGroupDefinitions
     .map((group) => ({
       id: group.id,
-      title: translate(group.titleKey, group.titleDefault),
+      title: t(group.titleKey, group.titleDefault),
       sections: generalNavSections.filter((section) => section.group === group.id)
     }))
     .filter((group) => group.sections.length > 0 || group.id === 'setup')

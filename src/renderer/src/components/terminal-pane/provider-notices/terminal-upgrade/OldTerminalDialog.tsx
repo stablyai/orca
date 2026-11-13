@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Learn more for a terminal opened before an Orca update its shell does not have. */
 export function OldTerminalDialog({
@@ -25,6 +25,7 @@ export function OldTerminalDialog({
   description: string
   cause: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -36,7 +37,7 @@ export function OldTerminalDialog({
         {/* Why no global fix: a new terminal already has the update. */}
         <DialogFooter>
           <Button type="button" autoFocus onClick={onOpenNewTerminal}>
-            {translate('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
+            {t('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
           </Button>
         </DialogFooter>
       </DialogContent>

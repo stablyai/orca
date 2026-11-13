@@ -27,6 +27,8 @@ export type RemoteRuntimeViewportBatcher = {
 export type RemoteRuntimePtyTextBatcherOptions = {
   maxPendingBytes?: number
   maxBytes?: number
+  /** False keeps input trailing even when idle; defaults to sending idle input at once. */
+  sendLeadingEdge?: () => boolean
 }
 
 export function createRemoteRuntimePtyTextBatcher(
@@ -75,12 +77,24 @@ export function createRemoteRuntimePtyTextBatcher(
     return text
   }
 
+  // Why: the window only coalesces input that follows a send, so an isolated keystroke never waits.
+  const closeWindow = (): void => {
+    timer = null
+    if (pending) {
+      flush()
+      timer ??= setTimeout(closeWindow, delayMs)
+    }
+  }
+
   const queuePending = (chunk: string, chunkBytes: number): void => {
+    if (!timer && !pending && (options.sendLeadingEdge?.() ?? true)) {
+      timer = setTimeout(closeWindow, delayMs)
+      onFlush(chunk)
+      return
+    }
     pending += chunk
     pendingBytes += chunkBytes
-    if (!timer) {
-      timer = setTimeout(flush, delayMs)
-    }
+    timer ??= setTimeout(closeWindow, delayMs)
   }
 
   const pushValidatedInput = (data: string): void => {

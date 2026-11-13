@@ -1,8 +1,8 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import {
   buildTaskPageGitHubWorkItemMutationPatch,
   type TaskPageGitHubMutationIntent
@@ -34,7 +34,7 @@ import type {
   BeginTaskPageGitHubWorkItemMutationArgs,
   BeginTaskPageGitHubWorkItemMutationResult
 } from './task-page-github-work-item-mutation-types'
-import type { ParsedTaskQuery } from '../../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../../shared/work-items/task-query'
 
 function resolveSourceScope(sourceContext?: TaskSourceContext | null): string | null {
   if (sourceContext?.provider === 'github') {

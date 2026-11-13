@@ -91,7 +91,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 ## Artifacts
 
 - **Orca account** — sign in (same account family as Orca Relay) to publish and manage shared files.
-- **Allow publishing public artifact links** — **off by default**. Device-wide gate: when on, you, agents, and the `orca` CLI on this machine can upload HTML/Markdown and mint public view links. Turning it off does not delete existing links.
+- **Allow publishing public artifact links** — **on by default for new profiles**; profiles created before this default keep their previous setting. Device-wide gate: when on, you, agents, and the `orca` CLI on this machine can upload HTML/Markdown and mint public view links. Turning it off does not delete existing links.
 - **Show Artifacts** / sidebar shortcut — open the Artifacts list to search, preview, copy, or delete account-owned links.
 - **Ask Before Deleting Artifacts** — optional confirmation before breaking a public link.
 - Share from an open local HTML page or Markdown editor with **Share as artifact**, or via `orca artifacts …`. See [CLI reference → Artifacts](/docs/cli/reference#artifacts).
@@ -125,7 +125,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
   - **Parakeet TDT-CTC JA** — Japanese.
   - **SenseVoice** — ZH / EN / JA / KO / Cantonese with auto language detection.
   - **Whisper Tiny** — 90+ languages, lower accuracy.
-  - **GPT-4o mini / GPT-4o Transcribe** — cloud; needs OpenAI key under the same pane.
+  - **GPT Transcribe** — cloud; needs OpenAI key under the same pane. A saved GPT-4o mini or GPT-4o Transcribe choice moves to it, since OpenAI shuts those down on 2027-02-26.
 - While listening, a **Listening…** pill shows a **Stop** control; in toggle mode the tooltip also shows the dictation shortcut.
 
 ## SSH

@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { applyTerminalAppearance } from './terminal-appearance'
-import { useThemeBackgroundStore } from '@/store/theme-background'
-import { usePluginFontReady } from '@/store/plugin-fonts'
-import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
+import type { MountedTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 
 export function useMountedTerminalAppearance(
   deps: Pick<
-    UseTerminalPaneLifecycleDeps,
+    MountedTerminalPaneLifecycleDeps,
+    | 'mountedManager'
     | 'managerRef'
     | 'settingsRef'
     | 'settings'
@@ -27,7 +28,12 @@ export function useMountedTerminalAppearance(
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
-    if (!manager || !deps.settings || !currentSettings) {
+    if (
+      !deps.mountedManager ||
+      manager !== deps.mountedManager ||
+      !deps.settings ||
+      !currentSettings
+    ) {
       return
     }
     applyTerminalAppearance(
@@ -40,6 +46,7 @@ export function useMountedTerminalAppearance(
       deps.paneLastThemeModeRef.current
     )
   }, [
+    deps.mountedManager,
     deps.settings,
     themeBackgroundActive,
     terminalFontReady,

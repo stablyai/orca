@@ -6,7 +6,7 @@ import type {
   BrowserConsoleResult,
   BrowserPdfResult,
   BrowserEvalResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 

@@ -1,8 +1,8 @@
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { AppState } from '../../store/types'
 
 export type RuntimeEnvironmentStoreSyncState = Pick<
@@ -111,7 +111,7 @@ type RuntimeEnvironmentStoreSyncSubscriberDeps = {
   getReachableEnvironmentIds: (state: RuntimeEnvironmentStoreSyncState) => string[]
   requestProjectRefresh: (environmentId: string) => void
   markEnvironmentSshStateStale: (environmentId: string) => void
-  sync: () => void
+  sync: (recoveryEnvironmentIds?: readonly string[]) => void
 }
 
 export type RuntimeEnvironmentStoreSyncSubscriber = (
@@ -170,7 +170,7 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
       }
       desiredEnvironmentKey = nextDesiredEnvironmentKey
       reachableEnvironmentKey = nextReachableEnvironmentKey
-      deps.sync()
+      deps.sync(refreshEnvironmentIds)
     } finally {
       handlingStoreWrite = false
     }

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 import { HomeSlide } from './slides/HomeSlide'
 import { WorktreeListSlide } from './slides/WorktreeListSlide'
 import { TerminalSlide } from './slides/TerminalSlide'
-import { translate } from '@/i18n/i18n'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { useTranslate } from '@/i18n/use-translate'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240
@@ -12,6 +12,7 @@ const TAP_BEFORE_PUSH_MS = 240
 type Phase = 'normal' | 'reset'
 
 export function PhoneCarousel(): React.JSX.Element {
+  const t = useTranslate()
   const [activeIdx, setActiveIdx] = useState(0)
   const [phase, setPhase] = useState<Phase>('normal')
   const [tappingSlide, setTappingSlide] = useState<number | null>(null)
@@ -112,7 +113,7 @@ export function PhoneCarousel(): React.JSX.Element {
         <div
           className={slideClass(0)}
           role="img"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.mobile.PhoneCarousel.89c7713645',
             'Orca Mobile home screen'
           )}
@@ -122,17 +123,14 @@ export function PhoneCarousel(): React.JSX.Element {
         <div
           className={slideClass(1)}
           role="img"
-          aria-label={translate('auto.components.mobile.PhoneCarousel.93217b41c1', 'Worktree list')}
+          aria-label={t('auto.components.mobile.PhoneCarousel.93217b41c1', 'Worktree list')}
         >
           <WorktreeListSlide tapping={tappingSlide === 1} />
         </div>
         <div
           className={slideClass(2)}
           role="img"
-          aria-label={translate(
-            'auto.components.mobile.PhoneCarousel.96d651cb87',
-            'Terminal session'
-          )}
+          aria-label={t('auto.components.mobile.PhoneCarousel.96d651cb87', 'Terminal session')}
         >
           <TerminalSlide />
         </div>

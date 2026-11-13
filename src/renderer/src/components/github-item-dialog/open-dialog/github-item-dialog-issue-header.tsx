@@ -21,12 +21,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
+import { cn } from '@/lib/class-names'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { i18n } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -67,6 +68,8 @@ export function GitHubItemDialogIssueHeader({
   repoPath: string | null
   issueAttachedWorkspaceLabel: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const ownerRepo = parseOwnerRepoFromItemUrl(workItem.url)
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
@@ -110,10 +113,7 @@ export function GitHubItemDialogIssueHeader({
                       size="icon-sm"
                       disabled={!canRefreshTask || refreshing}
                       onClick={() => void refreshTask()}
-                      aria-label={translate(
-                        'auto.components.GitHubItemDialog.refreshTask',
-                        'Refresh task'
-                      )}
+                      aria-label={t('auto.components.GitHubItemDialog.refreshTask', 'Refresh task')}
                     >
                       <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
                     </Button>
@@ -121,11 +121,11 @@ export function GitHubItemDialogIssueHeader({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
                   {refreshUnsupported
-                    ? translate(
+                    ? t(
                         'auto.components.GitHubItemDialog.refreshTaskUnsupported',
                         'Update Orca on this server to refresh tasks here.'
                       )
-                    : translate('auto.components.GitHubItemDialog.refreshTask', 'Refresh task')}
+                    : t('auto.components.GitHubItemDialog.refreshTask', 'Refresh task')}
                 </TooltipContent>
               </Tooltip>
             ) : null}
@@ -137,10 +137,7 @@ export function GitHubItemDialogIssueHeader({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => void handleCopyWorkItemLink()}
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.c43fe79ee0',
-                    'Copy GitHub link'
-                  )}
+                  aria-label={t('auto.components.GitHubItemDialog.c43fe79ee0', 'Copy GitHub link')}
                 >
                   {linkCopied ? (
                     <Check className="size-4 text-emerald-500" />
@@ -151,8 +148,8 @@ export function GitHubItemDialogIssueHeader({
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
                 {linkCopied
-                  ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
-                  : translate('auto.components.GitHubItemDialog.c43fe79ee0', 'Copy GitHub link')}
+                  ? t('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                  : t('auto.components.GitHubItemDialog.c43fe79ee0', 'Copy GitHub link')}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -161,16 +158,13 @@ export function GitHubItemDialogIssueHeader({
                   variant="ghost"
                   size="icon-sm"
                   onClick={(event) => openAppHttpLink(workItem.url, { event })}
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.3fdf777817',
-                    'Open on GitHub'
-                  )}
+                  aria-label={t('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                 >
                   <ExternalLink className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
+                {t('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -193,19 +187,19 @@ export function GitHubItemDialogIssueHeader({
                     size="sm"
                     onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
                     className="gap-1.5 whitespace-nowrap"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.GitHubItemDialog.84855fedd0',
                       'Open workspace attached to issue'
                     )}
                   >
-                    {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
+                    {t('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                     <ArrowRight className="size-3.5" />
                   </Button>
                   <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
                       size="icon-sm"
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.GitHubItemDialog.fe6ff12dc2',
                         'More issue workspace actions'
                       )}
@@ -217,14 +211,11 @@ export function GitHubItemDialogIssueHeader({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => onUse(workItem)}>
                     <Plus className="size-4" />
-                    {translate(
-                      'auto.components.GitHubItemDialog.36182aa57f',
-                      'Start new workspace'
-                    )}
+                    {t('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => openAppHttpLink(workItem.url)}>
                     <ExternalLink className="size-4" />
-                    {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
+                    {t('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -234,15 +225,12 @@ export function GitHubItemDialogIssueHeader({
                 size="sm"
                 onClick={() => onUse(workItem)}
                 className="gap-1.5 whitespace-nowrap"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.GitHubItemDialog.0ab4664a8b',
                   'Start workspace from issue'
                 )}
               >
-                {translate(
-                  'auto.components.GitHubItemDialog.0ab4664a8b',
-                  'Start workspace from issue'
-                )}
+                {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
                 <ArrowRight className="size-3.5" />
               </Button>
             )}
@@ -261,14 +249,14 @@ export function GitHubItemDialogIssueHeader({
               <CircleDot className="size-3.5" />
             )}
             {localState === 'closed'
-              ? translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')
-              : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
+              ? t('auto.components.GitHubItemDialog.ab050dffec', 'Closed')
+              : t('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </span>
           <span className="flex flex-wrap items-center gap-1.5">
             <span>
               <Trans
                 i18n={i18n}
-                defaults={translate(
+                defaults={t(
                   'auto.components.GitHubItemDialog.authorOpenedThisIssue',
                   '<author/> opened this issue'
                 )}
@@ -276,18 +264,18 @@ export function GitHubItemDialogIssueHeader({
                   author: (
                     <span className="font-semibold text-foreground">
                       {workItem.author ??
-                        translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                        t('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
                     </span>
                   )
                 }}
               />
             </span>
             <span className="text-muted-foreground/80">
-              {translate(
+              {t(
                 'auto.components.GitHubItemDialog.middotUpdatedRelativeTime',
                 '· updated {{time}}',
                 {
-                  time: formatRelativeTime(workItem.updatedAt)
+                  time: formatRelativeTime(workItem.updatedAt, intlLocale)
                 }
               )}
             </span>

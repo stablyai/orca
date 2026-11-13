@@ -8,7 +8,7 @@ import {
 } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
 import { isWorkspaceGridViewFull } from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 import { useAppStore } from '@/store'
-import { isKnownGridViewWorkspace } from '@/store/slices/workspace-grid-view'
+import { isKnownGridViewWorkspace } from '@/store/slices/workspace-grid-view/workspace-grid-view'
 
 export function WorkspaceGridViewMenuItems({
   workspaceId,

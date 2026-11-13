@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { orcadReadinessWaitCommand } from './orcad-remote-readiness-wait'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { ORCAD_LAUNCH_MACHINE_COMMAND } from './orcad-remote-host-support'
 
@@ -16,7 +16,11 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('the host-side readiness wait', () => {
-  async function waitAfter(gone: boolean, machine: 'here' | 'elsewhere' | 'unrecorded') {
+  async function waitAfter(
+    gone: boolean,
+    machine: 'here' | 'elsewhere' | 'unrecorded',
+    killPrefix = ''
+  ) {
     const root = mkdtempSync(join(tmpdir(), 'orcad-readiness-wait-'))
     roots.push(root)
     const slot = join(root, 'slot')
@@ -25,6 +29,7 @@ describe.skipIf(process.platform === 'win32')('the host-side readiness wait', ()
     const machineFile = quotePosixShell(join(slot, '.orcad-pid-machine'))
     const command = orcadReadinessWaitCommand(getRemoteHostPlatform('linux-x64'), slot, 2)
     const prefix = [
+      killPrefix,
       gone ? `sh -c 'echo $$ > "$1"' orcad-test ${pidFile};` : `echo ${process.pid} > ${pidFile};`,
       ...(machine === 'here'
         ? [`{ ${ORCAD_LAUNCH_MACHINE_COMMAND};} > ${machineFile} 2>/dev/null;`]
@@ -45,6 +50,15 @@ describe.skipIf(process.platform === 'win32')('the host-side readiness wait', ()
     'ends at once when the launched PID is gone here',
     async () => {
       expect(await waitAfter(true, 'here')).toBe(true)
+    }
+  )
+
+  // zsh prints ESRCH lowercase (#34149).
+  it.skipIf(process.platform !== 'linux')(
+    'ends at once when kill reports the gone PID like zsh',
+    async () => {
+      const zshKill = 'kill() { echo "zsh:kill:1: kill 1 failed: no such process" >&2; return 1; };'
+      expect(await waitAfter(true, 'here', zshKill)).toBe(true)
     }
   )
 

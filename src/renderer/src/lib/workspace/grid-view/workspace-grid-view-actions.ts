@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { isKnownGridViewWorkspace } from '@/store/slices/workspace-grid-view'
+import { isKnownGridViewWorkspace } from '@/store/slices/workspace-grid-view/workspace-grid-view'
 import { activateAndRevealWorkspace } from '../activation/worktree-activation'
 
 /** Adds a workspace and opens the grid view when the user is looking at a workspace outside it. */

@@ -15,19 +15,18 @@ import {
   SquareTerminal,
   Type
 } from 'lucide-react'
-import type {
-  PluginHostListEntry,
-  PluginMarketplaceHostInstallPreview
-} from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugin-host-api'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
-import type { ActivePluginCommand } from '@/store/plugin-panels'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { usePluginSyntaxes } from '@/store/plugin-syntax-packs'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
+import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { Button } from '../../ui/button'
 import { revealPluginIconTheme } from '../state/plugin-try-action'
@@ -38,7 +37,7 @@ import { PluginContributionEventRow, usePluginWorkerEvents } from './PluginContr
 import { PluginContributionActionLanguage } from './PluginContributionActionLanguage'
 import { PluginContributionActionPanel } from './PluginContributionActionPanel'
 import { PluginContributionActionNewFile } from './PluginContributionActionNewFile'
-import { collectActivePluginNewFiles } from '@/store/plugin-new-files'
+import { collectActivePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { PluginContributionSyntaxHint } from './PluginContributionActionSyntax'
 import {
   isPluginContributionLive,
@@ -57,44 +56,32 @@ import {
 } from '../presentation/plugin-contributions'
 import { useInstalledPluginContributions } from '../state/use-plugin-contribution-source'
 
-function catalogTypeLabel(type: PluginCatalogType): string {
+function catalogTypeLabel(type: PluginCatalogType, t: Translate = translate): string {
   switch (type) {
     case 'interface-language':
-      return translate(
+      return t(
         'auto.components.settings.PluginDetailSections.typeLanguagePack',
         'Interface language'
       )
     case 'app-theme':
-      return translate('auto.components.settings.PluginDetailSections.typeAppTheme', 'App theme')
+      return t('auto.components.settings.PluginDetailSections.typeAppTheme', 'App theme')
     case 'terminal-theme':
-      return translate(
-        'auto.components.settings.PluginDetailSections.typeTerminalTheme',
-        'Terminal theme'
-      )
+      return t('auto.components.settings.PluginDetailSections.typeTerminalTheme', 'Terminal theme')
     case 'icon-theme':
-      return translate(
-        'auto.components.settings.PluginDetailSections.typeIconTheme',
-        'File icon theme'
-      )
+      return t('auto.components.settings.PluginDetailSections.typeIconTheme', 'File icon theme')
     case 'syntax':
-      return translate(
-        'auto.components.settings.PluginDetailSections.typeSyntax',
-        'Syntax highlighting'
-      )
+      return t('auto.components.settings.PluginDetailSections.typeSyntax', 'Syntax highlighting')
     case 'instructions':
-      return translate(
+      return t(
         'auto.components.settings.PluginDetailSections.typeInstructions',
         'Agent instructions'
       )
     case 'panel':
-      return translate('auto.components.settings.PluginDetailSections.typePanel', 'Sidebar panel')
+      return t('auto.components.settings.PluginDetailSections.typePanel', 'Sidebar panel')
     case 'editor':
-      return translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
+      return t('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
     case 'worker':
-      return translate(
-        'auto.components.settings.PluginDetailSections.typeWorker',
-        'Background code'
-      )
+      return t('auto.components.settings.PluginDetailSections.typeWorker', 'Background code')
   }
 }
 
@@ -129,13 +116,14 @@ function CommandRow({
   command: AddsCommand
   onOpenShortcuts: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const overrides = useAppStore((state) => state.keybindings)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const platform = getShortcutPlatform()
   const binding = command.keybindings[0]
   const shadowed = binding ? shadowedKeybindingTitles(binding.key, platform, overrides) : []
   const unavailableReason = command.live
-    ? pluginCommandUnavailableReason(command.live, activeWorktreeId)
+    ? pluginCommandUnavailableReason(command.live, activeWorktreeId, t)
     : null
   return (
     <DetailRow
@@ -145,7 +133,7 @@ function CommandRow({
       detail={
         shadowed.length > 0 ? (
           <span className="flex flex-col items-start">
-            {translate(
+            {t(
               'auto.components.settings.PluginDetailSections.replaces',
               'Replaces your shortcut for {{value0}}',
               { value0: shadowed.join(', ') }
@@ -155,7 +143,7 @@ function CommandRow({
               className="mt-0.5 rounded-sm text-xs text-foreground underline underline-offset-2 outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring"
               onClick={onOpenShortcuts}
             >
-              {translate(
+              {t(
                 'auto.components.settings.PluginDetailSections.changeShortcuts',
                 'Change in Shortcuts'
               )}
@@ -164,12 +152,12 @@ function CommandRow({
         ) : unavailableReason ? (
           unavailableReason
         ) : isWorkspaceScopedPluginContext(binding?.when) ? (
-          translate(
+          t(
             'auto.components.settings.PluginKeybindingConsentPreview.worktree',
             'Only in a workspace'
           )
         ) : (
-          translate('auto.components.settings.PluginDetailSections.command', 'Command')
+          t('auto.components.settings.PluginDetailSections.command', 'Command')
         )
       }
       trailing={
@@ -201,6 +189,7 @@ function contributionRowId(row: PluginContribution): string {
 function useContributionRowActions(
   plugin: PluginHostListEntry | null
 ): (row: PluginContribution) => React.ReactNode {
+  const t = useTranslate()
   const syntaxes = usePluginSyntaxes()
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
   const iconThemes = usePluginIconThemes()
@@ -249,7 +238,7 @@ function useContributionRowActions(
               )
             }
           >
-            {translate('auto.components.settings.pluginInstallAction.tryIt', 'Try it')}
+            {t('auto.components.settings.pluginInstallAction.tryIt', 'Try it')}
           </Button>
         ) : null
       }
@@ -286,6 +275,8 @@ export function PluginAddsSection({
   types: readonly PluginCatalogType[]
   onOpenShortcuts: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const installedSource = useInstalledPluginContributions(plugin)
   // Why the summary over the preview: same names, known at first paint, so rows never appear late.
   const source = plugin
@@ -325,7 +316,7 @@ export function PluginAddsSection({
           )
       : previewCommands) ??
     []
-  const rows = describePluginContributions(source)
+  const rows = describePluginContributions(source, t, intlLocale)
   // Why: a fetched manifest or a catalog summary is exact, so its types add nothing.
   const fallbackTypes =
     (preview || summary) && !plugin ? [] : uncoveredCatalogTypes(types, rows, commands.length > 0)
@@ -335,7 +326,7 @@ export function PluginAddsSection({
   }
   return (
     <DetailSection
-      title={translate('auto.components.settings.PluginDetailSections.adds', 'Adds to Orca')}
+      title={t('auto.components.settings.PluginDetailSections.adds', 'Adds to Orca')}
       count={String(total)}
     >
       {rows.map((row) => (
@@ -360,7 +351,7 @@ export function PluginAddsSection({
         <PluginContributionEventRow key={`event:${event}`} event={event} />
       ))}
       {fallbackTypes.map((type) => (
-        <DetailRow key={type} icon={<FileCode />} title={catalogTypeLabel(type)} />
+        <DetailRow key={type} icon={<FileCode />} title={catalogTypeLabel(type, t)} />
       ))}
     </DetailSection>
   )

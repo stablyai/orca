@@ -1,3 +1,4 @@
+import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -12,6 +13,10 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { journalDispatchRowApplies } from '../projection/journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../projection/journal-dispatch-doubt-reasons'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import {
+  journalInputSourceBody,
+  journalInputSourceSequence
+} from '../input-order/journal-input-source'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -160,16 +165,20 @@ export function acceptSubmissionFromProviderItem(
   })
 }
 
-/** Any provider-accepted turn may lift queue pauses. */
+/** Acceptance lifts the pauses allowed by the input's saved provenance. */
 export function noteTurnAccepted(
   state: JournalReducerState,
-  submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
+  submission: Pick<
+    AgentJournalSubmission,
+    'acceptedSequence' | 'queuedMessageId' | 'source' | 'origin'
+  >
 ): void {
   if (submission.acceptedSequence !== undefined) {
     state.latestAcceptedTurnSequence = Math.max(
       state.latestAcceptedTurnSequence,
       submission.acceptedSequence
     )
+    getJournalInputOrder(state)?.notePersonAcceptance(submission)
   }
 }
 
@@ -181,4 +190,47 @@ function storedSourceKind(stored: unknown): string {
     typeof stored.kind === 'string'
     ? stored.kind
     : ''
+}
+
+/** A row keeps who requested it even when explicit Send supplies a client-origin attempt. */
+export function journalSubmissionIsPersonal(
+  state: { queue: Pick<JournalReducerState['queue'], 'cards'> },
+  submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>
+): boolean {
+  if (submission.queuedMessageId !== undefined) {
+    const card = state.queue.cards.get(submission.queuedMessageId)
+    return Boolean(
+      card &&
+      card.unattended !== true &&
+      !card.body.from &&
+      !orchestrationMailNotice(card.body.from)
+    )
+  }
+  return (
+    submission.source?.kind === 'user' ||
+    (submission.source === undefined && submission.origin === 'client')
+  )
+}
+
+/** Old importers could remove a completed card while retaining its original personal request. */
+export function journalLegacySubmissionIsPersonal(
+  state: Pick<JournalReducerState, 'queue' | 'inputs' | 'epoch'>,
+  submission: AgentJournalSubmission
+): boolean {
+  if (!submission.queuedMessageId || state.queue.cards.has(submission.queuedMessageId)) {
+    return journalSubmissionIsPersonal(state, submission)
+  }
+  const admission = state.inputs.sources.get(submission.clientMessageId)
+  const request = admission?.kind === 'submission' ? admission : admission?.submission
+  const body = journalInputSourceBody(admission)
+  return Boolean(
+    admission?.epoch === state.epoch &&
+    request?.queuedMessageId === submission.queuedMessageId &&
+    request?.origin === 'client' &&
+    request.source === undefined &&
+    request.payloadFingerprint === submission.payloadFingerprint &&
+    journalInputSourceSequence(admission) === submission.acceptedSequence &&
+    body &&
+    !body.from
+  )
 }

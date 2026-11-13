@@ -2,7 +2,7 @@ import {
   highlightMobileCode,
   resolveMobileSyntaxLanguage,
   type MobileSyntaxSegment
-} from '../session/mobile-file-syntax'
+} from './session-documents/mobile-file-syntax'
 
 export type MobileFilePreviewSyntax = {
   language: string

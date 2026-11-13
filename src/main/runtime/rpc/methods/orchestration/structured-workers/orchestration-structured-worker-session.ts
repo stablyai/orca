@@ -241,8 +241,7 @@ export async function sendStructuredWorkerPreamble(args: {
     case 'refused':
       throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
     case 'queued':
-      // Never for a `now` send; a held draft proves nothing about the worker taking it.
-      return preambleDispatchState(undefined)
+      return 'pending'
     case 'sent':
       return preambleDispatchState(outcome.submission)
   }

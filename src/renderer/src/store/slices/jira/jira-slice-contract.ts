@@ -10,7 +10,7 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 export type JiraReadOptions = {
   sourceContext?: TaskSourceContext | null

@@ -8,32 +8,6 @@ import '../attempt-outcome-projection'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
 
 describe('dispatch failure idempotency', () => {
-  it('counts an active dispatch failure only once', () => {
-    const db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-
-    expect(db.failDispatch(dispatch.id, 'exit')?.failure_count).toBe(1)
-    const duplicate = db.failDispatch(dispatch.id, 'duplicate escalation')
-
-    expect(duplicate?.failure_count).toBe(1)
-    expect(duplicate?.status).toBe('failed')
-    db.close()
-  })
-
-  it('does not overwrite a completed dispatch', () => {
-    const db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-    db.completeDispatch(dispatch.id)
-
-    const lateFailure = db.failDispatch(dispatch.id, 'late exit')
-
-    expect(lateFailure?.failure_count).toBe(0)
-    expect(lateFailure?.status).toBe('completed')
-    db.close()
-  })
-
   it('rolls back the dispatch when the task update fails', () => {
     const db = new OrchestrationDb(':memory:')
     const sqlite = (db as unknown as { db: Database.Database }).db

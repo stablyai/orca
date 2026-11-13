@@ -16,14 +16,16 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     getEnabledExtensionIds: () => [],
     updateEnabledExtensionIds: vi.fn(),
     getProfile: () => ({ id: 'default' })
   }
 }))
-vi.mock('./api/runtime', () => ({ openBrowserExtensionOptionsPage: vi.fn() }))
+vi.mock('./tabs-and-windows/browser-extension-options-page', () => ({
+  openBrowserExtensionOptionsPage: vi.fn()
+}))
 vi.mock('./installation/browser-extension-install-store', () => ({
   getBrowserExtensionInstallStore: () => mocks.store
 }))

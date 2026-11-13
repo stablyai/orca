@@ -1,89 +1,63 @@
 import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
+import { resolveTerminalAgentRecipient } from './session-recipient'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
-import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
+import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   readMutationReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-receipt'
+} from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
-import { helperQuestionAnswerer } from './helper-question-answerer'
-import { replyToRemoteRunHome } from './reply-remote'
+import { replyAccess } from './reply-access'
+import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
+import { replyOverPeerMail } from './peer-mail-reply'
 import { withAnswerNext } from '../receipt-next'
 import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import {
+  completionReportDispatchId,
+  reportFollowUpAction
+} from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
-export const ORCHESTRATION_REPLY_METHOD = defineMethod({
+export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
   permission: 'workspace',
   params: ReplyParams,
+  access: {
+    kind: 'writes',
+    caller: 'from',
+    server: 'on',
+    targets: { id: 'message', run: 'run' },
+    rule: replyAccess
+  },
+  replay: (_params, { runtime, replayedMutationReceipt }) => {
+    const nudge = readMutationReplayNudge(replayedMutationReceipt)
+    if (!nudge) {
+      return undefined
+    }
+    replayMutationNudge(runtime, nudge)
+    return { receipt: stripMutationReplayNudge(replayedMutationReceipt) }
+  },
   handler: async (
     params,
-    {
-      orchestrationCompatibilityEvidence,
-      orchestrationCaller,
-      runtime,
-      legacyCoordinatorRunId,
-      recordMutationReceipt,
-      replayedMutationReceipt,
-      signal
-    }
+    { orchestrationCaller, runtime, recordMutationReceipt, orchestrationMutation, signal },
+    access
   ) => {
-    const replayNudge = readMutationReplayNudge(replayedMutationReceipt)
-    if (replayNudge) {
-      replayMutationNudge(runtime, replayNudge)
-      return stripMutationReplayNudge(replayedMutationReceipt)
-    }
     const db = runtime.getOrchestrationDb()
-    const original = db.getMessageById(params.id)
-    if (!original) {
-      throw new Error(`Message not found: ${params.id}`)
-    }
-    if (
-      legacyCoordinatorRunId &&
-      (original.run_id !== legacyCoordinatorRunId ||
-        (params.run !== undefined && params.run !== legacyCoordinatorRunId))
-    ) {
-      throw new OrchestrationError(
-        'request_mismatch',
-        `Message ${params.id} does not belong to this adopted Run.`,
-        { effectsApplied: false }
-      )
-    }
-    if (
-      original.run_id === ORCHESTRATION_LEGACY_RUN_ID ||
-      original.delivery_contract === 'legacy_direct' ||
-      original.delivery_contract === 'audit_only'
-    ) {
-      throw new OrchestrationError(
-        'legacy_read_only',
-        'Legacy orchestration messages are inspect-only; no reply was applied.',
-        { effectsApplied: false }
-      )
-    }
-
-    const question = db.getQuestion(params.id)
-    const creatorAnswerer =
-      question && (params.run === undefined || params.run === question.run_id)
-        ? helperQuestionAnswerer(runtime, {
-            question: original,
-            from: params.from,
-            session: orchestrationCaller,
-            evidence: orchestrationCompatibilityEvidence
-          })
-        : undefined
-    if (question && creatorAnswerer) {
+    const { original } = access
+    if (access.kind === 'helper') {
+      const { question, answerer } = access
       const answered = db.answerQuestion({
         messageId: question.message_id,
         runId: question.run_id,
-        answeredBy: creatorAnswerer,
+        answeredBy: answerer,
         captureSender: acceptedAnswerSender(
           runtime,
-          `dispatch:${creatorAnswerer.dispatchId}`,
+          `dispatch:${answerer.dispatchId}`,
           orchestrationCallerIdentity(runtime, {
             handle: params.from ?? '',
             session: orchestrationCaller,
@@ -98,15 +72,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
         () => deliverQuestionAnswer(runtime, question)
       )
     }
-    if (question) {
-      const run = resolveRunScope(runtime, {
-        runId: params.run ?? question.run_id,
-        callerTerminalHandle: params.from,
-        requireCurrentConsumer: true,
-        legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
-      })
+    if (access.kind === 'run') {
+      const { question, run } = access
       const answered = db.answerQuestion({
         messageId: question.message_id,
         runId: run.id,
@@ -152,14 +119,46 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       )
     }
 
+    const peerRoute = db.getPeerMailMessage(original.id)
+    if (peerRoute) {
+      return await replyOverPeerMail({
+        runtime,
+        original,
+        route: peerRoute,
+        params,
+        orchestrationCaller,
+        orchestrationMutation,
+        recordMutationReceipt
+      })
+    }
+    if (params.on !== undefined) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `${params.id} did not come from another server, so its reply stays on this Orca. Drop --on. No reply was sent.`,
+        { effectsApplied: false }
+      )
+    }
     if (db.getRun(original.run_id)?.home_database === 'remote') {
       return await replyToRemoteRunHome({ runtime, db, original, params, signal })
+    }
+    // Await first, so the refusals and routing below read state as it is after the wait.
+    const terminalRecipient = await resolveTerminalAgentRecipient(original.from_handle)
+    // A finished task's worker never reads a reply to its report; refuse before marking or storing anything.
+    const reportDispatchId = completionReportDispatchId(db, original)
+    const followUp = reportDispatchId ? reportFollowUpAction(db, reportDispatchId) : undefined
+    if (reportDispatchId && followUp) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        formatFinishedReportReplyRefusal(reportDispatchId, followUp),
+        { effectsApplied: false, followUp }
+      )
     }
     const recipient = resolveReplyRecipient({
       runtime,
       db,
       originalFrom: original.from_handle,
-      originalRunId: original.run_id
+      originalRunId: original.run_id,
+      terminalRecipient
     })
     db.markAsRead([original.id])
     const reply = db.insertMessage({
@@ -171,7 +170,10 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       runId: recipient.runId
     })
 
-    const receipt = { message: exposeMessage(reply) }
+    const receipt = {
+      message: exposeMessage(reply),
+      ...(recipient.warning ? { warnings: [recipient.warning] } : {})
+    }
     return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(reply.to_handle, reply.type)
     )

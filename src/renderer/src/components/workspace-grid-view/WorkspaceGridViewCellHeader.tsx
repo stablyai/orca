@@ -7,10 +7,10 @@ import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { removeWorkspaceFromGridViewKeepingFocus } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { WORKSPACE_GRID_VIEW_CELL_ACTION_ATTR } from './workspace-grid-view-cell-frame'
 
 // Why the tab-strip look: the focused cell reads like the focused tab, with the same tint and bar.

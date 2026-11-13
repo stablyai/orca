@@ -73,9 +73,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/store/selectors', () => ({
-  getAllWorktreesFromState: () => Array.from(mocks.state.worktreeMap.values()),
-  getWorktreeMapFromState: () => mocks.state.worktreeMap,
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedAllWorktrees: () => Array.from(mocks.state.worktreeMap.values()),
+  getIndexedWorktreeMap: () => mocks.state.worktreeMap
+}))
+vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
   // Match declared hosts even though this fixture indexes only one worktree per ID.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const row = mocks.state.worktreeMap.get(worktreeId)
@@ -105,6 +107,8 @@ vi.mock('./delete-worktree-failure-toast', () => ({
 
 import { toast } from 'sonner'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
+
+import { runWorktreeDelete } from './delete-worktree-flow'
 
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 
@@ -155,6 +159,18 @@ describe('delete worktree flow', () => {
     vi.mocked(toast.info).mockClear()
     vi.mocked(showDeleteWorktreeFailureToast).mockClear()
     setWorktrees([])
+  })
+
+  it('keeps the ignored-file confirmation available when a caller requires it despite skip-confirm', () => {
+    setWorktrees([{ id: 'ignored-only' }])
+    mocks.state.settings.skipDeleteWorktreeConfirm = true
+    runWorktreeDelete('ignored-only', { forceConfirm: true })
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
+      worktreeId: 'ignored-only',
+      worktreeDeleteIdentities: [{ id: 'ignored-only', instanceId: 'ignored-only-instance' }],
+      allowSkipConfirm: false
+    })
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
   })
 
   it('revalidates each queued instance immediately before execution', async () => {

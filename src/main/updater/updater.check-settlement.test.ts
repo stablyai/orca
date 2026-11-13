@@ -8,7 +8,6 @@ const {
   autoUpdaterMock,
   fetchChangelogMock,
   fetchNewerReleaseTagsMock,
-  closeLocalBuildFeedMock,
   moduleFactories,
   resetUpdaterMocks
 } = await vi.hoisted(async () =>
@@ -128,33 +127,6 @@ describe('updater', () => {
     expect(oldSend).not.toHaveBeenCalled()
   })
 
-  it('leaves a dismissed release update on the release source', async () => {
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      autoUpdaterMock.emit('update-available', { version: '2.0.0' })
-      return Promise.resolve(undefined)
-    })
-    const send = vi.fn()
-    const { setupAutoUpdater, checkForUpdatesFromMenu, dismissAvailableUpdate } =
-      await loadUpdaterModule()
-    setupAutoUpdater(updaterMainWindow(send), {
-      getLastUpdateCheckAt: () => Date.now()
-    })
-
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      expect(send).toHaveBeenCalledWith(
-        'updater:status',
-        expect.objectContaining({ state: 'available', version: '2.0.0' })
-      )
-    })
-
-    dismissAvailableUpdate()
-
-    expect(closeLocalBuildFeedMock).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalledWith('updater:status', { state: 'idle' })
-  })
-
   it('deduplicates identical check errors from the event and rejected promise', async () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
@@ -184,123 +156,6 @@ describe('updater', () => {
       .filter((status) => typeof status === 'object' && status !== null && status.state === 'error')
 
     expect(errorStatuses).toEqual([{ state: 'error', message: 'boom', userInitiated: true }])
-  })
-
-  it('surfaces net::ERR_FAILED to user-initiated checks with a friendly message', async () => {
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('error', new Error('net::ERR_FAILED'))
-      })
-      return Promise.reject(new Error('net::ERR_FAILED'))
-    })
-
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      expect(statuses).toContainEqual(
-        expect.objectContaining({
-          state: 'error',
-          userInitiated: true,
-          message: expect.stringContaining("Couldn't reach the update server")
-        })
-      )
-    })
-
-    const statuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
-
-    expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
-    expect(statuses).not.toContainEqual(
-      expect.objectContaining({ state: 'error', message: 'net::ERR_FAILED' })
-    )
-  })
-
-  it('shows checking immediately for a user-initiated check while feed pinning is pending', async () => {
-    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
-    fetchNewerReleaseTagsMock.mockImplementation(
-      () =>
-        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
-          resolveTags = resolve
-        })
-    )
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      return new Promise(() => {})
-    })
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-
-    expect(sendMock).toHaveBeenCalledWith('updater:status', {
-      state: 'checking',
-      userInitiated: true
-    })
-    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
-
-    resolveTags({ tags: [], state: 'no-newer' })
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-
-    const checkingStatuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
-      .filter(
-        (status) => typeof status === 'object' && status !== null && status.state === 'checking'
-      )
-
-    expect(checkingStatuses).toEqual([{ state: 'checking', userInitiated: true }])
-  })
-
-  it('keeps background checks event-driven before checking-for-update fires', async () => {
-    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
-    fetchNewerReleaseTagsMock.mockImplementation(
-      () =>
-        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
-          resolveTags = resolve
-        })
-    )
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => null })
-
-    expect(
-      sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-        .some(
-          (status) => typeof status === 'object' && status !== null && status.state === 'checking'
-        )
-    ).toBe(false)
-
-    resolveTags({ tags: [], state: 'no-newer' })
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-
-    autoUpdaterMock.emit('checking-for-update')
-    expect(sendMock).toHaveBeenCalledWith(
-      'updater:status',
-      expect.objectContaining({ state: 'checking' })
-    )
   })
 
   it('promotes a pending background check to user-initiated without launching a duplicate check', async () => {

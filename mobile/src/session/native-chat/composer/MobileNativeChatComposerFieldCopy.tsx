@@ -36,7 +36,7 @@ export function MobileNativeChatComposerFieldCopy({
 }) {
   const [heardEnd, setHeardEnd] = useState(0)
   // The copy grows past the field's height cap so it can be shifted; the frame clips it.
-  const copyStyle = withoutHeightCap(StyleSheet.flatten(composerInputStyles.messageText))
+  const copyStyle = withoutHeightCap(StyleSheet.flatten(composerInputStyles.messageText) ?? {})
   // While dictating, the line holding the newest word sits at the field's bottom, whatever the draft holds after it.
   const shift = dictationPreview ? Math.min(0, fieldHeight - heardEnd) : -scrollTop
   return (

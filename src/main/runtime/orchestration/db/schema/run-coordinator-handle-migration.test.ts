@@ -71,33 +71,6 @@ describe('Run coordinator handle history migration', () => {
     expect(db.getMessageById(late.id)?.to_handle).toBe(`run:${run.id}`)
   })
 
-  it('self-converges a v28 database created before coordinator history existed', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-v28-convergence-'))
-    const dbPath = join(tempDir, 'orchestration.db')
-    db = new OrchestrationDb(dbPath)
-    const run = db.createRun({
-      objective: 'schema collision',
-      coordinatorHandle: 'term_existing',
-      coordinatorPaneKey: 'tab:leaf'
-    })
-    db.close()
-    db = undefined
-
-    const v28Db = new Database(dbPath)
-    v28Db.exec('DROP TABLE run_coordinator_handles')
-    expect(v28Db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    v28Db.close()
-
-    db = new OrchestrationDb(dbPath)
-    const sqlite = (db as unknown as { db: Database.Database }).db
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(
-      sqlite
-        .prepare('SELECT run_id, terminal_handle FROM run_coordinator_handles WHERE run_id = ?')
-        .all(run.id)
-    ).toEqual([{ run_id: run.id, terminal_handle: 'term_existing' }])
-  })
-
   it('records every coordinator rebind performed by an older runtime', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-old-runtime-'))
     const dbPath = join(tempDir, 'orchestration.db')

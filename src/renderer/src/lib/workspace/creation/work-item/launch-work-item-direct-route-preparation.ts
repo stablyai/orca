@@ -1,39 +1,43 @@
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AppState } from '@/store/types'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import type { RepoHostFields } from '@/lib/agent-detection-target-inventory'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/project-execution-runtime'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   refineLocalLaunchPlatform,
-  resolveRepoExecutionHostPlatform,
-  type KnownExecutionHostPlatform
-} from '@/lib/execution-host-facts'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+  resolveRepoExecutionHostPlatform
+} from '@/runtime/hosts/platform/execution-host-facts'
+import type { KnownExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../../../../../shared/wsl-paths'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type {
   AgentSessionLaunchPlan,
   planAgentSessionLaunch
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { adoptAgentSessionLaunchVerdict } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 import { directLaunchSurfaceRequest } from './launch-work-item-direct-preflight'
-import type {
-  DirectWorkItemLaunchInputs,
-  LaunchWorkItemDirectArgs
-} from './launch-work-item-direct-types'
-import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,
   resolveDirectWorkItemAgent
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AppState } from '@/store/types'
+import type { RepoHostFields } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
+import type {
+  DirectWorkItemLaunchInputs,
+  LaunchWorkItemDirectArgs
+} from './launch-work-item-direct-types'
 
 export type DirectWorkItemAgentLaunchPreparation = {
   launchConnectionId: string | null
   unavailable: boolean
   effectiveAgent: TuiAgent | null
   agentArgs?: string | null
+  freshLaunchInputs?: {
+    agentArgs?: string | null
+    actionAgentArgs?: string
+    sessionOptions?: Readonly<Record<string, string>>
+  }
   startupPlan: ReturnType<typeof buildDirectWorkItemStartup>['startupPlan']
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
@@ -91,6 +95,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   agentLaunchPreferences?: LaunchWorkItemDirectArgs['agentLaunchPreferences']
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   resolveLaunchInputs?: LaunchWorkItemDirectArgs['resolveLaunchInputs']
@@ -109,7 +114,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   repoLaunchHost: KnownExecutionHostPlatform
   repoProjectRuntime?: ProjectExecutionRuntimeResolution
   planLaunch: typeof planAgentSessionLaunch
-  requestId: AgentLaunchRequestId
+  requestId: string
   preflightPlan?: AgentSessionLaunchPlan
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const agentSelection = await resolveDirectWorkItemAgent({
@@ -216,6 +221,12 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     unavailable: false,
     effectiveAgent,
     agentArgs,
+    freshLaunchInputs: {
+      ...(inputs?.actionAgentArgs !== undefined || args.actionAgentArgs !== undefined
+        ? { actionAgentArgs: inputs?.actionAgentArgs ?? args.actionAgentArgs }
+        : { agentArgs }),
+      sessionOptions
+    },
     startupPlan,
     draftLaunchedNatively,
     startupPlanFailed,

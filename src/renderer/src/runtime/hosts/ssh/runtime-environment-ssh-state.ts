@@ -1,13 +1,13 @@
 import { useAppStore } from '@/store/index'
 import type { SshConnectionState, SshTargetSummary } from '../../../../../shared/ssh-types'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
 import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payload-admission'
 import {
   collectSshTargetGenerations,
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
-} from '@/store/slices/ssh-target-cleanup'
+} from '@/store/slices/ssh/ssh-target-metadata'
 import { sanitizeSshTargetGeneration } from '../../../../../shared/ssh-target-generation'
 import { forEachWithConcurrency } from '../../../../../shared/map-with-concurrency'
 

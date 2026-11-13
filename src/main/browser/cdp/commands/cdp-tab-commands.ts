@@ -3,24 +3,30 @@ import type {
   BrowserTabInfo,
   BrowserTabListResult,
   BrowserTabSwitchResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
-import { CdpBridgeCommandModule } from './cdp-bridge-command-module'
+import type { CdpBridgeState } from './cdp-bridge-state'
+import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
 
-export class CdpTabCommands extends CdpBridgeCommandModule {
+export class CdpTabCommands {
+  constructor(
+    private readonly bridgeState: CdpBridgeState,
+    private readonly debuggerLifecycle: CdpDebuggerLifecycle
+  ) {}
+
   setActiveTab(webContentsId: number): void {
-    this.activeWebContentsId = webContentsId
+    this.bridgeState.activeWebContentsId = webContentsId
   }
 
   getActiveWebContentsId(): number | null {
-    return this.activeWebContentsId
+    return this.bridgeState.activeWebContentsId
   }
 
   getActivePageId(_worktreeId?: string): string | null {
-    if (!this.activeWebContentsId) {
+    if (!this.bridgeState.activeWebContentsId) {
       return null
     }
-    return this.resolveTabIdSafe(this.activeWebContentsId)
+    return this.bridgeState.resolveTabIdSafe(this.bridgeState.activeWebContentsId)
   }
 
   getPageInfo(
@@ -31,7 +37,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     if (!resolvedPageId) {
       return null
     }
-    const webContentsId = this.getRegisteredTabs().get(resolvedPageId)
+    const webContentsId = this.bridgeState.getRegisteredTabs().get(resolvedPageId)
     if (webContentsId == null) {
       return null
     }
@@ -50,7 +56,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     const tabs: BrowserTabInfo[] = []
     let index = 0
 
-    for (const [tabId, wcId] of this.getRegisteredTabs()) {
+    for (const [tabId, wcId] of this.bridgeState.getRegisteredTabs()) {
       const guest = webContents.fromId(wcId)
       if (!guest || guest.isDestroyed()) {
         continue
@@ -60,7 +66,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
         index,
         url: guest.getURL(),
         title: guest.getTitle(),
-        active: wcId === this.activeWebContentsId
+        active: wcId === this.bridgeState.activeWebContentsId
       })
       index++
     }
@@ -70,7 +76,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
 
   tabSwitch(index: number): BrowserTabSwitchResult {
     // Keep indices aligned with tabList(), which skips destroyed guests.
-    const liveEntries = [...this.getRegisteredTabs()].filter(([_tabId, wcId]) => {
+    const liveEntries = [...this.bridgeState.getRegisteredTabs()].filter(([_tabId, wcId]) => {
       const guest = webContents.fromId(wcId)
       return guest && !guest.isDestroyed()
     })
@@ -82,31 +88,31 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     }
 
     const [tabId, wcId] = liveEntries[index]
-    if (this.activeWebContentsId !== null) {
-      this.invalidateRefMap(this.activeWebContentsId)
+    if (this.bridgeState.activeWebContentsId !== null) {
+      this.bridgeState.invalidateRefMap(this.bridgeState.activeWebContentsId)
     }
-    this.activeWebContentsId = wcId
+    this.bridgeState.activeWebContentsId = wcId
 
     return { switched: index, browserPageId: tabId }
   }
 
   onTabClosed(webContentsId: number): void {
-    if (this.activeWebContentsId === webContentsId) {
-      this.activeWebContentsId = null
+    if (this.bridgeState.activeWebContentsId === webContentsId) {
+      this.bridgeState.activeWebContentsId = null
     }
-    const tabId = this.resolveTabIdSafe(webContentsId)
+    const tabId = this.bridgeState.resolveTabIdSafe(webContentsId)
     if (tabId) {
-      const state = this.tabState.get(tabId)
+      const state = this.bridgeState.tabState.get(tabId)
       const guest = webContents.fromId(webContentsId)
       if (state && guest) {
-        this.removeDebuggerListeners(guest, state)
+        this.debuggerLifecycle.removeDebuggerListeners(guest, state)
       }
-      this.tabState.delete(tabId)
-      this.commandQueues.delete(tabId)
+      this.bridgeState.tabState.delete(tabId)
+      this.bridgeState.commandQueues.delete(tabId)
     }
   }
 
   onTabChanged(webContentsId: number): void {
-    this.activeWebContentsId = webContentsId
+    this.bridgeState.activeWebContentsId = webContentsId
   }
 }

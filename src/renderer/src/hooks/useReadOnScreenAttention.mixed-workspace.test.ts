@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
 import { acknowledgeViewedAutoAckTarget } from './agent-auto-ack-surfaces'
-import {
-  createTestStore,
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab
-} from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { workspaceHasLiveMarker } from '../store/slices/workspace-attention/workspace-live-markers'

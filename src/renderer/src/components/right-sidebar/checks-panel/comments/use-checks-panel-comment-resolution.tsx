@@ -2,7 +2,7 @@ import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
@@ -15,12 +15,13 @@ import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
 import { resolveGitLabMRDiscussionForChecks } from '../gitlab-review-client'
 import { checksPanelReviewStableKey, clearPendingPRCommentAiAck } from './pr-comments-ai-launch-ack'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { errorMessage } from '../../../../../../shared/error-message'
 import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab-types'
 
@@ -49,6 +50,7 @@ type ChecksPanelCommentResolutionInput = Pick<
   Pick<ChecksPanelReviewState, 'sourceControlAiActionsVisible'>
 
 export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolutionInput) {
+  const t = useTranslate()
   const {
     activeGitLabReview,
     activeReview,
@@ -180,7 +182,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
   const commentsDisabledReason = canTargetPRComments
     ? undefined
-    : translate(
+    : t(
         'auto.components.right.sidebar.checks.panel.content.commentingRequiresGitHubPrTarget',
         'Commenting requires a GitHub PR repository target.'
       )
@@ -205,12 +207,12 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const noEnabledAgentKnown = noAgentFor('resolveConflicts')
   const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
     !activeWorktreeId
-      ? translate(
+      ? t(
           'auto.components.right.sidebar.checks.panel.content.selectWorkspaceBeforeAiAction',
           'Select a workspace before launching an AI action.'
         )
       : noAgentFor(actionId)
-        ? translate(
+        ? t(
             'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
             'No enabled AI agents. Configure agents in Settings.'
           )

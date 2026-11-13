@@ -1,41 +1,83 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY } from '../../../../../shared/skill-install-capability'
-
-const mocks = vi.hoisted(() => ({ supports: vi.fn(), rpc: vi.fn() }))
-vi.mock('../../rpc/compatibility/runtime-capability-proof', () => ({
-  runtimeEnvironmentSupportsCapability: mocks.supports
-}))
-vi.mock('../../rpc/calls/runtime-rpc-call', () => ({
-  callRuntimeRpc: mocks.rpc
-}))
+import { autoUpdateBundledSkillsOnTarget } from './runtime-bundled-skills-client'
+import { clearRuntimeCompatibilityCache } from '../../rpc/compatibility/runtime-compatibility-cache'
+import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
+import { BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY } from '../../../../../shared/skill-install-capability'
 import {
-  autoUpdateBundledSkillsOnTarget,
-  executeBundledSkillsOnTarget,
-  planBundledSkillsOnTarget
-} from './runtime-bundled-skills-client'
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../../../shared/protocol-version'
 
-const target = { kind: 'environment', environmentId: 'paired-server' } as const
-const request = { names: ['orca-computer-use'] }
+const ENVIRONMENT_ID = 'server-1'
+const target = { kind: 'environment' as const, environmentId: ENVIRONMENT_ID }
+
+type CallArgs = {
+  selector: string
+  method: string
+  params?: unknown
+  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
+}
+const call = vi.fn<(args: CallArgs) => unknown>()
+
+function setPairingRevision(pairingRevision: number): void {
+  replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 1, pairingRevision }])
+}
+
+function status(runtimeId: string) {
+  return {
+    id: 'status',
+    ok: true,
+    result: {
+      runtimeId,
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+      capabilities: [BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY]
+    },
+    _meta: { runtimeId }
+  }
+}
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  clearRuntimeCompatibilityCache()
+  setPairingRevision(41)
+  call.mockReset()
+  vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
 })
 
-describe('renamed skills on paired runtimes', () => {
-  it('offers a server update before sending an unsupported canonical name', async () => {
-    mocks.supports.mockImplementation(
-      async (_id, capability) => capability !== BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY
+describe('silent skill update on a paired server', () => {
+  it('sends the update only to the runtime and pairing that answered the capability check', async () => {
+    call.mockImplementation(async (args) =>
+      args.method === 'status.get'
+        ? status('runtime-a')
+        : { id: 'u', ok: true, result: { scope: 'global', skills: [] }, _meta: {} }
     )
-    expect(await planBundledSkillsOnTarget(target, request)).toEqual({
-      kind: 'unsupported',
-      reason: 'update-server'
+
+    await autoUpdateBundledSkillsOnTarget(target, ['orca-cli'], { recordOnly: true })
+
+    expect(call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'skills.autoUpdateBundledOrca',
+        params: { names: ['orca-cli'], recordOnly: true },
+        expectedEnvironmentPairingRevision: 41,
+        expectedEnvironmentRuntimeId: 'runtime-a'
+      })
+    )
+  })
+
+  it('never sends the update when the server is re-paired while the capability check awaits', async () => {
+    call.mockImplementation(async (args) => {
+      if (args.method === 'status.get') {
+        // Another host takes over this saved server before its status answer arrives.
+        setPairingRevision(42)
+        return status('runtime-b')
+      }
+      return { id: 'u', ok: true, result: { scope: 'global', skills: [] }, _meta: {} }
     })
-    expect(await autoUpdateBundledSkillsOnTarget(target, request.names)).toBeNull()
-    const outcome = await executeBundledSkillsOnTarget(target, 'digest', request).then(
-      () => 'fulfilled',
-      () => 'rejected'
+
+    await expect(autoUpdateBundledSkillsOnTarget(target, ['orca-cli'])).rejects.toThrow()
+    expect(call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'skills.autoUpdateBundledOrca' })
     )
-    expect(outcome).toBe('rejected')
-    expect(mocks.rpc).not.toHaveBeenCalled()
   })
 })

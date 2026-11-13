@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { shouldPollActiveGitStatus } from '@/app-shell/platform/passive-macos-app-data-access'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView

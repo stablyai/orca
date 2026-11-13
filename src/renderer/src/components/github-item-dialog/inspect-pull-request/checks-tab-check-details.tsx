@@ -1,11 +1,11 @@
 import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import { translate } from '@/i18n/i18n'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import {
   formatCheckTimestamp,
@@ -25,10 +25,12 @@ export function ChecksTabCheckDetails({
   state: CheckDetailsLoadState | undefined
   onRetry: (check: PRCheckDetail, key: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const details = state?.details
   const openUrl = details?.detailsUrl ?? details?.url ?? check.url
-  const startedAt = formatCheckTimestamp(details?.startedAt)
-  const completedAt = formatCheckTimestamp(details?.completedAt)
+  const startedAt = formatCheckTimestamp(details?.startedAt, intlLocale)
+  const completedAt = formatCheckTimestamp(details?.completedAt, intlLocale)
   const detailsStatusCheck: PRCheckDetail = {
     ...check,
     status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
@@ -43,29 +45,28 @@ export function ChecksTabCheckDetails({
       {state?.loading && !state.error ? (
         <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
           <LoaderCircle className="size-3.5 animate-spin" />
-          {translate('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
+          {t('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             <span>
-              {translate('auto.components.GitHubItemDialog.9c3ba11a05', 'Status:')}{' '}
-              {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+              {t('auto.components.GitHubItemDialog.9c3ba11a05', 'Status:')}{' '}
+              {details ? getCheckStatusLabel(detailsStatusCheck, t) : getCheckStatusLabel(check, t)}
             </span>
             {startedAt && (
               <span>
-                {translate('auto.components.GitHubItemDialog.4812814bc8', 'Started')} {startedAt}
+                {t('auto.components.GitHubItemDialog.4812814bc8', 'Started')} {startedAt}
               </span>
             )}
             {completedAt && (
               <span>
-                {translate('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')}{' '}
-                {completedAt}
+                {t('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')} {completedAt}
               </span>
             )}
             {check.checkRunId && (
               <span className="font-mono">
-                {translate('auto.components.GitHubItemDialog.485609c4f2', 'check #')}
+                {t('auto.components.GitHubItemDialog.485609c4f2', 'check #')}
                 {check.checkRunId}
               </span>
             )}
@@ -87,8 +88,8 @@ export function ChecksTabCheckDetails({
               >
                 <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
                 {state.loading
-                  ? translate('githubChecks.retrying', 'Retrying…')
-                  : translate('auto.components.GitHubItemDialog.dcb3c546fe', 'Retry')}
+                  ? t('githubChecks.retrying', 'Retrying…')
+                  : t('auto.components.GitHubItemDialog.dcb3c546fe', 'Retry')}
               </Button>
             </div>
           )}
@@ -118,7 +119,7 @@ export function ChecksTabCheckDetails({
           {hasAnnotations && (
             <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
               <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                {translate('auto.components.GitHubItemDialog.96d8f36798', 'Annotations')}
+                {t('auto.components.GitHubItemDialog.96d8f36798', 'Annotations')}
               </div>
               <div className="flex flex-col">
                 {getKeyedCheckAnnotations(details!.annotations).map(
@@ -133,7 +134,7 @@ export function ChecksTabCheckDetails({
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
                           {annotation.path ??
-                            translate('auto.components.GitHubItemDialog.7d42606f66', 'Annotation')}
+                            t('auto.components.GitHubItemDialog.7d42606f66', 'Annotation')}
                           {annotation.startLine ? `:${annotation.startLine}` : ''}
                         </span>
                         {annotation.annotationLevel && (
@@ -165,7 +166,7 @@ export function ChecksTabCheckDetails({
           {hasJobs && (
             <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
               <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                {translate('auto.components.GitHubItemDialog.08d072664d', 'Jobs')}
+                {t('auto.components.GitHubItemDialog.08d072664d', 'Jobs')}
               </div>
               <div className="flex flex-col">
                 {getKeyedCheckJobs(details!.jobs).map(({ key, item: job }, index) => (
@@ -180,7 +181,7 @@ export function ChecksTabCheckDetails({
                       <span className="shrink-0 text-[11px] text-muted-foreground">
                         {job.conclusion ??
                           job.status ??
-                          translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                          t('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
                       </span>
                     </div>
                     {job.steps.length > 0 && (
@@ -205,11 +206,11 @@ export function ChecksTabCheckDetails({
           {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
             <div className="text-[12px] text-muted-foreground">
               {getCheckConclusion(check) === 'action_required'
-                ? translate(
+                ? t(
                     'auto.components.GitHubItemDialog.checkActionRequiredHint',
                     'Needs a manual action on GitHub (e.g. approving the run) to unblock merging.'
                   )
-                : translate(
+                : t(
                     'auto.components.GitHubItemDialog.744197c84d',
                     'No inline output is available for this check.'
                   )}
@@ -225,10 +226,7 @@ export function ChecksTabCheckDetails({
                 className="h-7 gap-1 px-2 text-[11px]"
                 onClick={(event) => openAppHttpLink(openUrl, { event })}
               >
-                {translate(
-                  'auto.components.GitHubItemDialog.checkOpenInBrowser',
-                  'Open in browser'
-                )}
+                {t('auto.components.GitHubItemDialog.checkOpenInBrowser', 'Open in browser')}
                 <ExternalLink className="size-3" />
               </Button>
             </div>

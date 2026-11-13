@@ -1,8 +1,8 @@
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
-import { isWebClientLocation } from '../../web-client-location'
+import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
+import { isWebClientLocation } from '../../../app-shell/platform/web-client-location'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../../shared/github/work-item-target'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../../shared/github/work-items/work-item-target'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -10,13 +10,13 @@ import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
 import {
   GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
-} from '../../../../../shared/task-source-runtime-capabilities'
+} from '../../../../../shared/work-items/task-source-runtime-capabilities'
 
 // Capture before the probe and carry the same authority through the actual queued dispatch.
 export async function callGitHubTargetOperation<TResult>(args: {

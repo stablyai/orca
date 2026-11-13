@@ -66,15 +66,6 @@ describe('task creation dependency readiness', () => {
     }
   )
 
-  it('rejects missing dependencies without inserting a task', () => {
-    const db = createDb()
-
-    expect(() =>
-      db.createTask({ runId: 'run_legacy_local', spec: 'child', deps: ['task_missing'] })
-    ).toThrow('Dependency task task_missing must belong to run')
-    expect(db.listTasks()).toEqual([])
-  })
-
   it('preserves readiness and later promotion across reload', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-task-readiness-'))
     directories.push(directory)

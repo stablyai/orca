@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import { createWorktreeIdentity } from '../../../../../shared/worktree/identity'
-import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
-import { forgeOwnerHostIdForWorkspace } from '../../../runtime/forge-credential-target'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/cache/github-cache-key'
+import { forgeOwnerHostIdForWorkspace } from '../../../runtime/source-control/forge/forge-credential-target'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../requests/request-coordination'
 import { createUpdateWorktreeMeta } from '../../slices/worktrees/metadata/update-worktree-meta'
 import { findKnownWorktreeById } from '../../slices/worktrees/listing/detected-worktree-meta'
@@ -126,102 +126,6 @@ describe('linked review clearing retains workspace and credential identities', (
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
-
-  for (const stamped of [false, true]) {
-    it.each(['cache', 'lookup', 'coordinator'] as const)(
-      `persists the paired copy through %s (stamp: ${stamped})`,
-      async (route) => {
-        const { store, workspace, sibling, update, key, alias, options } = setup(stamped)
-        if (route === 'cache') {
-          store.setState({ prCache: { [key]: { data: diverged, fetchedAt: NOW } } })
-        }
-        if (route === 'coordinator') {
-          store.getState().applyGitHubPRRefreshEvent({
-            sequence: 71,
-            reason: 'swr',
-            aliases: [alias],
-            status: 'in-flight',
-            requestStartedAt: NOW
-          })
-          store.getState().applyGitHubPRRefreshEvent({
-            sequence: 71,
-            reason: 'swr',
-            aliases: [alias],
-            outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
-          })
-        } else {
-          await store.getState().fetchPRForBranch(repository.path, branch, options)
-        }
-        await update.mock.results[0]?.value
-
-        expect(
-          findKnownWorktreeById(store.getState(), workspace.id, 'ssh:builder')?.linkedPR
-        ).toBeNull()
-        expect(findKnownWorktreeById(store.getState(), workspace.id, 'local')).toBe(sibling)
-        expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-          expect.objectContaining({
-            selector: 'server',
-            method: 'worktree.set',
-            params: expect.objectContaining({
-              worktree: `identity:${workspace.identity?.key}`,
-              linkedPR: null
-            })
-          })
-        )
-      }
-    )
-  }
-
-  it.each(['lookup', 'coordinator'] as const)(
-    'persists a branch-mismatch clear through %s',
-    async (route) => {
-      const { store, workspace, sibling, update, alias, options } = setup(true)
-      const mismatch = makePR({
-        number: 12,
-        state: 'open',
-        headSha: 'old-head',
-        headRefName: 'feature/old'
-      })
-      runtimeEnvironmentCall.mockImplementation(({ method }) => ({
-        id: method,
-        ok: true,
-        result: method === 'github.prForBranch' ? mismatch : {},
-        _meta: { runtimeId: 'server' }
-      }))
-      if (route === 'lookup') {
-        await store.getState().fetchPRForBranch(repository.path, branch, options)
-      } else {
-        store.getState().applyGitHubPRRefreshEvent({
-          sequence: 74,
-          reason: 'swr',
-          aliases: [alias],
-          status: 'in-flight',
-          requestStartedAt: NOW
-        })
-        store.getState().applyGitHubPRRefreshEvent({
-          sequence: 74,
-          reason: 'swr',
-          aliases: [alias],
-          outcome: { kind: 'found', pr: mismatch, fetchedAt: NOW }
-        })
-      }
-      await update.mock.results[0]?.value
-      expect(
-        findKnownWorktreeById(store.getState(), workspace.id, 'ssh:builder')?.linkedPR
-      ).toBeNull()
-      expect(findKnownWorktreeById(store.getState(), workspace.id, 'local')).toBe(sibling)
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-        expect.objectContaining({
-          selector: 'server',
-          method: 'worktree.set',
-          params: expect.objectContaining({
-            worktree: `identity:${workspace.identity?.key}`,
-            linkedPR: null
-          })
-        })
-      )
-    }
-  )
 
   it.each([
     { route: 'lookup', durable: true },

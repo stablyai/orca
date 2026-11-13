@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
-import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
+import { registerFileSearchSelectedTextProvider } from '@/lib/files/search/file-search-selection'
 import { isUnfocusedGridViewMember } from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 import { syncContentOnMount } from './monaco-content-sync'
 import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'

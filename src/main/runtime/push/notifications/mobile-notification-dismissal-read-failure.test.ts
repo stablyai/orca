@@ -1,38 +1,53 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import type * as fs from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import type * as SyncDatabaseModule from '../../../sqlite/sync-database'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
-vi.mock('node:fs', async (original) => {
-  const f = await original<typeof fs>()
-  return { ...f, readFileSync: vi.fn(f.readFileSync) }
+
+const failure = vi.hoisted(() => ({ remainingOpens: 0 }))
+vi.mock('../../../sqlite/sync-database', async (original) => {
+  const actual = await original<typeof SyncDatabaseModule>()
+  class FailingOpen extends actual.default {
+    constructor(...args: ConstructorParameters<typeof actual.default>) {
+      if (failure.remainingOpens > 0) {
+        failure.remainingOpens -= 1
+        throw Object.assign(new Error('read failed'), { code: 'EIO' })
+      }
+      super(...args)
+    }
+  }
+  return { ...actual, default: FailingOpen }
 })
-it('preserves dismissal history after EIO', async () => {
+
+it('keeps history it could not read and merges dismissals recorded meanwhile', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'push-comment-'))
+  const dismiss = (notificationId: string, notificationSeq: number) => ({
+    type: 'dismiss' as const,
+    notificationId,
+    notificationEpoch: 'epoch',
+    notificationSeq
+  })
   try {
     const store = new MobileNotificationDismissalStore(dir)
-    store.record({
-      type: 'dismiss',
-      notificationId: 'old',
+    store.record(dismiss('old', 1))
+    await store.close()
+    // The startup read fails; close() retries it and saves what was recorded meanwhile.
+    failure.remainingOpens = 1
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const restarted = new MobileNotificationDismissalStore(dir)
+    expect(restarted.hasLiveDelivery('anything')).toBe(true)
+    restarted.record(dismiss('new', 2))
+    await restarted.close()
+
+    const recovered = new MobileNotificationDismissalStore(dir)
+    await recovered.close()
+    const shown = (notificationId: string) => ({
+      notificationId,
       notificationEpoch: 'epoch',
       notificationSeq: 1
     })
-    await store.close()
-    const path = join(dir, 'mobile-notification-dismissals.json')
-    const before = readFileSync(path, 'utf8')
-    vi.mocked(readFileSync).mockImplementationOnce(() => {
-      throw Object.assign(new Error('read failed'), { code: 'EIO' })
-    })
-    const restarted = new MobileNotificationDismissalStore(dir)
-    restarted.record({
-      type: 'dismiss',
-      notificationId: 'new',
-      notificationEpoch: 'epoch',
-      notificationSeq: 2
-    })
-    await restarted.flush()
-    expect(readFileSync(path, 'utf8')).toBe(before)
+    expect(recovered.reconcile([shown('old'), shown('new')])).toEqual([shown('old'), shown('new')])
   } finally {
     vi.restoreAllMocks()
     rmSync(dir, { recursive: true, force: true })

@@ -2,7 +2,7 @@ import type { vi } from 'vitest'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from '../../input/keyboard/terminal-windows-shift-enter'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import type { AppState } from '@/store/types'
 
 export type StoreState = {

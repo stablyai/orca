@@ -4,7 +4,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import * as metadata from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { openTabBarEntry } from './tab-create-entry-action'
 

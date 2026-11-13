@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
-import { installHiddenWindowFramePump } from './hidden-window-frame-pump'
+import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
-import { installBrowserFindListener } from './preload-runtime-support'
+import { installBrowserFindListener } from './renderer/renderer-runtime'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
@@ -29,7 +29,7 @@ import { crashReportsApi } from './api/crash-reports-bridge'
 import { exportApi } from './api/export-bridge'
 import { ghApi } from './api/gh-bridge'
 import { hostedReviewApi } from './api/hosted-review-bridge'
-import { glApiBridge } from './api/gl-bridge'
+import { glApi } from './api/gitlab'
 import { bitbucketApi } from './api/bitbucket-bridge'
 import { linearApi } from './api/linear-bridge'
 import { jiraApi } from './api/jira-bridge'
@@ -54,6 +54,7 @@ import { computerUsePermissionsApi } from './api/computer-use-permissions-bridge
 import { shellApi } from './api/shell-bridge'
 import { skillsApi } from './api/skills-bridge'
 import { petApi } from './api/pet-bridge'
+import { appIconApi } from './api/app-icon-bridge'
 import { browserPasswordsApi } from './api/browser-passwords-bridge'
 import { browserApi } from './api/browser/browser-bridge'
 import { emulatorApi } from './api/emulator-bridge'
@@ -130,7 +131,7 @@ const api = {
   export: exportApi,
   gh: ghApi,
   hostedReview: hostedReviewApi,
-  gl: glApiBridge,
+  gl: glApi,
   bitbucket: bitbucketApi,
   linear: linearApi,
   jira: jiraApi,
@@ -159,6 +160,7 @@ const api = {
   shell: shellApi,
   skills: skillsApi,
   pet: petApi,
+  appIcon: appIconApi,
   browser: browserApi,
   browserPasswords: browserPasswordsApi,
   emulator: emulatorApi,

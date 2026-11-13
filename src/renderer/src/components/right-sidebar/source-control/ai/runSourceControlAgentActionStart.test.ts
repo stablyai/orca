@@ -3,11 +3,9 @@ import type { SourceControlActionRecipe } from '../../../../../../shared/source-
 import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   focusTerminalTabSurface: vi.fn(),
@@ -26,19 +24,19 @@ vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importO
   getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launchAgentInNewTab
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess }
 }))
 
-vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+vi.mock('@/lib/workspace/activation/workspace-navigation-toast-action', () => ({
   workspaceNavigationToastAction: ({
     workspaceId,
     executionHostId
@@ -102,52 +100,6 @@ describe('runSourceControlAgentActionStart', () => {
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
   })
 
-  it.each(['resolveConflicts', 'fixCommitFailure', 'fixPushFailure'] as const)(
-    'keeps %s in the folder group with the child cwd and recovery scope',
-    async (actionId) => {
-      mocks.launchAgentInNewTab.mockReturnValue({
-        surface: { kind: 'local-terminal', tabId: 'agent' }
-      })
-      const recoveryContext = {
-        target: { kind: 'local' as const },
-        worktreeId: 'child',
-        worktreePath: '/folder/repo',
-        connectionId: 'box'
-      }
-      await expect(
-        runSourceControlAgentActionStart(
-          buildArgs({
-            actionId,
-            worktreeId: 'child',
-            groupId: 'folder-group',
-            placementWorkspaceId: 'folder:feature',
-            initialCwd: '/folder/repo',
-            recoveryContext,
-            recipe: { agentId: 'codex', surface: 'chat', agentArgs: '--model gpt-5' },
-            launchChoice: {
-              agent: 'codex',
-              route: 'structured-native-chat',
-              requestedSurface: 'chat',
-              executionHostId: 'ssh:box'
-            }
-          })
-        )
-      ).resolves.toBe(true)
-      expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
-        expect.objectContaining({
-          worktreeId: 'folder:feature',
-          groupId: 'folder-group',
-          initialCwd: '/folder/repo',
-          trustWorktreeId: 'child',
-          selectedExecutionHostId: 'ssh:box',
-          requestedSurface: 'terminal',
-          agentArgs: '--model gpt-5'
-        })
-      )
-      expect(mocks.mutationInFlight).toHaveBeenCalledWith(recoveryContext)
-    }
-  )
-
   it('keeps a cross-host section launch child-owned instead of executing its path in the folder', async () => {
     useAppStore.setState({
       folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'local' })],
@@ -198,40 +150,6 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.navigate).not.toHaveBeenCalled()
     mocks.toastSuccess.mock.calls[0]?.[1].action.onClick()
     expect(mocks.navigate).toHaveBeenCalledWith('child', 'ssh:box')
-  })
-
-  it('notifies onLaunchAccepted as soon as the agent tab is created, before prompt delivery', async () => {
-    let resolveDelivery: (value: {
-      delivered: boolean
-      failureNotified: boolean
-    }) => void = () => {}
-    const promptDeliveryResult = new Promise<{ delivered: boolean; failureNotified: boolean }>(
-      (resolve) => {
-        resolveDelivery = resolve
-      }
-    )
-    const onLaunchAccepted = vi.fn()
-    const onLaunchAborted = vi.fn()
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult
-    })
-
-    const launchPromise = runSourceControlAgentActionStart(
-      buildArgs({ onLaunchAccepted, onLaunchAborted })
-    )
-
-    await vi.waitFor(() => {
-      expect(onLaunchAccepted).toHaveBeenCalledTimes(1)
-    })
-    expect(mocks.onLaunched).not.toHaveBeenCalled()
-
-    resolveDelivery({ delivered: true, failureNotified: false })
-    await expect(launchPromise).resolves.toBe(true)
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
-    expect(onLaunchAborted).not.toHaveBeenCalled()
   })
 
   // Why: irreversible host writes (fixing replies, thread resolves) hang off onLaunched, so a

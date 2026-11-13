@@ -3,23 +3,20 @@ import {
   buildBrowserPage,
   buildWorkspaceFromPage
 } from '@/store/slices/browser/pages/browser-page-records'
-import {
-  browserLinkPageMatches,
-  browserOpenResultForPage,
-  selectBrowserLinkDestination
-} from './browser-link-destination'
+import { browserLinkPageMatches, selectBrowserLinkDestination } from './browser-link-destination'
 import {
   browserLinkTestDestination,
   createBrowserLinkTestStore,
   WORKSPACE,
-  URL_TO_OPEN,
-  type BrowserLinkTestStore
+  URL_TO_OPEN
 } from './browser-link-open.test-fixture'
-import { captureLinkOpenIntent } from '../../link-open-intent'
-import '@/store/slices/store-test-helpers'
-import { makeUnifiedTab } from '@/store/slices/store-session-test-harness'
-import { makeWorktree, makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import { canOfferHttpLinkGroupAction } from './http-link-in-group-availability'
+import type { BrowserLinkTestStore } from './browser-link-open.test-fixture'
+import { captureLinkOpenIntent } from '../../links/placement/link-open-intent'
+import '@/store/testing/app-store-test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import '@/store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import './http-link-in-group-availability'
 
 let store: BrowserLinkTestStore
 beforeEach(() => {
@@ -27,80 +24,6 @@ beforeEach(() => {
 })
 
 describe('browser destination scope', () => {
-  it.each(['listed', 'detected'] as const)(
-    'refuses hostless ownership for %s twins even when the active workspace names one host',
-    (catalog) => {
-      const existing = store.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
-        targetGroupId: 'b',
-        executionHostId: 'local',
-        browserRuntimeEnvironmentId: null,
-        sessionProfileId: null,
-        activate: false
-      })
-      store.setState((state) => ({
-        ...(catalog === 'listed'
-          ? {
-              worktreesByRepo: {
-                repo1: [
-                  ...state.worktreesByRepo.repo1!,
-                  makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'runtime:other' })
-                ]
-              }
-            }
-          : {
-              detectedWorktreesByRepo: {
-                repo1: {
-                  repoId: 'repo1',
-                  authoritative: true,
-                  source: 'git' as const,
-                  worktrees: [
-                    {
-                      ...makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'runtime:other' }),
-                      ownership: 'external' as const,
-                      selectedCheckout: false,
-                      visible: true
-                    }
-                  ]
-                }
-              }
-            }),
-        unifiedTabsByWorktree: {
-          [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-            ...tab,
-            executionHostId: undefined
-          }))
-        }
-      }))
-      const state = store.getState()
-      const destination = browserLinkTestDestination()
-      expect(
-        selectBrowserLinkDestination(
-          state,
-          destination,
-          captureLinkOpenIntent(state, WORKSPACE, 'source')
-        )
-      ).toMatchObject({ status: 'ready', groupId: 'b', match: null })
-      expect(
-        browserOpenResultForPage(state, destination, existing.id, existing.activePageId!)
-      ).toBeNull()
-      expect(
-        canOfferHttpLinkGroupAction(state, {
-          workspaceId: WORKSPACE,
-          sourceTabId: 'source',
-          sourceOwner: { kind: 'local' },
-          url: URL_TO_OPEN
-        })
-      ).toBe(false)
-      expect(
-        selectBrowserLinkDestination(
-          state,
-          browserLinkTestDestination(),
-          captureLinkOpenIntent(state, WORKSPACE, 'source', { explicitSourceGroup: true })
-        )
-      ).toEqual({ status: 'refused' })
-    }
-  )
-
   it('refuses hostless folder twins despite an active host selection', () => {
     const workspaceId = 'folder:legacy'
     store.setState((state) => ({

@@ -9,7 +9,7 @@ vi.mock('electron', () => ({
   ipcMain: { removeHandler: vi.fn(), handle: vi.fn() },
   webFrameMain: { fromId: vi.fn() }
 }))
-vi.mock('../../browser-manager', () => ({ browserManager: {} }))
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))

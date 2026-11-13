@@ -55,24 +55,6 @@ describe('delegated phone auth follows its parent desktop', () => {
     expect(registry.resolveAuthenticatedPrincipal(principal)).toBeNull()
   })
 
-  it('refuses it when the desktop row is removed without the cascade', () => {
-    const { registry, desktop, child, principal } = delegatedRegistry()
-
-    expect(registry.removeDevice(desktop.deviceId)).toBe(true)
-
-    expect(registry.validateToken(child.token)).toBeNull()
-    expect(registry.resolveAuthenticatedPrincipal(principal)).toBeNull()
-  })
-
-  it('leaves phones paired directly to this host alone', () => {
-    const { registry, desktop } = delegatedRegistry()
-    const phone = registry.addDevice('phone', 'mobile')
-
-    removeOnDisk(desktop.deviceId)
-
-    expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
-  })
-
   it.each(['mobile', 'runtime'] as const)(
     'refuses a %s fork and its delegated phones after the bearer parent disappears on disk',
     (scope) => {

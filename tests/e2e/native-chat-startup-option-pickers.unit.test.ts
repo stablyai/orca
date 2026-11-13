@@ -9,7 +9,7 @@ import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/h
 import { StructuredAgentSessionStartupAttempts } from '../../src/main/native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt'
 import { createScriptedClaudeRuntime } from '../../src/main/runtime/agent-session/installation/structured-claude-scripted-runtime-test-support'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
-import { NativeChatSessionOptionPickers } from '../../src/renderer/src/components/native-chat/NativeChatSessionOptionPickers'
+import { NativeChatSessionOptionPickers } from '../../src/renderer/src/components/native-chat/session/options/controls/NativeChatSessionOptionPickers'
 import { structuredAgentSessionSeedCatalog } from '../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,

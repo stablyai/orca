@@ -1,6 +1,6 @@
 import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
-import type { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
-import { useNativeChatAcceptedAction } from '../../use-native-chat-action-outcomes'
+import type { useMobileStructuredAgentSession } from '../agent-session/use-mobile-structured-agent-session'
+import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'
 
 export function useMobileNativeChatPromptCards({
@@ -45,7 +45,10 @@ export function useMobileNativeChatPromptCards({
     handleNativeChatQuestionAnswer: structured?.respondQuestion,
     // A card's X stops its turn; a Pi dialog can open with no turn running, and then nothing can.
     handleNativeChatCancelPrompt: structured?.turnId ? cancel : undefined,
-    collapseNativeChatPrompt: structured ? undefined : presentation.collapsePrompt,
+    collapseNativeChatPrompt:
+      structured || presentation.permission?.startupDialog
+        ? undefined
+        : presentation.collapsePrompt,
     nativeChatCollapsedPrompt: structured ? null : presentation.collapsed
   }
 }

@@ -14,15 +14,6 @@ export type LiveEntriesByWorktreeCache = {
   entriesByWorktree: Map<string, AgentStatusEntry[]>
 }
 
-// Count full rebuilds to verify same-key status pings take the incremental path.
-let liveEntriesFullRebuildCount = 0
-export function getLiveEntriesFullRebuildCountForTests(): number {
-  return liveEntriesFullRebuildCount
-}
-export function recordLiveEntriesFullRebuild(): void {
-  liveEntriesFullRebuildCount += 1
-}
-
 // Local completed orphans stay hidden; remote rows await host retraction, not tab hydration.
 export function liveEntryWorktreeId(
   paneKey: string,

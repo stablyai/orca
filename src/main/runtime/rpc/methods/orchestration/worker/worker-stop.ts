@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -8,12 +8,13 @@ import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orch
 import type {
   HelperStopOutcome,
   WorkerStopReceipt
-} from '../../../../../../shared/orchestration-worker-stop-receipt'
-import { stopSingleWorker, type StopMutation } from './single-worker-stop'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
+import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerStop',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) =>

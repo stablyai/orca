@@ -6,12 +6,12 @@ import {
   FILE_REPLACE_WITH_UPLOAD_METHOD,
   FILE_REPLACE_WITH_UPLOAD_RUNTIME_CAPABILITY,
   type FileBytesWritePrecondition
-} from '../../../../../shared/file-bytes-write'
+} from '../../../../../shared/file-write/file-bytes-write'
 import {
   parseFileWriteResult,
   type FileWriteResult
-} from '../../../../../shared/file-write-disk-precondition'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import {
   callRuntimeFileMutation,

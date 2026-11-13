@@ -16,7 +16,7 @@ import {
   type BrowserPasswordGuestFieldFocused,
   type BrowserPasswordSuggestion
 } from '../../shared/browser-passwords-types'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { BrowserPasswordLoginTracker } from './browser-password-login-tracker'
 import { toBrowserPasswordOrigin } from './browser-password-origin'
 import {

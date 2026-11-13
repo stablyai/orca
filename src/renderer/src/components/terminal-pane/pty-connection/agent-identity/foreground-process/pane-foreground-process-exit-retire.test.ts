@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { resolveTitleDerivedPaneAgent } from '../../../../sidebar/workspace-card/activity/title-derived-pane-agent-identity'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import { createAgentCompletionCoordinator } from '../../../agent-completion/agent-completion-coordinator'
 import {
   createDeferred,

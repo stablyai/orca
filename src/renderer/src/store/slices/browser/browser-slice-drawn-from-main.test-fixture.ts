@@ -4,7 +4,7 @@ import { onTestFinished } from 'vitest'
 import type { AppState } from '../../types'
 import { createTabsGroupActions } from '../tabs/tabs-group-actions'
 import { createTestStore } from './browser-slice-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain, type TabsDrawnFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
 
 export type BrowserTestStore = ReturnType<typeof createTestStore>
 

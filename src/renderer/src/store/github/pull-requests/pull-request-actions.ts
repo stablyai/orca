@@ -1,19 +1,20 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubPRFallbackSource } from '../cache/cache-model'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
-import { prCacheKey } from '../cache/cache-identity'
+import '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { isFresh } from '../cache/cache-policy'
 import { buildGitHubPRRefreshStateClearToken } from '../refresh/pr-refresh-state'
 import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result-routing'
-import { nextLookupGeneration } from '../../lookup-generation-sequence'
+import { nextLookupGeneration } from '../../slices/hosted-review/refresh/lookup-generation-sequence'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
-import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/linked-pr-staleness'
+import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { startPullRequestLookup } from './pull-request-execution'
 
 export const createPullRequestActions = (
@@ -29,7 +30,7 @@ export const createPullRequestActions = (
     )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
-    const cacheKey = prCacheKey(
+    const cacheKey = getGitHubRepoCacheKey(
       repoPath,
       repoId,
       branch,

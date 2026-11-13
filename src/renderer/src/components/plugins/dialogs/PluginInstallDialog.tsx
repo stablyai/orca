@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { PluginHostInstallSource } from '../../../../../preload/api-types'
+import type { PluginHostInstallSource } from '../../../../../preload/api/plugin-host-api'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -48,6 +49,7 @@ export function PluginInstallDialog({
   initialKind = 'local-path',
   resolveGitSource = resolveGitSourceInMain
 }: PluginInstallDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const [kind, setKind] = useState<'local-path' | 'git'>(initialKind)
   const [localPath, setLocalPath] = useState('')
   const [gitUrl, setGitUrl] = useState('')
@@ -112,7 +114,7 @@ export function PluginInstallDialog({
     if (!parsed.ok) {
       setError(
         parsed.reason === 'missing-local-path'
-          ? translate(
+          ? t(
               'auto.components.settings.PluginInstallDialog.localRequired',
               'Enter the plugin folder path.'
             )
@@ -141,10 +143,10 @@ export function PluginInstallDialog({
       <DialogContent surface="security" scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.PluginInstallDialog.title', 'Install plugin')}
+            {t('auto.components.settings.PluginInstallDialog.title', 'Install plugin')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.PluginInstallDialog.description',
               'Nothing runs until you enable it.'
             )}
@@ -165,31 +167,28 @@ export function PluginInstallDialog({
             }}
           >
             <TabsList
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.PluginInstallDialog.source',
                 'Install source'
               )}
             >
               <TabsTrigger value="local-path">
-                {translate('auto.components.settings.PluginInstallDialog.localTab', 'Local folder')}
+                {t('auto.components.settings.PluginInstallDialog.localTab', 'Local folder')}
               </TabsTrigger>
               <TabsTrigger value="git">
-                {translate('auto.components.settings.PluginInstallDialog.gitTab', 'Git URL')}
+                {t('auto.components.settings.PluginInstallDialog.gitTab', 'Git URL')}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="local-path" className="space-y-2 pt-2">
               <Label htmlFor="plugin-local-path">
-                {translate(
-                  'auto.components.settings.PluginInstallDialog.localLabel',
-                  'Plugin folder path'
-                )}
+                {t('auto.components.settings.PluginInstallDialog.localLabel', 'Plugin folder path')}
               </Label>
               <Input
                 id="plugin-local-path"
                 className="font-mono text-xs"
                 value={localPath}
                 onChange={(event) => setLocalPath(event.target.value)}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.settings.PluginInstallDialog.localPlaceholder',
                   'Path to a plugin folder'
                 )}
@@ -199,7 +198,7 @@ export function PluginInstallDialog({
                 autoFocus
               />
               <p className="text-xs leading-5 text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.PluginInstallDialog.localHelp',
                   'The folder with orca-plugin.json'
                 )}
@@ -207,10 +206,7 @@ export function PluginInstallDialog({
             </TabsContent>
             <TabsContent value="git" className="space-y-2 pt-2">
               <Label htmlFor="plugin-git-url">
-                {translate(
-                  'auto.components.settings.PluginInstallDialog.gitLabel',
-                  'Repository URL'
-                )}
+                {t('auto.components.settings.PluginInstallDialog.gitLabel', 'Repository URL')}
               </Label>
               <Input
                 id="plugin-git-url"
@@ -222,7 +218,7 @@ export function PluginInstallDialog({
                   setResolvedGit(null)
                   setError(null)
                 }}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.settings.PluginInstallDialog.gitPlaceholder',
                   'https://github.com/acme/orca-notes'
                 )}
@@ -232,12 +228,12 @@ export function PluginInstallDialog({
               />
               {resolvedGit ? (
                 <div className="space-y-1 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs">
-                  <p className="text-foreground">{pluginGitResolutionSummary(resolvedGit)}</p>
+                  <p className="text-foreground">{pluginGitResolutionSummary(resolvedGit, t)}</p>
                   <p className="break-all font-mono text-muted-foreground">{resolvedGit.url}</p>
                 </div>
               ) : (
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.PluginInstallDialog.gitHelp',
                     'Paste a repository, release, or tag link. Without #tag or #commit, Orca uses the latest version tag.'
                   )}
@@ -258,11 +254,11 @@ export function PluginInstallDialog({
               disabled={busy === 'installing'}
               onClick={dismiss}
             >
-              {translate('auto.components.settings.PluginInstallDialog.cancel', 'Cancel')}
+              {t('auto.components.settings.PluginInstallDialog.cancel', 'Cancel')}
             </Button>
             <Button type="submit" size="sm" className="w-31" disabled={busy !== null}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              {submitLabel(busy, awaitingGitResolution)}
+              {submitLabel(busy, awaitingGitResolution, t)}
             </Button>
           </DialogFooter>
         </form>
@@ -273,15 +269,16 @@ export function PluginInstallDialog({
 
 function submitLabel(
   busy: 'resolving' | 'installing' | null,
-  awaitingGitResolution: boolean
+  awaitingGitResolution: boolean,
+  t: Translate = translate
 ): string {
   if (busy === 'resolving') {
-    return translate('auto.components.settings.PluginInstallDialog.checking', 'Checking…')
+    return t('auto.components.settings.PluginInstallDialog.checking', 'Checking…')
   }
   if (busy === 'installing') {
-    return translate('auto.components.settings.PluginInstallDialog.installing', 'Installing…')
+    return t('auto.components.settings.PluginInstallDialog.installing', 'Installing…')
   }
   return awaitingGitResolution
-    ? translate('auto.components.settings.PluginInstallDialog.continue', 'Continue')
-    : translate('auto.components.settings.PluginInstallDialog.install', 'Install')
+    ? t('auto.components.settings.PluginInstallDialog.continue', 'Continue')
+    : t('auto.components.settings.PluginInstallDialog.install', 'Install')
 }

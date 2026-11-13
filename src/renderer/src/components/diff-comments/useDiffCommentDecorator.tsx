@@ -1,9 +1,12 @@
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
+import {
+  diffCommentOwnerKey,
+  type DiffCommentOwner
+} from '@/store/slices/diff-comments/diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
-import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
+import { getCommentBodyLayoutLineCount } from '@/lib/source-control/review/comments/comment-body-line-count'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {

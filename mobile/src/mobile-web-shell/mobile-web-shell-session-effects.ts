@@ -1,20 +1,22 @@
 import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { mobileWebBundleStreamBytes } from '../transport/web-bundle/mobile-web-bundle-window-reader'
 import { mobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-operations'
-import type {
-  MobileWebBundleManifestRead,
-  MobileWebBundleManifestReply
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleManifestRead,
+  type MobileWebBundleManifestReply
 } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebBundleCompatManifest } from '../transport/web-bundle/mobile-web-bundle-compat'
-import { runRpcOperation } from '../transport/rpc-operation'
-import type { RpcClient } from '../transport/rpc-client'
-import type { GenerationStore, StagedGeneration } from './generation-store'
+import { runRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { GenerationStore, StagedGeneration } from './generations/generation-store'
 import type { createShellPageDeadline } from './shell-page-deadline'
 import {
   DOCUMENT_LOAD_DEADLINE_MS,
   PAGE_READY_DEADLINE_MS,
   type MobileWebShellRuntime
 } from './mobile-web-shell-runtime'
-import { generationDirectoryPath } from './generation-store-file-system'
+import { generationDirectoryPath } from './generations/generation-store-file-system'
 import type {
   CachedGeneration,
   MobileWebShellSessionEffect,
@@ -39,8 +41,6 @@ export async function openCache(
   hostKey: string
 ): Promise<CachedGeneration | null> {
   try {
-    // Sweep lazily from mounted shells so disabling the feature leaves cache untouched; the store sweeps once per launch.
-    await store.sweepStagedGenerations()
     const active = await store.readActiveGeneration(hostKey)
     return active === null
       ? null
@@ -89,8 +89,9 @@ export async function readManifest(
     manifest: {
       ...compatOf(manifest),
       buildId: manifest.buildId,
-      totalBytes: manifest.totalBytes,
-      totalAssets: manifest.assets.length,
+      // What this shell downloads: wire bytes, without the catalog chunks it skips.
+      totalBytes: mobileWebBundleStreamBytes(opened),
+      totalAssets: shellDownloadedAssets(manifest).length,
       routes: manifest.routes
     }
   })
@@ -192,11 +193,23 @@ export async function stageUpdate(
     send({ type: 'download-failed', flow, cause: NO_CONNECTION })
     return
   }
-  // Another page on this host already staged it; restaging would rewrite the waiting tree.
-  if (store.hasDeferredCommit(hostKey, opened.manifest.buildId)) {
+  // Wait out another page fetching it, and skip it once staged; restaging would rewrite the waiting tree.
+  const leaving = new AbortController()
+  args.downloads.add(leaving)
+  const release = await store.claimUpdate(hostKey, opened.manifest.buildId)
+  args.downloads.delete(leaving)
+  if (release === null) {
     return
   }
-  await fetchAndStage({ ...args, client }, false, async (staged) => store.deferCommit(staged))
+  if (leaving.signal.aborted) {
+    release()
+    return
+  }
+  try {
+    await fetchAndStage({ ...args, client }, false, async (staged) => store.deferCommit(staged))
+  } finally {
+    release()
+  }
 }
 
 type ShellPageDeadline = ReturnType<typeof createShellPageDeadline>
@@ -254,20 +267,26 @@ export async function runShellEffect(
       context.manifest.current = null
       await (effect.kind === 'download' ? download : stageUpdate)({ ...context, opened })
       return
-    case 'open-generation':
+    case 'open-generation': {
+      // A remount mints its own id below; only a first open adopts a page Home booted.
+      const spare = await runtime.claimSpareSessionId(effect.directory)
       send({
         type: 'activated',
         flow,
         generationDirectory: effect.directory,
-        sessionId: runtime.mintSessionId(),
+        sessionId: spare ?? runtime.mintSessionId(),
         buildId: effect.buildId,
         totalBytes: effect.totalBytes,
         elapsedMs: runtime.now() - context.startedAt
       })
       return
-    case 'remount':
-      send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
-      return
+    }
+    case 'remount': {
+      const remount = (): void =>
+        send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
+      // The dead document's deadlines are moot, so the remount can hold the one deadline slot.
+      return effect.inForeground === true ? context.deadline.arm(0, remount) : remount()
+    }
     case 'cancel-deadlines':
       context.deadline.cancel()
       return

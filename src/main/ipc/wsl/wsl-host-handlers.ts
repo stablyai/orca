@@ -12,7 +12,7 @@ import {
   createFakeWslHostConnector,
   readFakeWslHostsConfig
 } from '../../wsl/host-lifecycle/wsl-host-e2e-fake-connector'
-import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
+import { hasOrcadTemplate } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
 import type { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-automation-wake'
@@ -37,7 +37,7 @@ import { isRemoteRuntimeConnectionReady } from '../runtime-environments/runtime-
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { reconcileWslHostBridgePorts } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import type { WslHostRuntimeAccess } from '../../wsl/host-lifecycle/wsl-host-server-stop'
 import {
   changesWslHostAccounts,

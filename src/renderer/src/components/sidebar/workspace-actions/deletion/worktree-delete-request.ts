@@ -15,6 +15,7 @@ export type WorktreeBatchDeleteOptions = {
 export type WorktreeDeleteIdentity = Pick<Worktree, 'id' | 'instanceId' | 'hostId'>
 
 export type WorktreeDeleteOptions = {
+  forceConfirm?: boolean
   expectedInstanceId?: string
   /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId
@@ -44,7 +45,8 @@ export type WorktreeDeleteTargetLookup = (
 
 export function resolveWorktreeBatchDeleteTargets(
   requestedWorktrees: readonly string[] | readonly WorktreeDeleteIdentity[],
-  lookupTarget: WorktreeDeleteTargetLookup
+  lookupTarget: WorktreeDeleteTargetLookup,
+  options: { includeMainWorktrees?: boolean } = {}
 ): Worktree[] | null {
   // Deduplicate by ID and host so a same-ID twin cannot disappear from the confirmed batch.
   const uniqueRequests = Array.from(
@@ -64,7 +66,7 @@ export function resolveWorktreeBatchDeleteTargets(
     if (typeof request !== 'string' && (!target || target.instanceId !== request.instanceId)) {
       return null
     }
-    if (target && !target.isMainWorktree) {
+    if (target && (options.includeMainWorktrees || !target.isMainWorktree)) {
       targets.push(target)
     }
   }

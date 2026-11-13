@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
 import {
@@ -24,6 +24,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
 }: SidebarWorkspaceOptionsMenuProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
@@ -48,7 +49,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               className="relative text-muted-foreground"
               aria-label={
                 hasAnyFilter
-                  ? translate(
+                  ? t(
                       'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsActiveFilters',
                       'Workspace options ({{count}} filters active)',
                       {
@@ -56,7 +57,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
                         defaultValue_one: 'Workspace options ({{count}} filter active)'
                       }
                     )
-                  : translate(
+                  : t(
                       'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
                       'Workspace options'
                     )
@@ -70,7 +71,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {hasAnyFilter
-            ? translate(
+            ? t(
                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsFilterCount',
                 'Workspace options ({{count}} filters)',
                 {
@@ -78,7 +79,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
                   defaultValue_one: 'Workspace options ({{count}} filter)'
                 }
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
                 'Workspace options'
               )}

@@ -3,7 +3,7 @@ import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -14,7 +14,7 @@ import type {
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
@@ -32,6 +32,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 
 export function VaultSessionRow({
   session,
@@ -44,6 +45,7 @@ export function VaultSessionRow({
   resumeDisabled,
   resumeHidden,
   onToggleDetails,
+  originalPaneTarget,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -78,6 +80,7 @@ export function VaultSessionRow({
   resumeDisabled: boolean
   resumeHidden?: boolean
   onToggleDetails: () => void
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -104,30 +107,31 @@ export function VaultSessionRow({
   /** Set in `/resume`'s picker: a click resumes the row, and the row offers no other action. */
   onPick?: () => void
 }) {
+  const t = useTranslate()
   const resumeLabel = isAntigravityReferenceSession(session)
-    ? translate('aiVault.continueInCli', 'Continue in CLI')
+    ? t('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const title = useAiVaultSessionDisplayTitle(session)
+  const title = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
   const deleteBlockedReason = session.structuredSession
-    ? translate(
+    ? t(
         'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
         "This session can't be deleted from Orca."
       )
     : onRequestDelete
-      ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
-      : translate(
+      ? aiVaultSessionDeleteBlockedReason(session, deleteHost, t)
+      : t(
           'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
           'The transcript source is unavailable.'
         )
   const requestDelete = (): void => onRequestDelete?.(session)
   const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
-    ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
-    : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
+    ? t('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
+    : t('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
   const startResumeDrag = useCallback(
     (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
@@ -187,7 +191,7 @@ export function VaultSessionRow({
           title={
             !draggable
               ? undefined
-              : translate(
+              : t(
                   'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
                   'Drag to resume in a new tab'
                 )
@@ -234,12 +238,12 @@ export function VaultSessionRow({
           {latestTurn ? (
             <>
               <span className="font-medium text-foreground/80">
-                {conversationRoleLabel(latestTurn.role)}
+                {conversationRoleLabel(latestTurn.role, t)}
               </span>
               <span>: {latestTurn.text}</span>
             </>
           ) : (
-            translate(
+            t(
               'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
               'No conversation preview available'
             )

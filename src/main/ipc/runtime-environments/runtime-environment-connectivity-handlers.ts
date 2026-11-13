@@ -2,7 +2,7 @@ import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
 } from './runtime-environment-call-failure'
-import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { desktopChatCreationHistory } from '../../runtime/client/navigation/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -20,7 +20,7 @@ import {
   removeThroughOwningService
 } from './runtime-environment-host-service-ops'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
@@ -40,7 +40,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
 import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
-import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
+import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/authentication/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
   disconnectRuntimeEnvironmentForUser,
@@ -54,7 +54,7 @@ import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/host-lifecy
 import {
   isHostSpawnFencedForWslMoveUndo,
   wslMoveUndoSpawnFencedResponse
-} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
+} from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-spawn-fence'
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 

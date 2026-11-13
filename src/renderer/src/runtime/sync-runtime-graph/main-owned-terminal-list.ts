@@ -1,6 +1,6 @@
 // Main lists locally owned workspace terminals in layout-owner builds; window reports shown/parked panes. Paired workspaces retain window lists.
 import { getParkedTerminalWatcherPaneIdsByPtyId } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { AppState } from '@/store/types'
 import type { RuntimeMountedLeaf } from '../../../../shared/runtime-types'
 

@@ -68,7 +68,7 @@ vi.mock('../../../browser/guest-lifecycle/browser-main-window-readiness', () => 
   whenBrowserMainWindowReady: whenBrowserMainWindowReadyMock
 }))
 
-vi.mock('../../../browser/sessions/browser-session-registry', () => ({
+vi.mock('../../../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
 
@@ -190,5 +190,43 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-new')
     expect(bridge.setActiveTab).toHaveBeenCalledWith(101, 'wt-1')
+  })
+  // Pageless agent commands prefer an active client page; an agent's new server tab must take that over.
+  it('moves the workspace selection off a client page when a server tab is created', async () => {
+    const { RuntimeBrowserCommands } = await import('../commands/browser-commands')
+    const pages = new RuntimeBrowserPageRegistry()
+    pages.publishClientPage({
+      browserPageId: 'user-page',
+      workspaceId: 'wt-1',
+      browserProfileId: 'default',
+      executionHostKey: 'local',
+      placement: {
+        kind: 'client',
+        browserHostClientId: 'desktop-1',
+        browserHostGeneration: 1,
+        pageHostGeneration: 1
+      },
+      url: 'https://user.example/',
+      loading: false,
+      active: true
+    })
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['agent-page', 102]])),
+      setActiveTab: vi.fn()
+    }
+    const offscreen = { createTab: vi.fn(async () => ({ browserPageId: 'agent-page' })) }
+    const host = createHost({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create reaches only these two bridge methods.
+      getAgentBrowserBridge: () => bridge as unknown as AgentBrowserBridge,
+      getRuntimeBrowserPageRegistry: () => pages,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create reaches only createTab.
+      getOffscreenBrowserBackend: () => offscreen as never
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await commands.browserTabCreate({ worktree: 'id:wt-1', url: 'https://agent.example/' })
+
+    expect(bridge.setActiveTab).toHaveBeenCalledWith(102, 'wt-1')
+    expect(pages.listPages('wt-1').find((page) => page.active)).toBeUndefined()
   })
 })

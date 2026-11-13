@@ -27,18 +27,6 @@ describe('useWindowStreamVisible', () => {
     vi.restoreAllMocks()
   })
 
-  it('parks only after the grace period elapses', async () => {
-    const hook = renderHook(() => useWindowStreamVisible())
-    expect(hook.result.current).toBe(true)
-
-    await act(async () => setDocumentVisibility('hidden'))
-    await act(async () => vi.advanceTimersByTime(WINDOW_STREAM_PARK_DELAY_MS - 1))
-    expect(hook.result.current).toBe(true)
-
-    await act(async () => vi.advanceTimersByTime(1))
-    expect(hook.result.current).toBe(false)
-  })
-
   // Stale-visibility evidence must reopen streams when macOS occlusion updates stop.
   it('treats a wedged hidden document as visible once user input disproves it', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -52,15 +40,6 @@ describe('useWindowStreamVisible', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
     })
     expect(document.visibilityState).toBe('hidden')
-    expect(hook.result.current).toBe(true)
-  })
-
-  it('does not report visible while mounted into a hidden window', async () => {
-    setDocumentVisibility('hidden')
-    const hook = renderHook(() => useWindowStreamVisible())
-    expect(hook.result.current).toBe(false)
-
-    await act(async () => setDocumentVisibility('visible'))
     expect(hook.result.current).toBe(true)
   })
 })

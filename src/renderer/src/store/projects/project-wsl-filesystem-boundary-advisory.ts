@@ -4,7 +4,7 @@ import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getWslFilesystemBoundaryDistro } from '../../../../shared/wsl-paths'
-import { resolveProjectExecutionRuntime } from '../../../../shared/project-execution-runtime'
+import { resolveProjectExecutionRuntime } from '../../../../shared/execution-host/project-execution-runtime'
 import { translate } from '@/i18n/i18n'
 
 type BoundaryAdvisorySettings = Pick<GlobalSettings, 'localWindowsRuntimeDefault'>

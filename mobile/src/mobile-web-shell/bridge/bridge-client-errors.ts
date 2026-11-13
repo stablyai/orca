@@ -1,4 +1,4 @@
-import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import { markRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { BridgeRefusal } from './bridge-caps'
 
 /** A call that needs a session the page is not in yet. Always a mount-order bug, never a retry. */

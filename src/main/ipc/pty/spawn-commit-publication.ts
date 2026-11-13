@@ -1,7 +1,7 @@
-import { agentHookServer } from '../../agent-hooks/server'
-import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import {
   codexReattachedHomeRouteField,
   recordCodexPaneAccountForSpawn
@@ -17,7 +17,7 @@ import {
 } from './pane/serializer-state'
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import { seedResumeLaunchIdentityFromSpawn } from './pane/resume-launch-identity'
-import { recordPtySpawnTelemetry } from './pane/spawn-telemetry'
+import { recordAgentStartTelemetry } from './pane/spawn-telemetry'
 import type { PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnCommitInput, PtySpawnCommitState } from './spawn-commit-assembly'
 
@@ -79,7 +79,7 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   }
   // Emit agent_started only after confirmed spawn, with field validation at the telemetry boundary.
   if (args.telemetry && !state.stablePaneOwner) {
-    recordPtySpawnTelemetry(args.telemetry)
+    recordAgentStartTelemetry(args.telemetry)
   }
   // Publish reverse pane lookup for hook titles and provider cleanup.
   const rememberedPaneKey = rememberPaneKeyForPty(result.id, input.paneKey)

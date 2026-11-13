@@ -3,28 +3,23 @@ import {
   isTerminalLeafId,
   makePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { LocatedCodexPane } from './located-codex-pane'
-
-import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
-import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
-} from '@/lib/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+} from '@/lib/agent-session/accounts/agent-account-restart-startup'
+import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
+import { isForeignMachineCodexPtyId } from '@/lib/agent-session/accounts/codex-pane-selection-lane'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import '../../pty-transport/delivery/pty-dispatcher'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
 import {
@@ -37,6 +32,10 @@ import {
   reapUnboundCodexPty,
   releaseReplacedCodexPanePty
 } from './detached-pane-restart-pty-release'
+import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import type { LocatedCodexPane } from './located-codex-pane'
+import type { AppState } from '@/store/types'
+import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
 const inFlightPtyIds = new Set<string>()
 

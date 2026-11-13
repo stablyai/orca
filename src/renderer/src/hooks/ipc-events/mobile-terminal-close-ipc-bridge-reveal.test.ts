@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import type { RuntimeEditorTabReveal } from '../../../../shared/file-access/runtime-editor-file-open'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   _resetLayoutFramePositionForTests,
   beginLayoutFramePositions,
   noteLayoutFramePosition
-} from '@/runtime/layout-frame-position'
+} from '@/runtime/workspace-layout/frames/layout-frame-position'
 
 const { storeRef } = vi.hoisted(() => {
   const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }

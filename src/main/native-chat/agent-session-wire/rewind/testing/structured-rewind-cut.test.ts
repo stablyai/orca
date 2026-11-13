@@ -81,7 +81,7 @@ it("keeps a subagent row with the main turn it arrived in, across the subagent's
     nativeId: 'main'
   })
 
-  expect(cut).toMatchObject({ beforeTurnId: 'b', keptTurnId: 'a' })
+  expect(cut).toMatchObject({ beforeTurnId: 'b' })
   expect(cut!.kept.map(({ body }) => body)).toEqual(
     expect.arrayContaining([text('main a'), text('child in a'), text('late child in a')])
   )

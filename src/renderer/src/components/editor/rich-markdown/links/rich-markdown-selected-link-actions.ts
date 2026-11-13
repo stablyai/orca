@@ -1,3 +1,4 @@
+import { getMarkRange } from '@tiptap/core'
 import type { Editor } from '@tiptap/react'
 import { NodeSelection } from '@tiptap/pm/state'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -8,36 +9,37 @@ import {
   type RichMarkdownHtmlSuperscriptLinkContext
 } from '../citations/rich-markdown-html-superscript-link-context'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export function createEditableMarkdownLinkBubble(
   href: string,
-  position: Pick<LinkBubbleState, 'left' | 'top'>
+  position: Pick<LinkBubbleState, 'left' | 'top'>,
+  targetRange?: { from: number; to: number }
 ): LinkBubbleState {
   return {
     kind: 'markdown',
     href,
-    openEnabled: Boolean(href),
     copyEnabled: Boolean(href),
+    targetRange,
     ...position
   }
 }
 
 export function getRichMarkdownSelectionLinkBubble(
   editor: Editor,
-  root: HTMLElement | null,
-  context: RichMarkdownHtmlSuperscriptLinkContext
+  root: HTMLElement | null
 ): LinkBubbleState | null {
   const position = getLinkBubblePosition(editor, root)
   if (!position) {
     return null
   }
   if (editor.isActive('link')) {
-    return createBubble(
-      'markdown',
-      String(editor.getAttributes('link').href ?? ''),
-      position,
-      context
-    )
+    const attrs = editor.getAttributes('link')
+    const linkMarkType = editor.state.schema.marks.link
+    const targetRange = linkMarkType
+      ? getMarkRange(editor.state.selection.$from, linkMarkType, attrs) || undefined
+      : undefined
+    return createEditableMarkdownLinkBubble(String(attrs.href ?? ''), position, targetRange)
   }
   const selection = editor.state.selection
   if (
@@ -46,13 +48,14 @@ export function getRichMarkdownSelectionLinkBubble(
   ) {
     return null
   }
-  return createBubble(
-    'html-superscript',
-    String(selection.node.attrs.href ?? ''),
-    position,
-    context,
-    String(selection.node.attrs.label ?? '')
-  )
+  const href = String(selection.node.attrs.href ?? '')
+  return {
+    kind: 'html-superscript',
+    href,
+    label: String(selection.node.attrs.label ?? ''),
+    copyEnabled: Boolean(href),
+    ...position
+  }
 }
 
 export function getSelectedHtmlSuperscriptLinkStatus(
@@ -76,28 +79,28 @@ export function getSelectedHtmlSuperscriptLinkStatus(
 }
 
 export function formatSelectedHtmlSuperscriptLinkStatus(
-  status: NonNullable<ReturnType<typeof getSelectedHtmlSuperscriptLinkStatus>>
+  status: NonNullable<ReturnType<typeof getSelectedHtmlSuperscriptLinkStatus>>,
+  t: Translate = translate
 ): string {
   const label =
-    status.label ||
-    translate('auto.components.editor.RichMarkdownEditor.citationFallbackLabel', 'Citation')
+    status.label || t('auto.components.editor.RichMarkdownEditor.citationFallbackLabel', 'Citation')
   if (status.openEnabled) {
-    return translate(
+    return t(
       'auto.components.editor.RichMarkdownEditor.citationLinkAvailable',
       '{{value0}}, link to {{value1}}. Press Enter to open or Tab for link actions.',
       { value0: label, value1: status.href }
     )
   }
   const actionHint = status.href
-    ? translate(
+    ? t(
         'auto.components.editor.RichMarkdownEditor.tabForCitationActions',
         'Tab for available actions.'
       )
-    : translate(
+    : t(
         'auto.components.editor.RichMarkdownEditor.noCitationActions',
         'No link actions are available.'
       )
-  return translate(
+  return t(
     'auto.components.editor.RichMarkdownEditor.citationLinkUnavailable',
     '{{value0}}, citation link unavailable. {{value1}}',
     { value0: label, value1: actionHint }
@@ -142,21 +145,4 @@ export function openSelectedHtmlSuperscriptLink({
     sourceOwner: snapshot.sourceOwner
   })
   return true
-}
-
-function createBubble(
-  kind: LinkBubbleState['kind'],
-  href: string,
-  position: Pick<LinkBubbleState, 'left' | 'top'>,
-  context: RichMarkdownHtmlSuperscriptLinkContext,
-  label?: string
-): LinkBubbleState {
-  return {
-    kind,
-    href,
-    label,
-    openEnabled: classifyHtmlSuperscriptLinkAction(href, context.getSnapshot()),
-    copyEnabled: Boolean(href),
-    ...position
-  }
 }

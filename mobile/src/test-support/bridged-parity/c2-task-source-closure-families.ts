@@ -98,7 +98,8 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
   'tasks.task-list-linear': {
     'matrix-tasks.task-list-linear-linear.listissues-1': 'result-absent-settlement',
     'matrix-tasks.task-list-linear-linear.searchissues-1': 'result-absent-settlement',
-    'tk-list-linear': 'identical'
+    'tk-list-linear': 'identical',
+    'tk-list-linear-switch-back': 'identical'
   },
   'tasks.workspace-source': {
     'matrix-tasks.workspace-source-repo.searchrefs-1': 'result-absent-settlement',

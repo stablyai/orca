@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { selectFileListWorktree } from '@/store/selectors'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import { getFileExplorerOperationOwnerFromState } from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useQuickOpenInteraction(worktreeId: string | null): {
   opening: boolean

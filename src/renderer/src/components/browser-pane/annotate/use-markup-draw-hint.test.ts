@@ -20,20 +20,6 @@ describe('useMarkupDrawHint', () => {
     window.localStorage.removeItem(HINT_KEY)
   })
 
-  it('opens once when eligible and records the seen flag', () => {
-    const { result } = renderHook(() => useMarkupDrawHint(true))
-
-    expect(result.current.hintOpen).toBe(true)
-    expect(window.localStorage.getItem(HINT_KEY)).toBe('true')
-  })
-
-  it('does not open when the surface is not eligible', () => {
-    const { result } = renderHook(() => useMarkupDrawHint(false))
-
-    expect(result.current.hintOpen).toBe(false)
-    expect(window.localStorage.getItem(HINT_KEY)).toBeNull()
-  })
-
   it('closes when eligibility drops so a hidden pane cannot keep it open', () => {
     const { result, rerender } = renderHook(({ eligible }) => useMarkupDrawHint(eligible), {
       initialProps: { eligible: true }

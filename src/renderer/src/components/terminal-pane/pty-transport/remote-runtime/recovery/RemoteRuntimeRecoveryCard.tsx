@@ -7,6 +7,7 @@ import {
   remoteRuntimeDownForLabel,
   remoteRuntimeTailscaleHintLabel
 } from './remote-runtime-recovery-copy'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now())
@@ -39,6 +40,8 @@ export function RemoteRuntimeRecoveryCard({
   action?: { label: string; onClick: () => void } | null
   data: Record<`data-${string}`, string>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const now = useNow(downSince !== null)
   return (
     <div
@@ -70,7 +73,7 @@ export function RemoteRuntimeRecoveryCard({
                 aria-hidden="true"
                 className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground"
               >
-                {remoteRuntimeDownForLabel(now - downSince)}
+                {remoteRuntimeDownForLabel(now - downSince, t, intlLocale)}
               </div>
             ) : null}
           </div>
@@ -79,7 +82,7 @@ export function RemoteRuntimeRecoveryCard({
           ) : null}
           {tailscaleHost ? (
             <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="shrink-0">{remoteRuntimeTailscaleHintLabel()}</span>
+              <span className="shrink-0">{remoteRuntimeTailscaleHintLabel(t)}</span>
               <code className="min-w-0 truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono select-text">
                 {tailscalePingCommand(tailscaleHost)}
               </code>

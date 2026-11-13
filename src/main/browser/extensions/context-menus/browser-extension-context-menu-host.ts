@@ -4,8 +4,8 @@ import type {
   BrowserExtensionContextMenuGroup,
   BrowserExtensionContextMenuPayload
 } from '../../../../shared/browser/extensions/browser-extension-context-menu-types'
-import { chromeFrameId } from '../api/web-navigation'
-import { noteBrowserExtensionUserGesture } from '../api/permissions'
+import { chromeFrameId } from '../tabs-and-windows/browser-extension-frame-projection'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
@@ -32,6 +32,7 @@ import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   describeBrowserExtensionTab,
   resolveBrowserExtensionTab
+  // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 } from '../tabs-and-windows/browser-extension-tab-model'
 
 /** What a click needs, kept in main so the renderer only names a token and an item key. */
@@ -87,7 +88,7 @@ function forgetSnapshot(token: string): void {
 
 function topDocumentId(tabId: number | null): string | null {
   const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
-  return contents ? getBrowserExtensionDocumentId(contents.mainFrame.frameTreeNodeId) : null
+  return contents ? getBrowserExtensionDocumentId(contents.mainFrame) : null
 }
 
 function extensionDisplayName(extension: Electron.Extension): string {

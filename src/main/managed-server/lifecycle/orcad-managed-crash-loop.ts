@@ -1,17 +1,20 @@
 // Stop waking a managed orcad that keeps dying; an explicit Connect re-arms automatic starts.
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import type { OrcadHealth } from '../../orcad/orcad-health'
-import { isOrcadLaunchFailure, orcadLaunchFailureRanProcess } from '../../ssh/orcad-launch-failure'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/ssh-remote-platform'
+import type { OrcadHealth } from '../../orcad/diagnostics/orcad-health'
+import {
+  isOrcadLaunchFailure,
+  orcadLaunchFailureRanProcess
+} from '../activation/orcad-launch-failure'
+import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recovery-slot'
+import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
-import { MAX_ORCAD_LOCK_BYTES } from '../../orcad/orcad-instance-lock-reclaim'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
+import { MAX_ORCAD_LOCK_BYTES } from '../../orcad/instance-lock/orcad-instance-lock-reclaim'
 import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 

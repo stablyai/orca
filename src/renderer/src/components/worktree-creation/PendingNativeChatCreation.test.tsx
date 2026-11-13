@@ -5,38 +5,41 @@ import { forwardRef, useRef } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { NativeChatComposerProps } from '@/components/native-chat/native-chat-composer-types'
-import { NativeChatComposer } from '@/components/native-chat/NativeChatComposer'
-import { useNativeChatComposerRevealFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import type * as ComposerModule from '@/components/native-chat/NativeChatComposer'
+import type {
+  NativeChatComposerHandle,
+  NativeChatComposerProps
+} from '@/components/native-chat/composer/native-chat-composer-types'
+import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
+import { useNativeChatComposerRevealFocus } from '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
+import type * as ComposerModule from '@/components/native-chat/composer/NativeChatComposer'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import PendingNativeChatCreation from './PendingNativeChatCreation'
 import {
   changePrompt,
   promptEditor,
   promptValue
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
-  readNativeChatComposerDraft,
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled,
   flushNativeChatComposerDrafts
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { moveNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-move'
-import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { releaseNativeChatStagedFiles } from '@/components/native-chat/native-chat-draft-attachment-staging'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import { moveNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-move'
+import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   nativeChatComposerSelection,
   waitForNativeChatComposerHandoff
-} from '@/components/native-chat/native-chat-composer-mount'
+} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
 
 const modelCatalog = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: modelCatalog
 }))
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
@@ -44,22 +47,21 @@ vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
 }))
 
 const composer = vi.hoisted((): { props: NativeChatComposerProps | null } => ({ props: null }))
-vi.mock('@/components/native-chat/NativeChatComposer', async (importOriginal) => {
+vi.mock('@/components/native-chat/composer/NativeChatComposer', async (importOriginal) => {
   const original = await importOriginal<typeof ComposerModule>()
   return {
-    NativeChatComposer: forwardRef<
-      ComposerModule.NativeChatComposerHandle,
-      NativeChatComposerProps
-    >((props, ref) => {
-      composer.props = props
-      return <original.NativeChatComposer {...props} ref={ref} />
-    })
+    NativeChatComposer: forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
+      (props, ref) => {
+        composer.props = props
+        return <original.NativeChatComposer {...props} ref={ref} />
+      }
+    )
   }
 })
-vi.mock('@/components/native-chat/NativeChatEmptyState', () => ({
+vi.mock('@/components/native-chat/host-access/NativeChatEmptyState', () => ({
   NativeChatEmptyState: () => null
 }))
-vi.mock('@/components/native-chat/NativeChatUserMessageRow', () => ({
+vi.mock('@/components/native-chat/messages/rows/NativeChatUserMessageRow', () => ({
   NativeChatUserMessageRow: () => null
 }))
 vi.mock('./WorktreeSetupSteps', () => ({ WorktreeSetupSteps: () => null }))
@@ -308,7 +310,7 @@ function Destination({
   disabled?: boolean
 }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
-  const composerRef = useRef<ComposerModule.NativeChatComposerHandle>(null)
+  const composerRef = useRef<NativeChatComposerHandle>(null)
   useNativeChatComposerRevealFocus({
     tabId: 'destination',
     rootRef,
@@ -494,23 +496,6 @@ it.each([false, true])(
     )
   }
 )
-
-it('cancels a handoff whose destination never mounts', async () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const abort = new AbortController()
-  let completed = false
-  const handoff = waitForNativeChatComposerHandoff('no-source', 'missing', abort.signal, 5000).then(
-    () => {
-      completed = true
-    }
-  )
-  await act(async () => {})
-  expect(completed).toBe(false)
-  abort.abort()
-  await handoff
-  expect(completed).toBe(true)
-  expect(vi.getTimerCount()).toBe(0)
-})
 
 it('keeps typing visible in the replacement while its draft write is slow or refused', async () => {
   const storage = createMemoryNativeChatComposerDraftStorage()

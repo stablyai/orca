@@ -1,6 +1,6 @@
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
@@ -26,7 +26,8 @@ export function mountCreatedWorktreeStartupTabsInBackground(worktreeId: string):
 export function openBackgroundDeclinedTerminal(
   args: { request: WorktreeCreationRequest; worktreeId: string },
   host: RuntimeClientTarget,
-  heldChatMessage: string | undefined
+  heldChatMessage: string | undefined,
+  signal?: AbortSignal
 ): StructuredLaunchTerminal {
   const built = buildWorktreeCreationStartupOpt(args.request, false)
   // The submit-time plan never saw a message sent while the worktree was created; leave it unsent in the agent's input.
@@ -34,13 +35,42 @@ export function openBackgroundDeclinedTerminal(
     built && heldChatMessage && !built.draftPrompt
       ? { ...built, draftPrompt: heldChatMessage }
       : built
-  if (host.kind === 'environment') {
-    ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
-      startup,
+  if (host.kind === 'environment' && args.request.agent) {
+    const completion = launchAgentInWebHostTab({
+      ...(built?.freshAgentLaunch ?? args.request.launchInputs),
+      submitFollowup: true,
       agent: args.request.agent,
-      activate: false
+      environmentId: host.environmentId,
+      worktreeId: args.worktreeId,
+      prompt: heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
+      promptDelivery: heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit',
+      activate: false,
+      selectWorktree: false,
+      isCancelled: () => signal?.aborted === true,
+      buildStartup: () => {
+        const rebuilt = args.request.creationStartup?.legacy(
+          heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
+          heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit'
+        )
+        if (rebuilt?.promptPlan) {
+          return rebuilt.promptPlan
+        }
+        const plan = rebuilt?.startupPlan ?? args.request.startupPlan
+        return {
+          startupPlan: plan,
+          pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,
+          submitPastedPrompt: Boolean(plan?.followupPrompt)
+        }
+      }
     })
-    return { opened: true }
+    return {
+      opened: true,
+      completion,
+      promptDeliveryResult: completion.then(({ delivered, failureNotified }) => ({
+        delivered,
+        failureNotified
+      }))
+    }
   }
   if (!startup) {
     return { opened: false }

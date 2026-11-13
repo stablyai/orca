@@ -20,7 +20,7 @@ import {
 } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 import { emptyTabLayoutState } from '../../../store/slices/editor/editor-slice-test-harness'
 import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 

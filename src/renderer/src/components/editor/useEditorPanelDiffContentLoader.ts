@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import { getEditorFileReadContext } from '@/lib/editor-file-operation-owner'
+import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useAppStore } from '@/store'
 import {

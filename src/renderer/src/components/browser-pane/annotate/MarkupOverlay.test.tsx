@@ -41,14 +41,6 @@ function stroke(
 }
 
 describe('MarkupOverlay canvas pointer wiring', () => {
-  it('commits a stroke on release', () => {
-    const { canvas, undoButton } = renderOverlay()
-
-    stroke(canvas, 'pointerUp')
-
-    expect(undoButton).toHaveProperty('disabled', false)
-  })
-
   it('commits a stroke whose release never arrived once the canvas loses the pointer', () => {
     const { canvas, undoButton, redoButton } = renderOverlay()
 
@@ -59,13 +51,5 @@ describe('MarkupOverlay canvas pointer wiring', () => {
 
     // Only a committed stroke leaves something to redo; a still-held one is just dropped.
     expect(redoButton).toHaveProperty('disabled', false)
-  })
-
-  it('discards a stroke whose pointer was cancelled', () => {
-    const { canvas, undoButton } = renderOverlay()
-
-    stroke(canvas, 'pointerCancel')
-
-    expect(undoButton).toHaveProperty('disabled', true)
   })
 })

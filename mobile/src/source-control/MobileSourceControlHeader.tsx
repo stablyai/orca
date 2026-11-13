@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import type { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
@@ -15,6 +15,8 @@ type Props = {
   /** Shown rows are being re-read; the line waits out quick reads. */
   refreshing: boolean
   onBack: () => void
+  /** Back to the screen this hub was opened over in place, e.g. a folder's list; drawn beside dock Close. */
+  backInPlace?: { onPress: () => void; label: string }
   // Dock dismissal does not pop a route; keep it separate from Back.
   onClose: () => void
   onRefresh: () => void
@@ -33,6 +35,7 @@ export function MobileSourceControlHeader({
   ioBusy,
   refreshing,
   onBack,
+  backInPlace,
   onClose,
   onRefresh,
   onOpenPrWeb,
@@ -43,7 +46,7 @@ export function MobileSourceControlHeader({
   const t = useMobileTranslation()
   // Here, not in the panel, so the hint's timers re-render only the bar.
   const showRefreshLine = useRefreshHint(refreshing)
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const actions: ActionSheetAction[] = [
     {
@@ -72,17 +75,26 @@ export function MobileSourceControlHeader({
         ]
       : [])
   ]
+  const closeButton = (
+    <NavBarButton
+      icon={X}
+      onPress={onClose}
+      accessibilityLabel={t('sourceControl.header.close', 'Close source control')}
+    />
+  )
   return (
     <>
       <NavBar
         // Dock dismissal and route Back have distinct semantics.
         leading={
-          embedded ? (
+          backInPlace ? (
             <NavBarButton
-              icon={X}
-              onPress={onClose}
-              accessibilityLabel={t('sourceControl.header.close', 'Close source control')}
+              icon={ChevronLeft}
+              onPress={backInPlace.onPress}
+              accessibilityLabel={backInPlace.label}
             />
+          ) : embedded ? (
+            closeButton
           ) : (
             <NavBarButton
               icon={ChevronLeft}
@@ -96,16 +108,19 @@ export function MobileSourceControlHeader({
         accessory={accessory}
         refreshing={showRefreshLine}
         trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            onPress={() => setMenuOpen(true)}
-            active={menuOpen}
-            accessibilityLabel={t(
-              'sourceControl.header.moreActions',
-              'More source control actions'
-            )}
-          />
+          <>
+            {backInPlace && embedded ? closeButton : null}
+            <NavBarButton
+              ref={moreRef}
+              icon={MoreHorizontal}
+              onPress={() => setMenuOpen(true)}
+              active={menuOpen}
+              accessibilityLabel={t(
+                'sourceControl.header.moreActions',
+                'More source control actions'
+              )}
+            />
+          </>
         }
       />
       <PullDownMenu

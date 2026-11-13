@@ -41,6 +41,9 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     borderRadius: radii.surface,
     overflow: 'hidden'
   },
+  smartRailGroup: {
+    marginTop: spacing.md
+  },
   shortcutForm: {
     paddingTop: spacing.sm
   },

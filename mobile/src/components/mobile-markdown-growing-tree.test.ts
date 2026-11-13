@@ -53,13 +53,16 @@ describe('text growing a character at a time', () => {
     ])
   })
 
-  it('joins a line that stops being a heading to the paragraph above', () => {
-    expect(grown('para\n#x')).toEqual([paragraph('para\n#x')])
-  })
-
   it('makes one math block once a display formula closes past a blank line', () => {
     expect(grown('$$\nx\n\ny\n$$')).toEqual([
       { type: 'math', value: 'x\n\ny', source: '$$\nx\n\ny\n$$' }
+    ])
+  })
+
+  it('ends a quote at a display formula that closes past a blank line', () => {
+    expect(grown('> a\n$$\n\nb\n$$')).toEqual([
+      { type: 'blockquote', children: [paragraph('a')] },
+      { type: 'math', value: 'b', source: '$$\n\nb\n$$' }
     ])
   })
 })

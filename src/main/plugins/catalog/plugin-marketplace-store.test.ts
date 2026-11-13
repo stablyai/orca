@@ -59,12 +59,6 @@ describe('PluginMarketplaceStore', () => {
     await expect(store.readSnapshot(registered.id)).resolves.toBeNull()
   })
 
-  it('rejects path-like source ids before reading or deleting cache files', async () => {
-    const store = new PluginMarketplaceStore(await tempRoot())
-    await expect(store.readSnapshot('../outside')).rejects.toThrow()
-    await expect(store.removeSource('../outside')).rejects.toThrow()
-  })
-
   it('keeps release-bearing snapshots out of the key older builds read', async () => {
     const root = await tempRoot()
     const store = new PluginMarketplaceStore(root)

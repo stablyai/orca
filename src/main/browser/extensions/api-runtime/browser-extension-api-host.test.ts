@@ -52,7 +52,7 @@ vi.mock('electron', async () => {
     }
   }
 })
-vi.mock('../../browser-manager', () => ({ browserManager: {} }))
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
@@ -70,7 +70,7 @@ mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-api-host-'))
 
 const { BROWSER_EXTENSION_INVOKE_CHANNEL } =
   await import('../../../../shared/browser/extensions/browser-extension-channels')
-await import('../../../../preload/browser-extension-api-surface')
+await import('../../../../preload/browser/extensions/api/browser-extension-api-surface')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')
 const contexts = await import('./browser-extension-contexts')
@@ -180,22 +180,6 @@ describe('extension API host', () => {
   })
 })
 
-it('retires the current host after extension support restarts in the same document', async () => {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the session boundary copies the extensions, serviceWorkers and protocol members consumed by the actual host.
-  const isolated = { ...extensionSession } as unknown as Electron.Session
-  host.attachBrowserExtensionApiHostToSession(isolated, 'restarted')
-  const current = frameEvent(`chrome-extension://${EXTENSION_ID}/page.html`, isolated, 10, 1)
-  const listen = { type: 'listen', namespace: 'probe', event: 'onPing', active: true }
-  await invoke(current.event, listen)
-  host.forgetBrowserExtensionContexts(isolated)
-  host.attachBrowserExtensionApiHostToSession(isolated, 'restarted')
-  await invoke(current.event, listen)
-  current.event.sender.emit('did-navigate')
-  expect(contexts.getHostSessionState(isolated)?.frames.size).toBe(0)
-  expect(contexts.browserExtensionEventHasListener(isolated, 'probe', 'onPing')).toBe(false)
-  host.forgetBrowserExtensionContexts(isolated)
-})
-
 describe('extension subframe listener retirement', () => {
   const listen = { type: 'listen', namespace: 'probe', event: 'onPing', active: true }
 
@@ -217,66 +201,6 @@ describe('extension subframe listener retirement', () => {
     }
     return current
   }
-
-  it('shares one port across listeners and replaces it after final removal', async () => {
-    const { sess, state } = isolatedSession()
-    const page = frameEvent(`chrome-extension://${EXTENSION_ID}/frame.html`, sess, 21, 1)
-    await invoke(page.event, listen)
-    const first = channel()
-    const lateClose = first.port1.listeners('close')[0]
-    await invoke(page.event, listen)
-    await invoke(page.event, { ...listen, namespace: 'tabs', event: 'onCreated' })
-    expect(page.frame.postMessage).toHaveBeenCalledTimes(1)
-    await invoke(page.event, { ...listen, active: false })
-    expect(state.frames.size).toBe(1)
-    expect(first.port1.close).not.toHaveBeenCalled()
-    await invoke(page.event, { ...listen, namespace: 'tabs', event: 'onCreated', active: false })
-    expect(state.frames.size).toBe(0)
-    expect(first.port1.close).toHaveBeenCalledTimes(1)
-    expect(first.port1.listenerCount('close')).toBe(0)
-    await invoke(page.event, listen)
-    expect(channel()).not.toBe(first)
-    lateClose?.()
-    host.emitBrowserExtensionEvent({ session: sess }, 'probe', 'onPing', ['successor'])
-    expect(page.frame.send).toHaveBeenCalledTimes(1)
-    expect(state.frames.size).toBe(1)
-    host.forgetBrowserExtensionContexts(sess)
-  })
-
-  it('preserves sibling frames, windows, sessions and worker listeners', async () => {
-    const { sess, state } = isolatedSession()
-    const elsewhere = isolatedSession()
-    const removed = frameEvent(`chrome-extension://${EXTENSION_ID}/frame.html`, sess, 22, 1)
-    const sibling = frameEvent(`chrome-extension://${EXTENSION_ID}/frame.html`, sess, 22, 2)
-    sibling.event.sender = removed.event.sender
-    const window = frameEvent(`chrome-extension://${EXTENSION_ID}/page.html`, sess, 22, 3)
-    window.event.sender.id = 78
-    const other = frameEvent(`chrome-extension://${EXTENSION_ID}/page.html`, elsewhere.sess, 23, 1)
-    await invoke(removed.event, listen)
-    const owner = channel()
-    await invoke(sibling.event, listen)
-    await invoke(window.event, listen)
-    await invoke(other.event, listen)
-    const worker = contexts.ensureWorkerContext(
-      state,
-      EXTENSION_ID,
-      `chrome-extension://${EXTENSION_ID}/`
-    )
-    worker.events.add('probe.onPing')
-    worker.stream = { send: vi.fn(), close: vi.fn() }
-    owner.port1.emit('close')
-    host.emitBrowserExtensionEvent({}, 'probe', 'onPing', ['survivors'])
-    expect(removed.frame.send).not.toHaveBeenCalled()
-    for (const frame of [sibling.frame, window.frame, other.frame]) {
-      expect(frame.send).toHaveBeenCalledTimes(1)
-    }
-    expect(worker.stream.send).toHaveBeenCalledTimes(1)
-    expect(worker.stream.close).not.toHaveBeenCalled()
-    expect(state.frames.size).toBe(2)
-    expect(elsewhere.state.frames.size).toBe(1)
-    host.forgetBrowserExtensionContexts(sess)
-    host.forgetBrowserExtensionContexts(elsewhere.sess)
-  })
 
   it('keeps extension membership snapshotted while resolving current frames after callbacks', async () => {
     const { sess } = isolatedSession()

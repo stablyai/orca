@@ -1,7 +1,7 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
-import type { OrcadFeature } from '../../orcad-feature-readiness'
-import { rpcCallerOperationKey } from '../../rpc-caller-identity'
-import { HostAccountSignInFlows } from '../../../host-account-sign-in-flows'
+import type { OrcadFeature } from '../../startup/orcad-readiness'
+import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
+import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AddDataAccountParams,
@@ -23,7 +23,7 @@ import {
   HostAccountSignInFlowParams,
   HostAccountSignInCodeParams
 } from '../../../../../shared/rpc-contract/accounts-params'
-import { HostAccountLaunchEnvParams } from '../../../../../shared/host-account-launch-env'
+import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/promise-timeout-fallback'
 
 // Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.

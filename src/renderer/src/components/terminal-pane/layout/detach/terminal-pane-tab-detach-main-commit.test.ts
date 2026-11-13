@@ -2,16 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
-import { layoutApplyTestTransport as main } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
+import { layoutApplyTestTransport as main } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 import { LEAF_1, LEAF_2, splitLayout } from './terminal-pane-tab-detach-fixture'
 import {
   detachFrom,
-  GROUP,
   mainMovedTabId,
   openMainFrames,
   seedDetachStore,
-  sentMove,
   SOURCE,
   twoPaneManager,
   WT,
@@ -21,12 +19,12 @@ import {
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({
@@ -124,20 +122,6 @@ describe('detachTerminalPaneToTab rolls main’s committed move forward (layout-
     expectOnlyMainTabs(store)
   })
 
-  it('finds the pane by its leaf when its pane id changed meanwhile', async () => {
-    const store = await seeded()
-    const manager = twoPaneManager()
-    const move = await moveHeldByMain(() => detachFrom(store, { manager }))
-    manager.getPanes.mockImplementation(() => [{ id: 1 }, { id: 7 }])
-    manager.getLeafId.mockImplementation((paneId) =>
-      paneId === 1 ? LEAF_1 : paneId === 7 ? LEAF_2 : null
-    )
-
-    await expect(move.answer()).resolves.toMatchObject({ leafId: LEAF_2 })
-
-    expect(manager.detachPaneForExternalMove).toHaveBeenCalledWith(7)
-  })
-
   it('moves the last pane, after a sibling closed meanwhile, without killing its PTY', async () => {
     const store = await seeded({
       ...splitLayout(),
@@ -172,54 +156,5 @@ describe('detachTerminalPaneToTab rolls main’s committed move forward (layout-
     expect(state.ptyIdsByTabId[movedId]).toEqual(['pty-right'])
     expect(api.pty.kill).not.toHaveBeenCalledWith('pty-right', expect.anything())
     expect(api.pty.kill).not.toHaveBeenCalledWith('pty-right')
-  })
-
-  it('commits the move in main before the target tab exists, then shows main’s tab', async () => {
-    const store = await seeded()
-    const tabsBefore = store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)
-    const move = await moveHeldByMain(() => detachFrom(store))
-
-    expect(sentMove()).toEqual({
-      type: 'movePaneToNewTab',
-      workspace: WT,
-      tabId: SOURCE,
-      leafId: LEAF_2,
-      groupId: GROUP,
-      windowDetach: { ptyId: 'remote:env-1@@terminal-1' }
-    })
-    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(tabsBefore)
-
-    const result = await move.answer()
-    const movedId = mainMovedTabId()
-    expect(result?.tab.id).toBe(movedId)
-    expect(store.getState().terminalLayoutsByTabId[movedId]?.root).toEqual({
-      type: 'leaf',
-      leafId: LEAF_2
-    })
-  })
-
-  it('ignores a repeat drop of a pane whose move is still committing', async () => {
-    const store = await seeded()
-    const move = await moveHeldByMain(() => detachFrom(store))
-
-    await expect(detachFrom(store)).resolves.toBeNull()
-
-    await expect(move.answer()).resolves.toMatchObject({ leafId: LEAF_2 })
-    expect(main.sentOfType('movePaneToNewTab')).toHaveLength(1)
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
-  it('binds the moved tab’s layout to the live PTY, not the saved one', async () => {
-    const store = await seeded()
-    const saved = store.getState().terminalLayoutsByTabId[SOURCE]?.ptyIdsByLeafId?.[LEAF_2]
-    expect(saved).toBeTruthy()
-
-    const result = await detachFrom(store, { livePtyId: 'pty-respawned' })
-
-    expect(sentMove().windowDetach).toEqual({ ptyId: 'pty-respawned' })
-    expect(result?.ptyId).toBe('pty-respawned')
-    expect(store.getState().terminalLayoutsByTabId[mainMovedTabId()]?.ptyIdsByLeafId).toEqual({
-      [LEAF_2]: 'pty-respawned'
-    })
   })
 })

@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugin-host-api'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import type { PluginListFilter } from './plugin-list-filter'
@@ -25,15 +25,13 @@ export function PluginListToolbar({
   refreshBusy: boolean
   onRefresh: () => void
 }): React.JSX.Element {
-  const refreshLabel = translate(
-    'auto.components.settings.PluginManager.refreshLabel',
-    'Refresh catalogs'
-  )
+  const t = useTranslate()
+  const refreshLabel = t('auto.components.settings.PluginManager.refreshLabel', 'Refresh catalogs')
   return (
     <>
       {updateCount > 0 ? (
         <Button variant="outline" size="sm" onClick={onUpdateAll}>
-          {translate('auto.components.settings.PluginManager.updateAll', 'Update all…')}
+          {t('auto.components.settings.PluginManager.updateAll', 'Update all…')}
         </Button>
       ) : null}
       {sources.length > 0 ? (

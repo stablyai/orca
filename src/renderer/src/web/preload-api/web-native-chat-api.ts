@@ -1,9 +1,12 @@
-import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
+import type {
+  NativeChatApi,
+  NativeChatAppendedMessages
+} from '../../../../preload/api/native-chat-api'
 import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/native-chat-stream-unsubscribe'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle
-} from '@/components/native-chat/native-chat-runtime-contract'
+} from '@/components/native-chat/session/terminal/read/native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'

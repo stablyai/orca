@@ -1,13 +1,13 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
-import { rpcCallerOperationKey } from '../../rpc-caller-identity'
+import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
-  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from '../../../../../shared/rpc-contract/antigravity-accounts-params'
+import { AntigravityChatAuthConfigSchema } from '../../../../../shared/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import {
   cancelAntigravityChatSignIn,

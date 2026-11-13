@@ -1,12 +1,11 @@
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
-import {
-  prepareDirectWorkItemSetup,
-  type DirectWorkItemLaunchResult
-} from './direct-work-item-setup'
-import { toast } from 'sonner'
+import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
+import { prepareDirectWorkItemSetup } from './direct-work-item-setup'
+import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
+  directWorkItemFailureReporter,
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
   unavailableAgentErrorMessage,
@@ -18,7 +17,7 @@ import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
+import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -28,14 +27,11 @@ import {
   captureDirectWorkItemLaunchArgs
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/workspace/creation/work-item/launch-work-item-direct-types'
-import {
-  beginDirectWorkItemStructuredLaunch,
-  finishDirectWorkItemPrompt
-} from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
+import * as routing from './launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(
   args: LaunchWorkItemDirectArgs
@@ -45,11 +41,8 @@ export async function launchWorkItemDirect(
   args = captureDirectWorkItemLaunchArgs(args)
   let agentArgs = args.agentArgs
   let creationAccepted = false
-  const reportFailure = (message: string): false => {
-    toast.error(message)
-    args.onFailureNotified?.()
-    return false
-  }
+  let failureAgent = agentOverride
+  const reportFailure = directWorkItemFailureReporter(args.onFailureNotified, () => failureAgent)
   try {
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -58,6 +51,11 @@ export async function launchWorkItemDirect(
     const context = prepareDirectLaunchContext(store, args)
     if (!context) {
       return false
+    }
+    if (context.unavailable) {
+      return context.unavailable.pending
+        ? 'cancelled'
+        : reportFailure(agentLaunchRecoveryMessage(context.unavailable.recovery))
     }
     const { repo } = context
     const promptDelivery = args.promptDelivery ?? 'draft'
@@ -74,7 +72,6 @@ export async function launchWorkItemDirect(
     if (confirmedSetup === 'cancelled') {
       return 'cancelled'
     }
-
     const { workspaceIntentName, workspaceName } = getDirectWorkItemWorkspaceNames(
       item,
       itemType,
@@ -92,11 +89,11 @@ export async function launchWorkItemDirect(
         resolvedPushTarget = result.pushTarget
         resolvedBranchNameOverride = result.branchNameOverride
         resolvedCompareBaseRef = result.compareBaseRef
-      } catch (error) {
+      } catch {
         if (args.signal?.aborted) {
           return 'cancelled'
         }
-        toast.error(error instanceof Error ? error.message : resolvePrHeadErrorMessage())
+        reportFailure(resolvePrHeadErrorMessage())
         openModalFallback()
         return false
       }
@@ -107,8 +104,7 @@ export async function launchWorkItemDirect(
       return 'cancelled'
     }
     if (!projectPreflight) {
-      toast.error(unavailableAgentErrorMessage())
-      return false
+      return reportFailure(unavailableAgentErrorMessage())
     }
     const projectContext = projectPreflight.context
     const { prospectiveAgent, unavailable } = await resolveDirectProspectiveAgent(
@@ -120,11 +116,11 @@ export async function launchWorkItemDirect(
     if (args.signal?.aborted) {
       return 'cancelled'
     }
+    failureAgent = prospectiveAgent ?? undefined
     if (unavailable) {
-      toast.error(unavailableAgentErrorMessage())
-      return false
+      return reportFailure(unavailableAgentErrorMessage())
     }
-    const requestId = newAgentLaunchRequestId()
+    const requestId = createNonSecureContextUuid()
     const draftContent = await Promise.resolve(getLaunchableWorkItemDraftContent(item))
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -153,11 +149,11 @@ export async function launchWorkItemDirect(
     const agentArgsError = directWorkItemAgentArgsError(
       preflightInputs ? preflightInputs.agentArgs : args.agentArgs,
       context.shell,
-      Boolean(projectContext && preflightPlan?.route === 'structured-native-chat')
+      Boolean(projectContext && preflightPlan?.route === 'structured-native-chat'),
+      failureAgent
     )
     if (agentArgsError) {
-      toast.error(agentArgsError)
-      return false
+      return reportFailure(agentArgsError)
     }
 
     if (args.signal?.aborted) {
@@ -206,6 +202,7 @@ export async function launchWorkItemDirect(
       agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
+      actionAgentArgs: args.actionAgentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveLaunchInputs: args.resolveLaunchInputs,
       ...(preflightInputs ? { preflightInputs } : {}),
@@ -248,11 +245,20 @@ export async function launchWorkItemDirect(
         defaultTabs: result.defaultTabs,
         ...(launchPreparation.structuredLaunch
           ? { providesInitialSurface: true }
-          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource))
+          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource, {
+              ...launchPreparation.freshLaunchInputs,
+              prompt: draftContent,
+              promptDelivery,
+              legacy: () => ({
+                startupPlan,
+                pasteDraftAfterLaunch: draftLaunchedNatively ? null : draftContent,
+                submitPastedPrompt: promptDelivery !== 'draft'
+              })
+            }))
       })
       return activationHolder.value !== false
     }
-    const structuredResult = beginDirectWorkItemStructuredLaunch({
+    const structuredResult = routing.beginDirectWorkItemStructuredLaunch({
       plan,
       primaryTabId: null,
       beforeOpen: revealWorkspace,
@@ -271,29 +277,29 @@ export async function launchWorkItemDirect(
       // Report a workspace disappearing between create and activation rather than silently drop its draft.
       return reportFailure(workspaceActivationErrorMessage())
     }
-    const primaryTabId = structuredResult.completed
-      ? structuredResult.primaryTabId
-      : activation.primaryTabId
-
     store.setSidebarOpen(true)
 
     if (structuredResult.completed) {
       return true
     }
 
-    const completed = finishDirectWorkItemPrompt({
-      primaryTabId,
+    if (context.target.kind === 'environment' && startupPlan && !startupPlanFailed) {
+      // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
+      return (
+        routing.directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
+        reportFailure(workspaceActivationErrorMessage())
+      )
+    }
+    return routing.finishDirectWorkItemPrompt({
+      primaryTabId: activation.primaryTabId,
       effectiveAgent,
       promptDelivery,
       draftContent,
       startupPlan,
       draftLaunchedNatively,
-      startupPlanFailed
+      startupPlanFailed,
+      onFailureNotified: () => args.onFailureNotified?.()
     })
-    if (!completed) {
-      args.onFailureNotified?.()
-    }
-    return completed
   } catch (error) {
     if (!creationAccepted && args.signal?.aborted) {
       return 'cancelled'

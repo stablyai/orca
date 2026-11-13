@@ -1,4 +1,4 @@
-import type { ManagedOrcadDeploymentSummary } from '../../../shared/managed-orcad-execution-host'
+import type { ManagedOrcadDeploymentSummary } from '../../../shared/execution-host/managed-orcad-execution-host'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { RuntimeEnvironmentSource } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -77,6 +77,8 @@ export type MobileDesktopRelayHosts = {
   ) => Promise<BrowserPageCreationPlacement>
   onEnvironmentRetired: (listener: (environmentId: string) => void) => () => void
   onStatusChanged: (listener: () => void) => () => void
+  /** The saved server list was edited (added, renamed, removed), here or by the CLI. */
+  onCatalogChanged?: (listener: () => void) => () => void
   /** Windowless server events: onChange fires on ready, catalog changes and reconnect replay.
    * catalog is false only for worktreesChanged; repo/project-group writes never emit that event alone. */
   watchChanges: (

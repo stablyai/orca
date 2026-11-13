@@ -13,7 +13,7 @@ import {
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../shared/workspace-creator-visibility'
 import type { NotificationSettings } from '../../../../shared/notification-settings-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type WorkspaceNotificationMuteDeps = {
   store: Pick<

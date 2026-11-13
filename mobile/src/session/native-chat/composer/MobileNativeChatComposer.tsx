@@ -12,7 +12,7 @@ import {
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { MobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Keyboard, type TextInput, View } from 'react-native'
+import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -39,9 +39,10 @@ import { composerInputStyles as inputStyles } from '../../../components/composer
 import { MobileNativeChatComposerSendSlot } from './MobileNativeChatComposerSendSlot'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
 import type { MobileNativeChatMicProps } from './MobileNativeChatComposerMic'
+import { MobileNativeChatDictationLeading } from './MobileNativeChatDictationLeading'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
 import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
@@ -49,8 +50,6 @@ import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlan
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
-
-export type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 
 type Props = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
@@ -63,7 +62,7 @@ type Props = MobileNativeChatMicProps & {
     interactionModeSupported?: boolean
   }
   onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInput | null>
+  inputRef?: React.RefObject<TextInputInstance | null>
   // Terminal-backed chats keep curated commands and image-only attachment actions.
   structured?: MobileNativeChatStructuredComposer | null
   value: string
@@ -89,6 +88,8 @@ type Props = MobileNativeChatMicProps & {
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   disabled?: boolean
+  /** The desktop is out: typing and Send (which queues) still work; attaching and dictation can't. */
+  offline?: boolean
   /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
   sendDisabled?: boolean
   placeholder?: string
@@ -133,6 +134,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
+  offline = false,
   sendDisabled = false,
   placeholder,
   filePaths = NO_FILE_PATHS,
@@ -145,16 +147,18 @@ export function MobileNativeChatComposer({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const fallbackInputRef = useRef<TextInput>(null)
+  const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef
-  const groupRef = useRef<View>(null)
+  const groupRef = useRef<HostInstance>(null)
+  // This composer's ✕, which its own held mic may be released over.
+  const cancelRef = useRef<HostInstance>(null)
   const [focused, setFocused] = useState(false)
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
   )
   const files = structured?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
-    disabled: disabled || editSession?.locked === true,
+    disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
@@ -338,13 +342,15 @@ export function MobileNativeChatComposer({
             textAlignVertical="top"
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <View style={styles.leadingControls}>
+            <MobileNativeChatDictationLeading
+              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+            >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
                 isAttaching={isAttaching}
-                disabled={disabled}
+                disabled={disabled || offline}
                 menu={menu}
               />
               {sessionOptions ? (
@@ -364,18 +370,12 @@ export function MobileNativeChatComposer({
               ) : null}
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
-            </View>
-            {contextRing.ring}
+            </MobileNativeChatDictationLeading>
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
+                {...{ onMicPressIn, onMicPressOut, cancelRef }}
+                disabled={disabled || offline}
               />
             ) : null}
             {editSession ? (

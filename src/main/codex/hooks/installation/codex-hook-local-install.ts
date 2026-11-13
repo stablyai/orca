@@ -2,11 +2,11 @@ import { mkdirSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  writeManagedScript,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeManagedScript } from '../../../agent-hooks/installation/scripts/managed-hook-script-write'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { upsertHookTrustEntries, type CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import { getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath } from '../../trust/identity/codex-trust-identity'
@@ -129,6 +129,7 @@ export async function installCodexHooksExclusively(
       handlerIndex: 0,
       command,
       timeoutSec: hook.timeout,
+      statusMessage: hook.statusMessage,
       trustedHash,
       // Orca's setting overrides Codex's /hooks off switch for this hook.
       enabled: true

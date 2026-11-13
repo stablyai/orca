@@ -3,12 +3,11 @@ import {
   AgentSessionJournalError,
   JournalOutcomeDecodeError
 } from '../writing/journal-write-guards'
-import { JOURNAL_OUTCOME_FORMAT_2 } from './journal-outcome-format-2'
 import type Database from '../../../sqlite/sync-database'
 
 /** The newest record format this build reads, and the one it writes. Each stored record carries its
  * own format; older formats keep their frozen decoders and are never rewritten. */
-export const JOURNAL_OUTCOME_FORMAT = JOURNAL_OUTCOME_FORMAT_2
+export const JOURNAL_OUTCOME_FORMAT = 3
 /** Builds before outcome records refuse a row of this version wherever it sits in the epoch.
  * Under this version, how the input rows before the marker fold into keys and values is frozen: the
  * tail's records were written over that reading. A build that reads old rows into different keys or
@@ -116,7 +115,8 @@ export function startJournalOutcomeLog(
   sessionId: string,
   epoch: string,
   prefix: number,
-  savedAt: number
+  savedAt: number,
+  format: 2 | 3 = JOURNAL_OUTCOME_FORMAT
 ): JournalOutcomeSource {
   const tip = db
     .prepare('SELECT MAX(seq) AS seq FROM journal_rows WHERE session_id = ? AND epoch = ?')
@@ -149,10 +149,10 @@ export function startJournalOutcomeLog(
     `INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch, generation = excluded.generation,
     format = excluded.format, through_seq = excluded.through_seq, prefix_seq = excluded.prefix_seq`
-  ).run(sessionId, epoch, generation, JOURNAL_OUTCOME_FORMAT, prefix, prefix)
+  ).run(sessionId, epoch, generation, format, prefix, prefix)
   return {
     generation,
-    format: JOURNAL_OUTCOME_FORMAT,
+    format,
     through: prefix,
     prefix,
     marker: prefix > 0 ? 6 : 5
@@ -164,8 +164,9 @@ export function advanceJournalOutcomeSource(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  through: number
+  through: number,
+  format: 2 | 3 = JOURNAL_OUTCOME_FORMAT
 ): void {
   db.prepare(`UPDATE journal_outcome_epochs SET through_seq = ?, format = MAX(format, ?)
-    WHERE session_id = ? AND epoch = ?`).run(through, JOURNAL_OUTCOME_FORMAT, sessionId, epoch)
+    WHERE session_id = ? AND epoch = ?`).run(through, format, sessionId, epoch)
 }

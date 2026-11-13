@@ -1,4 +1,4 @@
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -10,7 +10,7 @@ import type {
   ListProjectViewsResult,
   ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefResult
-} from '../../shared/github/project-result-types'
+} from '../../shared/github/projects/project-result-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -28,19 +28,19 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../shared/github/project-request-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { GitHubCommentResult } from '../../shared/github/comment-types'
+} from '../../shared/github/projects/project-request-types'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
+import type { GitHubCommentResult } from '../../shared/github/comments/comment-types'
 import type {
   GitHubAssignableUser,
-  GitHubOwnerRepo,
   IssueInfo
-} from '../../shared/github/pull-request-types'
+} from '../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../shared/github/repositories/repository-identity'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   ListWorkItemsResult
-} from '../../shared/github/work-item-types'
+} from '../../shared/github/work-items/work-item-types'
 import type { GitHubCreateIssueResult, GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 
 export type GitHubRepoSelectorArgs = {
@@ -120,7 +120,7 @@ export type GithubWorkItemApi = {
       updates: GitHubIssueUpdate
       ownerRepo?: GitHubOwnerRepo
     }
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<{ ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }>
   addIssueComment: (
     args: GitHubRepoSelectorArgs & {
       number: number

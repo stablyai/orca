@@ -1,8 +1,9 @@
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost,
-  type ExecutionHostOwnerRow
-} from '../../../../shared/worktree-execution-host-resolution'
+  type ExecutionHostOwnerRow,
+  type ExecutionHostOwnerLookup
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
@@ -27,7 +28,7 @@ export type WorktreeHostRouting<T extends LaunchHostRepo> =
 export function resolveWorktreeHostRouting<T extends LaunchHostRepo & ExecutionHostOwnerRow>(
   repos: readonly T[],
   worktree: { repoId: string; hostId?: string | null },
-  lookup = createRepoRowExecutionHostLookup(repos)
+  lookup: ExecutionHostOwnerLookup<T> = createRepoRowExecutionHostLookup(repos)
 ): WorktreeHostRouting<T> {
   const resolution = resolveWorktreeExecutionHost(lookup, worktree)
   if (resolution.kind === 'unresolved') {

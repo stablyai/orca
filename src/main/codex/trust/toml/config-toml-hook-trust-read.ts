@@ -1,5 +1,5 @@
 import { parse as parseToml } from 'smol-toml'
-import { isPlainObject } from '../../../agent-hooks/hooks-json-read'
+import { isPlainObject } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import type { CodexHookTrustState } from './config-toml-trust'
 import { normalizeCodexHookTrustLookupKey } from '../identity/codex-trust-identity'
 import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'

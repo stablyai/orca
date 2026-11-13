@@ -1,9 +1,9 @@
 import { defineMethod } from '../../core'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   FolderWorkspaceCreate,
+  FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
-  FolderWorkspaceSelector,
   FolderWorkspaceUpdate
 } from '../../../../../shared/rpc-contract/folder-workspace-params'
 
@@ -32,14 +32,21 @@ export const FOLDER_WORKSPACE_METHODS = [
     permission: 'workspace',
     params: FolderWorkspaceUpdate,
     handler: async (params, { runtime }) => ({
-      folderWorkspace: await runtime.updateFolderWorkspace(params.folderWorkspaceId, params.updates)
+      folderWorkspace: await runtime.updateFolderWorkspace(
+        params.folderWorkspaceId,
+        params.updates,
+        { requireUniqueId: params.requireUniqueId }
+      )
     })
   }),
   defineMethod({
     name: 'folderWorkspace.delete',
     permission: 'workspace',
-    params: FolderWorkspaceSelector,
-    handler: async (params, { runtime }) => runtime.deleteFolderWorkspace(params.folderWorkspaceId)
+    params: FolderWorkspaceDelete,
+    handler: async (params, { runtime }) =>
+      runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
+        requireUniqueId: params.requireUniqueId
+      })
   }),
   defineMethod({
     name: 'folderWorkspace.getPathStatus',

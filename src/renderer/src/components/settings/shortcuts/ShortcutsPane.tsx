@@ -13,11 +13,6 @@ import {
 } from '../../../../../shared/keybindings/profile-defaults'
 import { keybindingFromInputForAction } from '../../../../../shared/keybindings/input'
 import { normalizeKeybindingListForAction } from '../../../../../shared/keybindings/normalization'
-import type {
-  KeybindingActionId,
-  KeybindingDefinition,
-  KeybindingInput
-} from '../../../../../shared/keybindings/types'
 import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
 import { useAppStore } from '../../../store/index'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
@@ -27,7 +22,8 @@ import {
   removeBindingOverride,
   sameBindings
 } from './keybinding-override-edits'
-import { ShortcutFilterRail, type ShortcutFilter } from './ShortcutFilterRail'
+import { ShortcutFilterRail } from './ShortcutFilterRail'
+import type { ShortcutFilter } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
@@ -40,14 +36,20 @@ import {
   replaceBindingAt
 } from './shortcut-binding-list-mutations'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
-import { useEditablePluginCommands } from '@/store/plugin-panels'
+import { useTranslate } from '@/i18n/use-translate'
+import { useEditablePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
 import { keybindingValidationErrorText } from './keybinding-diagnostic-text'
 import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import type {
+  KeybindingActionId,
+  KeybindingDefinition,
+  KeybindingInput
+} from '../../../../../shared/keybindings/types'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -57,6 +59,7 @@ const platform: NodeJS.Platform = isMac
     : 'linux'
 
 export function ShortcutsPane(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const terminalShortcutPolicy = useAppStore(
@@ -94,7 +97,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
   const macCapturedDigitChords = useMacCapturedDigitChords({ enabled: isMac })
-  const missionControlConflictMessage = translate(
+  const missionControlConflictMessage = t(
     'auto.components.settings.shortcutDefinitionCatalog.missionControlConflict',
     'Blocked by Mission Control. Remap here or change it in System Settings.'
   )
@@ -108,20 +111,24 @@ export function ShortcutsPane(): React.JSX.Element {
   const { groups, definitions, definitionsByAction, ignoredConflictActionIds, conflictByAction } =
     useMemo(
       () =>
-        buildShortcutDefinitionCatalog({
-          disabledTuiAgents,
-          pluginCommands,
-          keybindings,
-          platform,
-          macCapturedDigitChords,
-          missionControlConflictMessage
-        }),
+        buildShortcutDefinitionCatalog(
+          {
+            disabledTuiAgents,
+            pluginCommands,
+            keybindings,
+            platform,
+            macCapturedDigitChords,
+            missionControlConflictMessage
+          },
+          t
+        ),
       [
         disabledTuiAgents,
         keybindings,
         macCapturedDigitChords,
         missionControlConflictMessage,
-        pluginCommands
+        pluginCommands,
+        t
       ]
     )
   const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | null =>
@@ -135,19 +142,22 @@ export function ShortcutsPane(): React.JSX.Element {
   }
   const { filterCounts, shortcutRows, visibleShortcutCount, visibleShortcutGroups } = useMemo(
     () =>
-      buildShortcutRowVisibility({
-        groups,
-        keybindings,
-        conflictByAction,
-        terminalShortcutPolicy,
-        platform,
-        managedBrowserCreationEnabled,
-        mobileEmulatorCreationEnabled,
-        agentDashboardEnabled,
-        settingsSearchQuery: searchQuery,
-        shortcutQuery,
-        shortcutFilter
-      }),
+      buildShortcutRowVisibility(
+        {
+          groups,
+          keybindings,
+          conflictByAction,
+          terminalShortcutPolicy,
+          platform,
+          managedBrowserCreationEnabled,
+          mobileEmulatorCreationEnabled,
+          agentDashboardEnabled,
+          settingsSearchQuery: searchQuery,
+          shortcutQuery,
+          shortcutFilter
+        },
+        t
+      ),
     [
       agentDashboardEnabled,
       conflictByAction,
@@ -158,6 +168,7 @@ export function ShortcutsPane(): React.JSX.Element {
       searchQuery,
       shortcutFilter,
       shortcutQuery,
+      t,
       terminalShortcutPolicy
     ]
   )
@@ -171,7 +182,7 @@ export function ShortcutsPane(): React.JSX.Element {
       setErrors((prev) => ({
         ...prev,
         [actionId]: normalizedResult.ok
-          ? translate('settings.shortcuts.parseFailed', 'Unable to parse shortcut.')
+          ? t('settings.shortcuts.parseFailed', 'Unable to parse shortcut.')
           : keybindingValidationErrorText(normalizedResult)
       }))
       return false
@@ -181,7 +192,7 @@ export function ShortcutsPane(): React.JSX.Element {
     if (!definition) {
       setErrors((prev) => ({
         ...prev,
-        [actionId]: translate(
+        [actionId]: t(
           'auto.components.settings.ShortcutsPane.shortcutUnavailable',
           'Shortcut is no longer available.'
         )
@@ -218,7 +229,7 @@ export function ShortcutsPane(): React.JSX.Element {
         .join(', ')
       setErrors((prev) => ({
         ...prev,
-        [actionId]: translate(
+        [actionId]: t(
           'auto.components.settings.shortcutDefinitionCatalog.bindingConflict',
           '{{binding}} conflicts with {{actions}}.',
           { binding: formatKeybindingList([blockingConflict.binding], platform), actions: labels }
@@ -306,32 +317,31 @@ export function ShortcutsPane(): React.JSX.Element {
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
       <section className="flex min-h-0 flex-1 flex-col space-y-3">
         {showPolicy ? (
-          <ShortcutTerminalPolicyControl
-            terminalShortcutPolicy={terminalShortcutPolicy}
-            keywords={getTerminalShortcutPolicySearchEntry().keywords}
-            updateSettings={updateSettings}
-          />
+          <SettingsGroup>
+            <ShortcutTerminalPolicyControl
+              terminalShortcutPolicy={terminalShortcutPolicy}
+              keywords={getTerminalShortcutPolicySearchEntry().keywords}
+              updateSettings={updateSettings}
+            />
+          </SettingsGroup>
         ) : null}
 
         <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.ShortcutsPane.47f8f7aef9',
-            'Keyboard Shortcuts'
-          )}
+          title={t('auto.components.settings.ShortcutsPane.9a3a3ca03d', 'Keyboard shortcuts')}
           description={
             <>
-              {translate(
+              {t(
                 'auto.components.settings.ShortcutsPane.38e86e206a',
                 'Customize shortcuts visually or edit'
               )}{' '}
               <span className="font-mono text-[11px]">
                 {keybindingSnapshot?.path ??
-                  translate(
+                  t(
                     'auto.components.settings.ShortcutsPane.d8c988dab4',
                     '~/.orca/keybindings.json'
                   )}
               </span>{' '}
-              {translate('auto.components.settings.ShortcutsPane.4b7ae34062', 'directly.')}
+              {t('auto.components.settings.ShortcutsPane.4b7ae34062', 'directly.')}
             </>
           }
           action={<KeybindingsFileActions />}

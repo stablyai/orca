@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { invalidateTerminalParkingInputs } from '../terminal-pane/parking/terminal-parking-input-events'
 import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { hasRegisteredRuntimeTerminalTab } from '../../runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
 import { canAdmitTerminalTabsForStartup } from './background-terminal-worktree-mount'
 import {
   type TerminalPrewarmStage,
@@ -62,7 +64,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
             c.renderedActiveWorktreeId === worktreeId ||
             c.lastActivationWorktreeIdRef.current === worktreeId
         })
-        bumpRevision()
+        bumpRevision(worktreeId)
       },
       remainingHoldMs: (worktreeId) => {
         const c = controllerRef.current
@@ -79,8 +81,10 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
           : cooldownUntilMs + NARROWING_UNDO_MARGIN_MS - Date.now()
       }
     })
-    const bumpRevision = (): void =>
+    const bumpRevision = (worktreeId: string): void => {
+      invalidateTerminalParkingInputs(worktreeId)
       controllerRef.current.setBackgroundMountRevision((revision) => revision + 1)
+    }
 
     const stopMeasuring = (worktreeId: string): void => {
       const c = controllerRef.current
@@ -90,7 +94,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
         // Skip the post-measure cool-down: ordinary parking (or the neighbor exemption) decides from here.
         c.measuringTerminalWorktreeIdsRef.current.delete(worktreeId)
       }
-      bumpRevision()
+      bumpRevision(worktreeId)
     }
 
     const advance = (
@@ -99,7 +103,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
       stage: TerminalPrewarmStage
     ): void => {
       controllerRef.current.prewarmLeasesRef.current.set(worktreeId, stage)
-      bumpRevision()
+      bumpRevision(worktreeId)
       const next = stage === 'mount' ? 'layout' : stage === 'layout' ? 'warm' : null
       if (next === null && lease.hovered) {
         return
@@ -272,7 +276,6 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
         // The second pass re-resolves each tab's leaves; any change since the check fails confirmation.
         lease(worktreeId, clients.has('hover'), new Map(confirmedByTab))
         setHeldTerminalPrewarmWorktrees(leases.keys())
-        controllerRef.current.setTerminalParkingRevision((revision) => revision + 1)
       })
     }
 
@@ -302,7 +305,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
           }
         }
       }
-      // Read by the parking pass this sync's revision bump schedules.
+      // Lease membership invalidates only the workspaces whose parking exemption changed.
       setHeldTerminalPrewarmWorktrees(leases.keys())
     }
     sync()

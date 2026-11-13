@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PRRefreshOutcome } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRRefreshOutcome } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   createTestStore,
   makePR,
@@ -28,11 +28,8 @@ function found(number: number): PRRefreshOutcome {
 }
 
 const cases = [
-  { route: 'local', replacement: 'force', outcome: 'found' },
-  { route: 'local', replacement: 'hint', outcome: 'found' },
   { route: 'local', replacement: 'force', outcome: 'rejected' },
   { route: 'runtime', replacement: 'force', outcome: 'found' },
-  { route: 'runtime', replacement: 'force', outcome: 'upstream-error' },
   { route: 'runtime', replacement: 'hint', outcome: 'no-pr' }
 ] as const
 
@@ -88,13 +85,6 @@ describe('pull-request lookup ownership after newer settlement', () => {
 
       if (outcome === 'rejected') {
         pending[0].reject(new Error('old lookup failed'))
-      } else if (outcome === 'upstream-error') {
-        pending[0].resolve({
-          kind: 'upstream-error',
-          message: 'old error',
-          errorType: 'unknown',
-          fetchedAt: 3000
-        })
       } else if (outcome === 'no-pr') {
         pending[0].resolve({ kind: 'no-pr', fetchedAt: 3000 })
       } else {

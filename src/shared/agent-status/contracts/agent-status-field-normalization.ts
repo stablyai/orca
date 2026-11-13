@@ -154,7 +154,7 @@ function isEcmaTrimWhitespace(code: number): boolean {
   )
 }
 
-// Only provided strings update optional fields; absence must not erase cached state. Preserve option labels and shorten presentation fields only.
+// Only provided strings update optional fields; absence must not erase cached state. Preserve option labels and shorten presentation fields (and previews) only.
 const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
   'description',
   'detail',
@@ -162,6 +162,14 @@ const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
   'question',
   'summary'
 ])
+
+// A cut preview stays non-blank: whether Claude drew its preview layout decides the answer keystrokes.
+function compactPreview(preview: string, maxLength: number): string {
+  if (preview.length <= maxLength || !/\S/.test(preview)) {
+    return truncatePreservingSurrogates(preview, maxLength)
+  }
+  return `${truncatePreservingSurrogates(preview, Math.max(maxLength - 1, 0))}…`
+}
 
 function compactInteractivePromptValue(value: unknown, maxStringLength: number): unknown {
   if (Array.isArray(value)) {
@@ -173,9 +181,13 @@ function compactInteractivePromptValue(value: unknown, maxStringLength: number):
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      typeof item === 'string' && COMPACTABLE_INTERACTIVE_PROMPT_FIELDS.has(key)
-        ? truncatePreservingSurrogates(item, maxStringLength)
-        : compactInteractivePromptValue(item, maxStringLength)
+      typeof item !== 'string'
+        ? compactInteractivePromptValue(item, maxStringLength)
+        : key === 'preview'
+          ? compactPreview(item, maxStringLength)
+          : COMPACTABLE_INTERACTIVE_PROMPT_FIELDS.has(key)
+            ? truncatePreservingSurrogates(item, maxStringLength)
+            : item
     ])
   )
 }

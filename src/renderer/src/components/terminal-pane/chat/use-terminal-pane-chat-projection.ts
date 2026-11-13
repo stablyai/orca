@@ -3,13 +3,17 @@ import {
   nativeChatLaunchAgentForLeaf,
   nativeChatLeafOwnsTabWideEvidence,
   resolveNativeChatLeafRoute
-} from '../../native-chat/native-chat-leaf-routing'
+} from '../../native-chat/pane/routing/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from '../session-continuation/terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
+import {
+  canPaneOfferAgentId,
+  resolvePaneAgentSessionId
+} from '../../../lib/agent-session/identity/pane-agent-session-id'
+import { canOwnerResolveSleepingAgentId } from '../../../lib/agent-session/identity/sleeping-agent-id-owner'
 import { canPaneOfferResumeInNewChat } from '../../tab-bar/tab-session-history-switch'
 
 export function useTerminalPaneChatProjection({
@@ -130,12 +134,18 @@ export function useTerminalPaneChatProjection({
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const { menuAgentSessionId, menuAgentIdAvailable, activePaneCanResumeInChat } = useAppStore(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
           ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
           : null,
+      menuAgentIdAvailable:
+        contextMenu.open &&
+        contextMenuLeafId !== null &&
+        canPaneOfferAgentId(state, makePaneKey(tabId, contextMenuLeafId), () =>
+          canOwnerResolveSleepingAgentId(state, worktreeId)
+        ),
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
       activePaneCanResumeInChat:
         !activePaneIsChatLeaf &&
@@ -156,6 +166,7 @@ export function useTerminalPaneChatProjection({
   }, [getContextMenuLeafId, toggleNativeChatForLeaf])
   return {
     menuAgentSessionId,
+    menuAgentIdAvailable,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,

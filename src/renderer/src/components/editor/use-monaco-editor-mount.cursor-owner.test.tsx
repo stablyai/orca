@@ -1,17 +1,38 @@
 // @vitest-environment happy-dom
-import { cleanup, renderHook } from '@testing-library/react'
-import { Suspense } from 'react'
+import { cleanup, render, renderHook } from '@testing-library/react'
+import { Children, Suspense, type ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { editor, IRange } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
 import type { StoreApi } from 'zustand'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import '@/lib/editor/file-operations/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+const menuActions = vi.hoisted(() => new Map<string, () => unknown>())
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>
+  return {
+    DropdownMenu: Pass,
+    DropdownMenuTrigger: Pass,
+    DropdownMenuContent: Pass,
+    DropdownMenuItem: ({
+      children,
+      onSelect
+    }: {
+      children: ReactNode
+      onSelect: () => unknown
+    }) => {
+      const label = Children.toArray(children).find((child) => typeof child === 'string')
+      menuActions.set(String(label), onSelect)
+      return null
+    }
+  }
+})
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn()
 }))
@@ -216,17 +237,20 @@ it('keeps cursor and gutter copy on the current file owner after migration', asy
     const transport = runtimeEnvironmentId ? vi.mocked(callRuntimeRpc) : local
     transport.mockResolvedValue(copiedUrl)
     for (const line of [15, 21]) {
-      const menu = MonacoGutterContextMenu({
-        open: true,
-        onOpenChange: vi.fn(),
-        point: { x: 0, y: 0 },
-        line,
-        selection: snapshot,
-        fileId: result.fileId,
-        filePath,
-        relativePath: 'file.ts'
-      })
-      const action = menu.props.children[1].props.children[2].props.onSelect
+      const menu = render(
+        <MonacoGutterContextMenu
+          open
+          onOpenChange={vi.fn()}
+          point={{ x: 0, y: 0 }}
+          line={line}
+          selection={snapshot}
+          fileId={result.fileId}
+          filePath={filePath}
+          relativePath="file.ts"
+        />
+      )
+      const action = menuActions.get('Copy Remote URL')!
+      menu.unmount()
       await action()
       const expected = {
         relativePath: 'file.ts',

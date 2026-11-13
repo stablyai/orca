@@ -1,18 +1,20 @@
-import type { AppState } from '@/store/types'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getFolderWorkspaceCandidateRepos } from '../../../folder-workspace-connection'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import '../../../workspace/ownership/folder-workspace-connection'
+import { findFolderWorkspaceCandidateRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../../../shared/windows-terminal-shell'
-import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
 
 type AiVaultResumeShellState = Pick<
   AppState,
@@ -106,7 +108,9 @@ export function getAiVaultResumeWorkspaceWslDistro(
     ) {
       return null
     }
-    if (getFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1) {
+    if (
+      findFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1
+    ) {
       return undefined
     }
   }

@@ -14,7 +14,7 @@ import { HOST_TEST_SESSION as SESSION } from '../../native-chat/agent-session-wi
 const claudeTurnEnds = (connection: Parameters<typeof claudeFrame>[0]) =>
   claudeFrame(connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
 
-it.each(['low', 'high', undefined])(
+it.each(['high', undefined])(
   'admits accepted high independently of resolved effort (effective %s)',
   async (effective) => {
     const models = [

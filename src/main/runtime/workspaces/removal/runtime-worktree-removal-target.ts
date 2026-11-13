@@ -1,4 +1,4 @@
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   parseExactWorktreeIdSelector,
   type RuntimeWorktreeRemovalTarget

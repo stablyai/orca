@@ -48,6 +48,7 @@ import type {
   NotificationsApi
 } from './api/os-permission-api'
 import type { PetApi } from './api/pet-api'
+import type { AppIconApi } from './api/app-icon-api'
 import type { BrowserPasswordsApi } from './api/browser-passwords-api'
 import type { PluginsApi } from './api/plugin-host-api'
 import type { PreflightApi } from './api/preflight-api'
@@ -126,6 +127,7 @@ export type PreloadApi = {
   shell: ShellApi
   skills: SkillsApi
   pet: PetApi
+  appIcon: AppIconApi
   browser: BrowserApi
   browserPasswords: BrowserPasswordsApi
   emulator: EmulatorApi
@@ -176,68 +178,6 @@ export type PreloadApi = {
   mobile: MobileApi
   speech: SpeechApi
 }
-
-export type {
-  ClaudeUsageApi,
-  CodexUsageApi,
-  MuseUsageApi,
-  OpenCodeUsageApi
-} from './api/agent-usage-api'
-export type { AiVaultApi } from './api/ai-vault-api'
-export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
-export type { AppApi } from './api/app-api'
-export type {
-  BrowserApi,
-  DetectedBrowserInfo,
-  DetectedBrowserProfileInfo
-} from './api/browser/browser-api'
-export type { EmulatorApi } from './api/emulator-api'
-export type { ExportApi } from './api/filesystem-api'
-export type {
-  NativeChatApi,
-  NativeChatAppendedMessages,
-  NativeChatAppendedPayload,
-  NativeChatReadSessionResult,
-  NativeChatSubscribeArgs,
-  NativeChatSubscriptionFrame
-} from './api/native-chat-api'
-export type {
-  PluginAutoUpdateEvent,
-  PluginHostCustomEditor,
-  PluginHostNewFile,
-  PluginHostInstallResult,
-  PluginHostInstallSource,
-  PluginHostListEntry,
-  PluginHostLogLine,
-  PluginHostPanel,
-  PluginHostStatus,
-  PluginMarketplaceHostInstallPreview,
-  PluginMarketplaceHostListing,
-  PluginMarketplaceHostSourceState
-} from './api/plugin-host-api'
-export type {
-  PreflightApi,
-  PreflightRuntimeContext,
-  PreflightStatus,
-  RefreshAgentsResult
-} from './api/preflight-api'
-export type {
-  PtyManagementApi,
-  PtyManagementDaemonCwdClass,
-  PtyManagementFolderAccessMismatch,
-  PtyManagementMacTccAttributionHealth,
-  PtyManagementSession,
-  PtyManagementSeveredDaemon,
-  PtyManagementSeveredDaemonRestartResult
-} from './api/pty-management-api'
-
-export type {
-  DiagnosticsBundlePayload,
-  DiagnosticsStatusPayload,
-  DiagnosticsUploadPayload,
-  MemoryApi,
-  StatsApi
-} from './api/telemetry-api'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface

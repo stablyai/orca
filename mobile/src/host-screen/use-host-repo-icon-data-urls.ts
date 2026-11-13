@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MAX_REPO_ICON_IDS_PER_READ } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readHostMethodReply, sidebarRepoIconsRead } from './host-sidebar-feed-operations'
 
 const NO_DATA_URLS: ReadonlyMap<string, string | null> = new Map()

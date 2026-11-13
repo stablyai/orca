@@ -2,11 +2,11 @@ import { useCallback, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { isNativeChatSkillForAgent } from '../../../../../src/shared/native-chat/input/native-chat-skill-visibility'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { defineHostQuery, useHostQuery } from '../../../query/host-query'
 import { hostQueryKey } from '../../../query/host-query-key'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
-import { nativeChatSkillDiscoveryRead } from '../../mobile-session-read-operations'
+import { nativeChatSkillDiscoveryRead } from './mobile-native-chat-skill-operations'
 
 const NO_SKILLS: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills: [] }
 const NO_INPUT = {}

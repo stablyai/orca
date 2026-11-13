@@ -1,6 +1,6 @@
 import type { NativeObservation } from './recording-causality'
-import { buildDirectRpcWireRequest } from '../../transport/rpc-envelope-fields'
-import { RpcClientRequestTracker } from '../../transport/rpc-client-request-tracker'
+import { buildDirectRpcWireRequest } from '../../transport/rpc/rpc-envelope-fields'
+import { RpcClientRequestTracker } from '../../transport/rpc/rpc-client-request-tracker'
 import { captureError } from './recording-values'
 
 import type { ScriptedRpcTransport } from './scripted-rpc-transport'

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQueryClient, type Query, type QueryClient } from '@tanstack/react-query'
-import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
-import type { RpcClient } from '../transport/rpc-client'
+import { createHostConnectRefetchGate } from '../transport/hosts/host-connect-refetch-gate'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { hostScopeKey } from './host-query-key'
 
 type Watch = { holders: number; stop: () => void }
@@ -14,7 +14,7 @@ function refetchesOnConnect(query: Query): boolean {
 }
 
 // One connected-edge listener per world per host client, however many screens read that host.
-function retainHostConnectionInvalidation(
+export function retainHostConnectionInvalidation(
   queryClient: QueryClient,
   hostId: string,
   client: RpcClient

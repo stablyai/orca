@@ -1,7 +1,7 @@
 import { deleteConfirmedListSnapshot } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 import { deleteLastConfirmedClientValue } from '@/components/task-page/github/task-page-github-confirmed-client-values'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '../../types'
 import type { StoreApi } from 'zustand'
@@ -9,13 +9,16 @@ import {
   captureGitHubTaskObservation,
   githubTaskBinding,
   type GitHubTaskObservation
-} from '@/lib/github-task-observation'
-import { githubTaskIdentity } from '@/lib/github-task-target'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+} from '@/lib/work-items/github/github-task-observation'
+import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { nextProviderRequestId } from '../requests/request-coordination'
-import { isHostIdentityContinued, isHostIdentityFenceCurrent } from '../../host-catalog-fencing'
+import {
+  isHostIdentityContinued,
+  isHostIdentityFenceCurrent
+} from '../../../runtime/rpc/environment-revisions/host-identity-fence'
 import { applyTaskChange } from './task-change'
 import {
   bindingKey,

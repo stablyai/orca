@@ -1,5 +1,5 @@
 import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
-import type { GitRuntimeOptions } from '../../git/git-runtime-options'
+import type { GitRuntimeOptions } from '../../git/command-runner/git-runtime-options'
 import type { Repo } from '../../../shared/repo-types'
 import {
   readIssueCommandUnlessWslStopped,
@@ -7,8 +7,8 @@ import {
 } from '../../workspace-hooks/issue-command-file'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 type RuntimeRepositoryIssueCommandDeps = {
   resolveRepo: (selector: string) => Promise<Repo>

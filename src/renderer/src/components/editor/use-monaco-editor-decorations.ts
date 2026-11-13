@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../shared/file-listing/file-document'
 import {
   clearMarkdownDocCompletionDocuments,
   setMarkdownDocCompletionDocuments
