@@ -20699,6 +20699,11 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "無法建立工作樹。",
       "missingBaseBranchHelp": "請建立初始提交（例如在 main 上），或在「建立來源」中選擇現有分支，然後重試。"
+    },
+    "agentNotes": {
+      "pastedPressEnter": "備註已貼到 {{agent}}。請在該終端機中按 Enter 鍵傳送。",
+      "pastingNote": "正在將備註貼到 {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} 中有已貼上的備註尚未傳送。請先在該終端機中按 Enter 鍵。"
     }
   },
   "dashboardPopout": {

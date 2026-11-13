@@ -10,6 +10,7 @@ import { assertTerminalAgentSendable } from '../../terminal/terminal-agent-send-
 import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
 import {
+  terminalSendWriteReservation,
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
@@ -30,15 +31,7 @@ import {
   withTerminalInputSequence
 } from './terminal-send-input-sequence'
 
-// Every refused send reports the same zero-byte result, with the guard's reason when it has one.
-function refusedSend(
-  handle: string,
-  refusedReason?: NonNullable<ReturnType<typeof getTerminalSendGuardRefusedReason>>
-) {
-  return {
-    send: { handle, accepted: false, bytesWritten: 0, ...(refusedReason ? { refusedReason } : {}) }
-  }
-}
+import { refusedSend } from './terminal-send-refusal'
 
 export const TERMINAL_SEND_METHODS = [
   defineMethod({
@@ -171,7 +164,13 @@ export const TERMINAL_SEND_METHODS = [
             if (!refusedReason) {
               throw error
             }
-            return refusedSend(params.terminal, refusedReason)
+            return refusedSend(
+              params.terminal,
+              refusedReason,
+              refusedReason === 'input-changed' && leaf?.ptyId
+                ? runtime.terminalRunFacts.readInputGeneration(leaf.ptyId)
+                : undefined
+            )
           }
         }
         const { requireStartupDialog } = params
@@ -208,16 +207,14 @@ export const TERMINAL_SEND_METHODS = [
           params.interrupt !== true &&
           params.client?.type === 'desktop' &&
           (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
-        const reserveWrite =
-          params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
-            ? (ptyId: string): void => {
-                const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
-                if (!claim) {
-                  throw new Error('mobile_input_floor_unavailable')
-                }
-                mobileFloorClaim.current = claim
-              }
-            : undefined
+        const floorClientId =
+          params.inputKind !== 'query-reply' && leaf?.ptyId ? mobileFloorClientId : null
+        // Checked in the writer's synchronous step before the write: no input lands between them.
+        const reserveWrite = terminalSendWriteReservation(runtime, {
+          expectInputGeneration: hasText ? undefined : params.expectInputGeneration,
+          floorClientId,
+          floorClaim: mobileFloorClaim
+        })
         const answered = observeQuestionAnswerSend(params, runtime)
         let result
         let acceptedPromptCheckpoint: { send: RuntimeTerminalSend } | undefined
@@ -257,6 +254,10 @@ export const TERMINAL_SEND_METHODS = [
                     ? { requireWriteSettlement: true as const }
                     : {}),
                   ...(params.enter === true ? { waitForLaunchComposer: true as const } : {}),
+                  // A guarded paste's Enter is the client's own second send.
+                  ...(params.requireAgentStatus === 'sendable' && hasText && !hasSuffix
+                    ? { clientSubmit: true as const }
+                    : {}),
                   ...(reserveWrite ? { reserveWrite } : {}),
                   ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                     ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
@@ -270,7 +271,13 @@ export const TERMINAL_SEND_METHODS = [
           }
           const refusedReason = getTerminalSendGuardRefusedReason(error)
           if (refusedReason) {
-            return refusedSend(params.terminal, refusedReason)
+            return refusedSend(
+              params.terminal,
+              refusedReason,
+              refusedReason === 'input-changed' && leaf?.ptyId
+                ? runtime.terminalRunFacts.readInputGeneration(leaf.ptyId)
+                : undefined
+            )
           }
           if (error instanceof TerminalInputPausedError || isTerminalSendGuardNotWritable(error)) {
             return refusedSend(params.terminal)

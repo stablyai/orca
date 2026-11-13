@@ -159,9 +159,20 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.agentStatus',
     permission: 'workspace',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
-    })
+    handler: async (params, { runtime }) => {
+      const agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+      const ptyId = runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId
+      return {
+        agentStatus,
+        // Lets a sender tell whether the terminal took input since a paste it left unsent.
+        ...(ptyId
+          ? {
+              inputGeneration: runtime.terminalRunFacts.readInputGeneration(ptyId),
+              resolvedInputGeneration: runtime.terminalRunFacts.readResolvedInputGeneration(ptyId)
+            }
+          : {})
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.rename',

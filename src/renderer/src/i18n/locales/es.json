@@ -20895,6 +20895,11 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Detenido tras {{seconds}} segundos de silencio"
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Nota pegada en {{agent}}. Pulsa Intro allí para enviarla.",
+      "pastingNote": "Pegando nota en {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} tiene una nota pegada en espera. Pulsa Intro allí primero."
     }
   },
   "dashboardPopout": {

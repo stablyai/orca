@@ -20653,7 +20653,10 @@
       "notWritable": "{{target}}智能体未接受这些备注",
       "selectedSubmitFailed": "备注可能已粘贴到所选终端，但 Orca 无法提交",
       "activeSubmitFailed": "备注可能已粘贴到当前终端，但 Orca 无法提交",
-      "notWritableSelection": "{{target}}智能体未接受所选内容"
+      "notWritableSelection": "{{target}}智能体未接受所选内容",
+      "pastedPressEnter": "备注已粘贴到 {{agent}}，请在该终端中按 Enter 发送",
+      "pastingNote": "正在将备注粘贴到 {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} 中有已粘贴的备注尚未发送，请先在该终端中按 Enter"
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止"

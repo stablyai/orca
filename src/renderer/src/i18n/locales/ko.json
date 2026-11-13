@@ -20310,6 +20310,11 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "{{seconds}}초 동안 조용해서 중지했습니다"
+    },
+    "agentNotes": {
+      "pastedPressEnter": "메모를 {{agent}}에 붙여넣었습니다. 보내려면 해당 터미널에서 Enter 키를 누르세요.",
+      "pastingNote": "메모를 {{agent}}에 붙여넣는 중…",
+      "pastedNoteWaiting": "{{agent}}에 붙여넣은 메모가 대기 중입니다. 먼저 해당 터미널에서 Enter 키를 누르세요."
     }
   },
   "dashboardPopout": {

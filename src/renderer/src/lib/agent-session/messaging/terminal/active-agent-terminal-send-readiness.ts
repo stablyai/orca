@@ -22,6 +22,9 @@ export type TerminalAgentSendReadinessResult = {
   status: TerminalAgentSendReadiness
   supportsGuardedSend: boolean
   code?: ActiveAgentNotesSendFailureCode
+  /** Names the terminal's last input, as a paste receipt does. Older hosts omit it. */
+  inputGeneration?: number
+  resolvedInputGeneration?: number
 }
 
 export async function getTerminalAgentSendReadiness(
@@ -30,19 +33,27 @@ export async function getTerminalAgentSendReadiness(
   options: { allowLegacyFallback: boolean }
 ): Promise<TerminalAgentSendReadinessResult> {
   try {
-    const { agentStatus } = await callRuntimeRpc<{ agentStatus: RuntimeTerminalAgentStatus }>(
+    const { agentStatus, inputGeneration, resolvedInputGeneration } = await callRuntimeRpc<{
+      agentStatus: RuntimeTerminalAgentStatus
+      inputGeneration?: number
+      resolvedInputGeneration?: number
+    }>(
       runtimeTarget,
       'terminal.agentStatus',
       { terminal: terminalHandle },
       { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
     )
+    const input = {
+      ...(Number.isSafeInteger(inputGeneration) ? { inputGeneration } : {}),
+      ...(Number.isSafeInteger(resolvedInputGeneration) ? { resolvedInputGeneration } : {})
+    }
     if (!agentStatus.isRunningAgent) {
-      return { status: 'no-agent', supportsGuardedSend: true }
+      return { status: 'no-agent', supportsGuardedSend: true, ...input }
     }
     if (agentStatus.status === 'permission') {
-      return { status: 'permission', supportsGuardedSend: true }
+      return { status: 'permission', supportsGuardedSend: true, ...input }
     }
-    return { status: 'sendable', supportsGuardedSend: true }
+    return { status: 'sendable', supportsGuardedSend: true, ...input }
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       if (!options.allowLegacyFallback) {

@@ -21016,6 +21016,11 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
       "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut."
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Notiz in {{agent}} eingefügt. Drücken Sie dort die Eingabetaste, um sie zu senden.",
+      "pastingNote": "Notiz wird in {{agent}} eingefügt…",
+      "pastedNoteWaiting": "In {{agent}} wartet eine eingefügte Notiz. Drücken Sie dort zuerst die Eingabetaste."
     }
   },
   "dashboardPopout": {

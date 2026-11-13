@@ -159,10 +159,11 @@ export function createUiAgentActions(
         import('@/lib/agent-session/messaging/terminal/active-agent-note-send-result'),
         import('@/lib/agent-session/messaging/agent-message-send')
       ])
+      const messageTarget = runningAgentMessageTarget(target)
       const sending = sendMessageToAgent({
         worktreeId: mode.worktreeId,
         prompt: mode.prompt,
-        target: runningAgentMessageTarget(target)
+        target: messageTarget
       }).catch(() => {
         console.error('Failed to send notes to sidebar agent target:', {
           code: 'runtime-unverifiable'
@@ -177,26 +178,57 @@ export function createUiAgentActions(
         return current?.id === mode.id && current.instanceId === mode.instanceId
       }
 
+      if (result.status === 'pasted') {
+        // The terminal holds the notes now; sending them again would paste them twice.
+        mode.onPromptDelivered?.()
+        const { showNotePastedToast } =
+          await import('@/components/notes/delivery/note-pasted-toast')
+        showNotePastedToast({
+          worktreeId: mode.worktreeId,
+          target: messageTarget,
+          agentLabel: label,
+          settleMs: result.pasteSettleMs
+        })
+        get().closeAgentSendPopoverTargetMode(mode.id, mode.instanceId)
+        return true
+      }
+
       if (result.status !== 'sent') {
         const message = activeAgentNotesSendFailureMessage(result.status, {
           explicitTarget: true,
-          code: result.code
+          code: result.code,
+          agent: label
         })
+        // A note waiting for the user's Enter is no failure: the picker stays as it was.
+        const noteWaiting = result.code === 'terminal-draft-pending'
         set((s) =>
           s.agentSendPopoverTargetMode?.id === mode.id &&
           s.agentSendPopoverTargetMode.instanceId === mode.instanceId
             ? {
                 agentSendPopoverTargetMode: {
                   ...s.agentSendPopoverTargetMode,
-                  status: 'error',
+                  status: noteWaiting ? 'open' : 'error',
                   sendingPaneKey: undefined,
-                  error: message
+                  error: noteWaiting ? undefined : message
                 }
               }
             : s
         )
-        const { toast } = await import('sonner')
+        const [{ toast }, { showWaitingNoteRefusalToast }] = await Promise.all([
+          import('sonner'),
+          import('@/components/notes/delivery/note-pasted-toast')
+        ])
         if (!stillCurrent()) {
+          return false
+        }
+        if (noteWaiting) {
+          showWaitingNoteRefusalToast({
+            worktreeId: mode.worktreeId,
+            target: messageTarget,
+            agentLabel: label,
+            settleMs: result.pasteSettleMs,
+            readyMessage: message
+          })
           return false
         }
         toast.error(
