@@ -101,6 +101,7 @@ async function gitExecFileAsyncUnlocked(
           env: policy.env,
           signal: options.signal,
           terminationBarrier: options.terminationBarrier,
+          requireGuestTerminationProof: options.requireGuestTerminationProof,
           admissionTier: options.admissionTier,
           spawnOnWorkerThread: options.spawnOnWorkerThread,
           onChildTerminated: reportTerminated,

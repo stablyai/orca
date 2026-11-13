@@ -3,6 +3,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from '../../persistence/persistence-test-harness'
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
@@ -224,13 +229,21 @@ it('finishes saving after a quiescent removal reports failure, retaining the fai
 it('checkpoints pane state during a held synchronous deletion, then saves later metadata before releasing ownership', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-quit-checkpoint-'))
   const { Store } = await import('../../persistence/loading-store/store')
-  const { closeTestStores, createSqliteTestStore, readPersistedStateJson } =
-    await import('../../persistence/persistence-test-harness')
   const dataFile = join(directory, 'orca-data.json')
   const profile = createSqliteTestStore(Store, { dataFile })
   const savedTab = () => JSON.parse(readPersistedStateJson(dataFile)).workspaceSession.activeTabId
   await profile.flushPendingOrThrowAsync({ fullCheckpoint: true })
-  const checkpoint = vi.spyOn(profile, 'flushPendingOrThrowAsync')
+  const checkpointSaved = Promise.withResolvers<void>()
+  const savePending = profile.flushPendingOrThrowAsync.bind(profile)
+  vi.spyOn(profile, 'flushPendingOrThrowAsync').mockImplementation(async (...args) => {
+    try {
+      await savePending(...args)
+      checkpointSaved.resolve()
+    } catch (error) {
+      checkpointSaved.reject(error)
+      throw error
+    }
+  })
   const final = vi.spyOn(profile, 'flushFinalOrThrowAsync')
   const freeze = vi.spyOn(profile, 'freezeWritesAsync')
   let release!: () => void
@@ -262,7 +275,7 @@ it('checkpoints pane state during a held synchronous deletion, then saves later 
     )
     captureGrid()
     await grid
-    await checkpoint.mock.results[0]?.value
+    await checkpointSaved.promise
     expect(savedTab()).toBe('pane-grid-before-stop')
     await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS)
     expect(app.quit).toHaveBeenCalledOnce()

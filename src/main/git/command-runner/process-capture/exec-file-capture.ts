@@ -17,6 +17,7 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
   terminationBarrier?: boolean
+  requireGuestTerminationProof?: true
   onChildTerminated?: () => void
   admissionTier?: GitAdmissionTier
   createTimeoutError?: () => Error
@@ -51,7 +52,10 @@ export async function execFileCaptureToTermination(
     throw error
   }
   const captureBytes = options.encoding === 'buffer'
-  const proof = termination ? createWslGuestTerminationProof(termination) : undefined
+  const proof =
+    termination && options.requireGuestTerminationProof
+      ? createWslGuestTerminationProof(termination)
+      : undefined
   if (proof) {
     void proof.terminated.then(() => options.onChildTerminated?.())
   }
@@ -65,7 +69,7 @@ export async function execFileCaptureToTermination(
     captureStdoutAsBytes: captureBytes,
     captureStderrAsBytes: captureBytes,
     signal: options.signal,
-    terminationBarrier: proof?.barrier ?? true,
+    terminationBarrier: proof?.barrier ?? termination ?? true,
     onChildTerminated: proof?.onChildTerminated ?? options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })

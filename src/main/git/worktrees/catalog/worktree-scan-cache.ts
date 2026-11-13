@@ -1,3 +1,4 @@
+import { readTranslatedWorktreeGraph } from './worktree-list-reader'
 import { abortSignalReason } from '../../../../shared/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
@@ -15,7 +16,7 @@ let nextSignalIdentity = 0
 
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-type WorktreeScanKind = 'graph' | 'lenient' | 'strict' | 'strict-true-empty'
+type WorktreeScanKind = 'graph' | 'strict-graph' | 'lenient' | 'strict' | 'strict-true-empty'
 
 const worktreeScanGenerations = new Map<string, number>()
 
@@ -148,4 +149,12 @@ export function listWorktreesSharedStrictAllowingTrueEmpty(
     'strict-true-empty',
     listWorktreesStrictAllowingTrueEmptyUnshared
   )
+}
+
+/** Strict authority includes every registration, without preparation filtering or sparse probes. */
+export function listWorktreeGraphSharedStrict(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return shareWorktreeScan(repoPath, options, 'strict-graph', readTranslatedWorktreeGraph)
 }

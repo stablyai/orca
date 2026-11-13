@@ -27,6 +27,7 @@ import {
   listWorktreeGraph,
   listWorktrees,
   listWorktreesSharedStrict,
+  listWorktreeGraphSharedStrict,
   bumpWorktreeScanGeneration
 } from './worktree-scan-cache'
 import { __resetSparseCheckoutStateCacheForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
@@ -120,4 +121,32 @@ it('shares only matching live cancellation scopes and preserves generation fresh
     'fulfilled',
     'rejected'
   ])
+})
+
+it('keeps strict all-row graphs separate, preserves errors and refreshes in the same cancellation scope', async () => {
+  _resetWorktreeScanCacheForTests()
+  readTranslatedWorktreeGraphMock.mockReset()
+  const pending = Promise.withResolvers<GitWorktreeInfo[]>()
+  readTranslatedWorktreeGraphMock.mockReturnValue(pending.promise)
+  const signal = new AbortController().signal
+  const scans = [
+    listWorktreeGraphSharedStrict('/repo', { signal }),
+    listWorktreeGraphSharedStrict('/repo', { signal })
+  ]
+  expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledOnce()
+  scans.push(listWorktreeGraph('/repo', { signal }))
+  expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledTimes(2)
+  bumpWorktreeScanGeneration('/repo')
+  scans.push(listWorktreeGraphSharedStrict('/repo', { signal }))
+  expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledTimes(3)
+  const nested = {
+    ...ROW,
+    path: '/repo/checkout/.orca-worktree-preparation',
+    branch: 'refs/heads/orca-create-preparation/test'
+  }
+  pending.resolve([ROW, nested])
+  expect((await Promise.all(scans))[0]).toEqual([ROW, nested])
+  const failure = new Error('inventory unavailable')
+  readTranslatedWorktreeGraphMock.mockRejectedValueOnce(failure)
+  await expect(listWorktreeGraphSharedStrict('/repo', { signal })).rejects.toBe(failure)
 })

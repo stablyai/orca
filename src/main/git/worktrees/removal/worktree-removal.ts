@@ -83,18 +83,21 @@ async function performRemoveWorktree(
 
   // Avoid default deadlines during large deletes; preserve Windows long-path support used at creation.
   const longPathArgs = windowsLongPathGitArgs(repoPath)
-  const execOptions = {
+  const finalizationOptions = {
     ...gitExecOptions(repoPath, options),
+    ...gitEnvWithoutYesNoPrompt(),
+    admissionExempt: true as const
+  }
+  const execOptions = {
+    ...finalizationOptions,
     ...(options.checkoutDeleteSignal
       ? {
           signal: options.checkoutDeleteSignal,
           ...(process.platform === 'win32' && (options.wslDistro || parseWslPath(repoPath))
-            ? { terminationBarrier: true }
+            ? { terminationBarrier: true, requireGuestTerminationProof: true as const }
             : {})
         }
-      : {}),
-    ...gitEnvWithoutYesNoPrompt(),
-    admissionExempt: true as const
+      : {})
   }
   const args = [...longPathArgs, 'worktree', 'remove']
   if (force) {
@@ -120,7 +123,7 @@ async function performRemoveWorktree(
         }
         await gitExecFileAsync(
           [...longPathArgs, 'worktree', 'remove', '--force', '--', worktreePath],
-          execOptions
+          finalizationOptions
         )
       }
     } else {

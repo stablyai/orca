@@ -165,6 +165,7 @@ describe('WSL direct Git reads', () => {
   })
 
   it.each([
+    ['generic', false],
     ['git', true],
     ['git', false],
     ['filesystem', true],
@@ -215,23 +216,36 @@ describe('WSL direct Git reads', () => {
         let terminated = false
         let settled = false
         const pending =
-          kind === 'filesystem'
-            ? removeLocalWorktreePath(
-                String.raw`C:\repo\feature`,
-                { wslDistro: DISTRO },
-                controller.signal
-              )
-            : removeWorktree(String.raw`C:\repo`, String.raw`C:\repo\feature`, false, {
+          kind === 'generic'
+            ? gitExecFileAsync(['rebase', 'upstream/main'], {
+                cwd: String.raw`C:\repo`,
+                env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
                 wslDistro: DISTRO,
-                deleteBranch: false,
-                knownRemovedWorktree: { branch: 'feature', head: 'abc' },
-                checkoutDeleteSignal: controller.signal,
+                timeout: 25,
+                terminationBarrier: true,
                 observeChildTermination: (ended) => {
                   void ended.then(() => {
                     terminated = true
                   })
                 }
               })
+            : kind === 'filesystem'
+              ? removeLocalWorktreePath(
+                  String.raw`C:\repo\feature`,
+                  { wslDistro: DISTRO },
+                  controller.signal
+                )
+              : removeWorktree(String.raw`C:\repo`, String.raw`C:\repo\feature`, false, {
+                  wslDistro: DISTRO,
+                  deleteBranch: false,
+                  knownRemovedWorktree: { branch: 'feature', head: 'abc' },
+                  checkoutDeleteSignal: controller.signal,
+                  observeChildTermination: (ended) => {
+                    void ended.then(() => {
+                      terminated = true
+                    })
+                  }
+                })
         const outcome = pending.then(
           () => {
             settled = true
@@ -244,9 +258,16 @@ describe('WSL direct Git reads', () => {
         try {
           await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
           await Promise.resolve()
-          controller.abort()
+          if (kind !== 'generic') {
+            controller.abort()
+          }
           await vi.advanceTimersByTimeAsync(15_000)
-          if (confirmed) {
+          if (kind === 'generic') {
+            expect(await outcome).toMatchObject({ name: 'GitCommandTimeoutError', timeoutMs: 25 })
+            expect(terminated).toBe(true)
+            expect(settled).toBe(true)
+            expect(command.kill).toHaveBeenCalled()
+          } else if (confirmed) {
             expect(await outcome).toMatchObject({ name: 'AbortError' })
             if (kind === 'git') {
               expect(terminated).toBe(true)

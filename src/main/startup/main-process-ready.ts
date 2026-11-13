@@ -59,7 +59,11 @@ export async function initializeMainProcessReady(
         removalStopping,
         state.profileShutdownCheckpoint.catch(() => {})
       ])
-      await state.store?.freezeWritesAsync()
+      try {
+        await state.store?.flushFinalOrThrowAsync()
+      } finally {
+        await state.store?.freezeWritesAsync()
+      }
       if (removalStopped) {
         state.profileStateAdmission?.release()
         state.profileStateAdmission = undefined

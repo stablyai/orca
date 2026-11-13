@@ -56,6 +56,7 @@ import {
 } from './remove-worktree-test-harness'
 
 import { removeWorktree } from './worktree-removal'
+import * as nativeRemoval from './windows-worktree-removal'
 import { __getSparseCheckoutStateCacheSizeForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
@@ -278,4 +279,46 @@ locked active agent session
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
   })
+})
+
+it('finishes native Git registration and branch cleanup when checkout stop follows physical success', async () => {
+  platformSpy.mockReturnValue('win32')
+  const directory = await mkdtemp(join(tmpdir(), 'orca-native-finalization-'))
+  const checkout = join(directory, 'feature')
+  await mkdir(checkout)
+  const controller = new AbortController()
+  const physical = vi.spyOn(nativeRemoval, 'removeWindowsCheckout').mockImplementation(async () => {
+    await rm(checkout, { recursive: true })
+    controller.abort(new Error('host stopping after checkout completion'))
+  })
+  let registered = true
+  gitExecFileAsyncMock.mockImplementation(async (args: string[], options) => {
+    if (options.signal?.aborted) {
+      throw options.signal.reason
+    }
+    if (args.includes('list')) {
+      return {
+        stdout: registered ? `worktree ${checkout}\nHEAD abc\nbranch refs/heads/feature\n` : '',
+        stderr: ''
+      }
+    }
+    if (args.includes('remove')) {
+      registered = false
+    }
+    return { stdout: '', stderr: '' }
+  })
+  try {
+    await expect(
+      removeWorktree(directory, checkout, false, {
+        knownRemovedWorktree: { branch: 'feature', head: 'abc' },
+        checkoutDeleteSignal: controller.signal
+      })
+    ).resolves.toEqual({})
+    expect(existsSync(checkout)).toBe(false)
+    expect(registered).toBe(false)
+    expect(getGitCalls()).toContain('git branch -d -- feature')
+  } finally {
+    physical.mockRestore()
+    await rm(directory, { recursive: true, force: true })
+  }
 })

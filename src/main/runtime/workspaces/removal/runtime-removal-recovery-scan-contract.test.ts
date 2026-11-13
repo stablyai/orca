@@ -13,7 +13,11 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
 
-const { scan } = vi.hoisted(() => ({ scan: vi.fn() }))
+const { scan, nativeGraph } = vi.hoisted(() => ({ scan: vi.fn(), nativeGraph: vi.fn() }))
+vi.mock('../../../git/worktrees/catalog/worktree-list-reader', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  readTranslatedWorktreeGraph: nativeGraph
+}))
 vi.mock('../../../git/worktrees/catalog/worktree-listing', () => ({
   listWorktreesStrict: scan,
   listWorktreeGraph: vi.fn(),
@@ -50,11 +54,14 @@ import {
   readWorktreeRemovalRecords
 } from '../../../workspaces/removal/worktree-removal-records'
 
+const originalPlatform = process.platform
 let directory = ''
 afterEach(async () => {
   _resetPendingWorktreeRemovalsForTests()
   _resetWorktreeScanCacheForTests()
   scan.mockReset()
+  nativeGraph.mockReset()
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   _resetGitAdmissionForTests()
   if (directory) {
     await rm(directory, { recursive: true, force: true })
@@ -82,7 +89,8 @@ function host(repos: Repo[]) {
       getRepo: (id: string) => repos.find((repo) => repo.id === id),
       getWorktreeMeta: () => undefined
     } as unknown as RuntimeStore,
-    acquireWatcherRemoval: async () => ({ finish: async () => {} }),
+    acquireWatcherRemoval: vi.fn(async () => ({ finish: async () => {} })),
+    stopPtys: vi.fn(async () => {}),
     closeWatchers: async () => {},
     preservedBranchCleanup: { preserveHead: () => ({}), remember: () => {} },
     purge: vi.fn(async (_record: WorktreeRemovalRecord) => {}),
@@ -202,6 +210,70 @@ it.each([10, 100])(
       await vi.waitFor(() => expect(scan).toHaveBeenCalledOnce())
       await worktreeRemovalLifetime.close()
       expect(spawn).not.toHaveBeenCalled()
+      expect(runtime.purge).not.toHaveBeenCalled()
+      expect(
+        (await readWorktreeRemovalRecords(directory)).map((saved) => saved.worktreeId).sort()
+      ).toEqual(records.map((saved) => saved.worktreeId).sort())
+    } finally {
+      blocker.release()
+    }
+  }
+)
+
+it.each([10, 100])(
+  'cancels the shared native authorization after outer inventory for %i saved removals',
+  async (population) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    directory = await mkdtemp(join(tmpdir(), 'orca-native-recovery-cancel-'))
+    _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
+    const blocker = await acquireGitAdmission({
+      args: ['status'],
+      cwd: '/held',
+      tier: 'background'
+    })
+    const records = Array.from({ length: population }, (_, index) => record(index, 'repo-0'))
+    const repos = [
+      { id: 'repo-0', path: '/missing/repo-0', displayName: 'repo', badgeColor: '', addedAt: 0 }
+    ]
+    scan.mockResolvedValue(
+      records.map((saved) => ({
+        path: saved.worktreePath,
+        branch: 'refs/heads/feature',
+        head: 'abc',
+        isBare: false,
+        isMainWorktree: false
+      }))
+    )
+    const spawned = vi.fn()
+    nativeGraph.mockImplementation(async (cwd: string, options: { signal: AbortSignal }) => {
+      const grant = await acquireGitAdmission({
+        args: ['worktree', 'list', '--porcelain'],
+        cwd,
+        signal: options.signal,
+        tier: 'background'
+      })
+      try {
+        spawned()
+        return []
+      } finally {
+        grant.release()
+      }
+    })
+    try {
+      await writeWorktreeRemovalRecords(directory, () => records)
+      await prepareWorktreeRemovalsForStore({
+        getProfileStorageDirectory: () => directory,
+        getRepos: () => repos
+      })
+      const runtime = host(repos)
+      resumeInterruptedWorktreeRemovals((saved) =>
+        interruptedLocalWorktreeRemovalJob(saved, runtime)
+      )
+      await vi.waitFor(() => expect(nativeGraph).toHaveBeenCalledOnce())
+      await worktreeRemovalLifetime.close()
+      expect(spawned).not.toHaveBeenCalled()
+      expect(runtime.acquireWatcherRemoval).not.toHaveBeenCalled()
+      expect(runtime.stopPtys).not.toHaveBeenCalled()
       expect(runtime.purge).not.toHaveBeenCalled()
       expect(
         (await readWorktreeRemovalRecords(directory)).map((saved) => saved.worktreeId).sort()
