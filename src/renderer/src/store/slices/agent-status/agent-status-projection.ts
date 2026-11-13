@@ -1,7 +1,12 @@
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusChange } from './agent-status-contract'
+import {
+  readTerminalLeafAgentTypes,
+  stageTerminalLeafAgentTypes
+} from './agent-status-projection-terminal-types'
+import { stageAcceptedAgentTransitions } from './agent-status-projection-transitions'
+import type { AgentStatusChange, AgentStatusChangeListener } from './agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { WorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { WorktreeAttention } from '../../../../../shared/sidebar-list/smart-attention'
@@ -35,6 +40,16 @@ export class AgentStatusProjection {
   dashboardCounts(): DashboardCounts {
     return this.data.dashboardTotals
   }
+  terminalLeafAgentTypes(tabId: string) {
+    return readTerminalLeafAgentTypes(this.data, tabId)
+  }
+  hasActiveAgents(): boolean {
+    return this.data.activeAgentCount > 0
+  }
+  subscribeTransitions(listener: AgentStatusChangeListener): () => void {
+    this.data.transitionListeners.add(listener)
+    return () => this.data.transitionListeners.delete(listener)
+  }
   subscribeChanges(listener: (keys: ReadonlySet<string> | null) => void): () => void {
     this.data.changeListeners.add(listener)
     return () => this.data.changeListeners.delete(listener)
@@ -56,7 +71,24 @@ export class AgentStatusProjection {
     }
     this.data.notifying = true
     try {
-      while (this.data.notices.size || this.data.changedKeys.size || this.data.fullResync) {
+      while (
+        this.data.notices.size ||
+        this.data.changedKeys.size ||
+        this.data.fullResync ||
+        this.data.transitionBatches.length
+      ) {
+        const transitions = this.data.transitionBatches.splice(0)
+        for (const batch of transitions) {
+          for (const listener of Array.from(this.data.transitionListeners)) {
+            if (this.data.transitionListeners.has(listener)) {
+              try {
+                listener(batch)
+              } catch (error) {
+                console.error('Agent transition observer failed', error)
+              }
+            }
+          }
+        }
         const keys = this.data.fullResync ? null : new Set(this.data.changedKeys)
         this.data.fullResync = false
         this.data.changedKeys.clear()
@@ -169,6 +201,8 @@ export class AgentStatusProjection {
   ): () => void {
     const data = this.data
     const topology = stageProjectionTopology(data, state, changes, refreshKeys)
+    const publishTerminalTypes = stageTerminalLeafAgentTypes(data, state, topology.changedKeys)
+    const publishTransitions = stageAcceptedAgentTransitions(data, state, changes)
     const rows = stageProjectionRows(data, state, topology)
     const { previous } = topology
     const ownerInputs = structuredAgentSessionOwnerInputs(state)
@@ -195,6 +229,8 @@ export class AgentStatusProjection {
         data.notices.add('sender-locations')
       }
       publishCounts()
+      publishTerminalTypes()
+      publishTransitions()
       publishProjectionTopology(data, state, changes, topology, rows)
       const rowUpdates = publishProjectionRows(data, state, topology, rows)
       publishProjectionArrangement(data, state, topology, rows, rowUpdates)

@@ -1,3 +1,5 @@
+import type { AgentStatusChange, AgentStatusChangeListener } from './agent-status-contract'
+import type { TerminalTypeBucket } from './agent-status-projection-terminal-types'
 import { AgentRowDisplayIndex } from './agent-row-display-index'
 import type { AppState } from '../../types'
 import type {
@@ -23,6 +25,10 @@ import {
 
 export class AgentStatusProjectionState {
   display = new AgentRowDisplayIndex()
+  readonly terminalTypes = new Map<string, TerminalTypeBucket>()
+  activeAgentCount = 0
+  readonly transitionListeners = new Set<AgentStatusChangeListener>()
+  readonly transitionBatches: (readonly AgentStatusChange[])[] = []
   activeDashboardOwners = new Set<string>()
   readonly countedRows = new Map<string, CountedRow>()
   readonly countsByWorktree = new Map<string, DashboardCounts>()

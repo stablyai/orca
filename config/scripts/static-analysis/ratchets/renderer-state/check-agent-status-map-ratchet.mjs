@@ -13,6 +13,59 @@ export function violations(file, text) {
     ts.forEachChild(node, walk)
   }
   walk(source)
+  const aliases = new Map(
+    nodes.filter(ts.isTypeAliasDeclaration).map((node) => [node.name.text, node.type])
+  )
+  const resolveType = (type, seen = new Set()) => {
+    if (!type || !ts.isTypeReferenceNode(type) || seen.has(type.typeName.getText(source))) {
+      return type
+    }
+    const name = type.typeName.getText(source)
+    const alias = aliases.get(name)
+    return alias ? resolveType(alias, new Set([...seen, name])) : type
+  }
+  const mapType = (input) => {
+    const type = resolveType(input)
+    if (!type) {
+      return false
+    }
+    if (ts.isParenthesizedTypeNode(type)) {
+      return mapType(type.type)
+    }
+    if (ts.isTypeReferenceNode(type)) {
+      const name = type.typeName.getText(source)
+      return (
+        name === 'AcceptedAgentStatuses' ||
+        (['Map', 'ReadonlyMap'].includes(name) &&
+          type.typeArguments?.[1]?.getText(source) === 'AgentStatusEntry')
+      )
+    }
+    return /AppState\[['"]agentStatusByPaneKey['"]\]/.test(type.getText(source))
+  }
+  const parameterType = (parameter) => {
+    if (parameter.type) {
+      return parameter.type
+    }
+    const fn = parameter.parent
+    if (!ts.isArrowFunction(fn)) {
+      return undefined
+    }
+    let outer
+    if (ts.isReturnStatement(fn.parent)) {
+      for (let node = fn.parent.parent; node; node = node.parent) {
+        if (ts.isFunctionLike(node)) {
+          outer = node
+          break
+        }
+      }
+    } else if (ts.isArrowFunction(fn.parent) && fn.parent.body === fn) {
+      outer = fn.parent
+    }
+    const returned = resolveType(outer?.type)
+    return returned && ts.isFunctionTypeNode(returned)
+      ? returned.parameters[fn.parameters.indexOf(parameter)]?.type
+      : undefined
+  }
   const scopes = new Map()
   const scopeOf = (node) => {
     for (let parent = node.parent; parent; parent = parent.parent) {
@@ -83,12 +136,9 @@ export function violations(file, text) {
         return (binding.propertyName ?? binding.name).getText(source) === 'agentStatusByPaneKey'
       }
       if (ts.isParameter(binding)) {
-        return (
-          binding.type?.getText(source) === 'AcceptedAgentStatuses' ||
-          /AppState\[['"]agentStatusByPaneKey['"]\]/.test(binding.type?.getText(source) ?? '')
-        )
+        return mapType(parameterType(binding))
       }
-      return collection(binding.initializer, seen)
+      return mapType(binding.type) || collection(binding.initializer, seen)
     }
     return node.text === 'agentStatusByPaneKey'
   }
@@ -147,7 +197,11 @@ export function collect(root = process.cwd()) {
     .filter((file) => /\.[jt]sx?$/.test(file) && fs.existsSync(path.join(root, file)))
   return files.flatMap((file) => {
     const text = fs.readFileSync(path.join(root, file), 'utf8')
-    return /agentStatusByPaneKey|AcceptedAgentStatuses/.test(text) ? violations(file, text) : []
+    return /agentStatusByPaneKey|AcceptedAgentStatuses|AgentStatusEntry|acceptedAgentStatuses/.test(
+      text
+    )
+      ? violations(file, text)
+      : []
   })
 }
 export function main() {

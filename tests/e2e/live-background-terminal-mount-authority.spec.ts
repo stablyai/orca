@@ -9,6 +9,12 @@ import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import {
+  type TerminalIdentity,
+  terminalIdentity,
+  liveTerminalIdentity,
+  runtimeTerminalPaneKeys
+} from './helpers/terminal-pane-identity'
+import {
   clearTerminalPtyWriteLog,
   installTerminalPtyWriteSpy,
   readTerminalPtyWriteEntries
@@ -33,10 +39,6 @@ import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-pro
 import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 
 type SpawnEvent = { args: string[]; pid: number }
-type TerminalIdentity = Pick<
-  RuntimeTerminalSummary,
-  'handle' | 'incarnationId' | 'leafId' | 'ptyId' | 'tabId'
->
 
 const PROVIDER_SESSION_ID = '019fc155-00e1-7102-99a9-e7c72e532a8e'
 
@@ -148,19 +150,6 @@ async function terminalOutput(client: RuntimeClient, handle: string): Promise<st
     limit: 300
   })
   return read.result.terminal.tail.join('\n')
-}
-
-function terminalIdentity(terminal: RuntimeTerminalSummary): TerminalIdentity {
-  const { handle, incarnationId, leafId, ptyId, tabId } = terminal
-  return { handle, incarnationId, leafId, ptyId, tabId }
-}
-
-function liveTerminalIdentity(terminal: RuntimeTerminalSummary) {
-  return {
-    ...terminalIdentity(terminal),
-    connected: terminal.connected,
-    writable: terminal.writable
-  }
 }
 
 function readDaemonPid(userDataDir: string): number {
@@ -603,7 +592,12 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   ).toBe(true)
   expect(new Set(originals.map((terminal) => terminal.ptyId)).size).toBe(3)
   expect(new Set(originals.map((terminal) => terminal.incarnationId)).size).toBe(3)
-  expect(new Set(originals.map(({ leafId, tabId }) => makePaneKey(tabId, leafId))).size).toBe(3)
+  const originalPaneKeys = runtimeTerminalPaneKeys(
+    originals,
+    created.result.agentTerminalHandle ?? null,
+    createdCanary.result.terminal.handle
+  )
+  expect(new Set(originalPaneKeys).size).toBe(3)
   const agent = originals.find((terminal) => terminal.handle === created.result.agentTerminalHandle)
   const canary = originals.find(
     (terminal) => terminal.handle === createdCanary.result.terminal.handle
