@@ -2,7 +2,10 @@ import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls
 import React from 'react'
 import { isTrustedCompactImageSrc } from './comment-markdown-sanitize'
 import type { Components } from 'react-markdown'
-import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat/native-chat-href-routing'
+import {
+  NATIVE_CHAT_FILE_HREF_PREFIX,
+  NATIVE_CHAT_INFERRED_FILE_HREF_PREFIX
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import {
   CommentMarkdownDocumentCode,
   CommentMarkdownDocumentPre
@@ -40,7 +43,8 @@ function handleMarkdownAnchorClick(
   const trimmedHref = href?.trim()
   if (
     trimmedHref?.toLowerCase().startsWith('file:') ||
-    trimmedHref?.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX)
+    trimmedHref?.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX) ||
+    trimmedHref?.startsWith(NATIVE_CHAT_INFERRED_FILE_HREF_PREFIX)
   ) {
     event.preventDefault()
   }

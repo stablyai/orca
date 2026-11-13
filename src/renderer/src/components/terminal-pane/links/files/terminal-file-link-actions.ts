@@ -46,7 +46,7 @@ export type TerminalFileLinkActionDeps = {
 
 export type FileLinkActions = Pick<
   LinkActionRequest,
-  'destination' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
+  'destination' | 'description' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
 >
 
 export function handleTerminalFileLink(

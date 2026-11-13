@@ -9,6 +9,8 @@ export type LinkActionRequest = {
   anchorX: number
   anchorY: number
   destination: string
+  /** Explains how an inferred destination was selected. */
+  description?: string
   /** Copied instead of destination when the shown target differs from the resolved path. */
   copyValue?: string
   kind: LinkActionKind

@@ -21,6 +21,7 @@ import {
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
 import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 import type { Translate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
 
 export function resolveNativeChatHttpLinkRouting(
   state: AppState,
@@ -55,9 +56,9 @@ export function nativeChatFileOpenDeps(
 export function nativeChatFileLinkActions(
   target: NativeChatResolvedFileLink,
   context: NativeChatFileLinkContext,
-  t?: Translate
+  t: Translate = translate
 ): FileLinkActions {
-  return buildFileLinkActions(
+  const actions = buildFileLinkActions(
     target.absolutePath,
     target.line,
     target.column,
@@ -66,6 +67,15 @@ export function nativeChatFileLinkActions(
     t,
     target.isDirectoryHint ? { directoryHint: true } : undefined
   )
+  return target.provenance === 'bare-filename'
+    ? {
+        ...actions,
+        description: t(
+          'components.native-chat.fileLink.workspaceResolution',
+          "Filename resolved relative to this chat's workspace."
+        )
+      }
+    : actions
 }
 
 export function nativeChatLinkActions(

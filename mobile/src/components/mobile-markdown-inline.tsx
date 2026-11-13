@@ -16,6 +16,7 @@ import { MobileMarkdownMath } from './MobileMarkdownMath'
 export type MarkdownInlineContext = {
   // File targets call this when viewer exists; omit to keep paths plain.
   onOpenFile?: (pathText: string) => void
+  onOpenInferredFile?: (pathText: string) => void
   // Web links other than mail go here; the screen decides where they open.
   onOpenLink: (url: string) => void
   /** Host-confirmed paths are already links in the tree; draw no others. */
@@ -31,7 +32,7 @@ type SpanStyle = TextProps['style']
 // Send web/mail links to system handler; desktop-compatible file:/scheme-less targets go to onOpenFile.
 export function openMarkdownHref(
   href: string,
-  ctx: Pick<MarkdownInlineContext, 'onOpenFile' | 'onOpenLink'>
+  ctx: Pick<MarkdownInlineContext, 'onOpenFile' | 'onOpenInferredFile' | 'onOpenLink'>
 ): void {
   const route = routeMarkdownHref(href)
   if (route.kind === 'web') {
@@ -45,7 +46,11 @@ export function openMarkdownHref(
     return
   }
   if (route.kind === 'file' && ctx.onOpenFile) {
-    ctx.onOpenFile(route.pathText)
+    const open =
+      route.provenance === 'bare-filename'
+        ? (ctx.onOpenInferredFile ?? ctx.onOpenFile)
+        : ctx.onOpenFile
+    open(route.pathText)
   }
 }
 

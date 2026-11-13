@@ -6,7 +6,11 @@ import { MobileNativeChatImageViewer } from '../visual/MobileNativeChatImageView
 import { MobileImageViewerActions } from '../visual/MobileImageViewerActions'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import { MobileLinkActionSheet } from './MobileLinkActionSheet'
-import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
+import {
+  MarkdownLinkHandlerContext,
+  MarkdownInferredFileLinkHandlerContext
+} from '../../../components/markdown-link-handler'
+import { MobileInferredFileLinkSheet } from './MobileInferredFileLinkSheet'
 import {
   MobileNativeChatRowOverlaysContext,
   type MobileNativeChatViewedImage
@@ -24,6 +28,7 @@ export function MobileNativeChatRowOverlaysHost({
   conversation,
   imageSource,
   onOpenUrlInOrca,
+  onOpenFile,
   rewind,
   children
 }: {
@@ -31,6 +36,7 @@ export function MobileNativeChatRowOverlaysHost({
   imageSource?: MobileNativeChatImageSource
   /** Absent where the host can't open a browser tab for this chat. */
   onOpenUrlInOrca?: (url: string) => void
+  onOpenFile?: (pathText: string) => void
   /** The chat's "Rewind to here"; absent where it can't rewind. */
   rewind?: AgentSessionRewindSurface
   children?: React.ReactNode
@@ -41,6 +47,7 @@ export function MobileNativeChatRowOverlaysHost({
     image?: MobileNativeChatViewedImage
     actionsFor?: NativeChatMessage
     link?: string
+    inferredFile?: string
   }>(conversation)
   const overlays = useMemo(
     () => ({
@@ -55,6 +62,10 @@ export function MobileNativeChatRowOverlaysHost({
     [setShown, openRewind, imageSource]
   )
   const openLink = useCallback((link: string) => setShown({ link }), [setShown])
+  const openInferredFile = useCallback(
+    (inferredFile: string) => setShown({ inferredFile }),
+    [setShown]
+  )
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {
     const close = () => setShown(null)
@@ -68,14 +79,24 @@ export function MobileNativeChatRowOverlaysHost({
       <MobileNativeChatMessageActionsSheet message={shown.actionsFor} onClose={close} />
     ) : shown?.link ? (
       <MobileLinkActionSheet url={shown.link} onClose={close} openInOrca={onOpenUrlInOrca} />
+    ) : shown?.inferredFile && onOpenFile ? (
+      <MobileInferredFileLinkSheet
+        pathText={shown.inferredFile}
+        onOpenFile={onOpenFile}
+        onClose={close}
+      />
     ) : null
-  }, [shown, setShown, onOpenUrlInOrca])
+  }, [shown, setShown, onOpenUrlInOrca, onOpenFile])
   return (
     <MobileNativeChatRowOverlaysContext.Provider value={overlays}>
       <MarkdownLinkHandlerContext.Provider value={openLink}>
-        <MobileNativeChatRewindContext.Provider value={rewind}>
-          {children}
-        </MobileNativeChatRewindContext.Provider>
+        <MarkdownInferredFileLinkHandlerContext.Provider
+          value={onOpenFile ? openInferredFile : undefined}
+        >
+          <MobileNativeChatRewindContext.Provider value={rewind}>
+            {children}
+          </MobileNativeChatRewindContext.Provider>
+        </MarkdownInferredFileLinkHandlerContext.Provider>
       </MarkdownLinkHandlerContext.Provider>
       {opened}
       {dialog ? <MobileNativeChatRewindDialog dialog={dialog} onClose={closeRewind} /> : null}

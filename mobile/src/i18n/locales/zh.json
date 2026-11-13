@@ -644,6 +644,10 @@
       "unconfirmed": "{{agent}} 无法确认是否已创建分支。它可能已经打开；请先检查会话历史，再重试。",
       "failed": "{{agent}} 无法从此聊天创建分支。{{detail}}",
       "unsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。"
+    },
+    "fileLink": {
+      "workspaceResolution": "文件名按本聊天的工作区解析。",
+      "open": "打开文件"
     }
   },
   "common": {

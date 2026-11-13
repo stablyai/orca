@@ -270,6 +270,7 @@ function MobileNativeChatOverlayContent({
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
       onOpenUrlInOrca={onOpenUrlInOrca}
+      onOpenFile={onOpenFile}
       rewind={controller.nativeChatRewind}
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>

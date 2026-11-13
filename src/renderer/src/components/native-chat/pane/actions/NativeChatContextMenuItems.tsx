@@ -1,5 +1,9 @@
 import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuShortcut
+} from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -33,6 +37,12 @@ export function NativeChatContextMenuTargetItems({
           <Quote />
           {t('components.native-chat.addSelectionToChat', 'Add to chat')}
         </DropdownMenuItem>
+      ) : null}
+      {link?.description ? (
+        <DropdownMenuLabel className="max-w-72">
+          <p>{link.description}</p>
+          <p className="mt-1 break-all font-mono">{link.destination}</p>
+        </DropdownMenuLabel>
       ) : null}
       {linkRows.map((action) =>
         action ? (

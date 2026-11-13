@@ -1,5 +1,8 @@
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
-import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import {
+  routeNativeChatHref,
+  type NativeChatHrefRoute,
+  type NativeChatFileLinkProvenance
+} from '../../../../../../shared/native-chat/native-chat-href-routing'
 import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../../../shared/file-links/file-uri-path'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
 import {
@@ -15,6 +18,7 @@ export type NativeChatResolvedFileLink = {
   column: number | null
   /** The link names a directory by its trailing separator; the popover can say "Open folder". */
   isDirectoryHint?: true
+  provenance?: NativeChatFileLinkProvenance
 }
 
 function hasDirectorySeparator(pathText: string): boolean {
@@ -78,5 +82,6 @@ export function resolveNativeChatFileLink(
         }
       : null
   }
-  return resolvePathText(route.pathText, route.line, context)
+  const target = resolvePathText(route.pathText, route.line, context)
+  return target && route.provenance ? { ...target, provenance: route.provenance } : target
 }
