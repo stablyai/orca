@@ -20,7 +20,7 @@ export async function addLocalRepoFromPath(
   path: string,
   kind: 'git' | 'folder' = 'git',
   displayName?: string
-): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
+): Promise<{ repo: Repo; alreadyExisted: boolean; subdirectoryOf?: string } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
@@ -36,15 +36,27 @@ export async function addLocalRepoFromPath(
 
   const resolvedPath = gitInfo?.rootPath ?? path
   const pathKey = normalizeRuntimePathForComparison(path)
+  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
+  // A picked subdirectory registers as its Git root; report the jump so the renderer can explain it.
+  const subdirectoryOf = resolvedPathKey === pathKey ? undefined : resolvedPath
+  const alreadyExisting = (
+    repo: Repo
+  ): { repo: Repo; alreadyExisted: true; subdirectoryOf?: string } => ({
+    repo,
+    alreadyExisted: true,
+    // Only the resolved root itself contains the pick; aliases and main checkouts would misname it.
+    ...(subdirectoryOf && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+      ? { subdirectoryOf }
+      : {})
+  })
   const existing = store
     .getRepos()
     .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
-    return { repo: existing, alreadyExisted: true }
+    return alreadyExisting(existing)
   }
 
-  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
-  if (resolvedPathKey !== pathKey) {
+  if (subdirectoryOf) {
     const existingAfterRootResolve = store
       .getRepos()
       .find(
@@ -52,7 +64,7 @@ export async function addLocalRepoFromPath(
           !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
       )
     if (existingAfterRootResolve) {
-      return { repo: existingAfterRootResolve, alreadyExisted: true }
+      return alreadyExisting(existingAfterRootResolve)
     }
   }
   const existingAtRealPath = await findProjectAtSameRealPath(
@@ -60,7 +72,7 @@ export async function addLocalRepoFromPath(
     resolvedPath
   )
   if (existingAtRealPath) {
-    return { repo: existingAtRealPath, alreadyExisted: true }
+    return alreadyExisting(existingAtRealPath)
   }
 
   // Linked worktrees report their own toplevel; resolve the main checkout to avoid duplicate host setups.
@@ -81,7 +93,7 @@ export async function addLocalRepoFromPath(
             normalizeRuntimePathForComparison(repo.path) === mainRepoKey
         )
       if (trackedMainRepo) {
-        return { repo: trackedMainRepo, alreadyExisted: true }
+        return alreadyExisting(trackedMainRepo)
       }
     }
   }
@@ -104,7 +116,7 @@ export async function addLocalRepoFromPath(
     )
   })
   if (raceWinner) {
-    return { repo: raceWinner, alreadyExisted: true }
+    return alreadyExisting(raceWinner)
   }
   const repo = createLocalProjectRecord({
     path: resolvedPath,

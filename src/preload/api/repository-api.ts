@@ -37,7 +37,7 @@ export type RepositoryApi = {
     path: string
     kind?: 'git' | 'folder'
     displayName?: string
-  }) => Promise<{ repo: Repo } | { error: string }>
+  }) => Promise<{ repo: Repo; subdirectoryOf?: string } | { error: string }>
   removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
   reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
   reorderForHost: (args: {

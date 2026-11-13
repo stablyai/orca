@@ -44,6 +44,7 @@ export function createRepoAddActions(
             : defaultCreationHost(get().settings)
         const displayName = options?.displayName?.trim() || undefined
         let repo: Repo
+        let subdirectoryOf: string | undefined
         try {
           if (target.kind === 'local') {
             const result = await window.api.repos.add({
@@ -54,6 +55,7 @@ export function createRepoAddActions(
             if ('error' in result) {
               throw new Error(result.error)
             }
+            subdirectoryOf = result.subdirectoryOf
             repo = result.repo
           } else {
             const environmentId = target.environmentId
@@ -129,9 +131,36 @@ export function createRepoAddActions(
           }
         })
         if (alreadyAdded) {
-          toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
-            description: repo.displayName
-          })
+          if (subdirectoryOf) {
+            // Why: the pick resolved to an already-open repo's root; name that root and offer a folder workspace.
+            toast.info(
+              translate(
+                'auto.store.repos.repo.add.actions.a566c587d2',
+                'This folder is inside an existing project'
+              ),
+              {
+                description: translate(
+                  'auto.store.repos.repo.add.actions.f618038079',
+                  '{{path}} is inside {{project}}. Open Folder adds just this subfolder.',
+                  { path, project: repo.displayName }
+                ),
+                duration: ERROR_TOAST_DURATION,
+                action: {
+                  label: translate(
+                    'auto.store.repos.repo.add.actions.fe90c6c521',
+                    'Open as Folder'
+                  ),
+                  onClick: () => {
+                    void get().addNonGitFolder(path, { runtimeEnvironmentId: null })
+                  }
+                }
+              }
+            )
+          } else {
+            toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
+              description: repo.displayName
+            })
+          }
         } else {
           toast.success(
             isGitRepoKind(repo)

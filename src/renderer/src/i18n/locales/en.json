@@ -1824,6 +1824,17 @@
       },
       "pluginInstallLink": {
         "invalid": "That plugin link isn’t valid."
+      },
+      "repos": {
+        "repo": {
+          "add": {
+            "actions": {
+              "a566c587d2": "This folder is inside an existing project",
+              "f618038079": "{{path}} is inside {{project}}. Open Folder adds just this subfolder.",
+              "fe90c6c521": "Open as Folder"
+            }
+          }
+        }
       }
     },
     "lib": {
