@@ -366,6 +366,7 @@ function setAgentLineageState(options: {
     tabsByWorktree: { parent: [makeParentTab()] },
     unifiedTabsByWorktree: {},
     structuredChatSleptAtByPaneKey: {},
+    paneForegroundAgentByPaneKey: {},
     agentStatusByPaneKey
   }
   const changes = Array.from(agentStatusByPaneKey, ([paneKey, current]) => ({
