@@ -1,0 +1,16 @@
+# cloud/ workspace packages whose own `pnpm typecheck` is clean on cloud/integration. premerge-check.sh (and the
+# merge-gated recheck) typecheck each of these that a PR touches. A package joins this list only once it is at zero
+# errors, so the gate never blocks on pre-existing errors. One repo path per line, # comments allowed.
+# Baseline 2026-11-13 (clean checkout of 32b21bb on the Linux lane, cloud workspace installed and its packages built):
+# every package below 0 errors; cloud/apps/sandbox-control had 261 and is added once it is clean.
+cloud/apps/acceptance
+cloud/apps/billing
+cloud/apps/push
+cloud/apps/relay
+cloud/apps/relay-edge
+cloud/apps/relay-fence-broker
+cloud/packages/cloud-database
+cloud/packages/connector-contract
+cloud/packages/postgres-schema
+cloud/packages/push-contract
+cloud/packages/relay-contract
