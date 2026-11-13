@@ -1,6 +1,6 @@
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
-import { stopPRWatchRuntime } from './pr-watch-runtime'
+import { stopPRWatchRuntime, withPRWatchRecovery } from './pr-watch-runtime'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
@@ -160,12 +160,14 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   }
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
   // The store launch admission may already have opened; a failed install leaves it to that slot.
-  const recordStore = await openAgentSessionRecordStoreOnce({
-    stateDirectory: deps.stateDirectory,
-    legacySessionTabIds: deps.legacySessionTabIds ?? [],
-    hostId: deps.hostId,
-    logger
-  })
+  const recordStore = await openAgentSessionRecordStoreOnce(
+    withPRWatchRecovery({
+      stateDirectory: deps.stateDirectory,
+      legacySessionTabIds: deps.legacySessionTabIds ?? [],
+      hostId: deps.hostId,
+      logger
+    })
+  )
   const catalogOwner = await ensureStructuredAgentModelCatalogOwner(deps)
   try {
     // Without the Arguments source there is nothing to fill from; missing modes run Ask.

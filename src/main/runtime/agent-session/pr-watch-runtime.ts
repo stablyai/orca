@@ -48,13 +48,14 @@ export function startPRWatchRuntime(
   admittedDeps = deps
   const startedIn = generation
   starting ??= (async () => {
-    const { store, journalDatabase } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: deps.stateDirectory,
-      legacySessionTabIds: [...deps.legacySessionTabIds],
-      hostId: deps.hostId,
-      logger: deps.logger,
-      onMaintenanceTick: resumePRWatchRuntime
-    })
+    const { store, journalDatabase } = await openAgentSessionRecordStoreOnce(
+      withPRWatchRecovery({
+        stateDirectory: deps.stateDirectory,
+        legacySessionTabIds: [...deps.legacySessionTabIds],
+        hostId: deps.hostId,
+        logger: deps.logger
+      })
+    )
     if (startedIn !== generation) {
       return
     }
@@ -94,6 +95,13 @@ export function startPRWatchRuntime(
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
   })
   return starting
+}
+
+/** Every record-store opener's location: the store's maintenance pass then retries a failed watch start. */
+export function withPRWatchRecovery<T extends object>(
+  location: T
+): T & { onMaintenanceTick: () => void } {
+  return { ...location, onMaintenanceTick: resumePRWatchRuntime }
 }
 
 /** The journal's periodic maintenance pass retries an admitted start that failed; a no-op otherwise. */

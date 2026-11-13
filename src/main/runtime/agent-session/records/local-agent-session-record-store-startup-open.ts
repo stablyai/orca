@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { resumePRWatchRuntime } from '../pr-watch-runtime'
+import { withPRWatchRecovery } from '../pr-watch-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import {
   createStructuredAgentSessionLogger,
@@ -21,14 +21,12 @@ export type AgentSessionRecordStoreStartupOpen = {
 export function localAgentSessionRecordStoreLocation(
   legacySessionTabIds: readonly string[]
 ): AgentSessionRecordStoreLocation {
-  return {
+  return withPRWatchRecovery({
     stateDirectory: getProfileUserDataPath(),
     legacySessionTabIds,
     hostId: LOCAL_EXECUTION_HOST_ID,
-    logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
-    // An admitted CI-line watch start that failed retries on the journal's periodic pass.
-    onMaintenanceTick: resumePRWatchRuntime
-  }
+    logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
+  })
 }
 
 /** Boots the chat writer alongside other startup work; profiles without chats spawn nothing.

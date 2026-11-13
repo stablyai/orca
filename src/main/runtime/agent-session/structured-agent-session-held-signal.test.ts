@@ -62,7 +62,8 @@ const runtime = {
         hostId: 'local',
         logger: createStructuredAgentSessionLogger(),
         writerPath: journalSqlWorkerPath(),
-        readerPath: journalSqlReaderPath()
+        readerPath: journalSqlReaderPath(),
+        onMaintenanceTick: () => {}
       })
     ).store,
   listAiVaultSessions: async () => ({

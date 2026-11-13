@@ -35,7 +35,8 @@ function location(directory = stateDirectory) {
     hostId: HOST_ID,
     logger: createStructuredAgentSessionLogger(),
     writerPath: journalSqlWorkerPath(),
-    readerPath: journalSqlReaderPath()
+    readerPath: journalSqlReaderPath(),
+    onMaintenanceTick: () => {}
   }
 }
 

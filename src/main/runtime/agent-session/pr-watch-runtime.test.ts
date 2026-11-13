@@ -7,6 +7,11 @@ import * as profilePaths from '../../orca-profiles/profile-storage-paths'
 import { PRWatchService } from '../../github/pr-watch/pr-watch-service'
 import * as refresh from '../../github/pull-requests/refresh/pr-refresh-coordinator'
 import { JournalSqlReaderPool } from '../../native-chat/agent-session-journal/journal-sql-reader-pool'
+import { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openTestAgentSessionRecordStoreSlot } from './records/agent-session-record-store-test-harness'
@@ -168,6 +173,45 @@ it('retries a failed first watch start on the maintenance pass, with no chat ins
 
   await vi.waitFor(() => expect(started).toHaveBeenCalledTimes(2))
   await expect(started.mock.results[1]?.value).resolves.toBeUndefined()
+})
+
+it('retries a failed first watch start on the maintenance pass when the chat host opened the store', async () => {
+  const started = vi.spyOn(PRWatchService.prototype, 'start')
+  const watchRead = failFirstWatchRead()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  // Only the worker bundle differs from production; the host install's own location wins the slot.
+  const open = JournalSqlDatabase.open
+  const opened = vi.spyOn(JournalSqlDatabase, 'open').mockImplementation((directory, options) =>
+    open.call(JournalSqlDatabase, directory, {
+      ...options,
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath()
+    })
+  )
+  const host = await vi.importActual<typeof HostRuntime>('./structured-agent-session-runtime')
+  try {
+    await host.ensureStructuredAgentSessionHost({
+      ...location(),
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
+      resolveEnvironment: async () => ({})
+    })
+    expect(opened).toHaveBeenCalledTimes(1)
+
+    await watches.startPRWatchRuntime(
+      { ...location(), resolveWorkspace: async () => null },
+      { admit: true }
+    )
+    expect(watchRead.failed()).toBe(true)
+    await vi.advanceTimersByTimeAsync(MAINTENANCE_PASS_MS)
+
+    await vi.waitFor(() => expect(started).toHaveBeenCalledTimes(2))
+    await expect(started.mock.results[1]?.value).resolves.toBeUndefined()
+  } finally {
+    await host.stopStructuredAgentSessionRuntime()
+  }
 })
 
 // Committed shutdown is process-wide and sticky, so this runs last.

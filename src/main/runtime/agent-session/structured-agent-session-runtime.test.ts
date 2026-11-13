@@ -66,7 +66,8 @@ describe('structured agent-session runtime install', () => {
       logger,
       legacySessionTabIds: [],
       writerPath: journalSqlWorkerPath(),
-      readerPath: journalSqlReaderPath()
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceTick: () => {}
     })
     return await ensureStructuredAgentSessionHost({
       logger,

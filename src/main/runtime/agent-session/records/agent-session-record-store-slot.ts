@@ -16,9 +16,11 @@ export type AgentSessionRecordStoreLocation = {
   logger: StructuredAgentSessionLogger
   legacySessionTabIds: readonly string[]
   maintenanceAfter?: Promise<void>
+  /** Required: whichever opener wins the once-slot owns the store's maintenance pass for every later caller. */
+  onMaintenanceTick: () => void
 } & Pick<
   Parameters<typeof openStructuredAgentSessionSqlJournalDatabase>[0],
-  'writerPath' | 'readerPath' | 'onMaintenanceTick'
+  'writerPath' | 'readerPath'
 >
 
 export type OpenedAgentSessionRecordStore = {

@@ -130,7 +130,8 @@ async function profile() {
     legacySessionTabIds: [],
     logger: createStructuredAgentSessionLogger(),
     writerPath: journalSqlWorkerPath(),
-    readerPath: journalSqlReaderPath()
+    readerPath: journalSqlReaderPath(),
+    onMaintenanceTick: () => {}
   })
   await entered.promise
   const history = () =>
