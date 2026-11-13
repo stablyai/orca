@@ -217,8 +217,12 @@ it('reads, subscribes and answers everything without starting an agent', async (
 
   expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
   expect(history).toMatchObject({ ok: true, result: { ok: true } })
-  const snapshot = frames.find((frame) => frame.ok && 'result' in frame)
-  expect(snapshot).toMatchObject({ result: { type: 'snapshot', commands: null } })
+  // The opening snapshot follows subscribe's reply on the still-open stream.
+  await vi.waitFor(() =>
+    expect(frames.find((frame) => frame.ok && 'result' in frame)).toMatchObject({
+      result: { type: 'snapshot', commands: null }
+    })
+  )
   expect(options).toMatchObject({
     ok: true,
     result: { current: { model: 'gpt-saved', effort: 'high' } }
