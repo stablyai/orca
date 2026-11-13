@@ -22,6 +22,7 @@ import {
 } from '../browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
+import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
@@ -952,6 +953,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
   'browser.clientHost.requestResult': BrowserClientHostRequestResultParams,
+  'browser.clientPage.initializationAction': BrowserPageInitializationActionParams,
   'browser.clipboardRead': BrowserTarget,
   'browser.clipboardWrite': ClipboardWrite,
   'browser.console': LimitParam,

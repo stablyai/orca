@@ -47,3 +47,22 @@ export function openRecoveryTabsStream(
   )
   return { frames, errors, initial: initial.promise, completion, stop: () => stopped.abort() }
 }
+
+export function publishRecoveryTabsGraph(runtime: OrcaRuntimeService): void {
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, {
+    tabs: [],
+    leaves: [],
+    mobileSessionTabs: [
+      {
+        worktree: 'repo-1::/tmp/worktree-a',
+        publicationEpoch: 'renderer',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    ]
+  })
+}
