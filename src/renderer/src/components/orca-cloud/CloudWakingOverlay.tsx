@@ -119,8 +119,12 @@ export function CloudWakingOverlay({
   const stuck = !failed && seconds >= WAKE_STUCK_S
   const retryRef = useRef<HTMLButtonElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  // PAIRED-WAKE-TYPE-THROUGH: while typing goes through to the terminal, the pill never takes focus.
+  // Taking it as the overlay mounted (~0.3 s in) moved the keys typed after the first one onto the
+  // overlay, where they were lost (n53: "e" held, 22 lost).
+  const typingThrough = typeThrough && !failed
   useEffect(() => {
-    if (!autoFocus) {
+    if (!autoFocus || typingThrough) {
       return
     }
     if (failed) {
@@ -128,7 +132,7 @@ export function CloudWakingOverlay({
     } else {
       rootRef.current?.focus()
     }
-  }, [failed, autoFocus])
+  }, [failed, autoFocus, typingThrough])
   // Once the sandbox is up the pill says so; the clock still counts from the wake's start.
   const title =
     wake.phase === 'connecting'

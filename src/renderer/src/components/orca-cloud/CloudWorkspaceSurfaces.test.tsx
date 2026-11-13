@@ -194,6 +194,36 @@ describe('Orca Cloud surfaces', () => {
     expect(container.textContent).toMatch(/Connecting…\s*4s/)
   })
 
+  it('type-through never takes focus from the terminal; a covering wake still does (n53)', () => {
+    const terminal = document.createElement('textarea')
+    document.body.appendChild(terminal)
+    terminal.focus()
+    const wake = {
+      workspaceId: 'ws',
+      phase: 'waking' as const,
+      source: 'open' as const,
+      startedAt: T0,
+      at: T0
+    }
+    const props = {
+      workspaceName: 'w',
+      autoFocus: true,
+      onRetry: noop,
+      onRestart: noop,
+      onDismiss: noop
+    }
+    const through = render(
+      <CloudWakingOverlay wake={wake} typeThrough pendingInput={1} {...props} />
+    )
+    // The keys typed after the first one keep going to the terminal.
+    expect(document.activeElement).toBe(terminal)
+    through.unmount()
+    const covering = render(<CloudWakingOverlay wake={wake} {...props} />)
+    expect(document.activeElement).not.toBe(terminal)
+    covering.unmount()
+    terminal.remove()
+  })
+
   it('a failed wake is a dismissible alert whose primary action is Try again', () => {
     const onRetry = vi.fn()
     const onDismiss = vi.fn()

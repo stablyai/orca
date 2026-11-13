@@ -392,6 +392,8 @@ export function TerminalPaneRecoveryPortals({
             heldByServer={
               cloudWaking ||
               goingToSleep ||
+              // ASLEEP-RECONNECT-BANNER: asleep on purpose, so not a dropped connection.
+              cloudAsleep ||
               (!isolated &&
                 !awaitingSignIn &&
                 !wslHostUnavailable &&
