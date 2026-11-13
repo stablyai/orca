@@ -152,7 +152,7 @@ export async function preparePRBranchRead(
             runCoalescedProbe(
               reads,
               coalescingKey,
-              async () => {
+              async (ownsKey) => {
                 const start = startPRLookup()
                 const retained =
                   !narrowed &&
@@ -206,8 +206,8 @@ export async function preparePRBranchRead(
                     })
                   }
                   return settle &&
-                    (!retained || readTimedPROutcome(ownerKey, key)?.outcome === outcome)
-                    ? settle(outcome)
+                    (retained ? readTimedPROutcome(ownerKey, key)?.outcome === outcome : ownsKey())
+                    ? settle(outcome, { retained })
                     : outcome
                 } finally {
                   if (retained) {
@@ -267,7 +267,10 @@ export async function preparePRBranchRead(
   )
 }
 
-export type PRReadSettlement = (outcome: PRRefreshOutcome) => PRRefreshOutcome
+export type PRReadSettlement = (
+  outcome: PRRefreshOutcome,
+  producer: { retained: boolean }
+) => PRRefreshOutcome
 
 export type PreparedPRBranchRead = {
   key: string

@@ -115,22 +115,22 @@ export async function runImmediatePRRefresh(
     ...hostedReviewOptionArgs(candidate, reason, options)
   )
   try {
-    const outcome = await prepared.read((outcome) => {
-      if (
-        outcome.kind !== 'upstream-error' ||
-        !prepared.isCurrent() ||
-        !queue.ownsRequest(key, requestSequence) ||
-        !visibility.has(key)
-      ) {
+    const outcome = await prepared.read((outcome, producer) => {
+      if (!prepared.isCurrent()) {
         return outcome
       }
-      return retry.settleProducerError(
-        outcome,
-        key,
-        visibility.candidate(key, candidate),
-        prepared,
-        queue
-      )
+      const settled =
+        producer.retained && outcome.kind === 'upstream-error' && visibility.has(key)
+          ? retry.settleProducerError(
+              outcome,
+              key,
+              visibility.candidate(key, candidate),
+              prepared,
+              queue
+            )
+          : outcome
+      events.observe(candidate, settled, aliases)
+      return settled
     })
     if (!queue.ownsRequest(key, requestSequence)) {
       events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
@@ -143,9 +143,6 @@ export async function runImmediatePRRefresh(
         outcome.nextAutoRetryAt ??
         retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
       broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
-    }
-    if (prepared.didRead()) {
-      events.observe(candidate, outcome, aliases)
     }
     retry.noteManualGate(key, broadcastOutcome)
     events.broadcast(

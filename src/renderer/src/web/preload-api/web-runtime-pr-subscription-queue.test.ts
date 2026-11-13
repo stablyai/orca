@@ -45,10 +45,17 @@ it('holds web signal-route slots through responses and releases queued and activ
   const api = createRuntimeEnvironmentsApi()
   const start = (subscriptionId: string, reason: string, method = 'github.prForBranch') =>
     api.subscribe(
-      { selector: 'env', subscriptionId, method, params: { reason }, timeoutMs: 30_000 },
+      {
+        selector: 'env',
+        subscriptionId,
+        method,
+        params: { reason, selected: true },
+        timeoutMs: 30_000
+      },
       { onResponse: () => responseOrder.push('response') }
     )
   const first = await start('timer-1', 'swr')
+  expect(session.client.subscribe.mock.calls[0][1]).toMatchObject({ reason: 'swr', selected: true })
   const second = await start('timer-2', 'swr')
   const third = start('timer-3', 'swr')
   const cancelled = expect(third).rejects.toThrow()

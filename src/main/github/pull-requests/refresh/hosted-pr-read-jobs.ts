@@ -19,6 +19,7 @@ export type HostedPRReadJob = {
   prepared: PreparedPRBranchRead
   expiresAt: number
   running?: boolean
+  promoteSelected: () => void
   listeners: Set<(outcome: PRRefreshOutcome | null) => void>
   finish: (outcome: PRRefreshOutcome | null) => void
 }
@@ -142,7 +143,13 @@ export class HostedPRReadJobs {
               return outcome
             }
             const key = `hosted::${prepared.key}`
-            return this.retry.settleProducerError(outcome, key, candidate, prepared, this.queue)
+            return this.retry.settleProducerError(
+              outcome,
+              key,
+              { ...candidate, isSelected: false },
+              prepared,
+              this.queue
+            )
           })
         : prepared.read())
       if (!outcome) {
@@ -194,9 +201,26 @@ export class HostedPRReadJobs {
       }
       const listeners: HostedPRReadJob['listeners'] = new Set()
       const releaseHold = prepared.hold()
+      const expiresAt = Date.now() + JOB_LEASE_MS
+      const entry: PRRefreshQueueEntry = {
+        key,
+        candidate,
+        aliases: new Map(),
+        reason: 'swr',
+        priority: candidate.isSelected ? 80 : prepared.cached()?.quietIntervalMs ? 20 : 40,
+        dueAt: Math.min(expiresAt, Math.max(Date.now(), gate)),
+        queuedAt: this.queue.nextOrder()
+      }
       job = {
         prepared,
-        expiresAt: Date.now() + JOB_LEASE_MS,
+        promoteSelected: () => {
+          if (!entry.candidate.isSelected) {
+            entry.candidate = { ...entry.candidate, isSelected: true }
+            entry.priority = 80
+            this.wake()
+          }
+        },
+        expiresAt,
         listeners,
         finish: (outcome) => {
           releaseHold()
@@ -211,17 +235,12 @@ export class HostedPRReadJobs {
         }
       }
       this.jobs.set(key, job)
-      this.queue.set(key, {
-        key,
-        candidate,
-        aliases: new Map(),
-        reason: 'swr',
-        priority: prepared.cached()?.quietIntervalMs ? 20 : 40,
-        dueAt: Math.min(job.expiresAt, Math.max(Date.now(), gate)),
-        queuedAt: this.queue.nextOrder(),
-        hosted: job
-      })
+      entry.hosted = job
+      this.queue.set(key, entry)
       this.wake()
+    }
+    if (candidate.isSelected && !job.running) {
+      job.promoteSelected()
     }
     if (
       !acceptRevalidationOnly ||

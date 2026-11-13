@@ -28,7 +28,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.userRefresh,
         clientKind,
         signal,
-        params.acceptRevalidationOnly
+        params.acceptRevalidationOnly,
+        params.selected
       )
   }),
   defineMethod({

@@ -87,7 +87,8 @@ export class RuntimeHostedReviewCommands {
     userRefresh?: boolean,
     clientKind?: DeviceScope,
     signal?: AbortSignal,
-    acceptRevalidationOnly = false
+    acceptRevalidationOnly = false,
+    selected = false
   ): Promise<PRSnapshotReply> {
     const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -134,7 +135,8 @@ export class RuntimeHostedReviewCommands {
       currentHeadOid: lookupOptions.currentHeadOid ?? null,
       linkedPRNumber: linkedPRNumber ?? null,
       fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      localGitOptions: lookupOptions.localGitExecOptions
+      localGitOptions: lookupOptions.localGitExecOptions,
+      isSelected: reason === 'swr' && userRefresh !== true && selected
     }
     const prepared = await preparePRBranchRead(
       repo.path,

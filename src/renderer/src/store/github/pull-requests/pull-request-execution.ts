@@ -105,7 +105,14 @@ export function startPullRequestLookup(args: {
               linkedPRNumber,
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
-              ...(options?.reason === 'swr' ? { acceptRevalidationOnly: true } : {}),
+              ...(options?.reason === 'swr'
+                ? {
+                    acceptRevalidationOnly: true,
+                    ...(options.userRefresh !== true && options.selected === true
+                      ? { selected: true }
+                      : {})
+                  }
+                : {}),
               ...(options?.userRefresh === true ? { userRefresh: true } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }

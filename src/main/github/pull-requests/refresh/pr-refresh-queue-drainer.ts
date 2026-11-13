@@ -1,8 +1,8 @@
-import type {
-  GitHubPRRefreshCandidate,
-  PRRefreshOutcome
-} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import {
+  preparePRBranchRead,
+  type PRReadSettlement
+} from '../../client/lookup/pr-for-branch-outcome'
 import {
   hostedReviewOptionArgs,
   isBackground,
@@ -179,7 +179,8 @@ export class PRRefreshQueueDrainer {
           if (pausedUntil !== null) {
             this.queue.protectBackgroundUntil(next.key, pausedUntil)
             const dueAt = Math.min(pausedUntil, next.hosted?.expiresAt ?? Infinity)
-            this.queue.set(next.key, { ...next, dueAt })
+            next.dueAt = dueAt
+            this.queue.set(next.key, next)
             if (!next.hosted) {
               this.events.broadcast({
                 aliases,
@@ -224,22 +225,26 @@ export class PRRefreshQueueDrainer {
               watchPRKey: next.watch?.prKey
             })
           ))
-        const settle = (outcome: PRRefreshOutcome): PRRefreshOutcome => {
-          if (
-            outcome.kind !== 'upstream-error' ||
-            !prepared.isCurrent() ||
-            !this.queue.ownsRequest(next.key, requestSequence) ||
-            !(next.hosted || this.visibility.has(next.key))
-          ) {
+        const settle: PRReadSettlement = (outcome, producer) => {
+          if (!prepared.isCurrent()) {
             return outcome
           }
-          return this.retry.settleProducerError(
-            outcome,
-            next.key,
-            this.visibility.candidate(next.key, next.candidate),
-            prepared,
-            this.queue
-          )
+          const settled =
+            producer.retained &&
+            outcome.kind === 'upstream-error' &&
+            (next.hosted || this.visibility.has(next.key))
+              ? this.retry.settleProducerError(
+                  outcome,
+                  next.key,
+                  next.hosted
+                    ? { ...next.candidate, isSelected: false }
+                    : this.visibility.candidate(next.key, next.candidate),
+                  prepared,
+                  this.queue
+                )
+              : outcome
+          this.events.observe(next.candidate, settled, aliases)
+          return settled
         }
         const outcome = await (joinedRead ??
           (next.hosted ? prepared.readRetained(settle) : prepared.read(settle)))
@@ -272,9 +277,6 @@ export class PRRefreshQueueDrainer {
           plannedRetryAt === undefined
             ? outcome
             : this.retry.withErrorSchedule(outcome, plannedRetryAt)
-        if (!joinedRead && prepared.didRead()) {
-          this.events.observe(next.candidate, outcome, aliases)
-        }
         this.retry.noteManualGate(next.key, broadcastOutcome)
         if (next.hosted) {
           if (outcome.kind !== 'upstream-error') {

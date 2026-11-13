@@ -21,6 +21,7 @@ export const PrForBranch = RepoSelector.extend({
   reason: OptionalPRRefreshReason,
   userRefresh: z.boolean().optional(),
   acceptRevalidationOnly: z.boolean().optional(),
+  selected: z.boolean().optional(),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),

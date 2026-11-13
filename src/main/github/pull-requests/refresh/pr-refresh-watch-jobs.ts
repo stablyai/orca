@@ -6,6 +6,7 @@ import { prChecksDone } from '../../../../shared/github/pull-requests/refresh/pr
 export { prChecksDone } from '../../../../shared/github/pull-requests/refresh/pr-quiet-refresh'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
+import { isSelectedBudgetedPRRefresh } from './pr-refresh-pacing'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 
 export type PRWatchJob = NonNullable<PRRefreshQueueEntry['watch']>
@@ -97,7 +98,7 @@ export class PRWatchJobRunner {
 
   noteBudgetedStart(entry: PRRefreshQueueEntry): void {
     // Selected list reads have their own reserved turn; preserve the watch/list alternation.
-    if (entry.reason !== 'visible' || entry.candidate.isSelected !== true) {
+    if (!isSelectedBudgetedPRRefresh(entry)) {
       this.lastBudgetedStartWasWatch = entry.watch !== undefined
     }
   }

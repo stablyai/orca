@@ -145,14 +145,21 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       {
         selector: string
         method: string
-        params: { reason?: string }
+        params: { reason?: string; selected?: boolean }
         subscriptionId: string
       },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
     const start = (subscriptionId: string, reason: string, method = 'github.prForBranch') =>
-      subscribe({ sender }, { selector: 'desk', subscriptionId, method, params: { reason } })
+      subscribe(
+        { sender },
+        { selector: 'desk', subscriptionId, method, params: { reason, selected: true } }
+      )
     await start('timer-1', 'swr')
+    expect(subscribeRemoteRuntimeRequestMock.mock.calls[0][2]).toMatchObject({
+      reason: 'swr',
+      selected: true
+    })
     await start('timer-2', 'swr')
     const third = start('timer-3', 'swr')
     const cancelled = expect(third).rejects.toThrow()

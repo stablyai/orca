@@ -1,9 +1,13 @@
+// oxlint-disable-next-line typescript/triple-slash-reference -- Renderer integration tests also compile this main fixture with its ambient build constants.
+/// <reference path="../../../../types/build-constants.d.ts" />
 import { afterEach, beforeEach, vi } from 'vitest'
 import { makePR } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
+import type { RpcContext } from '../../rpc/core'
 
-export const mocks = vi.hoisted(() => ({ resolve: vi.fn(), account: vi.fn(), gate: vi.fn() }))
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), account: vi.fn(), gate: vi.fn() }))
+export { mocks }
 vi.mock('../../../github/accounts/github-project-account', () => ({
   githubPRPolicyProjects: () => ({ source: null, selection: String(mocks.account()) }),
   resolveGitHubProjectAccount: mocks.account
@@ -61,6 +65,8 @@ beforeEach(async () => {
   mocks.resolve.mockReset().mockImplementation(async () => found())
   mocks.account.mockReset().mockReturnValue(null)
   mocks.gate.mockReset().mockResolvedValue(null)
+  // Resolve the real handler before fake-clock assertions begin.
+  await import('../../rpc/methods/source-control/github/github-pull-request-methods')
   const { RuntimeHostedReviewCommands: Commands } = await import('./runtime-hosted-review-commands')
   const repo = {
     id: 'repo',
@@ -81,3 +87,19 @@ afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
 })
+
+export async function rpcRead(params: unknown, signal?: AbortSignal) {
+  const { GITHUB_PULL_REQUEST_METHODS } =
+    await import('../../rpc/methods/source-control/github/github-pull-request-methods')
+  const { PrForBranch } = await import('../../../../shared/rpc-contract/github-pull-request-params')
+  const { repo, branch, ...options } = PrForBranch.parse(params)
+  const parsed = { repo, branch, ...options }
+  const runtime = { getRepoPRForBranch: commands.getRepoPRForBranch.bind(commands) }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler only needs the bound real PR command and signal.
+  const context = { runtime, signal } as unknown as RpcContext
+  const method = GITHUB_PULL_REQUEST_METHODS.find((entry) => entry.name === 'github.prForBranch')
+  if (!method) {
+    throw new Error('PR RPC method is missing')
+  }
+  return method.handler(parsed, context)
+}

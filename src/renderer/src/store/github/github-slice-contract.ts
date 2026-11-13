@@ -71,6 +71,7 @@ export type GitHubSlice = {
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
+      selected?: boolean
       onReadOutcome?: (outcome: PRSnapshotReply) => void
       signal?: AbortSignal
     }

@@ -200,6 +200,7 @@ export function getVisibleHostedReviewRefreshTargets(
               force: true,
               signal,
               reason: (intent ? intent === 'discovery' : force) ? 'active' : 'swr',
+              selected,
               onReadOutcome: (next) => {
                 outcome = next
               },

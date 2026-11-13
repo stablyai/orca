@@ -79,11 +79,11 @@ export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModule
         withExecution: (operation) => operation(),
         read: async (settle) => {
           const outcome = await mocks.getPRForBranchOutcomeMock(...args)
-          return settle ? settle(outcome) : outcome
+          return settle ? settle(outcome, { retained: true }) : outcome
         },
         readRetained: async (settle) => {
           const outcome = await mocks.getPRForBranchOutcomeMock(...args)
-          return settle ? settle(outcome) : outcome
+          return settle ? settle(outcome, { retained: true }) : outcome
         }
       }
       return prepared
