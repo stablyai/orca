@@ -2,12 +2,18 @@ import { readdir, readlink, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { expandWindowsEnvironmentVariables } from '../../../../shared/windows-environment-expansion'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import {
   loadWindowsNativeRegistry,
   WINDOWS_REG_EXPAND_SZ,
   WINDOWS_REG_SZ
 } from '../../../windows/windows-native-registry'
+import {
+  startDiscoveryBudget,
+  TIMED_OUT,
+  within,
+  type DiscoveryBudget
+} from './pwsh-discovery-deadline'
 
 export type WindowsPwshInstall = { path: string; preview: boolean }
 
@@ -19,10 +25,14 @@ type Candidate = { path: string; alias: boolean }
 const APP_PATHS_PWSH_KEY = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\pwsh.exe'
 const VERSION_DIRECTORY = /^(\d+)(-preview)?$/i
 const STORE_PACKAGE_DIRECTORY = /^Microsoft\.PowerShell(Preview)?_/i
-// Local probes finish in milliseconds; this bounds only unreachable network PATH entries.
-const PROBE_DEADLINE_MS = 1_000
-// Leaves most of libuv's 4-thread pool to the daemon's own I/O, health checks included.
-const PROBE_CONCURRENCY = 2
+// Probes hold at most 3 of libuv's 4 pool threads, so the daemon's own I/O and health checks keep one.
+const LOCAL_PROBE_CONCURRENCY = 2
+// Network shares get their own lane so a stalled one cannot starve local candidates.
+const NETWORK_PROBE_CONCURRENCY = 1
+/** UNC paths, including the long-path `\\?\UNC\` form; drive-letter long paths stay local. */
+function isNetworkPath(candidate: string): boolean {
+  return /^\\\\(?![?.]\\[a-z]:)/i.test(candidate)
+}
 
 /** Store alias reparse stubs may launch through execFile PATH lookup but fail ConPTY absolute CreateProcessW (5). */
 export function isWindowsAppExecutionAliasPath(candidate: string): boolean {
@@ -70,12 +80,9 @@ async function resolveAppExecutionAlias(candidate: string): Promise<string | nul
   }
 }
 
-async function listDirectory(directory: string): Promise<string[]> {
-  try {
-    return await readdir(directory)
-  } catch {
-    return []
-  }
+async function listDirectory(directory: string, budget: DiscoveryBudget): Promise<string[]> {
+  const names = await within(budget, () => readdir(directory).catch((): string[] => []))
+  return names === TIMED_OUT ? [] : names
 }
 
 function readAppPathValues(): string[] {
@@ -108,9 +115,12 @@ function toCandidate(path: string): Candidate {
 }
 
 /** `<root>\<version>\pwsh.exe` for every numbered install, highest major first. */
-async function versionedInstallCandidates(roots: (string | undefined)[]): Promise<Candidate[]> {
+async function versionedInstallCandidates(
+  roots: (string | undefined)[],
+  budget: DiscoveryBudget
+): Promise<Candidate[]> {
   const uniqueRoots = [...new Set(roots.filter((root): root is string => Boolean(root)))]
-  const listings = await Promise.all(uniqueRoots.map((root) => listDirectory(root)))
+  const listings = await Promise.all(uniqueRoots.map((root) => listDirectory(root, budget)))
   const installs = listings.flatMap((names, rootIndex) =>
     names.flatMap((name) => {
       const match = VERSION_DIRECTORY.exec(name)
@@ -161,11 +171,14 @@ function appPathCandidates(terminalEnv: NodeJS.ProcessEnv): Candidate[] {
     .map(toCandidate)
 }
 
-async function storeCandidates(windowsApps: string | undefined): Promise<Candidate[]> {
+async function storeCandidates(
+  windowsApps: string | undefined,
+  budget: DiscoveryBudget
+): Promise<Candidate[]> {
   if (!windowsApps) {
     return []
   }
-  const packageDirs = (await listDirectory(windowsApps)).filter((name) =>
+  const packageDirs = (await listDirectory(windowsApps, budget)).filter((name) =>
     STORE_PACKAGE_DIRECTORY.test(name)
   )
   return [
@@ -179,7 +192,9 @@ async function storeCandidates(windowsApps: string | undefined): Promise<Candida
 
 async function probeCandidate(candidate: Candidate): Promise<string | null> {
   if (!candidate.alias) {
-    return (await isRealWindowsExecutable(candidate.path)) ? candidate.path : null
+    return (await isRealWindowsExecutable(candidate.path))
+      ? pathWin32.normalize(candidate.path)
+      : null
   }
   const target = await resolveAppExecutionAlias(candidate.path)
   // ConPTY cannot launch the alias itself; its real package target preserves the requested pwsh.
@@ -195,81 +210,105 @@ async function probeCandidate(candidate: Candidate): Promise<string | null> {
   return null
 }
 
+// A stalled probe holds its pool thread until the OS gives up; a later search waits on it instead of adding another.
+const pendingProbes = new Map<string, Promise<string | null>>()
+
+function probeCandidateOnce(candidate: Candidate): Promise<string | null> {
+  const key = pathWin32.normalize(candidate.path).toLowerCase()
+  const pending = pendingProbes.get(key)
+  if (pending) {
+    return pending
+  }
+  const probe = probeCandidate(candidate).finally(() => pendingProbes.delete(key))
+  pendingProbes.set(key, probe)
+  return probe
+}
+
 /** Every launchable pwsh.exe, best first. Reads only; never starts pwsh. */
 export async function discoverWindowsPwshInstalls(
   /** The environment the terminal will get; its PATH outranks this process's possibly stale one. */
   terminalEnv: NodeJS.ProcessEnv
 ): Promise<WindowsPwshDiscovery> {
-  const envs = [terminalEnv, process.env]
-  const programFilesRoots = [
-    ['ProgramW6432', 'PROGRAMW6432'],
-    ['ProgramFiles', 'PROGRAMFILES'],
-    ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']
-  ].map((names) => {
-    const root = readWindowsEnv(envs, names)
-    return root ? pathWin32.join(root, 'PowerShell') : undefined
-  })
-  const localAppData = readWindowsEnv(envs, ['LOCALAPPDATA', 'LocalAppData'])
-  const home = readWindowsEnv(envs, ['USERPROFILE', 'UserProfile']) ?? homedir()
-  const [programFiles, perUser, store] = await Promise.all([
-    versionedInstallCandidates(programFilesRoots),
-    versionedInstallCandidates([
-      localAppData ? pathWin32.join(localAppData, 'Microsoft', 'PowerShell') : undefined
-    ]),
-    storeCandidates(
-      localAppData ? pathWin32.join(localAppData, 'Microsoft', 'WindowsApps') : undefined
-    )
-  ])
-  const ordered = [
-    ...programFiles,
-    ...perUser,
-    ...pathDirectoryCandidates(envs),
-    ...appPathCandidates(terminalEnv),
-    ...store,
-    toCandidate(pathWin32.join(home, '.dotnet', 'tools', 'pwsh.exe')),
-    toCandidate(pathWin32.join(home, 'scoop', 'apps', 'pwsh', 'current', 'pwsh.exe'))
-  ]
-  const seenCandidates = new Set<string>()
-  const candidates = ordered.filter((candidate) => {
-    const key = pathWin32.normalize(candidate.path).toLowerCase()
-    if (seenCandidates.has(key)) {
-      return false
-    }
-    seenCandidates.add(key)
-    return true
-  })
-  // A PATH entry on an unresponsive share can stall stat; stop waiting rather than hold the tab.
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let expired = false
-  const timedOut = Symbol('timed-out')
-  const deadline = new Promise<typeof timedOut>((resolve) => {
-    timer = setTimeout(() => {
-      expired = true
-      resolve(timedOut)
-    }, PROBE_DEADLINE_MS)
-    timer.unref?.()
-  })
-  // Best candidates are probed first; past the deadline no new probe starts.
-  const resolved = await mapWithConcurrency(candidates, PROBE_CONCURRENCY, (candidate) =>
-    expired ? Promise.resolve(timedOut) : Promise.race([probeCandidate(candidate), deadline])
-  ).finally(() => clearTimeout(timer))
-  const installs: WindowsPwshInstall[] = []
-  const seenInstalls = new Set<string>()
-  resolved.forEach((path, index) => {
-    if (path === timedOut) {
-      return
-    }
-    const key = path?.toLowerCase()
-    if (!path || !key || seenInstalls.has(key)) {
-      return
-    }
-    seenInstalls.add(key)
-    installs.push({
-      path,
-      preview: isPreviewPwshPath(path) || isPreviewPwshPath(candidates[index].path)
+  // Listing and probing each get the full budget, so a stalled install folder cannot block every probe.
+  const listing = startDiscoveryBudget()
+  let probing: DiscoveryBudget | undefined
+  try {
+    const envs = [terminalEnv, process.env]
+    const programFilesRoots = [
+      ['ProgramW6432', 'PROGRAMW6432'],
+      ['ProgramFiles', 'PROGRAMFILES'],
+      ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']
+    ].map((names) => {
+      const root = readWindowsEnv(envs, names)
+      return root ? pathWin32.join(root, 'PowerShell') : undefined
     })
-  })
-  return { installs, complete: !resolved.includes(timedOut) }
+    const localAppData = readWindowsEnv(envs, ['LOCALAPPDATA', 'LocalAppData'])
+    const home = readWindowsEnv(envs, ['USERPROFILE', 'UserProfile']) ?? homedir()
+    const [programFiles, perUser, store] = await Promise.all([
+      versionedInstallCandidates(programFilesRoots, listing),
+      versionedInstallCandidates(
+        [localAppData ? pathWin32.join(localAppData, 'Microsoft', 'PowerShell') : undefined],
+        listing
+      ),
+      storeCandidates(
+        localAppData ? pathWin32.join(localAppData, 'Microsoft', 'WindowsApps') : undefined,
+        listing
+      )
+    ])
+    const ordered = [
+      ...programFiles,
+      ...perUser,
+      ...pathDirectoryCandidates(envs),
+      ...appPathCandidates(terminalEnv),
+      ...store,
+      toCandidate(pathWin32.join(home, '.dotnet', 'tools', 'pwsh.exe')),
+      toCandidate(pathWin32.join(home, 'scoop', 'apps', 'pwsh', 'current', 'pwsh.exe'))
+    ]
+    const seenCandidates = new Set<string>()
+    const candidates = ordered.filter((candidate) => {
+      const key = pathWin32.normalize(candidate.path).toLowerCase()
+      if (seenCandidates.has(key)) {
+        return false
+      }
+      seenCandidates.add(key)
+      return true
+    })
+    listing.stop()
+    const budget = startDiscoveryBudget()
+    probing = budget
+    const resolved: (string | null | typeof TIMED_OUT)[] = []
+    // Each lane probes its best candidates first; past the deadline no new probe starts.
+    const probeLane = (network: boolean, concurrency: number): Promise<void> =>
+      forEachWithConcurrency(
+        candidates.flatMap((candidate, index) =>
+          isNetworkPath(candidate.path) === network ? [index] : []
+        ),
+        concurrency,
+        async (index) => {
+          resolved[index] = await within(budget, () => probeCandidateOnce(candidates[index]))
+        }
+      )
+    await Promise.all([
+      probeLane(false, LOCAL_PROBE_CONCURRENCY),
+      probeLane(true, NETWORK_PROBE_CONCURRENCY)
+    ])
+    const installs: WindowsPwshInstall[] = []
+    const seenInstalls = new Set<string>()
+    resolved.forEach((path, index) => {
+      if (!path || path === TIMED_OUT || seenInstalls.has(path.toLowerCase())) {
+        return
+      }
+      seenInstalls.add(path.toLowerCase())
+      installs.push({
+        path,
+        preview: isPreviewPwshPath(path) || isPreviewPwshPath(candidates[index].path)
+      })
+    })
+    return { installs, complete: !listing.incomplete && !budget.incomplete }
+  } finally {
+    listing.stop()
+    probing?.stop()
+  }
 }
 
 /** Stable unless only a preview exists; the reverse when the setting asks for a preview build. */

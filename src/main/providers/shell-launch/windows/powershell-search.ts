@@ -63,12 +63,13 @@ function startPwshSearch(
   return search
 }
 
-/** Searches once per shell setting; a miss is searched again only when the terminal's PATH differs. */
+/** Searches once per shell setting; a result lacking the preferred build is searched again only when the terminal's PATH differs. */
 export async function findWindowsPwsh(
   options: WindowsPowerShellResolveOptions
 ): Promise<string | null> {
   const settingKey = options.settingKey ?? ''
   const requestPath = readPath(options.env ?? process.env)
+  const preferPreview = options.preferPreview === true
   if (pwshSearch?.settingKey === null) {
     pwshSearch.settingKey = settingKey
   }
@@ -79,7 +80,10 @@ export async function findWindowsPwsh(
   }
   let installs = await search.installs
   // A daemon started before an install sees a stale PATH; the terminal's PATH may know better.
-  if (installs.length === 0 && search.searchedPath !== requestPath) {
+  if (
+    !installs.some((install) => install.preview === preferPreview) &&
+    search.searchedPath !== requestPath
+  ) {
     if (pwshSearch === search || pwshSearch?.settingKey !== settingKey) {
       pwshSearch = startPwshSearch(settingKey, options)
     }
@@ -97,7 +101,7 @@ export async function findWindowsPwsh(
       '[pty] PowerShell 7 (pwsh.exe) was not found in Program Files, the per-user install folder, PATH, App Paths, the Store install, or user tool folders'
     )
   }
-  return selectWindowsPwsh(installs, options.preferPreview === true)
+  return selectWindowsPwsh(installs, preferPreview)
 }
 
 /** Starts the search before the first terminal asks, so that terminal opens no slower. */

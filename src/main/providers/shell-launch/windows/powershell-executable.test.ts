@@ -9,11 +9,13 @@ type SimulatedAppPaths = { machine?: string; user?: string }
 
 const machine = vi.hoisted(() => {
   const appPaths: SimulatedAppPaths = {}
+  const stalledReads: (() => void)[] = []
   return {
     files: new Map<string, string>(),
     aliases: new Map<string, string>(),
-    // Paths whose stat never settles, like an unreachable network share.
+    // Paths whose reads hang, like an unreachable network share, until it responds again.
     unresponsive: new Set<string>(),
+    stalledReads,
     appPaths
   }
 })
@@ -26,16 +28,30 @@ function enoent(path: string): Error {
   return Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
 }
 
+function stallWhileUnresponsive<T>(path: string, read: () => Promise<T>): Promise<T> {
+  if (!machine.unresponsive.has(key(path))) {
+    return read()
+  }
+  return new Promise((resolve, reject) => {
+    machine.stalledReads.push(() => void stallWhileUnresponsive(path, read).then(resolve, reject))
+  })
+}
+
+function shareResponds(): void {
+  machine.unresponsive.clear()
+  for (const retry of machine.stalledReads.splice(0)) {
+    retry()
+  }
+}
+
 vi.mock('node:fs/promises', () => ({
-  stat: async (path: string) => {
-    if (machine.unresponsive.has(key(path))) {
-      return new Promise(() => {})
-    }
-    if (!machine.files.has(key(path))) {
-      throw enoent(path)
-    }
-    return { isFile: () => true, size: 4096 }
-  },
+  stat: (path: string) =>
+    stallWhileUnresponsive(path, async () => {
+      if (!machine.files.has(key(path))) {
+        throw enoent(path)
+      }
+      return { isFile: () => true, size: 4096 }
+    }),
   readlink: async (path: string) => {
     const target = machine.aliases.get(key(path))
     if (!target) {
@@ -43,20 +59,21 @@ vi.mock('node:fs/promises', () => ({
     }
     return target
   },
-  readdir: async (dir: string) => {
-    const prefix = `${key(dir)}\\`
-    const names = new Set<string>()
-    for (const original of [...machine.files.values(), ...machine.aliases.keys()]) {
-      const normalized = pathWin32.normalize(original)
-      if (normalized.toLowerCase().startsWith(prefix)) {
-        names.add(normalized.slice(prefix.length).split('\\')[0])
+  readdir: (dir: string) =>
+    stallWhileUnresponsive(dir, async () => {
+      const prefix = `${key(dir)}\\`
+      const names = new Set<string>()
+      for (const original of [...machine.files.values(), ...machine.aliases.keys()]) {
+        const normalized = pathWin32.normalize(original)
+        if (normalized.toLowerCase().startsWith(prefix)) {
+          names.add(normalized.slice(prefix.length).split('\\')[0])
+        }
       }
-    }
-    if (names.size === 0) {
-      throw enoent(dir)
-    }
-    return [...names]
-  }
+      if (names.size === 0) {
+        throw enoent(dir)
+      }
+      return [...names]
+    })
 }))
 
 vi.mock('../../../windows/windows-native-registry', async (importOriginal) => ({
@@ -121,7 +138,7 @@ async function findPwsh(
 beforeEach(() => {
   machine.files.clear()
   machine.aliases.clear()
-  machine.unresponsive.clear()
+  shareResponds()
   machine.appPaths = {}
   install(WINDOWS_POWERSHELL, CMD)
   // This process's own PATH is the stale one; tests put fresh entries on the terminal env.
@@ -186,8 +203,36 @@ describe('PowerShell 7 discovery sources', () => {
       await vi.advanceTimersByTimeAsync(1_000)
       expect(await first).toBe(WINDOWS_POWERSHELL)
 
-      machine.unresponsive.clear()
+      shareResponds()
       expect(await findPwsh({ env, settingKey })).toBe('\\\\slow-share\\tools\\pwsh.exe')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps probing local PATH entries while network shares stall', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      machine.unresponsive.add(key('\\\\share-a\\tools\\pwsh.exe'))
+      machine.unresponsive.add(key('\\\\share-b\\tools\\pwsh.exe'))
+      install('D:\\Tools\\pwsh.exe')
+      const env = { ...ENV, Path: '\\\\share-a\\tools;\\\\share-b\\tools;D:\\Tools' }
+      const found = findPwsh({ env })
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(await found).toBe('D:\\Tools\\pwsh.exe')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops waiting on an install folder that cannot be listed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      machine.unresponsive.add(key('C:\\Program Files\\PowerShell'))
+      install('D:\\Tools\\pwsh.exe')
+      const found = findPwsh({ env: { ...ENV, Path: 'D:\\Tools' } })
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(await found).toBe('D:\\Tools\\pwsh.exe')
     } finally {
       vi.useRealTimers()
     }
@@ -266,6 +311,18 @@ describe('PowerShell 7 search cache', () => {
     expect(await findPwsh({ settingKey })).toBe(perUserPwsh)
   })
 
+  it('searches again when an install registered with forward slashes fails to launch', async () => {
+    const settingKey = freshSetting()
+    install('D:/PowerShell/pwsh.exe')
+    machine.appPaths = { machine: 'D:/PowerShell/pwsh.exe' }
+    expect(await findPwsh({ settingKey })).toBe('D:\\PowerShell\\pwsh.exe')
+
+    uninstall('D:/PowerShell/pwsh.exe')
+    install(perUserPwsh)
+    forgetWindowsPowerShellAfterLaunchFailure('D:\\PowerShell\\pwsh.exe')
+    expect(await findPwsh({ settingKey })).toBe(perUserPwsh)
+  })
+
   it('keeps a miss for the same PATH but searches again once the terminal PATH changes', async () => {
     const settingKey = freshSetting()
     expect(await findPwsh({ settingKey })).toBe(WINDOWS_POWERSHELL)
@@ -285,6 +342,23 @@ describe('PowerShell 7 search warm-up', () => {
       vi.resetModules()
       const search = await import('./powershell-search')
       install('D:\\Fresh\\pwsh.exe')
+      search.warmWindowsPwshSearch()
+      const env = { ...ENV, Path: 'D:\\Fresh;C:\\Windows\\System32' }
+      expect(await search.findWindowsPwsh({ env, settingKey: 'powershell.exe|pwsh.exe' })).toBe(
+        'D:\\Fresh\\pwsh.exe'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
+  it('finds a stable build on the terminal PATH when the warm-up found only a preview', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      vi.resetModules()
+      const search = await import('./powershell-search')
+      install('C:\\Program Files\\PowerShell\\7-preview\\pwsh.exe', 'D:\\Fresh\\pwsh.exe')
       search.warmWindowsPwshSearch()
       const env = { ...ENV, Path: 'D:\\Fresh;C:\\Windows\\System32' }
       expect(await search.findWindowsPwsh({ env, settingKey: 'powershell.exe|pwsh.exe' })).toBe(
