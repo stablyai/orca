@@ -6,9 +6,7 @@ import { CloudSecretsPane, type CloudSecretRepoChoice } from './CloudSecretsPane
 import {
   FIXTURE_MEMBER,
   FIXTURE_NAMES,
-  FIXTURE_PERSONAL_ACTIVITY,
   FIXTURE_SECRETS,
-  FIXTURE_TEAM_ACTIVITY,
   FIXTURE_SOLO,
   fixtureCloudSecretsApi
 } from './cloud-secrets-fixture-data'
@@ -18,7 +16,7 @@ const REPOS: CloudSecretRepoChoice[] = [
   { key: 'github.com/acme/web', label: 'acme/web' },
   { key: 'github.com/acme/api', label: 'acme/api' }
 ]
-const people = { nameFor: (userId: string) => FIXTURE_NAMES[userId] ?? null, rosterLoaded: true }
+const people = { nameFor: (userId: string) => FIXTURE_NAMES[userId] ?? null }
 const noop = (): void => {}
 
 function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -332,51 +330,4 @@ export const tabPanelFocused = defineFixture({
     frame.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]')?.focus()
     await new Promise((resolve) => setTimeout(resolve, 30))
   }
-})
-
-export const activityAdmin = defineFixture({
-  width: 760,
-  render: () => (
-    <Frame>
-      <CloudSecretsPane
-        api={fixtureCloudSecretsApi({
-          activity: { team: FIXTURE_TEAM_ACTIVITY, personal: FIXTURE_PERSONAL_ACTIVITY, pageSize: 7 }
-        })}
-        repos={REPOS}
-        people={people}
-        onSetUpAgent={noop}
-        initialTab="activity"
-      />
-    </Frame>
-  )
-})
-
-export const activityMember = defineFixture({
-  width: 760,
-  render: () => (
-    <Frame>
-      <CloudSecretsPane
-        api={fixtureCloudSecretsApi({ caller: FIXTURE_MEMBER })}
-        repos={REPOS}
-        people={people}
-        onSetUpAgent={noop}
-        initialTab="activity"
-      />
-    </Frame>
-  )
-})
-
-export const activityEmpty = defineFixture({
-  width: 760,
-  render: () => (
-    <Frame>
-      <CloudSecretsPane
-        api={fixtureCloudSecretsApi({ caller: FIXTURE_SOLO, activity: { team: [], personal: [] } })}
-        repos={REPOS}
-        people={people}
-        onSetUpAgent={noop}
-        initialTab="activity"
-      />
-    </Frame>
-  )
 })

@@ -1,7 +1,5 @@
 import { ipcRenderer } from 'electron'
 import type {
-  CloudSecretActivityPage,
-  CloudSecretActivityView,
   CloudSecretBatchResult,
   CloudSecretTarget,
   CloudSecretView,
@@ -30,11 +28,6 @@ export type CloudSecretsApi = {
     delete?: string[]
   }) => Promise<CloudSecretsResult<CloudSecretBatchResult>>
   effective: (request: { repo?: string }) => Promise<CloudSecretsResult<CloudSecretsEffective>>
-  /** Who changed which secret and when (names only), newest first, last 90 days. */
-  activity: (request: {
-    view: CloudSecretActivityView
-    cursor?: string
-  }) => Promise<CloudSecretsResult<CloudSecretActivityPage>>
   /** Best-effort nudge so a running workspace picks up new values now; the server also does it on write. */
   refreshEnv: (request: { runtimeEnvironmentId: string }) => Promise<CloudSecretsResult<boolean>>
   /** Who owns an Orca Cloud workspace and whether teammates share it (control plane only). */
@@ -55,7 +48,6 @@ export const cloudSecretsApi: CloudSecretsApi = {
   remove: (request) => ipcRenderer.invoke('cloudSecrets:remove', request),
   batch: (request) => ipcRenderer.invoke('cloudSecrets:batch', request),
   effective: (request) => ipcRenderer.invoke('cloudSecrets:effective', request),
-  activity: (request) => ipcRenderer.invoke('cloudSecrets:activity', request),
   refreshEnv: (request) => ipcRenderer.invoke('cloudSecrets:refreshEnv', request),
   saveDesktopKey: (request) => ipcRenderer.invoke('cloudSecrets:saveDesktopKey', request),
   workspaceSharing: (request) => ipcRenderer.invoke('cloudSecrets:workspaceSharing', request)
