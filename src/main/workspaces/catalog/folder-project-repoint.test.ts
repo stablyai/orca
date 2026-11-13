@@ -16,6 +16,13 @@ import {
   testState
 } from '../../persistence/persistence-test-harness'
 import { makeTerminalTab } from '../../persistence/persistence-session-fixtures'
+import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
+import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
+import {
+  WslMoveProjectFencedError,
+  loadWslMoveFence,
+  resetWslMoveFenceForTests
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import type { Store } from '../../persistence/loading-store/store'
 import { repointMovedFolderProject } from './folder-project-repoint'
 
@@ -40,6 +47,7 @@ describe('repointMovedFolderProject', () => {
   })
 
   afterEach(async () => {
+    resetWslMoveFenceForTests()
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -172,6 +180,26 @@ describe('repointMovedFolderProject', () => {
 
     expect(result).toEqual({ outcome: 'not-applicable' })
     expect(store.getRepos()[0]?.path).toBe(oldFolder)
+  })
+
+  it('refuses to migrate when a WSL move fences the project after the entry check', async () => {
+    seedWorkspaceState()
+    rmSync(oldFolder, { recursive: true, force: true })
+    mkdirSync(newFolder)
+    seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
+    loadWslMoveFence(testState.dir)
+    const oldMainId = mainWorktreeId()
+
+    // Called directly, so no handler entry check stands between the fence and the migration.
+    await expect(
+      repointMovedFolderProject(store, {
+        projectId: `repo:${repo.id}`,
+        folderPath: newFolder,
+        kind: 'folder'
+      })
+    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
+    expect(store.getRepos()[0]?.path).toBe(oldFolder)
+    expect(store.getWorktreeMeta(oldMainId)?.displayName).toBe('Main checkout')
   })
 
   it.skipIf(process.platform === 'win32')(
