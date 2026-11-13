@@ -27,6 +27,8 @@ export type NativeChatStructuredComposerTransport = {
   sendOut?: boolean
   /** Send is held for this reason, which the disabled button says. */
   sendBlockedReason?: string
+  /** Typing stays open while Send is held: the empty field's placeholder says why. */
+  heldHint?: string
   /** What a plain send does now, and whether Cmd/Ctrl+Enter would send it the other way. */
   sendFollowUp?: NativeChatSendFollowUp
   /** `onSent` fires once a conversation command leaves for the host, before its reply. */

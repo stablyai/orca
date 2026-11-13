@@ -85,6 +85,8 @@ export function useNativeChatStructuredComposerTransport(args: {
   reveal: { revealLatest: () => void; captureRevealLatest: () => () => void }
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
+  /** END-PASS CHAT-RENEW: the empty field's placeholder while Send is held (typing stays open). */
+  heldHint?: string
 }): NativeChatStructuredComposerTransport {
   const { props, controller, forks, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
     args
@@ -92,6 +94,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
   const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
+  const { heldHint } = args
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
     props.agent,
@@ -176,6 +179,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       sendOut: controller.sendOut,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
+      ...(heldHint ? { heldHint } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       compactInstructions: controller.compactInstructions,
@@ -216,6 +220,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.sessionId,
     props.target,
     sendBlockedReason,
+    heldHint,
     sendThroughLaunch,
     setOptionPickerRequest,
     starting,

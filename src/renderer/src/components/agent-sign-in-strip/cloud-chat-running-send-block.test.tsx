@@ -88,7 +88,7 @@ const props = {
   tabId: TAB_ID
 } as const
 
-function composer(sendBlockedReason: string | null, draft: string) {
+function composer(sendBlockedReason: string | null, draft: string, heldHint?: string) {
   return nativeChatComposerSendState({
     agent: 'claude',
     draft,
@@ -99,7 +99,8 @@ function composer(sendBlockedReason: string | null, draft: string) {
     structuredTransport: {
       sendOut: false,
       optionSnapshot: [],
-      ...(sendBlockedReason !== null ? { sendBlockedReason } : {})
+      ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
+      ...(heldHint ? { heldHint } : {})
     },
     editSession: undefined,
     isWorking: false,
@@ -167,10 +168,12 @@ describe('a running idle chat whose strip is expired holds Send with its hint (E
       expect(slot.heldHint).toBe(HINT)
       expect(slot.sendBlockedReason).toBe(HINT)
       for (const draft of ['', 'continue please']) {
-        const state = composer(slot.sendBlockedReason, draft)
+        const state = composer(slot.sendBlockedReason, draft, slot.heldHint)
         expect(state.sendButtonDisabled).toBe(true)
         expect(state.sendHeld).toBe(true)
         expect(state.sendBlockedReason).toBe(HINT)
+        // The composer field shows it as the empty field's placeholder.
+        expect(state.heldHint).toBe(HINT)
       }
     })
   }

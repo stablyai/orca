@@ -24,8 +24,6 @@ export type NativeChatComposerProps = {
   canSend?: boolean
   /** Disable unavailable input and show this reason as its placeholder. */
   unavailableHint?: string | undefined
-  /** Input stays open but the transport holds Send: show this reason as the empty field's placeholder. */
-  heldHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */

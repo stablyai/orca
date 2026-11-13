@@ -42,7 +42,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       agent,
       canSend = true,
       unavailableHint,
-      heldHint,
       isWorking = false,
       isStopping = false,
       afterStop,
@@ -367,7 +366,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           hasPty={hasPty}
           canSend={canSend}
           unavailableHint={unavailableHint}
-          heldHint={heldHint}
           autocomplete={autocomplete}
           mentionFiles={mentionFiles}
           activeSuggestion={activeSuggestion}

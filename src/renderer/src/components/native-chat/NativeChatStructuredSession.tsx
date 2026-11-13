@@ -217,7 +217,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     setOptionPickerRequest,
     onError: reportComposerError,
     reveal: submits,
-    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
+    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason,
+    ...(hostHeld || !install.heldHint ? {} : { heldHint: install.heldHint })
   })
   const continuation = useNativeChatInterruptedContinuation({
     ...controller,
@@ -393,7 +394,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               agent={props.agent}
               {...stopControls.composer}
               unavailableHint={install.unavailableHint}
-              heldHint={hostHeld ? undefined : install.heldHint}
               steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
               structuredTransport={transport}
               notices={notices}
