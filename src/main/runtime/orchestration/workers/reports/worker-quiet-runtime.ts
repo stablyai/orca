@@ -5,8 +5,10 @@ import { getRuntimeDesktopSurface } from '../../../construction/runtime-desktop-
 import { startWorkerQuietWatch } from './worker-quiet-watch'
 import type { CrewChanges } from '../../crew/crew-changes'
 import { WorkerQuietSweep, type WorkerQuietObservation } from './worker-quiet-sweep'
-import { latestWorkerQuietNotice, reportWorkerQuiet } from './worker-quiet-report'
-import type { WorkerTurnStopDispatch } from '../turn-stops/worker-turn-stop-report'
+import { reportWorkerQuiet } from './worker-quiet-report'
+import { latestWorkerQuietNotices } from './worker-quiet-recovery'
+import { potentiallyLiveRemoteAttachmentSql } from '../../db/federation/remote-attachment-liveness'
+import { isAgentHookSource } from '../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-turn-stops'
 import type {
   DispatchContextRow,
@@ -30,15 +32,27 @@ export function startWorkerQuietSweep(deps: {
   readPty: (paneKey: string) => RuntimePtyWorktreeRecord | null
   notify: (handle: string, type: string) => void
 }): () => void {
-  const candidates = new Map<
-    string,
-    { target: WorkerTurnStopDispatch; from: string; agent: string }
-  >()
+  type Target =
+    | { kind: 'local'; dispatch: DispatchContextRow }
+    | { kind: 'remote'; attachment: RemoteDispatchAttachmentRow }
+  const candidates = new Map<string, { target: Target; from: string; agent: string }>()
   const sweep = new WorkerQuietSweep(
     Date.now(),
-    (id) => {
+    (ids) => {
       const db = deps.getDb()
-      return db ? latestWorkerQuietNotice(db, id) : undefined
+      return db
+        ? latestWorkerQuietNotices(
+            db,
+            ids.map((dispatchId) => {
+              const target = candidates.get(dispatchId)!.target
+              return {
+                dispatchId,
+                runId:
+                  target.kind === 'local' ? target.dispatch.run_id : target.attachment.home_run_id
+              }
+            })
+          )
+        : new Map()
     },
     (row, notice) => {
       const candidate = candidates.get(row.dispatchId)
@@ -65,12 +79,9 @@ export function startWorkerQuietSweep(deps: {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the canonical column list covers the attachment row.
     const remote = db.db
       .prepare(
-        `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments WHERE state IN ('starting', 'ready', 'start_unknown')`
+        `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments WHERE ${potentiallyLiveRemoteAttachmentSql()} AND state IN ('starting', 'ready', 'start_unknown')`
       )
       .all() as RemoteDispatchAttachmentRow[]
-    type Target =
-      | { kind: 'local'; dispatch: DispatchContextRow }
-      | { kind: 'remote'; attachment: RemoteDispatchAttachmentRow }
     const targets: Target[] = [
       ...local.map((dispatch): Target => ({ kind: 'local', dispatch })),
       ...remote.map((attachment): Target => ({ kind: 'remote', attachment }))
@@ -101,8 +112,11 @@ export function startWorkerQuietSweep(deps: {
           continue
         }
         const host = getStructuredAgentSessionHost()
+        if (host?.readStatusSummary(running.sessionId)?.status !== 'working') {
+          continue
+        }
         const progress = host?.attentionReads.workerProgress(running.sessionId)
-        if (!progress || host?.readStatusSummary(running.sessionId)?.status !== 'working') {
+        if (!progress) {
           continue
         }
         candidates.set(dispatchId, {
@@ -128,6 +142,7 @@ export function startWorkerQuietSweep(deps: {
       const row = deps.store.getStatusSnapshotForPane(paneKey)[0]
       const pty = deps.readPty(paneKey)
       const progress = deps.store.producerProgress?.get(paneKey)
+      const agent = row?.agentType ?? pty?.launchAgent ?? pty?.foregroundAgent ?? 'agent'
       let tool: { name: string; startedAt: number } | undefined
       for (const call of progress?.tools.values() ?? []) {
         if (!tool || call.startedAt < tool.startedAt) {
@@ -137,7 +152,7 @@ export function startWorkerQuietSweep(deps: {
       candidates.set(dispatchId, {
         target,
         from,
-        agent: row?.agentType ?? pty?.launchAgent ?? pty?.foregroundAgent ?? 'agent'
+        agent
       })
       observations.push({
         dispatchId,
@@ -152,6 +167,7 @@ export function startWorkerQuietSweep(deps: {
           ? undefined
           : (pty?.lastAgentStatusStartedAtEpochMs ?? row?.stateStartedAt),
         lastProducerEventAt: progress?.lastProducerEventAt,
+        progressObservable: isAgentHookSource(agent) || progress !== undefined,
         tool:
           tool ??
           (row?.agentType === 'claude' && row.workingMode === 'monitoring'

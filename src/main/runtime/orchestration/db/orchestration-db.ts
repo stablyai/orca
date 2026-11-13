@@ -20,6 +20,7 @@ import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
+import { WORKER_QUIET_NOTICE_INDEXES_SQL } from './schema/worker-quiet-notice-indexes'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -91,6 +92,7 @@ class OrchestrationDbCore {
         WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
       CREATE INDEX IF NOT EXISTS idx_messages_stop_reports
         ON messages(run_id) WHERE id LIKE 'msg\\_stop\\_%' ESCAPE '\\';
+      ${WORKER_QUIET_NOTICE_INDEXES_SQL}
     `)
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)

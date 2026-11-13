@@ -7,6 +7,7 @@ export type WorkerQuietObservation = {
   connectionId?: string | null
   workingSince?: number
   lastProducerEventAt?: number
+  progressObservable?: boolean
   tool?: { name: string; startedAt: number }
 }
 
@@ -42,7 +43,7 @@ export class WorkerQuietSweep {
 
   constructor(
     private readonly startedAt: number,
-    private readonly latest: (dispatchId: string) => QuietNotice | undefined,
+    private readonly latest: (dispatchIds: readonly string[]) => ReadonlyMap<string, QuietNotice>,
     private readonly send: (observation: WorkerQuietObservation, notice: QuietNotice) => boolean
   ) {
     this.lastSweepAt = startedAt
@@ -72,17 +73,23 @@ export class WorkerQuietSweep {
         this.recovered.delete(id)
       }
     }
+    const unrecovered = observations.filter(
+      (row) => row.working && !row.restoredUnconfirmed && !this.history.has(row.dispatchId)
+    )
+    if (unrecovered.length > 0) {
+      const latest = this.latest(unrecovered.map((row) => row.dispatchId))
+      for (const row of unrecovered) {
+        const previous = latest.get(row.dispatchId)
+        this.history.set(row.dispatchId, previous)
+        if (previous) {
+          this.recovered.add(row.dispatchId)
+        }
+      }
+    }
     for (const row of observations) {
       if (!row.working || row.restoredUnconfirmed) {
         this.episodes.delete(row.dispatchId)
         continue
-      }
-      if (!this.history.has(row.dispatchId)) {
-        const latest = this.latest(row.dispatchId)
-        this.history.set(row.dispatchId, latest)
-        if (latest) {
-          this.recovered.add(row.dispatchId)
-        }
       }
       let episode = this.episodes.get(row.dispatchId)
       const connected = row.connected !== false

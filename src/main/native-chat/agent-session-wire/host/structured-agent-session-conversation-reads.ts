@@ -68,29 +68,14 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
           return null
         }
         const { journal } = session
-        let tool: { name: string; startedAt: number } | undefined
-        journal.visitItemsWithLinkage((id, _sequence, body, attribution) => {
-          if (
-            body.kind !== 'tool-call' ||
-            body.state !== 'running' ||
-            journal.itemFence(id) !== child.fence ||
-            attribution.turnScope?.kind !== 'turn' ||
-            attribution.turnScope.turnItemId !== turn.item.itemId
-          ) {
-            return
-          }
-          const startedAt = journal.item(id)?.observedAt ?? turn.item.observedAt
-          if (!tool || startedAt < tool.startedAt) {
-            tool = { name: body.name, startedAt }
-          }
-        })
+        const turnStartedAt =
+          turn.item.body.kind === 'turn'
+            ? (turn.item.body.startedAt ?? turn.item.observedAt)
+            : turn.item.observedAt
         return {
-          turnStartedAt:
-            turn.item.body.kind === 'turn'
-              ? (turn.item.body.startedAt ?? turn.item.observedAt)
-              : turn.item.observedAt,
-          lastProducerEventAt: journal.lastProviderActivityAt(child.fence),
-          tool
+          turnStartedAt,
+          lastProducerEventAt: journal.lastProviderActivityAt(child.fence) ?? turnStartedAt,
+          tool: journal.runningTool(turn.item.itemId, child.fence)
         }
       },
 

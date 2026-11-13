@@ -1,7 +1,8 @@
 import { ProducerProgressStore } from '../../../../agent-hooks/server/producer-progress'
 import { expect, it, vi } from 'vitest'
 import { WorkerQuietSweep, type WorkerQuietObservation } from './worker-quiet-sweep'
-import { reportWorkerQuiet, latestWorkerQuietNotice } from './worker-quiet-report'
+import { reportWorkerQuiet } from './worker-quiet-report'
+import { latestWorkerQuietNotices } from './worker-quiet-recovery'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
@@ -34,7 +35,7 @@ it('only advises for a quiet working episode, respects tools, fallback, grace, a
   const sent: { id: string; ordinal: number; at: number }[] = []
   const sweep = new WorkerQuietSweep(
     0,
-    () => undefined,
+    () => new Map(),
     (row, notice) => {
       sent.push({ id: row.dispatchId, ordinal: notice.ordinal, at: notice.observedAt })
       return true
@@ -125,11 +126,18 @@ it('relays status/normal with deterministic ids and retains the turn ordinal acr
     expect(relay).toHaveLength(1)
     expect(JSON.parse(relay[0]!.payload)).toMatchObject({ type: 'status', priority: 'normal' })
     expect(JSON.parse(JSON.parse(relay[0]!.payload).payload).stopReason).toBeUndefined()
-    expect(latestWorkerQuietNotice(db, dispatch.id)?.ordinal).toBe(1)
+    expect(
+      latestWorkerQuietNotices(db, [{ dispatchId: dispatch.id, runId: run.id }]).get(dispatch.id)
+        ?.ordinal
+    ).toBe(1)
     const sent: number[] = []
     const restarted = new WorkerQuietSweep(
       1_000_000,
-      (id) => latestWorkerQuietNotice(db, id),
+      (ids) =>
+        latestWorkerQuietNotices(
+          db,
+          ids.map((dispatchId) => ({ dispatchId, runId: run.id }))
+        ),
       (_row, next) => {
         sent.push(next.ordinal)
         return true

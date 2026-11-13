@@ -1,3 +1,4 @@
+import type { TerminalStatusIngestEvent } from './terminal-status-ingest-event'
 import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
@@ -80,25 +81,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     this.republishProgramStatusFacet(paneKey)
   }
 
-  ingestTerminalStatus(event: {
-    ptyId?: string
-    paneKey: string
-    tabId?: string
-    worktreeId?: string
-    connectionId?: string | null
-    terminalHandle?: string
-    payload: ParsedAgentStatusPayload
-    /** `process`: derived from the pane's foreground process rather than parsed from its bytes. */
-    origin?: 'process'
-    /** Drop this write when a hook has reported the pane since then (the hook owns that command). */
-    yieldsToHookSince?: number
-    /** Projected from OSC 7501: yields to the pane's hook row (programStatusHookYieldEndsAt). */
-    fromProgramStatus?: true
-    /** The program left no records: a row only OSC wrote is removed instead. */
-    removesProgramStatusRow?: true
-    /** A repeat that renews a live program row's freshness; the window must see it too. */
-    renewsProgramStatusLease?: true
-  }): void {
+  ingestTerminalStatus(event: TerminalStatusIngestEvent): void {
     const physicalPaneKey = event.paneKey.trim()
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
@@ -219,7 +202,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       if (hookOwnsAgent && previous && Number.isFinite(yieldEndsAt)) {
         const yieldedTo = previous.receivedAt
         const delayMs = yieldEndsAt - now
-        const replay = { ...event, renewsProgramStatusLease: true as const }
+        const replay = { ...event, isReplay: true as const }
         this.hookSilenceRechecks.defer(paneKey, delayMs + 1, (currentPaneKey) => {
           const row = this.state.lastStatusByPaneKey.get(currentPaneKey)
           // Re-offer only against the hook observation this report yielded to.
@@ -237,7 +220,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         this.hookSilenceRechecks.cancel(paneKey)
       }
     }
-    if (event.fromProgramStatus && !event.renewsProgramStatusLease) {
+    if (event.fromProgramStatus && !event.renewsProgramStatusLease && !event.isReplay) {
       this.producerProgress.observe({ paneKey, connectionId, payload }, now, newRun)
     }
     if (

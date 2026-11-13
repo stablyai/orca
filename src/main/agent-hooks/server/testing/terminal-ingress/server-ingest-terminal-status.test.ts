@@ -27,6 +27,38 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  it('counts real hooks and program reports as progress, excluding lease renewals and replay', () => {
+    vi.useFakeTimers()
+    try {
+      const server = new AgentHookServer()
+      const payload = { state: 'working' as const, prompt: 'work', agentType: 'codex' as const }
+      const hook = { paneKey: PANE, hookEventName: 'PreToolUse', toolUseId: 'call-1', payload }
+      const program = {
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        fromProgramStatus: true as const,
+        payload
+      }
+      vi.setSystemTime(1_000)
+      server.ingestRemote(hook, 'conn-1')
+      expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(1_000)
+      vi.setSystemTime(2_000)
+      server.ingestTerminalStatus(program)
+      expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(2_000)
+      vi.setSystemTime(3_000)
+      server.ingestTerminalStatus({ ...program, renewsProgramStatusLease: true })
+      server.ingestRemote({ ...hook, isReplay: true }, 'conn-1')
+      server.ingestTerminalStatus({ ...program, isReplay: true })
+      expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(2_000)
+      vi.setSystemTime(4_000)
+      server.ingestRemote({ ...hook, hookEventName: 'PostToolUse' }, 'conn-1')
+      expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(4_000)
+      expect([...server.producerProgress.get(PANE)!.tools.values()]).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves a hook turn stamp when an OSC repaint omits hook-only completion text', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
