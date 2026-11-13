@@ -138,7 +138,7 @@ it.each(['unforwarded', 'unsafe forwarded'])(
     resetWslAutomountRootsForTests()
     await settleWslAutomountRoot('Custom', '/qamnt/')
     setLocalGitRuntimeRouter(() => 'Custom')
-    getLocalGitCapabilityCache({ wslDistro: 'Custom' }).rememberSupported('merge-tree-write-tree')
+    getLocalGitCapabilityCache({ cwd: driveCwd }).rememberSupported('merge-tree-write-tree')
     vi.stubEnv('GIT_ALTERNATE_OBJECT_DIRECTORIES', String.raw`C:\other\objects`)
     vi.stubEnv(
       'WSLENV',
