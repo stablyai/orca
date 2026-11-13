@@ -5,7 +5,8 @@ import {
   makePR,
   mockApi,
   resetRemoteRuntimeMocks,
-  runtimeEnvironmentCall
+  runtimeEnvironmentCall,
+  runtimeEnvironmentSubscribe
 } from '../github-slice-test-harness'
 
 beforeEach(() => {
@@ -221,3 +222,58 @@ it('handles negotiated invalidation before data or linked-PR settlement', async 
     .fetchPRForBranch('/runtime/repo', 'receipt', { force: true, reason: 'active' })
   expect(store.getState().prCache['runtime:env-1::runtime-repo::receipt']?.data).toBeNull()
 })
+
+it.each(['origin', 'joiner'] as const)(
+  'detaches an aborted %s while the live consumer receives the shared result',
+  async (cancelled) => {
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'runtime-repo',
+          path: '/runtime/repo',
+          displayName: 'Runtime repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    })
+    const reply = Promise.withResolvers<PRRefreshOutcome>()
+    runtimeEnvironmentCall.mockImplementation(async () => ({
+      id: 'rpc',
+      ok: true,
+      result: await reply.promise
+    }))
+    const origin = new AbortController()
+    const joiner = new AbortController()
+    const originOutcome = vi.fn()
+    const joinerOutcome = vi.fn()
+    const first = store.getState().fetchPRForBranch('/runtime/repo', 'shared-cancel', {
+      force: true,
+      reason: 'active',
+      signal: origin.signal,
+      onReadOutcome: originOutcome
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const second = store.getState().fetchPRForBranch('/runtime/repo', 'shared-cancel', {
+      force: true,
+      reason: 'active',
+      signal: joiner.signal,
+      onReadOutcome: joinerOutcome
+    })
+    ;(cancelled === 'origin' ? origin : joiner).abort()
+    expect(await (cancelled === 'origin' ? first : second)).toBeNull()
+    reply.resolve(found(30))
+    expect((await (cancelled === 'origin' ? second : first))?.number).toBe(30)
+    expect(
+      store.getState().prCache['runtime:env-1::runtime-repo::shared-cancel']?.data?.number
+    ).toBe(30)
+    expect(cancelled === 'origin' ? originOutcome : joinerOutcome).not.toHaveBeenCalled()
+    expect(cancelled === 'origin' ? joinerOutcome : originOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'found', pr: expect.objectContaining({ number: 30 }) })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(1)
+  }
+)

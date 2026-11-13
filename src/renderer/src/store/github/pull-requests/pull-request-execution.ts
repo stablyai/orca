@@ -161,7 +161,6 @@ export function startPullRequestLookup(args: {
         if (inflight?.generation === generation) {
           inflight.outcome = outcome
         }
-        options?.onReadOutcome?.(outcome)
       }
       if (isPRRevalidationOnly(outcome)) {
         return get().prCache[cacheKey]?.data ?? null

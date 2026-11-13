@@ -14,9 +14,12 @@ import type { GetProjectViewTableResult } from '../../../../../shared/github/pro
 import type { LinkedReviewClearScope } from '../pull-requests/linked-review-clear'
 import type { AppState } from '../../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from '../cache/cache-identity'
+import type { PromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
 
 export type InflightPR = {
   promise: Promise<PRInfo | null>
+  controller: AbortController
+  waiters: PromiseSettlementWaiters<PRInfo | null>
   force: boolean
   generation: number
   lookupHintKey: string

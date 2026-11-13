@@ -17,6 +17,7 @@ import { PR_CHECK_PAGE_LIMIT } from '../../client/check/pr-check-rollup'
 import { parsePRKey } from '../../pr-watch/pr-watch-types'
 import { quietPRIntervalForCandidate } from '../../client/lookup/pr-quiet-policy-evidence'
 import type { readTimedPROutcome } from '../../client/lookup/pr-last-outcome'
+import { cachedPRBranchOutcome } from '../../client/lookup/pr-read-identity'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -140,6 +141,26 @@ export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null
   return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
     : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+}
+
+export function freshQueuedPROutcome(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason
+): PRRefreshOutcome | null {
+  const cached = cachedPRBranchOutcome(
+    candidate.repoPath,
+    candidate.branch,
+    candidate.linkedPRNumber ?? null,
+    candidate.connectionId ?? null,
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    hostedReviewOptionArgs(candidate, reason)[0] ?? {}
+  )
+  const outcome = cached?.outcome
+  if (!outcome || outcome.kind === 'upstream-error') {
+    return null
+  }
+  const dueAt = freshRetryAt(visibleCandidateAfterOutcome(candidate, outcome))
+  return dueAt !== null && dueAt > Date.now() ? outcome : null
 }
 
 export function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefreshAlias {

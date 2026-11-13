@@ -14,7 +14,12 @@ import {
 } from '../refresh/pr-refresh-state'
 import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result-routing'
 import { nextLookupGeneration } from '../../slices/hosted-review/refresh/lookup-generation-sequence'
-import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
+import {
+  inflightPRRequests,
+  prRequestGenerations,
+  type InflightPR
+} from '../requests/request-coordination'
+import { sharedPromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
 import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
@@ -45,6 +50,9 @@ export const createPullRequestActions = (
       repo !== undefined
     )
     const cached = get().prCache[cacheKey]
+    if (options?.signal?.aborted) {
+      return cached?.data ?? null
+    }
     const hostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
@@ -116,6 +124,7 @@ export const createPullRequestActions = (
     if (
       !options?.userRefresh &&
       inflightRequest &&
+      !inflightRequest.controller.signal.aborted &&
       (!options?.force || inflightRequest.force) &&
       inflightRequest.lookupHintKey === lookupHintKey &&
       !(
@@ -124,12 +133,11 @@ export const createPullRequestActions = (
       ) &&
       !linkedRefetch
     ) {
-      return inflightRequest.promise.then((pr) => {
-        if (inflightRequest.outcome && !inflightRequest.superseded) {
-          options?.onReadOutcome?.(inflightRequest.outcome)
-        }
-        return pr
-      })
+      return waitForPullRequest(
+        inflightRequest,
+        options,
+        () => get().prCache[cacheKey]?.data ?? null
+      )
     }
 
     if (inflightRequest) {
@@ -146,12 +154,13 @@ export const createPullRequestActions = (
     )
     prRequestGenerations.set(cacheKey, generation)
 
+    const controller = new AbortController()
     const request = startPullRequestLookup({
       set,
       get,
       repoPath,
       branch,
-      options,
+      options: { ...options, signal: controller.signal, onReadOutcome: undefined },
       repo,
       repoId,
       requestSettings,
@@ -167,13 +176,44 @@ export const createPullRequestActions = (
       requestStartedPRRefreshToken
     })
 
-    inflightPRRequests.set(cacheKey, {
+    const inflight: InflightPR = {
       promise: request,
+      controller,
+      waiters: sharedPromiseSettlementWaiters(request),
       force: Boolean(options?.force),
       generation,
       reason: options?.reason,
       lookupHintKey
-    })
-    return request
+    }
+    inflightPRRequests.set(cacheKey, inflight)
+    return waitForPullRequest(inflight, options, () => get().prCache[cacheKey]?.data ?? null)
   }
 })
+
+function waitForPullRequest(
+  inflight: InflightPR,
+  options: Parameters<GitHubSlice['fetchPRForBranch']>[2],
+  fallback: () => PRInfo | null
+): Promise<PRInfo | null> {
+  return inflight.waiters
+    .wait({
+      signal: options?.signal,
+      deferSettled: true,
+      onFulfilled: () => {
+        if (inflight.outcome && !inflight.superseded) {
+          options?.onReadOutcome?.(inflight.outcome)
+        }
+      },
+      onAbandon: () => {
+        if (inflight.waiters.waiterCount === 0) {
+          inflight.controller.abort()
+        }
+      }
+    })
+    .catch((error: unknown) => {
+      if (options?.signal?.aborted) {
+        return fallback()
+      }
+      throw error
+    })
+}
