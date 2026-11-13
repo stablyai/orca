@@ -36,6 +36,15 @@ function register(url: string) {
       create: async () => {
         throw new Error('unused')
       },
+      bootPlan: async () => {
+        throw new Error('unused')
+      },
+      cloneStatus: async () => {
+        throw new Error('unused')
+      },
+      destroy: async () => {
+        throw new Error('unused')
+      },
       githubUser: async () => ({ connected: false as const }),
       connectGitHubUser,
       disconnectGitHubUser: async () => ({ connected: false as const })
