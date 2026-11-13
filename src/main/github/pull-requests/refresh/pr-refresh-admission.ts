@@ -3,7 +3,7 @@ import {
   candidateReadRequest,
   isBudgetedBackground
 } from './pr-refresh-candidate-policy'
-import { prBranchReadKeys } from '../../client/lookup/pr-read-identity'
+import { exactRequestMatcher } from '../../client/lookup/pr-read-identity'
 import { usesActiveRefreshPacing, type PRRefreshPacing } from './pr-refresh-pacing'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
@@ -52,15 +52,20 @@ export class PRRefreshAdmission {
   private stillDemanded(
     entry: PRRefreshQueueEntry,
     requestSequence: number,
-    exactKey: string
+    exactKey?: string
   ): boolean {
-    const shownRequest = (shown: GitHubPRRefreshCandidate) =>
-      prBranchReadKeys(...candidateReadRequest(shown, 'visible'))[1] === exactKey
-    if (
-      this.queue.ownsRequest(entry.key, requestSequence) &&
-      this.visibility.hasDemand(entry.key, shownRequest)
-    ) {
-      return true
+    // Cheap checks first; the scope is resolved once, only when a row of the key is still shown,
+    // and every shown alias is then compared in it without resolving its own.
+    if (this.queue.ownsRequest(entry.key, requestSequence) && this.visibility.has(entry.key)) {
+      const sameRequest = exactRequestMatcher(
+        candidateReadRequest(entry.candidate, 'visible'),
+        exactKey
+      )
+      const shownRequest = (shown: GitHubPRRefreshCandidate) =>
+        sameRequest(candidateReadRequest(shown, 'visible'))
+      if (this.visibility.hasDemand(entry.key, shownRequest)) {
+        return true
+      }
     }
     this.endAttempt(entry, requestSequence)
     return false
@@ -141,11 +146,7 @@ export class PRRefreshAdmission {
     if (
       this.rowWork(entry) &&
       entry.reason === 'visible' &&
-      !this.stillDemanded(
-        entry,
-        requestSequence,
-        prBranchReadKeys(...candidateReadRequest(entry.candidate, 'visible'))[1]
-      )
+      !this.stillDemanded(entry, requestSequence)
     ) {
       return false
     }
@@ -196,7 +197,8 @@ export class PRRefreshAdmission {
       return false
     }
     const candidate = this.visibility.candidate(entry.key, entry.candidate)
-    const exact = prepared.isCurrent() ? prepared.cached()?.outcome : undefined
+    // Scope was checked just above, in this same synchronous decision.
+    const exact = prepared.cached()?.outcome
     const failure = this.retry.currentFailure(entry.key, candidate, exact)
     if (!failure || failure.gateAt <= Date.now()) {
       return true
