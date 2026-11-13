@@ -30,6 +30,7 @@ import {
   savedResumeResult
 } from '../../ipc/pty/host-env/saved-resume-admission'
 import { spawnedCommands, resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION = { key: 'session_id', id: 'provider-session-1' } as const
@@ -72,8 +73,8 @@ function hasWorkspaceScopeResolver(
 }
 
 function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only paneKey, providerSession and the observation clocks.
-  return { paneKey, providerSession: SESSION, receivedAt } as never
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only agentType, paneKey, providerSession and the observation clocks.
+  return { agentType: 'claude', paneKey, providerSession: SESSION, receivedAt } as never
 }
 
 function makeRuntime(
@@ -93,7 +94,22 @@ function makeRuntime(
   )
   const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
     getDesktopWindowStatus: () => 'openable',
-    ...(opts.rows ? { getAgentProviderSessionSnapshot: opts.rows } : {}),
+    ...(opts.rows
+      ? {
+          getAgentProviderSessionSnapshot: opts.rows,
+          getAgentProviderSessionRowsForPane: (paneKey: string) =>
+            opts.rows!().filter((row) => row.paneKey === paneKey),
+          getAgentProviderSessionRowsForSession: (
+            agent: string,
+            session: AgentStatusIpcPayload['providerSession']
+          ) =>
+            opts.rows!().filter(
+              (row) =>
+                row.agentType === agent &&
+                agentProviderSessionsEqual(agent, row.providerSession, session)
+            )
+        }
+      : {}),
     ...(opts.checkHookAgentPresence ? { checkHookAgentPresence: opts.checkHookAgentPresence } : {}),
     ...(opts.subscribeAgentProviderSessionChanges
       ? { subscribeAgentProviderSessionChanges: opts.subscribeAgentProviderSessionChanges }

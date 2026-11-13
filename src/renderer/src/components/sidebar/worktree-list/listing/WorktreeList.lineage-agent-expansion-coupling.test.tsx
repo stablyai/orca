@@ -1,8 +1,8 @@
+// @vitest-environment happy-dom
 import {
   acceptedAgentStatuses,
   type AcceptedAgentStatuses
 } from '@/store/slices/agent-status/accepted-agent-statuses'
-// @vitest-environment happy-dom
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
@@ -11,6 +11,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 // Render real list/agents so changing lineage row keys remounts cards and exercises disclosure persistence independently of child-worktree expansion.
 
 import { act, type ReactNode } from 'react'
+import { useAppStore } from '@/store'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProjectHeaderDragContract from '../drag/project-header-drag-contract'
@@ -367,6 +368,13 @@ function setAgentLineageState(options: {
     structuredChatSleptAtByPaneKey: {},
     agentStatusByPaneKey
   }
+  const changes = Array.from(agentStatusByPaneKey, ([paneKey, current]) => ({
+    paneKey,
+    previous: undefined,
+    current
+  }))
+  agentStatusByPaneKey.projection.prepare(useAppStore.getState(), changes)()
+  agentStatusByPaneKey.prepare()()
 }
 
 const mountedRoots: Root[] = []

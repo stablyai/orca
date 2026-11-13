@@ -166,7 +166,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           })
         })
       )
-      expect(mockStoreState.agentStatusByPaneKey).toEqual({})
+      expect(Array.from(mockStoreState.agentStatusByPaneKey.values())).toEqual([])
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
         paneKey,
         providerSession: { id: 'codex-session-1', transcriptPath },
