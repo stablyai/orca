@@ -10,7 +10,6 @@ import { seedBrowserLinkTestStore, WORKSPACE, URL_TO_OPEN } from './browser-link
 import '../../links/placement/link-open-intent'
 import { openRoutedHttpLink } from './http-link-destinations'
 import { openHttpLink } from './http-link-routing'
-import './http-link-destinations'
 import '../workspace/workspace-browser-tab-open'
 
 const OTHER_WORKSPACE = 'repo1::/other'
