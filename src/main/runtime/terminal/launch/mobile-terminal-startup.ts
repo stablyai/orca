@@ -13,6 +13,7 @@ import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/sta
 import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { applyProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import {
   resolveWslHostAgentLaunchInputs,
   resolveWslHostAgentResumeInputs
@@ -129,7 +130,10 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const settings = this.store.getSettings()
+    const settings = applyProjectAgentLaunchDefaults(
+      this.store.getSettings(),
+      workspace.repo?.agentLaunchDefaults
+    )
     if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }

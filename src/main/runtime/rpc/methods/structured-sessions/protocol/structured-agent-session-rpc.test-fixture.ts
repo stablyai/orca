@@ -141,7 +141,7 @@ export function dispatcher(
   reset(runtimeCalls)
   Object.assign(runtimeCalls, {
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
-    structuredAgentSessionLaunchSeedOptions: vi.fn(() => undefined),
+    structuredAgentSessionLaunchSeedOptions: vi.fn(async () => undefined),
     resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({
       envelope: params.envelope,
       location: {

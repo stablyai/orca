@@ -41,9 +41,9 @@ async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>,
     })
   }
   // Reservation applies options only to a record it creates, so an existing chat is never reseeded.
-  const permissionMode = ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)?.[
-    AGENT_CHAT_PERMISSION_MODE_OPTION_ID
-  ]
+  const permissionMode = (
+    await ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
+  )?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
   const attachParams: AgentSessionAttachParams = {
     ...params,
     ...(permissionMode
@@ -170,7 +170,10 @@ export async function handleStructuredAgentSessionCreateSupport(
   }
   // Optional: older clients ignore it, and a client seeds its picker with what create will use.
   const seedOptions = support.supported
-    ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
+    ? await ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent, {
+        worktree: params.worktree,
+        resume: Boolean(params.resumeFrom)
+      })
     : undefined
   return seedOptions ? { ...support, seedOptions } : support
 }

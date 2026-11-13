@@ -14,9 +14,12 @@ type WorkspaceIdentityStateInput = Pick<
   | 'selectedRepoConnectionId'
   | 'selectedRepoRuntimeEnvironmentId'
   | 'settings'
->
+> & {
+  selectedRepoAgentLaunchDefaults?: Repo['agentLaunchDefaults']
+}
 
-import { useState, useMemo, useCallback, type SetStateAction } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, type SetStateAction } from 'react'
+import type { Repo } from '../../../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import {
   getWorkspaceSourceProvider,
@@ -56,6 +59,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     persistDraft,
     selectedRepoConnectionId,
     selectedRepoRuntimeEnvironmentId,
+    selectedRepoAgentLaunchDefaults,
     settings
   } = input
 
@@ -172,16 +176,31 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     [disabledTuiAgents]
   )
 
+  const preferredDefaultAgent =
+    selectedRepoAgentLaunchDefaults?.defaultTuiAgent ?? settings?.defaultTuiAgent ?? null
+
   const fallbackDefaultAgent: TuiAgent =
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(settings.defaultTuiAgent, disabledTuiAgents)
-      ? settings.defaultTuiAgent
+    preferredDefaultAgent &&
+    preferredDefaultAgent !== 'blank' &&
+    isTuiAgentEnabled(preferredDefaultAgent, disabledTuiAgents)
+      ? preferredDefaultAgent
       : (enabledCatalogAgents[0] ?? 'claude')
 
-  const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
+  const [tuiAgent, autoSelectTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
+
+  // Follow the selected project's default until the user, or a restored draft, picks an agent.
+  const agentPickedRef = useRef(persistDraft && Boolean(newWorkspaceDraft?.agent))
+  const setTuiAgent = useCallback((action: SetStateAction<TuiAgent>) => {
+    agentPickedRef.current = true
+    autoSelectTuiAgent(action)
+  }, [])
+  useEffect(() => {
+    if (!agentPickedRef.current) {
+      autoSelectTuiAgent(fallbackDefaultAgent)
+    }
+  }, [fallbackDefaultAgent])
 
   // Host-owned repos must show their host’s installed agents rather than the client’s inventory.
   const runtimeEnvironmentId = selectedRepoRuntimeEnvironmentId?.trim() || null
@@ -252,9 +271,11 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     disabledTuiAgentKey,
     disabledTuiAgents,
     enabledCatalogAgents,
+    preferredDefaultAgent,
     fallbackDefaultAgent,
     tuiAgent,
     setTuiAgent,
+    autoSelectTuiAgent,
     connectionId,
     isRemote,
     runtimeEnvironmentId,

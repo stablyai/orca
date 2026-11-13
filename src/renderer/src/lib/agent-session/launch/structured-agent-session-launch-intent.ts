@@ -9,6 +9,7 @@ import type {
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { structuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { useAppStore } from '@/store/index'
@@ -59,7 +60,7 @@ type LaunchSeed = Readonly<Record<string, string>> | undefined
 /** Seed local saved selection for local chats; paired hosts report their own admitted seed, absent on older servers. */
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
-  owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
+  owner: Pick<StructuredAgentSessionLaunchIntent, 'target' | 'worktreeId'>,
   agent: TuiAgent,
   hostSeedOptions: LaunchSeed,
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -67,7 +68,12 @@ function launchSeedOptions(
   const seedOptions =
     owner.target.kind === 'local'
       ? structuredLaunchSeedOptions(
-          resumeFrom ? { ...state.settings, agentLaunchChoices: undefined } : state.settings,
+          {
+            ...state.settings,
+            agentLaunchChoices: resumeFrom
+              ? undefined
+              : readAgentLaunchPreferencesForWorktree(state, owner.worktreeId).agentLaunchChoices
+          },
           agent
         )
       : resumeFrom
@@ -146,7 +152,9 @@ function buildStructuredAgentSessionLaunchIntent(
       ...(forkFrom ? { forkFrom } : {}),
       randomUuid: createNonSecureContextUuid
     }),
-    ...(forkFrom ? {} : launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom))
+    ...(forkFrom
+      ? {}
+      : launchSeedOptions(state, { ...owner, worktreeId }, agent, hostSeedOptions, resumeFrom))
   }
 }
 
@@ -238,6 +246,12 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
         ? args.seedOptions
           ? { seedOptions: args.seedOptions }
           : {}
-        : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
+        : launchSeedOptions(
+            state,
+            { target, worktreeId: args.worktreeId },
+            args.agent,
+            args.seedOptions,
+            args.resumeFrom
+          ))
   }
 }

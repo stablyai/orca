@@ -231,3 +231,54 @@ it('updates the shared cold projection when existing capability resolves after t
     vi.useRealTimers()
   }
 })
+
+it('applies the owning project defaults to workspace preferences and new-tab menus', async () => {
+  useAppStore.setState((state) => ({
+    repos: [
+      {
+        ...TEST_REPO,
+        agentLaunchDefaults: {
+          defaultTuiAgent: 'opencode',
+          agentLaunchChoices: { codex: { model: 'desktop-project' } }
+        }
+      },
+      {
+        ...TEST_REPO,
+        executionHostId: 'runtime:alpha',
+        agentLaunchDefaults: {
+          defaultTuiAgent: 'claude',
+          agentLaunchChoices: { codex: { model: 'remote-project', options: { effort: 'high' } } }
+        }
+      }
+    ],
+    settings: { ...state.settings!, agentLaunchChoices: { codex: { model: 'desktop-global' } } }
+  }))
+  const workspace = { kind: 'git-worktree' as const, worktreeId: 'wt' }
+  const ensured = await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+  expect(ensured.defaultTuiAgent).toBe('claude')
+  expect(ensured.agentLaunchChoices?.codex).toEqual({
+    model: 'remote-project',
+    options: { effort: 'high' }
+  })
+  const menu = renderHook(() =>
+    useAgentMenuObservation('wt', true, { kind: 'runtime', environmentId: 'alpha' })
+  )
+  expect(menu.result.current.preferences.defaultTuiAgent).toBe('claude')
+  expect(menu.result.current.preferences.agentLaunchChoices?.codex).toEqual({
+    model: 'remote-project',
+    options: { effort: 'high' }
+  })
+  await act(async () =>
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) =>
+        repo.executionHostId === 'runtime:alpha'
+          ? { ...repo, agentLaunchDefaults: undefined }
+          : repo
+      )
+    }))
+  )
+  expect(
+    readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt').agentLaunchChoices?.codex
+  ).toEqual({ model: 'host-model', options: { effort: 'low' } })
+  expect(menu.result.current.preferences.defaultTuiAgent).toBe('codex')
+})

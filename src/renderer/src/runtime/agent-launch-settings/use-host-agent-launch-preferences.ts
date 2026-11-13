@@ -1,3 +1,8 @@
+import {
+  applyProjectAgentLaunchDefaults,
+  type ProjectAgentLaunchDefaults
+} from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
+import { projectAgentLaunchDefaultsForWorkspace } from './project-agent-launch-preferences'
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -6,7 +11,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
 import {
-  buildAgentLaunchRouteInput,
+  resolveAgentLaunchHost,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
@@ -32,9 +37,9 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
       ? { agentLaunchChoices: state.settings.agentLaunchChoices }
       : {})
   }
-  const host = parseExecutionHostId(
-    buildAgentLaunchRouteInput(state, { agent: 'claude', workspace }).executionHostId
-  )
+  const { executionHostId } = resolveAgentLaunchHost(state, workspace)
+  const host = parseExecutionHostId(executionHostId)
+  const project = projectAgentLaunchDefaultsForWorkspace(state, workspace, executionHostId)
   const owner =
     host?.kind === 'runtime'
       ? {
@@ -45,7 +50,7 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
           )?.runtimeId
         }
       : null
-  return { desktop, owner }
+  return { desktop, owner, project }
 }
 
 /** The current owner model map shares the existing availability fallback. */
@@ -53,14 +58,17 @@ export function readAgentLaunchPreferencesForWorkspace(
   state: AppState,
   workspace: ProspectiveWorkspace
 ): AgentLaunchPreferences {
-  const { desktop, owner } = preferencesForWorkspace(state, workspace)
+  const { desktop, owner, project } = preferencesForWorkspace(state, workspace)
   const snapshot = owner
     ? cachedSnapshot(
         owner.environmentId,
         snapshotKey(owner.environmentId, owner.pairingRevision, owner.runtimeId)
       )
     : null
-  return effectiveAgentLaunchPreferences(owner, desktop, snapshot)
+  return applyProjectAgentLaunchDefaults(
+    effectiveAgentLaunchPreferences(owner, desktop, snapshot),
+    project
+  )
 }
 
 export function readAgentLaunchPreferencesForWorktree(
@@ -81,9 +89,9 @@ export async function ensureAgentLaunchPreferences(
   if (signal?.aborted) {
     throw cancelled()
   }
-  const { desktop, owner } = preferencesForWorkspace(state, workspace)
+  const { desktop, owner, project } = preferencesForWorkspace(state, workspace)
   if (!owner) {
-    return desktop
+    return applyProjectAgentLaunchDefaults(desktop, project)
   }
   const entry = resource(owner)
   const { promise, resolve, reject } = Promise.withResolvers<Snapshot>()
@@ -102,7 +110,10 @@ export async function ensureAgentLaunchPreferences(
     if (signal?.aborted || !current(entry)) {
       throw cancelled()
     }
-    return effectiveAgentLaunchPreferences(owner, desktop, snapshot)
+    return applyProjectAgentLaunchDefaults(
+      effectiveAgentLaunchPreferences(owner, desktop, snapshot),
+      project
+    )
   } finally {
     signal?.removeEventListener('abort', listener)
     release()
@@ -142,7 +153,8 @@ export function useHostAgentMenuSettings(
   } | null,
   desktopSettings: GlobalSettings | null,
   active: boolean,
-  open: boolean
+  open: boolean,
+  projectDefaults?: ProjectAgentLaunchDefaults
 ) {
   const host = parseExecutionHostId(owner?.executionHostId)
   const environmentId = host?.kind === 'runtime' ? host.environmentId : undefined
@@ -191,22 +203,30 @@ export function useHostAgentMenuSettings(
     () => effectiveSnapshot(undefined)
   )
   if (!environmentId) {
-    return { settings: desktopSettings, pending: false }
+    return {
+      settings: desktopSettings
+        ? applyProjectAgentLaunchDefaults(desktopSettings, projectDefaults)
+        : desktopSettings,
+      pending: false
+    }
   }
   return {
     pending,
-    settings: {
-      ...desktopSettings,
-      defaultTuiAgent,
-      disabledTuiAgents,
-      agentLaunchChoices,
-      agentDefaultArgs,
-      agentPermissionDefault,
-      agentPermissionOverrides,
-      agentCmdOverrides: {},
-      agentDefaultEnv: {},
-      nativeChatSessionOptions: {},
-      nativeChatPermissionMode: undefined
-    }
+    settings: applyProjectAgentLaunchDefaults(
+      {
+        ...desktopSettings,
+        defaultTuiAgent,
+        disabledTuiAgents,
+        agentLaunchChoices,
+        agentDefaultArgs,
+        agentPermissionDefault,
+        agentPermissionOverrides,
+        agentCmdOverrides: {},
+        agentDefaultEnv: {},
+        nativeChatSessionOptions: {},
+        nativeChatPermissionMode: undefined
+      },
+      projectDefaults
+    )
   }
 }

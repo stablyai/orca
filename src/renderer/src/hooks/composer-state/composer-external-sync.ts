@@ -7,6 +7,7 @@ import { useGitHubSubmitResolution } from './github-submit-resolution'
 
 export function useComposerExternalSync(target: ComposerTargetState): ComposerExternalSyncState {
   const hostRuntimeEffects = useHostRuntimeEffects({
+    autoSelectTuiAgent: target.workspaceIdentityState.autoSelectTuiAgent,
     commitHookCheckIfCurrent: target.providerRuntimeSync.commitHookCheckIfCurrent,
     connectionId: target.workspaceIdentityState.connectionId,
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
@@ -18,6 +19,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     isRemote: target.workspaceIdentityState.isRemote,
     loadHookCheckForRepo: target.providerRuntimeSync.loadHookCheckForRepo,
     newWorkspaceDraft: target.composerTargetStore.newWorkspaceDraft,
+    preferredDefaultAgent: target.workspaceIdentityState.preferredDefaultAgent,
     repoId: target.initialTargetState.repoId,
     repoIdRef: target.runtimeTargetSelection.repoIdRef,
     runtimeEnvironmentId: target.workspaceIdentityState.runtimeEnvironmentId,
@@ -25,8 +27,6 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoSshStatus: target.runtimeTargetSelection.selectedRepoSshStatus,
-    setTuiAgent: target.workspaceIdentityState.setTuiAgent,
-    settings: target.composerTargetStore.settings,
     tuiAgent: target.workspaceIdentityState.tuiAgent
   })
   const linkedItemLookupEffects = useLinkedItemLookupEffects({

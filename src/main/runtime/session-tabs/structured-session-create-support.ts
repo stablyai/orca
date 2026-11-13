@@ -1,3 +1,4 @@
+import { structuredSessionProjectSeedOptions } from './structured-session-project-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
 import {
@@ -22,7 +23,6 @@ import {
 } from '../agent-session/launch/structured-agent-launch-support'
 import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
 import { structuredAgentChatProgramNeedsInstall } from '../agent-session/launch/structured-agent-availability'
-import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../agent-session/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
@@ -74,10 +74,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   /** Share new-chat selection between create and createSupport so client pickers show what create will run. */
-  structuredAgentSessionLaunchSeedOptions(
-    agent: StructuredAgentId
-  ): Record<string, string> | undefined {
-    return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
+  async structuredAgentSessionLaunchSeedOptions(
+    agent: StructuredAgentId,
+    launch: { worktree?: string; resume?: boolean } = {}
+  ): Promise<Record<string, string> | undefined> {
+    const worktree =
+      launch.worktree && !launch.resume
+        ? (await this.resolveRuntimeFileTarget(launch.worktree)).worktree
+        : undefined
+    return structuredSessionProjectSeedOptions(this.requireStore(), agent, worktree, launch.resume)
   }
 
   async resolveStructuredAgentSessionCreateIntent(
@@ -180,13 +185,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
     const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
-    const options = structuredLaunchSeedOptions(
-      {
-        ...settings,
-        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
-      },
-      input.agent
-    )
+    const options = await this.structuredAgentSessionLaunchSeedOptions(input.agent, {
+      worktree: input.worktree,
+      resume: Boolean(input.resumeFrom)
+    })
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
     const host = getStructuredAgentSessionHost()

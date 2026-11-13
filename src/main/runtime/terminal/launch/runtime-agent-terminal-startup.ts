@@ -39,6 +39,12 @@ import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
+import { applyProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
+
+/** Host settings with the workspace project's own launch defaults layered on top. */
+function workspaceLaunchSettings(store: RuntimeStore, workspace: TerminalWorkspaceLaunchScope) {
+  return applyProjectAgentLaunchDefaults(store.getSettings(), workspace.repo?.agentLaunchDefaults)
+}
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -71,7 +77,7 @@ export async function resolveAgentTerminalCreateOptions(
     (!callerSuppliedLaunch && store && opts.command && workspace.repo
       ? resolveBareAgentLaunchCommand({
           command: opts.command,
-          settings: store.getSettings(),
+          settings: workspaceLaunchSettings(store, workspace),
           platform: agentLaunchPlatformForScope(store, workspace),
           isRemote: Boolean(workspace.connectionId)
         })
@@ -128,7 +134,7 @@ export async function resolveAgentTerminalCreateOptions(
           workspace,
           opts,
           plannedAgent,
-          store.getSettings(),
+          workspaceLaunchSettings(store, workspace),
           runtime,
           host,
           sessionOptions

@@ -43,9 +43,13 @@ export type ComposerIdentityModel = {
   disabledTuiAgentKey: string
   disabledTuiAgents: TuiAgent[]
   enabledCatalogAgents: TuiAgent[]
+  /** The selected project's default agent, else the host-wide one. */
+  preferredDefaultAgent: TuiAgent | 'blank' | null
   fallbackDefaultAgent: TuiAgent
   tuiAgent: TuiAgent
   setTuiAgent: React.Dispatch<React.SetStateAction<TuiAgent>>
+  /** Changes the agent without counting as the user's pick, so project defaults keep applying. */
+  autoSelectTuiAgent: React.Dispatch<React.SetStateAction<TuiAgent>>
   connectionId: string | null
   isRemote: boolean
   runtimeEnvironmentId: string | null

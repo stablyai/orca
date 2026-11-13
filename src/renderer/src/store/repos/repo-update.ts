@@ -1,3 +1,4 @@
+import { normalizeProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -21,6 +22,11 @@ import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-ident
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
+  if (sanitized.agentLaunchDefaults != null) {
+    // Empty defaults clear on every host; JSON transport would drop an undefined key.
+    sanitized.agentLaunchDefaults =
+      normalizeProjectAgentLaunchDefaults(sanitized.agentLaunchDefaults) ?? null
+  }
   if ('defaultJiraProject' in sanitized) {
     const reference = normalizeJiraProjectReference(sanitized.defaultJiraProject)
     if (reference === undefined) {
@@ -152,6 +158,13 @@ export function createRepoUpdateActions(
                   )
                 ).repo
           if (
+            sanitizedUpdates.agentLaunchDefaults !== undefined &&
+            JSON.stringify(updatedRepo?.agentLaunchDefaults ?? null) !==
+              JSON.stringify(sanitizedUpdates.agentLaunchDefaults)
+          ) {
+            return false
+          }
+          if (
             sanitizedUpdates.projectGroupOrder !== undefined &&
             (!updatedRepo ||
               (updatedRepo.projectGroupOrder ?? null) !== sanitizedUpdates.projectGroupOrder)
@@ -194,6 +207,7 @@ export function createRepoUpdateActions(
               let mergedRepo: Repo = r
               const {
                 projectGroupOrder: _projectGroupOrder,
+                agentLaunchDefaults,
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
                 hiddenAt,
@@ -203,6 +217,12 @@ export function createRepoUpdateActions(
                 ...updatesWithoutClearSentinels
               } = sanitizedUpdates
               mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
+              if (agentLaunchDefaults === null) {
+                const { agentLaunchDefaults: _defaults, ...withoutDefaults } = mergedRepo
+                mergedRepo = withoutDefaults
+              } else if (agentLaunchDefaults !== undefined) {
+                mergedRepo = { ...mergedRepo, agentLaunchDefaults }
+              }
               if (sourceControlAi === null) {
                 const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } =
                   mergedRepo

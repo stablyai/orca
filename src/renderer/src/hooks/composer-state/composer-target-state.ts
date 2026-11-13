@@ -96,6 +96,7 @@ export function useComposerTargetState(
     persistDraft: composerTargetStore.persistDraft,
     selectedRepoConnectionId: runtimeTargetSelection.selectedRepoConnectionId,
     selectedRepoRuntimeEnvironmentId: runtimeTargetSelection.selectedRepoRuntimeEnvironmentId,
+    selectedRepoAgentLaunchDefaults: runtimeTargetSelection.selectedRepo?.agentLaunchDefaults,
     settings: composerTargetStore.settings
   })
   const asyncComposerState = useComposerAsyncState({

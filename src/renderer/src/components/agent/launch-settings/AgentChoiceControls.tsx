@@ -38,6 +38,8 @@ export type AgentChoiceControlsProps = {
   liveCatalog?: AgentSessionModelCatalogResult
   /** Tells the reader this list is the release's, because the host gave none. */
   usesSeedModels?: boolean
+  /** The model an unset choice inherits; it scopes option menus but is never saved. */
+  inheritedModel?: string
   onChange: (value: AgentDedicatedChoices | undefined) => void
 }
 
@@ -74,6 +76,7 @@ export function AgentChoiceFields({
   layout = 'stacked',
   liveCatalog,
   usesSeedModels,
+  inheritedModel,
   onSelect
 }: Omit<AgentChoiceControlsProps, 'onChange'> & {
   onSelect: (patch: AgentChoicePatch) => void
@@ -85,7 +88,8 @@ export function AgentChoiceFields({
   }
   const catalog = picksModel ? getAgentSessionOptionLaunchCatalog(agent) : null
   const selected = value
-  const model = catalog && selected?.model ? findCatalogModel(catalog, selected.model) : undefined
+  const optionModel = selected?.model ?? inheritedModel
+  const model = catalog && optionModel ? findCatalogModel(catalog, optionModel) : undefined
   const live =
     liveCatalog && liveCatalog.origin !== 'unknown' && liveCatalog.models.length
       ? { agent, catalog: liveCatalog, terminal: {} }
@@ -113,7 +117,7 @@ export function AgentChoiceFields({
       ? selected.model
       : undefined
   const liveEffort = live
-    ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
+    ? agentPickerEntryOptions(live, optionModel, 'terminal').find(({ id }) => id === 'effort')
     : undefined
   const effortKind =
     menu && selected?.model
@@ -121,7 +125,7 @@ export function AgentChoiceFields({
         ? { ...effort.kind, defaultValue: '' }
         : undefined
       : liveEffort?.kind
-  const options = sourceControlActionOptions(agent, selected?.model ?? '').flatMap((row) => {
+  const options = sourceControlActionOptions(agent, optionModel ?? '').flatMap((row) => {
     // CLI carrier mappings remain available to Args badges without advertising a mode control.
     if (
       (!model && row.option.category === 'mode') ||

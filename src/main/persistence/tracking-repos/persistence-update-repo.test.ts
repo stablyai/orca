@@ -78,6 +78,57 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('persists project launch defaults only on their owning host and supports clearing', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'same', path: '/local' }))
+    store.addRepo(makeRepo({ id: 'same', path: '/remote', executionHostId: 'ssh:server' }))
+    store.updateRepo(
+      { id: 'same', executionHostId: 'ssh:server' },
+      {
+        agentLaunchDefaults: {
+          defaultTuiAgent: 'codex',
+          agentLaunchChoices: { codex: { model: 'gpt-5.4', options: { effort: 'medium' } } }
+        }
+      }
+    )
+    await store.flushPendingOrThrowAsync()
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(
+      reopened.getRepos().find((repo) => repo.path === '/local')?.agentLaunchDefaults
+    ).toBeUndefined()
+    expect(
+      reopened.getRepos().find((repo) => repo.path === '/remote')?.agentLaunchDefaults
+    ).toEqual({
+      defaultTuiAgent: 'codex',
+      agentLaunchChoices: { codex: { model: 'gpt-5.4', options: { effort: 'medium' } } }
+    })
+    // A payload this host cannot read (the RPC schema turns it into undefined) must not clear.
+    reopened.updateRepo(
+      { id: 'same', executionHostId: 'ssh:server' },
+      { agentLaunchDefaults: undefined }
+    )
+    reopened.updateRepo(
+      { id: 'same', executionHostId: 'ssh:server' },
+      { agentLaunchDefaults: { defaultTuiAgent: 'future-agent' } as never }
+    )
+    expect(
+      reopened.getRepos().find((repo) => repo.path === '/remote')?.agentLaunchDefaults
+    ).toEqual({
+      defaultTuiAgent: 'codex',
+      agentLaunchChoices: { codex: { model: 'gpt-5.4', options: { effort: 'medium' } } }
+    })
+    reopened.updateRepo(
+      { id: 'same', executionHostId: 'ssh:server' },
+      { agentLaunchDefaults: null }
+    )
+    await reopened.flushPendingOrThrowAsync()
+    await closeTestStores()
+    expect(
+      (await createStore()).getRepos().find((repo) => repo.path === '/remote')?.agentLaunchDefaults
+    ).toBeUndefined()
+  })
+
   it('updateRepo targets one host when repo ids collide', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))

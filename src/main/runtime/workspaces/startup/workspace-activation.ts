@@ -8,6 +8,7 @@ import {
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { phoneWakeReport } from '../../../../shared/workspace-sleep'
 import type { Repo } from '../../../../shared/repo-types'
+import { applyProjectAgentLaunchDefaults } from '../../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
@@ -133,7 +134,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     }
     return resolveWorktreeStartupDraftAgent({
       repo,
-      settings: this.store.getSettings(),
+      settings: applyProjectAgentLaunchDefaults(this.store.getSettings(), repo.agentLaunchDefaults),
       ...(requestedAgent ? { requestedAgent } : {})
     })
   }
@@ -163,7 +164,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
       ...(requestedAgent ? { requestedAgent } : {}),
       ...(launchSource ? { launchSource } : {}),
-      settings: this.store.getSettings(),
+      settings: applyProjectAgentLaunchDefaults(this.store.getSettings(), repo.agentLaunchDefaults),
       getLaunchRuntime: (agent) => this.resolveStartupAgentLaunchRuntime(repo, agent)
     })
   }
@@ -198,7 +199,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
       ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
-      settings: this.store.getSettings(),
+      settings: applyProjectAgentLaunchDefaults(this.store.getSettings(), repo.agentLaunchDefaults),
       getLaunchRuntime: (agent) =>
         this.resolveStartupAgentLaunchRuntime(repo, agent, launchInputs?.launchScope),
       toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)

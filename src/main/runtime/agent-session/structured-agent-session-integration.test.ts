@@ -247,7 +247,7 @@ beforeEach(async () => {
     resolveStructuredAgentSessionLocalWorkspacePath: async () => `/repos/${WORKSPACE}`,
     getClientSettings: () => ({ nativeChatProviders: { claude: true, codex: true } }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
-    structuredAgentSessionLaunchSeedOptions: () => undefined,
+    structuredAgentSessionLaunchSeedOptions: async () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
         envelope: _envelope,

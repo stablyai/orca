@@ -40,6 +40,7 @@ import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventor
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
+import { projectAgentLaunchDefaultsForWorkspace } from '@/runtime/agent-launch-settings/project-agent-launch-preferences'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -116,7 +117,10 @@ export function useAgentMenuObservation(
     unresolvedTarget ? null : facts,
     desktopSettings,
     viewActive && (open || shown),
-    viewActive && open
+    viewActive && open,
+    useAppStateValue((state) =>
+      projectAgentLaunchDefaultsForWorkspace(state, workspace, input.executionHostId)
+    )
   )
   useAppStateValue(
     useShallow((state) => [
@@ -128,9 +132,8 @@ export function useAgentMenuObservation(
       state.settings?.agentPermissionDefault,
       state.settings?.agentPermissionOverrides,
       state.settings?.nativeChatSessionOptions,
-      settings?.agentLaunchChoices === desktopSettings?.agentLaunchChoices
-        ? state.settings?.agentLaunchChoices
-        : undefined,
+      // Project defaults always produce a new merged map, so an identity gate would miss global edits.
+      state.settings?.agentLaunchChoices,
       state.settings?.nativeChatPermissionMode
     ])
   )

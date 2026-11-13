@@ -8,11 +8,13 @@ type HostRuntimeEffectsInput = Pick<
   | 'ensureDetectedAgents'
   | 'ensureRemoteDetectedAgents'
   | 'ensureRuntimeDetectedAgents'
+  | 'autoSelectTuiAgent'
   | 'fallbackDefaultAgent'
   | 'folderTargetConnectionId'
   | 'isRemote'
   | 'loadHookCheckForRepo'
   | 'newWorkspaceDraft'
+  | 'preferredDefaultAgent'
   | 'repoId'
   | 'repoIdRef'
   | 'runtimeEnvironmentId'
@@ -20,8 +22,6 @@ type HostRuntimeEffectsInput = Pick<
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
   | 'selectedRepoSshStatus'
-  | 'setTuiAgent'
-  | 'settings'
   | 'tuiAgent'
 >
 
@@ -49,6 +49,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
   const {
+    autoSelectTuiAgent,
     commitHookCheckIfCurrent,
     connectionId,
     disabledTuiAgents,
@@ -60,6 +61,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     isRemote,
     loadHookCheckForRepo,
     newWorkspaceDraft,
+    preferredDefaultAgent,
     repoId,
     repoIdRef,
     runtimeEnvironmentId,
@@ -67,8 +69,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoSshStatus,
-    setTuiAgent,
-    settings,
     tuiAgent
   } = input
 
@@ -88,14 +88,14 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
         return
       }
       const enabledIds = filterEnabledTuiAgents(ids, disabledTuiAgents)
-      if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && enabledIds.length > 0) {
+      if (!newWorkspaceDraft?.agent && !preferredDefaultAgent && enabledIds.length > 0) {
         const firstInCatalogOrder = getAgentCatalog().find((a) => enabledIds.includes(a.id))
         if (firstInCatalogOrder) {
-          setTuiAgent(firstInCatalogOrder.id)
+          autoSelectTuiAgent(firstInCatalogOrder.id)
         }
       } else if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
         const firstEnabledDetected = getAgentCatalog().find((a) => enabledIds.includes(a.id))
-        setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
+        autoSelectTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
     })
     return () => {
@@ -109,7 +109,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     isRemote,
     selectedRepoSshStatus,
     disabledTuiAgents,
-    setTuiAgent
+    autoSelectTuiAgent
   ])
 
   useEffect(() => {

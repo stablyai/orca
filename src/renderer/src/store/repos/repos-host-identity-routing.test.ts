@@ -93,6 +93,37 @@ beforeEach(() => {
 })
 
 describe('repo slice host identity routing', () => {
+  it.each([true, false])(
+    'saves project defaults only when their host persists them (supported=%s)',
+    async (supported) => {
+      const defaults = {
+        defaultTuiAgent: 'codex' as const,
+        agentLaunchChoices: { codex: { model: 'project-model' } }
+      }
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'project-defaults',
+        ok: true,
+        result: {
+          repo: { ...remoteDuplicate, ...(supported ? { agentLaunchDefaults: defaults } : {}) }
+        },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+      const store = createTestStore()
+      store.setState({ repos: [localDuplicate, remoteDuplicate] })
+      await expect(
+        store
+          .getState()
+          .updateRepo('same-repo', { agentLaunchDefaults: defaults }, { hostId: 'runtime:env-1' })
+      ).resolves.toBe(supported)
+      expect(
+        store.getState().repos.find((repo) => repo.path === '/local')?.agentLaunchDefaults
+      ).toBeUndefined()
+      expect(
+        store.getState().repos.find((repo) => repo.path === '/remote')?.agentLaunchDefaults
+      ).toEqual(supported ? defaults : undefined)
+    }
+  )
+
   it('keeps queued focused-host repo updates pinned when focus changes', async () => {
     const firstUpdate = deferred<{
       id: string

@@ -1,4 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { normalizeProjectAgentLaunchDefaults } from '../../../shared/agent-launch/choices/project-agent-launch-defaults'
 import type { Repo } from '../../../shared/repo-types'
 import { type ExecutionHostId, getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
@@ -119,6 +120,7 @@ export class RepoUpdatePersistenceOperations {
       projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
+      agentLaunchDefaults?: Repo['agentLaunchDefaults'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
@@ -240,6 +242,21 @@ export class RepoUpdatePersistenceOperations {
     ) {
       delete repo.hiddenAt
       delete sanitizedUpdates.hiddenAt
+    }
+    if ('agentLaunchDefaults' in sanitizedUpdates) {
+      // Only null clears: undefined is a payload this host could not read (e.g. a newer agent id).
+      const defaults =
+        sanitizedUpdates.agentLaunchDefaults === null
+          ? null
+          : normalizeProjectAgentLaunchDefaults(sanitizedUpdates.agentLaunchDefaults)
+      if (defaults === null) {
+        delete repo.agentLaunchDefaults
+      }
+      if (defaults) {
+        sanitizedUpdates.agentLaunchDefaults = defaults
+      } else {
+        delete sanitizedUpdates.agentLaunchDefaults
+      }
     }
     if (
       'sourceControlAi' in sanitizedUpdates &&

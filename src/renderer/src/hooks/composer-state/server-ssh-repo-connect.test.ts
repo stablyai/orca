@@ -28,6 +28,7 @@ function renderEffects(repoId: string, targetId: string, hostId: ExecutionHostId
   return renderHook(() =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the connect path reads only the refs and store set here; the rest are inert stubs.
     useHostRuntimeEffects({
+      autoSelectTuiAgent: vi.fn(),
       commitHookCheckIfCurrent: vi.fn(),
       connectionId: null,
       disabledTuiAgents: [],
@@ -39,6 +40,7 @@ function renderEffects(repoId: string, targetId: string, hostId: ExecutionHostId
       isRemote: false,
       loadHookCheckForRepo: vi.fn(),
       newWorkspaceDraft: null,
+      preferredDefaultAgent: null,
       repoId: null,
       repoIdRef: { current: repoId },
       runtimeEnvironmentId: null,
@@ -47,8 +49,6 @@ function renderEffects(repoId: string, targetId: string, hostId: ExecutionHostId
       selectedRepoHookContextKey: null,
       selectedRepoIsGit: false,
       selectedRepoSshStatus: null,
-      setTuiAgent: vi.fn(),
-      settings: null,
       tuiAgent: 'claude'
     } as unknown as Parameters<typeof useHostRuntimeEffects>[0])
   )
