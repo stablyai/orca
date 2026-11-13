@@ -356,6 +356,8 @@ const ORCA_CLI_MARKDOWN = [
   "",
   "Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.",
   "",
+  "Workspace cleanup: `ORCA workspace cleanup preview --json` shows what the user's cleanup rules would remove now and why each other workspace stays (`rows[].evaluation`). `ORCA workspace cleanup run --json` runs the rules now, on the same path as the scheduled runner (every workspace is re-checked right before removal, nothing is forced), and prints the finished run's rows. `ORCA workspace cleanup report --json` lists recent runs; `nextRunAt` is null when no rule is on. Rules live in Orca settings; these commands never change them. Run `run` only when the user asks for cleanup.",
+  "",
   "Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.",
   "`hide` hides them; `inherit` clears the repo override and follows the global default.",
   "Per-worktree visibility rules still apply.",
