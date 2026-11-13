@@ -51,7 +51,7 @@ export function MobileHomeTabBar(props: {
   return (
     <SafeAreaView
       style={styles.bar}
-      edges={{ bottom: 'maximum' }}
+      edges={['bottom']}
       // Android has no 'tabbar' role and crashes on mount; iOS keeps its tab-bar trait.
       accessibilityRole={Platform.OS === 'ios' ? 'tabbar' : 'tablist'}
     >
