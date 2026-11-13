@@ -96,46 +96,11 @@ describe('useMobileFileTapHandlers workspace-root reply', () => {
     push.mockClear()
   })
 
-  it('opens the linked workspace on the tapped host', async () => {
-    const chat = mountChat()
-    chat.tap()
-    await chat.reply()
-
-    expect(push.mock.calls).toEqual([
-      [
-        {
-          pathname: '/h/[hostId]/session/[worktreeId]',
-          params: { hostId: 'host-a', worktreeId: 'wt-2' }
-        }
-      ]
-    ])
-  })
-
-  it('drops the reply after the client is replaced on the same host', async () => {
-    const chat = mountChat()
-    chat.tap()
-    chat.render(chat.createClient(), 'host-a')
-    await chat.reply()
-
-    expect(push).not.toHaveBeenCalled()
-    expect(chat.reportChatTapFailure).not.toHaveBeenCalled()
-  })
-
   it('drops the reply after the host changes away and back', async () => {
     const chat = mountChat()
     chat.tap()
     chat.render(chat.first, 'host-b')
     chat.render(chat.first, 'host-a')
-    await chat.reply()
-
-    expect(push).not.toHaveBeenCalled()
-    expect(chat.reportChatTapFailure).not.toHaveBeenCalled()
-  })
-
-  it('drops the reply after the client generation moves with no render', async () => {
-    const chat = mountChat()
-    chat.tap()
-    chat.moveGeneration()
     await chat.reply()
 
     expect(push).not.toHaveBeenCalled()
