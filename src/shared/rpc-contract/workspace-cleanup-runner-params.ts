@@ -12,3 +12,12 @@ export const WorkspaceCleanupRunNowParams = z
   .object({ trigger: z.enum(['run-now', 'cli']).optional() })
   .strict()
   .default({})
+
+/** The workspaces this client holds unsaved editor buffers in on this host; replaces its last report. */
+export const WorkspaceCleanupReportUnsavedEditorsParams = z
+  .object({
+    worktreeIds: z.array(z.string().min(1).max(4096)).max(5000),
+    /** One per client window: windows sharing a socket each keep their own report. */
+    reporterId: z.string().min(1).max(128).optional()
+  })
+  .strict()

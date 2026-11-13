@@ -6,6 +6,13 @@ import type {
   WorkspaceCleanupWaiting
 } from './workspace-cleanup-evaluation'
 
+// Workspaces no rule watches are not part of a run's receipt.
+export const WORKSPACE_CLEANUP_UNWATCHED_CAUSES: ReadonlySet<WorkspaceCleanupKeepCause> = new Set([
+  'not-removable',
+  'project-off',
+  'rules-off'
+])
+
 export const WORKSPACE_CLEANUP_REPORT_RUN_LIMIT = 20
 // Matches T3 Code's report cap; a run over hundreds of workspaces must not bloat the sidecar.
 export const WORKSPACE_CLEANUP_REPORT_ROW_LIMIT = 200

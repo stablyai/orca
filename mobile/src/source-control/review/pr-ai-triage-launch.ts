@@ -12,19 +12,39 @@ import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-l
 import { projectSourceControlActionLaunch } from '../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { translate } from '../../i18n/mobile-i18n'
 import { readAgentLaunchNotice } from '../../session/agent-launch/agent-launch-request'
+import type { AgentLaunchResult } from '../../../../src/shared/agent-launch/contracts/agent-launch-intent'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import type { LaunchedAgentOpens } from '../../session/agent-launch/launched-agent-opener'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 
 export type MobilePromptedAgentLaunch =
-  | { kind: 'sent'; warning?: string }
+  | { kind: 'sent'; opens: LaunchedAgentOpens; warning?: string }
   /** The agent started but `prompt`, the text as sent, did not reach it; the caller offers it. */
-  | { kind: 'prompt-not-sent'; prompt: string; warning?: string }
+  | { kind: 'prompt-not-sent'; prompt: string; opens: LaunchedAgentOpens; warning?: string }
   /** Nothing started; `message` says why. */
   | { kind: 'not-started'; message: string }
   /** The agent may be running; do not launch again until the user has looked. */
   | { kind: 'unconfirmed'; message: string }
 
 export const AGENT_PROMPT_NOT_SENT_MESSAGE = "The agent started, but the prompt wasn't sent."
+
+// A chat's pane key is derived as a notification's is, so the session finds the tab the same way.
+export function launchedAgentOpens(result: AgentLaunchResult): LaunchedAgentOpens {
+  const { outcome, worktreeId } = result
+  return outcome.kind === 'structured'
+    ? {
+        worktreeId,
+        paneKey: structuredAgentSessionPaneKey(
+          outcome.tabId ?? structuredAgentSessionTabId(outcome.sessionId),
+          outcome.sessionId
+        )
+      }
+    : { worktreeId, paneKey: outcome.paneKey ?? null }
+}
 
 export function agentPromptNotSentMessage(): string {
   return translate(
@@ -100,7 +120,7 @@ export async function launchAgentWithPrompt(args: {
   switch (launched.kind) {
     case 'launched': {
       const warning = readAgentLaunchNotice(launched.result)
-      const extra = warning ? { warning } : {}
+      const extra = { opens: launchedAgentOpens(launched.result), ...(warning ? { warning } : {}) }
       return launched.promptDelivered
         ? { kind: 'sent', ...extra }
         : { kind: 'prompt-not-sent', prompt: text, ...extra }
@@ -138,6 +158,7 @@ export function promptedLaunchNotice(
   error: string | null
   warning: string | null
   undeliveredPrompt: string | null
+  opens: LaunchedAgentOpens | null
 } {
   switch (result.kind) {
     case 'sent':
@@ -146,7 +167,8 @@ export function promptedLaunchNotice(
         success: agentStartedMessage(workspaceLabel),
         error: null,
         warning: result.warning ?? null,
-        undeliveredPrompt: null
+        undeliveredPrompt: null,
+        opens: result.opens
       }
     case 'prompt-not-sent':
       return {
@@ -154,7 +176,8 @@ export function promptedLaunchNotice(
         success: null,
         error: agentPromptNotSentMessage(),
         warning: result.warning ?? null,
-        undeliveredPrompt: result.prompt
+        undeliveredPrompt: result.prompt,
+        opens: result.opens
       }
     case 'not-started':
     case 'unconfirmed':
@@ -163,7 +186,8 @@ export function promptedLaunchNotice(
         success: null,
         error: result.message,
         warning: null,
-        undeliveredPrompt: null
+        undeliveredPrompt: null,
+        opens: null
       }
   }
 }

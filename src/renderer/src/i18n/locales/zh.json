@@ -1800,9 +1800,6 @@
         "pasteTooLarge": "粘贴内容过大"
       },
       "useMacosTccPromptNotice": {
-        "title": "看到\"Orca 想要访问…\"提示？",
-        "description": "当 Orca 中运行的代理或终端工具尝试访问受保护的文件时，macOS 可能会显示权限信息，请在\"设置\"中授予\"完全磁盘访问权限\"，以减少此类提示",
-        "openSettings": "打开设置",
         "dismiss": "不再显示"
       },
       "useInstalledAgentSkills": {
@@ -3439,7 +3436,6 @@
             "7eee951968": "检查工作区安全",
             "191f0bc98e": "关闭",
             "7ae2ad30f4": "刷新",
-            "b2c1331844": "删除不活动的工作区",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
             "9cc26c019d": "移除",
@@ -3449,7 +3445,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
             "74f6c16279": "返回"
           },
@@ -4039,7 +4034,6 @@
             "1d411fb6a5": "为此仓库保存快捷命令",
             "8f1e971966": "添加快捷命令",
             "3220e2da27": "该快捷命令将从您保存的列表中删除",
-            "e8e1a52edb": "删除\"{{value0}}\"？",
             "37e1bb90ce": "运行：{{value0}}",
             "77ac113df0": "开始 {{value0}}: {{value1}}",
             "7b1c9d6ae1": "执行",
@@ -5413,7 +5407,6 @@
           "loading": "正在加载内容…",
           "deleteFailed": "Orca 无法从云端删除此内容",
           "deleted": "已从云端删除",
-          "confirmDelete": "确认删除",
           "moreActions": "{{name}} 的更多操作",
           "deletePackage": "从云端删除"
         },
@@ -5619,8 +5612,6 @@
           "5cc1a6701c": "打开设置",
           "2b56b35f53": "您可以在\"设置\"中更改此设置",
           "dd3a45bbbd": "下次我们将跳过此确认",
-          "fc23c4cbdf": "删除工作区",
-          "86f0ae1257": "删除工作区",
           "removeFolderProjectInstead": "请移除文件夹项目，而不是删除此工作区",
           "gitBlocksMainWorktree": "Git 不允许移除主工作树",
           "removeBatchFolder_other": "从 Orca 移除<target>{{count}} 个工作区</target>。磁盘上的项目文件夹不会被删除",
@@ -5717,11 +5708,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "取消",
-          "591f330288": "删除项目组",
           "2c14ce677a": "正在删除...",
           "0e0e6764af": "包含的项目",
           "55f75628c0": "不会删除磁盘上的项目文件夹",
-          "fec7e9c8ae": "删除组",
           "removeContainedProjects_other": "移除包含的 {{count}} 个项目",
           "deleteGroupDescription": "删除 <name>{{name}}</name>",
           "moreProjects_other": "另有 {{count}} 个"
@@ -6455,9 +6444,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "取消",
           "cf95e3b5bb": "关闭",
-          "deleteWorkspace": "删除工作区",
           "deleting": "正在删除…",
-          "forceDelete": "强制删除",
           "forceDeleting": "正在强制删除…"
         },
         "local": {
@@ -6759,16 +6746,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "审查保留的分支",
           "f21976c9a8": "选择要强制删除的本地分支，未选择的分支保留在其存储库中",
           "38c947f7c5": "选择全部",
           "9602129d38": "已选择 {{value1}} 中的 {{value0}}",
           "ee39e872d5": "可能会取消合并",
           "676db406fd": "头不可用",
-          "285e1e4882": "取消",
-          "a0f9863597_one": "强制删除 {{count}} 分支",
-          "a0f9863597_other": "强制删除 {{count}} 分支",
-          "a0f9863597": "强制删除 {{count}} 分支"
+          "285e1e4882": "取消"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "跳转到顶部"
@@ -8066,7 +8049,6 @@
           "c6b155911b": "所有命令",
           "c36912efd5": "从选项卡栏中的\"快捷命令\"按钮运行它们，或者在任何终端内右键单击",
           "3d9dc558e8": "该快捷命令将从您保存的列表中删除",
-          "3edf3deaf8": "删除\"{{value0}}\"？",
           "9fcfc29519": "插入",
           "9b3e338d62": "进入",
           "4ccc63da87": "代理",
@@ -8527,7 +8509,6 @@
           "6503182299": "入门清单",
           "82db1b7de4": "入门清单，已完成 {{value0}}/{{value1}}，显示设置指南",
           "df38d612b7": "尚未添加项目",
-          "3e483e256b": "没有匹配的项目设置",
           "progressComplete": "已完成 {{value0}}/{{value1}}"
         },
         "ShortcutFilterRail": {
@@ -13090,7 +13071,6 @@
             "abf59262fb": "启动智能体前请查看并编辑完整的命令输入",
             "4ede779461": "使用 AI 解决评审冲突",
             "3b203c62f8": "这将从 PR 中永久删除该评论",
-            "ea9b649ce3": "删除评论？",
             "5788d1059d": "无法更新评论主题，检查 GitHub API 预算",
             "07871c0589": "链接另一个 PR",
             "7f4489f370": "刷新",
@@ -13958,8 +13938,7 @@
                   "5ddd8cac7f": "放弃所有已暂存的更改？",
                   "d4df3a61df": "放弃对\"{{value0}}\"的更改？",
                   "5c0bdbc4cb": "恢复\"{{value0}}\"？",
-                  "d97bf697c9": "这将永久删除该文件，此操作无法撤销",
-                  "96c772bee9": "删除\"{{value0}}\"？"
+                  "d97bf697c9": "这将永久删除该文件，此操作无法撤销"
                 },
                 "dialog": {
                   "3bc61dc989": "取消",
@@ -14195,7 +14174,6 @@
             "unresolved": "无法确定哪个主机拥有此工作区，请检查连接后重试"
           },
           "useFileDeletion": {
-            "d979a4fbb5": "永久删除\"{{value0}}\"？",
             "92276aceb7": "删除",
             "7fb9435c86": "这会永久删除远程主机上的目录及其内容，此操作无法撤销",
             "23e98f192f": "这会永久删除远程主机上的文件，此操作无法撤销",
@@ -14376,7 +14354,6 @@
             "resumeInNewCliTooltipChat": "此聊天保持不变"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "要删除此会话吗？",
             "description": "\"{{value0}}\"将被删除，删除后，也将无法通过 {{value1}} 自身的命令行恢复",
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
@@ -17326,9 +17303,7 @@
           "2faecab10b": "立即运行",
           "13118faadf": "未知项目",
           "73f630b49d": "取消",
-          "9adfab2596": "删除外部自动化",
           "1e2e41392f": "不要再问",
-          "080dcb5fbb": "删除自动化",
           "19a6e30eae": "刷新自动化",
           "77c2778945": "自动化",
           "e1bf9b1512": "工作区不可用",
@@ -18174,7 +18149,6 @@
       },
       "artifacts": {
         "ArtifactsPage": {
-          "deleteTitle": "删除产物？",
           "deleteDescription": "“{{name}}” 将无法再通过其公开链接访问",
           "delete": "删除",
           "signInAgain": "重新登录 Orca 以加载产物",
@@ -20084,11 +20058,8 @@
           "candidateName": "{{value1}} 上的 {{value0}}"
         },
         "stopAgents": {
-          "titleMany": "停止这些代理？",
           "descriptionOne": "删除将停止代理当前任务",
-          "descriptionMany": "删除将停止这些代理当前任务",
-          "confirm": "停止代理并删除",
-          "confirmOne": "停止代理并删除"
+          "descriptionMany": "删除将停止这些代理当前任务"
         },
         "candidateRow": {
           "gitChip": {
@@ -20316,7 +20287,7 @@
         "turnDiffsSearchChangedFiles": "已更改文件",
         "turnDiffsSearchEdits": "编辑",
         "markNewMessagesTitle": "返回聊天时标记新消息",
-        "markNewMessagesCopy": "返回聊天时，如果错过的内容很长或有其他人发了消息，会用“新消息”分隔线标出你错过的内容并滚动到那里。看过之后它会淡出。",
+        "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
         "markNewMessagesSearchUnread": "未读"
       },
       "voice": {
@@ -21326,10 +21297,7 @@
       "delete": "删除",
       "restore": "恢复",
       "discard": "放弃",
-      "discardAll": "全部丢弃",
-      "deleteUntrackedTitle_one": "删除 {{count}} 个未跟踪文件？",
-      "deleteUntrackedTitle_other": "删除 {{count}} 个未跟踪文件？",
-      "deleteCount": "删除 {{count}} 个"
+      "discardAll": "全部丢弃"
     },
     "createReviewFailure": {
       "authRequiredCommand": "{{providerName}} 未通过身份验证。下一步：在此环境中运行 {{command}}",
@@ -21754,7 +21722,8 @@
   "common": {
     "retry": "重试",
     "cancel": "取消",
-    "unassigned": "未分配"
+    "unassigned": "未分配",
+    "delete": "删除"
   },
   "fileExplorer": {
     "root": {
@@ -21774,8 +21743,7 @@
     "trashFailed": {
       "titleRecycleBin": "无法将“{{name}}”移到回收站。是否永久删除？",
       "titleTrash": "无法将“{{name}}”移到废纸篓。是否永久删除？",
-      "description": "此操作无法撤销",
-      "confirm": "永久删除"
+      "description": "此操作无法撤销"
     }
   },
   "sparsePreset": {
@@ -22142,7 +22110,6 @@
     "nestedRemoval": {
       "refreshFailed": "无法刷新工作区列表",
       "review": "连同嵌套工作树一起删除…",
-      "title": "删除工作区和嵌套工作树？",
       "description": "这将永久删除“{{name}}”、下面列出的每个嵌套工作树及其中的所有文件（包括未提交的更改），它们的终端和代理将被停止",
       "detached": "分离 HEAD",
       "loading": "正在检查嵌套工作树…",
@@ -22150,7 +22117,6 @@
       "cancel": "取消",
       "retry": "重新检查",
       "deleting": "正在删除…",
-      "confirm": "删除所有列出的工作树",
       "preservedBranches": "部分嵌套工作树分支已保留"
     },
     "setupTerminalTitle": "初始设置"

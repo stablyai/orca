@@ -9,7 +9,7 @@ import { getManagedScript } from '../../../../codex/hooks/definitions/codex-hook
 import { getSyntheticAgentTerminalTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import { extractAllOscTitles } from '../../../../../shared/agent-status/title/osc-title-extraction'
 import { extractOscTitleScanTail } from '../../../../../shared/osc-title-scan-tail'
-import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
+import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },

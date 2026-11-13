@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { TERMINAL_MAC_YEN_SETTING_ID } from './terminal-advanced-platform-search'
 import {
   SettingsRow,
   SettingsSegmentedControl,
@@ -123,6 +124,7 @@ export function TerminalMacKeyboardSection({
       </SearchableSetting>
 
       <SearchableSetting
+        id={TERMINAL_MAC_YEN_SETTING_ID}
         title={t(
           'auto.components.settings.TerminalPane.19f4935159',
           'JIS Yen (¥) to Backslash (\\\\)'

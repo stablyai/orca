@@ -1,4 +1,4 @@
-import { getStatus } from '../../git/source-control/status-read'
+import { getStatus } from '../../git/source-control/status/status-read'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
