@@ -478,7 +478,6 @@
 23 test-no-wall-clock:src/main/runtime/terminal/output/terminal-query-responder.test.ts
 3 test-no-wall-clock:src/main/runtime/terminal/query/orca-runtime-codex-idle-title-chat-address.test.ts
 1 test-no-wall-clock:src/main/runtime/terminal/recovery/terminal-pane-recovery-liveness-gate.test.ts
-4 test-no-wall-clock:src/main/runtime/terminal/wait/tui-idle-hook-lane-runtime.test.ts
 1 test-no-wall-clock:src/main/runtime/workspaces/process-listing/runtime-worktree-structured-agent-rows-liveness.test.ts
 1 test-no-wall-clock:src/main/runtime/workspaces/removal/owned-session-teardown-policy.test.ts
 6 test-no-wall-clock:src/main/skills/install/skill-bundle-process-termination.integration.test.ts

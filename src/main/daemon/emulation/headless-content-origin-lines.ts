@@ -1,4 +1,4 @@
-import type { Terminal } from '@xterm/headless'
+import type { IBufferCell, Terminal } from '@xterm/headless'
 import {
   getTerminalLineOrigins,
   setTerminalLineOrigins,
@@ -8,7 +8,8 @@ import {
   type TerminalOriginRuns
 } from '../../../shared/terminal/output/terminal-content-origin'
 
-export type OriginCell = object
+export type OriginCell = IBufferCell
+type OriginCellAttributes = { fg?: number; bg?: number }
 export type OriginBufferLine = {
   length: number
   getString(index: number): string
@@ -16,7 +17,12 @@ export type OriginBufferLine = {
   translateToString(trim?: boolean, start?: number, end?: number, columns?: number[]): string
   loadCell(index: number, cell: OriginCell): OriginCell
   setCell(index: number, cell: OriginCell): void
-  setCellFromCodepoint(index: number, code: number, width: number, attrs: object): void
+  setCellFromCodepoint(
+    index: number,
+    code: number,
+    width: number,
+    attrs: OriginCellAttributes
+  ): void
   addCodepointToCell(index: number, code: number, width: number): void
   set(index: number, cell: [number, string, number, number]): void
   insertCells(pos: number, count: number, cell: OriginCell): void

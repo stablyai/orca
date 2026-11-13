@@ -328,6 +328,7 @@ it.each([100, 1000])(
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             runVisits++
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Transparent test instrumentation must preserve arbitrary array accessors.
           return Reflect.get(target, key, receiver)
         }
       })
@@ -350,6 +351,7 @@ it.each([100, 1000])(
               }
             }
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Preserve Map accessors while observing only iteration on this instance.
           const value = Reflect.get(target, key, target)
           return typeof value === 'function' ? value.bind(target) : value
         }
