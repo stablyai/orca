@@ -175,7 +175,6 @@
 2 src/renderer/src/components/task-page/use-task-page-source-availability.ts
 2 src/renderer/src/components/task-page/use-task-page-store-bindings.ts
 1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-controller.ts
-1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-lifecycle.ts
 1 src/renderer/src/components/terminal-pane/layout/close/retire-unbound-runtime-terminal-pane.ts
 2 src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-admission.ts
 2 src/renderer/src/components/terminal-pane/layout/close/use-terminal-pane-close-actions.ts
