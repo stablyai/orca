@@ -2652,9 +2652,11 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "title": "Seeing “Orca would like to access…” prompts?",
-        "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
-        "openSettings": "Open Settings",
+        "titleOne": "macOS just interrupted an agent",
+        "titleMany": "macOS interrupted your agents {{count}}×",
+        "subtitle": "Full Disk Access stops these file prompts.",
+        "enable": "Turn on Full Disk Access",
+        "close": "Close",
         "dismiss": "Don't show again"
       },
       "useMacTccAttributionSeveredNotice": {

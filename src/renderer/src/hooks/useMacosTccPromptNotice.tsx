@@ -7,8 +7,8 @@ import {
   usePluginLanguagePackStore,
   usePluginLanguagePacks
 } from '@/store/plugins/localization/plugin-language-packs'
-import { translate } from '@/i18n/i18n'
 import { resolveUiLocale } from '@/i18n/supported-languages'
+import { FullDiskAccessNudgeToast } from '@/components/macos-permissions/FullDiskAccessNudgeToast'
 import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import {
   dismissMacosTccPromptNotice,
@@ -41,39 +41,38 @@ export function useMacosTccPromptNotice(): void {
     if (!localeReady) {
       return
     }
-    return subscribeToMacosTccPromptNotice(window.api?.macosTccPrompts, (_, acknowledge) => {
-      toast.warning(
-        translate(
-          'auto.hooks.useMacosTccPromptNotice.title',
-          'Seeing “Orca would like to access…” prompts?'
-        ),
-        {
-          description: translate(
-            'auto.hooks.useMacosTccPromptNotice.description',
-            'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
+    return subscribeToMacosTccPromptNotice(
+      window.api?.macosTccPrompts,
+      ({ promptCount }, acknowledge) => {
+        toast.custom(
+          (toastId) => (
+            <FullDiskAccessNudgeToast
+              promptCount={promptCount}
+              onClose={() => toast.dismiss(toastId)}
+              onEnable={() => {
+                acknowledge()
+                openSettingsPage()
+                openSettingsTarget({
+                  pane: 'developer-permissions',
+                  repoId: null,
+                  sectionId: FULL_DISK_ACCESS_SETTINGS_TARGET_ID
+                })
+                toast.dismiss(toastId)
+              }}
+              onDontShowAgain={() => {
+                void dismissMacosTccPromptNotice(window.api?.macosTccPrompts)
+                toast.dismiss(toastId)
+              }}
+            />
           ),
-          duration: Infinity,
-          onDismiss: acknowledge,
-          action: {
-            label: translate('auto.hooks.useMacosTccPromptNotice.openSettings', 'Open Settings'),
-            onClick: () => {
-              acknowledge()
-              openSettingsPage()
-              openSettingsTarget({
-                pane: 'developer-permissions',
-                repoId: null,
-                sectionId: FULL_DISK_ACCESS_SETTINGS_TARGET_ID
-              })
-            }
-          },
-          cancel: {
-            label: translate('auto.hooks.useMacosTccPromptNotice.dismiss', "Don't show again"),
-            onClick: () => {
-              void dismissMacosTccPromptNotice(window.api?.macosTccPrompts)
-            }
+          {
+            duration: Infinity,
+            closeButton: false,
+            unstyled: true,
+            onDismiss: acknowledge
           }
-        }
-      )
-    })
+        )
+      }
+    )
   }, [localeReady, openSettingsPage, openSettingsTarget])
 }

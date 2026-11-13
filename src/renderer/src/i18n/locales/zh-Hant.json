@@ -2061,9 +2061,6 @@
         "unreadableSkillSource": "技能資料夾沒有回應，因此此狀態可能不完整。"
       },
       "useMacosTccPromptNotice": {
-        "title": "看到「Orca 想要存取…」提示？",
-        "description": "當 Orca 中執行的代理程式或終端機工具嘗試存取受保護的檔案時，macOS 可能會顯示權限訊息。請在「設定」中授予「完整磁碟存取權」，以減少此類提示。",
-        "openSettings": "開啟設定",
         "dismiss": "不再顯示"
       },
       "useMacTccAttributionSeveredNotice": {

@@ -1894,9 +1894,6 @@
         "unreadableSkillSource": "Un dossier de skill n'a pas répondu ; cet état peut donc être incomplet."
       },
       "useMacosTccPromptNotice": {
-        "title": "Vous voyez des invites « Orca souhaite accéder à… » ?",
-        "description": "Des messages d'autorisation macOS peuvent apparaître quand un agent ou un outil de terminal exécuté dans Orca tente d'accéder à des fichiers protégés. Accordez l'Accès complet au disque dans les paramètres pour réduire ces invites.",
-        "openSettings": "Ouvrir les paramètres",
         "dismiss": "Ne plus afficher"
       },
       "useMacTccAttributionSeveredNotice": {
