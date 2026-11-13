@@ -121,6 +121,21 @@ describe('RelayOriginPool drain retry cap', () => {
     expect(Math.max(...deadCell)).toBeGreaterThan(250_000)
   })
 
+  it('falls back to the full backoff when the director alternates between failing cells', async () => {
+    const deadCell = await asksDuring(THIRTY_MINUTES, async () => assignment)
+    harness.origins.length = 0
+    harness.failOpens = false
+    let epoch = 1
+    const alternating = await asksDuring(THIRTY_MINUTES, async () => {
+      epoch += 1
+      const cell = epoch % 2 === 0 ? 'a' : 'b'
+      return { ...assignment, cellUrl: `https://relay-${cell}.example`, assignmentEpoch: epoch }
+    })
+    // Each of the two cells gets the short cap once; after that the rate matches a dead cell.
+    expect(alternating.length).toBeLessThanOrEqual(deadCell.length + 2)
+    expect(Math.max(...alternating)).toBeGreaterThan(250_000)
+  })
+
   it('retries within 60s each time the director names a different cell that then fails', async () => {
     let epoch = 1
     const gaps = await asksDuring(THIRTY_MINUTES, async () => {

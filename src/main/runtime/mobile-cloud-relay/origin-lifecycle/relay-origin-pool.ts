@@ -13,8 +13,9 @@ import {
 import { RelayControlRotation } from './relay-control-rotation'
 
 // The director answered and only a cell it newly named failed: retry that once sooner. Director
-// failures, and the same cell failing again, keep the full backoff: every retry re-asks the
-// director, so a short cap on a dead cell would multiply director load for every host on it.
+// failures, and any cell failing again in the same episode (even alternating A, B, A), keep the
+// full backoff: every retry re-asks the director, so a short cap on dead cells would multiply
+// director load for every host on them.
 const CELL_CONNECT_RETRY_MAX_MS = 60_000
 
 export class RelayOriginPool {
@@ -30,7 +31,8 @@ export class RelayOriginPool {
   private readonly basisOrigins = this.retirement.basis
   private assignment: RelayAssignment | null = null
   private deferredAssignment: RelayAssignment | null = null
-  private failedCellUrl: string | null = null
+  // Cells that failed since the last success: each gets the short cap once.
+  private readonly failedCells = new Set<string>()
   private relayJwt: string | null = null
   private readonly rotation: RelayControlRotation
   private rotationPromise: Promise<void> | null = null
@@ -257,10 +259,13 @@ export class RelayOriginPool {
     this.retirement.schedule(origin, graceMs)
     this.retirement.maybeClose(origin)
   }
-  // attempts is 0 right after a success, so a cell that worked before counts as new again.
+  // attempts is 0 only right after a success, which starts a new episode.
   private isNewCellFailure(cellUrl: string): boolean {
-    const repeated = this.drainRetry.attempts > 0 && this.failedCellUrl === cellUrl
-    this.failedCellUrl = cellUrl
+    if (this.drainRetry.attempts === 0) {
+      this.failedCells.clear()
+    }
+    const repeated = this.failedCells.has(cellUrl)
+    this.failedCells.add(cellUrl)
     return !repeated
   }
 
