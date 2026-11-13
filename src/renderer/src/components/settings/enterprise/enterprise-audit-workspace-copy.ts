@@ -82,7 +82,7 @@ export const WORKSPACE_AUDIT_ACTIONS: Record<string, ActionCopy> = {
       ),
     // Says who got it: themselves, a teammate by name, or someone who has since left. With no
     // name to give, the plain sentences above are used. The previous owner is left out.
-    detailed: (t, detail, _locale, { name, actorUserId }) => {
+    detailed: (t, detail, _locale, { name, actorUserId, nameOf }) => {
       const owner = typeof detail.toUserId === 'string' ? detail.toUserId : null
       if (owner && owner === actorUserId) {
         return name
@@ -107,8 +107,15 @@ export const WORKSPACE_AUDIT_ACTIONS: Record<string, ActionCopy> = {
               'Made a former member the owner of a workspace'
             )
       }
-      const person =
-        typeof detail.toUserName === 'string' ? detail.toUserName.trim().slice(0, 80) : ''
+      // The control plane names people who have used Orca Cloud in this team; a teammate who has
+      // not is named from the team roster, like the person column.
+      const person = (
+        (typeof detail.toUserName === 'string' ? detail.toUserName : '') ||
+        (owner ? nameOf(owner) : null) ||
+        ''
+      )
+        .trim()
+        .slice(0, 80)
       if (!person) {
         return null
       }

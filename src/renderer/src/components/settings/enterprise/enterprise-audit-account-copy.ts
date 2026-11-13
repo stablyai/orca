@@ -16,8 +16,15 @@ export type ActionCopy = {
     t: Translate,
     detail: Detail,
     locale: string | undefined,
-    /** The target's name when known, and who did it. */
-    about: { name: string | null; actorUserId: string | null }
+    /**
+     * The target's name when known, who did it, and a way to name another teammate the event
+     * points at by id (from the team roster) when the control plane could not.
+     */
+    about: {
+      name: string | null
+      actorUserId: string | null
+      nameOf: (userId: string) => string | null
+    }
   ) => string | null
 }
 
