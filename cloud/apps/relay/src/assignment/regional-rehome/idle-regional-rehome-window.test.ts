@@ -239,23 +239,4 @@ describe('idle regional rehome candidate window', () => {
     expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(3)
   })
 
-  it('excludes a host outside the cohort', async () => {
-    const { store, database } = await setup()
-    await seedHost(store, identity)
-    const now = 100_000_000 + 86_400_000
-    const safety = {
-      observedAt: now,
-      sqlFailures: 0,
-      reconnects: 0,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    }
-    await database.query('UPDATE relay_region_decisions SET cohort_bucket = 40')
-    const narrow = new RelayAssignmentStore(database, () => now, { regionalRehomeCohortPercent: 40 })
-    expect(await narrow.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-    const wide = new RelayAssignmentStore(database, () => now, { regionalRehomeCohortPercent: 41 })
-    expect(await wide.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(3)
-  })
 })

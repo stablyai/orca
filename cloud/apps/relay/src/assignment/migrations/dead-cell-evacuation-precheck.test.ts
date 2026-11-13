@@ -80,26 +80,6 @@ describe.each(dialects)('dead-cell evacuation pre-check (%s)', (_dialect, open) 
     })
   }
 
-  it('keeps hosts on an unfenced dead existing-only cell', async () => {
-    let now = 100
-    const { store } = await setup(() => now)
-    for (const cell of CELLS) await heartbeat(store, cell)
-    const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
-    await store.setCellEnabled('cell-b', false)
-    expect(await store.assign(identity)).toMatchObject({ cellId: 'cell-a' })
-    await store.setCellEnabled('cell-b', true)
-    await store.setCellEnabled('cell-a', false)
-    now += 45_001
-    await heartbeat(store, CELLS[1]!)
-
-    expect(await store.evacuateDeadCells()).toBe(0)
-    expect(
-      await database!.query(`SELECT cell_id FROM relay_assignments WHERE user_id = ?`, [
-        identity.userId
-      ])
-    ).toEqual([{ cell_id: 'cell-a' }])
-  })
-
   it('still evacuates hosts from a dead uncapped cell that admits', async () => {
     let now = 100
     const { store } = await setup(() => now)

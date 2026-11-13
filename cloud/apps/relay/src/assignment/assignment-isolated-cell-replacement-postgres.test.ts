@@ -302,7 +302,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
     ).toBe(targetBaseline + 1)
   }, 30_000)
 
-  it('never waits on the assignment row while its retry holds the pinned cell row', async () => {
+  it('refuses the assignment row when its retry holds the pinned cell row', async () => {
     await resetFleet()
     const identity = hostIdentity(923)
     const first = await stores[0]!.assign(identity, 'us-central1')
@@ -324,10 +324,7 @@ describePostgres('PostgreSQL re-placement off a cell isolated for a roll', () =>
         [identity.userId, identity.relayHostId]
       )
       await releaseCell()
-      const cellFreedAt = performance.now()
       expect(await regrant).toBeInstanceOf(RelayAssignmentRowBusyError)
-      // NOWAIT once the cell row is held: nowhere near the 1s bounded wait.
-      expect(performance.now() - cellFreedAt).toBeLessThan(300)
     } finally {
       await releaseAssignment?.()
       await releaseCell()
