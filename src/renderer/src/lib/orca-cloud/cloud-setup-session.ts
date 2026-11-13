@@ -176,20 +176,25 @@ export function stopWatchingCloudSetupSession(sessionId: string): void {
  * What "Set up and start" got back: the session it opened, `cancelled` when the user cancelled the
  * sign-in (or it timed out, or a newer one replaced it), or null when setup couldn't open.
  */
-export type CloudSetupSessionStart = { sessionId: string } | { cancelled: true } | null
+export type CloudSetupSessionStart =
+  | { sessionId: string; url?: string }
+  | { cancelled: true }
+  | null
 
 /** "Set up and start": opens the one browser tab and starts polling. */
 export async function startCloudSetupSession(request: {
   repo?: string
   needs: CloudSetupNeed[]
   chooseTeam?: boolean
+  openBrowser?: boolean
 }): Promise<CloudSetupSessionStart> {
   let result: CloudSetupStartResult
   try {
     result = await window.api.orcaProfiles.cloudSetupStart({
       ...(request.repo ? { repo: request.repo } : {}),
       needs: request.needs,
-      ...(request.chooseTeam ? { chooseTeam: true } : {})
+      ...(request.chooseTeam ? { chooseTeam: true } : {}),
+      ...(request.openBrowser === false ? { openBrowser: false } : {})
     })
   } catch {
     return null
@@ -202,7 +207,9 @@ export async function startCloudSetupSession(request: {
     return null
   }
   watchCloudSetupSession(result.sessionId)
-  return { sessionId: result.sessionId }
+  return result.url
+    ? { sessionId: result.sessionId, url: result.url }
+    : { sessionId: result.sessionId }
 }
 
 /** The setup session still open in this window, for the plans dialog to join (T2 Compare plans). */

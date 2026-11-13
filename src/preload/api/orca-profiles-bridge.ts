@@ -67,7 +67,7 @@ export const orcaProfilesApi = {
     )
   },
   findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
-  connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
+  connectCurrent: (args) => ipcRenderer.invoke('orcaProfiles:connectCurrent', args),
   signInProgress: () => ipcRenderer.invoke('orcaProfiles:signInProgress'),
   cancelSignIn: () => ipcRenderer.invoke('orcaProfiles:cancelSignIn'),
   refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
@@ -107,8 +107,6 @@ export const orcaProfilesApi = {
   billingPlans: () => ipcRenderer.invoke('orcaProfiles:billingPlans'),
   billingOpenCheckout: (args) => ipcRenderer.invoke('orcaProfiles:billingOpenCheckout', args),
   billingOpenPortal: () => ipcRenderer.invoke('orcaProfiles:billingOpenPortal'),
-  billingPortalLink: () => ipcRenderer.invoke('orcaProfiles:billingPortalLink'),
-  billingCheckoutLink: (args) => ipcRenderer.invoke('orcaProfiles:billingCheckoutLink', args),
   billingTeamPlans: (args) => ipcRenderer.invoke('orcaProfiles:billingTeamPlans', args),
   billingUsageHistory: (args) => ipcRenderer.invoke('orcaProfiles:billingUsageHistory', args),
   cloudSetupStart: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupStart', args),

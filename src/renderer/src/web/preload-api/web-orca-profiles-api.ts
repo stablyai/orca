@@ -90,8 +90,6 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
       cloudSetupGet: async () => ({ status: 'unconfigured' }),
       cloudSetupLink: async () => ({ status: 'unconfigured' }),
       billingOpenPortal: async () => ({ status: 'unconfigured' }),
-      billingPortalLink: async () => ({ status: 'unconfigured' }),
-      billingCheckoutLink: async () => ({ status: 'unconfigured' }),
       billingTeamPlans: async () => ({ status: 'unconfigured' }),
       billingUsageHistory: async () => ({ status: 'unconfigured' }),
       billingSetOverage: async () => ({ status: 'unconfigured' }),

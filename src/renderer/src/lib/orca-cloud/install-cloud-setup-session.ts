@@ -76,7 +76,8 @@ export function installCloudSetupSession(): () => void {
     const repoUrl = githubRepoUrlFor(repo?.gitRemoteIdentity?.remoteUrl)
     return startCloudSetupSession({
       ...(repoUrl ? { repo: repoUrl } : {}),
-      needs: sessionNeedsFor(request.needs, repoUrl)
+      needs: sessionNeedsFor(request.needs, repoUrl),
+      ...(request.openBrowser === false ? { openBrowser: false } : {})
     })
   })
   const unsubscribe = subscribeCloudSetupSessions(() => notifyCloudSetupSessionChanged())

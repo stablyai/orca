@@ -4,7 +4,8 @@ import { RecipeEnvForwardingWarning } from './RecipeEnvForwardingWarning'
 const summary = {
   count: 42,
   keyLike: ['ANTHROPIC_API_KEY', 'GITHUB_TOKEN', 'NPM_TOKEN'],
-  other: ['EDITOR', 'HOME', 'LANG', 'PATH', 'SHELL', 'TERM', 'USER']
+  other: ['EDITOR', 'HOME', 'LANG', 'PATH', 'SHELL', 'TERM', 'USER'],
+  narrowed: false
 }
 
 export const warning = defineFixture({
@@ -25,6 +26,22 @@ export const manyKeys = defineFixture({
         ...summary,
         keyLike: ['ANTHROPIC_API_KEY', 'AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN', 'NPM_TOKEN']
       }}
+    />
+  )
+})
+
+// A recipe with `passEnv: ['AWS_*']`: only base variables plus the AWS ones reach its scripts.
+export const narrowed = defineFixture({
+  width: 420,
+  render: () => (
+    <RecipeEnvForwardingWarning
+      summary={{
+        count: 6,
+        keyLike: ['AWS_SECRET_ACCESS_KEY'],
+        other: ['HOME', 'LANG', 'PATH', 'SHELL', 'USER'],
+        narrowed: true
+      }}
+      defaultReviewOpen
     />
   )
 })

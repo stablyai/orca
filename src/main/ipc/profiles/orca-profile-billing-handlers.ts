@@ -2,7 +2,6 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type {
   OrcaBillingCheckoutArgs,
-  OrcaBillingLinkResult,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
@@ -27,10 +26,6 @@ import {
   openOrcaBillingPortal,
   setOrcaBillingOverage
 } from '../../billing/billing-service'
-import {
-  getOrcaBillingCheckoutLink,
-  getOrcaBillingPortalLink
-} from '../../billing/billing-hosted-links'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store'
 import { notifyUsageAlertIfDue } from '../../billing/usage-alert-notifier'
@@ -111,7 +106,8 @@ const CloudSetupStart = z
   .object({
     repo: z.string().url().startsWith('https://github.com/').max(300).optional(),
     needs: z.array(z.enum(CLOUD_SETUP_NEEDS)).max(3),
-    chooseTeam: z.boolean().optional()
+    chooseTeam: z.boolean().optional(),
+    openBrowser: z.boolean().optional()
   })
   .strict()
 
@@ -221,14 +217,5 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
   )
   ipcMain.handle('orcaProfiles:billingOpenPortal', async (): Promise<OrcaBillingOpenResult> =>
     openOrcaBillingPortal(getProfileUserDataPath())
-  )
-  // "Copy link": the same Stripe URLs, minted but not opened (paste into another browser profile).
-  ipcMain.handle('orcaProfiles:billingPortalLink', async (): Promise<OrcaBillingLinkResult> =>
-    getOrcaBillingPortalLink(getProfileUserDataPath())
-  )
-  ipcMain.handle(
-    'orcaProfiles:billingCheckoutLink',
-    async (_event, rawArgs: unknown): Promise<OrcaBillingLinkResult> =>
-      getOrcaBillingCheckoutLink(getProfileUserDataPath(), billingCheckoutArgsFromUnknown(rawArgs))
   )
 }

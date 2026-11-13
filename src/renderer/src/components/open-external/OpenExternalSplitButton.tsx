@@ -29,12 +29,18 @@ export type OpenExternalSplitButtonProps = Omit<ButtonProps, 'onClick' | 'type' 
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   /** The wrapper (place it in the parent's layout); `className` styles the main button. */
   groupClassName?: string
+  /**
+   * Where the copied link works, when that's limited: a muted second line under "Copy link" and
+   * the copied toast's description. Only loopback sign-in links set it (`SIGN_IN_LINK_HINT`).
+   */
+  copyHint?: string
 }
 
 export function OpenExternalSplitButton({
   link,
   onClick,
   groupClassName,
+  copyHint,
   className,
   variant,
   size,
@@ -61,7 +67,7 @@ export function OpenExternalSplitButton({
       return
     }
     setState('copying')
-    const result = await copyExternalLink(link)
+    const result = await copyExternalLink(link, copyHint)
     if (!mounted.current) {
       return
     }
@@ -138,7 +144,14 @@ export function OpenExternalSplitButton({
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={() => void copy()}>
           <Link2 aria-hidden />
-          {copyLabel}
+          {copyHint ? (
+            <span className="flex flex-col">
+              <span>{copyLabel}</span>
+              <span className="text-xs text-muted-foreground">{copyHint}</span>
+            </span>
+          ) : (
+            copyLabel
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

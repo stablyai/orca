@@ -7,7 +7,7 @@ import { ArrowLeft, Check, ExternalLink, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
-import { CloudSetupBrowserButton } from './CloudSetupBrowserButton'
+import { CloudSetupFlowBrowserButton } from './CloudSetupBrowserButton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -176,9 +176,7 @@ function StepActions({
     label: string,
     onClick: () => void,
     link?: ExternalLinkSource | null
-  ): React.JSX.Element => (
-    <CloudSetupBrowserButton label={label} busy={flow.busy} onClick={onClick} link={link} />
-  )
+  ): React.JSX.Element => <CloudSetupFlowBrowserButton {...{ flow, label, onClick, link }} />
   const inBrowserAction =
     flow.action === 'sign-in' ||
     flow.action === 'choose-plan' ||
@@ -195,12 +193,13 @@ function StepActions({
           <p role="status" className="text-sm text-muted-foreground">
             {t('cloudSetupPage.signIn.didNotFinish', 'Sign-in didn’t finish. Try again.')}
           </p>
-          {browser(continueLabel, flow.continueInBrowser)}
+          {browser(continueLabel, flow.continueInBrowser, flow.continueLink)}
         </div>
       ) : (
-        browser(continueLabel, flow.continueInBrowser)
+        browser(continueLabel, flow.continueInBrowser, flow.continueLink)
       )
     case 'choose-plan':
+      // Copy link is for sign-in only: a plan is chosen in the browser that opens.
       return browser(continueLabel, flow.continueInBrowser)
     case 'fix-billing':
       // A failed payment is fixed in the billing portal (browser); hours and the cap in Settings.
@@ -212,7 +211,7 @@ function StepActions({
         </Button>
       )
     case 'github-install':
-      return browser(continueLabel, flow.installGitHub, flow.installGitHubLink)
+      return browser(continueLabel, flow.installGitHub)
     case 'start-trial':
       return (
         <Button type="button" onClick={flow.startTrial} disabled={flow.busy}>

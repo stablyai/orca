@@ -83,7 +83,7 @@ export function createCloudWorkspacesService(deps: {
   const client: CloudWorkspacesClient = createCloudWorkspacesClient({
     baseUrl: deps.config.controlPlaneUrl,
     getAccessToken: deps.config.getAccessToken,
-    fetch: deps.fetch
+    fetch: deps.fetch ?? deps.config.fetch
   })
   let active: {
     sandboxId: string

@@ -107,6 +107,13 @@ export function classifyCloudApiResponse(
   return { code: 'server', detail: error ?? `HTTP ${status}` }
 }
 
+/** The "Couldn't switch to {team}" message, when the token could not be minted for the team. */
+function orgSwitchDetail(error: unknown): string | undefined {
+  return error instanceof Error && 'reason' in error && error.reason === 'org_mismatch'
+    ? error.message
+    : undefined
+}
+
 export function createCloudApiClient(deps: CloudApiClientDeps) {
   const fetchImpl = deps.fetchImpl ?? fetch
   const base = `${deps.controlPlaneUrl.replace(/\/+$/, '')}/`
@@ -121,7 +128,10 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
     try {
       token = await deps.getAccessToken()
     } catch (error) {
-      throw new CloudApiError(deps.classifyTokenError?.(error) ?? 'signed-out')
+      throw new CloudApiError(
+        deps.classifyTokenError?.(error) ?? 'signed-out',
+        orgSwitchDetail(error)
+      )
     }
     const url = new URL(path.replace(/^\//, ''), base)
     for (const [name, value] of Object.entries(options.query ?? {})) {
@@ -142,8 +152,9 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
         redirect: 'error',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       })
-    } catch {
-      throw new CloudApiError('network')
+    } catch (error) {
+      // The control-plane fetch throws when a re-minted token still names another team.
+      throw new CloudApiError('network', orgSwitchDetail(error))
     }
     if (!response.ok) {
       const body: unknown = await response.json().catch(() => null)
