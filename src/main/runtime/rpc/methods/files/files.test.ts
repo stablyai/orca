@@ -137,4 +137,26 @@ describe('file RPC methods', () => {
     expect(unwatch).toHaveBeenCalledTimes(1)
     expect(cleanups.size).toBe(0)
   })
+
+  it('opens phone and older-CLI files without moving the desktop unless a target asks to', async () => {
+    const openMobileFile = vi.fn(async () => ({}))
+    const openMobileDiff = vi.fn(async () => ({}))
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      openMobileFile,
+      openMobileDiff
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+    const target = { worktree: 'id:wt-1', relativePath: 'README.md' }
+
+    await dispatcher.dispatch(makeRequest('files.open', target))
+    await dispatcher.dispatch(makeRequest('files.openDiff', target))
+    await dispatcher.dispatch(makeRequest('files.open', { ...target, navigation: 'all' }))
+
+    expect(openMobileFile.mock.calls).toEqual([
+      ['id:wt-1', 'README.md', 'caller'],
+      ['id:wt-1', 'README.md', 'all']
+    ])
+    expect(openMobileDiff.mock.calls).toEqual([['id:wt-1', 'README.md', false, 'caller']])
+  })
 })
