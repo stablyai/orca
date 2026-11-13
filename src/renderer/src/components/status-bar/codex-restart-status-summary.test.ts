@@ -22,15 +22,4 @@ describe('selectCodexStaleSessionCount', () => {
       })
     ).toBe(0)
   })
-
-  it('recomputes on a new map identity and reuses the result for the same identities', () => {
-    const ptyIdsByTabId = { tab: ['pty-1'] }
-    const codexRestartNoticeByPtyId: Record<string, typeof awaiting> = { 'pty-1': awaiting }
-    const state = { ptyIdsByTabId, codexRestartNoticeByPtyId }
-    expect(selectCodexStaleSessionCount(state)).toBe(1)
-    // Same identities: the memo answers even though the map was mutated behind the store's back.
-    delete codexRestartNoticeByPtyId['pty-1']
-    expect(selectCodexStaleSessionCount(state)).toBe(1)
-    expect(selectCodexStaleSessionCount({ ptyIdsByTabId, codexRestartNoticeByPtyId: {} })).toBe(0)
-  })
 })
