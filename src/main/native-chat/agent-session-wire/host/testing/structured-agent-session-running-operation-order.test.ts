@@ -17,8 +17,11 @@ it.each(['goal', 'rewind'] as const)(
   'answers a %s while an earlier message is queued behind compact',
   async (operation) => {
     const { host, dispatch } = hostTestState()
-    const compact = vi.fn(async () => ({ state: 'accepted' as const, providerIdentity: null }))
-    host.deps.adapter.compact = compact
+    const compacting = Promise.withResolvers<void>()
+    host.deps.adapter.compact = vi.fn(async () => {
+      compacting.resolve()
+      return { state: 'accepted' as const, providerIdentity: null }
+    })
     host.deps.adapter.changeThreadGoal = vi.fn(async () => ({ ok: true as const }))
     host.deps.adapter.rewindSupport = () => ({ supported: true })
     await attach()
@@ -26,7 +29,7 @@ it.each(['goal', 'rewind'] as const)(
     expect(
       await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
     ).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+    await compacting.promise
     const queued = hostTestMessage('After compact')
     const queuedEnvelope = envelope('agentSession.send', { body: queued })
     expect(
@@ -49,11 +52,6 @@ it.each(['goal', 'rewind'] as const)(
             itemId,
             expectedEpoch
           })
-    let settled = false
-    void result.then(() => {
-      settled = true
-    })
-    await vi.waitFor(() => expect(settled).toBe(true))
     expect(await result).toMatchObject(
       operation === 'goal' ? { ok: true } : { ok: false, refusal: { rewindReason: 'busy' } }
     )
@@ -89,11 +87,6 @@ it('releases a startup goal when earlier delivery parks behind compact', async (
   })
   await host.collaboratorsForTests().serialize(SESSION, async () => {})
   opened.resolve({ reportedOptions: { model: '' } })
-  let settled = false
-  void result.then(() => {
-    settled = true
-  })
-  await vi.waitFor(() => expect(settled).toBe(true))
   expect(await result).toMatchObject({ ok: true })
   expect(dispatch).not.toHaveBeenCalled()
 })
