@@ -47,8 +47,8 @@ import { WorkerEntrypoint } from 'cloudflare:workers'
 import type { RunnerBuild } from './build-runner'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { cachedCreateTiming } from './create-timing'
-import { creatorLeftAccount } from './member-changes'
-import { authenticateDesktop } from './auth'
+import { creatorLeftAccount, tokenPredatesMemberChange } from './member-changes'
+import { authenticateDesktop, OrgMismatchError } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
 import { handleMcpRoutes, isMcpPath, oauthApprovalsApi, oauthGrantsApi } from './mcp'
@@ -1160,6 +1160,29 @@ async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): P
 }
 
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
+  try {
+    return await routeRequest(request, env, deps)
+  } catch (error) {
+    // A stale-org token anywhere in routing (ORG-TOKEN-STALE): the desktop re-mints once and retries.
+    if (error instanceof OrgMismatchError) {
+      return orgMismatchResponse()
+    }
+    throw error
+  }
+}
+
+function orgMismatchResponse(): Response {
+  return json(
+    {
+      error: 'org_mismatch',
+      reason: 'org_mismatch',
+      message: 'Orca Cloud signed you in for a different team. Try again.'
+    },
+    409
+  )
+}
+
+async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Response> {
   const url = new URL(request.url)
   try {
     const shared = await shareGateway(request, url, env, deps)
@@ -1394,6 +1417,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
       }
+      if (await tokenPredatesMemberChange(env.SANDBOX_DB, caller)) {
+        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        return fail('unauthorized', 401, 'stale_token')
+      }
       if (request.method !== 'GET') {
         return fail('not_found', 404)
       }
@@ -1418,6 +1445,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
+      }
+      if (await tokenPredatesMemberChange(env.SANDBOX_DB, caller)) {
+        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        return fail('unauthorized', 401, 'stale_token')
       }
       if (url.pathname === '/v1/github/installations' && request.method === 'GET') {
         const rows = await listAccountInstallations(env.SANDBOX_DB, caller.accountId)
@@ -1492,6 +1523,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
+      }
+      if (await tokenPredatesMemberChange(env.SANDBOX_DB, caller)) {
+        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        return fail('unauthorized', 401, 'stale_token')
       }
       const secrets = await secretsDeps(env)
       if (!secrets) {
@@ -1638,6 +1673,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       if (request.method !== 'POST') {
         return fail('not_found', 404)
+      }
+      if (await tokenPredatesMemberChange(life.db, caller)) {
+        // ORG-TOKEN-STALE: never create (and bill) with a token minted before a role change.
+        return fail('unauthorized', 401, 'stale_token')
       }
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
       const raw = await readJson(request)
@@ -2256,6 +2295,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof SecretError) {
     return fail(error.code, error.status, error.reason)
+  }
+  if (error instanceof OrgMismatchError) {
+    return orgMismatchResponse()
   }
   if (error instanceof GuardrailError) {
     if (error.code === 'concurrency_limit') {

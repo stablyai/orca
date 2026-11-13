@@ -70,6 +70,28 @@ export function readBearer(value: string | null): string | null {
   return /^Bearer ([^\s]+)$/.exec(value ?? '')?.[1] ?? null
 }
 
+/**
+ * ORG-TOKEN-STALE: the desktop says which team it is acting for (`x-orca-org: <org id>`, or `user` for a
+ * personal account). A token minted for another team (stale after a team or role switch) is refused
+ * rather than acting on the wrong team. No header: no check (older desktops).
+ */
+export const ORG_HEADER = 'x-orca-org'
+export class OrgMismatchError extends Error {
+  constructor() {
+    super('org_mismatch')
+    this.name = 'OrgMismatchError'
+  }
+}
+export function assertExpectedOrg(request: Request, tokenOrgId: string | undefined): void {
+  const expected = request.headers.get(ORG_HEADER)?.trim()
+  if (!expected) {
+    return
+  }
+  if (expected !== (tokenOrgId ?? 'user')) {
+    throw new OrgMismatchError()
+  }
+}
+
 /** Same account rule as billing: an org pays for its members, otherwise the user is the account. */
 export function accountIdFor(claims: { sub: string; org?: string }): string {
   return claims.org ? `org:${claims.org}` : `user:${claims.sub}`
@@ -144,7 +166,11 @@ export async function authenticateDesktop(
     (await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)) ??
     (staging ? await verify(token, staging.keys, env, staging.issuer, now) : null)
   if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
-    return caller && (await tokenPredatesRemoval(env.SANDBOX_DB, caller)) ? null : caller
+    if (!caller || (await tokenPredatesRemoval(env.SANDBOX_DB, caller))) {
+      return null
+    }
+    assertExpectedOrg(request, caller.orgId)
+    return caller
   }
   if (devKeys?.source !== env.SANDBOX_DEV_JWKS) {
     devKeys = {
@@ -159,5 +185,9 @@ export async function authenticateDesktop(
   }
   // Org-less dev tokens keep their historical `dev:<sub>` account; org dev tokens get `dev:org:<id>`.
   const devCaller: SandboxCaller = { ...dev, accountId: dev.orgId ? `dev:org:${dev.orgId}` : `dev:${dev.userId}`, dev: true }
-  return (await tokenPredatesRemoval(env.SANDBOX_DB, devCaller)) ? null : devCaller
+  if (await tokenPredatesRemoval(env.SANDBOX_DB, devCaller)) {
+    return null
+  }
+  assertExpectedOrg(request, devCaller.orgId)
+  return devCaller
 }
