@@ -143,6 +143,17 @@ const recordsByOwner = new Map<
   string,
   { owner: MergedBranchSectionOwner; record: MergedBranchSectionRecord }
 >()
+const ownerKeysByHostIdentity = new Map<string, Set<string>>()
+
+function dropOwnerRecord(key: string, owner: MergedBranchSectionOwner): void {
+  recordsByOwner.delete(key)
+  const hostIdentity = getWorktreeHostIdentity(owner)
+  const ownerKeys = ownerKeysByHostIdentity.get(hostIdentity)
+  ownerKeys?.delete(key)
+  if (ownerKeys?.size === 0) {
+    ownerKeysByHostIdentity.delete(hostIdentity)
+  }
+}
 
 function isCheckoutPositivelyGone(
   owner: MergedBranchSectionOwner,
@@ -184,7 +195,7 @@ function pruneRecordsOfRemovedCheckouts(keep: string): void {
       key !== keep &&
       isCheckoutPositivelyGone(entry.owner, liveInstancesByHostIdentity, liveRepoIds)
     ) {
-      recordsByOwner.delete(key)
+      dropOwnerRecord(key, entry.owner)
     }
   }
   // Doubling the bar keeps scans amortized O(1) per write when most records must stay.
@@ -195,14 +206,12 @@ function dropRecordsOfRemovedCheckouts(
   hostId: ExecutionHostId,
   worktreeIds: readonly string[]
 ): void {
-  if (recordsByOwner.size === 0) {
-    return
-  }
-  const removed = new Set(worktreeIds.map((id) => composeWorktreeHostIdentity(hostId, id)))
-  for (const [key, entry] of recordsByOwner) {
-    if (removed.has(getWorktreeHostIdentity(entry.owner))) {
+  for (const id of worktreeIds) {
+    const hostIdentity = composeWorktreeHostIdentity(hostId, id)
+    for (const key of ownerKeysByHostIdentity.get(hostIdentity) ?? []) {
       recordsByOwner.delete(key)
     }
+    ownerKeysByHostIdentity.delete(hostIdentity)
   }
 }
 
@@ -221,7 +230,7 @@ export function writeMergedBranchSectionRecord(
 ): void {
   const key = mergedBranchSectionOwnerKey(owner)
   if (record.merged === null && record.disclosure.kind === 'untouched') {
-    recordsByOwner.delete(key)
+    dropOwnerRecord(key, owner)
     return
   }
   if (!subscribedToRemovals) {
@@ -232,6 +241,10 @@ export function writeMergedBranchSectionRecord(
     owner: { id: owner.id, hostId: owner.hostId, instanceId: owner.instanceId },
     record
   })
+  const hostIdentity = getWorktreeHostIdentity(owner)
+  const ownerKeys = ownerKeysByHostIdentity.get(hostIdentity) ?? new Set<string>()
+  ownerKeys.add(key)
+  ownerKeysByHostIdentity.set(hostIdentity, ownerKeys)
   if (recordsByOwner.size > pruneThreshold) {
     pruneRecordsOfRemovedCheckouts(key)
   }
