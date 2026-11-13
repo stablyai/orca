@@ -80,12 +80,13 @@ export function WorktreeCardHostMark({
 
 const PROBLEM: ReadonlySet<CloudDotState> = new Set(['failed', 'wakeFailed'])
 
-/** Line 2 names a cloud or VM row's state when it is not running ("Asleep · branch"). */
-export function WorktreeCardHostStateWord({
-  worktreeId
-}: {
+/**
+ * The state line 2 names for a cloud or VM row when it is not running ("Asleep · branch"), or
+ * null. The card's facts read it too (`host.stateWord`), so line 2 exists only when it has a word.
+ */
+export function useHostStateWord(
   worktreeId: string
-}): React.JSX.Element | null {
+): { state: CloudDotState | null; going: boolean } | null {
   const cloud = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   const vmDot = useAppStore((state) =>
     state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]
@@ -93,7 +94,6 @@ export function WorktreeCardHostStateWord({
       : null
   )
   const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
-  const t = useTranslate()
   const state = cloud.isCloud ? cloud.state : vmDot
   // Sleep chosen and not ended: "Going to sleep…" until the sleep ends, driven by the same flag as
   // the view, so the row never says Asleep (the record flips to suspended first) before the view
@@ -103,6 +103,21 @@ export function WorktreeCardHostStateWord({
   if (!going && (!state || state === 'running' || state === 'unknown')) {
     return null
   }
+  return { state, going }
+}
+
+/** Line 2 names a cloud or VM row's state when it is not running ("Asleep · branch"). */
+export function WorktreeCardHostStateWord({
+  worktreeId
+}: {
+  worktreeId: string
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const word = useHostStateWord(worktreeId)
+  if (!word) {
+    return null
+  }
+  const { state, going } = word
   return (
     <>
       <span
