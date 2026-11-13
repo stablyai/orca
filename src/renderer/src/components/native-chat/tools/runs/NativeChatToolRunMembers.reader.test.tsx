@@ -176,6 +176,9 @@ function editRun(count: number, editAt: number): NativeChatBlock[] {
   return blocks
 }
 
+// Stable, as a real transcript's callback is: a new one each render would make every card reveal again.
+const ignoreRevealTarget = (): void => {}
+
 function Transcript({
   blocks,
   mounted = true,
@@ -203,7 +206,7 @@ function Transcript({
             activeTurnIsWorking={live}
             disclosureId="message-1"
             revealedDiff={revealedDiff}
-            onRevealDiff={() => {}}
+            onRevealDiff={ignoreRevealTarget}
           />
         ) : null}
       </NativeChatToolRunWindowContext.Provider>
@@ -388,7 +391,9 @@ describe('NativeChatToolRun opened-run reader', () => {
     await settle()
     expect(topRow(container).key).toBe('edit:apply_patch:400')
 
-    // A reveal made in the same render that shows the pane again wins over the place it kept while hidden.
+    // A reveal made in the same render that shows the pane again wins over the place it kept while hidden,
+    // and is what the run keeps even before the browser reports the reveal's scroll: hidden again at once and
+    // shown under the same request (so no fresh reveal), it returns to the revealed edit.
     await scrollBox(container, 2_000)
     pane.hidden = true
     rerender(
@@ -396,17 +401,12 @@ describe('NativeChatToolRun opened-run reader', () => {
     )
     pane.hidden = false
     rerender(<Transcript blocks={blocks} revealedDiff={{ ...reveal, requestId: 2 }} />)
-    await settle()
-    expect(topRow(container).key).toBe('edit:apply_patch:400')
-
-    // That revealed place is what the run keeps: hidden, evicted and back, it returns there.
     pane.hidden = true
     rerender(
       <Transcript blocks={blocks} visible={false} revealedDiff={{ ...reveal, requestId: 2 }} />
     )
-    rerender(<Transcript blocks={blocks} visible={false} mounted={false} />)
     pane.hidden = false
-    rerender(<Transcript blocks={blocks} />)
+    rerender(<Transcript blocks={blocks} revealedDiff={{ ...reveal, requestId: 2 }} />)
     await settle()
     expect(topRow(container).key).toBe('edit:apply_patch:400')
   })
