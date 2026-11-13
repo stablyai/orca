@@ -4269,7 +4269,7 @@
                 "uploadingFilesToRemote_few": "Загружаются {{count}} файла на удалённый сервер…",
                 "uploadingFilesToRemote_many": "Загружается {{count}} файлов на удалённый сервер…",
                 "uploadingFilesToRemote_other": "Загружается {{count}} файла на удалённый сервер…",
-                "writeTargetGone": "Терминал закрылся до ввода пути. Файлы находятся в:"
+                "writeTargetGone": "Загрузка завершена, но терминал был недоступен для ввода пути. Файлы находятся в:"
               }
             }
           },

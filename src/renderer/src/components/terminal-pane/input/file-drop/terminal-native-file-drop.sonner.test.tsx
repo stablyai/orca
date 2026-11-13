@@ -14,14 +14,18 @@ vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
 }))
 
 vi.mock('./terminal-drop-path-writer', () => ({
-  writeTerminalDropPathsToCapturedTarget: vi.fn(async () => ({
+  writeTerminalDropPathsToCapturedTarget: vi.fn<WritePathsToCapturedTarget>(async () => ({
     sentAnyPath: true,
-    failureReason: undefined
+    targetCurrent: true,
+    pathsWritten: 1
   }))
 }))
 
-const goneTitle = 'The terminal closed before the drop could be typed. Files are at:'
+type WritePathsToCapturedTarget = typeof writeTerminalDropPathsToCapturedTarget
+
+const goneTitle = "Upload finished, but the terminal wasn't open to type the path. Files are at:"
 const uploadedPath = '/srv/orca/workspaces/api-server/.orca/drops/model-eval-results.bin'
+const secondUploadedPath = '/srv/orca/workspaces/api-server/.orca/drops/eval-notes.md'
 
 const frames: FrameRequestCallback[] = []
 
@@ -117,4 +121,41 @@ it('stays silent when the upload produced no paths to point at', async () => {
 
   expect(view.queryByText(goneTitle)).toBeNull()
   expect(writeTerminalDropPathsToCapturedTarget).not.toHaveBeenCalled()
+})
+
+it('reports the untyped remainder when the pane goes stale mid-write', async () => {
+  mockImportResults([
+    { status: 'imported', destPath: uploadedPath },
+    { status: 'imported', destPath: secondUploadedPath }
+  ])
+  vi.mocked(writeTerminalDropPathsToCapturedTarget).mockResolvedValueOnce({
+    sentAnyPath: true,
+    targetCurrent: false,
+    pathsWritten: 1,
+    failureReason: 'target-stale'
+  })
+  const view = render(<Toaster closeButton />)
+  const { args } = createDropArgs([{ id: 7, leafId: 'leaf-7' }])
+
+  await deliverDrop(args)
+
+  expect(view.queryByText(goneTitle)).not.toBeNull()
+  expect(view.container.textContent).toContain(secondUploadedPath)
+  expect(view.container.textContent).not.toContain(uploadedPath)
+})
+
+it('copies the landed paths from the toast Copy action', async () => {
+  const writeClipboardText = vi.fn(() => Promise.resolve())
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the toast action reads only ui.writeClipboardText off window.api; any other member would fail this test at call time.
+  window.api = { ui: { writeClipboardText } } as never
+  mockImportResults([{ status: 'imported', destPath: uploadedPath }])
+  const view = render(<Toaster closeButton />)
+  const { args } = createDropArgs([])
+
+  await deliverDrop(args)
+
+  await act(async () => {
+    view.getByText('Copy').click()
+  })
+  expect(writeClipboardText).toHaveBeenCalledWith(uploadedPath)
 })

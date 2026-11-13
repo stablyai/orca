@@ -3933,7 +3933,7 @@
                 "uploadingFiles_many": "Transfert de {{count}} fichiers vers l’environnement d’exécution…",
                 "uploadingFilesToRemote_one": "Transfert de {{count}} fichier vers l’hôte distant…",
                 "uploadingFilesToRemote_other": "Transfert de {{count}} fichiers vers l’hôte distant…",
-                "writeTargetGone": "Le terminal s'est fermé avant que le chemin puisse être saisi. Les fichiers se trouvent dans :",
+                "writeTargetGone": "L'envoi est terminé, mais le terminal n'était plus disponible pour saisir le chemin. Les fichiers se trouvent dans :",
                 "uploadingFilesToRemote_many": "Transfert de {{count}} fichiers vers l’hôte distant…"
               }
             }

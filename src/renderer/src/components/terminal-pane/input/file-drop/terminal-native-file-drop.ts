@@ -255,6 +255,10 @@ async function pasteResolvedDropPaths(
     targetShell: args.targetShell
   })
   showTerminalDropWriteFailure(writeResult.failureReason)
+  if (writeResult.failureReason === 'target-stale') {
+    // The pane vanished mid-write; the uploaded paths that never got typed must not be silently swallowed.
+    showTerminalDropTargetGone(args.paths.slice(writeResult.pathsWritten))
+  }
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
   }

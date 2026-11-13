@@ -4088,7 +4088,7 @@
                 "failedUploads_other": "{{count}} 個檔案上傳失敗。",
                 "uploadingFiles_other": "正在將 {{count}} 個檔案上傳至執行環境…",
                 "uploadingFilesToRemote_other": "正在將 {{count}} 個檔案上傳至遠端…",
-                "writeTargetGone": "終端機在路徑輸入前已關閉。檔案位於："
+                "writeTargetGone": "上傳已完成，但終端機未能用於輸入路徑。檔案位於："
               }
             }
           },

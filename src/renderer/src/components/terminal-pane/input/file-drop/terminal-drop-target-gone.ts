@@ -7,11 +7,22 @@ export function showTerminalDropTargetGone(paths: readonly string[]): void {
   if (paths.length === 0) {
     return
   }
+  const copyText = paths.join('\n')
   toast.message(
     translate(
       'auto.components.terminal.pane.terminal.drop.handler.writeTargetGone',
-      'The terminal closed before the drop could be typed. Files are at:'
+      "Upload finished, but the terminal wasn't open to type the path. Files are at:"
     ),
-    { description: paths.join('  ') }
+    {
+      description: paths.join('  '),
+      // Long remote paths need time to read or copy, so keep the toast until the user acts on it.
+      duration: Number.POSITIVE_INFINITY,
+      action: {
+        label: translate('menu.copy', 'Copy'),
+        onClick: () => {
+          void window.api.ui.writeClipboardText(copyText)
+        }
+      }
+    }
   )
 }

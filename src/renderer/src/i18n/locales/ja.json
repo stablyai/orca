@@ -3575,7 +3575,7 @@
                 "failedUploads_other": "{{count}} 件のファイルをアップロードできませんでした。",
                 "uploadingFiles_other": "{{count}} 件のファイルをランタイムにアップロード中…",
                 "uploadingFilesToRemote_other": "{{count}} 件のファイルをリモートにアップロード中…",
-                "writeTargetGone": "ターミナルが閉じたため、パスを入力できませんでした。ファイルは次の場所にあります:"
+                "writeTargetGone": "アップロードは完了しましたが、パスを入力できる端末がありませんでした。ファイルは次の場所にあります:"
               }
             }
           },
