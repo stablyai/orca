@@ -26,6 +26,7 @@ import type {
   WorkspaceCleanupRunRow
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { Button } from '../../ui/button'
+import { formatAtRiskLocalFileNames } from '@/lib/workspace/display/at-risk-local-files-label'
 import { WorkspaceCleanupMetadataText } from '@/components/workspace-cleanup/candidate-list/workspace-cleanup-metadata-chip'
 import type { WorkspaceCleanupKeepCause } from '../../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { formatCleanupKeepCause, formatCleanupRunTrigger } from './workspace-cleanup-run-labels'
@@ -215,7 +216,9 @@ function RemovedRow({ row }: { row: WorkspaceCleanupRunRow }): React.JSX.Element
     <div className={`${REMOVED_GRID} py-1.5`}>
       <WorkspaceCleanupWorkspaceLine workspace={row} />
       <div className="justify-self-start">
-        {row.reason ? <WorkspaceCleanupReasonChip reason={row.reason} /> : null}
+        {row.reason ? (
+          <WorkspaceCleanupReasonChip reason={row.reason} prNumber={row.prNumber} />
+        ) : null}
       </div>
       <span className="text-xs text-muted-foreground">
         {row.outcome === 'archived'
@@ -297,7 +300,17 @@ function KeptReason({ row }: { row: WorkspaceCleanupRunRow }): React.JSX.Element
   if (!row.keepCause) {
     return null
   }
-  const label = formatCleanupKeepCause(row.keepCause, t)
+  const names =
+    row.keepCause === 'ignored-files' && row.ignoredFiles
+      ? formatAtRiskLocalFileNames(row.ignoredFiles, t)
+      : null
+  const cause = formatCleanupKeepCause(row.keepCause, t)
+  const label = names
+    ? t('components.settings.workspaceCleanup.keep.withDetail', '{{cause}} · {{detail}}', {
+        cause,
+        detail: names
+      })
+    : cause
   return (
     <WorkspaceCleanupMetadataText
       icon={KEEP_CAUSE_ICONS[row.keepCause] ?? CircleMinus}

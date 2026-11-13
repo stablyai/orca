@@ -16,6 +16,7 @@ import type {
   WorkspaceCleanupReport,
   WorkspaceCleanupRun,
   WorkspaceCleanupRunRow,
+  WorkspaceCleanupRowDetails,
   WorkspaceCleanupRunTrigger,
   WorkspaceCleanupWorkspaceRef
 } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -24,7 +25,11 @@ import {
   type WorkspaceCleanupWorkspace
 } from './workspace-cleanup-run-evidence'
 import { decideWorkspaceCleanup, removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
-import { keptRunOutcome, summarizeWorkspaceCleanupRun } from './workspace-cleanup-run-summary'
+import {
+  keptRunOutcome,
+  summarizeWorkspaceCleanupRun,
+  workspaceCleanupRowDetails
+} from './workspace-cleanup-run-summary'
 import {
   appendWorkspaceCleanupRun,
   readWorkspaceCleanupRunHistory
@@ -39,7 +44,7 @@ const SETTINGS_DEBOUNCE_MS = 10 * 1000
 
 type DecidedWorkspace = {
   workspace: WorkspaceCleanupWorkspace
-  ref: WorkspaceCleanupWorkspaceRef & { sizeBytes?: number }
+  ref: WorkspaceCleanupWorkspaceRef & WorkspaceCleanupRowDetails & { sizeBytes?: number }
   evaluation: WorkspaceCleanupEvaluation
 }
 
@@ -193,7 +198,11 @@ export class WorkspaceCleanupRunner {
       const sizeBytes = sizes.get(workspace.ref.worktreeId)
       decided.push({
         workspace,
-        ref: { ...workspace.ref, ...(sizeBytes !== undefined ? { sizeBytes } : {}) },
+        ref: {
+          ...workspace.ref,
+          ...workspaceCleanupRowDetails(workspace.input),
+          ...(sizeBytes !== undefined ? { sizeBytes } : {})
+        },
         evaluation: await decideWorkspaceCleanup(this.deps.runtime, workspace, now)
       })
     }

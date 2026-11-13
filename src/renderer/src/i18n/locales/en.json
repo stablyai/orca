@@ -22263,7 +22263,8 @@
           "unchanged": "Unchanged",
           "inactive": "Inactive",
           "automationRun": "Automation run",
-          "orchestrationWorker": "Orchestration worker"
+          "orchestrationWorker": "Orchestration worker",
+          "mergedNumber": "{{label}} · #{{number}}"
         },
         "keep": {
           "pinned": "Pinned",
@@ -22284,7 +22285,8 @@
           "waiting": "Waiting",
           "notRemovable": "Main workspace or folder project",
           "projectOff": "Cleanup off for this project",
-          "rulesOff": "No rule on"
+          "rulesOff": "No rule on",
+          "withDetail": "{{cause}} · {{detail}}"
         },
         "trigger": {
           "startup": "On startup",

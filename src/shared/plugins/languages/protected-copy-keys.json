@@ -768,6 +768,7 @@
     "components.settings.workspaceCleanup.enable.summary",
     "components.settings.workspaceCleanup.enable.title",
     "components.settings.workspaceCleanup.enable.turnOn",
+    "components.settings.workspaceCleanup.reason.mergedNumber",
     "components.workspace.cleanup.browse.forceDeleteRisk",
     "components.workspace.cleanup.browse.gitStatusCheckFailed",
     "components.workspace.cleanup.browse.gitStatusUnverified",

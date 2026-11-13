@@ -22,12 +22,22 @@ const REASON_ICONS: Record<WorkspaceCleanupRuleReason, LucideIcon> = {
 
 /** The rule that removes, or would remove, a workspace. */
 export function WorkspaceCleanupReasonChip({
-  reason
+  reason,
+  prNumber
 }: {
   reason: WorkspaceCleanupRuleReason
+  /** The merged pull request, when the host read one. */
+  prNumber?: number
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = formatCleanupRuleReasonBadge(reason, t)
+  const badge = formatCleanupRuleReasonBadge(reason, t)
+  const label =
+    reason === 'merged' && prNumber !== undefined
+      ? t('components.settings.workspaceCleanup.reason.mergedNumber', '{{label}} · #{{number}}', {
+          label: badge,
+          number: prNumber
+        })
+      : badge
   return (
     <WorkspaceCleanupMetadataChip
       icon={REASON_ICONS[reason] ?? Clock}

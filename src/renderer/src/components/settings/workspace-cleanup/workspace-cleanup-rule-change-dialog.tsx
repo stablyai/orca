@@ -123,7 +123,10 @@ export function WorkspaceCleanupRuleChangeDialog({
               >
                 <WorkspaceCleanupWorkspaceLine workspace={row} className="flex-1" />
                 {row.evaluation.action !== 'keep' ? (
-                  <WorkspaceCleanupReasonChip reason={row.evaluation.reason} />
+                  <WorkspaceCleanupReasonChip
+                    reason={row.evaluation.reason}
+                    prNumber={row.prNumber}
+                  />
                 ) : null}
                 <span
                   className={cn(
