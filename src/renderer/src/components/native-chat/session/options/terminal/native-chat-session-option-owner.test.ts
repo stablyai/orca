@@ -65,7 +65,9 @@ describe('terminal option owner catalog invalidation', () => {
       const rows = Array.from({ length: count }, (_, index) => worktree(index))
       const repos = rows.map((_, index) => repo(index))
       const worktreesByRepo = Object.fromEntries(rows.map((row) => [row.repoId, [row]]))
+      const settings = createGlobalSettingsFixture()
       useAppStore.setState({
+        settings,
         repos,
         worktreesByRepo,
         tabsByWorktree: Object.fromEntries(
@@ -171,7 +173,9 @@ describe('terminal option owner catalog invalidation', () => {
       // Three existing GitHub cache passes plus one shared owner-index pass.
       expect(repoRowsRead).toBe(4 * count)
       expect(renders).toEqual(Array.from({ length: count }, () => 0))
-      act(() => useAppStore.setState({ settings: createGlobalSettingsFixture() }))
+      act(() =>
+        useAppStore.setState({ settings: { ...settings, diffWordWrap: !settings.diffWordWrap } })
+      )
       expect(worktreeCatalogEnumerations).toBe(1)
       expect(terminalCatalogEnumerations).toBe(2)
       expect(repoRowsRead).toBe(4 * count)
