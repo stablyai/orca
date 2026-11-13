@@ -50,6 +50,7 @@ export function runLocalPlanForAgent(input: {
       cwd: input.target.cwd,
       env: wslDistro ? input.target.env : target.env,
       operation: input.operation,
+      laneId: input.target.laneId,
       wslDistro,
       spawnAgent: input.spawnAgent,
       timeoutMs
@@ -60,7 +61,7 @@ export function runLocalPlanForAgent(input: {
     const deadlineAt = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
     const deadline = AbortSignal.timeout(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     const signal = AbortSignal.any([canceled.signal, deadline])
-    const lane = localGenerationLaneKey(input.operation, input.target.cwd)
+    const lane = localGenerationLaneKey(input.operation, input.target.cwd, input.target.laneId)
     const failure = (): InternalTextGenerationResult =>
       canceled.signal.aborted || input.shouldExecute?.() === false
         ? { success: false, error: 'Generation canceled.', canceled: true }
@@ -149,7 +150,7 @@ function runCodexLocalPlanUnderHomeLock(
   commandEnv?: Record<string, string>,
   awaitSettlement = false
 ): Promise<InternalTextGenerationResult> {
-  const laneKey = localGenerationLaneKey(operation, target.cwd)
+  const laneKey = localGenerationLaneKey(operation, target.cwd, target.laneId)
   let canceledWhileQueued = false
   let publishResult!: (result: InternalTextGenerationResult) => void
   let rejectResult!: (error: unknown) => void
