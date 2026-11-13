@@ -71,7 +71,8 @@ export function buildOrderedGroups(args: {
           ([repoId, candidate]) => [repoId, candidate.repo] as const
         )
       ],
-      pendingRepoIds: pendingByRepo.keys(),
+      // A create with no project here yet sits atop the list instead (GH-CREATE-NO-ROW).
+      pendingRepoIds: [...pendingByRepo.keys()].filter((repoId) => repoMap.has(repoId)),
       repoOrder,
       projectOrderBy
     })

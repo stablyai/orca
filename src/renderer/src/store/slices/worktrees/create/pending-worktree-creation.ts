@@ -149,13 +149,7 @@ export function createRemovePendingWorktreeCreation(
         .catch(() => undefined)
     }
     const cleanup = cleanUpCancelledVm(creationId, removedEntry.request, get)
-    // A GitHub-only create past its start is opening a sandbox that stays; nothing is deleted.
-    const opening = Boolean(removedEntry.request.githubSource) && removedEntry.phase === 'creating'
-    if (
-      removedEntry.status === 'creating' &&
-      isOrcaCloudCreateRequest(removedEntry.request) &&
-      !opening
-    ) {
+    if (removedEntry.status === 'creating' && isOrcaCloudCreateRequest(removedEntry.request)) {
       beginOrcaCloudCancelCleanup(creationId, cleanup ? [cleanup] : [], {
         runtimeId: removedEntry.request.ephemeralVmRuntimeId,
         createStartedAt: removedEntry.startedAt,

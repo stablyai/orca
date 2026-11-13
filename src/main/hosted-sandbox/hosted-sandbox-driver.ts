@@ -25,6 +25,7 @@ import type {
 } from './hosted-environment-provider'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { takeSuspendReason } from './idle-sleep-requests'
+import { reclaimCancelledCreate } from './hosted-sandbox-create-reclaim'
 
 export const HOSTED_SANDBOX_DRIVER_ID = 'orca-cloud'
 
@@ -144,20 +145,33 @@ export async function createSandboxWithProgress(
       )
       .catch(() => undefined)
   }
-  const ready = await client.create(
-    {
-      workspaceId: spec.workspaceId,
-      machineSize,
-      // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
-      ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
-      ...(spec.region ? { region: spec.region } : {}),
-      ...(spec.repo ? { repo: spec.repo } : {})
-    },
-    ctx?.signal,
-    spec.idempotencyKey
-  )
+  const body = {
+    workspaceId: spec.workspaceId,
+    machineSize,
+    // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
+    ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
+    ...(spec.region ? { region: spec.region } : {}),
+    ...(spec.repo ? { repo: spec.repo } : {})
+  }
+  let ready: HostedSandboxReadyResponse
+  try {
+    ready = await client.create(body, ctx?.signal, spec.idempotencyKey)
+  } catch (error) {
+    // GH-CREATE-CANCEL: cancelled in flight, the control plane may still have made it: find it by
+    // its key and delete it before reporting the cancel.
+    if (ctx?.signal?.aborted && spec.idempotencyKey) {
+      await reclaimCancelledCreate(client, body, spec.idempotencyKey)
+    }
+    throw error
+  }
   if (ready.clone) {
+    // A cancelled, failed or stalled clone deletes the sandbox itself.
     await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
+  }
+  if (ctx?.signal?.aborted) {
+    // Cancelled just as it answered: nothing will use it, so it must not keep running (and billing).
+    await client.destroy(ready.sandbox.id).catch(() => undefined)
+    throw new EnvironmentProviderError('aborted', 'Cancelled.')
   }
   ctx?.onProgress?.({ phase: 'connecting' })
   return ready
