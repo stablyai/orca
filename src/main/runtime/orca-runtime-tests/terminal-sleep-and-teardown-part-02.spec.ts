@@ -4,10 +4,12 @@ import './runtime-test-module-registration.spec'
 import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import '../session-lifecycle/close/mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
+  HEADLESS_SECOND_LEAF_ID,
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -120,6 +122,108 @@ describe('OrcaRuntimeService', () => {
       runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     ).resolves.toMatchObject({ stopped: 0, postStopVerified: true })
     expect(stopAndWait).not.toHaveBeenCalled()
+  })
+
+  it('captures each pane conversation after its presence probe without changing candidate precedence', async () => {
+    const firstPane = `host-tab:${HEADLESS_LEAF_ID}`
+    const siblingPane = `host-tab:${HEADLESS_SECOND_LEAF_ID}`
+    const fixture = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({
+            [HEADLESS_LEAF_ID]: 'persisted-pty',
+            [HEADLESS_SECOND_LEAF_ID]: 'sibling-pty'
+          })
+        }
+      })
+    )
+    const probeStarted = deferred<boolean>()
+    const probe = deferred<'live'>()
+    let conversation = 'before-probe'
+    const row = (paneKey: string, id: string, receivedAt: number): AgentStatusIpcPayload => ({
+      paneKey,
+      connectionId: null,
+      agentType: 'claude',
+      state: 'done',
+      prompt: 'keep this conversation',
+      providerSession: { key: 'session_id', id },
+      stateStartedAt: 10,
+      receivedAt
+    })
+    const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
+      getAgentProviderSessionRowsForPane: (paneKey) =>
+        paneKey === firstPane
+          ? [row(firstPane, conversation, 20), row(firstPane, 'later-candidate', 30)]
+          : paneKey === siblingPane
+            ? [row(siblingPane, 'sibling-conversation', 40)]
+            : [],
+      checkHookAgentPresence: async (paneKey) => {
+        if (paneKey === firstPane) {
+          probeStarted.resolve(true)
+          return probe.promise
+        }
+        return 'live'
+      }
+    })
+    const live = new Set(['persisted-pty', 'sibling-pty'])
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        live.delete(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () =>
+        [...live].map((id) => ({
+          id,
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude'
+        }))
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: fixture.getSession().terminalLayoutsByTabId['host-tab'] ?? null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'persisted-pty'
+        },
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_SECOND_LEAF_ID,
+          paneRuntimeId: 2,
+          ptyId: 'sibling-pty'
+        }
+      ]
+    })
+
+    const sleeping = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+    await probeStarted.promise
+    conversation = 'after-probe'
+    probe.resolve('live')
+    await expect(sleeping).resolves.toMatchObject({ stopped: 2, postStopVerified: true })
+
+    const records = fixture.getSession().sleepingAgentSessionsByPaneKey
+    expect(records?.[firstPane]?.providerSession).toEqual({ key: 'session_id', id: 'after-probe' })
+    expect(records?.[siblingPane]?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'sibling-conversation'
+    })
   })
 
   it('reports a PTY that remains live after acknowledged worktree sleep', async () => {
