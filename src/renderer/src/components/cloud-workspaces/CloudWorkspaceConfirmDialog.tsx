@@ -155,26 +155,28 @@ export function CloudWorkspaceConfirmDialog({
               {archiveDefinition}
             </DialogDescription>
           ) : (
-            <DialogDescription>
+            <>
               {/* OWNER-TRANSFER: what the change does, before who manages it afterwards. */}
-              {ownerChangeConsequences(
-                w.ownerUserId === selfId ? null : memberName(directory, w.ownerUserId, selfId, t),
-                t
-              ).map((line) => (
-                <span key={line} className="mb-1.5 block">
-                  {line}
-                </span>
-              ))}
-              {losesManagement
-                ? t(
-                    'auto.components.cloudWorkspaces.reassignLosesManagement',
-                    "You won't be able to manage this workspace after this."
-                  )
-                : t(
-                    'auto.components.cloudWorkspaces.reassignBody',
-                    'They can then change who can see it, archive it or make someone else the owner.'
-                  )}
-            </DialogDescription>
+              <ul className="list-disc space-y-1 pl-5 text-left text-sm text-muted-foreground">
+                {ownerChangeConsequences(
+                  w.ownerUserId === selfId ? null : memberName(directory, w.ownerUserId, selfId, t),
+                  t
+                ).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <DialogDescription>
+                {losesManagement
+                  ? t(
+                      'auto.components.cloudWorkspaces.reassignLosesManagement',
+                      "You won't be able to manage this workspace after this."
+                    )
+                  : t(
+                      'auto.components.cloudWorkspaces.reassignBody',
+                      'They can then change who can see it, archive it or make someone else the owner.'
+                    )}
+              </DialogDescription>
+            </>
           )}
         </DialogHeader>
         {error ? <InlineError title={error} density="compact" /> : null}

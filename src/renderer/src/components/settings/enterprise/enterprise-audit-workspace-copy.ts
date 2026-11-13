@@ -140,7 +140,7 @@ export const WORKSPACE_AUDIT_ACTIONS: Record<string, ActionCopy> = {
     plain: (t) =>
       t(
         'settings.enterprise.audit.action.wsOwnerNotified',
-        'Told the previous owner about an owner change'
+        'Notified the previous owner about an owner change'
       ),
     detailed: (t, detail, _locale, { name, nameOf }) => {
       const previous = typeof detail.toUserId === 'string' ? detail.toUserId : null
