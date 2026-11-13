@@ -20,6 +20,8 @@ class FakeStateType:
     EDITABLE = 6
     ENABLED = 7
     SENSITIVE = 8
+    HAS_POPUP = 9
+    MULTI_LINE = 10
 
 
 class FakeStateSet:
@@ -147,6 +149,7 @@ class SnapshotFixture(ExitStack):
         self.timeout = (800, 15000)
         self.delays = {}
         self.restore = lambda: None
+        self.pointer = None
         self.bounds = {node: runtime.Rect(100 + i * 10, 200 + i * 20, 300, 400)
                        for i, node in enumerate(runtime.all_nodes(root))}
         for node in self.bounds:
@@ -161,6 +164,7 @@ class SnapshotFixture(ExitStack):
             (runtime.Atspi, "CoordType", types.SimpleNamespace(SCREEN=0)),
             (runtime, "capture_png", self.capture),
             (runtime, "restore_window", lambda *_: self.restore()),
+            (runtime, "x11_pointer_state", lambda: self.pointer),
         ):
             self.enter_context(patch.object(obj, name, value, create=True))
         return self
@@ -386,6 +390,7 @@ class RuntimeRenderTest(unittest.TestCase):
     def test_window_only_protection_preserves_completed_semantic_action(self):
         button = FakeAccessible("button", "Continue")
         effects = []
+        button.get_state_set = lambda: FakeStateSet(FakeStateType.ENABLED)
         button.get_n_actions = lambda: 1
         button.get_action_name = lambda _: "click"
         def click(_):
@@ -410,21 +415,27 @@ class RuntimeRenderTest(unittest.TestCase):
                 runtime.run_operation({"tool": "click", "app": "Fixture"})
             self.assertEqual(effects, ["clicked"])
 
-    def test_pointer_input_waits_for_activation_and_uses_restored_geometry(self):
+    def test_pointer_input_refuses_without_restore_and_raises_only_a_valid_target(self):
         operations = (
             {"tool": "click", "x": 5, "y": 6},
             {"tool": "scroll", "x": 5, "y": 6, "direction": "down", "pages": 1},
             {"tool": "drag", "from_x": 5, "from_y": 6, "to_x": 25, "to_y": 26},
         )
+        cases = (
+            {"name": "no restore flag", "restore": False, "error": "background_unavailable"},
+            {"name": "target outside the window", "restore": True, "offset": 1000, "error": "outside the target window"},
+            {"name": "restore did not activate", "restore": True, "activates": False, "error": "window_not_focused"},
+            {"name": "restored", "restore": True, "activates": True},
+        )
         for operation in operations:
-            for activates in (False, True):
-                with self.subTest(tool=operation["tool"], activates=activates), SnapshotFixture(
+            for case in cases:
+                with self.subTest(tool=operation["tool"], case=case["name"]), SnapshotFixture(
                     FakeAccessible("frame", "Editor")
                 ) as fixture:
-                    restored = []
-                    pointer_calls = []
+                    restored, pointer_calls, moves = [], [], []
+                    fixture.pointer = (700, 800, 0)
                     fixture.root.get_state_set = lambda: FakeStateSet(
-                        *([FakeStateType.ACTIVE] if activates and restored and fixture.clock >= 0.1 else [])
+                        *([FakeStateType.ACTIVE] if case.get("activates") and restored else [])
                     )
                     def restore():
                         restored.append(True)
@@ -432,33 +443,72 @@ class RuntimeRenderTest(unittest.TestCase):
                     fixture.restore = restore
                     def sleep(seconds):
                         fixture.clock += seconds
+                    offset = case.get("offset", 0)
+                    request = {key: value + offset if key.endswith(("x", "y")) else value for key, value in operation.items()}
+                    request.update({"app": "Fixture", "noScreenshot": True, "restoreWindow": case["restore"]})
                     with patch.object(runtime.time, "sleep", sleep), \
+                         patch.object(runtime.Atspi, "generate_mouse_event", lambda *args: moves.append(args), create=True), \
                          patch.object(runtime, "click_at", lambda *args: pointer_calls.append(args[:2])), \
                          patch.object(runtime, "scroll_at", lambda *args: pointer_calls.append(args[:2])), \
                          patch.object(runtime, "drag_between", lambda start, end: pointer_calls.extend((start, end))):
-                        request = {**operation, "app": "Fixture", "noScreenshot": True, "restoreWindow": False}
-                        if activates:
-                            result = runtime.run_operation(request)
-                            self.assertTrue(result["ok"])
-                            self.assertEqual(pointer_calls, [(505, 206), (525, 226)] if operation["tool"] == "drag" else [(505, 206)])
-                        else:
-                            with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
+                        if "error" in case:
+                            with self.assertRaisesRegex(RuntimeError, case["error"]):
                                 runtime.run_operation(request)
                             self.assertEqual(pointer_calls, [])
+                            self.assertEqual(restored, [True] if case.get("activates") is False else [])
+                        else:
+                            result = runtime.run_operation(request)
+                            self.assertEqual(pointer_calls, [(505, 206), (525, 226)] if operation["tool"] == "drag" else [(505, 206)])
+                            self.assertEqual(moves, [(700, 800, "abs")])
+                            self.assertEqual(result["action"]["delivery"], "foreground")
+
+    def test_background_click_refuses_controls_that_take_the_foreground(self):
+        cases = (
+            ("menu bar entry", "gtk", "3.24", "menu item", "Settings", ["click", "ShowMenu"], (), True),
+            ("dialog opener", "Qt", "6.6", "push button", "Configure Kate...", ["Press"], (), True),
+            ("dialog opener on GTK 3", "gtk", "3.24", "push button", "Test…", ["click"], (), False),
+            ("popup opener", "gtk", "4.14", "combo box", "Degrees", ["click"], (FakeStateType.HAS_POPUP,), True),
+            ("popup opener with Selection", "gtk", "4.14", "combo box", "Output", ["click"], (FakeStateType.HAS_POPUP, "selection"), False),
+            ("plain button", "Qt", "6.6", "push button", "Save", ["Press", "SetFocus"], (), False),
+        )
+        for name, toolkit, version, role, label, actions, traits, refused in cases:
+            for restore in (False, True):
+                button = FakeAccessible(role, label)
+                effects = []
+                button.get_state_set = lambda traits=traits: FakeStateSet(FakeStateType.ENABLED, *[t for t in traits if t != "selection"])
+                button.get_selection_iface = lambda traits=traits: button if "selection" in traits else None
+                button.get_n_actions = lambda actions=actions: len(actions)
+                button.get_action_name = lambda index, actions=actions: actions[index]
+                button.do_action = lambda index: effects.append(index) or True
+                with self.subTest(case=name, restore=restore), SnapshotFixture(FakeAccessible("frame", "Editor", children=[button])) as fixture:
+                    fixture.app.get_toolkit_name = lambda toolkit=toolkit: toolkit
+                    fixture.app.get_toolkit_version = lambda version=version: version
+                    element = runtime.make_snapshot("Fixture", False)["elements"][1]
+                    request = {"tool": "click", "app": "Fixture", "element": element, "noScreenshot": True, "restoreWindow": restore}
+                    if refused and not restore:
+                        with self.assertRaisesRegex(RuntimeError, "background_unavailable"):
+                            runtime.run_operation(request)
+                        self.assertEqual(effects, [])
+                    else:
+                        result = runtime.run_operation(request)
+                        self.assertEqual(effects, [0])
+                        self.assertEqual(result["action"]["delivery"], "background")
 
     def test_restoration_requires_selected_window_focus_before_keyboard_input(self):
         restore_window = runtime.restore_window
         cases = (
-            {"name": "delayed AT-SPI focus", "ack": False, "delay": 0.1, "expected": True, "native": False},
-            {"name": "ineffective true acknowledgment", "ack": True, "expected": True, "native": True},
+            {"name": "native activation", "expected": True, "native": True},
             {"name": "unmanaged helper", "ids": "70\n71\n", "managed": [71], "expected": True, "native": True},
+            {"name": "grab focus when no native window maps", "windows": 2, "ack": True, "expected": True},
             {"name": "two accessible windows", "windows": 2},
             {"name": "two native windows", "ids": "72\n71\n"},
             {"name": "failed managed window identity", "managed": [71, None]},
-            {"name": "Wayland", "session": "wayland"},
+            {"name": "window on another workspace", "desktops": ("0", "2"), "error": "another workspace"},
+            {"name": "window on every workspace", "desktops": ("0", "-1"), "expected": True, "native": True},
+            {"name": "Wayland", "session": "wayland", "error": "unsupported capability"},
             {"name": "search timeout", "timeout": "search"},
             {"name": "activation timeout", "timeout": "windowactivate"},
-            {"name": "activation refused", "refused": True},
+            {"name": "activation refused", "refused": True, "native": True},
         )
         for case in cases:
             with self.subTest(case=case["name"]), SnapshotFixture(FakeAccessible("frame", "Editor")) as fixture:
@@ -468,8 +518,6 @@ class RuntimeRenderTest(unittest.TestCase):
                     fixture.app.children.append(FakeAccessible("frame", "Sibling"))
 
                 def state():
-                    if fixture.clock >= case.get("delay", float("inf")):
-                        active[0] = 71
                     states = [FakeStateType.SHOWING]
                     if active[0] == 71:
                         states.append(FakeStateType.ACTIVE)
@@ -478,6 +526,11 @@ class RuntimeRenderTest(unittest.TestCase):
                 def sleep(seconds):
                     fixture.clock += seconds
 
+                def grab():
+                    if case.get("ack"):
+                        active[0] = 71
+                    return bool(case.get("ack"))
+
                 def activate(window_id):
                     activations.append(window_id)
                     if not case.get("refused"):
@@ -485,6 +538,9 @@ class RuntimeRenderTest(unittest.TestCase):
 
                 def native(command, **_kwargs):
                     stage = command[1]
+                    if stage in {"get_desktop", "get_desktop_for_window"}:
+                        current, target = case.get("desktops", ("0", "0"))
+                        return types.SimpleNamespace(returncode=0, stdout=current if stage == "get_desktop" else target)
                     if case.get("timeout") == stage or (case.get("timeout") == "windowactivate" and "windowactivate" in command):
                         raise runtime.subprocess.TimeoutExpired(command, 2)
                     if stage == "search":
@@ -503,7 +559,7 @@ class RuntimeRenderTest(unittest.TestCase):
                 fixture.root.get_state_set = state
                 with patch.object(runtime, "restore_window", restore_window), \
                      patch.object(runtime.time, "sleep", sleep), \
-                     patch.object(runtime.Atspi.Component, "grab_focus", lambda _: case.get("ack", False), create=True), \
+                     patch.object(runtime.Atspi.Component, "grab_focus", lambda _: grab(), create=True), \
                      patch.object(runtime.Atspi, "KeySynthType", types.SimpleNamespace(STRING=1), create=True), \
                      patch.object(runtime.Atspi, "generate_keyboard_event", lambda *_: keys.append(active[0]), create=True), \
                      patch.object(runtime.Gdk, "Screen", types.SimpleNamespace(get_default=lambda: types.SimpleNamespace(
@@ -518,12 +574,73 @@ class RuntimeRenderTest(unittest.TestCase):
                     if case.get("expected"):
                         self.assertTrue(runtime.run_operation(request)["ok"])
                     else:
-                        with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
+                        with self.assertRaisesRegex(RuntimeError, case.get("error", "window_not_focused")):
                             runtime.run_operation(request)
                 self.assertEqual(keys, [71] if case.get("expected") else [])
-                self.assertEqual(activations, [71] if case.get("native") or case.get("refused") else [])
+                self.assertEqual(activations, [71] if case.get("native") else [])
                 if not case.get("expected"):
                     self.assertEqual(active[0], 99)
+
+    def test_typing_stops_when_the_window_loses_focus_or_a_key_is_held(self):
+        text = "a" * 100
+        cases = (
+            {"name": "idle", "typed": [40, 40, 20]},
+            {"name": "caps lock", "masks": [0x2], "typed": [40, 40, 20], "clear": True},
+            {"name": "focus lost", "inactive_after": 1, "typed": [40], "error": "lost focus after 40 of 100"},
+            {"name": "held before", "masks": [0x4], "typed": [], "error": "modifier key"},
+            {"name": "held during", "masks": [0, 0x1], "typed": [40], "error": "pressed after 40 of 100"},
+        )
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                chunks, commands = [], []
+                window = FakeAccessible("frame", "Editor")
+                window.get_state_set = lambda: FakeStateSet(
+                    *([] if len(chunks) >= case.get("inactive_after", 99) else [FakeStateType.ACTIVE]))
+                masks = list(case.get("masks", [0]))
+                def pointer():
+                    return (0, 0, masks.pop(0) if len(masks) > 1 else masks[0])
+                def run(command, input=None, **_):
+                    commands.append(command)
+                    chunks.append(len(input))
+                with patch.object(runtime, "x11_pointer_state", pointer), \
+                     patch.object(runtime.Atspi, "set_timeout", lambda *_: None, create=True), \
+                     patch.object(runtime.shutil, "which", lambda _: "/usr/bin/xdotool"), \
+                     patch.object(runtime, "temporary_x11_keymap", lambda *_: nullcontext(None)), \
+                     patch.object(runtime.subprocess, "run", run):
+                    if "error" in case:
+                        with self.assertRaisesRegex(RuntimeError, case["error"]):
+                            runtime.type_text(text, window)
+                    else:
+                        runtime.type_text(text, window)
+                self.assertEqual(chunks, case["typed"])
+                self.assertEqual(any("--clearmodifiers" in command for command in commands), bool(case.get("clear")))
+
+    def test_return_in_a_background_gtk_entry_activates_it_without_keys(self):
+        for toolkit, multi_line, activates_window in (("gtk", False, False), ("gtk", False, True), ("Qt", False, False), ("gtk", True, False)):
+            entry = FakeAccessible("text", "Search", value="cats")
+            effects = []
+            states = [FakeStateType.FOCUSED, FakeStateType.EDITABLE] + ([FakeStateType.MULTI_LINE] if multi_line else [])
+            entry.get_state_set = lambda states=states: FakeStateSet(*states)
+            entry.get_n_actions = lambda: 1
+            entry.get_action_name = lambda _: "activate"
+            entry.do_action = lambda index: effects.append(index) or True
+            with self.subTest(toolkit=toolkit, multi_line=multi_line, activates_window=activates_window), \
+                 SnapshotFixture(FakeAccessible("frame", "Editor", children=[entry])) as fixture, \
+                 patch.object(runtime, "press_key") as keys:
+                fixture.app.get_toolkit_name = lambda toolkit=toolkit: toolkit
+                fixture.app.get_toolkit_version = lambda: "3.24"
+                fixture.root.get_state_set = lambda: FakeStateSet(*([FakeStateType.ACTIVE] if effects and activates_window else []))
+                request = {"tool": "press_key", "key": "Enter", "app": "Fixture", "noScreenshot": True}
+                if toolkit == "gtk" and not multi_line:
+                    result = runtime.run_operation(request)
+                    self.assertEqual(effects, [0])
+                    self.assertEqual(result["action"]["actionName"], "activate")
+                    self.assertEqual(result["action"]["delivery"], "foreground" if activates_window else "background")
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "background_unavailable.*type-text --element-index"):
+                        runtime.run_operation(request)
+                    self.assertEqual(effects, [])
+                keys.assert_not_called()
 
     def test_text_entry_inserts_into_the_focused_field_of_a_background_window(self):
         cases = (
@@ -603,7 +720,7 @@ class RuntimeRenderTest(unittest.TestCase):
                         paste.assert_called_once_with("x")
                     self.assertEqual(result["action"]["verification"]["state"], "unverified")
                 else:
-                    with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
+                    with self.assertRaisesRegex(RuntimeError, "background_unavailable"):
                         runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
                 if not active or tool != "type_text":
                     keys.assert_not_called()
