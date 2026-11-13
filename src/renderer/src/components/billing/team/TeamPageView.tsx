@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { CreditCard, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,6 +26,8 @@ import type { TeamPageArrival } from './team-page-store'
 export type TeamPageViewProps = {
   /** The active team, or null on a personal account. */
   org: { orgId: string; name: string } | null
+  /** The team's MFA requirement for this person: the countdown banner or the setup screen. */
+  mfaNotice?: React.ReactNode
   viewerUserId: string | null
   roster: OrcaProfileOrgMembersListResult | null
   billing: OrcaBillingStatusResult | null
@@ -114,6 +116,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {props.mfaNotice ?? null}
       <header className="flex items-center gap-3">
         <TeamMark name={props.org.name} />
         <div className="min-w-0 flex-1">
@@ -141,20 +144,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 : t('auto.components.billing.team.loadFailedTitle', 'Couldn’t load team')}
           </p>
         </div>
-        {!inline && entitlement?.canManageBilling ? (
-          // Seats, prices and invoices live in Plan & billing; one quiet way there from here.
-          // mr-6 clears the dialog's close button, which sits in this corner.
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="mr-6 shrink-0"
-            onClick={props.onSeePlans}
-          >
-            <CreditCard />
-            {t('auto.components.billing.team.planBillingLink', 'Plan & billing')}
-          </Button>
-        ) : null}
       </header>
 
       {props.arrival?.kind === 'checkout-success' && entitlement ? (
@@ -213,10 +202,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       {roster?.canManageMembers ? (
         <TeamInviteComposer
           viewerRole={viewerRole}
-          entitlement={entitlement}
-          members={roster.members.length}
-          pendingInvites={roster.pendingInvites.length}
-          now={props.now}
           onInvite={props.onInvite}
           inputRef={inviteInput}
         />

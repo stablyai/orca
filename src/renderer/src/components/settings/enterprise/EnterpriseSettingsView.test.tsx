@@ -222,8 +222,8 @@ describe('without the Enterprise plan', () => {
     expect(contact).toHaveLength(1)
     fireEvent.click(contact[0]!)
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
-    // The Copy link chevron sits beside it (the open-in-browser rule).
-    expect(screen.getAllByRole('button', { name: 'More link options' })).toHaveLength(1)
+    // Contact sales is not a sign-in page: a plain button, no Copy link chevron (AUTH-ONLY-COPY-LINK).
+    expect(screen.queryAllByRole('button', { name: 'More link options' })).toHaveLength(0)
   })
 
   it('a team missing only the audit log keeps the button on that block, with no banner', () => {

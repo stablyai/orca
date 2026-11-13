@@ -195,6 +195,8 @@ export type PendingWorktreeCreation = {
   resumedAt?: number
   /** VM creates: the provisioned VM's runtime environment, known once it answers. */
   vmEnvironmentId?: string
+  /** GitHub-only Orca Cloud create: the server it is pairing to; its rows wait for the hand-off. */
+  pairingHostId?: string
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
   /** Phases entered so far with their start times, so the chat checklist can time each step. */

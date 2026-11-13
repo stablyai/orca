@@ -29,12 +29,23 @@ export function isUnknownServerFailure(error: string, status?: number): boolean 
   return status !== undefined && status >= 500 && !DESCRIBED_CODES.has(error)
 }
 
+/** The team's MFA policy refused the request: not a session problem, so never "sign in again". */
+export function mfaRequiredMessage(t: Translate = translate): string {
+  return t(
+    'auto.components.teamMfa.requiredInline',
+    'Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces.'
+  )
+}
+
 export function describeError(
   error: string,
   reason?: string,
   t: Translate = translate,
   owner?: CloudWorkspaceSeatOwner
 ): string {
+  if (reason === 'mfa_required') {
+    return mfaRequiredMessage(t)
+  }
   if (error === 'not_found') {
     return t(
       'auto.components.cloudWorkspaces.errorNotFound',
@@ -133,6 +144,9 @@ export function describeInlineError(
   reason?: string,
   t: Translate = translate
 ): string {
+  if (reason === 'mfa_required') {
+    return mfaRequiredMessage(t)
+  }
   if (error === 'unauthorized') {
     return signInAgainMessage(t)
   }
