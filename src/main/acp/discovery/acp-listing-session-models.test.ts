@@ -130,8 +130,8 @@ function accumulatedCatalogHarness(count: number) {
     close: async () => {}
   }))
   const store = new AgentModelCatalogStore()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: measure the production publication boundary required by the scaling regression.
   const writes = vi.spyOn(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: measure the production publication boundary required by the scaling regression.
     store as unknown as { writeSuccess: ReturnType<typeof createAgentModelCatalogSuccessWriter> },
     'writeSuccess'
   )

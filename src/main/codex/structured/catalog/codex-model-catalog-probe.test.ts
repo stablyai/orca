@@ -377,11 +377,11 @@ it('settles a failed inventory and pending sign-in classification when the real 
 it('keeps a later nonempty page and late configured model after an empty first page', async () => {
   const config = Promise.withResolvers<unknown>()
   const observations: string[][] = []
-  const request = vi.fn(async (method: string, params: unknown) => {
+  const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
     if (method === 'config/read') {
       return config.promise
     }
-    return (params as { cursor?: string }).cursor
+    return params?.cursor
       ? { data: [MODEL_ROW], nextCursor: null }
       : { data: [], nextCursor: 'next' }
   })
