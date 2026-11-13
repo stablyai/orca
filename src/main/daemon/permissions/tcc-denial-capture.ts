@@ -17,7 +17,6 @@ import { track } from '../../telemetry/client'
 import { inspectMacProcessCodeIdentity } from '../executable-host/macos/daemon-mac-code-identity'
 import { getLastMacDaemonForkReason } from '../executable-host/macos/macos-daemon-fork-reason'
 import type { DaemonEndpointIdentity } from '../protocol/daemon-hello-protocol'
-import { writeTccDenialDiagnostics } from './tcc-denial-diagnostics-file'
 import { readTccFolderState, type TccFolderState } from './tcc-denial-folder-state'
 import { readTccLogVerdict } from './tcc-denial-log-verdict'
 import { checkHelperSignatures } from './tcc-denial-signature-checks'
@@ -192,14 +191,6 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
       volume_type: folderState.volumeType
     }
     track('daemon_pty_cwd_denial_capture', props)
-    await writeTccDenialDiagnostics({
-      capturedAt: new Date().toISOString(),
-      deniedAt: new Date(denialAtMs).toISOString(),
-      helperPid: identity.pid,
-      helperPath,
-      ...props,
-      logLines: log.lines
-    })
   } catch {
     // Diagnostics are best-effort; a failed capture must not reach terminal creation.
   }

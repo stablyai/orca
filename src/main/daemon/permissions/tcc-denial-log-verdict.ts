@@ -20,8 +20,6 @@ const LOG_LOOKBACK_MS = 30_000
 const LOG_LOOKAHEAD_MS = 2_000
 const LOG_TIMEOUT_MS = 5_000
 const LOG_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
-const MAX_KEPT_LINES = 150
-const MAX_KEPT_LINE_CHARS = 1_500
 const LOG_PREDICATE = '(subsystem == "com.apple.TCC") OR (sender == "Sandbox")'
 
 export type TccLogVerdict = {
@@ -32,8 +30,6 @@ export type TccLogVerdict = {
   service: TccService
   requirementFailure: RequirementFailure
   kernelDeny: YesNo
-  /** Raw filtered lines for the local diagnostics file only; they carry paths. */
-  lines: string[]
 }
 
 export type TccLogSubject = {
@@ -45,7 +41,7 @@ export type TccLogSubject = {
   cwdClass: MacTccFolderClass
 }
 
-type LogRecord = { line: string; message: string; msgId: string | null }
+type LogRecord = { message: string; msgId: string | null }
 
 type MsgGroup = {
   relevant: boolean
@@ -54,10 +50,7 @@ type MsgGroup = {
 }
 
 const LOG_ENTRY_SCHEMA = z.object({
-  eventMessage: z.string(),
-  processImagePath: z.string().optional(),
-  processID: z.number().optional(),
-  timestamp: z.string().optional()
+  eventMessage: z.string()
 })
 const MSG_ID_PATTERN = /\bmsgID=(\d+\.\d+)/
 const ANY_PID_PATTERN = /\bpid=\d+/
@@ -92,14 +85,8 @@ function toRecord(rawLine: string): LogRecord | null {
   if (!entry.success) {
     return null
   }
-  const { eventMessage: message, processImagePath: image = '' } = entry.data
-  const processName = image.slice(image.lastIndexOf('/') + 1)
-  const line = `${entry.data.timestamp ?? ''} ${processName}[${entry.data.processID ?? ''}] ${message}`
-  return {
-    line: line.length > MAX_KEPT_LINE_CHARS ? `${line.slice(0, MAX_KEPT_LINE_CHARS)}…` : line,
-    message,
-    msgId: MSG_ID_PATTERN.exec(message)?.[1] ?? null
-  }
+  const message = entry.data.eventMessage
+  return { message, msgId: MSG_ID_PATTERN.exec(message)?.[1] ?? null }
 }
 
 /** A failed requirement check for this code identity; the app and its hosts share it. */
@@ -127,7 +114,7 @@ function authReasonOf(raw: string | undefined): TccAuthReason {
   return TCC_AUTH_REASONS.find((reason) => reason === raw) ?? 'other'
 }
 
-/** Keep only lines about the helper, then derive the enums; `stdout` is `log show --style ndjson`. */
+/** Derive enums from lines about the helper; raw `log show --style ndjson` text is never kept. */
 export function parseTccLogVerdict(
   stdout: string,
   subject: TccLogSubject,
@@ -163,7 +150,6 @@ export function parseTccLogVerdict(
     }
   }
 
-  const kept: string[] = []
   let kernelDeny = false
   let requirementFailure: RequirementFailure = 'no'
   for (const record of records) {
@@ -182,9 +168,6 @@ export function parseTccLogVerdict(
         : requirementFailure === 'yes'
           ? 'yes'
           : 'uncorrelated'
-    }
-    if (kept.length < MAX_KEPT_LINES) {
-      kept.push(record.line)
     }
   }
 
@@ -206,8 +189,7 @@ export function parseTccLogVerdict(
     authReason: authReasonOf(chosen?.result?.authReason),
     service: serviceName === null ? 'none' : (SERVICE_BY_NAME[serviceName] ?? 'other'),
     requirementFailure,
-    kernelDeny: kernelDeny ? 'yes' : 'no',
-    lines: kept
+    kernelDeny: kernelDeny ? 'yes' : 'no'
   }
 }
 

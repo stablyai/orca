@@ -1,13 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { trackMock, logVerdictMock, writeFileMock } = vi.hoisted(() => ({
+const { trackMock, logVerdictMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
-  logVerdictMock: vi.fn(),
-  writeFileMock: vi.fn()
+  logVerdictMock: vi.fn()
 }))
 vi.mock('../../../telemetry/client', () => ({ track: trackMock }))
 vi.mock('../tcc-denial-log-verdict', () => ({ readTccLogVerdict: logVerdictMock }))
-vi.mock('../tcc-denial-diagnostics-file', () => ({ writeTccDenialDiagnostics: writeFileMock }))
 vi.mock('../tcc-denial-signature-checks', () => ({
   checkHelperSignatures: async () => ({ live: 'pass', diskCopy: 'fail' })
 }))
@@ -33,7 +31,6 @@ const FOLDER = async () => ({ dataless: 'yes', icloud: 'yes', volumeType: 'apfs'
 beforeEach(() => {
   resetTccDenialCaptureForTests()
   trackMock.mockReset()
-  writeFileMock.mockReset().mockResolvedValue(undefined)
   logVerdictMock.mockReset().mockResolvedValue({
     logAccess: 'ok',
     tccdAsked: 'no',
@@ -41,8 +38,7 @@ beforeEach(() => {
     authReason: 'none',
     service: 'none',
     requirementFailure: 'no',
-    kernelDeny: 'yes',
-    lines: ['raw line']
+    kernelDeny: 'yes'
   })
 })
 
@@ -99,9 +95,6 @@ describe('tcc denial capture', () => {
         folder_icloud: 'yes',
         volume_type: 'apfs'
       })
-    )
-    expect(writeFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ helperPid: 1206, logLines: ['raw line'] })
     )
   })
 

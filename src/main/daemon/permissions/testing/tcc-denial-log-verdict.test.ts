@@ -121,8 +121,6 @@ describe('parseTccLogVerdict', () => {
       requirementFailure: 'no',
       kernelDeny: 'yes'
     })
-    expect(verdict.lines).toHaveLength(5)
-    expect(verdict.lines.some((kept) => kept.includes('msgID=153.1044'))).toBe(false)
   })
 
   it('reports no tccd request when only other processes asked', () => {
@@ -131,8 +129,7 @@ describe('parseTccLogVerdict', () => {
       authValue: 'none',
       authReason: 'none',
       service: 'none',
-      kernelDeny: 'no',
-      lines: []
+      kernelDeny: 'no'
     })
   })
 
@@ -191,8 +188,7 @@ describe('parseTccLogVerdict', () => {
       'Failed to match existing code requirement for subject org.example.other and service kTCCServiceSystemPolicyDownloadsFolder'
     )
     expect(parseTccLogVerdict(ndjson([other]), SUBJECT, 'ok')).toMatchObject({
-      requirementFailure: 'no',
-      lines: []
+      requirementFailure: 'no'
     })
   })
 
