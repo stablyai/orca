@@ -2,7 +2,6 @@ import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
 } from '../pairing/paired-runtime-connection'
-import type { AddressInfo } from 'node:net'
 import { afterEach, expect, it, onTestFinished } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
@@ -138,7 +137,7 @@ async function createServer(
         return
       }
       if (!authenticated) {
-        const auth = JSON.parse(plaintext) as { type: string; deviceToken: string }
+        const auth: { type: string; deviceToken: string } = JSON.parse(plaintext)
         auths.push(auth)
         expect(auth).toEqual({
           type: 'e2ee_auth',
@@ -150,11 +149,11 @@ async function createServer(
         return
       }
 
-      const request = JSON.parse(plaintext) as {
+      const request: {
         id: string
         method: string
         params?: unknown
-      }
+      } = JSON.parse(plaintext)
       requests.push(request)
       if (request.method === 'test.hang') {
         return
@@ -172,7 +171,10 @@ async function createServer(
   })
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
-  const address = wss.address() as AddressInfo
+  const address = wss.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Test server did not bind a TCP port')
+  }
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,

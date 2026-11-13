@@ -54,7 +54,8 @@ describe('host-owned Chat input', () => {
 
   it.each([
     ['claude', 'claude-2-1-316-default-unlabelled-middle', 100, 30, ''],
-    ['codex', 'codex-0-137-0-rotating-placeholder', 80, 24, '\x1b[20;3H\x1b[0mship it\x1b[K']
+    ['codex', 'codex-0-137-0-rotating-placeholder', 80, 24, '\x1b[20;3H\x1b[0mship it\x1b[K'],
+    ['codex', 'codex-fullscreen-multiline-early-input', 120, 40, '']
   ] as const)(
     'blocks %s foreign drafts in recognized native editors before any model bytes',
     async (agent, fixture, cols, rows, typed) => {
@@ -81,14 +82,6 @@ describe('host-owned Chat input', () => {
   it('hands unknown and unsupported editor contexts back with no effects', async () => {
     for (const agent of ['claude', 'codex', 'omp'] as const) {
       const { runtime, handle, writes } = await createRuntime(undefined, agent)
-      if (agent === 'codex') {
-        vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
-        runtime.onPtyData(
-          'pty-prompt',
-          readRuntimeFixture('codex-fullscreen-multiline-early-input'),
-          Date.now()
-        )
-      }
       await expect(
         runtime.controlTerminalModel(
           handle,

@@ -165,15 +165,15 @@ describe('terminal option owner catalog invalidation', () => {
           tabsByWorktree: nextTabs
         })
       )
-      // One listing pass per new immutable catalog, independent of mounted consumers.
+      // Unannotated replacement needs one parking scan and one shared tab-owner scan.
       expect(worktreeCatalogEnumerations).toBe(1)
-      expect(terminalCatalogEnumerations).toBe(1)
+      expect(terminalCatalogEnumerations).toBe(2)
       // Three existing GitHub cache passes plus one shared owner-index pass.
       expect(repoRowsRead).toBe(4 * count)
       expect(renders).toEqual(Array.from({ length: count }, () => 0))
       act(() => useAppStore.setState({ settings: createGlobalSettingsFixture() }))
       expect(worktreeCatalogEnumerations).toBe(1)
-      expect(terminalCatalogEnumerations).toBe(1)
+      expect(terminalCatalogEnumerations).toBe(2)
       expect(repoRowsRead).toBe(4 * count)
       expect(renders).toEqual(Array.from({ length: count }, () => 0))
 
