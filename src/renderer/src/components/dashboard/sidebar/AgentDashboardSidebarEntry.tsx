@@ -77,6 +77,7 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
     <button
       type="button"
       data-contextual-tour-target="agents-sidebar"
+      aria-current={drawerOpen ? 'page' : undefined}
       onClick={() => {
         if (openAsPopout) {
           void window.api.dashboard.openPopout()
@@ -86,11 +87,13 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
       }}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-        'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+        drawerOpen
+          ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
       )}
     >
       <LayoutDashboard
-        className={`size-4 shrink-0 ${SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME}`}
+        className={cn('size-4 shrink-0', !drawerOpen && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME)}
         strokeWidth={1.75}
       />
       <span className="flex-1">{t('dashboard.sidebar.dashboardLabel', 'Agent Dashboard')}</span>
