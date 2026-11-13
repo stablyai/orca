@@ -136,6 +136,33 @@
       "title": "ターミナル"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca は Google Play で配信中です",
+      "description": "このアプリは引き続き使えますが、今後のアップデートは Google Play から配信されます。移行は数分で完了します。",
+      "installTitle": "Google Play から Orca をインストール",
+      "installDescription": "今すぐ、どこからでもインストールできます。",
+      "openGooglePlay": "Google Play を開く",
+      "cantUseGooglePlay": "Google Play を使えない"
+    },
+    "download": {
+      "title": "新しい Orca アプリを入手",
+      "description": "このアプリは引き続き使えますが、今後のアップデートとセキュリティ修正は新しいアプリで配信されます。移行は数分で完了します。",
+      "installTitle": "新しいアプリをダウンロード",
+      "installDescription": "確認が表示されたら、ブラウザにアプリのインストールを許可してください。",
+      "download": "ダウンロード",
+      "keepThisVersion": "このバージョンを使い続ける",
+      "keepThisVersionNote": "セキュリティ修正は届かなくなります。1 週間後にもう一度お知らせします。"
+    },
+    "pairTitle": "コンピュータとペアリング",
+    "pairDescription": "コンピュータの Orca で「設定」→「モバイル」を開き、コードをスキャンしてください。",
+    "deleteTitle": "このアプリを削除",
+    "deleteDescription": "新しいアプリに Agent が表示されたら削除してください。それまではこのアプリを使い続けてください。",
+    "dataKept": "Agent、チャット、ワークスペースはコンピュータに保存されているので、新しいアプリでもすべて表示されます。",
+    "banner": {
+      "seeHowToSwitch": "移行方法を見る"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
