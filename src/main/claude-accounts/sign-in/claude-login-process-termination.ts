@@ -1,14 +1,13 @@
-import { spawnProcess } from '@orca/process-host'
-import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ChildProcess } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import { recordSelfInitiatedTreeKill } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
+import { runWindowsTaskkillTree } from '../../pty/process-retirement/windows-process-tree-kill'
 
 const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 
 export function terminateClaudeProcess(
-  child: ChildProcess,
+  child: Pick<ChildProcess, 'pid' | 'kill'>,
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
   afterKill: () => void
 ): void {
@@ -24,29 +23,14 @@ export function terminateClaudeProcess(
       afterKill()
       return
     }
-    const taskkill = spawnProcess({
-      program: windowsSystem32Binary('taskkill.exe'),
-      args: ['/pid', String(windowsTerminationPid), '/t', '/f'],
-      stdio: 'ignore'
-    })
-    let finished = false
-    const finish = (succeeded: boolean): void => {
-      if (finished) {
-        return
+    void runWindowsTaskkillTree(windowsTerminationPid, WINDOWS_TASKKILL_TIMEOUT_MS).then(
+      (succeeded) => {
+        if (!succeeded) {
+          child.kill()
+        }
+        afterKill()
       }
-      finished = true
-      clearTimeout(taskkillTimeout)
-      if (!succeeded) {
-        child.kill()
-      }
-      afterKill()
-    }
-    const taskkillTimeout = setTimeout(() => {
-      taskkill.kill()
-      finish(false)
-    }, WINDOWS_TASKKILL_TIMEOUT_MS)
-    taskkill.once('error', () => finish(false))
-    taskkill.once('close', (code) => finish(code === 0))
+    )
   }
   if (process.platform === 'win32') {
     // The login tree belongs to the relayed PID, not the wrapper.

@@ -174,8 +174,17 @@ function startTreeKill(
   })
 }
 
+/** Taskkill for live pid trees outside Git: on the process worker when it can run, rerun from main if the worker never created it. */
+export function runWindowsTaskkillOffMain(pids: number[], waitMs: number): Promise<boolean> {
+  return runTaskkill(pids, canSpawnOnWorkerThread(), waitMs)
+}
+
 /** True when taskkill reported every tree ended within its wait. */
-function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promise<boolean> {
+function runTaskkill(
+  pids: number[],
+  onWorker = canSpawnOnWorkerThread(),
+  waitMs = WINDOWS_TREE_KILL_WAIT_MS
+): Promise<boolean> {
   return new Promise((resolve) => {
     const taskkill = windowsSystem32Binary('taskkill.exe')
     const args = [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f']
@@ -238,9 +247,9 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
     if (onWorker) {
       // As with a native launch, the wait starts once taskkill exists. A queued taskkill is never given up
       // for a root-only kill: the live worker reaches it, and a dead one reruns it from main.
-      killer.once('spawn', () => waitFor(WINDOWS_TREE_KILL_WAIT_MS))
+      killer.once('spawn', () => waitFor(waitMs))
     } else {
-      waitFor(WINDOWS_TREE_KILL_WAIT_MS)
+      waitFor(waitMs)
     }
   })
 }

@@ -1,8 +1,8 @@
 import { spawnProcess } from '@orca/process-host'
-import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
+import { runWindowsTaskkillTree } from '../../pty/process-retirement/windows-process-tree-kill'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
 export type CodexAppServerSpawn = (
@@ -36,34 +36,13 @@ export function killCodexAppServerProcessTree(
       child.kill('SIGKILL')
       return
     }
-    try {
-      // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
-      const killer = spawnImpl(
-        windowsSystem32Binary('taskkill.exe'),
-        ['/pid', String(child.pid), '/t', '/f'],
-        {
-          stdio: 'ignore',
-          windowsHide: true
-        }
-      )
-      let fellBack = false
-      const killDirectChild = (): void => {
-        if (!fellBack) {
-          fellBack = true
-          child.kill('SIGKILL')
-        }
+    // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
+    void runWindowsTaskkillTree(child.pid).then((treeTerminated) => {
+      if (!treeTerminated) {
+        child.kill('SIGKILL')
       }
-      killer.on('error', killDirectChild)
-      killer.on('exit', (code) => {
-        if (code !== 0) {
-          killDirectChild()
-        }
-      })
-      killer.unref()
-      return
-    } catch {
-      // Fall through to the direct-child best effort when taskkill cannot start.
-    }
+    })
+    return
   }
   if (child.pid) {
     try {
