@@ -13,17 +13,15 @@ using System.Windows.Forms;
 public static class OrcaForegroundHolder {
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
-    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int processId);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
-    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint attach, uint attachTo, bool enable);
-    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern short VkKeyScan(char ch);
     [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 
     const int ASFW_ANY = -1;
     const uint KEYEVENTF_KEYUP = 2;
+    const byte VK_MENU = 0x12;
     static readonly ConcurrentQueue<string> commands = new ConcurrentQueue<string>();
     static Form form;
 
@@ -84,17 +82,12 @@ public static class OrcaForegroundHolder {
     }
 
     static bool Take() {
-        IntPtr foreground = GetForegroundWindow();
-        if (foreground != form.Handle) {
-            uint ignored;
-            uint foregroundThread = GetWindowThreadProcessId(foreground, out ignored);
-            uint self = GetCurrentThreadId();
-            bool attached = foregroundThread != 0 && foregroundThread != self && AttachThreadInput(self, foregroundThread, true);
-            BringWindowToTop(form.Handle);
+        // Why: Windows refuses a background process's activation until an Alt press lifts the foreground lock.
+        for (int attempt = 0; attempt < 10 && GetForegroundWindow() != form.Handle; attempt++) {
+            keybd_event(VK_MENU, 0, 0, UIntPtr.Zero);
+            keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            Thread.Sleep(50);
             SetForegroundWindow(form.Handle);
-            if (attached) {
-                AttachThreadInput(self, foregroundThread, false);
-            }
         }
         // Why: lifts the foreground lock, so any activation Orca attempts succeeds and the test sees it.
         AllowSetForegroundWindow(ASFW_ANY);
