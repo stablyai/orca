@@ -3,9 +3,16 @@ import type { AppState } from '../../types'
 import type { DictationState, SpeechModelState } from '../../../../../shared/speech-types'
 import type { DictationTranscriptSnapshot } from '../../../../../shared/dictation-transcript'
 
-export type DictationLiveText = Pick<DictationTranscriptSnapshot, 'committed' | 'tentative'>
+export type DictationLiveText = Pick<DictationTranscriptSnapshot, 'committed' | 'tentative'> & {
+  /** The engine heard speech it hasn't committed yet (pause-cut on-device models only). */
+  speechPending: boolean
+}
 
-export const NO_DICTATION_LIVE_TEXT: DictationLiveText = { committed: '', tentative: '' }
+export const NO_DICTATION_LIVE_TEXT: DictationLiveText = {
+  committed: '',
+  tentative: '',
+  speechPending: false
+}
 
 export type DictationSlice = {
   dictationState: DictationState
@@ -21,7 +28,13 @@ export type DictationSlice = {
 }
 
 function sameSpeechModelState(a: SpeechModelState, b: SpeechModelState): boolean {
-  return a.id === b.id && a.status === b.status && a.progress === b.progress && a.error === b.error
+  return (
+    a.id === b.id &&
+    a.status === b.status &&
+    a.progress === b.progress &&
+    a.error === b.error &&
+    a.needsUpdate === b.needsUpdate
+  )
 }
 
 // Replies allocate fresh arrays; preserve unchanged identity or every model refresh rerenders subscribers/menu.

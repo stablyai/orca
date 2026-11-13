@@ -1,5 +1,5 @@
 import { screen, type BrowserWindow } from 'electron'
-import { rectOverlapsWorkArea, type WindowRect } from './window-bounds-validation'
+import { rectOverlapsWorkArea, type WindowRect } from './presentation/window-bounds-validation'
 
 // The strip a user grabs to move the window; usable means it is reachable on the cursor's display.
 const TITLE_STRIP_HEIGHT = 32

@@ -39,7 +39,7 @@ export const dictationControlsCopy = {
       : translate('dictation.status.movedToComputer', 'Moved to the computer')
 }
 
-function spokenDuration(elapsedSeconds: number): string {
+export function dictationSpokenDuration(elapsedSeconds: number): string {
   const minutes = Math.floor(elapsedSeconds / 60)
   const count = elapsedSeconds % 60
   const seconds =
@@ -67,7 +67,7 @@ export function dictationMeterLabel(
   engine: MobileDictationEngineShown['kind'] | null,
   computer: string | null
 ): string {
-  const duration = spokenDuration(elapsedSeconds)
+  const duration = dictationSpokenDuration(elapsedSeconds)
   if (engine === 'phone') {
     return translate('dictation.controls.meterOnPhone', 'Recording, {{duration}}, on this phone', {
       duration
@@ -91,7 +91,18 @@ export function dictationMeterLabel(
 }
 
 // The few words a kept failure shows in the composer row; the full message is too long for it.
-export function dictationFailureReason({ message, offline }: MobileDictationKeptFailure): string {
+export function dictationFailureReason(failure: MobileDictationKeptFailure): string {
+  return (
+    dictationKeptFailureCause(failure) ??
+    translate('dictation.failure.stopped', 'Dictation stopped')
+  )
+}
+
+// Why a kept failure stopped, when it is known; null for the generic stop.
+export function dictationKeptFailureCause({
+  message,
+  offline
+}: MobileDictationKeptFailure): string | null {
   if (offline || dictationFailureMessage(message) === dictationSessionLostMessage()) {
     return translate('dictation.failure.connectionLost', 'Connection lost')
   }
@@ -101,5 +112,5 @@ export function dictationFailureReason({ message, offline }: MobileDictationKept
   if (message === phoneDictationFailedMessage()) {
     return translate('dictation.failure.phoneStopped', 'Stopped on this phone')
   }
-  return translate('dictation.failure.stopped', 'Dictation stopped')
+  return null
 }

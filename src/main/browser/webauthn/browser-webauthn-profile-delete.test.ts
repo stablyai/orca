@@ -47,6 +47,7 @@ vi.mock('../identity/browser-process-user-agent', () => ({
 }))
 
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
+import { setBrowserNetworkProxySettingsResolver } from '../sessions/proxy/browser-session-proxy'
 import {
   cancelAllBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest
@@ -88,6 +89,7 @@ describe('browser WebAuthn profile deletion', () => {
   const sessionsByPartition = new Map<string, MockSession>()
 
   beforeEach(() => {
+    setBrowserNetworkProxySettingsResolver(null)
     sessionsByPartition.clear()
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockImplementation((partition: string) => {

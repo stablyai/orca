@@ -1,4 +1,4 @@
-import type * as PtySpawnValidationTypes from '../../../providers/working-directory-validation'
+import type * as PtySpawnValidationTypes from '../../../providers/working-directory/validation'
 import { describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../../../providers/local-pty/local-pty-executable-spawn'
 
@@ -34,7 +34,7 @@ vi.mock('../../../pty/shell-startup/pwsh', () => ({
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
-vi.mock('../../../providers/windows-powershell-executable', () => ({
+vi.mock('../../../providers/shell-launch/windows/powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
   resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
@@ -53,7 +53,7 @@ vi.mock('../../../providers/local-pty/local-pty-executable-spawn', async (import
   }
 })
 
-vi.mock('../../../providers/working-directory-validation', async (importOriginal) => {
+vi.mock('../../../providers/working-directory/validation', async (importOriginal) => {
   const actual = await importOriginal<typeof PtySpawnValidationTypes>()
   return {
     ...actual,
@@ -62,7 +62,7 @@ vi.mock('../../../providers/working-directory-validation', async (importOriginal
   }
 })
 
-vi.mock('../../../providers/agent-foreground-process', () => ({
+vi.mock('../../../providers/foreground/agent-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
     return value && typeof value === 'object' && 'available' in value
@@ -71,7 +71,7 @@ vi.mock('../../../providers/agent-foreground-process', () => ({
   }
 }))
 
-vi.mock('../../../providers/windows-pty-job-membership', () => ({
+vi.mock('../../../providers/foreground/windows/pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
 }))

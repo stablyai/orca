@@ -1,4 +1,5 @@
 import type { VoiceSettings } from '../../../shared/speech-types'
+import { stopAfterSilenceSeconds } from '../../../shared/dictation-silence-stop'
 import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
@@ -18,6 +19,7 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../../speech/speech-model-deletion'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -34,7 +36,8 @@ export type OpenAiSpeechKeyStatus = {
 export class RuntimeMobileSpeechCatalog {
   constructor(private readonly getStore: () => RuntimeStore | null) {}
 
-  async list(): Promise<RuntimeSpeechSetupState> {
+  /** `worktreeId` picks the repo terms a phone recognizing on its own spells with. */
+  async list(worktreeId?: string): Promise<RuntimeSpeechSetupState> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
@@ -43,7 +46,7 @@ export class RuntimeMobileSpeechCatalog {
     const runnable = SPEECH_MODEL_CATALOG.filter(
       (manifest) =>
         isOfferedSpeechModel(manifest) &&
-        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer(manifest)) &&
+        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer()) &&
         // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
         (manifest.provider !== 'openai-compatible' ||
           stateById.get(manifest.id)?.status === 'ready')
@@ -67,6 +70,10 @@ export class RuntimeMobileSpeechCatalog {
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
+      stopAfterSilenceSeconds: stopAfterSilenceSeconds(voice),
+      // The phone has no Whisper prompt to bias, and its text pass would only join the name; keeping the
+      // hint out also spares a phone page from before hints, which would treat the name as a full term.
+      dictationTerms: hostDictationTerms(store, worktreeId).filter((entry) => !entry.hint),
       models
     }
   }
@@ -74,7 +81,7 @@ export class RuntimeMobileSpeechCatalog {
   async download(modelId: string): Promise<{ started: true }> {
     const store = this.requireStore()
     const manifest = getCatalogModel(modelId)
-    if (!manifest || !isLocalSpeechModel(manifest) || !hasLocalSpeechRecognizer(manifest)) {
+    if (!manifest || !isLocalSpeechModel(manifest) || !hasLocalSpeechRecognizer()) {
       throw new Error('voice_model_not_downloadable')
     }
     void getSpeechModelManager(store)

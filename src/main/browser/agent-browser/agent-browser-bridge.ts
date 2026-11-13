@@ -278,7 +278,8 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
       worktreeId,
       browserPageId,
       async (sessionName) => await this.execAgentBrowser(sessionName, args, { cliArgv: true }),
-      { elements: passthroughElementArgs(args) }
+      // Raw commands and batches can click or press keys too.
+      { elements: passthroughElementArgs(args), blockFileChooser: true }
     )
   }
 }

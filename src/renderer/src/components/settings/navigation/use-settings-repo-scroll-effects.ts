@@ -1,6 +1,6 @@
+import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect, useRef, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
@@ -9,6 +9,7 @@ import type { SettingsInteractionController } from '../page/use-settings-interac
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from '../page/use-settings-terminal-model'
 import { watchForSettingsDeepLinkTarget } from './settings-deep-link-target-watcher'
+import { requestSettingsTargetReveal } from '../section-layout/settings-target-highlight'
 import {
   cancelPendingSettingsDeepLinkTargetWatch,
   cancelPendingSettingsSubsectionScrollFrame,
@@ -48,6 +49,9 @@ export function useSettingsRepoScrollEffects(
 ): void {
   const {
     activeSectionId,
+    generalSubPage,
+    setGeneralSubPage,
+    setHighlightedSettingsTarget,
     pendingNavRequestTick,
     repos,
     setActiveSectionId,
@@ -98,18 +102,6 @@ export function useSettingsRepoScrollEffects(
         .filter((repo) => !retryOnly || retryOnly.has(getRepoHostIdentity(repo)))
         .map(async (repo) => {
           const repoHostIdentity = getRepoHostIdentity(repo)
-          if (isFolderRepo(repo)) {
-            setRepoHooksMap((previous) => {
-              if (previous[repoHostIdentity]) {
-                return previous
-              }
-              return {
-                ...previous,
-                [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
-              }
-            })
-            return
-          }
           try {
             const hostId = getRepoExecutionHostId(repo)
             // Showing Settings is no act on the repo's WSL distro (E9).
@@ -181,7 +173,14 @@ export function useSettingsRepoScrollEffects(
 
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
       // Inactive panes have no DOM; activate before locating the subsection next render.
-      if (activeSectionId !== pendingNavSectionId) {
+      const requestedGeneralSubPage = resolveGeneralSubPage(scrollTargetId)
+      if (
+        activeSectionId !== pendingNavSectionId ||
+        (pendingNavSectionId === 'general' && generalSubPage !== requestedGeneralSubPage)
+      ) {
+        if (pendingNavSectionId === 'general') {
+          setGeneralSubPage(requestedGeneralSubPage)
+        }
         setActiveSectionId(pendingNavSectionId)
         return
       }
@@ -197,10 +196,19 @@ export function useSettingsRepoScrollEffects(
             root: container,
             isTargetPresent: () =>
               getSettingsScrollTarget(scrollTargetId, contentScrollRef.current) !== null,
-            onTargetPresent: () => setPendingNavRequestTick((tick) => tick + 1)
+            onTargetPresent: () => setPendingNavRequestTick((tick) => tick + 1),
+            onTimeout: () => {
+              pendingNavSectionRef.current = null
+              pendingScrollTargetRef.current = null
+            }
           })
           return
         }
+        const revealTarget = getSettingsScrollTarget(scrollTargetId, container)
+        if (revealTarget) {
+          requestSettingsTargetReveal(revealTarget)
+        }
+        setHighlightedSettingsTarget({ id: scrollTargetId })
         const scrollToSubsection = (): void => {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
         }
@@ -230,6 +238,9 @@ export function useSettingsRepoScrollEffects(
     }
   }, [
     activeSectionId,
+    generalSubPage,
+    setGeneralSubPage,
+    setHighlightedSettingsTarget,
     contentScrollRef,
     pendingNavRequestTick,
     pendingNavSectionRef,

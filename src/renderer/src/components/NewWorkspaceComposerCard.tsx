@@ -1,17 +1,17 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
-import { resolveProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
+import { getScreenSubmitModifierLabel } from '@/lib/keyboard/screen-submit-shortcut'
+import { resolveProjectCloneUrlPrefill } from '@/lib/workspace/creation/project-clone-url-prefill'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
 } from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
@@ -23,6 +23,7 @@ import {
   filterEnabledTuiAgents
 } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
@@ -79,6 +80,7 @@ export default function NewWorkspaceComposerCard(
     selectedRepoProjectId,
     activeFolderWorkspaceId,
     onAddProjectOverride,
+    onAddProjectEntryRequest,
     onNestedDialogOpenChange
   } = props
   const projectOptions = props.projectOptions ?? EMPTY_PROJECT_OPTIONS
@@ -105,6 +107,18 @@ export default function NewWorkspaceComposerCard(
   const projectDescriptionId = React.useId()
   const [sparseEditing, setSparseEditing] = React.useState(false)
   const [addRemoteHostMode, setAddRemoteHostMode] = React.useState<AddRemoteHostMode | null>(null)
+  const remoteHostDialogOpenRef = React.useRef(false)
+  const handleRemoteHostModeChange = React.useCallback(
+    (nextMode: AddRemoteHostMode | null): void => {
+      const nextOpen = nextMode !== null
+      if (remoteHostDialogOpenRef.current !== nextOpen) {
+        remoteHostDialogOpenRef.current = nextOpen
+        onNestedDialogOpenChange?.(nextOpen)
+      }
+      setAddRemoteHostMode(nextMode)
+    },
+    [onNestedDialogOpenChange]
+  )
   const [setLocationOption, setSetLocationOption] = React.useState<NeedsProjectHostOption | null>(
     null
   )
@@ -192,6 +206,16 @@ export default function NewWorkspaceComposerCard(
     }
     openModal('add-repo')
   }, [onAddProjectOverride, openModal])
+  const handleAddProjectEntryRequest = React.useCallback(
+    (entryRequest: AddRepoDialogEntryRequest): void => {
+      if (onAddProjectEntryRequest) {
+        onAddProjectEntryRequest(entryRequest)
+        return
+      }
+      openModal('add-repo', { entryRequest })
+    },
+    [onAddProjectEntryRequest, openModal]
+  )
   const handleSetLocation = React.useCallback(
     (option: NeedsProjectHostOption): void => {
       setSetLocationDialogMounted(true)
@@ -297,11 +321,13 @@ export default function NewWorkspaceComposerCard(
           ephemeralVmRecipes={ephemeralVmRecipes}
           projectDescriptionId={projectDescriptionId}
           onAddProject={handleAddProject}
+          onAddProjectEntryRequest={handleAddProjectEntryRequest}
+          handleOpenRemoteHostDialog={handleRemoteHostModeChange}
           focusNameInput={focusNameInput}
           shouldShowRunTargetPicker={shouldShowRunTargetPicker}
           handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
-          handleAddSshHost={() => setAddRemoteHostMode('ssh')}
-          handleAddRemoteServer={() => setAddRemoteHostMode('server')}
+          handleAddSshHost={() => handleRemoteHostModeChange('ssh')}
+          handleAddRemoteServer={() => handleRemoteHostModeChange('server')}
           handleConnectRunTargetHost={handleConnectRunTargetHost}
           handleSetLocation={handleSetLocation}
           sshStatusLabel={sshStatusLabel}
@@ -338,7 +364,7 @@ export default function NewWorkspaceComposerCard(
           />
         </div>
       ) : null}
-      <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
+      <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={handleRemoteHostModeChange} />
       {setLocationDialogMounted ? (
         <React.Suspense fallback={null}>
           <SetProjectLocationDialog

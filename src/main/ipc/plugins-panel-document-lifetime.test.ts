@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
 }))
 
 // The real guest session needs Electron; these cases pin ownership, which guests do not change.
-vi.mock('../plugins/panels/plugin-frame-guest-sessions', () => ({
+vi.mock('../plugins/panels/guest-isolation/plugin-frame-guest-sessions', () => ({
   bindPluginFrameGuests: () => {},
   clearPluginFrameStorage: async () => {},
   preparePluginFrameGuest: async () => guestSetup.result

@@ -2,7 +2,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { mediaPlaybackPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  mediaPlaybackStateCache,
+  mediaVolumePreference,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 export default function MediaViewer({
   src,
@@ -26,24 +30,42 @@ export default function MediaViewer({
     if (!media) {
       return
     }
-    const restorePosition = (): void => {
-      const saved = playbackCacheKey ? mediaPlaybackPositionCache.get(playbackCacheKey) : undefined
-      if (saved !== undefined && Number.isFinite(media.duration)) {
-        media.currentTime = Math.min(saved, media.duration)
+    let lastSyncedVolume = { ...mediaVolumePreference }
+    media.volume = lastSyncedVolume.volume
+    media.muted = lastSyncedVolume.muted
+    const saveVolume = (): void => {
+      lastSyncedVolume = { volume: media.volume, muted: media.muted }
+      Object.assign(mediaVolumePreference, lastSyncedVolume)
+    }
+    // Loading a source resets playbackRate to defaultPlaybackRate, so speed is restored with position.
+    const restorePlayback = (): void => {
+      const saved = playbackCacheKey ? mediaPlaybackStateCache.get(playbackCacheKey) : undefined
+      if (!saved) {
+        return
+      }
+      media.playbackRate = saved.playbackRate
+      // Unfinalized recordings such as screen-captured WebM report Infinity and cannot seek reliably.
+      if (Number.isFinite(media.duration)) {
+        media.currentTime = Math.min(saved.currentTime, media.duration)
       }
     }
-    media.addEventListener('loadedmetadata', restorePosition, { once: true })
+    media.addEventListener('volumechange', saveVolume)
+    media.addEventListener('loadedmetadata', restorePlayback, { once: true })
     // Strict Mode replays cleanup while retaining the DOM element.
     media.src = src
     return () => {
-      media.removeEventListener('loadedmetadata', restorePosition)
-      // Unloaded metadata leaves currentTime at zero, which must not replace saved progress.
-      if (playbackCacheKey && Number.isFinite(media.duration)) {
-        if (media.ended) {
-          mediaPlaybackPositionCache.delete(playbackCacheKey)
-        } else {
-          setWithLRU(mediaPlaybackPositionCache, playbackCacheKey, media.currentTime)
-        }
+      media.removeEventListener('volumechange', saveVolume)
+      media.removeEventListener('loadedmetadata', restorePlayback)
+      // volumechange is queued, so a change made right before leaving may not have fired yet.
+      if (media.volume !== lastSyncedVolume.volume || media.muted !== lastSyncedVolume.muted) {
+        saveVolume()
+      }
+      // NaN duration means metadata never loaded, so currentTime and playbackRate are still defaults.
+      if (playbackCacheKey && !Number.isNaN(media.duration)) {
+        setWithLRU(mediaPlaybackStateCache, playbackCacheKey, {
+          currentTime: media.ended ? 0 : media.currentTime,
+          playbackRate: media.playbackRate
+        })
       }
       media.pause()
       media.removeAttribute('src')

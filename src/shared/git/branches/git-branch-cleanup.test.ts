@@ -1,143 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  branchHasNoUnmergedChangesOnAnyTarget,
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   type GitBranchCleanupExec
 } from './git-branch-cleanup'
 import { GitCapabilityCache } from '../commands/git-capability-cache'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../fetch/git-fetch-auto-maintenance'
 
-function baseProofResponses(
-  responses: Partial<Record<string, string | Error>> = {}
-): GitBranchCleanupExec {
-  return vi.fn<GitBranchCleanupExec>(async (args, options) => {
-    if (args[0] === 'patch-id' && options?.stdin === 'branch-diff') {
-      const response = responses.branchPatchId ?? 'branch-patch 0000000\n'
-      if (response instanceof Error) {
-        throw response
-      }
-      return { stdout: response }
-    }
-    if (args[0] === 'patch-id' && options?.stdin === 'squash-diff') {
-      const response = responses.squashPatchId ?? 'branch-patch squash\n'
-      if (response instanceof Error) {
-        throw response
-      }
-      return { stdout: response }
-    }
-    const key = args.join(' ')
-    const response =
-      responses[key] ??
-      {
-        'rev-parse --verify --quiet refs/remotes/origin/main^{commit}': 'target\n',
-        'merge-tree --write-tree target refs/heads/feature/test': 'merged-tree\n',
-        'rev-parse --verify --quiet target^{tree}': 'target-tree\n',
-        'rev-list --right-only --merges --count target...refs/heads/feature/test': '1\n',
-        'merge-base target refs/heads/feature/test': 'base\n',
-        'diff base refs/heads/feature/test': 'branch-diff',
-        'rev-list --ancestry-path --max-count=201 base..target': 'squash\n',
-        'show --format= squash': 'squash-diff',
-        'merge-tree --write-tree squash refs/heads/feature/test': 'squash-tree\n',
-        'rev-parse --verify --quiet squash^{tree}': 'squash-tree\n'
-      }[key] ??
-      ''
-    if (response instanceof Error) {
-      throw response
-    }
-    return { stdout: response }
-  })
+/** Answers the stale remote ref the way a merged branch would: merging it leaves the target tree unchanged. */
+function mergedProofResponses(): GitBranchCleanupExec {
+  const responses: Record<string, string> = {
+    'rev-parse --verify --quiet refs/remotes/origin/main^{commit}': 'target\n',
+    'merge-base target refs/heads/feature/test': 'base\n',
+    'diff --name-only --no-renames base refs/heads/feature/test': 'feature.txt\n',
+    'merge-tree --write-tree target refs/heads/feature/test': 'merged-tree\n',
+    'rev-parse --verify --quiet target^{tree}': 'merged-tree\n'
+  }
+  return vi.fn<GitBranchCleanupExec>(async (args) => ({ stdout: responses[args.join(' ')] ?? '' }))
 }
-
-describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
-  it('accepts a branch with merge commits when a target squash commit matches its net patch', async () => {
-    const runGit = baseProofResponses()
-
-    await expect(
-      branchHasNoUnmergedChangesOnAnyTarget(
-        runGit,
-        'feature/test',
-        ['refs/remotes/origin/main'],
-        new GitCapabilityCache()
-      )
-    ).resolves.toBe(true)
-
-    expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'branch-diff' })
-    expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'squash-diff' })
-    expect(runGit).not.toHaveBeenCalledWith(['cherry', 'target', 'refs/heads/feature/test'])
-    // Only merge-tree's throwaway tree writes go to a scratch object store.
-    const discarding = vi
-      .mocked(runGit)
-      .mock.calls.filter(([, options]) => options?.discardWrittenObjects)
-      .map(([args]) => args[0])
-    expect(discarding.length).toBeGreaterThan(0)
-    expect(new Set(discarding)).toEqual(new Set(['merge-tree']))
-  })
-
-  it('preserves a branch with merge commits when no target squash commit matches', async () => {
-    const runGit = baseProofResponses({ squashPatchId: 'other-patch squash\n' })
-
-    await expect(
-      branchHasNoUnmergedChangesOnAnyTarget(
-        runGit,
-        'feature/test',
-        ['refs/remotes/origin/main'],
-        new GitCapabilityCache()
-      )
-    ).resolves.toBe(false)
-  })
-
-  it('preserves when a matching squash candidate still changes after merging the branch', async () => {
-    const runGit = baseProofResponses({
-      'merge-tree --write-tree squash refs/heads/feature/test': 'different-tree\n'
-    })
-
-    await expect(
-      branchHasNoUnmergedChangesOnAnyTarget(
-        runGit,
-        'feature/test',
-        ['refs/remotes/origin/main'],
-        new GitCapabilityCache()
-      )
-    ).resolves.toBe(false)
-  })
-
-  it('preserves when the target squash scan exceeds the cap', async () => {
-    const commits = Array.from({ length: 201 }, (_, index) => `commit-${index}`).join('\n')
-    const runGit = baseProofResponses({
-      'rev-list --ancestry-path --max-count=201 base..target': `${commits}\n`
-    })
-
-    await expect(
-      branchHasNoUnmergedChangesOnAnyTarget(
-        runGit,
-        'feature/test',
-        ['refs/remotes/origin/main'],
-        new GitCapabilityCache()
-      )
-    ).resolves.toBe(false)
-
-    expect(runGit).not.toHaveBeenCalledWith(['show', '--format=', 'commit-0'])
-  })
-
-  it('preserves when patch-id cannot be computed', async () => {
-    const runGit = baseProofResponses({ branchPatchId: new Error('patch-id failed') })
-
-    await expect(
-      branchHasNoUnmergedChangesOnAnyTarget(
-        runGit,
-        'feature/test',
-        ['refs/remotes/origin/main'],
-        new GitCapabilityCache()
-      )
-    ).resolves.toBe(false)
-  })
-})
 
 describe('branchHasNoUnmergedChangesWithLazyTargetRefresh', () => {
   it('preserves a branch when refresh fails even if the stale remote ref would prove it merged', async () => {
-    const proof = baseProofResponses({
-      'rev-parse --verify --quiet target^{tree}': 'merged-tree\n'
-    })
+    const proof = mergedProofResponses()
     const runGit = vi.fn<GitBranchCleanupExec>(async (args, options) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n' }

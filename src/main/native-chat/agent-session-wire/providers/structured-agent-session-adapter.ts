@@ -347,6 +347,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     inheritance?: boolean
   }): Promise<void> | undefined
   stopProviderNaming?(): void
+  captureConversationTitleOwner?(record: AgentSessionRecord): {
+    isCurrent: (record: AgentSessionRecord) => boolean
+    generate: (firstPrompt: string, shouldExecute: () => boolean) => Promise<unknown>
+  } | null
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(
     sessionId: string,

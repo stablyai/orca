@@ -16,7 +16,7 @@ import {
   onWorkspaceStartsDrawing
 } from './workspace-layout-frame-drawn-workspaces'
 import type { TerminalTabTitleUpdate } from '@/store/terminals/terminal-tab-title-batch'
-import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { liveTitleUpdates } from './workspace-layout-frame-changes'
 import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'
 import { framePaneFactsShown, showFramePaneStarts } from './workspace-layout-frame-pane-starts'
@@ -190,7 +190,9 @@ export function openWorkspaceLayoutFrameSync(
     const rekeyed = shownContentRekeyPatch(state, cache)
     const base: AppState = { ...state, ...rekeyed }
     const builtKeys = [...fullBuilt, ...workspaceBuilt]
-    const patch = layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
+    const builds = { fullBuilt, workspaceBuilt, rebound }
+    const patch = layoutFrameFlushPatch(base, cache, builds, holds)
+    // The flush's builds mark their own records full resync; rekeys keep their writers' provenance.
     show({ ...rekeyed, ...patch }, builtKeys)
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)

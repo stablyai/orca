@@ -1,48 +1,97 @@
-import { recordedCodexRollout } from './__fixtures__/codex-rollout-recordings'
 import type * as AppServerSession from './app-server/codex-app-server-session'
-import type * as LocalHistory from '../native-chat/codex-local-history'
-import type * as RolloutStream from '../native-chat/codex-rollout-history-stream'
-import { readCodexLocalHistory } from '../native-chat/codex-local-history'
-import { readCodexRolloutBytes } from '../native-chat/codex-rollout-history-stream'
-import { appendFile, mkdir, mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
+import type * as LocalHistory from '../native-chat/transcript-history/codex/codex-local-history'
+import type * as RolloutStream from '../native-chat/transcript-history/codex/codex-rollout-history-stream'
+import { readCodexLocalHistory } from '../native-chat/transcript-history/codex/codex-local-history'
+import { readCodexRolloutBytes } from '../native-chat/transcript-history/codex/codex-rollout-history-stream'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { copyCodexConversation, codexForkHistory } from './codex-conversation-copy'
+import { agentSessionRecordFixture } from '../native-chat/testing/agent-session-record-test-fixture'
+import { copyCodexConversation } from './codex-conversation-copy'
+import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import type { CodexAppServerRpc } from './app-server/codex-app-server-session'
 
-const state = vi.hoisted(() => ({
-  home: '',
-  paths: new Map<string, string>(),
-  request: vi.fn<CodexAppServerRpc['request']>(),
-  initialize: vi.fn()
-}))
-vi.mock('../native-chat/codex-local-history', async (importOriginal) => {
+const state = vi.hoisted(() => {
+  const session: {
+    run?: (body: (rpc: CodexAppServerRpc) => Promise<unknown>) => Promise<unknown>
+    transport?: 'native' | 'unsupported-read'
+  } = {}
+  return {
+    home: '',
+    paths: new Map<string, string>(),
+    request: vi.fn<CodexAppServerRpc['request']>(),
+    initialize: vi.fn(),
+    session
+  }
+})
+vi.mock('../native-chat/transcript-history/codex/codex-local-history', async (importOriginal) => {
   const original = await importOriginal<typeof LocalHistory>()
   return { ...original, readCodexLocalHistory: vi.fn(original.readCodexLocalHistory) }
 })
-vi.mock('../native-chat/codex-rollout-history-stream', async (importOriginal) => {
-  const original = await importOriginal<typeof RolloutStream>()
-  return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
-})
+vi.mock(
+  '../native-chat/transcript-history/codex/codex-rollout-history-stream',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof RolloutStream>()
+    return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
+  }
+)
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))
-vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof AppServerSession>()),
-  runCodexAppServerSession: async (
-    launch: unknown,
-    body: (rpc: CodexAppServerRpc) => Promise<unknown>
-  ) => {
-    state.initialize(launch)
-    return body({ request: state.request, notify: () => {} })
+vi.mock('./app-server/codex-app-server-session', async (importOriginal) => {
+  const original = await importOriginal<typeof AppServerSession>()
+  return {
+    ...original,
+    runCodexAppServerSession: async (
+      launch: AppServerSession.CodexAppServerInvocation,
+      body: (rpc: CodexAppServerRpc) => Promise<unknown>
+    ) => {
+      state.initialize(launch)
+      if (state.session.transport) {
+        const server = String.raw`
+          let experimental = false
+          require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+            const message = JSON.parse(line)
+            if (typeof message.id !== 'number') return
+            if (message.method === 'initialize') {
+              experimental = message.params.capabilities?.experimentalApi === true
+            }
+            const error = message.method === 'thread/read' && process.argv[1] === 'unsupported-read'
+              ? { code: -32601, message: 'thread/read is not supported yet' }
+              : message.method === 'thread/turns/list' && !experimental
+                ? { code: -32600, message: 'thread/turns/list requires experimentalApi capability' }
+                : null
+            process.stdout.write(JSON.stringify({ id: message.id, ...(error ? { error } : { result: {} }) }) + '\n')
+          })
+        `
+        return original.runCodexAppServerSession(
+          {
+            ...launch,
+            command: process.execPath,
+            args: ['-e', server, state.session.transport],
+            cliPath: null
+          },
+          (rpc) =>
+            body({
+              ...rpc,
+              request: async (method, params) => {
+                await rpc.request(method, params)
+                return state.request(method, params)
+              }
+            })
+        )
+      }
+      return state.session.run
+        ? state.session.run(body)
+        : body({ request: state.request, notify: () => {} })
+    }
   }
-}))
+})
 
-const SOURCE = '00000000-0000-4000-8000-000000000001'
-const CHILD = '00000000-0000-4000-8000-000000000002'
+const SOURCE = '01a1bdd2-6d33-7a21-9a1d-c14f0117bc8c'
+const CHILD = '01a1bde0-5ded-7f03-a1bf-3dae1613d8c7'
 let root: string
 
 beforeEach(async () => {
@@ -50,6 +99,8 @@ beforeEach(async () => {
   state.home = root
   state.paths.clear()
   state.request.mockReset()
+  state.session.run = undefined
+  state.session.transport = undefined
   state.initialize.mockReset()
   vi.mocked(readCodexLocalHistory).mockClear()
   vi.mocked(readCodexRolloutBytes).mockClear()
@@ -58,34 +109,12 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { force: true, recursive: true })
 })
-
-function message(type: 'UserMessage' | 'AgentMessage', id: string) {
-  return {
-    type: 'event_msg',
-    payload: {
-      type: 'item_completed',
-      item: { type, id, content: [{ type: 'text', text: 'repeated identical prompt' }] }
-    }
-  }
-}
-function turn(id: string | undefined, n: number) {
-  return [
-    ...(id ? [{ type: 'event_msg', payload: { type: 'task_started', turn_id: id } }] : []),
-    message('UserMessage', `u${n}`),
-    message('AgentMessage', `a${n}`),
-    ...(id ? [{ type: 'event_msg', payload: { type: 'task_complete', turn_id: id } }] : [])
-  ]
-}
-async function history(id: string, records: object[]) {
-  const path = join(root, 'sessions', `rollout-2026-11-04T00-00-00-${id}.jsonl`)
-  await writeFile(
-    path,
-    `${[{ type: 'session_meta', payload: { id, history_mode: 'paginated' } }, ...records].map((row, ordinal) => JSON.stringify({ ...row, ordinal })).join('\n')}\n`
-  )
-  state.paths.set(id, path)
-  return path
-}
-function copy(selected = `${SOURCE}:a1`, settled = true, turnId?: string) {
+function copy(
+  selected = `${SOURCE}:a1`,
+  settled = true,
+  turnId?: string,
+  options: { signal?: AbortSignal; selectedItemId?: string } = {}
+) {
   return copyCodexConversation(
     {
       record: agentSessionRecordFixture({
@@ -102,15 +131,18 @@ function copy(selected = `${SOURCE}:a1`, settled = true, turnId?: string) {
         providerHandle: null
       },
       providerSessionId: SOURCE,
+      signal: options.signal,
       title: 'Source fork',
       accountHome: { variable: 'CODEX_HOME', path: root },
       checkpoint: {
-        selectedItemId: agentJournalItemKey({
-          provider: 'legacy',
-          agent: 'codex',
-          sessionId: SOURCE,
-          recordId: selected
-        }),
+        selectedItemId:
+          options.selectedItemId ??
+          agentJournalItemKey({
+            provider: 'legacy',
+            agent: 'codex',
+            sessionId: SOURCE,
+            recordId: selected
+          }),
         settled,
         ...(turnId ? { turnId } : {})
       }
@@ -123,198 +155,64 @@ function copy(selected = `${SOURCE}:a1`, settled = true, turnId?: string) {
   )
 }
 
-async function childPrefix(lines?: number) {
-  const source = `${(await readFile(state.paths.get(SOURCE)!, 'utf8'))
-    .trimEnd()
-    .split('\n')
-    .slice(0, lines)
-    .join('\n')}\n`
-  const count = source.trim().split('\n').length
-  const path = await history(CHILD, [])
-  await writeFile(
-    path,
-    `${JSON.stringify({
-      ordinal: count,
-      type: 'session_meta',
-      payload: {
-        id: CHILD,
-        history_mode: 'paginated',
-        history_base: {
-          thread_id: SOURCE,
-          end_ordinal_exclusive: count,
-          end_byte_offset: Buffer.byteLength(source)
-        }
-      }
-    })}\n`
-  )
-  return path
-}
-
-it('uses a persisted terminal canonical boundary for an idle imported latest reply with no live owner', async () => {
-  await history(SOURCE, turn('canonical', 1))
-  await childPrefix()
-  state.request.mockResolvedValue({ thread: { id: CHILD } })
-  await expect(copy(undefined, false)).resolves.toEqual({
-    sessionId: CHILD,
-    coverage: { unit: 'codex-turn', ids: ['canonical'] }
-  })
-  expect(state.request).toHaveBeenCalledWith(
-    'thread/fork',
-    expect.objectContaining({ lastTurnId: 'canonical' })
-  )
-})
-
-it('uses beforeTurnId only for the immediate next effective root and opts into the experimental API', async () => {
-  await history(SOURCE, [...turn(undefined, 1), ...turn('canonical-next', 2)])
-  await childPrefix(3)
-  state.request.mockImplementation(async (method) =>
-    method === 'thread/fork'
-      ? { thread: { id: CHILD } }
-      : { data: [{ id: 'legacy-first' }, { id: 'canonical-next' }], nextCursor: null }
-  )
-  await expect(copy()).resolves.toEqual({
-    sessionId: CHILD,
-    coverage: { unit: 'codex-turn', ids: ['legacy-first'] }
-  })
-  expect(state.request).toHaveBeenCalledWith(
-    'thread/fork',
-    expect.objectContaining({ beforeTurnId: 'canonical-next' })
-  )
-  expect(state.initialize).toHaveBeenCalledWith(expect.objectContaining({ experimentalApi: true }))
-})
-
-it('forks and reverts only the child for legacy, legacy, canonical, counting against the captured child', async () => {
-  const records = [...turn(undefined, 1), ...turn(undefined, 2), ...turn('canonical-third', 3)]
-  await history(SOURCE, records)
-  const source = await readFile(state.paths.get(SOURCE)!, 'utf8')
-  const path = join(root, 'sessions', `rollout-2026-11-04T00-00-00-${CHILD}.jsonl`)
-  const count = source.trim().split('\n').length
-  await writeFile(
-    path,
-    `${JSON.stringify({ ordinal: count, type: 'session_meta', payload: { id: CHILD, history_mode: 'paginated', history_base: { thread_id: SOURCE, end_ordinal_exclusive: count, end_byte_offset: Buffer.byteLength(source) } } })}\n`
-  )
-  state.paths.set(CHILD, path)
-  let reverted = false
+it('cannot dispatch an abandoned preparation after its lifetime ends, but keeps an invoked fork uncertain', async () => {
+  const listed = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<unknown>()
+  const expired = Promise.withResolvers<never>()
+  const lifetime = new AbortController()
+  let abandoned: Promise<unknown> | undefined
+  let childCreated = false
   state.request.mockImplementation(async (method) => {
+    if (method === 'thread/read') {
+      return { thread: { id: SOURCE, historyMode: 'paginated' } }
+    }
     if (method === 'thread/fork') {
-      return { thread: { id: CHILD, historyMode: 'paginated' } }
-    }
-    if (method === 'thread/name/set') {
-      return {}
-    }
-    if (method === 'thread/revert') {
-      reverted = true
+      childCreated = true
       return { thread: { id: CHILD } }
     }
-    return {
-      data: (reverted ? ['legacy-1'] : ['legacy-1', 'legacy-2', 'canonical-third']).map((id) => ({
-        id
-      })),
-      nextCursor: null
-    }
+    listed.resolve()
+    return release.promise
   })
-  await expect(copy()).resolves.toEqual({
-    sessionId: CHILD,
-    coverage: { unit: 'codex-turn', ids: ['legacy-1'] }
-  })
-  expect(state.request).toHaveBeenCalledWith('thread/revert', {
-    threadId: CHILD,
-    beforeTurnId: 'legacy-2'
-  })
-  expect(state.request).toHaveBeenCalledWith('thread/fork', {
-    threadId: SOURCE,
-    excludeTurns: true,
-    cwd: root
-  })
-})
-
-it('uses exact physical identities across repeated prompts rather than a retained-window offset', async () => {
-  const path = await history(SOURCE, [
-    ...turn('first', 1),
-    ...turn('second', 2),
-    ...turn('third', 3)
-  ])
-  const result = await codexForkHistory({
-    path,
-    roots: [join(root, 'sessions')],
-    sessionId: SOURCE,
-    selectedItemId: agentJournalItemKey({
-      provider: 'legacy',
-      agent: 'codex',
-      sessionId: SOURCE,
-      recordId: `${SOURCE}:a2`
-    })
-  })
-  expect(result.index).toBe(1)
-  expect(result.selected.id).toBe('second')
-})
-
-it('freezes all-unrecorded root IDs on the source, excluding child replacements and later source growth', async () => {
-  await history(SOURCE, [...turn(undefined, 1), ...turn(undefined, 2), ...turn(undefined, 3)])
-  let reverted = false
-  state.request.mockImplementation(async (method, params) => {
-    if (method === 'thread/fork') {
-      await history(SOURCE, [
-        ...turn(undefined, 1),
-        ...turn(undefined, 2),
-        ...turn(undefined, 3),
-        ...turn(undefined, 4)
-      ])
-      const path = await childPrefix()
-      await appendFile(
-        path,
-        `${JSON.stringify({
-          type: 'event_msg',
-          payload: { type: 'task_started', turn_id: 'child-only' }
-        })}\n`
-      )
-      return { thread: { id: CHILD, historyMode: 'paginated' } }
-    }
-    if (method === 'thread/revert') {
-      reverted = true
-      return { thread: { id: CHILD } }
-    }
-    return {
-      data: (params?.threadId === SOURCE
-        ? ['S1', 'S2', 'S3']
-        : reverted
-          ? ['S1']
-          : ['S1', 'C2', 'C3', 'C4']
-      ).map((id) => ({ id })),
-      nextCursor: null
-    }
-  })
-  await expect(copy()).resolves.toEqual({
-    sessionId: CHILD,
-    coverage: { unit: 'codex-turn', ids: ['S1'] }
-  })
-})
-
-it('certifies recorded turns in a standalone copied rollout with no physical history base', async () => {
-  const rows = await recordedCodexRollout('c')
-  const source = rows.find((row) => row.type === 'session_meta')!
-  const started = rows.find(
-    (row) => row.type === 'event_msg' && row.payload.type === 'task_started'
-  )!
-  const through = rows.findIndex(
-    (row) => row.type === 'event_msg' && row.payload.type === 'task_complete'
-  )
-  const captured = rows.slice(0, through + 1)
-  for (const [id, meta] of [
-    [SOURCE, source],
-    [CHILD, source]
-  ] as const) {
-    const path = await history(id, [])
-    const serialized = captured
-      .map((row) =>
-        JSON.stringify(row === meta ? { ...row, payload: { ...row.payload, id } } : row)
-      )
-      .join('\n')
-    await writeFile(path, `${serialized}\n`)
+  state.session.run = async (body) => {
+    abandoned = body({ request: state.request, notify: () => {}, signal: lifetime.signal })
+    return Promise.race([abandoned, expired.promise])
   }
-  state.request.mockResolvedValue({ thread: { id: CHILD } })
-  await expect(copy(undefined, true, String(started.payload.turn_id))).resolves.toEqual({
-    sessionId: CHILD,
-    coverage: { unit: 'codex-turn', ids: ['01a1b0d7-ac1d-7e00-85b8-806a4d8d494b'] }
+  const preparation = copy(undefined, true, 'selected')
+  await listed.promise
+  lifetime.abort(new CodexAppServerTimeoutError('session ended'))
+  expired.reject(lifetime.signal.reason)
+  await expect(preparation).rejects.toMatchObject({
+    refusal: { createAttemptRefusedBeforeCommit: true }
   })
+  release.resolve({ data: [{ id: 'selected' }], nextCursor: null })
+  await expect(abandoned).rejects.toBe(lifetime.signal.reason)
+  expect(childCreated).toBe(false)
+  const forked = Promise.withResolvers<void>()
+  const lost = Promise.withResolvers<never>()
+  const pending = Promise.withResolvers<unknown>()
+  state.session.run = async (body) =>
+    Promise.race([body({ request: state.request, notify: () => {} }), lost.promise])
+  state.request.mockImplementation(async (method) => {
+    if (method === 'thread/read') {
+      return { thread: { id: SOURCE, historyMode: 'paginated' } }
+    }
+    if (method === 'thread/fork') {
+      forked.resolve()
+      return pending.promise
+    }
+    return { data: [{ id: 'selected' }], nextCursor: null }
+  })
+  const invoked = copy(undefined, true, 'selected')
+  await forked.promise
+  const timeout = new CodexAppServerTimeoutError('reply lost')
+  lost.reject(timeout)
+  await expect(invoked).rejects.not.toHaveProperty('refusal')
+  pending.reject(timeout)
+  state.session.run = undefined
+  state.session.transport = undefined
+  const caller = new AbortController()
+  caller.abort(new Error('caller cancelled'))
+  await expect(copy(undefined, true, 'selected', { signal: caller.signal })).rejects.toBe(
+    caller.signal.reason
+  )
 })

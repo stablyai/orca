@@ -17,7 +17,7 @@ import {
 import './websocket-transport'
 import '../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { RuntimeClient } from './client'
-import '../handlers/worktree-removal-request'
+import '../workspaces/worktree-removal-request'
 import { launchOrcaApp } from './launch'
 import './environments'
 import {

@@ -4,8 +4,12 @@ import type { SpeechModelState } from '../../../../../shared/speech-types'
 import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
-import type { SettingsNavSection, SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type {
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/components/settings/navigation/settings-navigation-types'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
+import { parseSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
 
 export const SETTINGS_NAV_GROUPS = [
   {
@@ -113,10 +117,54 @@ export function getSettingsScrollTarget(
   sectionId: string,
   container?: HTMLElement | null
 ): HTMLElement | null {
+  const title = parseSettingsTitleTargetId(sectionId)
+  if (title !== null) {
+    return (
+      (container ?? document).querySelector<HTMLElement>(
+        `[data-settings-search-title="${CSS.escape(title)}"]`
+      ) ?? (container ? findSettingsRowByVisibleTitle(title, container) : null)
+    )
+  }
   return (
     container?.querySelector<HTMLElement>(`[data-settings-section="${CSS.escape(sectionId)}"]`) ??
     document.getElementById(sectionId)
   )
+}
+
+// Rows not wrapped in SearchableSetting are found by the label they render.
+function findSettingsRowByVisibleTitle(title: string, root: HTMLElement): HTMLElement | null {
+  const wanted = title.trim().toLowerCase()
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const element = node.parentElement
+    // The pane's own h2 heading is not a setting row.
+    if (node.textContent?.trim().toLowerCase() !== wanted || !element || element.closest('h2')) {
+      continue
+    }
+    // A group title stands for its whole card, not the heading text.
+    const groupCard = element
+      .closest('[data-settings-group-heading]')
+      ?.closest('[data-settings-group]')
+      ?.querySelector<HTMLElement>('[data-settings-group-card]')
+    // Free-form card content has no row; the card stands in rather than the bare label.
+    return (
+      groupCard ??
+      element.closest<HTMLElement>('[data-settings-row]') ??
+      element.closest<HTMLElement>('[data-settings-group-card]') ??
+      element
+    )
+  }
+  return null
+}
+
+function hasNestedScroller(target: HTMLElement, container: HTMLElement): boolean {
+  for (let node = target.parentElement; node && node !== container; node = node.parentElement) {
+    const overflowY = getComputedStyle(node).overflowY
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return true
+    }
+  }
+  return false
 }
 
 export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
@@ -125,8 +173,9 @@ export function scrollSubsectionIntoView(targetId: string, container?: HTMLEleme
   if (!target) {
     return
   }
-  if (!container) {
-    target.scrollIntoView({ block: 'start' })
+  // A target inside its own scroll area (the Shortcuts list) needs every scroller moved, not just the page.
+  if (!container || hasNestedScroller(target, container)) {
+    target.scrollIntoView({ block: container ? 'center' : 'start' })
     return
   }
   const containerRect = container.getBoundingClientRect()

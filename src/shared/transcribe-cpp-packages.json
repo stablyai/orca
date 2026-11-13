@@ -1,5 +1,6 @@
 {
   "darwin-arm64": "@transcribe-cpp/darwin-arm64-metal",
+  "darwin-x64": "@transcribe-cpp/darwin-x64-cpu",
   "linux-x64": "@transcribe-cpp/linux-x64-cpu-vulkan",
   "linux-arm64": "@transcribe-cpp/linux-arm64-cpu-vulkan",
   "win32-x64": "@transcribe-cpp/win32-x64-cpu-vulkan"

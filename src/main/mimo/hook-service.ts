@@ -13,14 +13,14 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { getOpenCodeFamilyPluginSource } from '../opencode/hook-service'
-import { sourceOverlayDirName } from '../opencode/overlay-dir-names'
+import { getOpenCodeFamilyPluginSource } from '../opencode/status-hooks/plugin-source/status-plugin-module-source'
+import { sourceOverlayDirName } from '../opencode/status-hooks/overlay-dir-names'
 import {
   clearOpenCodeOverlayManifestEntries,
   readOpenCodeOverlayManifest,
   writeOpenCodeOverlayManifest,
   type OpenCodeOverlayManifest
-} from '../opencode/opencode-overlay-manifest'
+} from '../opencode/status-hooks/opencode-overlay-manifest'
 import {
   isSafeDescendCandidate,
   mirrorEntry,

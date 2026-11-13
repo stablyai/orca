@@ -18,7 +18,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSearchScopeIdentity } from '../../../../../../shared/ai-vault/search/ai-vault-search-scope'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { useAiVaultAssociationObservation } from '../scanning/ai-vault-association-observation'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'

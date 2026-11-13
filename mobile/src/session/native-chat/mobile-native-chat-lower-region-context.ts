@@ -1,5 +1,4 @@
-import { createContext, useContext, useLayoutEffect, useRef } from 'react'
-import type { View } from 'react-native'
+import { createContext, useContext } from 'react'
 
 export type MobileNativeChatLowerRegion = {
   getViewport: () => unknown
@@ -27,20 +26,9 @@ export const MobileNativeChatLowerGeometryContext = createContext<{
 
 export const MobileNativeChatComposerPresenceContext = createContext(true)
 
+/** A prompt card sits under the queue: the queue closes its own box instead of tucking into a composer. */
+export const MobileNativeChatQueueAbovePromptContext = createContext(false)
+
 export function useMobileNativeChatLowerGeometry() {
   return useContext(MobileNativeChatLowerGeometryContext)
-}
-
-export function useMobileNativeChatComposerRegion(shown: boolean, focused: boolean) {
-  const groupRef = useRef<View>(null)
-  const lowerRegion = useMobileNativeChatLowerRegion()
-  const menuWasShown = useRef(false)
-  useLayoutEffect(() => {
-    lowerRegion?.layoutChanged()
-    if (shown !== menuWasShown.current && focused) {
-      lowerRegion?.reveal(groupRef.current, shown ? 'menu' : 'edit')
-    }
-    menuWasShown.current = shown
-  })
-  return groupRef
 }

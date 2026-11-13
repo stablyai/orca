@@ -107,11 +107,11 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('../ipc/ui', () => ({ getTrustedUIRendererWebContents: () => trustedRenderer }))
-vi.mock('./privileged-window-navigation', () => ({
+vi.mock('./security/privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: vi.fn()
 }))
 vi.mock('../updater/updater-service', () => ({ isQuittingForUpdate: updateQuitMock }))
-vi.mock('./renderer-publication-throttle', () => ({
+vi.mock('./visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: acquireMock }
 }))
 

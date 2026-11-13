@@ -1,32 +1,34 @@
 import {
   localhostLabelRouteForHttpLink,
-  openLabeledLocalhostLink,
-  type LocalhostLinkRepo,
-  type LocalhostLinkProject,
-  type LocalhostLinkWorktree
+  openLabeledLocalhostLink
 } from './http-link-localhost-route'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
-
-import type { LinkOpenIntent, LinkSourceState } from '../../link-open-intent'
-import { captureLinkOpenIntent, canOpenLinkInSourceGroup } from '../../link-open-intent'
-import type { AppState } from '@/store/types'
+import type {
+  LocalhostLinkRepo,
+  LocalhostLinkProject,
+  LocalhostLinkWorktree
+} from './http-link-localhost-route'
+import {
+  captureLinkOpenIntent,
+  canOpenLinkInSourceGroup
+} from '../../links/placement/link-open-intent'
+import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
 import { translate } from '@/i18n/i18n'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { toast } from 'sonner'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
-import {
-  captureBrowserLinkReveal,
-  type BrowserLinkSelectionSubscriber
-} from './browser-link-reveal'
+import { captureBrowserLinkReveal } from './browser-link-reveal'
+import type { BrowserLinkSelectionSubscriber } from './browser-link-reveal'
 import {
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
-  prepareRemoteHttpLinkTab,
-  type HttpLinkBrowserTabState
+  prepareRemoteHttpLinkTab
 } from './http-link-browser-placement'
-
+import type { HttpLinkBrowserTabState } from './http-link-browser-placement'
+import { resolveModifierRouting } from './http-link-modifier-routing'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
+import type { AppState } from '@/store/types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
@@ -135,22 +137,6 @@ export function canHttpLinkOpenInSourceGroup(
   return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
 }
 
-// Route only external http(s); file/markdown targets stay with resolveMarkdownLinkTarget. Modifier-held resolves the user’s Shift choice; forceSystemBrowser is unconditional.
-/** Shift traditionally forces system browser; the inversion setting instead chooses the other destination when system is already default. */
-function resolveModifierRouting(
-  modifierHeld: boolean,
-  openLinksInApp: boolean,
-  modifierInverts: boolean
-): { wantsOrca: boolean; wantsSystemBrowser: boolean } {
-  if (!modifierHeld) {
-    return { wantsOrca: false, wantsSystemBrowser: false }
-  }
-  if (!modifierInverts) {
-    return { wantsOrca: false, wantsSystemBrowser: true }
-  }
-  return { wantsOrca: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
-}
-
 function reportHttpLinkBrowserOpenFailure(error: unknown): void {
   toast.error(
     error instanceof Error
@@ -167,31 +153,34 @@ async function openSystemHttpLink(url: string): Promise<void> {
   }
 }
 
-export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
+export type HttpLinkDestination = 'orca-browser' | 'system-browser' | 'none'
+
+// Route only external http(s); file/markdown targets stay with resolveMarkdownLinkTarget. Modifier-held resolves the user’s Shift choice; forceSystemBrowser is unconditional.
+export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): HttpLinkDestination {
   // Ownerless legacy callers retain their default-server classification without asserting an owner.
   const ownerlessRemoteActive =
     !opts.sourceOwner && Boolean(storeAccessor?.()?.settings?.activeRuntimeEnvironmentId?.trim())
-  executeHttpLink(url, opts, ownerlessRemoteActive)
+  return executeHttpLink(url, opts, ownerlessRemoteActive)
 }
 
 export function openOwnedHttpLink(
   url: string,
   opts: OpenHttpLinkOptions & { sourceOwner: HttpLinkSourceOwner }
-): void {
-  executeHttpLink(url, opts, false)
+): HttpLinkDestination {
+  return executeHttpLink(url, opts, false)
 }
 
 function executeHttpLink(
   url: string,
   opts: OpenHttpLinkOptions,
   remoteRuntimeActive: boolean
-): void {
+): HttpLinkDestination {
   if (opts.linkContext?.isCurrentRequest?.() === false) {
-    return
+    return 'none'
   }
   const { worktreeId, allowRemoteInApp, forceSystemBrowser, forceInApp, sourceOwner } = opts
   if (sourceOwner?.kind === 'unknown') {
-    return
+    return 'none'
   }
   const state = storeAccessor?.()
   const effectiveSourceOwner = sourceOwner
@@ -244,8 +233,9 @@ function executeHttpLink(
         opts.onBrowserOpenComplete ? isHttpLinkBackgroundOpen(state) : false,
         opts.onBrowserOpenComplete
       )
+      return 'orca-browser'
     }
-    return
+    return 'none'
   }
 
   if (wantsOrca && sourceIsLocal && worktreeId && state) {
@@ -282,18 +272,18 @@ function executeHttpLink(
       openLocalHttpLinkTab(getState(), worktreeId, chosenUrl, undefined, activate)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
-    if (!localhostRoute) {
+    if (localhostRoute) {
+      void openLabeledLocalhostLink(url, localhostRoute, openLocal)
+    } else {
       openLocal(url)
-      return
     }
-    void openLabeledLocalhostLink(url, localhostRoute, openLocal)
-    return
+    return 'orca-browser'
   }
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
     void openSystemHttpLink(url)
-    return
+    return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
     if (opts.linkContext?.isCurrentRequest?.() === false) {
@@ -301,6 +291,7 @@ function executeHttpLink(
     }
     void openSystemHttpLink(labeledUrl)
   })
+  return 'system-browser'
 }
 
 export async function resolveLocalhostHttpLinkDisplayUrl(

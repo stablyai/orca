@@ -356,8 +356,7 @@
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
       "resume": "再開",
-      "resumeSending": "キュー内のメッセージの送信を再開",
-      "title": "キュー内のメッセージ"
+      "resumeSending": "キュー内のメッセージの送信を再開"
     },
     "offlineQueue": {
       "failed": "送信できませんでした — 「送信」をタップして再試行",
@@ -1332,6 +1331,30 @@
       "phoneStopped": "このスマートフォンで停止しました",
       "stopped": "音声入力が停止しました",
       "recordingKept": "録音は保持されています"
+    },
+    "announce": {
+      "typedInto": "{{target}} に入力しました",
+      "insertedIn": "{{target}} に挿入しました",
+      "listeningOnPhone": "聞き取り中。このスマートフォンで文字起こししています。",
+      "listeningOn": "聞き取り中。{{computer}} で文字起こししています。",
+      "listeningOnComputer": "聞き取り中。コンピュータで文字起こししています。",
+      "finishing": "仕上げ中。",
+      "inserted": "挿入しました。",
+      "cancelled": "音声入力をキャンセルしました。",
+      "movedTo": "このスマートフォンでの文字起こしが止まりました。{{computer}} で続けます。",
+      "movedToComputer": "このスマートフォンでの文字起こしが止まりました。コンピュータで続けます。",
+      "stoppedKept": "音声入力が停止しました。{{reason}}。録音は保持されています。",
+      "stoppedKeptGeneric": "音声入力が停止しました。録音は保持されています。",
+      "stillListening": "聞き取りを続けています。"
+    },
+    "pill": {
+      "open": "開く",
+      "listening": "聞き取り中",
+      "starting": "開始中",
+      "finishing": "仕上げ中",
+      "stopped": "音声入力が停止しました",
+      "label": "{{target}} への音声入力、{{duration}}",
+      "hint": "ダブルタップで戻る"
     }
   },
   "files": {
@@ -2136,6 +2159,10 @@
       "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
       "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
       "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
+      "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
+      "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
+      "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+      "selectedModel": "選択されたモデル",
       "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
       "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",
       "providerRetryLastError": "直近のエラー: {{detail}}。",
@@ -2289,20 +2316,16 @@
       "loadFailed": "PR を読み込めませんでした。"
     },
     "queuedCardText": {
-      "showLess": "折りたたむ",
       "showLessHint": "メッセージを折りたたんで表示します。",
-      "showMore": "さらに表示",
       "showMoreHint": "メッセージ全体を表示します。"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "キュー内のこのメッセージを削除",
       "images_one": "画像 {{count}} 枚",
       "images_other": "画像 {{count}} 枚",
       "moreActions": "その他の操作",
       "send": "送信",
       "sendAgainHint": "このメッセージを再送信",
       "sendHint": "このメッセージを送信",
-      "showLessHint": "メッセージを折りたたんで表示します。",
       "steer": "今すぐ送信",
       "steerHint": "モデルを中断せずに送信します"
     },
@@ -2422,8 +2445,7 @@
     "tabStrip": {
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
       "newTab": "新規タブ",
-      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
-      "tabStatus": "{{title}}、{{status}}"
+      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
@@ -2466,6 +2488,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "添付に失敗しました（再接続中）。"
+    },
+    "useCloseActions": {
+      "closeFailed": "タブを閉じられませんでした。もう一度お試しください。",
+      "closeFailedDesktopNotReady": "タブを閉じられませんでした。コンピューターの Orca はまだ読み込み中です。少ししてからもう一度お試しください。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",
@@ -2536,8 +2562,8 @@
       "insertFailed": "ディクテーションの結果を挿入できませんでした。",
       "insertFailedCopied": "ディクテーションの結果を挿入できず、クリップボードにコピーしました。",
       "inserted": "ディクテーションの結果を挿入しました。",
-      "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
-      "stoppedAtCloudLimit": "クラウドの10分の上限に達したため、ディクテーションが停止しました。"
+      "stoppedAtCloudLimit": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
+      "stoppedAfterSilenceSeconds": "{{seconds}} 秒間無音だったため停止しました"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止要求を送信できませんでした。",
@@ -3412,6 +3438,22 @@
     "githubViewControls": {
       "openView": "GitHub でビューを開く"
     },
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} をマージしますか？",
+      "confirmGitHubSquash": "PR #{{number}} のコミットをまとめてマージしますか？",
+      "confirmGitHubRebase": "PR #{{number}} をリベースしてマージしますか？",
+      "confirmGitLabMerge": "マージリクエスト #{{number}} をマージしますか？",
+      "confirmGitLabSquash": "マージリクエスト #{{number}} のコミットをまとめてマージしますか？",
+      "confirmGitLabRebase": "マージリクエスト #{{number}} をリベースしてマージしますか？",
+      "merged": "マージ済み",
+      "closed": "クローズ済み",
+      "conflicts": "競合あり",
+      "behind": "遅れあり",
+      "blocked": "ブロック中",
+      "checksPending": "チェック待ち",
+      "ableToMerge": "マージ可能",
+      "unknown": "不明"
+    },
     "itemActions": {
       "changeStatus": "ステータスを変更",
       "copyGitHubLink": "GitHub リンクをコピーする",
@@ -3557,6 +3599,11 @@
       "team": "チーム",
       "updated": "更新日時",
       "updatedSortDescription": "アクティビティが新しい順"
+    },
+    "pagination": {
+      "pageUnreachable": "ページ {{page}} は GitHub 検索で取得できる範囲を超えています。",
+      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。",
+      "noMoreResults": "ページ {{page}} にこれ以上の結果はありません。"
     },
     "pickerProjection": {
       "allRepos": "すべてのリポジトリ",

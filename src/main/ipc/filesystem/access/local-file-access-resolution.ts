@@ -9,7 +9,7 @@ import {
 } from './filesystem-auth'
 import { isDescendantOrEqual } from './filesystem-path-containment'
 import { filePreviewForPath } from '../../../../shared/file-preview/file-preview-kind'
-import { getDefaultFloatingWorkspacePath } from '../../floating-workspace-directory'
+import { getFloatingWorkspaceFileRoots } from '../../floating-workspace-directory'
 import {
   isDeviceNamespacePath,
   isNetworkSharePath,
@@ -35,7 +35,7 @@ export async function resolveDesktopAuthorizedPath(
 ): Promise<string> {
   return resolveAuthorizedPath(targetPath, store, {
     ...options,
-    extraRoots: [getDefaultFloatingWorkspacePath()]
+    ...getFloatingWorkspaceFileRoots(store)
   })
 }
 

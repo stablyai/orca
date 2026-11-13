@@ -1,4 +1,5 @@
 import { resolveRendererWebContents } from '../browser-guest-renderer-target'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { setupGuestContextMenu } from '../input/browser-guest-context-menu'
 import { setupGrabShortcutForwarding } from '../input/shortcuts/browser-guest-grab-shortcuts'
 import { setupGuestMouseWheelZoomForwarding } from '../input/browser-guest-wheel-zoom'

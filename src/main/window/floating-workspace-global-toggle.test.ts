@@ -38,7 +38,7 @@ vi.mock('./floating-workspace-window', () => ({
   summonFloatingWorkspaceWindow: electron.summon,
   requestFloatingWorkspaceWindowPlacement: electron.requestPlacement
 }))
-vi.mock('./foreground-activation-policy', () => ({
+vi.mock('./activation/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => electron.background.value
 }))
 

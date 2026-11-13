@@ -5,7 +5,7 @@ import {
   editorViewStateCache,
   scrollTopCache,
   setWithLRU
-} from '@/lib/scroll-cache'
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor

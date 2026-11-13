@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { FloatingWorkspaceMode } from '../../../../shared/ui-chrome-types'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 /** A browser tab cannot open a second Orca window, so a web client only has the in-window panel. */
 export function canOpenFloatingWorkspacePopout(): boolean {

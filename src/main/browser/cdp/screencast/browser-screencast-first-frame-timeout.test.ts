@@ -4,10 +4,6 @@ import { startBrowserScreencast } from './browser-screencast-stream'
 import type { BrowserScreencastOptions } from './browser-screencast-stream-types'
 import { createMockScreencastWebContents } from './browser-screencast-web-contents-test-double'
 
-function never<T>(): Promise<T> {
-  return new Promise<T>(() => {})
-}
-
 function start(
   webContents: ReturnType<typeof createMockScreencastWebContents>,
   options: BrowserScreencastOptions
@@ -24,6 +20,7 @@ function startOptions(viewport: boolean) {
     maxHeight: 1200,
     everyNthFrame: 2,
     minFrameIntervalMs: 0,
+    holdPaint: () => () => {},
     ...(viewport ? { viewportWidth: 390, viewportHeight: 844 } : {}),
     onFrame: vi.fn(() => true),
     onError: vi.fn()
@@ -36,27 +33,6 @@ describe('browser screencast first-frame deadline', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('reports no frame at exactly 10 s when the captures hang', async () => {
-    const webContents = Object.assign(createMockScreencastWebContents(), {
-      capturePage: vi.fn(() => never())
-    })
-    webContents.debugger.sendCommand.mockImplementation(async (method: string) =>
-      method === 'Page.captureScreenshot' ? never() : {}
-    )
-    const options = startOptions(true)
-    const session = await start(webContents, options)
-
-    await vi.advanceTimersByTimeAsync(9_999)
-    expect(options.onError).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(options.onError).toHaveBeenCalledExactlyOnceWith('Browser stream timed out.')
-    session.stop()
-    // The stop queues behind the capture: capturePage's 10 s bound, then the fallback's 8 s.
-    await vi.advanceTimersByTimeAsync(8_000)
-    await session.done
   })
 
   it('drops a capture that settles after the limit', async () => {

@@ -11,7 +11,7 @@ import { makeCmdJTaskSearchResult } from '../cmd-j/task-search-results'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 
 vi.mock('../cmd-j/task-search-requests', () => ({ createCmdJTaskSearchRequests: vi.fn() }))
@@ -47,8 +47,14 @@ it('publishes a fast source while a second is pending, then discards both after 
     complete = resolve
   })
   vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
-    { id: 'fast', provider: 'jira', hostLabel: 'Local', run: async () => [jiraTaskResult] },
-    { id: 'slow', provider: 'jira', hostLabel: 'Remote', run: () => slow }
+    {
+      id: 'fast',
+      provider: 'jira',
+      hostId: 'local',
+      hostLabel: 'Local',
+      run: async () => [jiraTaskResult]
+    },
+    { id: 'slow', provider: 'jira', hostId: 'ssh:remote', hostLabel: 'Remote', run: () => slow }
   ])
   const { result, rerender } = renderHook(useWorktreeJumpPaletteTaskSearch, { initialProps: input })
   await act(async () => vi.advanceTimersByTimeAsync(600))
@@ -87,6 +93,7 @@ it('filters to open after pending edits apply: a pending reopen shows and a fail
     {
       id: 'github',
       provider: 'github',
+      hostId: 'local',
       hostLabel: 'Local',
       run: async () =>
         [closed, open].map((item) =>

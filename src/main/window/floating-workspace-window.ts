@@ -13,9 +13,12 @@ import {
   resolveZoomShortcut,
   zoomDashboardPopout
 } from './dashboard-popout-window'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { rendererPublicationThrottle } from './renderer-publication-throttle'
+import {
+  isBackgroundLaunch,
+  showWindowWithoutStealingFocus
+} from './activation/foreground-activation-policy'
+import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
+import { rendererPublicationThrottle } from './visibility/renderer-publication-throttle'
 import { isQuittingForUpdate } from '../updater/updater-service'
 import {
   boundsOnCursorDisplay,

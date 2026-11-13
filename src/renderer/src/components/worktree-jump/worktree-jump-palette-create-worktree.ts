@@ -1,15 +1,16 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import { worktreeMatchesGitHubNumber } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
-} from '../../../../shared/github/links'
+} from '../../../../shared/github/repositories/links'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace-name'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-palette-create-worktree-input'
 import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -18,7 +19,7 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
-import { buildLinearIssueComposerData } from '@/lib/linear-linked-work-item'
+import { buildLinearIssueComposerData } from '@/lib/work-items/linear/linear-linked-work-item'
 import { isWorktreePaletteCreateActivationAllowed } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export function createWorktreeJumpPaletteWorktreeHandler({
@@ -184,6 +185,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       const matches = workspaces.filter(
         (worktree) =>
           !worktree.isArchived &&
+          !isWorktreeRetiredByRemoval(worktree) &&
           worktreeMatchesGitHubNumber(
             worktree,
             ghNumber,

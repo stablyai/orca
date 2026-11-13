@@ -1,32 +1,30 @@
-import { claudeStartupAnswerObservation } from './claude-startup-answer-observation'
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
+import { claudeStartupAnswerObservation } from './child-process/claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
-import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
-import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
-import { withoutRejectedClaudeApiKey } from './claude-rejected-api-key'
+import { buildClaudeChildProcessEnv } from './child-process/claude-child-process-environment'
+import { withoutInheritedClaudeConfigDir } from './structured/launch/claude-config-dir-pin'
+import { withoutRejectedClaudeApiKey } from './configuration/claude-rejected-api-key'
 import {
-  ClaudeControlRequestError,
   createClaudeControlSurface,
   type ClaudeControlSurface
-} from './claude-agent-sdk-control-requests'
-import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
+} from './sdk-transport/claude-agent-sdk-control-requests'
+import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
-import { claudeChildCloseProven } from './claude-child-exit-proof-ladder'
-import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
+import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
+import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'
 import {
   claudeUnwrittenUserMessageError,
   createClaudeUserMessageQueue
-} from './claude-agent-sdk-user-message-queue'
+} from './sdk-transport/claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
-import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
+import { claudeStreamJsonExitError } from './sdk-transport/claude-stream-json-exit-error'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
-
-export { ClaudeControlRequestError }
 
 /** Bound output draining after proven exit so inherited pipes cannot hold close open. */
 export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
@@ -112,8 +110,7 @@ export async function openClaudeStreamJsonConnection(
   const env = await withoutRejectedClaudeApiKey(
     withoutKeys(
       buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-        scrubConfiguredChildSessionStamps: true
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
       }),
       launch.envToDelete ?? []
     )
@@ -124,7 +121,7 @@ export async function openClaudeStreamJsonConnection(
     options: {
       ...launch.options,
       cwd: launch.cwd,
-      env,
+      env: withOrcaClaudeChatEntrypoint(env, process.platform),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),

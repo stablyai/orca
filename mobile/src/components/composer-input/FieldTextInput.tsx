@@ -1,5 +1,11 @@
 import type { Ref } from 'react'
-import { TextInput, type StyleProp, type TextInputProps, type TextStyle } from 'react-native'
+import {
+  TextInput,
+  type StyleProp,
+  type TextInputProps,
+  type TextStyle,
+  type TextInputInstance
+} from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { composerInputStyles as styles } from './composer-input-styles'
@@ -9,7 +15,7 @@ type FieldTextInputProps = Omit<
   TextInputProps,
   'style' | 'placeholderTextColor' | 'selectionColor'
 > & {
-  ref?: Ref<TextInput>
+  ref?: Ref<TextInputInstance>
   /** Size, padding and type; the edge and focus ring are the field's own. */
   style?: StyleProp<TextStyle>
 }

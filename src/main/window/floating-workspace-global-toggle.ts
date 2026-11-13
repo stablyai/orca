@@ -13,7 +13,7 @@ import {
   requestFloatingWorkspaceWindowPlacement,
   summonFloatingWorkspaceWindow
 } from './floating-workspace-window'
-import { isBackgroundLaunch } from './foreground-activation-policy'
+import { isBackgroundLaunch } from './activation/foreground-activation-policy'
 
 const GLOBAL_KEY = /^([A-Z0-9]|F([1-9]|1[0-9]|2[0-4])|Space)$/
 

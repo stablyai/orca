@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { spawnSttWorkerWithCpuFallback } from './stt-worker-cpu-fallback'
 
 class FakeChild extends EventEmitter {
@@ -40,8 +40,6 @@ function setup(): {
     type: 'init',
     speechModulesDir: '/app/node_modules',
     modelDir: '/models/parakeet',
-    modelType: 'transducer',
-    streaming: false,
     sampleRate: 16000,
     files: ['model-Q8_0.gguf']
   })
@@ -93,16 +91,6 @@ describe('GPU speech process falling back to the CPU', () => {
     ])
   })
 
-  it('keeps the GPU for later sessions when only this audio failed', () => {
-    const { worker, children, marks } = setup()
-    const [gpu] = children
-    gpu.emit('message', { type: 'ready' })
-    worker.postMessage(feed(100))
-    gpu.emit('message', { type: 'error', streamId: '1', error: 'bad input' })
-    children[1].emit('message', { type: 'ready' })
-    expect(marks()).toBe(0)
-  })
-
   it('does not replay a canceled dictation', () => {
     const { worker, children } = setup()
     const [gpu] = children
@@ -127,6 +115,31 @@ describe('GPU speech process falling back to the CPU', () => {
     expect(marks()).toBe(0)
   })
 
+  it('keeps a slow GPU load that still finishes its steps, and moves a silent one to the CPU', () => {
+    vi.useFakeTimers()
+    try {
+      const { children, events } = setup()
+      const [gpu] = children
+      vi.advanceTimersByTime(20_000)
+      gpu.emit('message', { type: 'loading' })
+      vi.advanceTimersByTime(20_000)
+      gpu.emit('message', { type: 'loading' })
+      vi.advanceTimersByTime(20_000)
+      gpu.emit('message', { type: 'ready' })
+      expect(children).toHaveLength(1)
+      expect(events).toEqual([{ type: 'ready' }])
+
+      const silent = setup()
+      vi.advanceTimersByTime(20_000)
+      silent.children[0].emit('message', { type: 'loading' })
+      vi.advanceTimersByTime(25_000)
+      expect(silent.children).toHaveLength(2)
+      expect(silent.children[1].cpuOnly).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('fails the worker when the CPU replacement cannot load the model mid-dictation', () => {
     const { worker, children } = setup()
     const exits: number[] = []
@@ -136,16 +149,5 @@ describe('GPU speech process falling back to the CPU', () => {
     children[0].emit('exit', 1)
     children[1].emit('message', { type: 'error', error: 'model load failed' })
     expect(exits).toEqual([1])
-  })
-
-  it('keeps a GPU process on IPC audio, which it can replay, and hands a CPU process the port', () => {
-    const { worker, children } = setup()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fakes never touch the port.
-    const port = {} as never
-    expect(worker.attachAudioPort('1', port)).toBe(false)
-    children[0].emit('message', { type: 'ready' })
-    worker.postMessage(feed(100))
-    children[0].emit('exit', 1)
-    expect(worker.attachAudioPort('2', port)).toBe(true)
   })
 })

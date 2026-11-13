@@ -78,6 +78,18 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
     ]
   },
+  markNewMessages: {
+    targetSectionId: 'chat-mark-new-messages',
+    title: translate(
+      'components.settings.nativeChat.markNewMessagesTitle',
+      'Mark new messages when returning to a chat'
+    ),
+    description: translate(
+      'components.settings.nativeChat.markNewMessagesCopy',
+      "When you come back to a chat, a New line marks what you missed if it's long or someone else wrote, and scrolls there. It fades once you've seen it."
+    ),
+    keywords: [translate('components.settings.nativeChat.markNewMessagesSearchUnread', 'unread')]
+  },
   linkPreviews: {
     targetSectionId: 'chat-link-previews',
     title: translate('components.settings.nativeChat.linkPreviewsTitle', 'Link previews'),

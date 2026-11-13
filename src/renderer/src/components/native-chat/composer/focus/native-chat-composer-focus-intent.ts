@@ -5,7 +5,7 @@ import {
   overlayFocusAppliesTo,
   overlayFocusContains,
   subscribeOverlayFocusChanges
-} from '@/lib/overlay-focus-ownership'
+} from '@/lib/overlay-interaction/overlay-focus-ownership'
 
 const PENDING_FOCUS_MS = 1000
 

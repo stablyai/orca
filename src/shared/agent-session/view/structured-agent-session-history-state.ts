@@ -59,10 +59,14 @@ export function replacePage(
 }
 
 export function mergeItems(
-  current: readonly AgentJournalRenderItem[],
+  current: AgentJournalRenderItem[],
   incoming: readonly AgentJournalRenderItem[],
   removedIds: readonly string[]
 ): AgentJournalRenderItem[] {
+  const upserted = removedIds.length === 0 ? upsertItems(current, incoming) : null
+  if (upserted) {
+    return upserted
+  }
   const removed = new Set(removedIds)
   const byId = new Map(
     current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
@@ -74,6 +78,49 @@ export function mergeItems(
     }
   }
   return [...byId.values()].sort(compareAgentJournalItems)
+}
+
+/** Streamed revisions replace their row in place and new rows append past the tail, keeping every other row's
+ * position; anything that would move a row returns null for the full merge. */
+function upsertItems(
+  current: AgentJournalRenderItem[],
+  incoming: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem[] | null {
+  if (incoming.length === 0) {
+    return current
+  }
+  // One pass copies the rows and finds every incoming id's row.
+  const rowOf = new Map(incoming.map((item) => [item.itemId, -1]))
+  const next: AgentJournalRenderItem[] = []
+  for (const row of current) {
+    if (rowOf.has(row.itemId)) {
+      rowOf.set(row.itemId, next.length)
+    }
+    next.push(row)
+  }
+  let changed = false
+  for (const item of incoming) {
+    const index = rowOf.get(item.itemId)!
+    const prior = next[index]
+    if (prior && item.revision < prior.revision) {
+      continue
+    }
+    const tail = next.at(-1)
+    if (
+      prior
+        ? compareAgentJournalItems(prior, item) !== 0
+        : tail && compareAgentJournalItems(tail, item) >= 0
+    ) {
+      return null
+    }
+    if (prior) {
+      next[index] = item
+    } else {
+      rowOf.set(item.itemId, next.push(item) - 1)
+    }
+    changed = true
+  }
+  return changed ? next : current
 }
 
 /** Keep the contiguous loaded suffix: an older revision retains its sequence and would move the paging anchor past a hole.
