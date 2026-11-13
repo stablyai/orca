@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, promises as fsPromises, readFileSync, rmSync } from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TerminalHistoryJournals } from '../terminal-history-journals'
@@ -11,6 +12,8 @@ const roots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
+  // Named `node:fs/promises` imports see a restored `open` only once resynced.
+  syncBuiltinESMExports()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -119,22 +122,27 @@ describe('host-wide read pressure', () => {
     const old = await open(sessionId)
     old.record({ kind: 'output', data: 'OLD_ROW\r\n' })
     expect(await old.flush()).toBe(true)
-    // The next file handle to close, the reader's source log, finishes only when released.
-    const probe = await fsPromises.open(join(old.dir, 'meta.json'), 'r')
-    const handles = Object.getPrototypeOf(probe)
-    await probe.close()
-    const close = handles.close
+    // The reader's own handle on the predecessor log closes only when released.
+    const logPath = join(old.dir, 'output.log')
     const closing = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
+    const openFile = fsPromises.open
     let held = false
-    vi.spyOn(handles, 'close').mockImplementation(async function (this: unknown) {
-      if (!held) {
+    vi.spyOn(fsPromises, 'open').mockImplementation(async (...args) => {
+      const handle = await openFile(...args)
+      if (!held && String(args[0]) === logPath) {
         held = true
-        closing.resolve()
-        await release.promise
+        const close = handle.close
+        handle.close = async () => {
+          closing.resolve()
+          await release.promise
+          return close.call(handle)
+        }
       }
-      return close.call(this)
+      return handle
     })
+    // The bounded reader imports `open` by name; resync so it reaches the wrapper.
+    syncBuiltinESMExports()
     const read = readThrough(journals.reads, old)
     // Sync point only: the read holds its replay lease and its source file is still closing.
     await closing.promise
