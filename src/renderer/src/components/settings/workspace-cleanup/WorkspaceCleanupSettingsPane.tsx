@@ -84,11 +84,7 @@ function summarizeMatches(
 
 type RulesChange = (rules: WorkspaceCleanupRules) => WorkspaceCleanupRules
 
-type PendingChange = WorkspaceCleanupRuleChangeRequest & {
-  change: RulesChange
-  /** The host's rules the listed rows were previewed against. */
-  previewedRules: string
-}
+type PendingChange = WorkspaceCleanupRuleChangeRequest & { change: RulesChange }
 
 export function WorkspaceCleanupSettingsPane({
   hostScope,
@@ -206,7 +202,7 @@ export function WorkspaceCleanupSettingsPane({
     }
     if (request && rows.length > 0) {
       setPendingRule(null)
-      setPendingChange({ ...request, rows, change, previewedRules: JSON.stringify(latest) })
+      setPendingChange({ ...request, rows, change })
       return
     }
     finishChange(await update(nextRules))
@@ -253,21 +249,19 @@ export function WorkspaceCleanupSettingsPane({
     if (!change) {
       return
     }
-    // The dialog can stay open a while; if the rules moved, what it lists may no longer be all.
+    // The dialog can stay open a while: the rules may have moved, or a workspace aged past a rule.
     const latest = await readLatest()
     if (!latest || !mountedRef.current) {
       return
     }
-    if (JSON.stringify(latest) !== change.previewedRules) {
-      const rows = await previewNewRemovals(latest, change.change(latest))
-      if (!rows || !mountedRef.current) {
-        return
-      }
-      const listed = new Set(change.rows.map(workspaceCleanupRowKey))
-      if (rows.some((row) => !listed.has(workspaceCleanupRowKey(row)))) {
-        setPendingChange({ ...change, rows, previewedRules: JSON.stringify(latest) })
-        return
-      }
+    const rows = await previewNewRemovals(latest, change.change(latest))
+    if (!rows || !mountedRef.current) {
+      return
+    }
+    const listed = new Set(change.rows.map(workspaceCleanupRowKey))
+    if (rows.some((row) => !listed.has(workspaceCleanupRowKey(row)))) {
+      setPendingChange({ ...change, rows })
+      return
     }
     // Pinned workspaces are always kept, so Keep is a pin rather than a second keep list.
     for (const row of keep) {
