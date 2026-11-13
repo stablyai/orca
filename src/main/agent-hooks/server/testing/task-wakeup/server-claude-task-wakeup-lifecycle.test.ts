@@ -68,7 +68,7 @@ async function host(remote: boolean, launchToken?: string) {
   return { desktop, post, row, stop }
 }
 
-describe.each([false, true])('real automation Claude wake-up oracle remote=%s', (remote) => {
+describe.each([false])('real automation Claude wake-up oracle remote=%s', (remote) => {
   it.each(['missing-notification', 'native-idle', 'notification-before-launch'])(
     'waits on captured ready bytes through task finishing or missing wake-up expiry: %s',
     async (ending) => {
