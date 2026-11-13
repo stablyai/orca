@@ -9,6 +9,7 @@ import { SshTargetsEmptyState } from './targets/SshTargetsEmptyState'
 import { SshTargetDestructiveActions } from './targets/SshTargetDestructiveActions'
 import { SshHostsHeaderActions, SshHostsListToolbar } from './SshPaneToolbar'
 import { SshHostsHeaderPortal } from './ssh-hosts-header-slot'
+import { SSH_SETTING_ANCHORS } from './ssh-search'
 import { useSshTargetTests } from './targets/use-ssh-target-tests'
 import { SshRestoreRemovedHostsDialog } from './targets/SshRestoreRemovedHostsDialog'
 import { useSshConfigSync } from './targets/use-ssh-config-sync'
@@ -262,7 +263,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }
 
   return (
-    <div className="space-y-3">
+    <div id={SSH_SETTING_ANCHORS.hosts} className="space-y-3">
       <SshHostsHeaderPortal>
         <SshHostsHeaderActions
           syncing={syncing}

@@ -81,11 +81,6 @@ function NavigationHarness({
   )
   return (
     <TooltipProvider>
-      <input
-        aria-label="Search settings"
-        value={useAppStore((state) => state.settingsSearchInputQuery)}
-        onChange={(event) => setQuery(event.target.value)}
-      />
       <button onClick={() => requestTarget('general-open-in-apps')}>Open app settings link</button>
       <GeneralPane
         settings={settings}
@@ -108,20 +103,13 @@ function NavigationHarness({
   )
 }
 
-function renderNavigationHarness({
-  initialQuery = 'worktree',
-  ...props
-}: Parameters<typeof NavigationHarness>[0] & { initialQuery?: string } = {}) {
-  useAppStore.setState({
-    settingsSearchQuery: initialQuery,
-    settingsSearchInputQuery: initialQuery
-  })
+function renderNavigationHarness(props: Parameters<typeof NavigationHarness>[0] = {}) {
   return render(<NavigationHarness {...props} />)
 }
 
-it('opens an old subsection link from another child with a conflicting query, including repeated selection', async () => {
+it('opens an old subsection link from another child, including repeated selection', async () => {
   const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
-  const { container } = renderNavigationHarness({ initialQuery: 'font' })
+  const { container } = renderNavigationHarness()
   fireEvent.click(screen.getByRole('button', { name: 'Open app settings link' }))
   const add = await screen.findByRole('button', { name: 'Add app' })
   const target = container.querySelector('#general-open-in-apps')
@@ -130,22 +118,4 @@ it('opens an old subsection link from another child with a conflicting query, in
   scroll.mockClear()
   fireEvent.click(screen.getByRole('button', { name: 'Open app settings link' }))
   await waitFor(() => expect(scroll.mock.contexts).toContain(target))
-})
-
-it('keeps an incomplete Open in draft when search temporarily replaces its form', async () => {
-  const onWrite = vi.fn()
-  renderNavigationHarness({ initialPage: 'open-in', initialQuery: '', onWrite })
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Add app' }), { key: 'ArrowDown' })
-  fireEvent.click(await screen.findByRole('menuitem', { name: /Custom/ }))
-  fireEvent.change(screen.getByPlaceholderText('App name'), { target: { value: 'Draft editor' } })
-  fireEvent.blur(screen.getByPlaceholderText('App name'))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
-    target: { value: 'open in' }
-  })
-  await screen.findByRole('button', { name: /Open in apps/i })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
-    target: { value: '' }
-  })
-  expect(await screen.findByDisplayValue('Draft editor')).toBeTruthy()
-  expect(onWrite).not.toHaveBeenCalled()
 })

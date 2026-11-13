@@ -2172,6 +2172,38 @@ html.native-shell .app-layout {
   }
 }
 
+/* Search and deep-link target: a tint out to the enclosing card's edges that fades.
+   An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
+   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+.settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 100vmax var(--settings-target-tint),
+    calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-target-highlight {
+    animation: settings-target-highlight-fade 3s ease-out forwards;
+  }
+}
+
+@keyframes settings-target-highlight-fade {
+  60% {
+    box-shadow:
+      inset 0 0 0 100vmax var(--settings-target-tint),
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 100vmax transparent,
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
+      var(--settings-target-bleed-right, 0px) 0 0 transparent;
+  }
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;
