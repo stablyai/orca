@@ -14,14 +14,12 @@ import { createWorktreeWithStartupAgent } from '../../../../agent-launch/startup
 import { defineMethod } from '../../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { resolvePairedCallerHostId } from '../pairing/paired-caller-host-id'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   WorktreeCreate,
   WorktreePrefetchCreateBase
 } from '../../../../../shared/rpc-contract/worktree-create-params'
 import {
-  WorktreeActivate,
   WorktreeForceDeleteBranch,
   WorktreeRemove,
   WorktreePreviewNestedRemoval,
@@ -40,6 +38,7 @@ import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-li
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKSPACE_CLEANUP_SCAN_METHOD } from './workspace-cleanup-scan-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
+import { WORKTREE_ACTIVATE_METHOD } from './worktree-activate-method'
 import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
@@ -99,23 +98,7 @@ export const WORKTREE_METHODS = [
   }),
   WORKTREE_SLEEP_METHOD,
   WORKSPACE_CLEANUP_SCAN_METHOD,
-  defineMethod({
-    name: 'worktree.activate',
-    permission: 'workspace',
-    params: WorktreeActivate,
-    handler: async (params, { runtime, clientKind }) =>
-      // Only mobile activation wakes host-renderer slept agents; preserve web/desktop behavior.
-      runtime.activateManagedWorktree(params.worktree, {
-        notifyClients: params.notifyClients !== false,
-        clientKind,
-        navigation: resolveRuntimeNavigationTarget({
-          navigation: params.navigation,
-          notifyClients: params.notifyClients,
-          clientKind,
-          defaultTarget: 'host'
-        })
-      })
-  }),
+  WORKTREE_ACTIVATE_METHOD,
   defineMethod({
     name: 'worktree.create',
     permission: 'workspace',
