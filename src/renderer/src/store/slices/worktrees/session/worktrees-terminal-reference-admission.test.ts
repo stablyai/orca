@@ -110,7 +110,7 @@ beforeEach(() => {
   resetWorktreeSliceModuleMemory()
 })
 
-it('drops stale queued starts and fallback reads after the pane closes', async () => {
+it('keeps workspace attachments unchanged after closed-pane lookups settle', async () => {
   const { store, pending, observeBurst, closePane } = setup()
   observeBurst()
   await flush()
@@ -126,7 +126,7 @@ it('drops stale queued starts and fallback reads after the pane closes', async (
   ).toEqual([7])
 })
 
-it('retains occupied native permits until settlement after their pane closes', async () => {
+it('attaches a current pane review after closed-pane lookups settle', async () => {
   const { store, pending, observeBurst, closePane } = setup()
   observeBurst()
   await flush()

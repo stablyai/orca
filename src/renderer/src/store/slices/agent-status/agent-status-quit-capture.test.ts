@@ -71,8 +71,8 @@ describe('captureAllSleepingAgentSessions', () => {
       )
 
     store.getState().captureAllSleepingAgentSessions('quit')
-    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
     store.getState().captureAllSleepingAgentSessions('periodic')
+    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
 
     expect(quitRecord).toMatchObject({ origin: 'quit', providerSession })
 
