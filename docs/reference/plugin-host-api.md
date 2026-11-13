@@ -28,7 +28,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`shell.openExternal`](#shellopenexternal) | none | panel, editor | no | 1.1 | Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel. |
 | [`files.saveAs`](#filessaveas) | none | panel, editor | yes | 1.1 | Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only. |
 | [`plugin.request`](#pluginrequest) | none | panel, editor | no | 1.2 | Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. |
-| [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 | The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. |
+| [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 | The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. |
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. |
 | [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. A plugin with `main` and status bar items has its worker started when it is enabled and kept running while it stays enabled, so a worker can poll and update its items without an event or a hook. |
 | [`appearance.read`](#appearanceread) | `appearance:write` | worker | no | 1.4 | Reads the current desktop appearance revision for a conditional update. |
@@ -185,10 +185,10 @@ Asks the plugin's own worker to run the handler it registered with `orca.panels.
 
 ### `agents.list`
 
-The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.
+The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.
 
 ```ts
-(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }
+(params?: { workspaceId?: string }) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number; sessionId?: string | null; task?: { title: string } | null }[] }
 ```
 
 ### `events.subscribe`

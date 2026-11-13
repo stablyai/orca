@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
+import { pluginWorkspaceIdSchema } from './plugin-host-api-workspace-methods'
 import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
 import { hasUnsafeProviderSessionIdChars } from '../../agent-session/lifecycle/agent-session-resume'
 import {
@@ -28,7 +29,13 @@ const pluginRequestResult = z.object({ output: z.json() })
 
 export const PLUGIN_AGENT_LIST_LIMIT = 50
 export const PLUGIN_AGENT_TASK_TITLE_MAX = 512
-const agentsListParams = z.strictObject({}).optional()
+const agentsListParams = z
+  .strictObject({
+    /** A workspace by the id `workspace.list` gives, instead of the focused one. Hosts that
+     *  list only the focused workspace refuse it with `invalid_params`. */
+    workspaceId: pluginWorkspaceIdSchema.optional()
+  })
+  .optional()
 const agentsListResult = z.object({
   agents: z
     .array(
@@ -75,9 +82,9 @@ export const PLUGIN_PANEL_BRIDGE_API = {
   }),
   'agents.list': spec({
     summary:
-      'The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.',
+      'The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.',
     since: 2,
-    scope: 'active-workspace',
+    scope: 'any-workspace',
     capability: 'agent:read',
     mutation: false,
     surfaces: ALL_SURFACES,
