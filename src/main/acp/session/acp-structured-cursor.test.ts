@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { z } from 'zod'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import {
   closeProviderTimelineRigs,
@@ -17,6 +18,7 @@ import {
 } from './testing/acp-structured-adapter.test-support'
 
 const CURSOR = acpLaunchSpecFor('cursor')!
+const CONFIG_WRITE = z.object({ configId: z.string(), value: z.string() })
 afterEach(closeProviderTimelineRigs)
 
 // Shaped as cursor-agent 2026.11.11's question handler sends them; these name no session.
@@ -203,10 +205,12 @@ it('writes effort to the effort levels, not the thinking switch, and Fast to its
 
 it("writes the person's Fast choice again after a model switch resets it", async () => {
   // Each model brings its own Fast default: Grok and Composer start on.
-  const optionsFor = (model: string, fast: string): SessionConfigOption[] => [
-    { ...OPUS_OPTIONS[0]!, currentValue: model } as SessionConfigOption,
-    { ...OPUS_OPTIONS[3]!, currentValue: fast } as SessionConfigOption
-  ]
+  const optionsFor = (model: string, fast: string): SessionConfigOption[] =>
+    [OPUS_OPTIONS[0]!, OPUS_OPTIONS[3]!].map((option) =>
+      option.type === 'select'
+        ? { ...option, currentValue: option.id === 'model' ? model : fast }
+        : option
+    )
   const rig = await openAcpAdapterRig({
     spec: CURSOR,
     script: (agent) => {
@@ -216,7 +220,7 @@ it("writes the person's Fast choice again after a model switch resets it", async
         agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: optionsFor(model, fast) })
       )
       agent.on('session/set_config_option', (frame) => {
-        const { configId, value } = frame.params as { configId: string; value: string }
+        const { configId, value } = CONFIG_WRITE.parse(frame.params)
         if (configId === 'model') {
           model = value
           fast = 'true'
@@ -244,7 +248,7 @@ it("writes the person's Fast choice again after a model switch resets it", async
   }
   expect(
     rig.sent('session/set_config_option').map(({ params }) => {
-      const { configId, value } = params as { configId: string; value: string }
+      const { configId, value } = CONFIG_WRITE.parse(params)
       return `${configId}=${value}`
     })
   ).toEqual(['model=grok-4.7', 'fast=false', 'model=composer-2.5', 'fast=false'])
