@@ -3,6 +3,7 @@ import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
+import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-race'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
@@ -164,6 +165,15 @@ async function gitExecFileAsyncUnlocked(
           throw createAbortError()
         }
         return await runCapturedCommand()
+      } catch (error) {
+        return await retryGitFetchRefRace(
+          args,
+          error,
+          runCapturedCommand,
+          () => terminationState.current,
+          options.signal,
+          options.canStart
+        )
       } finally {
         const termination = terminationState.current
         if (termination) {
