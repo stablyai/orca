@@ -486,7 +486,7 @@ describe('Session', () => {
       return new TerminalSessionTeardown(new Map([['test-session', session]])).killSession(
         'test-session',
         session,
-        false
+        { immediate: false }
       )
     }
 

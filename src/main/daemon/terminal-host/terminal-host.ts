@@ -14,7 +14,7 @@ import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
 import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
-import { TerminalSessionTeardown } from './terminal-session-teardown'
+import { TerminalSessionTeardown, type TerminalHostKillOptions } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
 import {
   createOrAttachClaimedAgentSession,
@@ -172,7 +172,7 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer(source)
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
+  kill(sessionId: string, opts: TerminalHostKillOptions = {}): Promise<void> {
     const pending = this.sessionTeardown.get(sessionId)
     if (pending) {
       return Promise.resolve(
@@ -180,7 +180,7 @@ export class TerminalHost {
       )
     }
     const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
+    const killed = this.sessionTeardown.killSession(sessionId, session, opts)
     this.killedTombstones.record(sessionId)
     return Promise.resolve(killed)
   }

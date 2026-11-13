@@ -18,7 +18,10 @@ import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recov
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
-import { serializeTerminalCheckpointWithinLimit } from '../restoration/terminal-checkpoint-serializer'
+import {
+  serializeTerminalCheckpointStrict,
+  serializeTerminalCheckpointWithinLimit
+} from '../restoration/terminal-checkpoint-serializer'
 import {
   PRIVATE_FILE_MODE,
   tightenPathMode
@@ -107,6 +110,50 @@ export class TerminalHistorySessionWriter {
         error: error instanceof Error ? error : new Error(String(error))
       }
     }
+    await this.publishCheckpoint(data, generation)
+    return { result: 'committed' }
+  }
+
+  /**
+   * A host publication: the whole image or nothing, never row-trimmed. An explicit generation
+   * supersedes every predecessor generation the caller validated.
+   */
+  async checkpointStrict(
+    snapshot: TerminalSnapshot,
+    opts: { pendingOutputSeq: number; generation?: number }
+  ): Promise<
+    | { result: 'committed'; data: string; generation: number }
+    | { result: 'too-large' }
+    | { result: 'retryable'; error: Error }
+  > {
+    this.resolveLogState()
+    const generation = opts.generation ?? (this.logGeneration ?? 0) + 1
+    const data = serializeTerminalCheckpointStrict(
+      snapshot,
+      {
+        cwd: snapshot.cwd ?? this.readMeta()?.cwd ?? null,
+        generation,
+        pendingOutputSeq: opts.pendingOutputSeq,
+        checkpointedAt: new Date().toISOString()
+      },
+      this.checkpointMaxBytes
+    )
+    if (data === null) {
+      return { result: 'too-large' }
+    }
+    try {
+      await this.publishCheckpoint(data, generation)
+    } catch (error) {
+      return {
+        result: 'retryable',
+        error: error instanceof Error ? error : new Error(String(error))
+      }
+    }
+    return { result: 'committed', data, generation }
+  }
+
+  // Rename publishes the checkpoint; the header reset then starts its generation's log.
+  private async publishCheckpoint(data: string, generation: number): Promise<void> {
     const tmpPath = `${this.checkpointPath}.tmp`
     // Create temporary files privately before publishing the checkpoint.
     this.assertAdmitted()
@@ -123,7 +170,6 @@ export class TerminalHistorySessionWriter {
     this.logBytes = LOG_HEADER_BYTES
     this.assertAdmitted()
     clearTerminalHistoryRecoveryProtection(this.dir)
-    return { result: 'committed' }
   }
 
   get admitted(): boolean {

@@ -1,7 +1,8 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { HistoryReader } from '../../../history/restoration/history-reader'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import type { DaemonServer } from '../../../server/daemon-server'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
@@ -267,6 +268,57 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
       }
+    })
+
+    // A rebuild runs after its records left the daemon; a changing source must not publish shallowly.
+    it('writes no checkpoint while the saved source keeps changing, then saves it all', async () => {
+      historyAdapter = new DaemonPtyAdapter({
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION,
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: 'changing-source'
+      })
+      const checkpoints = historyAdapter as unknown as {
+        checkpointSessions(ids: string[], opts: { final: boolean }): Promise<unknown>
+      }
+      lastSubprocess._simulateData('SAVED_EARLIER\r\n')
+      await checkpoints.checkpointSessions([id], { final: false })
+      lastSubprocess._simulateData('DRAINED_DURING_CHANGE\r\n')
+      const sessionDir = join(historyDir, getHistorySessionDirName(id))
+      const reader = HistoryReader.prototype as unknown as {
+        detectColdRestoreOnce: (...args: unknown[]) => Promise<unknown>
+      }
+      const read = reader.detectColdRestoreOnce
+      const changing = vi.spyOn(reader, 'detectColdRestoreOnce').mockImplementation(async function (
+        this: HistoryReader,
+        ...args: unknown[]
+      ) {
+        const result = await read.apply(this, args)
+        utimesSync(join(sessionDir, 'meta.json'), new Date(), new Date(Date.now() + 60_000))
+        return result
+      })
+      const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+
+      await expect(historyAdapter.shutdown(id, { keepHistory: true })).rejects.toThrow()
+      expect(checkpointSpy).not.toHaveBeenCalled()
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+
+      changing.mockRestore()
+      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+      const restored = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: id
+      })
+      expect(restored.coldRestore?.scrollback).toContain('SAVED_EARLIER')
+      expect(restored.coldRestore?.scrollback).toContain('DRAINED_DURING_CHANGE')
     })
 
     it('cold restores the second sleep/wake cycle with post-wake output', async () => {

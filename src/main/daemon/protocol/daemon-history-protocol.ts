@@ -16,11 +16,59 @@ export type TerminalHistoryOutcome =
 export type FlushHistoryRequest = {
   id: string
   type: 'flushHistory'
-  /** final seals the incarnation: Sleep's verified capture, after which exit is never clean. */
-  payload: { sessionId: string; expectedIncarnationId?: string; final?: boolean }
+  payload: {
+    sessionId: string
+    /** commit makes the cut durable and leaves the terminal running; sleep also ends it. */
+    intent: 'commit' | 'sleep'
+    expectedIncarnationId: string
+    /** A successful literal folder probe; ordered at C for commit, at the final cut for sleep. */
+    cwdObservation?: { cwd: string }
+    /** Sleep only: the caller's existing immediate-versus-graceful kill intent. */
+    immediate?: boolean
+    remainingBudgetMs?: number
+  }
 }
 
-export type FlushHistoryResult = { status: 'committed' | 'unavailable' }
+/** What happened to the probed folder: rejected means a malformed probe was not saved. */
+export type TerminalHistoryCwdNoteOutcome = 'none' | 'published' | 'folded' | 'rejected'
+
+export type FlushHistoryUnavailableReason =
+  | 'absent'
+  | 'busy'
+  | 'terminating'
+  | 'exited'
+  | 'refused'
+  | 'gap'
+  | 'unreadable'
+  | 'unrepresentable'
+  | 'canceled'
+  | 'deadline'
+  | 'write_failed'
+
+type FlushHistoryReceipt = {
+  incarnationId: string
+  appliedRevision: number
+  outputSequence: number
+  generation: number
+  logBytes: number
+  cwdNote: TerminalHistoryCwdNoteOutcome
+}
+
+/**
+ * committed: the cut is durable and the terminal still runs. finalized: the process physically
+ * exited and its final history is verified. unavailable: preflight never authorized termination;
+ * authorized means termination was accepted but exit or publication is unproven; exited means
+ * the process ended and only its readable prefix remains.
+ */
+export type FlushHistoryResult =
+  | ({ status: 'committed' } & FlushHistoryReceipt)
+  | ({ status: 'finalized'; backing: 'checkpoint' | 'raw' } & FlushHistoryReceipt)
+  | {
+      status: 'unavailable'
+      incarnationId?: string
+      phase: 'preflight' | 'authorized' | 'exited'
+      reason: FlushHistoryUnavailableReason
+    }
 
 export const TERMINAL_HISTORY_UNAVAILABLE = 'terminal_history_unavailable'
 

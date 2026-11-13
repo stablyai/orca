@@ -38,6 +38,13 @@ export const JOURNAL_SESSION_BACKLOG_RECORDS = 10_000
 
 type JournalState = 'open' | 'gap'
 
+/** A replay's bounds plus where its pending records begin and the note captured with them. */
+type JournalReplayOptions = Pick<TerminalHistoryCut, 'firstRecord' | 'cwdNote'> & {
+  scrollbackRows?: number
+  isCanceled?: () => boolean
+  selfContained?: boolean
+}
+
 /** A journal's identity, cuts and read-only replays; the writing side extends it. */
 export class TerminalSessionJournalReads {
   readonly dir: string
@@ -54,6 +61,8 @@ export class TerminalSessionJournalReads {
   protected committedLogBytes = 0
   /** Bumped by every applied record and every transition that can change a derived answer. */
   protected appliedRevision = 0
+  /** The latest probed folder, ordered within this history; reads capture it with their cut. */
+  protected cwdNote: TerminalHistoryCut['cwdNote'] = null
   private derived: DerivedHistoryImage | null = null
   protected frozen: FrozenReadSource | null = null
   constructor(
@@ -110,6 +119,8 @@ export class TerminalSessionJournalReads {
     return {
       generation: this.foldGeneration,
       logBytes: this.committedLogBytes,
+      firstRecord: this.queue.committed,
+      cwdNote: this.cwdNote,
       records,
       outputSequence: this.output?.outputSequence() ?? 0,
       terminalOwner: this.output?.terminalOwner(),
@@ -286,7 +297,9 @@ export class TerminalSessionJournalReads {
       return null
     }
     try {
-      const snapshot = await this.replay(cut.logBytes, cut.source, { ...opts, selfContained })
+      const { firstRecord, cwdNote } = cut
+      const replayOpts = { ...opts, selfContained, firstRecord, cwdNote }
+      const snapshot = await this.replay(cut.logBytes, cut.source, replayOpts)
       return snapshot
         ? {
             snapshot: {
@@ -327,7 +340,7 @@ export class TerminalSessionJournalReads {
   protected replay(
     logBytes: number,
     pending: TerminalJournalSource['pending'],
-    opts: { scrollbackRows?: number; isCanceled?: () => boolean; selfContained?: boolean } = {}
+    opts: JournalReplayOptions
   ): Promise<TerminalSnapshot | null> {
     return replayTerminalJournalSource(
       {
@@ -335,6 +348,8 @@ export class TerminalSessionJournalReads {
         generation: opts.selfContained ? 0 : (this.writer?.committedLog?.generation ?? 0),
         folded: !opts.selfContained && this.foldGeneration > 0,
         logBytes: opts.selfContained ? 0 : logBytes,
+        firstRecord: opts.firstRecord,
+        cwdNote: opts.cwdNote,
         pending,
         origin: this.origin
       },

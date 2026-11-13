@@ -5,6 +5,7 @@ import { recordDaemonStreamBacklogEvent } from '../transport/stream/daemon-strea
 import type { GetSnapshotRequest, GetSnapshotResult } from '../protocol/daemon-rpc-contract'
 import type { FlushHistoryRequest, FlushHistoryResult } from '../protocol/daemon-history-protocol'
 import type { TerminalHistoryJournals } from '../history/journal/terminal-history-journals'
+import { flushDaemonHistory } from './daemon-history-flush'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
 import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
 import { ABANDONED_REPLY, withPreparedReply } from './daemon-reply-obligation'
@@ -36,7 +37,7 @@ function answerWithin(
   disconnected: AbortSignal
 ): Promise<GetSnapshotResult | FlushHistoryResult> {
   if (request.type === 'flushHistory') {
-    return flushDaemonHistory(host.historyJournals, request.payload)
+    return flushDaemonHistory(host, request.payload, disconnected)
   }
   const requested = request.payload.scrollbackRows
   const scrollbackRows =
@@ -146,20 +147,4 @@ async function readDaemonHistorySnapshot(
   } catch {
     return failed()
   }
-}
-
-async function flushDaemonHistory(
-  journals: TerminalHistoryJournals | undefined,
-  payload: FlushHistoryRequest['payload']
-): Promise<FlushHistoryResult> {
-  const journal = journals?.live(payload.sessionId, payload.expectedIncarnationId)
-  if (!journal?.session) {
-    return { status: 'unavailable' }
-  }
-  if (payload.final) {
-    // A final capture includes parser-held bytes, as the teardown snapshot did.
-    journal.session.prepareForFinalSnapshot()
-  }
-  const committed = await journal.flush({ final: payload.final === true })
-  return { status: committed ? 'committed' : 'unavailable' }
 }

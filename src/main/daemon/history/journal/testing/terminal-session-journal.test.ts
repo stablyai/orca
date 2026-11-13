@@ -38,6 +38,8 @@ function openJournal(
   const dirName = getHistorySessionDirName(sessionId)
   const dir = join(root, dirName)
   mkdirSync(dir, { recursive: true })
+  // The daemon's hold always leaves metadata before a journal opens.
+  writeTerminalHistoryMeta(dir, newTerminalHistoryMeta({ cwd: '/tmp', cols: 80, rows: 24 }, null))
   const journal = new TerminalSessionJournal(
     {
       acquireReplay: async () => () => {},
@@ -45,7 +47,8 @@ function openJournal(
       charge: () => {},
       makeRoom: () => {},
       settled: () => {},
-      log: () => {}
+      log: () => {},
+      owns: () => true
     },
     root,
     dirName,

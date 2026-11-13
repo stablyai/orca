@@ -255,6 +255,8 @@ describe('daemon-owned terminal history', () => {
     vi.mocked(client.request).mockRestore()
     child._simulateExit(0)
     await waitFor(() => harness!.server.host.historyJournals?.live(request.sessionId) === undefined)
+    // A same-ID start reads the predecessor's history once its final writes have landed.
+    await harness!.server.host.historyJournals!.settleAll()
     await adapter.spawn(request)
     child._simulateData('NEW_INCARNATION\r\n')
     release.resolve()

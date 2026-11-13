@@ -7,6 +7,10 @@ import { TerminalSessionJournal } from '../terminal-session-journal'
 import { DerivedHistoryImageBudget } from '../terminal-history-derived-image'
 import { TerminalHistoryReads } from '../terminal-history-read-admission'
 import { getHistorySessionDirName } from '../../storage/history-paths'
+import {
+  newTerminalHistoryMeta,
+  writeTerminalHistoryMeta
+} from '../../storage/terminal-history-metadata'
 
 const roots: string[] = []
 
@@ -27,6 +31,11 @@ export function openReads(imageBudget?: number) {
   const openJournal = (sessionId: string): TerminalSessionJournal => {
     const dirName = getHistorySessionDirName(sessionId)
     mkdirSync(join(root, dirName), { recursive: true })
+    // The daemon's hold always leaves metadata before a journal opens.
+    writeTerminalHistoryMeta(
+      join(root, dirName),
+      newTerminalHistoryMeta({ cwd: '/tmp', cols: 80, rows: 24 }, null)
+    )
     const journal = new TerminalSessionJournal(
       {
         acquireReplay: (priority, signal) => replay.acquire(priority, signal),
@@ -34,7 +43,8 @@ export function openReads(imageBudget?: number) {
         charge: () => {},
         makeRoom: () => {},
         settled: () => {},
-        log: () => {}
+        log: () => {},
+        owns: () => true
       },
       root,
       dirName,

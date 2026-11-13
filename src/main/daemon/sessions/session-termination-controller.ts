@@ -40,12 +40,16 @@ export class SessionTerminationController {
     this._isTerminating = false
   }
 
-  /** Claim synchronously before async teardown; false means exited or already claimed. */
-  beginTermination(): boolean {
+  /**
+   * Claim synchronously before async teardown; false means exited or already claimed. An
+   * accepted claim is reported before the producer resumes, which can deliver an exit at once.
+   */
+  beginTermination(onAccepted?: () => void): boolean {
     if (this.deps.isExited() || this._isTerminating) {
       return false
     }
     this._isTerminating = true
+    onAccepted?.()
     // Resume a child blocked on write before snapshotting so it can process termination.
     this.deps.releaseProducerPause({ resume: true })
     return true

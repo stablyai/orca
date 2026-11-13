@@ -74,7 +74,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     })
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
-    const graceful = teardown.killSession('s1', session, false)
+    const graceful = teardown.killSession('s1', session, { immediate: false })
     await Promise.resolve()
     const immediate = teardown.requestImmediate('s1')
 

@@ -6,7 +6,8 @@ import {
   openTerminalJournalOrigin,
   publishTerminalJournalSeedOrigin
 } from './terminal-session-journal-source'
-import { TerminalSessionJournalReads } from './terminal-session-journal-reads'
+import { TerminalSessionJournalSleep } from './terminal-session-journal-sleep'
+import type { TerminalJournalPhysicalFinal } from './terminal-session-journal-contract'
 
 export type { TerminalHistoryCut } from './terminal-session-journal-contract'
 
@@ -25,14 +26,12 @@ const JOURNAL_APPEND_BYTES = 64 * 1024
  * folds the retained window into a checkpoint only at the log cap, and never rebases on reads.
  * A storage or backing failure gaps the incarnation for good: I/O continues, history does not.
  */
-export class TerminalSessionJournal extends TerminalSessionJournalReads {
+export class TerminalSessionJournal extends TerminalSessionJournalSleep {
   private pumping: Promise<void> | null = null
   private appendTimer: ReturnType<typeof setTimeout> | null = null
   private flushing = 0
   private originRecords = 0
-  private ending = false
   private finalized = false
-  private sealedByFinalFlush = false
   private exitCode: number | null = null
   private readonly settledSignal = Promise.withResolvers<void>()
   private isSettled = false
@@ -46,11 +45,6 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     // Coalescing can change content without new intake; every applied call invalidates.
     this.markApplied()
     if (this.state !== 'open' || this.ending) {
-      return
-    }
-    if (this.sealedByFinalFlush) {
-      // Output after the final capture is not in it; never let reads claim it.
-      this.gap('applied_after_final_flush')
       return
     }
     const plan = this.queue.plan(record)
@@ -92,12 +86,9 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     return true
   }
 
-  /** Commit everything applied so far; a final flush also stops later clean-end marking. */
-  async flush(opts: { final?: boolean } = {}): Promise<boolean> {
+  /** Commit everything applied so far. */
+  async flush(): Promise<boolean> {
     const target = this.queue.intake
-    if (opts.final) {
-      this.sealedByFinalFlush = true
-    }
     this.flushing += 1
     try {
       do {
@@ -110,13 +101,17 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     return this.state === 'open' && this.writer !== null
   }
 
-  /** Physical exit or disposal: drain what was applied, then end cleanly only if nothing gapped. */
-  finish(exitCode: number | null): void {
+  /**
+   * Physical exit (with its final descriptor) or disposal: drain what was applied, then end
+   * cleanly only if nothing gapped. The first call closes intake; a repeat changes nothing.
+   */
+  finish(exitCode: number | null, physical?: TerminalJournalPhysicalFinal): void {
     if (this.ending) {
       return
     }
     this.ending = true
     this.exitCode = exitCode
+    this.captureFinalCut(physical)
     this.markApplied()
     this.kick()
   }
@@ -141,10 +136,15 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
   }
 
   private get urgent(): boolean {
-    return this.ending || this.flushing > 0 || this.queue.bytes >= JOURNAL_APPEND_BYTES
+    return (
+      this.ending ||
+      this.flushing > 0 ||
+      this.operation !== null ||
+      this.queue.bytes >= JOURNAL_APPEND_BYTES
+    )
   }
 
-  private kick(): void {
+  protected kick(): void {
     if (this.appendTimer) {
       clearTimeout(this.appendTimer)
       this.appendTimer = null
@@ -178,6 +178,9 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     if (this.state === 'open' && !this.writer) {
       await this.openOrigin()
     }
+    if (this.needsEmptyBacking && this.state === 'open' && this.writer) {
+      await this.appendEmptyBacking()
+    }
     let first = true
     while (
       this.state === 'open' &&
@@ -195,6 +198,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
         this.seq += 1
         this.committedLogBytes = this.writer.committedLog?.bytes ?? 0
         this.host.charge(this, -this.queue.commit(batch.records, batch.headOffset))
+        this.publishIfCovered()
         continue
       }
       await this.fold()
@@ -203,12 +207,29 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       return
     }
     this.finalized = true
-    if (this.writer && !this.sealedByFinalFlush) {
-      updateTerminalHistoryMeta(this.dir, {
-        endedAt: new Date().toISOString(),
-        exitCode: this.exitCode
-      })
+    // An authorized Sleep keeps its history restorable and publishes its final cut instead.
+    if ((await this.completeSleepFinal()) || !this.writer || this.state !== 'open') {
+      return
     }
+    updateTerminalHistoryMeta(this.dir, {
+      endedAt: new Date().toISOString(),
+      exitCode: this.exitCode
+    })
+  }
+
+  /** Affirmative backing for an operation over an empty origin: one ordinary empty batch. */
+  private async appendEmptyBacking(): Promise<void> {
+    const writer = this.writer!
+    this.needsEmptyBacking = false
+    if (this.committedLogBytes > 0 || this.foldGeneration > 0) {
+      return
+    }
+    if ((await writer.appendIncrements(this.seq + 1, [])) !== 'ok' || this.state !== 'open') {
+      return
+    }
+    this.seq += 1
+    this.committedLogBytes = writer.committedLog?.bytes ?? 0
+    this.publishIfCovered()
   }
 
   // An explicit new physical origin: predecessor files are superseded only by a seeded origin.
@@ -223,7 +244,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       this.originRecords === 0 ||
       !hasReplayableTerminalHistorySessionFiles(this.dir)
     ) {
-      this.writer = openTerminalJournalOrigin(this.dir, this.origin)
+      this.writer = openTerminalJournalOrigin(this.dir, this.origin, () => this.ownsDirectory())
       this.committedLogBytes = 0
       return
     }
@@ -234,7 +255,9 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
         return
       }
       const seed = this.queue.snapshot().slice(0, this.originRecords)
-      const writer = await publishTerminalJournalSeedOrigin(this.dir, this.origin, seed)
+      const writer = await publishTerminalJournalSeedOrigin(this.dir, this.origin, seed, () =>
+        this.ownsDirectory()
+      )
       if (this.state !== 'open') {
         return
       }
@@ -243,6 +266,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       this.markApplied()
       this.foldGeneration += 1
       this.host.charge(this, -this.queue.commit(this.originRecords, 0))
+      this.publishIfCovered()
     } finally {
       release()
     }
@@ -260,12 +284,18 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       const covered = this.queue.sealAll()
       const cut = this.captureCut()
       const records = cut.records
-      const snapshot = await this.replay(committed.bytes, (index) => records[index])
+      const snapshot = await this.replay(committed.bytes, (index) => records[index], {
+        firstRecord: cut.firstRecord,
+        cwdNote: cut.cwdNote
+      })
       if (!snapshot || this.state !== 'open') {
         throw new Error('terminal_history_fold_replay_failed')
       }
-      // Rename publishes the new generation; a failed header reset then gaps rather than reopen it.
-      const result = await writer.checkpoint(snapshot, { pendingOutputSeq: this.seq })
+      // The whole retained window or nothing; the refused batch stays queued until it publishes.
+      const result = await writer.checkpointStrict(snapshot, { pendingOutputSeq: this.seq })
+      if (result.result === 'too-large') {
+        throw new Error('backing_exhausted')
+      }
       if (result.result !== 'committed') {
         throw result.error
       }
@@ -274,6 +304,8 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       this.committedLogBytes = writer.committedLog?.bytes ?? 0
       this.markApplied()
       this.host.charge(this, -this.queue.commit(covered, 0))
+      this.settleFoldedNote()
+      this.publishIfCovered()
     } finally {
       release()
     }

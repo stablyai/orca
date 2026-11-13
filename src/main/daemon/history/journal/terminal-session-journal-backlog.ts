@@ -32,6 +32,8 @@ export class TerminalJournalBacklog {
   /** Monotonic record counts; a flush waits for committed to reach an earlier intake. */
   intake = 0
   committed = 0
+  /** An observation's record boundary: no batch crosses it until committed reaches it. */
+  cutAt: number | null = null
 
   get bytes(): number {
     return this.chargedBytes
@@ -69,7 +71,9 @@ export class TerminalJournalBacklog {
   }
 
   take(): TerminalJournalBatch {
-    const batch = takeTerminalJournalBatch(this.queue, this.headOffset)
+    const limit =
+      this.cutAt !== null && this.committed < this.cutAt ? this.cutAt - this.committed : Infinity
+    const batch = takeTerminalJournalBatch(this.queue, this.headOffset, limit)
     this.sealed = Math.max(this.sealed, batch.records)
     return batch
   }
@@ -121,12 +125,16 @@ export class TerminalJournalBacklog {
 /** At most 64 KiB of encoded frames, sliced surrogate-safe from the queue head. */
 function takeTerminalJournalBatch(
   queue: readonly PendingOutputRecord[],
-  headOffset: number
+  headOffset: number,
+  maxRecords: number
 ): TerminalJournalBatch {
   const data: PendingOutputRecord[] = []
   let bytes = 9
   let records = 0
   for (const [index, record] of queue.entries()) {
+    if (index >= maxRecords) {
+      break
+    }
     if (record.kind !== 'output') {
       if (data.length > 0 && bytes + 9 > JOURNAL_BATCH_BYTES) {
         break

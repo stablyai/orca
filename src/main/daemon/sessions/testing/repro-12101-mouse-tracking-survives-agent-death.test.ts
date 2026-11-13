@@ -93,11 +93,9 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, agent.getSnapshot()!)
-    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
-      sessionId,
-      agent,
-      false
-    )
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(sessionId, agent, {
+      immediate: false
+    })
     agentPty.simulateKilledExit()
     agent.dispose()
 

@@ -3,6 +3,12 @@ import { excludeShellBackgroundJobs } from '../../pty/process-retirement/pty-she
 import { terminateShutdownDescendants } from '../sessions/terminal-descendant-shutdown'
 import type { Session } from '../sessions/session'
 
+export type TerminalHostKillOptions = {
+  immediate?: boolean
+  /** Reports this request's own accepted reservation, before the producer can exit. */
+  onReservationAccepted?: () => void
+}
+
 type TeardownOperation = {
   promise: Promise<void>
   immediate: boolean
@@ -68,10 +74,14 @@ export class TerminalSessionTeardown {
     await Promise.all(this.requestImmediateAll())
   }
 
-  killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
+  killSession(
+    sessionId: string,
+    session: Session,
+    { immediate = false, onReservationAccepted }: TerminalHostKillOptions
+  ): void | Promise<void> {
     if (!session.launchAgent && !immediate && process.platform === 'win32') {
       // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
-      if (session.beginTermination()) {
+      if (session.beginTermination(onReservationAccepted)) {
         session.signalTerminationRoot()
         session.scheduleForceDisposeFallback()
       }
@@ -79,8 +89,10 @@ export class TerminalSessionTeardown {
     }
     // Hand-typed agents carry no launch metadata, yet their detached tools outlive the shell's SIGHUP.
     if (session.launchAgent || !immediate) {
-      return this.killAfterDescendantSnapshot(sessionId, session, immediate)
+      return this.killAfterDescendantSnapshot(sessionId, session, immediate, onReservationAccepted)
     }
+    // The immediate sweep runs either way; only its own accepted claim is reported.
+    session.beginTermination(onReservationAccepted)
     // Track the async probe so a concurrent create waits instead of treating the terminating ID as absent (#18046).
     return this.track(sessionId, session, immediate, () =>
       this.forceKillPlainShellSession(sessionId, session)
@@ -119,7 +131,6 @@ export class TerminalSessionTeardown {
 
   /** Immediate close must reach detached tools even when startup did not identify an agent. */
   private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
-    session.beginTermination()
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
@@ -132,7 +143,8 @@ export class TerminalSessionTeardown {
   private killAfterDescendantSnapshot(
     sessionId: string,
     session: Session,
-    immediate: boolean
+    immediate: boolean,
+    onReservationAccepted?: () => void
   ): void | Promise<void> {
     const pending = this.operations.get(sessionId)
     if (pending) {
@@ -141,7 +153,7 @@ export class TerminalSessionTeardown {
       return pending.promise
     }
 
-    if (!session.beginTermination()) {
+    if (!session.beginTermination(onReservationAccepted)) {
       // A graceful sweep may leave the root alive; escalate after its scan has finished.
       if (immediate && session.isAlive && session.isTerminating) {
         return session.forceKillAndWaitForExit()

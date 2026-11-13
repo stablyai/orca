@@ -122,8 +122,8 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Claim termination before async teardown; false means exited or already claimed. */
-  beginTermination(): boolean {
-    return this.termination.beginTermination()
+  beginTermination(onAccepted?: () => void): boolean {
+    return this.termination.beginTermination(onAccepted)
   }
 
   get pid(): number {

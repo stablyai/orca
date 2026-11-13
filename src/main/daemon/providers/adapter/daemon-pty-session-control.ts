@@ -8,14 +8,13 @@ import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pt
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
-import { readDaemonLiveSleepCwd } from './daemon-live-sleep-cwd'
+import { readDaemonSleepFolder } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
-import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from '../wsl/daemon-wsl-sleep-cwd'
 import * as unlistedSession from '../routing/daemon-unlisted-session'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import { flushHostHistoryForSleep, type ShutdownOptions } from './daemon-pty-host-history'
+import type { ShutdownOptions } from './daemon-pty-host-history'
 import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 
@@ -144,43 +143,37 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     await this.ensureConnected(opts.deadlineMs)
     // Sleep may precede the first periodic checkpoint; persist the screen before killing.
     if (opts.keepHistory) {
-      const sleepWslDistro = this.wslDistrosBySessionId.get(id)
-      const sleepPaneKey = this.wslPaneKeysBySessionId.get(id)
-      const live = this.activeSessionIds.has(id)
-      const startedAt = Date.now()
-      const read =
-        sleepWslDistro && sleepPaneKey
-          ? // A live pane's own wsl.exe keeps its distro running.
-            await readDaemonWslSleepCwdWithFacts(
-              { paneKey: sleepPaneKey, wslDistro: sleepWslDistro, live },
-              opts.deadlineMs
-            )
-          : { cwd: live ? await readDaemonLiveSleepCwd(this.client, id, opts.deadlineMs) : null }
-      const sleepCwd = read.cwd
-      // Device runs need to see why a WSL pane woke at its spawn folder (awin 5e).
-      const sleepFolder = {
-        wslDistro: sleepWslDistro,
-        paneKey: sleepPaneKey,
-        live,
-        elapsedMs: Date.now() - startedAt
+      // Captured before the probe: only this exact binding's process may end or be cleaned up.
+      const binding = this.hostHistory.enabled ? this.hostHistory.get(id) : undefined
+      const sleepCwd = await readDaemonSleepFolder(this.client, id, {
+        wslDistro: this.wslDistrosBySessionId.get(id),
+        paneKey: this.wslPaneKeysBySessionId.get(id),
+        live: this.activeSessionIds.has(id),
+        deadlineMs: opts.deadlineMs
+      })
+      if (this.hostHistory.enabled) {
+        // The daemon ends this exact process itself; no second kill, no main readback.
+        const sleep = { ...opts, cwd: sleepCwd }
+        const slept = await this.hostHistory.finalizeSleep(this.client, id, binding, sleep)
+        if (!slept) {
+          throw new FinalCheckpointWaitExpiredError(id)
+        }
+        return this.completeShutdownWithHistoryLock(id, opts, slept)
       }
-      logSleepFolderRead(id, read, sleepFolder)
-      const committed = this.hostHistory.enabled
-        ? await flushHostHistoryForSleep(this.client, id, this.hostHistory, opts.deadlineMs)
-        : await this.runExclusiveCheckpoint(
-            async () => {
-              // Set inside: a caller past its deadline leaves this checkpoint running without it.
-              if (sleepCwd) {
-                this.probedShellCwds.set(id, sleepCwd)
-              }
-              try {
-                await this.checkpointSessions([id], { final: true, teardown: true })
-              } finally {
-                this.probedShellCwds.delete(id)
-              }
-            },
-            { callerDeadlineMs: opts.deadlineMs }
-          )
+      const committed = await this.runExclusiveCheckpoint(
+        async () => {
+          // Set inside: a caller past its deadline leaves this checkpoint running without it.
+          if (sleepCwd) {
+            this.probedShellCwds.set(id, sleepCwd)
+          }
+          try {
+            await this.checkpointSessions([id], { final: true, teardown: true })
+          } finally {
+            this.probedShellCwds.delete(id)
+          }
+        },
+        { callerDeadlineMs: opts.deadlineMs }
+      )
       // Caller timeout leaves the checkpoint running; preserve the live PTY until recovery data is verified.
       if (!committed) {
         throw new FinalCheckpointWaitExpiredError(id)
@@ -203,10 +196,6 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       const unreadable =
         detection?.status === 'unreadable' ||
         (detection?.status === 'restored' && detection.hasUnreadableRecovery)
-      if (unreadable && this.hostHistory.enabled) {
-        // A host-owned capture must read back before its live PTY may go.
-        throw new FinalCheckpointWaitExpiredError(id)
-      }
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
         if (this.coldRestoreCache.has(id)) {
@@ -246,12 +235,23 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     await this.completeShutdownWithHistoryLock(id, opts)
   }
 
-  /** Complete an explicit close without issuing another kill; the caller holds the spawn/history lock. */
+  /**
+   * Complete an explicit close without issuing another kill; the caller holds the spawn/history
+   * lock. A captured incarnation cleans up only that binding, never a same-ID successor.
+   */
   protected async completeShutdownWithHistoryLock(
     id: string,
-    opts: Pick<ShutdownOptions, 'keepHistory' | 'historyAdmission'>
+    opts: Pick<ShutdownOptions, 'keepHistory' | 'historyAdmission'>,
+    capturedIncarnationId?: string
   ): Promise<void> {
-    this.ptyInventory.retire(id, this.ptyInventory.currentIncarnation(id))
+    if (capturedIncarnationId !== undefined) {
+      this.hostHistory.release(id, capturedIncarnationId)
+      const current = this.ptyInventory.currentIncarnation(id)
+      if (current !== undefined && current !== capturedIncarnationId) {
+        return
+      }
+    }
+    this.ptyInventory.retire(id, capturedIncarnationId ?? this.ptyInventory.currentIncarnation(id))
     this.activeSessionIds.delete(id)
     this.hostLossSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)

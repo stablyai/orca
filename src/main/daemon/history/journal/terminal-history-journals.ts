@@ -148,7 +148,8 @@ export class TerminalHistoryJournals {
           }
         },
         settled: (owner) => this.release(hold.sessionId, owner),
-        log: (event, details) => this.logger?.log(event, details)
+        log: (event, details) => this.logger?.log(event, details),
+        owns: (owner) => this.byId.get(hold.sessionId) === owner
       },
       this.root,
       getHistorySessionDirName(hold.sessionId),

@@ -131,6 +131,40 @@ export class DaemonPtyHostHistoryBindings {
     }
   }
 
+  /**
+   * Sleep of the binding captured before the folder probe: the daemon proves recoverable history,
+   * ends that exact process and verifies its final cut. The incarnation, only for its receipt.
+   */
+  async finalizeSleep(
+    client: DaemonClient,
+    sessionId: string,
+    binding: HostHistoryBinding | undefined,
+    opts: { cwd: string | null; immediate?: boolean; deadlineMs?: number }
+  ): Promise<string | null> {
+    const incarnationId = binding?.incarnationId
+    if (!incarnationId || this.bindings.get(sessionId) !== binding) {
+      return null
+    }
+    try {
+      const result = await client.request<FlushHistoryResult>(
+        'flushHistory',
+        {
+          sessionId,
+          intent: 'sleep',
+          expectedIncarnationId: incarnationId,
+          ...(opts.cwd ? { cwdObservation: { cwd: opts.cwd } } : {}),
+          immediate: opts.immediate === true
+        },
+        remainingDaemonRequestTimeoutMs(opts.deadlineMs)
+      )
+      return result.status === 'finalized' && isHostHistoryReceipt(result, incarnationId)
+        ? incarnationId
+        : null
+    } catch {
+      return null
+    }
+  }
+
   /** Undefined means a legacy or unknown route; an adopted live host session has no other owner. */
   authority(sessionId: string): TerminalHistoryAuthority | undefined {
     const binding = this.bindings.get(sessionId)
@@ -153,28 +187,41 @@ export function awaitHistoryAdmissionReady(admission: HistoryWriterAdmission): P
   )
 }
 
-/** Sleep's verified capture: committed to the cut, after which the daemon never ends it cleanly. */
-export async function flushHostHistoryForSleep(
+/** Quit's durable cut for one captured binding; the terminal keeps running either way. */
+export async function commitHostHistory(
   client: DaemonClient,
   sessionId: string,
-  bindings: DaemonPtyHostHistoryBindings,
-  deadlineMs: number | undefined
+  incarnationId: string,
+  opts: { cwd: string | undefined; deadlineMs: number }
 ): Promise<boolean> {
-  const incarnationId = bindings.get(sessionId)?.incarnationId
   try {
     const result = await client.request<FlushHistoryResult>(
       'flushHistory',
       {
         sessionId,
-        ...(incarnationId ? { expectedIncarnationId: incarnationId } : {}),
-        final: true
+        intent: 'commit',
+        expectedIncarnationId: incarnationId,
+        ...(opts.cwd ? { cwdObservation: { cwd: opts.cwd } } : {})
       },
-      remainingDaemonRequestTimeoutMs(deadlineMs)
+      remainingDaemonRequestTimeoutMs(opts.deadlineMs)
     )
-    return result.status === 'committed'
+    return result.status === 'committed' && isHostHistoryReceipt(result, incarnationId)
   } catch {
     return false
   }
+}
+
+function isHostHistoryReceipt(
+  result: Exclude<FlushHistoryResult, { status: 'unavailable' }>,
+  incarnationId: string
+): boolean {
+  const counts = [result.appliedRevision, result.outputSequence, result.generation, result.logBytes]
+  return (
+    result.incarnationId === incarnationId &&
+    counts.every((count) => Number.isSafeInteger(count) && count >= 0) &&
+    ['none', 'published', 'folded', 'rejected'].includes(result.cwdNote) &&
+    (result.status !== 'finalized' || result.backing === 'checkpoint' || result.backing === 'raw')
+  )
 }
 
 /** The daemon's image for this binding; null is unavailable, never a cue to read another model. */

@@ -215,6 +215,15 @@ export async function replayTerminalSnapshot(
   }
 }
 
+/** The whole image or nothing: host publications never trim retained rows to fit. */
+export function serializeTerminalCheckpointStrict(
+  snapshot: TerminalSnapshot,
+  metadata: CheckpointMetadata,
+  maxBytes: number
+): string | null {
+  return stringifyWithinLimit(checkpointFile(snapshot, metadata), maxBytes)
+}
+
 export async function serializeTerminalCheckpointWithinLimit(
   snapshot: TerminalSnapshot,
   metadata: CheckpointMetadata,

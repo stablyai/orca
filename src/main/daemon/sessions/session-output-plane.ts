@@ -48,6 +48,7 @@ export class SessionOutputPlane {
   private pendingOutputSeq = 0
   private _outputSequence = 0
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
+  private finalParserFence: Promise<void> | null = null
   private disposed = false
 
   constructor(opts: SessionOutputPlaneOptions) {
@@ -293,13 +294,35 @@ export class SessionOutputPlane {
     this.disposed = true
   }
 
-  /** Physical exit or disposal: the journal drains what was applied, never past this cut. */
-  finishHistory(exitCode: number | null): void {
-    this.historyJournal?.finish(exitCode)
+  /**
+   * Physical exit, after held output drained: the journal's final cut. The parser fence is
+   * captured now, before disposal could make it a no-op; it covers every issued write.
+   */
+  finishHistory(exitCode: number): void {
+    const journal = this.historyJournal
+    if (!journal) {
+      return
+    }
+    const fence = this.flushParsedWrites()
+    this.finalParserFence = fence
+    journal.finish(exitCode, {
+      outputSequence: this._outputSequence,
+      settled: fence.then(
+        () => ({ terminalOwner: this.readTerminalOwner?.() }),
+        () => ({ terminalOwner: this.readTerminalOwner?.() })
+      )
+    })
   }
 
+  /** Never a final cut by itself; the emulator outlives only the already-captured parser fence. */
   disposeEmulator(): void {
     this.historyJournal?.finish(null)
-    this.emulator.dispose()
+    const fence = this.finalParserFence
+    if (fence) {
+      const release = (): void => this.emulator.dispose()
+      void fence.then(release, release)
+    } else {
+      this.emulator.dispose()
+    }
   }
 }

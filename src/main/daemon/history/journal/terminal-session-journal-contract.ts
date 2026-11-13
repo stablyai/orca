@@ -13,12 +13,33 @@ export type TerminalSessionJournalHost = {
   makeRoom(bytes: number): void
   settled(journal: TerminalSessionJournalReads): void
   log(event: string, details: Record<string, unknown>): void
+  /** Whether this journal is still its ID's directory owner; checked before every note/origin write. */
+  owns(journal: TerminalSessionJournalReads): boolean
+}
+
+/**
+ * The journal's latest effective probed folder: still at its absolute record boundary, or
+ * published at a committed position of one log generation.
+ */
+export type TerminalJournalCwdNote =
+  | { cwd: string; record: number }
+  | { cwd: string; generation: number; logBytes: number }
+
+/** What physical exit hands the journal: the final stream position and the settled parser. */
+export type TerminalJournalPhysicalFinal = {
+  outputSequence: number
+  /** Settles after every already-issued parser write, then reads the final owner. */
+  settled: Promise<{ terminalOwner: TerminalOwner | undefined }>
 }
 
 /** An immutable applied cut: committed log prefix plus the uncommitted records at that moment. */
 export type TerminalHistoryCut = {
   generation: number
   logBytes: number
+  /** Absolute index of the first uncommitted record, where `records` begins. */
+  firstRecord: number
+  /** The folder note effective at this cut, captured with it. */
+  cwdNote: TerminalJournalCwdNote | null
   records: PendingOutputRecord[]
   outputSequence: number
   terminalOwner: TerminalOwner | undefined
@@ -34,6 +55,8 @@ export type TerminalJournalSession = {
   readonly incarnationId: string
   readonly historySeeded: boolean | undefined
   readonly isAlive: boolean
+  /** A teardown already claimed the process. */
+  readonly isTerminating?: boolean
   settleShellOwnershipConfirmation(): Promise<void>
   /** Releases held startup bytes into the stream, as a live snapshot would first. */
   snapshotBarrier(): void

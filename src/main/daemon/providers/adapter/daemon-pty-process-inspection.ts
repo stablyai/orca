@@ -168,7 +168,10 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       !needsAdoption &&
       !this.wslPaneKeysBySessionId.has(sessionId) &&
       this.wslDistrosBySessionId.get(sessionId) !== undefined
-    if (!needsAdoption && !needsPaneKey) {
+    // A host Sleep ends one exact incarnation; a listed-only session still needs its identity.
+    const needsHostBinding =
+      this.hostHistory.enabled && !this.hostHistory.get(sessionId)?.incarnationId
+    if (!needsAdoption && !needsPaneKey && !needsHostBinding) {
       return
     }
     // Captured before the inventory, lock and replay awaits that precede any writer install.
@@ -185,7 +188,15 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       if (session && needsAdoption) {
         await this.adoptLiveSession(session, { activeOnlyIfReconciled: true }, admission)
       } else if (session?.wslDistro && session.paneKey) {
+        this.wslDistrosBySessionId.set(sessionId, session.wslDistro)
         this.wslPaneKeysBySessionId.set(sessionId, session.paneKey)
+      }
+      if (session?.incarnationId && needsHostBinding) {
+        this.hostHistory.bind(sessionId, {
+          incarnationId: session.incarnationId,
+          admission: undefined,
+          outcome: undefined
+        })
       }
     } finally {
       this.historyManager?.drop(sessionId, admission)

@@ -48,9 +48,17 @@ export class ColdRestoreReplayWriter {
     return true
   }
 
-  /** Replays the source with no record, string or slice held across a yield. */
-  async replayRecords(source: ReplayRecordSource, isCanceled: () => boolean): Promise<boolean> {
+  /**
+   * Replays the source with no record, string or slice held across a yield. A positioned folder
+   * is set once before that record (or at the end), so later real OSC 7 still wins.
+   */
+  async replayRecords(
+    source: ReplayRecordSource,
+    isCanceled: () => boolean,
+    cwdAt?: { index: number; cwd: string }
+  ): Promise<boolean> {
     const position = { index: 0, offset: 0 }
+    let cwdPending = cwdAt !== undefined
     for (;;) {
       const pendingYield = this.takeBudgetYield()
       if (pendingYield) {
@@ -58,6 +66,10 @@ export class ColdRestoreReplayWriter {
       }
       if (isCanceled()) {
         return false
+      }
+      if (cwdPending && position.index === cwdAt!.index && position.offset === 0) {
+        cwdPending = false
+        this.emulator.setCwd(cwdAt!.cwd)
       }
       const step = this.replayStep(source, position)
       if (step !== 'more') {

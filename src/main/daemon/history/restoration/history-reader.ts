@@ -33,6 +33,8 @@ import {
   type IncrementalLogRestore
 } from './terminal-history-cold-restore-info'
 import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
+import { cwdObservationRecordIndex } from '../storage/terminal-history-cwd-observation'
+import { readTerminalHistoryCoherently } from './terminal-history-coherent-read'
 
 export type RestorableHistoryProbe =
   | { status: 'none' }
@@ -76,7 +78,17 @@ export class HistoryReader {
     return detection.status === 'restored' ? detection.restoreInfo : null
   }
 
+  /** One coherent acquisition, retried once; a source that keeps changing is unavailable. */
   async detectColdRestoreState(
+    sessionId: string,
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
+  ): Promise<ColdRestoreDetection> {
+    return readTerminalHistoryCoherently(this.basePath, sessionId, () =>
+      this.detectColdRestoreOnce(sessionId, opts)
+    )
+  }
+
+  private async detectColdRestoreOnce(
     sessionId: string,
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
   ): Promise<ColdRestoreDetection> {
@@ -142,12 +154,18 @@ export class HistoryReader {
         : { status: 'none' }
     }
 
+    // A note saved exactly at this checkpoint's empty log is the newest folder it has.
+    const note = meta.cwdObservation
+    const cwd =
+      note && note.generation === checkpoint.generation && note.logBytes === LOG_HEADER_BYTES
+        ? note.cwd
+        : (checkpoint.cwd ?? null)
     return {
       status: 'restored',
       sessionId,
-      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
+      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, cwd, meta),
       hasUnreadableRecovery: logRestore.readFailed,
-      ...((checkpoint.cwd ?? null) === null ? { cwdFromSpawn: true } : {})
+      ...(cwd === null ? { cwdFromSpawn: true } : {})
     }
   }
 
@@ -259,7 +277,20 @@ export class HistoryReader {
       })
       try {
         const records = log.batches.flatMap((batch) => batch.records)
-        if (!(await replayTerminalHistory(emulator, checkpoint, (index) => records[index]))) {
+        const note = meta.cwdObservation
+        const noteIndex = note ? cwdObservationRecordIndex(note, logBuffer, log.generation) : null
+        if (
+          !(await replayTerminalHistory(
+            emulator,
+            checkpoint,
+            (index) => records[index],
+            undefined,
+            {
+              baseline: checkpoint?.cwd,
+              ...(note && noteIndex !== null ? { at: { index: noteIndex, cwd: note.cwd } } : {})
+            }
+          ))
+        ) {
           return { restoreInfo: null, readFailed: true }
         }
         const snapshot = emulator.getSnapshot()

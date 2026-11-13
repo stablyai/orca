@@ -1,5 +1,6 @@
-import { existsSync, unlinkSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { decodeLogHeader, LOG_HEADER_BYTES } from './terminal-history-log'
 import {
   PRIVATE_DIR_MODE,
   PRIVATE_FILE_MODE,
@@ -22,6 +23,23 @@ export function clearReplayableTerminalHistorySessionFiles(dir: string): void {
     try {
       unlinkSync(join(dir, name))
     } catch {}
+  }
+}
+
+/** The generation a log's header declares, or null when it is missing, torn or foreign. */
+export function readTerminalHistoryLogHeaderGeneration(logPath: string): number | null {
+  try {
+    const fd = openSync(logPath, 'r')
+    try {
+      const header = Buffer.alloc(LOG_HEADER_BYTES)
+      return readSync(fd, header, 0, LOG_HEADER_BYTES, 0) === LOG_HEADER_BYTES
+        ? decodeLogHeader(header)
+        : null
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    return null
   }
 }
 

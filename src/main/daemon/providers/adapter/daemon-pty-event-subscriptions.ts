@@ -8,6 +8,9 @@ import type { ListSessionsResult, ShutdownIfIdleResult } from '../../protocol/da
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
 import { readDaemonWslQuitCwds } from '../wsl/daemon-wsl-sleep-cwd'
+import { commitHostHistory } from './daemon-pty-host-history'
+import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../../shared/quit-teardown-deadline'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
@@ -174,6 +177,13 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     }
   }
 
+  private hostBindingsForQuit(): { id: string; incarnationId: string }[] {
+    return [...this.activeSessionIds].flatMap((id) => {
+      const incarnationId = this.hostHistory.get(id)?.incarnationId
+      return incarnationId ? [{ id, incarnationId }] : []
+    })
+  }
+
   private wslBridgePanesForQuit(): { sessionId: string; paneKey: string; wslDistro: string }[] {
     return [...this.activeSessionIds].flatMap((sessionId) => {
       const wslDistro = this.wslDistrosBySessionId.get(sessionId)
@@ -189,25 +199,53 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   }
 
   // Checkpoint without marking history ended so a daemon crash after app quit remains recoverable.
-  async disconnectOnly(): Promise<void> {
+  async disconnectOnly(opts: { deadlineMs?: number } = {}): Promise<void> {
     if (!this.disconnectOnlyPromise) {
       this.respawnAdoptionClosed = true
       this.sessionsAwaitingDaemonRecovery.clear()
       this.writeRecoveryAttempted = false
       this.releasePendingRespawnAdoptionLease()
-      this.disconnectOnlyPromise = this.finishDisconnectOnly([...this.keepHistoryShutdowns])
+      // One absolute quit budget from first admission covers waits, probes and commits.
+      const deadlineMs = Math.min(
+        opts.deadlineMs ?? Number.POSITIVE_INFINITY,
+        Date.now() + WILL_QUIT_TEARDOWN_DEADLINE_MS
+      )
+      this.disconnectOnlyPromise = this.finishDisconnectOnly(
+        [...this.keepHistoryShutdowns],
+        deadlineMs
+      )
     }
     await this.disconnectOnlyPromise
   }
 
-  protected async finishDisconnectOnly(keepHistoryShutdowns: Promise<void>[]): Promise<void> {
+  protected async finishDisconnectOnly(
+    keepHistoryShutdowns: Promise<void>[],
+    deadlineMs: number
+  ): Promise<void> {
     // Let admitted sleep shutdowns finish recovery and kill RPCs before disconnecting their client.
-    await Promise.allSettled(keepHistoryShutdowns)
+    await awaitDaemonWorkWithinCallerDeadline(
+      Promise.allSettled(keepHistoryShutdowns).then(() => {}),
+      deadlineMs
+    )
     this.respawnAdoptionClosed = true
+    // Every host binding gets its durable cut; captured before any probe await.
+    const hostSessions = this.hostHistory.enabled ? this.hostBindingsForQuit() : []
     // Bridge bash reports no folder and the daemon outlives quit; a distro stopped before relaunch leaves only this read.
     const shellCwds = await readDaemonWslQuitCwds(
       this.wslBridgePanesForQuit(),
-      this.quitWslCwdBudgetMs
+      Math.max(0, Math.min(this.quitWslCwdBudgetMs, deadlineMs - Date.now()))
+    )
+    await Promise.allSettled(
+      hostSessions
+        .filter(
+          ({ id, incarnationId }) => this.hostHistory.get(id)?.incarnationId === incarnationId
+        )
+        .map(({ id, incarnationId }) =>
+          commitHostHistory(this.client, id, incarnationId, {
+            cwd: shellCwds.get(id),
+            deadlineMs
+          })
+        )
     )
     // Await final checkpoints, including new sessions, before disconnect can reject their snapshot RPCs.
     await this.runExclusiveCheckpoint(
