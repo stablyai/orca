@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionHistoryPage,
   type AgentSessionSlashCommand,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
@@ -66,7 +67,7 @@ export async function deliverToSubscriber(
     hostNow,
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
   }
-  const work = (await port.hooks.readCurrentWork?.(subscriber.sessionId, journal)) ?? undefined
+  let work = (await port.hooks.readCurrentWork?.(subscriber.sessionId, journal)) ?? undefined
   if (!port.isActive(subscriber)) {
     return
   }
@@ -84,15 +85,14 @@ export async function deliverToSubscriber(
   const reader = subscriberHistoryReader(subscriber)
   const readPage = createAgentSessionCatchUpReader(journal, reader)
   while (true) {
-    const result = withPublishedWorkResult(
-      await readPage({
-        sessionId: subscriber.sessionId,
-        direction: 'after',
-        cursor: subscriber.cursor,
-        limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-      }),
-      work
-    )
+    const read = await readPage({
+      sessionId: subscriber.sessionId,
+      direction: 'after',
+      cursor: subscriber.cursor,
+      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+    })
+    work = await workThroughPage(port, subscriber.sessionId, journal, work, read.page)
+    const result = withPublishedWorkResult(read, work)
     if (!result.ok) {
       const page = { ...result.page, fence: subscriber.fence }
       await emit(
@@ -128,10 +128,9 @@ export async function deliverToSubscriber(
     }
     // Bound synchronous catch-up; older history remains available through paging.
     if (page.hasNewer && subscriber.snapshotCatchUp !== false) {
-      const tail = withPublishedWork(
-        await readAgentSessionHydrationPage(journal, subscriber.fence, reader),
-        work
-      )
+      const hydrated = await readAgentSessionHydrationPage(journal, subscriber.fence, reader)
+      work = await workThroughPage(port, subscriber.sessionId, journal, work, hydrated)
+      const tail = withPublishedWork(hydrated, work)
       await emit(
         subscriber,
         {
@@ -188,6 +187,27 @@ export async function deliverToSubscriber(
   }
 }
 
+function pagePassedWork(page: AgentSessionHistoryPage, work: StructuredAgentSessionObservedWork) {
+  const cursor = page.liveCursor ?? page.window.nextCursor
+  return cursor.epoch !== work.cursor.epoch || cursor.sequence > work.cursor.sequence
+}
+
+/** Restated copies must not be older than the rows they replace, so re-answer work the page passed.
+ *  A page holding a not-yet-adopted commit keeps its own rows; that commit's publish restates work. */
+async function workThroughPage(
+  port: SubscriberDeliveryPort,
+  sessionId: string,
+  journal: AgentSessionJournal,
+  work: StructuredAgentSessionObservedWork | undefined,
+  page: AgentSessionHistoryPage
+): Promise<StructuredAgentSessionObservedWork | undefined> {
+  if (!work || !pagePassedWork(page, work)) {
+    return work
+  }
+  const current = (await port.hooks.readCurrentWork?.(sessionId, journal)) ?? undefined
+  return current && !pagePassedWork(page, current) ? current : undefined
+}
+
 async function emitCaughtUp(
   port: SubscriberDeliveryPort,
   subscriber: Subscriber,
@@ -232,13 +252,16 @@ export async function publishSubscriberSnapshot(
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   fence: number,
-  work: AgentSessionPublishedWork | undefined,
+  answered: StructuredAgentSessionObservedWork | undefined,
   hostNow: number
 ): Promise<void> {
-  const page = withPublishedWork(
-    await readAgentSessionHydrationPage(journal, fence, subscriberHistoryReader(subscriber)),
-    work
+  const hydrated = await readAgentSessionHydrationPage(
+    journal,
+    fence,
+    subscriberHistoryReader(subscriber)
   )
+  const work = await workThroughPage(port, subscriber.sessionId, journal, answered, hydrated)
+  const page = withPublishedWork(hydrated, work)
   if (!port.isActive(subscriber)) {
     return
   }

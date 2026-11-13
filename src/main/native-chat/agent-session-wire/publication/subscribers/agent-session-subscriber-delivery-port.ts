@@ -1,4 +1,5 @@
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
@@ -16,10 +17,22 @@ export function subscriberDeliveryPort(
 ): SubscriberDeliveryPort {
   let work: Promise<StructuredAgentSessionObservedWork | null> | undefined
   let queue: Promise<QueuePublication | undefined> | undefined
-  const readWork = () =>
-    (work ??= Promise.resolve(
+  const read = () =>
+    Promise.resolve(
       sessionId && journal ? base.hooks.readCurrentWork?.(sessionId, journal) : null
-    ).then((value) => value ?? null))
+    ).then((value) => value ?? null)
+  const readWork = async () => {
+    const shared = (work ??= read())
+    const value = await shared
+    // A commit adopted since the shared answer makes it stale for every later reader.
+    if (value && journal && !sameJournalCursor(value.cursor, journal.cursor())) {
+      if (work === shared) {
+        work = read()
+      }
+      return work
+    }
+    return value
+  }
   const hooks =
     sessionId && journal
       ? {

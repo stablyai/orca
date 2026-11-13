@@ -16,7 +16,7 @@ export class StructuredAgentSessionObservedWork {
   constructor(
     private readonly journal: Pick<SqlAgentSessionJournal, 'cursor'>,
     private readonly work: JournalObserverResult['work'],
-    private readonly cursor: AgentJournalCursor,
+    readonly cursor: AgentJournalCursor,
     readonly readSource?: JournalSqlWorkResult
   ) {
     this.restated = new Map(work.restatedSubmissions.map((send) => [send.clientMessageId, send]))
