@@ -55,6 +55,7 @@ describe('a coordinator of two Runs', () => {
     insertRunReport(db, runA.id)
 
     await driveToLiveIdle(harness.runtime)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(harness.write).toHaveBeenCalledWith(
       PTY_ID,

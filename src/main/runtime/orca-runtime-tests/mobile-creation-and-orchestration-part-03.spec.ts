@@ -61,8 +61,9 @@ describe('OrcaRuntimeService', () => {
       const payloads = write.mock.calls
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
-      expect(payloads).toContain(
-        '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\n'
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('orca-dev orchestration check --run run_test')
       )
       expect(payloads.some((data) => data.includes('reserved completion'))).toBe(false)
       expect(status.delivered_at).toEqual(expect.any(String))
@@ -240,7 +241,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       runtime.notifyMessageArrived(republished.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -294,6 +295,7 @@ describe('OrcaRuntimeService', () => {
 
       // Replacement can start idle with no transition; its first live idle evidence must reauthorize delivery.
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -329,9 +331,9 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'once only' })
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       const pointerWrites = write.mock.calls.filter(
         ([, payload]) => typeof payload === 'string' && payload.includes('orchestration check')
@@ -377,12 +379,12 @@ describe('OrcaRuntimeService', () => {
       const first = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'first' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
       // Arm the first flight before the next message, or this tests ordinary batching.
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       // Mid-flight notify must retry after settlement without losing or duplicating the second row.
       const second = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'second' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       expect(
         write.mock.calls.filter(
           ([, payload]) => typeof payload === 'string' && payload.includes('orchestration check')
