@@ -19,6 +19,7 @@ import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly renameListeners = new Set<() => void>()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
   private openWslSignInLink: ((signInLink: string) => void) | null = null
@@ -103,6 +104,25 @@ export class ClaudeAccountService {
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.remove(accountId))
+  }
+
+  // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
+  // synchronous write touches no state a queued account change reads.
+  renameAccount(accountId: string, displayName: string | null): ClaudeRateLimitAccountsState {
+    const state = this.selection.rename(accountId, displayName)
+    // Account streams otherwise republish only on usage changes.
+    for (const listener of this.renameListeners) {
+      listener()
+    }
+    return state
+  }
+
+  /** Listeners live as long as their account stream subscription. */
+  onAccountRenamed(listener: () => void): () => void {
+    this.renameListeners.add(listener)
+    return () => {
+      this.renameListeners.delete(listener)
+    }
   }
 
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {

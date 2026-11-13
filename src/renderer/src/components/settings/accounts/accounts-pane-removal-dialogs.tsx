@@ -14,6 +14,15 @@ import {
   DialogTitle
 } from '../../ui/dialog'
 import type { AccountsPaneSectionModel, RemoveAccountTarget } from './accounts-pane-types'
+import { getManagedAccountInlineLabel } from '../../../../../shared/managed-account-display-names'
+
+function removalAccountLabel(
+  accounts: readonly { id: string; email: string; displayName?: string }[],
+  target: RemoveAccountTarget | null
+): string {
+  const account = target ? accounts.find((entry) => entry.id === target.id) : undefined
+  return account ? getManagedAccountInlineLabel(account) : ''
+}
 
 export function renderAccountsRemovalDialogs(
   model: AccountsPaneSectionModel,
@@ -26,7 +35,10 @@ export function renderAccountsRemovalDialogs(
     runCodexAccountAction,
     setRemoveClaudeTarget,
     setRemoveCodexTarget,
-    accountOwner
+    accountOwner,
+    accountRuntimeSentenceLabel,
+    claudeAccounts,
+    codexAccounts
   } = model
   return (
     <>
@@ -40,9 +52,13 @@ export function renderAccountsRemovalDialogs(
               {t('auto.components.settings.AccountsPane.0d47394635', 'Remove Codex Account?')}
             </DialogTitle>
             <DialogDescription>
+              <span className="block font-medium text-foreground">
+                {removalAccountLabel(codexAccounts.accounts, removeCodexTarget)}
+              </span>
               {t(
-                'auto.components.settings.AccountsPane.380a7736cc',
-                'Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.'
+                'settings.accounts.codexRemoveHome',
+                "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+                { host: accountRuntimeSentenceLabel }
               )}
             </DialogDescription>
           </DialogHeader>
@@ -80,9 +96,13 @@ export function renderAccountsRemovalDialogs(
               {t('auto.components.settings.AccountsPane.63843e37e2', 'Remove Claude Account?')}
             </DialogTitle>
             <DialogDescription>
+              <span className="block font-medium text-foreground">
+                {removalAccountLabel(claudeAccounts.accounts, removeClaudeTarget)}
+              </span>
               {t(
-                'settings.accounts.claudeRemoveFolder',
-                "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+                'settings.accounts.claudeRemoveProfile',
+                "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default.",
+                { host: accountRuntimeSentenceLabel }
               )}
             </DialogDescription>
           </DialogHeader>

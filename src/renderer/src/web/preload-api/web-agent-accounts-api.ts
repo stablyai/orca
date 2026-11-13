@@ -119,6 +119,12 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
         { accountId },
         ACCOUNT_MUTATION_TIMEOUT_MS
       ),
+    rename: ({ accountId, displayName }) =>
+      callRuntimeResult<ClaudeRateLimitAccountsState>(
+        'accounts.renameClaude',
+        { accountId, displayName },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      ),
     select: ({ accountId, runtime }) => {
       // No targeted Claude select RPC; null would clear host lane, while concrete account IDs identify their lane.
       if (runtime === 'wsl' && accountId === null) {
@@ -154,6 +160,12 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
       callRuntimeResult<CodexRateLimitAccountsState>(
         'accounts.removeCodex',
         { accountId },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      ),
+    rename: ({ accountId, displayName }) =>
+      callRuntimeResult<CodexRateLimitAccountsState>(
+        'accounts.renameCodex',
+        { accountId, displayName },
         ACCOUNT_MUTATION_TIMEOUT_MS
       ),
     // Why: a WSL lane needs the targeted RPC, or a null selection would clear the host lane.

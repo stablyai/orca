@@ -13,6 +13,8 @@ import {
 } from '../../../provider-accounts/provider-account-visibility'
 import { formatAccountTimestamp, getCodexAccountRuntimeLabel } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
+import { getManagedAccountPrimaryLabel } from '../../../../../../shared/managed-account-display-names'
+import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
 
 export function renderCodexAccountRow(
   account: CodexRateLimitAccountsState['accounts'][number],
@@ -32,6 +34,7 @@ export function renderCodexAccountRow(
     isRemoteAccountScope,
     runCodexAccountAction,
     setRemoveCodexTarget,
+    setRenameTarget,
     accountOwner
   } = model
   const isActive = providerAccountIsActiveInView(
@@ -86,7 +89,9 @@ export function renderCodexAccountRow(
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">{account.email}</span>
+            <span className="truncate text-sm font-medium">
+              {getManagedAccountPrimaryLabel(account)}
+            </span>
             <Badge
               variant="outline"
               className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
@@ -121,6 +126,12 @@ export function renderCodexAccountRow(
                 <span className="shrink-0 opacity-50">•</span>
               </>
             ) : null}
+            {account.displayName ? (
+              <>
+                <span className="min-w-0 truncate">{account.email}</span>
+                <span className="shrink-0 opacity-50">•</span>
+              </>
+            ) : null}
             {needsReauthentication ? (
               <span className="truncate">
                 {t(
@@ -138,6 +149,13 @@ export function renderCodexAccountRow(
 
         <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
           {/* Keep maintenance actions lighter so account selection remains primary in dense lists. */}
+          <AccountRenameButton
+            t={t}
+            disabled={isRemoving}
+            onRename={() =>
+              setRenameTarget(renameTargetFor('codex', account, getProviderAccountRuntime(account)))
+            }
+          />
           <Button
             variant="ghost"
             size="xs"

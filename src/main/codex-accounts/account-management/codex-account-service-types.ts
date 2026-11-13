@@ -1,3 +1,7 @@
+import {
+  getManagedAccountDisplayName,
+  type ManagedAccountDisplayNames
+} from '../../../shared/managed-account-display-names'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState,
@@ -56,11 +60,14 @@ export type CodexResetCreditConsumeResult =
   | CodexResetCreditRejectedBeforeProviderResult
 
 export function toCodexManagedAccountSummary(
-  account: CodexManagedAccount
+  account: CodexManagedAccount,
+  names?: ManagedAccountDisplayNames
 ): CodexManagedAccountSummary {
+  const displayName = getManagedAccountDisplayName(names, 'codex', account.id)
   return {
     id: account.id,
     email: account.email,
+    ...(displayName ? { displayName } : {}),
     managedHomeRuntime: account.managedHomeRuntime ?? 'host',
     wslDistro: account.wslDistro ?? null,
     providerAccountId: account.providerAccountId ?? null,

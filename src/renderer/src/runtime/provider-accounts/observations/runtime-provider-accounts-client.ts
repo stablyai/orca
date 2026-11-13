@@ -7,6 +7,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envel
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { translate } from '@/i18n/i18n'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
@@ -279,4 +280,51 @@ export async function removeCodexProviderAccount(
     )
   }
   return window.api.codexAccounts.remove({ accountId })
+}
+
+type ProviderAccountRename = { accountId: string; displayName: string | null }
+
+// Hosts older than account names lack these methods; every other account action still works there.
+async function renameOnHost<T>(
+  target: Extract<RuntimeClientTarget, { kind: 'environment' }>,
+  method: 'accounts.renameClaude' | 'accounts.renameCodex',
+  rename: ProviderAccountRename,
+  hostLabel: string
+): Promise<T> {
+  try {
+    return await callRuntimeRpc<T>(target, method, rename, {
+      timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS
+    })
+  } catch (error) {
+    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
+      throw new Error(
+        translate(
+          'accounts.rename.unsupportedHost',
+          'Update Orca on {{host}} to change this setting there.',
+          { host: hostLabel }
+        )
+      )
+    }
+    throw error
+  }
+}
+
+export function renameClaudeProviderAccount(
+  target: RuntimeClientTarget,
+  rename: ProviderAccountRename,
+  hostLabel: string
+): Promise<ClaudeRateLimitAccountsState> {
+  return target.kind === 'environment'
+    ? renameOnHost(target, 'accounts.renameClaude', rename, hostLabel)
+    : window.api.claudeAccounts.rename(rename)
+}
+
+export function renameCodexProviderAccount(
+  target: RuntimeClientTarget,
+  rename: ProviderAccountRename,
+  hostLabel: string
+): Promise<CodexRateLimitAccountsState> {
+  return target.kind === 'environment'
+    ? renameOnHost(target, 'accounts.renameCodex', rename, hostLabel)
+    : window.api.codexAccounts.rename(rename)
 }

@@ -36,10 +36,19 @@ export type ProviderAccountAction =
   | 'adding'
   | `reauth:${string}`
   | `remove:${string}`
+  | `rename:${string}`
   | `select:${string}`
 
 export type RemoveAccountTarget = {
   id: string
+  runtime: ProviderAccountRuntimeView
+}
+
+export type RenameAccountTarget = {
+  provider: 'claude' | 'codex'
+  id: string
+  email: string
+  displayName: string | null
   runtime: ProviderAccountRuntimeView
 }
 
@@ -87,6 +96,7 @@ export type AccountsPaneSectionModel = {
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
+  setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
   codexAction: ProviderAccountAction

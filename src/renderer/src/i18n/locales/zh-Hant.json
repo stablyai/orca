@@ -873,9 +873,6 @@
     },
     "followSymlinkedDirectories": "跟隨符號連結目錄",
     "followSymlinkedDirectoriesDescription": "在快速開啟中搜尋連結資料夾，並在檔案總管中展開本機連結資料夾。",
-    "accounts": {
-      "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
       "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
@@ -7295,7 +7292,6 @@
           "locationSaveFailed": "無法儲存帳戶位置。請再試一次。",
           "dbb9626ed1": "取消",
           "63843e37e2": "移除 Claude 帳戶？",
-          "380a7736cc": "移除此帳戶會永久刪除其受管理的 Codex 主目錄，包括其中儲存的所有 Codex 工作階段歷史記錄和 MCP 登入資訊。此操作無法復原。如果該帳戶目前使用中，Orca 將改用系統預設的 Codex 登入。",
           "0d47394635": "移除 Codex 帳戶？",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "登入 opencode.ai 後在 URL 中找到此內容（例如",

@@ -35,6 +35,8 @@ import {
 } from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
+import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
+import type { ManagedAccountNameProvider } from '../../../../shared/managed-account-display-names'
 import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
 
 export type RuntimeAccountServices = {
@@ -295,6 +297,11 @@ export class RuntimeAccountController {
     return this.requireServices().codexAccounts.removeAccount(accountId)
   }
 
+  renameAccount(provider: ManagedAccountNameProvider, id: string, name: string | null) {
+    const { claudeAccounts, codexAccounts } = this.requireServices()
+    return (provider === 'claude' ? claudeAccounts : codexAccounts).renameAccount(id, name)
+  }
+
   addCodexFromHome(
     sourceHome: string,
     target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
@@ -303,22 +310,14 @@ export class RuntimeAccountController {
   }
 
   onChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
-    const services = this.requireServices()
-    const unsubscribeData = hasAppEnvironment()
-      ? getManagedDataAccountService().onChanged(() => listener(this.getStreamSnapshot()))
-      : () => {}
-    const unsubscribeUsage = services.rateLimits.onStateChange((rateLimits) => {
-      listener({
-        ...this.streamDataAccountsSnapshot(),
-        claude: services.claudeAccounts.listAccounts(),
-        codex: services.codexAccounts.listAccounts(),
-        rateLimits
-      })
-    })
-    return () => {
-      unsubscribeData()
-      unsubscribeUsage()
-    }
+    return subscribeRuntimeAccountChanges(
+      this.requireServices(),
+      {
+        stream: () => this.getStreamSnapshot(),
+        dataAccounts: () => this.streamDataAccountsSnapshot()
+      },
+      listener
+    )
   }
 
   private requireServices(): RuntimeAccountServices {

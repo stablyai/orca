@@ -693,9 +693,6 @@
     },
     "followSymlinkedDirectories": "Suivre les dossiers liés symboliquement",
     "followSymlinkedDirectoriesDescription": "Recherchez les dossiers liés dans Quick Open et développez les dossiers liés locaux dans l'Explorateur de fichiers.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Opération Git en cours ailleurs",
       "remoteOperationInAnotherWorkspace": "Un autre espace de travail exécute une opération Git, par exemple un push, un pull ou un force push. Attendez qu’elle se termine avant d’utiliser cette action pour éviter des opérations simultanées.",
@@ -7357,7 +7354,6 @@
           "locationSaveFailed": "Impossible d’enregistrer l’emplacement des comptes. Réessayez.",
           "dbb9626ed1": "Annuler",
           "63843e37e2": "Supprimer le compte Claude ?",
-          "380a7736cc": "La suppression de ce compte efface définitivement son home Codex géré, y compris tout l'historique de sessions Codex et les connexions MCP stockés dedans. Cette action est irréversible. Si le compte est actuellement actif, Orca revient à la connexion Codex par défaut du système.",
           "0d47394635": "Supprimer le compte Codex ?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Trouvez-le dans l'URL après connexion à opencode.ai (par ex.",

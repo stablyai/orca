@@ -15,7 +15,8 @@ import {
 } from '../../../provider-accounts/provider-account-visibility'
 import {
   formatAccountTimestamp,
-  getClaudeAccountRuntimeLabel
+  getClaudeAccountRuntimeLabel,
+  joinAccountDetails
 } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import {
@@ -31,6 +32,8 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { getManagedAccountPrimaryLabel } from '../../../../../../shared/managed-account-display-names'
+import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
 
 export function renderClaudeAccountsSection(
   model: AccountsPaneSectionModel,
@@ -48,6 +51,7 @@ export function renderClaudeAccountsSection(
     remoteAccountScopeNotice,
     runClaudeAccountAction,
     setRemoveClaudeTarget,
+    setRenameTarget,
     settings,
     accountOwner,
     systemClaudeActive,
@@ -264,6 +268,7 @@ export function renderClaudeAccountsSection(
                 const isReauthing = claudeAction === `reauth:${account.id}`
                 const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
                 const accountRuntimeView = getProviderAccountRuntime(account)
+                const accountLabel = getManagedAccountPrimaryLabel(account)
                 const reauthenticate = (copyLink: boolean): Promise<void> =>
                   runClaudeAccountAction(
                     `reauth:${account.id}`,
@@ -305,7 +310,7 @@ export function renderClaudeAccountsSection(
                         className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                       >
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-sm font-medium">{account.email}</span>
+                          <span className="truncate text-sm font-medium">{accountLabel}</span>
                           <Badge
                             variant="outline"
                             className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
@@ -327,12 +332,21 @@ export function renderClaudeAccountsSection(
                                 'accounts.claude.signInRequired',
                                 'Sign in again to use this account'
                               )
-                            : account.organizationName
-                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}`
-                              : formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
+                            : joinAccountDetails([
+                                account.organizationName,
+                                account.displayName ? account.email : null,
+                                formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)
+                              ])}
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+                        <AccountRenameButton
+                          t={t}
+                          disabled={claudeAction === `remove:${account.id}`}
+                          onRename={() =>
+                            setRenameTarget(renameTargetFor('claude', account, accountRuntimeView))
+                          }
+                        />
                         <ButtonGroup>
                           <Button
                             variant="ghost"

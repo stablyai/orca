@@ -1,3 +1,7 @@
+import {
+  getManagedAccountDisplayName,
+  getManagedAccountPrimaryLabel
+} from '../../../../shared/managed-account-display-names'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
@@ -103,8 +107,14 @@ export function buildCodexStatusSwitchGroups(
         ...accountsForTarget.map((account) => ({
           id: account.id,
           label: getCodexAccountDisplayLabel(account, accountsForTarget),
-          name: account.email,
-          detail: getCodexAccountDisplayDetail(account, accountsForTarget),
+          name: getManagedAccountPrimaryLabel(account),
+          detail:
+            [
+              account.displayName ? account.email : null,
+              getCodexAccountDisplayDetail(account, accountsForTarget)
+            ]
+              .filter(Boolean)
+              .join(' · ') || null,
           active: account.id === activeId,
           runtimeTarget: target
         }))
@@ -148,6 +158,18 @@ export function buildCodexStatusSwitchGroups(
   return groups
 }
 
+function withCodexDisplayName(
+  settings: GlobalSettings,
+  accountId: string
+): { displayName?: string } {
+  const displayName = getManagedAccountDisplayName(
+    settings.managedAccountDisplayNames,
+    'codex',
+    accountId
+  )
+  return displayName ? { displayName } : {}
+}
+
 function getCodexStatusAccountsFromSettings(
   settings: GlobalSettings | null | undefined
 ): CodexRateLimitAccountsState | null {
@@ -159,6 +181,7 @@ function getCodexStatusAccountsFromSettings(
       .map((account) => ({
         id: account.id,
         email: account.email,
+        ...withCodexDisplayName(settings, account.id),
         managedHomeRuntime: account.managedHomeRuntime ?? 'host',
         wslDistro: account.wslDistro ?? null,
         providerAccountId: account.providerAccountId ?? null,

@@ -7,6 +7,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { requireLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { RateLimitState } from '../../../../../../shared/rate-limit-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { getManagedAccountDisplayName } from '../../../../../../shared/managed-account-display-names'
 import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/codex-reset-credit-scope'
 import { getSystemCodexHomePath } from '../../../../../codex/configuration/homes/codex-home-paths'
 import { getSelectedCodexAccountIdForTarget } from '../../../../../codex-accounts/account-management/runtime-selection'
@@ -30,6 +31,7 @@ export function sessionAccountUsageOffer(
       | 'codexManagedAccounts'
       | 'activeCodexManagedAccountId'
       | 'activeCodexManagedAccountIdsByRuntime'
+      | 'managedAccountDisplayNames'
     >
   >,
   state: RateLimitState | undefined
@@ -57,9 +59,12 @@ export function sessionAccountUsageOffer(
     ? buildCodexResetCreditExpectedScope({ target, account, limits: state.codex })
     : null
   const credits = scope ? state?.codex?.rateLimitResetCredits : undefined
+  const displayName = account
+    ? getManagedAccountDisplayName(settings.managedAccountDisplayNames, 'codex', account.id)
+    : undefined
   return {
     account: account
-      ? { kind: 'managed' as const, email: account.email }
+      ? { kind: 'managed' as const, email: account.email, ...(displayName ? { displayName } : {}) }
       : home === normalizeRuntimePathForComparison(getSystemCodexHomePath())
         ? { kind: 'system' as const }
         : null,

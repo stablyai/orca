@@ -177,6 +177,28 @@ describe('account CLI handlers', () => {
     }
   })
 
+  it('selects a Codex account by the name the user gave it', async () => {
+    const codex = {
+      accounts: [
+        { id: 'work-id', email: 'me@example.com', displayName: 'Work' },
+        { id: 'home-id', email: 'me@example.com' }
+      ],
+      activeAccountId: 'home-id'
+    }
+    callMock.mockImplementation((method: string) =>
+      Promise.resolve({
+        id: 'test',
+        ok: true,
+        result: method === 'accounts.list' ? { claude: { accounts: [] }, codex } : codex,
+        _meta: { runtimeId: 'test-runtime' }
+      })
+    )
+    const ctx = context('codex')
+    ctx.flags.set('account', 'work')
+    await ACCOUNT_HANDLERS['account select'](ctx)
+    expect(callMock).toHaveBeenCalledWith('accounts.selectCodex', { accountId: 'work-id' })
+  })
+
   it('waits for physical child close before removing interrupted login credentials', async () => {
     // A live login can recreate credentials after cleanup; wait for close before deleting them.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
