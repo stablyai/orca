@@ -76,14 +76,15 @@ describe('Claude outer hook process capture', () => {
         )
         const endpointPath = join(home, 'endpoint.env')
         await writeFile(endpointPath, '')
-        const capture = async (hookEventName: string) => {
+        const capture = async (hookEventName: string, spacedPayload = false) => {
+          const payload = JSON.stringify({ session_id: 'session-1', hook_event_name: hookEventName })
           const result = await runProcess({
             program: '/bin/sh',
             args: [
               '-c',
               `${HOOK_PARENT_CAPTURE}/bin/sh ${quotePosixShell(scriptPath)} "$1"`,
               'sh',
-              JSON.stringify({ session_id: 'session-1', hook_event_name: hookEventName })
+              spacedPayload ? payload.replaceAll('":"', '": "') : payload
             ],
             env: {
               HOME: home,
@@ -104,6 +105,7 @@ describe('Claude outer hook process capture', () => {
         const stale = { pid: process.pid, platform: live?.platform, startTime: 'stale' }
         await writeFile(recordPath, `${process.pid} session-1 ${JSON.stringify(stale)}\n`)
         expect(await capture('PostToolUse')).toEqual(stale)
+        expect(await capture('PostToolUse', true)).toEqual(stale)
 
         expect(await capture('UserPromptSubmit')).toEqual(live)
         expect(await capture('PreToolUse')).toEqual(live)

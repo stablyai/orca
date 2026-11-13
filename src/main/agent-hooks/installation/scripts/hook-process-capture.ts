@@ -5,13 +5,18 @@ import { buildPosixPaneFileIdLoop } from './hook-post-command'
 export const HOOK_PARENT_CAPTURE = 'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
 
 const CLAUDE_TOOL_EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PostToolBatch']
-const TOOL_EVENT_PATTERNS = CLAUDE_TOOL_EVENTS.map((name) => `*'"hook_event_name":"${name}"'*`)
+const TOOL_EVENT_PATTERNS = CLAUDE_TOOL_EVENTS.flatMap((name) => [
+  `*'"hook_event_name":"${name}"'*`,
+  `*'"hook_event_name": "${name}"'*`
+])
 
 // Safe: each Claude process fires SessionStart first, and every non-tool event rewrites the record.
 function buildClaudeIdentityLookupLines(): string[] {
   return [
     '  orca_agent_record= orca_agent_record_line= orca_agent_cached= orca_agent_tool_event=',
-    '  orca_agent_session=${payload#*\\"session_id\\":\\"}',
+    '  orca_agent_session=${payload#*\\"session_id\\":}',
+    '  orca_agent_session=${orca_agent_session# }',
+    '  orca_agent_session=${orca_agent_session#\\"}',
     '  orca_agent_session=${orca_agent_session%%\\"*}',
     '  case "$orca_agent_session" in *[!A-Za-z0-9_-]*) orca_agent_session= ;; esac',
     `  case "$payload" in ${TOOL_EVENT_PATTERNS.join('|')}) orca_agent_tool_event=1 ;; esac`,
