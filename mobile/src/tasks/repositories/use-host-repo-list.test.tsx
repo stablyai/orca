@@ -6,19 +6,13 @@ import { useHostRepoList, type HostRepoListResource } from './use-host-repo-list
 type Repo = { id: string }
 
 function mountResource() {
-  const pending: { resolve: (repos: Repo[]) => void; reject: (err: Error) => void }[] = []
+  const pending: { resolve: (repos: Repo[]) => void }[] = []
   let latest: HostRepoListResource<Repo> | null = null
-  let calls = 0
 
-  function Probe({ clientKey, connected = true }: { clientKey: unknown; connected?: boolean }) {
+  function Probe({ clientKey }: { clientKey: unknown }) {
     latest = useHostRepoList<Repo>(
       clientKey,
-      connected
-        ? () => {
-            calls += 1
-            return new Promise<Repo[]>((resolve, reject) => pending.push({ resolve, reject }))
-          }
-        : null
+      () => new Promise<Repo[]>((resolve) => pending.push({ resolve }))
     )
     return null
   }
@@ -34,29 +28,14 @@ function mountResource() {
       }
       return latest
     },
-    get callCount(): number {
-      return calls
-    },
-    pending,
-    rerender() {
+    rebind(clientKey: unknown) {
       act(() => {
-        renderer.update(createElement(Probe, { clientKey: 'client-a' }))
-      })
-    },
-    rebind(clientKey: unknown, connected = true) {
-      act(() => {
-        renderer.update(createElement(Probe, { clientKey, connected }))
+        renderer.update(createElement(Probe, { clientKey }))
       })
     },
     async settle(index: number, repos: Repo[]) {
       await act(async () => {
         pending[index]!.resolve(repos)
-        await Promise.resolve()
-      })
-    },
-    async fail(index: number, message: string) {
-      await act(async () => {
-        pending[index]!.reject(new Error(message))
         await Promise.resolve()
       })
     }
@@ -100,6 +79,4 @@ describe('useHostRepoList', () => {
     await probe.settle(0, [{ id: 'stale-a' }])
     expect(probe.resource.state.repos).toEqual([{ id: 'new-a' }])
   })
-
-  // Reload and ensureLoaded share an event before requested state commits; join the replacement request.
 })

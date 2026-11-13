@@ -250,6 +250,7 @@ export function buildDefaultSettings(args: {
     minimaxEndpoint: 'overseas',
     zcodePlanSite: 'zai',
     geminiCliOAuthEnabled: false,
+    claudeOAuthUsageEnabled: true,
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
@@ -299,12 +300,7 @@ export function buildDefaultSettings(args: {
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.
-    githubProjects: {
-      pinned: [],
-      recent: [],
-      lastViewByProject: {},
-      activeProject: null
-    },
+    githubProjects: { pinned: [], recent: [], lastViewByProject: {}, activeProject: null },
     // Why: keep agent/model maps empty so first use follows the default agent's model, not a frozen stale choice.
     commitMessageAi: {
       enabled: true,

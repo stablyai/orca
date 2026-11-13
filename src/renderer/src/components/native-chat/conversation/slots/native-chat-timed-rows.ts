@@ -23,7 +23,7 @@ export function anchorNativeChatTimedRows(
   rows: readonly NativeChatTimedRow[]
 ): [key: string, messageId: string | null][] {
   const dated = slots.flatMap((slot) =>
-    slot.kind === 'message' && slot.depth === 0 && slot.message.timestamp !== null
+    slot.kind === 'message' && slot.message.timestamp !== null
       ? [{ id: slot.message.id, at: slot.message.timestamp }]
       : []
   )

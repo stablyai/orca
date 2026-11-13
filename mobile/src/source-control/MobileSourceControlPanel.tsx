@@ -12,29 +12,29 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
-import { useMobileSourceControlRefresh } from './use-mobile-source-control-refresh'
-import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
-import { MobileSourceControlHeader } from './MobileSourceControlHeader'
-import { MobileSourceControlContent } from './MobileSourceControlContent'
+import { useMobileSourceControlRefresh } from './panel/use-mobile-source-control-refresh'
+import { useMobileSourceControlActionSheet } from './workflows/use-mobile-source-control-action-sheet'
+import { MobileSourceControlHeader } from './panel/MobileSourceControlHeader'
+import { MobileSourceControlContent } from './changes/MobileSourceControlContent'
 import {
   buildMobileSourceControlPrimaryAction,
   resolveMobileSourceControlReviewInputs
-} from './mobile-source-control-primary-action'
-import { MobileSourceControlModals } from './MobileSourceControlModals'
+} from './workflows/mobile-source-control-primary-action'
+import { MobileSourceControlModals } from './panel/MobileSourceControlModals'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
-import { MobileSourceControlHubCommitsPage } from './MobileSourceControlHubCommitsPage'
-import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
-import { useMobileSourceControlNextStep } from './use-mobile-source-control-next-step'
+import { MobileSourceControlHubCommitsPage } from './panel/MobileSourceControlHubCommitsPage'
+import { MobileSourceControlNextStepBar } from './panel/MobileSourceControlNextStepBar'
+import { useMobileSourceControlNextStep } from './panel/use-mobile-source-control-next-step'
 import { OptionPager } from '../components/bottom-drawer/BottomDrawer'
-import { useSourceControlHubNavigation } from './use-source-control-hub-navigation'
+import { useSourceControlHubNavigation } from './panel/use-source-control-hub-navigation'
 import { styles } from './mobile-source-control-styles'
-import { hubStyles } from './mobile-source-control-hub-styles'
+import { hubStyles } from './panel/mobile-source-control-hub-styles'
 import {
   SOURCE_CONTROL_HUB_TABS,
   SOURCE_CONTROL_HUB_TAB_LABELS,
   type SourceControlHubRouteTab
-} from './mobile-source-control-hub-tab'
-import { groupMobileSourceControlMenu } from './mobile-source-control-actions'
+} from './panel/mobile-source-control-hub-tab'
+import { groupMobileSourceControlMenu } from './workflows/mobile-source-control-actions'
 import { useMobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
 import { MobilePrTabBody } from '../components/MobilePRSidebar'
 import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
@@ -42,8 +42,8 @@ import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'
 import {
   useMobileSourceControlPrTab,
   type MobilePrTabOpeners
-} from './use-mobile-source-control-pr-tab'
-import { openMobilePrUrl } from '../components/mobile-pr-url'
+} from './panel/use-mobile-source-control-pr-tab'
+import { openExternalLink as openMobilePrUrl } from '../platform/external-links/external-link'
 
 export type MobileSourceControlPanelProps = {
   hostId: string

@@ -95,7 +95,8 @@ afterEach(() => {
 export async function rpcRead(params: unknown, signal?: AbortSignal) {
   const { GITHUB_PULL_REQUEST_METHODS } =
     await import('../../rpc/methods/source-control/github/github-pull-request-methods')
-  const { PrForBranch } = await import('../../../../shared/rpc-contract/github-pull-request-params')
+  const { PrForBranch } =
+    await import('../../../../shared/rpc-contract/github/github-pull-request-params')
   const { repo, branch, ...options } = PrForBranch.parse(params)
   const parsed = { repo, branch, ...options }
   const runtime = { getRepoPRForBranch: commands.getRepoPRForBranch.bind(commands) }

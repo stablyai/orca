@@ -11,7 +11,7 @@ import { useHostQuery } from '../../query/host-query'
 import {
   NO_SOURCE_CONTROL_SETTINGS_INPUT,
   sourceControlSettingsQuery
-} from '../../source-control/mobile-source-control-settings'
+} from '../../source-control/settings/mobile-source-control-settings'
 import {
   NO_BRANCH,
   NO_CHECKS,

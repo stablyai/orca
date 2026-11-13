@@ -71,14 +71,14 @@ export const createRefreshEventActions = (
         )
         // Why: a request main ends without data closes at its own sequence, while it is still the
         // one shown loading; an older request or a repeat never overwrites a newer state.
-        const endsOwnRequest =
+        const completesOwnedRequest =
           event.status === 'skipped' &&
           event.sequence === previousSequence &&
           nextStates[alias.cacheKey]?.status === 'in-flight'
         if (
           event.outcome
             ? event.sequence < previousSequence
-            : event.sequence <= previousSequence && !endsOwnRequest
+            : event.sequence <= previousSequence && !completesOwnedRequest
         ) {
           if (event.outcome || event.status !== 'in-flight') {
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)

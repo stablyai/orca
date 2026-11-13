@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
+import { markHydratedBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   EDITOR_OWNER,
@@ -20,9 +21,21 @@ vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
 
 const initialState = useAppStore.getInitialState()
 
+function resetBrowserLinkStore(): void {
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
+}
+
 beforeEach(() => {
   createStoreCascadesMockApi()
-  useAppStore.setState(initialState, true)
+  resetBrowserLinkStore()
   seedBrowserLinkTestStore(useAppStore)
   useAppStore.setState((state) => ({
     openFiles: [
@@ -44,7 +57,7 @@ beforeEach(() => {
     }
   }))
 })
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(resetBrowserLinkStore)
 
 it('opens HTML in its editor group even when another pane is active, and reuses it on repeat', async () => {
   await openEditorHtmlPreview('report', 'source')

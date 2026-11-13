@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { enqueueRuntimeCall } from './requests/runtime-environment-call-queue'
 
 it('passes timed intent to the desktop queue without holding status or manual PR reads', async () => {
   const release = Promise.withResolvers<void>()

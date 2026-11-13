@@ -12,7 +12,7 @@ import {
   DESKTOP_SOURCE_CONTROL_DEFAULTS,
   NO_SOURCE_CONTROL_SETTINGS_INPUT,
   sourceControlSettingsQuery
-} from '../../source-control/mobile-source-control-settings'
+} from '../../source-control/settings/mobile-source-control-settings'
 import {
   prBranchReviewQuery,
   type PrQueryScope

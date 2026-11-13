@@ -9,7 +9,7 @@ import {
   PullRequestFileViewed,
   RerunPullRequestChecks,
   ReviewThread
-} from '../../../../../../shared/rpc-contract/github-pull-request-params'
+} from '../../../../../../shared/rpc-contract/github/github-pull-request-params'
 
 export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({

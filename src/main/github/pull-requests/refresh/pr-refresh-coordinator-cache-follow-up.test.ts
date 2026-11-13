@@ -113,3 +113,50 @@ it('rereads unresolved manual mergeability at its forced follow-up despite the t
     outcome: { pr: { mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' } }
   })
 })
+
+it.each([false, true])(
+  'refreshes a settled row on re-exposure and shares a newer exact answer (refreshed while queued: %s)',
+  async (refreshedWhileQueued) => {
+    mocks.resolve.mockImplementation(async () => found({ state: 'merged' }))
+    const coordinator = await import('./pr-refresh-coordinator')
+    const { getPRForBranchOutcome } = await import('../../client/lookup/pr-for-branch-outcome')
+    const candidate = makeCandidate({ currentHeadOid: 'head-sha', linkedPRNumber: 12 })
+    const seed = () =>
+      coordinator.runHostedPRRead(candidate, () =>
+        getPRForBranchOutcome('/repo', candidate.branch, 12, null, null, {
+          currentHeadOid: 'head-sha',
+          userRefresh: true
+        })
+      )
+    await seed()
+    const visible = {
+      ...candidate,
+      cachedFetchedAt: 1_000,
+      cachedHeadOid: 'head-sha',
+      cachedHasPR: true,
+      cachedPRState: 'merged' as const,
+      cachedChecksStatus: 'success' as const
+    }
+    coordinator.reportVisiblePRRefreshCandidates([visible], 1, 1)
+    coordinator.reportVisiblePRRefreshCandidates([], 2, 1)
+    vi.setSystemTime(2_000)
+    coordinator.reportVisiblePRRefreshCandidates([visible], 3, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.resolve).toHaveBeenCalledTimes(1)
+    coordinator.reportVisiblePRRefreshCandidates([], 4, 1)
+    vi.setSystemTime(21_000)
+    mocks.resolve.mockImplementation(async () => found({ state: 'merged', title: 'updated' }))
+    mocks.send.mockClear()
+    coordinator.reportVisiblePRRefreshCandidates([visible], 5, 1)
+    if (refreshedWhileQueued) {
+      await seed()
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.send.mock.calls.at(-1)?.[1]).toMatchObject({
+      outcome: { fetchedAt: 21_000, pr: { state: 'merged', title: 'updated' } }
+    })
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+  }
+)

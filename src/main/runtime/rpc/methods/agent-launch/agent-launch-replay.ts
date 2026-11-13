@@ -20,7 +20,7 @@ import type { TerminalSpawnDispatch } from '../../../../agent-launch/agent-launc
 import type { RpcContext } from '../../core'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import { agentLaunchFailureMessage } from './agent-launch-failure-code'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 
 /** Partition the ledger by transport-proven caller; an unnamed caller gets no replay safety or shared namespace. */
 export function agentLaunchOperationCallerKey(context: Pick<RpcContext, 'caller'>): string {

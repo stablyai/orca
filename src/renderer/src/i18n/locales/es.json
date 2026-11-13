@@ -18800,7 +18800,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Abrir con (cuando el foco no está en un campo editable)"
+            "openWith": "Abrir con (excepto al escribir en un campo de texto de Orca)"
           }
         },
         "pluginInstallCount": {
@@ -19679,8 +19679,7 @@
         "stateMonitoringCount": "{{value0}} supervisando",
         "stateUnverifiableCount": "{{value0}} con estado no disponible",
         "stateWaitingCount": "{{value0}} esperando",
-        "stateWorkingCount": "{{value0}} trabajando",
-        "showAgent": "Mostrar {{value0}} en la conversación"
+        "stateWorkingCount": "{{value0}} trabajando"
       },
       "taskList": {
         "title": "Tareas",
@@ -21566,6 +21565,11 @@
         "reasonSharedSession": "También abierta en otro panel",
         "sharedOne": "1 sesión de Claude permanece en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarla podría volver a abrir la conversación del otro panel.",
         "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel."
+      },
+      "oauthUsage": {
+        "title": "Consulta de uso de Claude",
+        "description": "Usa tu inicio de sesión de Claude Code para consultar el uso, los créditos y las cuentas inactivas. Desactívala para usar solo las lecturas en directo de las sesiones de terminal.",
+        "about": "Acerca de la consulta de uso de Claude"
       }
     },
     "hostSignIn": {

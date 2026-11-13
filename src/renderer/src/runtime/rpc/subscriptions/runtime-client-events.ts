@@ -121,6 +121,7 @@ function isRuntimeClientEvent(
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState' ||
-    message.type === 'workspaceViewChanged'
+    message.type === 'workspaceViewChanged' ||
+    message.type === 'workspaceCleanupRunFinished'
   )
 }

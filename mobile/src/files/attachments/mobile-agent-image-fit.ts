@@ -8,7 +8,7 @@ import {
 import { base64DecodedByteLength } from '../../../../src/shared/agent-session/agent-session-attachments'
 import { detectImageFileSignature } from '../../../../src/shared/image-file-signature'
 import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
-import type { PickedMobileImage } from '../../platform/media-picker-contract'
+import type { PickedMobileImage } from '../../platform/media-picking/media-picker-contract'
 
 // Page-only: decodes and re-encodes through the WebView's canvas.
 

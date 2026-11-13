@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MoveTab } from '../../rpc-contract/session-tabs-schemas-params'
-import { TerminalCreateParams } from '../../rpc-contract/terminal-unary-params'
+import { MoveTab } from '../../rpc-contract/session-tabs/session-tabs-schemas-params'
+import { TerminalCreateParams } from '../../rpc-contract/terminal/terminal-unary-params'
 import { translateSessionTabMove, translateTerminalCreate } from './old-client-method-translation'
 import './old-client-pane-layout-translation'
 import './old-client-session-row-ids'

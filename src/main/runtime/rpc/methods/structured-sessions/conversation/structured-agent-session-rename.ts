@@ -3,10 +3,10 @@
 
 import { defineMethod } from '../../../core'
 import { requireRenameStructuredHost } from '../creation/structured-agent-session-gate'
-import '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import { RenameParams } from '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import { RenameParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 
 export const STRUCTURED_AGENT_SESSION_RENAME_METHODS = [
   defineMethod({

@@ -10,7 +10,7 @@ import type { HostedReviewInfo } from '../../../../src/shared/source-control/hos
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import type { GitHubPrForBranchRead } from './pr-for-branch-revalidation'
 import type { HostReadIntent } from '../../query/host-read-intent'
-import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/hosted-review/github-pr-suppression'
 import {
   prBranchFallbackNeedsHint,
   resolvePRBranchFallback,
@@ -22,8 +22,8 @@ import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from '../../../../src/shared/github/pull-requests/refresh/linked-pr-staleness'
-import type { MobileWorktreeSummary } from '../mobile-worktree-metadata-operations'
-import type { WorktreeGitHubPRLink } from '../mobile-pr-link'
+import type { MobileWorktreeSummary } from '../branches/mobile-worktree-metadata-operations'
+import type { WorktreeGitHubPRLink } from './mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
 
 export type PrSidebarData = {

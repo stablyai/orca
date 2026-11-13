@@ -3,7 +3,7 @@ import {
   BROWSER_PASSKEY_REQUEST_CANCEL_CHANNEL,
   BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL
 } from '../shared/browser-passkey-request'
-import { installBrowserPasskeyRequestWatch } from './browser-passkey-request-watch'
+import { installBrowserPasskeyRequestWatch } from './browser/passkeys/browser-passkey-request-watch'
 
 // A session preload: it runs in every frame of every browser page, popup and serve window.
 const electron: {

@@ -5,7 +5,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
-} from '../../../src/shared/worktree/retired-name-registry'
+} from '../../../src/shared/worktree/naming/retired-name-registry'
 import { useRetiredWorktreeNames } from './use-retired-worktree-names'
 
 type Pending = { resolve: (response: unknown) => void }

@@ -18328,7 +18328,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "다음으로 열기 (편집 가능한 필드에 포커스가 없을 때)"
+            "openWith": "다음으로 열기 (Orca 텍스트 필드에 입력하는 중 제외)"
           }
         },
         "pluginInstallCount": {
@@ -19141,8 +19141,7 @@
         "stateMonitoringCount": "{{value0}} 모니터링",
         "stateUnverifiableCount": "{{value0}} 상태를 확인할 수 없음",
         "stateWaitingCount": "{{value0}} 대기 중",
-        "stateWorkingCount": "{{value0}} 작업 중",
-        "showAgent": "대화에 {{value0}} 표시"
+        "stateWorkingCount": "{{value0}} 작업 중"
       },
       "railLabel": "귀하의 메시지",
       "railImageMessage": "이미지 첨부",
@@ -21553,6 +21552,11 @@
         "reasonSharedSession": "다른 패널에서도 열려 있음",
         "sharedOne": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 1개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다.",
         "sharedOther": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 {{count}}개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다."
+      },
+      "oauthUsage": {
+        "title": "Claude 사용량 주기적 조회",
+        "description": "Claude Code 로그인 정보로 사용량, 크레딧 및 비활성 계정을 확인합니다. 끄면 실행 중인 터미널 세션에서 제공하는 실시간 사용량만 표시합니다.",
+        "about": "Claude 사용량 주기적 조회 정보"
       }
     },
     "hostSignIn": {

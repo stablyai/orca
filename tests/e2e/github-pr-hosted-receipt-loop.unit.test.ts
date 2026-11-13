@@ -20,7 +20,8 @@ describe('hosted PR receipt delivery', () => {
       await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets')
     const { createVisibleHostedReviewRefreshScheduler } =
       await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
-    const { PrForBranch } = await import('../../src/shared/rpc-contract/github-pull-request-params')
+    const { PrForBranch } =
+      await import('../../src/shared/rpc-contract/github/github-pull-request-params')
     const readReceipt = (reason: 'active' | 'swr') =>
       commands.getRepoPRForBranch(
         'repo',
@@ -181,7 +182,7 @@ it('applies data-bearing retry replies to both clients and sends selection after
         throw new Error('unexpected fixture RPC')
       }
       const { PrForBranch } =
-        await import('../../src/shared/rpc-contract/github-pull-request-params')
+        await import('../../src/shared/rpc-contract/github/github-pull-request-params')
       const params = PrForBranch.parse(args.params)
       const requestClient = 'selector' in args && args.selector === 'env-client-0' ? 0 : 1
       reasons.push(params.reason ?? 'missing')

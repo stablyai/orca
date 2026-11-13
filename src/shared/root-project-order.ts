@@ -2,7 +2,7 @@ import type { ProjectGroup } from './project-group-types'
 import type { Repo } from './repo-types'
 import { getEffectiveProjectGroupManualRank } from './project-groups'
 import { getLogicalRepoOrderRankById } from './project-section-order'
-import { compareCodePoints, compareSidebarText } from './sidebar-list/text-order'
+import { compareCodePoints, compareSidebarText } from './sidebar-list/sorting/text-order'
 
 export type RootProjectEntry = { kind: 'group'; group: ProjectGroup } | { kind: 'repo'; repo: Repo }
 

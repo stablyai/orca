@@ -19067,7 +19067,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
+            "openWith": "Ouvrir avec (sauf pendant la saisie dans un champ de texte d’Orca)"
           }
         },
         "pluginInstallCount": {
@@ -19911,8 +19911,7 @@
         "stateMonitoringCount": "{{value0}} en surveillance",
         "stateUnverifiableCount": "{{value0}} au statut indisponible",
         "stateWaitingCount": "{{value0}} en attente",
-        "stateWorkingCount": "{{value0}} en cours",
-        "showAgent": "Afficher {{value0}} dans la conversation"
+        "stateWorkingCount": "{{value0}} en cours"
       },
       "railLabel": "Vos messages",
       "railImageMessage": "Image jointe",
@@ -22234,6 +22233,11 @@
         "reasonSharedSession": "Également ouverte dans un autre volet",
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
         "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
+      },
+      "oauthUsage": {
+        "title": "Suivi de l’utilisation de Claude",
+        "description": "Utilise votre connexion Claude Code pour consulter l’utilisation, les crédits et les comptes inactifs. Désactivez cette option pour utiliser uniquement les données en direct des sessions de terminal.",
+        "about": "À propos du suivi de l’utilisation de Claude"
       }
     },
     "hostSignIn": {

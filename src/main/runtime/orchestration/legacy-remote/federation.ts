@@ -16,9 +16,10 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from '../../../../shared/rpc-contract/orchestration-federation-start-params'
+import { FederationAttachStartParams } from '../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../../rpc/methods/orchestration/worker/start/launch/worker-opencode-model-preflight'
+import { reusedWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -158,6 +159,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
                 `Terminal ${terminalHandle} is not running a recognized agent.`
               )
             }
+            launch.receipt = reusedWorkerLaunchReceipt(runtime, launch.receipt, {
+              address: terminalHandle,
+              terminalHandle,
+              orcaSessionId: null
+            })
             effects.push({
               kind: 'terminal',
               role: 'agent',

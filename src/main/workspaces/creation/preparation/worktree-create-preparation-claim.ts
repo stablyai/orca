@@ -1,7 +1,7 @@
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { worktreeBaseRefFamily } from '../../../../shared/worktree/base-ref'
-import type { PreparedCheckoutMissReason } from '../../../../shared/worktree/create-timing-vocabulary'
+import { worktreeBaseRefFamily } from '../../../../shared/worktree/base-refs/base-ref'
+import type { PreparedCheckoutMissReason } from '../../../../shared/worktree/creation/create-timing-vocabulary'
 
 export type PreparationSelectionMissReason = Extract<
   PreparedCheckoutMissReason,

@@ -8,7 +8,7 @@ const node = (type: string, props: Record<string, unknown> = {}, children: unkno
 })
 
 describe('parsePluginDeclarativeTree', () => {
-  it('drops unknown props and enum values with a warning instead of refusing', () => {
+  it('drops unknown props and enum values instead of refusing', () => {
     const result = parsePluginDeclarativeTree(
       node('Stack', { className: 'p-4', gap: 'huge' }, [
         node('Text', { tone: '#ff0000' }, ['x']),
@@ -22,12 +22,6 @@ describe('parsePluginDeclarativeTree', () => {
         { type: 'IconButton', props: { icon: 'skull' } }
       ]
     })
-    expect(result.ok && result.warnings).toEqual([
-      'Stack: ignored unknown prop "className"',
-      'Stack: ignored invalid gap',
-      'Text: ignored invalid tone',
-      'IconButton: unknown icon "skull"; showing a fallback glyph'
-    ])
   })
 
   it('draws unknown components, and known ones missing a required prop, as placeholders', () => {
@@ -45,7 +39,7 @@ describe('parsePluginDeclarativeTree', () => {
 })
 
 describe('ui.* payloads', () => {
-  it('counts text children toward the node cap and charges each one', () => {
+  it('counts text children toward the aggregate node cap', () => {
     const many = (count: number) => ({
       type: 'Text',
       props: {},

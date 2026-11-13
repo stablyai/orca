@@ -51,7 +51,14 @@ export const remoteOutboundBudgetCloseSchema = z
 export const mainThreadHangDetectedSchema = z
   .object({
     unresponsive_ms: z.number().int().nonnegative(),
-    self_recovered: z.boolean()
+    self_recovered: z.boolean(),
+    native_top_frames: z.array(z.string().max(180)).max(24).optional(),
+    macos_build: z
+      .string()
+      .max(64)
+      .regex(/^macOS \d+(?:\.\d+){0,3} \([A-Za-z0-9]+\)$/)
+      .optional(),
+    menu_bar_icon: z.boolean().nullable().optional()
   })
   .strict()
 
