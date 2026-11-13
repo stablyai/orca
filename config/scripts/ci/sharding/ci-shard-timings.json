@@ -1732,7 +1732,6 @@
       "src/main/git/source-control/status/status-branch-line-total-exec-contract.test.ts": 1033,
       "src/main/git/source-control/status/status-branch-line-total-real-git.test.ts": 785,
       "src/main/git/source-control/status/status-branch-line-total-untracked-base.test.ts": 700,
-      "src/main/git/source-control/status/status-cquoted-paths.test.ts": 348,
       "src/main/git/source-control/diffs/status-diff.test.ts": 327,
       "src/main/git/source-control/status-discard-and-bulk-staging.test.ts": 289,
       "src/main/git/source-control/mutations/status-discard-symlink.test.ts": 456,

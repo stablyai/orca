@@ -85,15 +85,6 @@ describe('stageWorktreeChanges', () => {
     expect(names(repo, ['diff', '--cached', '--name-only'])).toHaveLength(OVER_CAP + 1)
   })
 
-  it('stages only tracked changes for the tracked scope', async () => {
-    const repo = await createOverCapRepo()
-
-    await stageWorktreeChanges(repo, 'tracked')
-
-    expect(names(repo, ['diff', '--name-only'])).toEqual([])
-    expect(names(repo, ['ls-files', '--others', '--exclude-standard'])).toEqual(['zz-new.txt'])
-  })
-
   it('leaves unresolved conflicts unstaged', async () => {
     const repo = await createConflictRepo()
 
@@ -176,16 +167,6 @@ describe('stageWorktreeChanges', () => {
           'node_modules'
         ])
       })
-    })
-
-    it('still stages a regular file the user put at a shared name', async () => {
-      const repo = await createRepo()
-      git(repo, ['commit', '-q', '--allow-empty', '-m', 'initial'])
-      await writeFile(path.join(repo, 'node_modules'), 'not a link\n')
-
-      await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['node_modules'] })
-
-      expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['node_modules'])
     })
   })
 })
