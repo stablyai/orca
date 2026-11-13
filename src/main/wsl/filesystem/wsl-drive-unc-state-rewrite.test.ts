@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import '../../persistence/__fixtures__/wsl-mover/wsl-mover-folders-profile'
 import { heavyWslMoverProfile } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-heavy-profile'
 import {
   repo,

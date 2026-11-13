@@ -81,9 +81,11 @@ vi.mock('../components/list/ListGroup', async () => {
     SectionHeader: ({ title }: { title: string }) => h('Text', null, title)
   }
 })
-vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
-vi.mock('../platform/external-link', () => ({ openExternalLink: vi.fn() }))
-vi.mock('../platform/haptics', () => ({ triggerSuccess: vi.fn() }))
+vi.mock('../platform/clipboard/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: vi.fn() })
+}))
+vi.mock('../platform/external-links/external-link', () => ({ openExternalLink: vi.fn() }))
+vi.mock('../platform/haptics/haptics', () => ({ triggerSuccess: vi.fn() }))
 const transport = vi.hoisted(
   (): { forceReconnect: ((hostId: string) => Promise<void>) | null } => ({
     forceReconnect: () => Promise.resolve()

@@ -1,3 +1,4 @@
+import type * as FileExplorerScreenModule from '../../../files/explorer/MobileFileExplorerPanel'
 import { createElement } from 'react'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
@@ -19,8 +20,8 @@ export function fileExplorerScreenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'files.explorer-screen': ({ client, effect }) => {
-      const Panel = modules.load<typeof import('../../../files/MobileFileExplorerPanel')>(
-        'mobile/src/files/MobileFileExplorerPanel.tsx'
+      const Panel = modules.load<typeof FileExplorerScreenModule>(
+        'mobile/src/files/explorer/MobileFileExplorerPanel.tsx'
       ).MobileFileExplorerPanel
       const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({
