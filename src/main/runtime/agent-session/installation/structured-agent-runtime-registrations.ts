@@ -136,6 +136,7 @@ function createClaudeAdapter(
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
+    ...(deps.onClaudeLiveRateLimits ? { onClaudeLiveRateLimits: deps.onClaudeLiveRateLimits } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }

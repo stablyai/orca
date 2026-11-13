@@ -24,6 +24,7 @@ import {
   hostShellEnvironmentRevision
 } from '../environment/structured-agent-shell-environment'
 import { usageLimitAccountSources } from './usage-limit-account-usage'
+import type { ClaudeStatusLineRateLimits } from '../../../../shared/claude-statusline-rate-limits'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -71,6 +72,14 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
   async structuredAgentModelCatalog() {
     return (await ensureStructuredAgentModelCatalogOwner(this.structuredAgentCatalogDependencies()))
       .modelCatalog
+  }
+
+  protected structuredAgentUsageHostDeps() {
+    return {
+      usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
+      onClaudeLiveRateLimits: (event: ClaudeStatusLineRateLimits) =>
+        this.accounts.usageRateLimits()?.ingestLiveClaudeRateLimits(event)
+    }
   }
 
   /** Read the setting live so turning it off stops every pending automatic continuation. */
