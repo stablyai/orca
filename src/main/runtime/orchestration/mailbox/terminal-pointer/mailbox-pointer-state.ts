@@ -11,6 +11,21 @@ export type OrchestrationMailboxDeliveryFlight = {
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
 type ParkedOrchestrationMailboxDeliveries = Map<string, ReadonlySet<string> | undefined>
 
+type ForegroundObservation = {
+  processIncarnation: string
+  generation: number
+  held: boolean
+}
+
+export type OrchestrationMailboxForegroundObservation = {
+  observation: Readonly<Omit<ForegroundObservation, 'held'>>
+  generation: number
+}
+
+export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
+  foreground: 'agent' | 'shell' | 'unknown'
+}
+
 export class OrchestrationMailboxPointerState {
   private readonly flightsByPtyId = new Map<string, OrchestrationMailboxDeliveryFlight>()
   private readonly parkedDeliveriesByPtyId = new Map<string, ParkedOrchestrationMailboxDeliveries>()
@@ -21,13 +36,18 @@ export class OrchestrationMailboxPointerState {
   private readonly watermarkMailboxesByPtyId = new Map<string, Set<string>>()
   private readonly parkedTypesByMailbox = new Map<string, ReadonlySet<string> | null>()
 
-  private readonly foregroundHolds = new Map<string, string>()
-  private readonly foregroundProbes = new Map<string, Promise<'agent' | 'shell' | 'unknown'>>()
+  private readonly foregroundObservations = new Map<string, ForegroundObservation>()
+  private readonly foregroundProbes = new Map<
+    string,
+    Promise<OrchestrationMailboxForegroundProbe>
+  >()
 
   probeForeground(
     ptyId: string,
+    processIncarnation: string,
     read: () => Promise<'agent' | 'shell' | 'unknown'>
-  ): Promise<'agent' | 'shell' | 'unknown'> {
+  ): Promise<OrchestrationMailboxForegroundProbe> {
+    const observation = this.captureForegroundObservation(ptyId, processIncarnation)
     const pending = this.foregroundProbes.get(ptyId)
     if (pending) {
       return pending
@@ -35,6 +55,7 @@ export class OrchestrationMailboxPointerState {
     const probe = Promise.resolve()
       .then(read)
       .catch(() => 'unknown' as const)
+      .then((foreground) => ({ foreground, ...observation }))
       .finally(() => {
         if (this.foregroundProbes.get(ptyId) === probe) {
           this.foregroundProbes.delete(ptyId)
@@ -44,16 +65,54 @@ export class OrchestrationMailboxPointerState {
     return probe
   }
 
-  holdForeground(ptyId: string, processIncarnation: string): void {
-    this.foregroundHolds.set(ptyId, processIncarnation)
+  captureForegroundObservation(
+    ptyId: string,
+    processIncarnation: string
+  ): OrchestrationMailboxForegroundObservation {
+    const observation = this.foregroundObservation(ptyId, processIncarnation)
+    return { observation, generation: observation.generation }
+  }
+
+  holdForeground(
+    ptyId: string,
+    proof: OrchestrationMailboxForegroundObservation | undefined
+  ): boolean {
+    const observation = this.foregroundObservations.get(ptyId)
+    if (
+      !proof ||
+      !observation ||
+      observation !== proof.observation ||
+      observation.generation !== proof.generation
+    ) {
+      return false
+    }
+    observation.held = true
+    return true
   }
 
   foregroundHold(ptyId: string): string | undefined {
-    return this.foregroundHolds.get(ptyId)
+    const observation = this.foregroundObservations.get(ptyId)
+    return observation?.held ? observation.processIncarnation : undefined
   }
 
-  clearForegroundHold(ptyId: string): boolean {
-    return this.foregroundHolds.delete(ptyId)
+  observeTerminal(ptyId: string): boolean {
+    const observation = this.foregroundObservations.get(ptyId)
+    if (!observation) {
+      return false
+    }
+    observation.generation++
+    const held = observation.held
+    observation.held = false
+    return held
+  }
+
+  private foregroundObservation(ptyId: string, processIncarnation: string): ForegroundObservation {
+    let observation = this.foregroundObservations.get(ptyId)
+    if (!observation || observation.processIncarnation !== processIncarnation) {
+      observation = { processIncarnation, generation: 0, held: false }
+      this.foregroundObservations.set(ptyId, observation)
+    }
+    return observation
   }
 
   hasFlight(ptyId: string): boolean {
@@ -213,6 +272,7 @@ export class OrchestrationMailboxPointerState {
     flight: OrchestrationMailboxDeliveryFlight | undefined
     releasedMailboxes: string[]
   } {
+    this.foregroundObservations.delete(ptyId)
     const flight = this.flightsByPtyId.get(ptyId)
     this.flightsByPtyId.delete(ptyId)
     this.parkedDeliveriesByPtyId.delete(ptyId)

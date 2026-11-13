@@ -47,9 +47,10 @@ describe('OrcaRuntimeService', () => {
       expect(write).not.toHaveBeenCalled()
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_mailbox`.\n'
+        '\nYou have 1 orchestration message. Run orca-dev orchestration check --run run_mailbox.\n'
       )
       expect(write).not.toHaveBeenCalledWith(
         'pty-1',
@@ -248,7 +249,7 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => {
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_codex_native_title`.\n'
+        '\nYou have 1 orchestration message. Run orca-dev orchestration check --run run_codex_native_title.\n'
       )
     })
     db.close()
@@ -315,6 +316,7 @@ describe('OrcaRuntimeService', () => {
 
       // Resumed agents can report idle first; seeded idle has no transition, so liveness alone must release mail (#12536).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -363,6 +365,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await vi.advanceTimersByTimeAsync(0)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')

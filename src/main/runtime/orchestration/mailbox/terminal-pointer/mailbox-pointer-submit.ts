@@ -49,7 +49,7 @@ export function submitOrchestrationMailboxPointer(
   let releaseWithoutRedrive = false
   let finalizeReservation = true
   let preserveAmbiguousDelivery = false
-  let deferredUntilIdle = false
+  let preserveFlight = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
   const messageIds = input.messages.map((message) => message.id)
   const reservationTarget = {
@@ -63,7 +63,11 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
-      const foreground = await deps.readForeground(input.ptyId)
+      const foreground = await deps.state.probeForeground(
+        input.ptyId,
+        input.expectedTarget.processIncarnation,
+        () => deps.readForeground(input.ptyId)
+      )
       if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         finalizeReservation = false
         return
@@ -79,8 +83,12 @@ export function submitOrchestrationMailboxPointer(
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
       if (!terminal || !sameMailbox) {
         clearAndRedrive = true
-      } else if (foreground === 'shell') {
-        deps.state.holdForeground(input.ptyId, input.expectedTarget.processIncarnation)
+      } else if (foreground.foreground === 'shell') {
+        if (!deps.state.holdForeground(input.ptyId, foreground)) {
+          submitOrchestrationMailboxPointer(deps, input)
+          preserveFlight = true
+          return
+        }
         clearAndRedrive = true
         redriveClearedPointer = false
       } else if (
@@ -91,7 +99,7 @@ export function submitOrchestrationMailboxPointer(
         // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
-        deferredUntilIdle = true
+        preserveFlight = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
@@ -122,7 +130,7 @@ export function submitOrchestrationMailboxPointer(
       }
     })
     .finally(() => {
-      if (deferredUntilIdle) {
+      if (preserveFlight) {
         return
       }
       let released = false

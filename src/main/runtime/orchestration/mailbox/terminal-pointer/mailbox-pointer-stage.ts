@@ -143,8 +143,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
-          readForeground: (ptyId) =>
-            args.state.probeForeground(ptyId, () => args.deps.readForeground(ptyId)),
+          readForeground: args.deps.readForeground,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
           settle: args.settle,

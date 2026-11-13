@@ -152,13 +152,14 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       }
       const mailboxes = new Map([[mailboxHandle, options.reservedTypes]])
       this.foregroundDeferredMailboxes.set(ptyId, mailboxes)
-      void this.probeForeground(ptyId)
+      void this.probeForeground(ptyId, target.processIncarnation)
         .then((foreground) => {
           this.foregroundDeferredMailboxes.delete(ptyId)
           const current = this.deps.resolveSubmitTarget(ptyId)
-          if (current?.processIncarnation === target.processIncarnation && foreground === 'shell') {
-            this.holdForeground(ptyId, target.processIncarnation)
-          }
+          const retryProbe =
+            current?.processIncarnation === target.processIncarnation &&
+            foreground.foreground === 'shell' &&
+            !this.holdForeground(ptyId, foreground)
           for (const [probedMailbox, reservedTypes] of mailboxes) {
             const terminal = this.deps.getTerminal(ptyId)
             if (terminal) {
@@ -166,7 +167,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
                 mailboxHandle: probedMailbox,
                 reservedTypes,
                 skipAbsenceProbe: true,
-                foregroundProbeIncarnation: target.processIncarnation
+                foregroundProbeIncarnation: retryProbe ? undefined : target.processIncarnation
               })
             }
           }
@@ -197,33 +198,29 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     })
   }
 
-  probeForeground(ptyId: string): Promise<'agent' | 'shell' | 'unknown'> {
-    return this.state.probeForeground(ptyId, () => this.deps.readForeground(ptyId))
-  }
+  readonly probeForeground = (ptyId: string, processIncarnation: string) =>
+    this.state.probeForeground(ptyId, processIncarnation, () => this.deps.readForeground(ptyId))
 
-  holdForeground(
-    ptyId: string,
-    processIncarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
-  ): void {
-    if (processIncarnation) {
-      this.state.holdForeground(ptyId, processIncarnation)
-    }
+  readonly holdForeground = this.state.holdForeground.bind(this.state)
+
+  captureForegroundObservation(ptyId: string) {
+    const processIncarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+    return processIncarnation
+      ? this.state.captureForegroundObservation(ptyId, processIncarnation)
+      : undefined
   }
 
   isForegroundHeld(ptyId: string): boolean {
     const hold = this.state.foregroundHold(ptyId)
-    if (!hold) {
+    if (hold && hold !== this.deps.resolveSubmitTarget(ptyId)?.processIncarnation) {
+      this.observeTerminal(ptyId)
       return false
     }
-    if (hold === this.deps.resolveSubmitTarget(ptyId)?.processIncarnation) {
-      return true
-    }
-    this.observeTerminal(ptyId)
-    return false
+    return !!hold
   }
 
   observeTerminal(ptyId: string): void {
-    if (this.state.clearForegroundHold(ptyId)) {
+    if (this.state.observeTerminal(ptyId)) {
       queueMicrotask(() => this.deps.redriveTerminal(ptyId))
     }
   }
