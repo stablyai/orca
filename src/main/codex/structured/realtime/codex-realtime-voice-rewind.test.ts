@@ -12,7 +12,14 @@ async function settle(): Promise<void> {
   }
 }
 
-it('drops what a voice call heard once the chat is rewound, so undone speech never returns', async () => {
+const KEPT = [
+  { role: 'user', text: 'Plan the cache' },
+  { role: 'assistant', text: 'Use LRU.' }
+]
+
+async function heardCall(
+  revert: Promise<unknown> = Promise.resolve({ thread: { id: THREAD_ID } })
+) {
   const codex = fakeCodex({
     'thread/timeline/list': () => {
       throw new Error('thread/timeline/list is not supported yet')
@@ -28,7 +35,9 @@ it('drops what a voice call heard once the chat is rewound, so undone speech nev
           ]
         }
       ]
-    })
+    }),
+    'thread/read': () => ({ thread: { id: THREAD_ID, status: { type: 'idle' } } }),
+    'thread/revert': () => revert
   })
   const adapter = await acquired(codex)
   const connection = codex.connections.at(-1)
@@ -36,39 +45,64 @@ it('drops what a voice call heard once the chat is rewound, so undone speech nev
     connection?.handlers.onNotification?.(method, { threadId: THREAD_ID, ...params })
   const call = () => {
     const events: AgentSessionVoiceEvent[] = []
-    adapter.startVoiceConversation({
+    const handle = adapter.startVoiceConversation({
       sessionId: 'session-1',
       offerSdp: 'v=0 offer',
       emit: (event) => events.push(event)
     })
-    return events
+    return { events, handle }
   }
-  const startedWith = () =>
-    connection?.calls.findLast((request) => request.method === 'thread/realtime/start')?.params
-      ?.initialItems
-
+  const starts = () =>
+    connection?.calls.filter((request) => request.method === 'thread/realtime/start') ?? []
   const live = call()
   await settle()
   notify('thread/realtime/sdp', { sdp: 'v=0 answer' })
   notify('thread/realtime/item/completed', {
     item: { type: 'transcriptSegment', id: 's1', role: 'user', text: 'Drop the cache entirely' }
   })
+  return { adapter, connection, notify, call, starts, live }
+}
 
-  await adapter
-    .prepareRewind({ sessionId: 'session-1', fence: 7, beforeTurnId: 'later' })
-    .catch(() => undefined)
-  expect(live.at(-1)).toEqual({ type: 'ended', reason: 'requested' })
+it('refuses a voice call until the rewind settles, then starts without the undone speech', async () => {
+  let reverted: (value: unknown) => void = () => {}
+  const { adapter, notify, call, starts, live } = await heardCall(
+    new Promise((resolve) => (reverted = resolve))
+  )
+
+  const rewound = adapter.rewind({ sessionId: 'session-1', fence: 7, beforeTurnId: 'undone' })
+  await settle()
+  expect(live.events.at(-1)).toEqual({ type: 'ended', reason: 'requested' })
   notify('thread/realtime/closed', { reason: 'requested' })
 
+  const during = call()
+  await settle()
+  expect(during.events).toEqual([{ type: 'refused', reason: 'busy' }])
+  expect(starts()).toHaveLength(1)
+
+  reverted({ thread: { id: THREAD_ID } })
+  await expect(rewound).resolves.toEqual({ ok: true })
   const next = call()
   await settle()
-  // The first call started with these same turns; only a second start proves the new seed.
-  expect(next).toEqual([])
-  expect(
-    connection?.calls.filter((request) => request.method === 'thread/realtime/start')
-  ).toHaveLength(2)
-  expect(startedWith()).toEqual([
-    { role: 'user', text: 'Plan the cache' },
-    { role: 'assistant', text: 'Use LRU.' }
+  expect(next.events).toEqual([])
+  expect(starts()).toHaveLength(2)
+  expect(starts().at(-1)?.params?.initialItems).toEqual(KEPT)
+})
+
+it('keeps the call and what it heard when Codex refuses to prepare the rewind', async () => {
+  const { adapter, connection, notify, call, starts, live } = await heardCall()
+
+  await expect(
+    adapter.prepareRewind({ sessionId: 'session-1', fence: 8, beforeTurnId: 'kept' })
+  ).resolves.toEqual({ ok: false, reason: 'invalid-target' })
+  expect(live.events.some((event) => event.type === 'ended')).toBe(false)
+  expect(connection?.calls.some((request) => request.method === 'thread/realtime/stop')).toBe(false)
+
+  live.handle.stop()
+  notify('thread/realtime/closed', { reason: 'requested' })
+  call()
+  await settle()
+  expect(starts().at(-1)?.params?.initialItems).toEqual([
+    ...KEPT,
+    { role: 'user', text: 'Drop the cache entirely' }
   ])
 })
