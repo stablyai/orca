@@ -63,6 +63,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     if (pty) {
       pty.tailPendingAnsi = ''
       pty.commandPaint = undefined
+      pty.lastExplicitAgentStatus = null
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''

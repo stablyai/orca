@@ -26,6 +26,7 @@ import type {
 
 /** The runtime state every tui-idle site reads its evidence from. */
 export type TuiIdleEvidenceSource = {
+  captureGeneration?(ptyId: string): () => boolean
   quiescenceMs: number
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
@@ -154,6 +155,7 @@ export function ptyTuiIdleEvidence(
     agent,
     terminalAgent,
     commandBoundaryPending,
+    startupPending: startup?.kind === 'pending',
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,

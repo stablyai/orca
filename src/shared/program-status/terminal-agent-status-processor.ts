@@ -13,6 +13,7 @@ type OffsetPayload = { payload: ParsedAgentStatusPayload; offset: number }
 
 type ProgramStatusSideEffectScan = {
   payloads: ProgramStatusPayload[]
+  readiness?: { payload: ParsedAgentStatusPayload | null; offset: number }
   activity: ProgramActivityChange[]
   /** See ProcessedAgentStatusChunk.programStatusFacet. */
   facet?: ProgramStatusFacet | null
@@ -25,7 +26,7 @@ export function createProgramStatusSideEffectScanner(): (
   const programStatus = createProgramStatusProjector()
   let lastActivity: AgentStatus | null = null
   return (data) => {
-    const { payloads, rootChanges, facet } = programStatus.process(data)
+    const { payloads, rootChanges, facet, readiness } = programStatus.process(data)
     const activity: ProgramActivityChange[] = []
     for (const change of rootChanges) {
       const next = programStatusActivity(change.root)
@@ -34,7 +35,7 @@ export function createProgramStatusSideEffectScanner(): (
         lastActivity = next
       }
     }
-    return { payloads, activity, ...(facet !== undefined ? { facet } : {}) }
+    return { payloads, activity, readiness, ...(facet !== undefined ? { facet } : {}) }
   }
 }
 
@@ -60,17 +61,52 @@ function mergeInBandStatusPayloads(
 
 /** Merge stripped OSC 9999 and retained OSC 7501 statuses for main’s side-effect scan. */
 export function createTerminalAgentStatusProcessor(): (data: string) => ProcessedAgentStatusChunk {
-  const processAgentStatusOsc = createAgentStatusOscProcessor()
+  let rawStart = 0
+  const stripped: { cleanOffset: number; rawEnd: number }[] = []
+  let latestHook: ProcessedAgentStatusChunk['readinessStatus']
+  const processAgentStatusOsc = createAgentStatusOscProcessor({
+    begin: (carriedLength) => {
+      rawStart = -carriedLength
+      stripped.length = 0
+      latestHook = undefined
+    },
+    stripped: (cleanOffset, rawEnd, payload) => {
+      stripped.push({ cleanOffset, rawEnd })
+      if (payload) {
+        latestHook = { payload, offset: rawEnd, fromProgram: false }
+      }
+    }
+  })
   const scanProgramStatus = createProgramStatusSideEffectScanner()
   return (data) => {
     const chunk = processAgentStatusOsc(data)
     const scan = scanProgramStatus(chunk.cleanData)
-    if (scan.payloads.length === 0 && scan.activity.length === 0 && scan.facet === undefined) {
+    let readinessStatus = latestHook
+    if (scan.readiness) {
+      let delta = rawStart
+      for (const frame of stripped) {
+        if (frame.cleanOffset >= scan.readiness.offset) {
+          break
+        }
+        delta = frame.rawEnd - frame.cleanOffset
+      }
+      const offset = scan.readiness.offset + delta
+      if (!readinessStatus || offset > readinessStatus.offset) {
+        readinessStatus = { payload: scan.readiness.payload, offset, fromProgram: true }
+      }
+    }
+    if (
+      scan.payloads.length === 0 &&
+      scan.activity.length === 0 &&
+      scan.facet === undefined &&
+      !readinessStatus
+    ) {
       return chunk
     }
     const payloads = mergeInBandStatusPayloads(chunk, scan.payloads)
     return {
       ...chunk,
+      ...(readinessStatus ? { readinessStatus } : {}),
       payloads: payloads.map(({ payload }) => payload),
       lastPayloadCleanOffset: payloads.at(-1)?.offset ?? null,
       payloadCleanOffsets: payloads.map(({ offset }) => offset),

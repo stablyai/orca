@@ -12,7 +12,6 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
-import type { RuntimePtyController } from '../../../terminal/lifecycle/runtime-pty-controller-contract'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -29,11 +28,61 @@ describe('mailbox delivery with current adopted agent evidence', () => {
     }
   })
 
+  it('holds a reused Claude pane through the next preexec despite the previous program status', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-reuse-status-')
+    const { runtime } = createRuntime(db, { launchAgent: null })
+    const write = vi.fn<(id: string, data: string) => boolean>(() => true)
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'zsh'
+    })
+    const run = createBoundRun(db, 'reused Claude')
+    await runtime.listTerminals()
+    runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID })
+    const ingest = (data: string) => runtime.onPtyData(PTY_ID, data, Date.now())
+    try {
+      ingest(
+        '\x1b]133;C\x07\x1b]0;claude\x07\x1b[?2031h\x1b[?2004h❯\u00a0\x1b]7501;state=idle:app=claude-code\x07'
+      )
+      ingest('\x1b]7501;state=working:app=claude-code\x07')
+      ingest('\x1b]7501;state=done:app=claude-code\x07')
+      ingest('\x1b]7501;state=clear\x07\x1b]0;\x07\x1b]133;D;0\x07\x1b]133;A\x07~/repo % ')
+      ingest('\x1b]133;C\x07\x1b]0;claude\x07HOOKSTART second invocation\r\n')
+      const settled = vi.fn()
+      const idle = runtime.waitForTerminal(TERMINAL_HANDLE, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      idle.then(settled, () => {})
+      insertDirectRunMessage(db, run.id, 'New invocation brief')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(12_000)
+
+      expect(settled).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      ingest(
+        'HOOKDONE second invocation\r\n\x1b[?2031h\x1b[?2004h❯\u00a0\x1b]7501;state=idle:app=claude-code\x07'
+      )
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(settled).toHaveBeenCalledTimes(1)
+      await expect(idle).resolves.toMatchObject({ satisfied: true })
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+    } finally {
+      db.close()
+    }
+  })
+
   it('delivers working-turn mail only after an adopted wrapper has current composer evidence', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-adopted-working-mail-')
     const { runtime } = createRuntime(db, { launchAgent: null })
-    const write = vi.fn<RuntimePtyController['write']>(() => true)
+    const write = vi.fn<(id: string, data: string) => boolean>(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -64,7 +113,7 @@ describe('mailbox delivery with current adopted agent evidence', () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-adopted-omp-app-zone-')
     const { runtime } = createRuntime(db, { launchAgent: null })
-    const write = vi.fn<RuntimePtyController['write']>(() => true)
+    const write = vi.fn<(id: string, data: string) => boolean>(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -116,7 +165,7 @@ describe('mailbox delivery with current adopted agent evidence', () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-working-dsb-mail-')
     const { runtime } = createRuntime(db, { launchAgent: null })
-    const write = vi.fn<RuntimePtyController['write']>(() => true)
+    const write = vi.fn<(id: string, data: string) => boolean>(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),

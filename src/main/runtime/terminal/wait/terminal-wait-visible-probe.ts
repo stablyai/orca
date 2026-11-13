@@ -3,11 +3,6 @@ import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snap
 import type { TerminalWaiter } from './terminal-waiter'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptBody,
-  isKnownReadyPromptSettled
-} from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
 import type {
@@ -18,7 +13,8 @@ import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
-import { outputClockOf } from './tui-idle-evidence-source'
+import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
+import { evaluateTuiIdle } from './tui-idle-evidence'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
@@ -45,6 +41,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     if (providerTimeoutMs < 1) {
       return
     }
+    const isCurrent = this.ptyForegroundAgent.captureGeneration(waiter.ptyId)
     const screenRule = readsTrustedScreen(agent)
     void withTimeout(
       this.readTerminal(waiter.handle, screenRule ? { screen: true } : {}, {
@@ -60,6 +57,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       .then((projection) => {
         const pty = this.ptysById.get(waiter.ptyId)
         if (
+          !isCurrent() ||
           !projection ||
           projection.source !== 'screen' ||
           !pty ||
@@ -67,19 +65,22 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         ) {
           return
         }
-        const snapshotText = projection.tail.join('\n')
-        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse.
-        const ready = screenRule
-          ? isKnownReadyPromptBody(
-              snapshotText,
-              agent,
-              () => restoreProjectedComposerDraft(projection.tail, projection.draft),
-              // Why read now: output since the probe started makes the pane clocked.
-              outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
-            )
-          : isKnownReadyPromptSettled(snapshotText)
-        if (!blockedReason && !ready) {
+        const lines = restoreProjectedComposerDraft(projection.tail, projection.draft)
+        const evidence = ptyTuiIdleEvidence(
+          {
+            ...this.tuiIdleEvidenceSource,
+            readScreenLines: () => lines,
+            readRuledScreen: () => {
+              const screen = this.tuiIdleEvidenceSource.readRuledScreen?.(waiter.ptyId)
+              return screen ? { ...screen, lines } : null
+            }
+          },
+          pty,
+          () => projection.tail.join('\n')
+        )
+        const verdict = evaluateTuiIdle(evidence)
+        const blockedReason = verdict.kind === 'blocked' ? verdict.reason : null
+        if (!blockedReason && verdict.kind !== 'ready-strong') {
           return
         }
         const result = blockedReason

@@ -23,6 +23,12 @@ function findAgentStatusPrefixCarry(data: string): string {
 }
 
 export type ProcessedAgentStatusChunk = {
+  /** Latest action evidence at its raw chunk offset, including unchanged live program reports; null retires an ended program. */
+  readinessStatus?: {
+    payload: ParsedAgentStatusPayload | null
+    offset: number
+    fromProgram: boolean
+  }
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
   lastPayloadCleanOffset: number | null
@@ -63,14 +69,23 @@ function findAgentStatusTerminator(
   return { index: next.stIndex, length: 2 }
 }
 
+export type AgentStatusOscOffsets = {
+  begin(carriedLength: number): void
+  stripped(cleanOffset: number, rawEnd: number, payload: ParsedAgentStatusPayload | null): void
+}
+
 /** Parse OSC 9999 for hidden/model-owned terminals as well as mounted views. */
-export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
+export function createAgentStatusOscProcessor(
+  offsets?: AgentStatusOscOffsets
+): (data: string) => ProcessedAgentStatusChunk {
   const MAX_PENDING = 64 * 1024
   let pending = ''
   // Track searched pending bytes so split frames scan new bytes instead of the whole accumulation.
   let pendingSearched = 0
 
   return (data: string): ProcessedAgentStatusChunk => {
+    const carriedLength = pending.length
+    offsets?.begin(carriedLength)
     // Keep ordinary output on the identity path unless it ends in a split marker, avoiding clean-string rebuilds per PTY chunk.
     if (pending.length === 0 && !data.includes(OSC_AGENT_STATUS_PREFIX)) {
       const carry = findAgentStatusPrefixCarry(data)
@@ -133,6 +148,7 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
         payloadCleanOffsets.push(lastPayloadCleanOffset)
       }
       cursor = terminator.index + terminator.length
+      offsets?.stripped(cleanData.length, cursor - carriedLength, parsed)
     }
 
     return {

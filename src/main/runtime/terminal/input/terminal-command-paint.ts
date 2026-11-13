@@ -1,6 +1,6 @@
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   DraftPasteMarkerSignal,
@@ -57,6 +57,7 @@ const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
 export class TerminalCommandPaint {
   commandEpoch = 0
   commandActive = false
+  lastBoundaryEnd = -1
   private awaitingPaint = false
   private markerEndInChunk = -1
   private commandOutputPrefix = ''
@@ -79,6 +80,7 @@ export class TerminalCommandPaint {
           { scanner: createDraftPasteReadyScanner(signal), seen: false }
         ])
       )
+      this.lastBoundaryEnd = endInChunk
       this.commandEpoch += 1
       this.commandActive = true
       this.markerEndInChunk = endInChunk
@@ -93,7 +95,8 @@ export class TerminalCommandPaint {
   observe(data: string, normalizedText: string): void {
     this.markerEndInChunk = -1
     this.commandOutputPrefix = ''
-    this.scanner.scan(data)
+    this.lastBoundaryEnd = -1
+    this.lastBoundaryEnd = Math.max(this.scanner.scan(data), this.lastBoundaryEnd)
     if (this.markerEndInChunk !== -1) {
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
       const commandOutput = this.commandOutputPrefix + data.slice(this.markerEndInChunk)
@@ -136,7 +139,8 @@ export type TerminalCommandPaintRecord = { commandPaint?: TerminalCommandPaint }
 
 /** `normalizedText` is the chunk as the tail buffer received it (pending escapes resolved). */
 export function observeTerminalCommandPaint(
-  record: TerminalCommandPaintRecord & { foregroundAgent: TerminalAgent | null },
+  record: TerminalCommandPaintRecord &
+    Pick<RuntimePtyWorktreeRecord, 'foregroundAgent' | 'lastExplicitAgentStatus'>,
   data: string,
   normalizedText: string
 ): void {
@@ -146,6 +150,7 @@ export function observeTerminalCommandPaint(
   record.commandPaint.observe(data, normalizedText)
   if (epoch !== record.commandPaint.commandEpoch || active !== record.commandPaint.commandActive) {
     record.foregroundAgent = null
+    record.lastExplicitAgentStatus = null
   }
 }
 

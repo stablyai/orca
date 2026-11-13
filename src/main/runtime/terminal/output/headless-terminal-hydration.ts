@@ -224,7 +224,8 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies = false
+    forwardQueryReplies = false,
+    isCurrentAction = this.ptyForegroundAgent.captureGeneration(ptyId)
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
@@ -251,6 +252,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)
         if (!pty || this.headlessTerminals.get(ptyId) !== state) {
+          continue
+        }
+        if (!isCurrentAction()) {
           continue
         }
         const command = this.terminalSpawnCommandsByPtyId.get(ptyId)

@@ -73,11 +73,6 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     entry.programActivity = activity
     this.observeClaudeTerminalEvidence(ptyId, { kind: 'activity', status: activity })
     const pty = this.ptysById.get(ptyId)
-    if (activity === null && pty?.lastExplicitAgentStatus?.programAtRest) {
-      // The at-rest claim was the program's; a later agent in this pane must earn its own.
-      const { programAtRest: _ended, ...status } = pty.lastExplicitAgentStatus
-      pty.lastExplicitAgentStatus = status
-    }
     // A stale-spinner clear stands for the title it replaced, so a dead spinner is not revived.
     // Programs that never set a title still report their status here.
     const title = entry.lastTitle ?? { raw: '', normalized: '' }

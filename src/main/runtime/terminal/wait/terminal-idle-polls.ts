@@ -146,8 +146,10 @@ export class RuntimeTerminalIdlePolls {
     }
     let startedForegroundPoll = false
     try {
-      const sample = this.sample(entry)
-      const { verdict, ptyId } = sample
+      let sample = this.sample(entry)
+      let { verdict } = sample
+      const { ptyId } = sample
+      const isCurrent = this.deps.captureGeneration?.(ptyId) ?? (() => true)
       if (verdict.kind === 'blocked') {
         this.settle(entry, sample.blocked(verdict.reason))
         return
@@ -165,8 +167,22 @@ export class RuntimeTerminalIdlePolls {
       const screenRead = this.readScreenBlockedReason(entry, ptyId)
       // Why await only a real read: a pane with no screen model keeps its tick synchronous.
       const screenBlockedReason = screenRead ? await screenRead : null
-      if (!this.entries.has(entry)) {
+      if (!this.entries.has(entry) || !isCurrent()) {
         return
+      }
+      if (screenRead) {
+        sample = this.sample(entry)
+        verdict = sample.verdict
+        if (verdict.kind === 'ready-strong' || verdict.kind === 'blocked') {
+          this.settle(
+            entry,
+            verdict.kind === 'blocked' ? sample.blocked(verdict.reason) : sample.ready()
+          )
+          return
+        }
+        if (verdict.kind === 'working') {
+          return
+        }
       }
       if (screenBlockedReason) {
         this.settle(entry, sample.blocked(screenBlockedReason))
@@ -193,7 +209,21 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
-        if (foreground && !isShellProcess(foreground) && sample.isQuiet(lane)) {
+        if (!this.entries.has(entry) || !isCurrent()) {
+          return
+        }
+        sample = this.sample(entry)
+        const latest = sample.verdict
+        if (latest.kind === 'blocked') {
+          this.settle(entry, sample.blocked(latest.reason))
+        } else if (
+          latest.kind === 'ready-strong' ||
+          (latest.kind === 'pending' &&
+            latest.quietForeground !== 'closed' &&
+            foreground &&
+            !isShellProcess(foreground) &&
+            sample.isQuiet(latest.quietForeground))
+        ) {
           this.settle(entry, sample.ready())
         }
       }

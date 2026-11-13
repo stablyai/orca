@@ -1,3 +1,4 @@
+import { observeTerminalActionStatus } from './terminal-action-status'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
@@ -37,7 +38,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies?: boolean
+    forwardQueryReplies?: boolean,
+    isCurrentAction?: () => boolean
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
@@ -113,7 +115,6 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     // Hydrate before tracking live data: publish the seeded state/chain first or a late seed could overwrite live bytes.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
     // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
-    this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const ptyTailBefore = pty
@@ -160,6 +161,14 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
       this.scheduleWaitBlockedCheck(ptyId, normalized.text, at)
     }
+
+    this.trackHeadlessTerminalData(
+      ptyId,
+      data,
+      outputSequence,
+      forwardQueryReplies,
+      this.ptyForegroundAgent.captureGeneration(ptyId)
+    )
 
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.recordPtyWorktree(ptyId, leaf.worktreeId, {
@@ -263,28 +272,9 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
       }
-      // Background CLI PTYs may lack pane keys; retain first-party status on the always-addressable PTY record.
-      const latestAgentStatus = agentStatusChunk.payloads.at(-1)
-      if (latestAgentStatus) {
-        const ptyRecord = this.ptysById.get(ptyId)
-        if (ptyRecord) {
-          const fromProgram = agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
-          const signInSince = ptyRecord.lastExplicitAgentStatus?.programSignInRequiredSince
-          // The facet rides only chunks where it changed; repeats keep the kind and first stamp.
-          const signInRequired =
-            fromProgram &&
-            latestAgentStatus.state === 'blocked' &&
-            (agentStatusChunk.programStatusFacet !== undefined
-              ? agentStatusChunk.programStatusFacet?.kind === 'auth'
-              : signInSince !== undefined)
-          ptyRecord.lastExplicitAgentStatus = {
-            state: latestAgentStatus.state,
-            updatedAt: Date.now(),
-            sessionBoundary: latestAgentStatus.sessionBoundary,
-            ...(latestAgentStatus.state === 'done' && fromProgram ? { programAtRest: true } : {}),
-            ...(signInRequired ? { programSignInRequiredSince: signInSince ?? Date.now() } : {})
-          }
-        }
+      const actionPty = this.ptysById.get(ptyId)
+      if (actionPty) {
+        observeTerminalActionStatus(actionPty, agentStatusChunk)
       }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput,

@@ -116,6 +116,7 @@ type ProgramStatusProjector = {
    * or absent when unchanged. */
   process: (data: string) => {
     payloads: ProgramStatusPayload[]
+    readiness?: { payload: ParsedAgentStatusPayload | null; offset: number }
     rootChanges: ProgramStatusRootChange[]
     facet?: ProgramStatusFacet | null
   }
@@ -126,6 +127,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
   const records = new ProgramStatusRecordSet()
   let lastRoot: RootProjection | null = null
   let lastKey: string | null = null
+  let latestProjection: ParsedAgentStatusPayload | null = null
   let rootStateStartedAt = 0
   // Set once children hold this root's done open; that row and its all-clear share one completion stamp.
   let rootDoneHeldOpen = false
@@ -205,6 +207,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
   }
 
   const project = (): ParsedAgentStatusPayload | null => {
+    latestProjection = null
     const root = records.root()
     const newInvocation = invocationEnded
     invocationEnded = false
@@ -257,6 +260,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
         stateStartedAt: rootStateStartedAt
       }
     }
+    latestProjection = payload
     // Deduplicate redraw reports so only changed payloads reach the store.
     const key = JSON.stringify(payload)
     if (key === lastKey) {
@@ -271,6 +275,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
       const events = scan(data)
       const payloads: ProgramStatusPayload[] = []
       const rootChanges: ProgramStatusRootChange[] = []
+      let readiness: { payload: ParsedAgentStatusPayload | null; offset: number } | undefined
       const facetBefore = lastFacet
       for (const event of events) {
         let changed: boolean
@@ -316,15 +321,19 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
             payloads.push({ payload, offset: event.offset })
           }
         }
+        readiness = {
+          payload: !ended && records.root() ? latestProjection : null,
+          offset: event.offset
+        }
         // After the ending event's own projection, so only the next report opens a new invocation.
         if (endsInvocation) {
           invocationEnded = true
         }
       }
       if (lastFacet === facetBefore) {
-        return { payloads, rootChanges }
+        return { payloads, rootChanges, readiness }
       }
-      return { payloads, rootChanges, facet: lastFacet ?? null }
+      return { payloads, rootChanges, readiness, facet: lastFacet ?? null }
     }
   }
 }
