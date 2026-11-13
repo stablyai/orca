@@ -263,13 +263,17 @@ describe('useEphemeralVmRecipeOptions', () => {
     )
   })
 
-  it('does not send a paired-runtime repo id to local recipe discovery', async () => {
+  // RUNON-NO-NEW-SANDBOX: a project cloned only on a remote server still offers Orca Cloud (it starts
+  // from GitHub). Main has no clone to read, so its "not found" never surfaces, and no orca.yaml
+  // recipe from this computer is offered for it.
+  it('offers only Orca Cloud for a project cloned on a remote server, with no local recipe error', async () => {
     const listRecipes = vi.fn().mockResolvedValue({
       status: 'error',
       repoPath: null,
       diagnostics: [],
-      recipes: [],
-      message: 'Repo not found: repo-runtime'
+      recipes: [{ id: 'devbox', name: 'devbox', create: './create.sh' }],
+      message: 'Repo not found: repo-runtime',
+      orcaCloud: 'offered'
     })
     installApi(listRecipes)
 
@@ -277,7 +281,20 @@ describe('useEphemeralVmRecipeOptions', () => {
       <Harness repoId="repo-runtime" repoExecutionHostId="runtime:windows-2" />
     )
 
-    expect(listRecipes).not.toHaveBeenCalled()
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('cloud')
+    )
     expect(container.querySelector('[data-testid="error"]')?.textContent).toBe('none')
+  })
+
+  it('offers nothing for a remote-server project while Orca Cloud is unavailable', async () => {
+    installApi(vi.fn().mockResolvedValue({ ...result([]), orcaCloud: 'unavailable' }))
+    const { container } = await render(
+      <Harness repoId="repo-runtime" repoExecutionHostId="runtime:windows-2" />
+    )
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('none')
+    )
+    expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('')
   })
 })

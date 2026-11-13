@@ -24283,6 +24283,7 @@
         "theAgent": "The agent",
         "showMore": "Show more repositories…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer.",
+        "remoteServerDetail": "Orca Cloud starts from a GitHub repository and can’t reach this project’s. Give Orca access with More access, or pick another repository.",
         "headingShort": "GitHub",
         "badge": "Cloud only. Orca Cloud clones it, so no copy on this computer is needed.",
         "rowPrivate": "{{repo}}, private, cloud only",

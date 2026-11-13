@@ -221,7 +221,7 @@ export function useCloudStartComposer({
             folderProject: cloudOnly.folderProject,
             needsGitHubRepo: orcaCloudNeedsGitHubRepo({
               cloudSelected,
-              folderProject: cloudOnly.folderProject,
+              folderProject: cloudOnly.needsGitHubPick,
               pickedRepo: cloudOnly.picked !== null,
               repoCount: cloudOnly.repos?.length ?? 0,
               githubProjectCount

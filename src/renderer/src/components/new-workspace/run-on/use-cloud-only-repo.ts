@@ -11,6 +11,11 @@ import {
 } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 import { startCloudWorkspaceFromGitHub } from '@/lib/orca-cloud/start-cloud-workspace-from-github'
 import type { CloudSetupStep } from './cloud-start-model'
+import {
+  isRemoteServerProject,
+  pickCloudOnlyRepository,
+  remoteServerProjectGitHubKey
+} from './cloud-only-project'
 import { useGitHubAccessHandoff, type GitHubAccessHandoffPhase } from './use-github-access-handoff'
 
 export type CloudOnlyRepo = {
@@ -24,6 +29,11 @@ export type CloudOnlyRepo = {
   picked: OrcaCloudGitHubRepository | null
   /** The project is a plain folder: Orca Cloud needs a GitHub repository (D3/D4). */
   folderProject: boolean
+  /**
+   * Orca Cloud can only start this project from a picked GitHub repository: a folder, or a project
+   * cloned only on a remote server (RUNON-NO-NEW-SANDBOX). Create waits until one is picked.
+   */
+  needsGitHubPick: boolean
   /** The GitHub row is done for a repository listed from the team's installations. */
   githubStep: CloudSetupStep | null
   pick: (fullName: string) => void
@@ -57,6 +67,9 @@ export function useCloudOnlyRepo({
   onAutoPick?: () => void
 }): CloudOnlyRepo {
   const { folderProject, folderStep } = useFolderGitHubStep(repoId)
+  const project = useAppStore((s) => s.repos.find((repo) => repo.id === repoId) ?? null)
+  const remoteServer = isRemoteServerProject(project)
+  const projectKey = remoteServerProjectGitHubKey(project)
   // D4 rows show while Orca Cloud is picked, or for a folder, which can only start from GitHub.
   const enabled = (cloudSelected || folderProject) && cloudOffered
   const [refreshSignal, setRefreshSignal] = useState(0)
@@ -74,8 +87,8 @@ export function useCloudOnlyRepo({
     }
   })
   const picked = useMemo(
-    () => (enabled ? (repos?.find((repo) => repo.fullName === pickedName) ?? null) : null),
-    [enabled, pickedName, repos]
+    () => (enabled ? pickCloudOnlyRepository(repos, pickedName, projectKey) : null),
+    [enabled, pickedName, projectKey, repos]
   )
   const githubStep = useMemo<CloudSetupStep | null>(
     () =>
@@ -124,14 +137,31 @@ export function useCloudOnlyRepo({
     retryRepos: unavailable ? retry : null,
     retryingRepos: retrying,
     picked,
-    githubStep: githubStep ?? folderStep,
+    githubStep: githubStep ?? folderStep ?? (remoteServer ? remoteServerStep() : null),
     folderProject,
+    needsGitHubPick: folderProject || remoteServer,
     pick,
     clear,
     moreAccess,
     githubHandoff: enabled ? handoff.phase : 'idle',
     checkGitHubAgain: handoff.checkAgain,
     start
+  }
+}
+
+/** A remote-server project whose GitHub repository isn't picked (or reachable) yet: Create waits. */
+function remoteServerStep(): CloudSetupStep {
+  return {
+    id: 'github',
+    state: 'failed',
+    need: 'github',
+    blocksStart: true,
+    label: translate('orcaCloud.setup.github.repositoryLabel', 'GitHub repository'),
+    status: translate('orcaCloud.setup.github.neededStatus', 'Needed'),
+    detail: translate(
+      'components.newWorkspace.cloudOnly.remoteServerDetail',
+      'Orca Cloud starts from a GitHub repository and can’t reach this project’s. Give Orca access with More access, or pick another repository.'
+    )
   }
 }
 

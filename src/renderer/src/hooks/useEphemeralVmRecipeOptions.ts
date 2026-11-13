@@ -1,6 +1,10 @@
 import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
 import { useAppStore } from '@/store'
 import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
@@ -73,11 +77,15 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const requestGeneration = useRef(0)
   // A plain folder still loads: it offers Orca Cloud only, and the setup panel then says the
   // project needs a GitHub repository (D3/D4) instead of the option vanishing.
+  // RUNON-NO-NEW-SANDBOX: a project cloned only on a remote Orca server (a paired cloud workspace's)
+  // still offers Orca Cloud; like a folder it has no recipes here and starts from GitHub (D4).
+  const remoteServer =
+    !args.repoConnectionId && parseExecutionHostId(args.repoExecutionHostId)?.kind === 'runtime'
   const canLoad =
     args.enabled !== false &&
     Boolean(args.repoId) &&
     !args.repoConnectionId &&
-    args.repoExecutionHostId === LOCAL_EXECUTION_HOST_ID &&
+    (args.repoExecutionHostId === LOCAL_EXECUTION_HOST_ID || remoteServer) &&
     !args.projectGroupTarget
 
   const load = useCallback(
@@ -102,12 +110,15 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           }
           // Orca Cloud rides its account capability, not the experimental VM-recipes flag.
           const nextRecipes = withOrcaCloudSetupRecipe(
-            (result.recipes ?? []).filter(
-              (recipe) =>
-                recipe.provider === 'orca-cloud' || (args.customRecipesEnabled && args.repoIsGit)
-            ),
+            remoteServer
+              ? []
+              : (result.recipes ?? []).filter(
+                  (recipe) =>
+                    recipe.provider === 'orca-cloud' ||
+                    (args.customRecipesEnabled && args.repoIsGit)
+                ),
             result.orcaCloud,
-            !args.repoIsGit
+            !args.repoIsGit || remoteServer
           )
           setRecipes(nextRecipes)
           setOrcaCloud(result.orcaCloud ?? 'unavailable')
@@ -134,7 +145,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
             const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
             return { error: `${recipeLabel}${fieldLabel}: ${diagnostic.message}` }
           })
-          if (!args.customRecipesEnabled || !args.repoIsGit) {
+          if (!args.customRecipesEnabled || !args.repoIsGit || remoteServer) {
             setErrors([])
             return
           }
@@ -164,7 +175,14 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           )
         })
     },
-    [args.customRecipesEnabled, args.initialRecipeId, args.repoId, args.repoIsGit, canLoad]
+    [
+      args.customRecipesEnabled,
+      args.initialRecipeId,
+      args.repoId,
+      args.repoIsGit,
+      canLoad,
+      remoteServer
+    ]
   )
 
   useEffect(() => {

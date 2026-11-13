@@ -98,6 +98,7 @@ const handoffCloudStart = (githubHandoff: 'waiting' | 'timed-out'): CloudStartVi
     retryingRepos: false,
     picked: null,
     folderProject: false,
+    needsGitHubPick: false,
     githubStep: null,
     pick: () => {},
     clear: () => {},

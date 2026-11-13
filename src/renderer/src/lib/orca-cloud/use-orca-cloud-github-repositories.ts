@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { HostedGithubRepositoriesResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { orcaCloudGitHubRepoUrl } from './use-orca-cloud-repo-access'
 import { useOrcaCloudIdentityKey } from './orca-cloud-identity'
 
@@ -160,7 +161,12 @@ export function useOrcaCloudGitHubRepositories(
       enabled && listing
         ? selectCloudOnlyRepositories(
             listing.repos,
-            repos.map((repo) => orcaCloudGitHubRepoUrl(repo))
+            // Clones on this computer only: one on a remote server can still start (RUNON-NO-NEW-SANDBOX).
+            repos
+              .filter(
+                (repo) => parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
+              )
+              .map((repo) => orcaCloudGitHubRepoUrl(repo))
           )
         : null,
     [enabled, listing, repos]
