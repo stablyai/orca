@@ -15,18 +15,26 @@ import {
   TERMINAL_FONT_WEIGHT_MAX,
   TERMINAL_FONT_WEIGHT_MIN
 } from './terminal/appearance/terminal-fonts'
-import { normalizeUiLanguage, type UiLanguage } from './ui-language'
+import { TERMINAL_THEME_CATALOG } from './terminal-themes/terminal-theme-catalog'
+import { isPluginUiLanguage, normalizeUiLanguage, type UiLanguage } from './ui-language'
 
 const flag = z.boolean()
 const name = z.string().max(256)
 const fraction = z.number().min(0).max(1)
 const fontWeight = z.number().int().min(TERMINAL_FONT_WEIGHT_MIN).max(TERMINAL_FONT_WEIGHT_MAX)
+// Custom and plugin palettes live in settings the receiver may not have, so only built-ins cross.
+const builtInTerminalTheme = z
+  .string()
+  .refine((name) => Object.hasOwn(TERMINAL_THEME_CATALOG, name))
 
 // Preferences that mean the same on any computer. Everything else stays where it was set: paths,
 // accounts, secrets, the machine name, plugin approvals, agent launch flags and platform options.
 const PORTABLE_SETTING_SCHEMAS = {
   theme: z.enum(['system', 'dark', 'light']),
-  uiLanguage: z.custom<UiLanguage>((value) => normalizeUiLanguage(value) === value),
+  // A plugin language needs its pack installed on the receiver.
+  uiLanguage: z.custom<UiLanguage>(
+    (value) => !isPluginUiLanguage(value) && normalizeUiLanguage(value) === value
+  ),
   appFontFamily: name,
   showTitlebarAppName: flag,
   showTasksButton: flag,
@@ -38,15 +46,15 @@ const PORTABLE_SETTING_SCHEMAS = {
   rightSidebarOpenByDefault: flag,
   compactWorktreeCards: flag,
   terminalFontFamily: name,
-  terminalFontSize: z.number().int().positive(),
+  terminalFontSize: z.number().int().min(10).max(24),
   terminalFontWeight: fontWeight,
   terminalFontWeightBold: fontWeight,
   terminalLineHeight: z.number().min(MIN_TERMINAL_LINE_HEIGHT).max(MAX_TERMINAL_LINE_HEIGHT),
   terminalLigatures: z.enum(['auto', 'on', 'off']),
   terminalCursorStyle: z.enum(['bar', 'block', 'underline']),
   terminalCursorBlink: flag,
-  terminalThemeDark: name,
-  terminalThemeLight: name,
+  terminalThemeDark: builtInTerminalTheme,
+  terminalThemeLight: builtInTerminalTheme,
   terminalUseSeparateLightTheme: flag,
   terminalDividerColorDark: name,
   terminalDividerColorLight: name,
