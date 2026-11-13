@@ -37,6 +37,19 @@ export function auditCaller(db: D1Database, caller: ApiCaller, entry: AuditEntry
   return audit(db, { accountId: caller.accountId, type: actor.type, id: actor.id, userId: caller.userId }, entry, now)
 }
 
+/**
+ * A signed-in desktop or phone acting on the lifecycle routes (index.ts), which do not go through
+ * the public API's auditCaller. Best effort: a failed audit write never fails the action.
+ */
+export function auditSession(
+  db: D1Database,
+  caller: { accountId: string; userId: string },
+  entry: AuditEntry,
+  now: number
+): Promise<void> {
+  return audit(db, { accountId: caller.accountId, type: 'user', id: caller.userId, userId: caller.userId }, entry, now).catch(() => undefined)
+}
+
 export type AuditRow = {
   id: string
   actor_type: string

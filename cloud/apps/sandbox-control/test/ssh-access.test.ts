@@ -23,7 +23,7 @@ describe('ssh key routes', () => {
     // The key travels in the env, never on the command line.
     expect(command).toMatchObject({ command: SSH_KEYS_COMMAND, args: ['add'], env: { ORCA_SSH_PUBLIC_KEY: KEY } })
     expect([...h.vercel.authorizedKeys.values()]).toEqual([[KEY]])
-    expect(h.raw.prepare('SELECT action, target_id, detail FROM audit_log').all()).toEqual([
+    expect(h.raw.prepare("SELECT action, target_id, detail FROM audit_log WHERE action LIKE 'sandbox.ssh%'").all()).toEqual([
       { action: 'sandbox.ssh_key_added', target_id: id, detail: JSON.stringify({ key: 'orca:mac-studio:ws-1' }) }
     ])
   })
