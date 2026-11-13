@@ -8,10 +8,8 @@ import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
-import {
-  readForwardLocalWorkerTranscriptPage,
-  readInitialLocalWorkerTranscriptPage
-} from './worker-transcript-local-read'
+import { readForwardLocalWorkerTranscriptPage } from './worker-transcript-local-read'
+import { readInitialLocalWorkerTranscriptPageReusing } from './worker-transcript-initial-page-cache'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -75,7 +73,7 @@ export async function readWorkerTranscript(args: {
   try {
     const page =
       args.offset === undefined
-        ? await readInitialLocalWorkerTranscriptPage(filePath, limit, decode)
+        ? await readInitialLocalWorkerTranscriptPageReusing(filePath, limit, decode)
         : await readForwardLocalWorkerTranscriptPage(
             filePath,
             args.offset,

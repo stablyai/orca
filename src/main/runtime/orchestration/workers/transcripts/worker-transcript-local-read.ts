@@ -48,18 +48,7 @@ export async function readInitialLocalWorkerTranscriptPage(
   if (!before) {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
-  const page = await readNativeChatTranscriptTailFile(
-    filePath,
-    limit,
-    decode,
-    false,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    false,
-    MAX_TRANSCRIPT_SCAN_BYTES
-  )
+  const page = await readNativeChatTranscriptTailFile(filePath, limit, decode, false)
   const after = await readLocalTranscriptSourceIdentity(filePath)
   if (workerTranscriptSourceChanged(before, after, page.consumedTo)) {
     return sourceChanged()

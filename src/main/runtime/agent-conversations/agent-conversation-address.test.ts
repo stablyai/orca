@@ -47,6 +47,16 @@ describe('resolveAgentConversation', () => {
     })
   })
 
+  it('names the Orca ID for a provider id shaped like one, as typed', async () => {
+    // Kimi's own session ids are `session_<uuid>`, stored with the UUID's hyphens.
+    hookServer.terminalAgentIdsOfProviderSession.mockImplementation(async (id) =>
+      id === 'session_5688af50-12a0-4b0b-9a4a-098d87fe1e68' ? [TERMINAL] : []
+    )
+    await expect(
+      resolveAgentConversation(runtime, 'session_5688af50-12a0-4b0b-9a4a-098d87fe1e68')
+    ).rejects.toMatchObject({ code: 'agent_provider_id' })
+  })
+
   it('refuses a terminal handle, and an ID no store on this host knows', async () => {
     await expect(resolveAgentConversation(runtime, 'term_0a1b2c')).rejects.toMatchObject({
       code: 'agent_terminal_handle'

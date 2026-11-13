@@ -14,6 +14,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderKey } from '../identity/agent-provider-key'
+import { sleepingRecordOfKey } from '../identity/sleeping-agent-records'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -34,6 +35,8 @@ type SleepingAgentSighting = Pick<
 export type TerminalAgentTranscriptSource = {
   key: AgentProviderKey
   providerSession: AgentProviderSessionMetadata
+  /** The identity store generation that vouched for `key`. */
+  authority: number
 }
 
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
@@ -197,45 +200,43 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
    *  needs no running agent), else a sleeping record naming its provider key. The session id and
    *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
    *  names its own conversation. null: nothing names it now; undefined: the store cannot answer.
-   *  `knownKey` is the key an earlier answer gave: an id is never relinked, so a recheck needs no
-   *  second store question. */
+   *  `known` is an earlier answer: an id is never relinked, so while its store still stands a
+   *  recheck needs no second store question. */
   async terminalAgentTranscriptSource(
     id: string,
     readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
-    knownKey?: AgentProviderKey
+    known?: TerminalAgentTranscriptSource
   ): Promise<TerminalAgentTranscriptSource | null | undefined> {
     const authority = this.agentIdentities.authority()
-    const live = this.liveTranscriptSource(id)
+    const live = this.liveTranscriptSource(id, authority)
     if (live) {
       return live
     }
-    const linked = knownKey ? { key: knownKey } : await this.agentIdentities.providerKeyOf(id)
+    const linked =
+      known?.authority === authority
+        ? { key: known.key }
+        : await this.agentIdentities.providerKeyOf(id)
     if (!linked || authority !== this.agentIdentities.generation) {
       return undefined
     }
     const { key } = linked
+    const windows = process.platform === 'win32'
     // Sleeping records carry no WSL distro, so one names a WSL agent's key only while its hooks
     // still say so; a native Windows agent's record matches its full key like any other.
-    if (!key || (process.platform === 'win32' && key.wslDistro !== '')) {
+    if (!key || (windows && key.wslDistro !== '')) {
       return null
     }
-    for (const record of Object.values(readSleeping())) {
-      if (record.providerSession.id !== key.providerSessionId) {
-        continue
-      }
-      const recordKey = agentProviderKeyOf({
-        agent: record.agent,
-        providerSession: record.providerSession,
-        connectionId: record.connectionId ?? null
-      })
-      if (recordKey && sameProviderKey(recordKey, key)) {
-        return { key, providerSession: record.providerSession }
-      }
+    const record = sleepingRecordOfKey(readSleeping(), key, windows)
+    if (record) {
+      return { key, providerSession: record.providerSession, authority }
     }
     return null
   }
 
-  private liveTranscriptSource(id: string): TerminalAgentTranscriptSource | null {
+  private liveTranscriptSource(
+    id: string,
+    authority: number
+  ): TerminalAgentTranscriptSource | null {
     let best: { key: AgentProviderKey; row: EnrichedAgentHookEventPayload } | null = null
     for (const place of this.agentIdentities.placesOf(id)) {
       const subject = place.canonical
@@ -266,7 +267,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       }
     }
     return best?.row.providerSession
-      ? { key: best.key, providerSession: best.row.providerSession }
+      ? { key: best.key, providerSession: best.row.providerSession, authority }
       : null
   }
 

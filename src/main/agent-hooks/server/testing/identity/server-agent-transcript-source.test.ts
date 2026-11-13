@@ -25,6 +25,10 @@ class IdentityTestServer extends AgentHookServer {
   protected override createAgentIdentityClient(): AgentIdentityClient {
     return this.identityClient
   }
+
+  moveStatusFile(path: string): void {
+    this.setStatusFilePath(path)
+  }
 }
 
 function hook(sessionId: string, transcriptPath: string) {
@@ -113,40 +117,101 @@ it.skipIf(process.platform === 'win32')(
       key: { wslDistro: 'Ubuntu', providerSessionId: 'session-a' },
       providerSession: { transcriptPath: '/home/u/.claude/projects/p/session-a.jsonl' }
     })
-    // The post-read recheck reuses the key it was given: one partition read, no store question.
-    expect(await server.terminalAgentTranscriptSource(id!, records, found!.key)).toEqual(found)
+    // The post-read recheck reuses the answer it was given: one partition read, no store question.
+    expect(await server.terminalAgentTranscriptSource(id!, records, found!)).toEqual(found)
     expect(server.identityClient.providerKeyRequests).toBe(1)
     expect(partitionReads).toBe(2)
   }
 )
 
-it('reads a native Windows agent asleep by its record, never a WSL agent by a distro-less one', async () => {
+it('reads a native Windows agent asleep by its own record, never a WSL record of the same conversation', async () => {
   const platform = process.platform
   const server = await started()
-  server.ingestRemote(hook('session-n', 'C:\\Users\\u\\.claude\\projects\\p\\n.jsonl'), null)
+  const nativePath = 'C:\\Users\\u\\.claude\\projects\\p\\x.jsonl'
+  const guestPath = '/home/u/.claude/projects/p/x.jsonl'
+  // One provider conversation resumed natively and in WSL: two keys, two Orca IDs.
+  server.ingestRemote(hook('session-x', nativePath), null)
   await answered()
   const native = server.getStatusSnapshot()[0]?.orcaSessionId
-  server.ingestRemote(hook('session-w', '/home/u/.claude/projects/p/w.jsonl'), WSL)
+  server.ingestRemote(hook('session-x', guestPath), WSL)
   await answered()
   const wsl = server.getStatusSnapshot()[0]?.orcaSessionId
+  expect(wsl).not.toBe(native)
   server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
   // Sleeping records carry no distro: both look native.
-  const asleep = (id: string, path: string) => ({
+  const asleep = (path: string) => ({
     agent: 'claude' as const,
-    providerSession: { key: 'session_id' as const, id, transcriptPath: path },
+    providerSession: { key: 'session_id' as const, id: 'session-x', transcriptPath: path },
     connectionId: null
-  })
-  const records = () => ({
-    n: asleep('session-n', 'C:\\Users\\u\\.claude\\projects\\p\\n.jsonl'),
-    w: asleep('session-w', '/home/u/.claude/projects/p/w.jsonl')
   })
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   try {
-    expect(await server.terminalAgentTranscriptSource(native!, records)).toMatchObject({
-      key: { wslDistro: '', providerSessionId: 'session-n' }
-    })
-    expect(await server.terminalAgentTranscriptSource(wsl!, records)).toBeNull()
+    for (const records of [
+      { guest: asleep(guestPath), native: asleep(nativePath) },
+      { native: asleep(nativePath), guest: asleep(guestPath) }
+    ]) {
+      expect(await server.terminalAgentTranscriptSource(native!, () => records)).toMatchObject({
+        key: { wslDistro: '' },
+        providerSession: { transcriptPath: nativePath }
+      })
+      expect(await server.terminalAgentTranscriptSource(wsl!, () => records)).toBeNull()
+    }
   } finally {
     Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   }
 })
+
+it.skipIf(process.platform === 'win32')(
+  'never carries a key past the store that vouched for it, and looks up a sleeping conversation by its own key',
+  async () => {
+    const server = await started()
+    server.ingestRemote(hook('session-a', '/home/u/.claude/projects/p/a.jsonl'), WSL)
+    await answered()
+    const id = server.getStatusSnapshot()[0]?.orcaSessionId
+    server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+    const sleeping = (sessionId: string) => ({
+      agent: 'claude' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: sessionId,
+        transcriptPath: `/home/u/.claude/projects/p/${sessionId}.jsonl`
+      },
+      connectionId: WSL
+    })
+    for (const population of [300, 3_000]) {
+      let visits = 0
+      const records: Record<string, ReturnType<typeof sleeping>> = {}
+      for (let index = 0; index < population; index++) {
+        const record = sleeping(`other-${index}`)
+        records[`pane-${index}`] = {
+          ...record,
+          get providerSession() {
+            visits++
+            return record.providerSession
+          }
+        }
+      }
+      records.a = sleeping('session-a')
+      const found = await server.terminalAgentTranscriptSource(id!, () => records)
+      visits = 0
+      for (let read = 0; read < 10; read++) {
+        expect(await server.terminalAgentTranscriptSource(id!, () => records, found!)).toEqual(
+          found
+        )
+      }
+      // Ten rechecks touch only the asked conversation's records, however many others sleep.
+      expect(visits).toBe(0)
+    }
+
+    const found = await server.terminalAgentTranscriptSource(id!, () => ({
+      a: sleeping('session-a')
+    }))
+    // Another store takes over (a different status path): it never linked this id.
+    const other = mkdtempSync(join(tmpdir(), 'agent-transcript-store-b-'))
+    cleanups.push(() => rmSync(other, { recursive: true, force: true }))
+    server.moveStatusFile(join(other, 'status.json'))
+    expect(
+      await server.terminalAgentTranscriptSource(id!, () => ({ a: sleeping('session-a') }), found!)
+    ).toBeNull()
+  }
+)

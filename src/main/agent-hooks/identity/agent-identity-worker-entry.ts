@@ -35,10 +35,6 @@ const LOOKUP_INDEX_SQL = `CREATE INDEX IF NOT EXISTS provider_links_by_orca_sess
   ON provider_links(orca_session_id);
 CREATE INDEX IF NOT EXISTS provider_links_by_provider_session
   ON provider_links(provider_session_id);`
-const LOOKUP_INDEX_NAMES = [
-  'provider_links_by_orca_session',
-  'provider_links_by_provider_session'
-] as const
 const PROVIDER_SESSION_ID_MATCH_LIMIT = 8
 
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
@@ -59,23 +55,14 @@ export class AgentIdentityStore {
     hardenSqliteDatabaseFiles(path)
   }
 
-  /** Adds the lookup indexes on first use; a busy or read-only file throws, so the caller's
-   *  failure backoff retries it rather than scanning. */
+  /** Adds the lookup indexes on first use; a busy file throws, so the caller's failure backoff
+   *  retries it rather than scanning. A newer build's read-only file is left as it is: it can't
+   *  be indexed here and that never clears, so its rare lookups scan. */
   private requireLookupIndexes(): void {
-    if (this.lookupIndexed) {
+    if (this.lookupIndexed || this.readOnly) {
       return
     }
-    if (!this.readOnly) {
-      this.db.exec(LOOKUP_INDEX_SQL)
-    }
-    const present = this.db
-      .prepare(
-        `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name IN (${LOOKUP_INDEX_NAMES.map(() => '?').join(', ')})`
-      )
-      .get(...LOOKUP_INDEX_NAMES)
-    if (Number(present?.count) !== LOOKUP_INDEX_NAMES.length) {
-      throw new Error('agent identity lookup indexes unavailable')
-    }
+    this.db.exec(LOOKUP_INDEX_SQL)
     this.lookupIndexed = true
   }
 

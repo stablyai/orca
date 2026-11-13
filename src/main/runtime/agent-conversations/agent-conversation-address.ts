@@ -33,31 +33,23 @@ export async function resolveAgentConversation(
   runtime: { ensureStructuredAgentSessionHost(): Promise<unknown> },
   input: string
 ): Promise<ResolvedAgentConversation> {
-  // Orca mints `<agent>_<uuid>` with underscores; a hyphenated UUID spells the same ID.
-  const text = input
-    .trim()
-    .replace(
-      /_([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i,
-      '_$1_$2_$3_$4_$5'
-    )
+  const text = input.trim()
   if (isTerminalHandle(text)) {
     throw new AgentConversationRefusal(
       CODES.terminalHandle,
       `${text} is a terminal handle, which changes when the terminal restarts. Use \`orca terminal …\` for it, or the agent's \`orca_session_id:\` from \`orca agent list\`.`
     )
   }
-  const id = text.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
-    ? parseOrcaSessionAddress(text)
-    : isOrcaSessionId(text)
-      ? text
-      : null
+  const id = orcaSessionIdOf(text)
   // The chat store opens lazily; installing it reads records and starts no agent.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   const store = readAgentSessionRecordStore()
-  const found = store ? lookupOrcaAgentSession(store, id ?? text) : null
-  if (found?.kind === 'provider-id') {
-    throw providerIdRefusal(text, [found.orcaSessionId], store)
+  // A provider's own id is matched as typed; only Orca IDs are respelled.
+  const asTyped = store ? lookupOrcaAgentSession(store, text) : null
+  if (asTyped?.kind === 'provider-id') {
+    throw providerIdRefusal(text, [asTyped.orcaSessionId], store)
   }
+  const found = store && id ? (id === text ? asTyped : lookupOrcaAgentSession(store, id)) : null
   if (found?.kind === 'found' && store && id) {
     return {
       kind: 'chat',
@@ -86,12 +78,30 @@ export async function resolveAgentConversation(
   throw id
     ? new AgentConversationRefusal(
         CODES.unknown,
-        `No agent ${id} on this Orca. If it runs on another host, run this there or add \`--environment <host>\`.`
+        `No agent ${text} on this Orca. If it runs on another host, run this there or add \`--environment <host>\`.`
       )
     : new AgentConversationRefusal(
         CODES.invalidId,
         `${text || 'That'} is not an Orca session ID. Find agents' IDs with \`orca agent list\`, or copy one with Copy Orca Session ID.`
       )
+}
+
+/** The Orca ID `text` spells: an `orca_session_id:` address or a bare ID, whose UUID Orca mints
+ *  with underscores where a UUID is usually written with hyphens. */
+function orcaSessionIdOf(text: string): OrcaSessionId | null {
+  const bare = (
+    text.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+      ? text.slice(ORCA_SESSION_ADDRESS_PREFIX.length)
+      : text
+  ).replace(
+    /_([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i,
+    '_$1_$2_$3_$4_$5'
+  )
+  return text.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+    ? parseOrcaSessionAddress(`${ORCA_SESSION_ADDRESS_PREFIX}${bare}`)
+    : isOrcaSessionId(bare)
+      ? bare
+      : null
 }
 
 function providerIdRefusal(

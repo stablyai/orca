@@ -91,3 +91,14 @@ it('gives a cursor read at most --limit entries and continues where it stopped',
   expect(next.entries).toEqual([{ kind: 'message', role: 'assistant', text: 'reply 101' }])
   expect(next.limited).toBe(true)
 })
+
+it('takes a cursor ahead of the journal to history, not as an empty read', async () => {
+  host.reads.journalCursor.mockResolvedValue({ epoch: 'e', sequence: 100 })
+  host.history.mockResolvedValueOnce(page([], 1_100, false))
+  const ahead = await readAgentConversation(ctx, chat, { limit: 1 })
+  host.history.mockResolvedValueOnce({ ok: false, page: page([], 100, false).page })
+
+  await expect(readAgentConversation(ctx, chat, { cursor: ahead.cursor! })).rejects.toMatchObject({
+    code: 'agent_read_source_changed'
+  })
+})

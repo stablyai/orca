@@ -51,7 +51,7 @@ export type StructuredAttentionMobileDelivery = {
 /** Read display labels from persisted host metadata without disk/Git lookups. */
 export function readStructuredAttentionWorkspaceLabels(
   store: Pick<RuntimeStore, 'getRepo' | 'getWorktreeMeta' | 'getFolderWorkspaces'>,
-  scope: Pick<AgentSessionExecutionLocation, 'workspaceId'>
+  scope: AgentSessionExecutionLocation
 ): StructuredAttentionWorkspaceLabels {
   const folderScope = parseWorkspaceKey(scope.workspaceId)
   if (folderScope?.type === 'folder') {

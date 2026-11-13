@@ -61,9 +61,7 @@ export async function readNativeChatTranscriptTailFile(
   decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
   signal?: AbortSignal,
   onConsumedBoundary?: (boundary: Buffer) => void,
-  sourceOrder = false,
-  /** Stop looking back after this many bytes, so a tail with few messages costs a bounded read. */
-  maxScanBytes = Number.POSITIVE_INFINITY
+  sourceOrder = false
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
@@ -111,10 +109,9 @@ export async function readNativeChatTranscriptTailFile(
     if (cursor === 0) {
       onConsumedBoundary?.(finalBoundaryByte)
     }
-    const scanFloor = Math.max(0, cursor - maxScanBytes)
-    while (cursor > scanFloor && newestFirst.length <= limit) {
+    while (cursor > 0 && newestFirst.length <= limit) {
       signal?.throwIfAborted()
-      const start = Math.max(scanFloor, cursor - TAIL_CHUNK_BYTES)
+      const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
       const buffer = Buffer.allocUnsafe(cursor - start)
       const { bytesRead } = await readTranscriptFile(
         handle,
@@ -171,8 +168,7 @@ export async function readNativeChatTranscriptTailFile(
       messages: selected.map((entry) => entry.message),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
-      // A scan stopped at its byte bound may have left older messages unread.
-      hasMore: limit > 0 && (chronological.length > limit || (cursor > 0 && cursor === scanFloor)),
+      hasMore: limit > 0 && chronological.length > limit,
       beforeOffset: selected[0]?.offset ?? end,
       ...(Number.isFinite(latest) ? { latestTimestamp: latest } : {}),
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),

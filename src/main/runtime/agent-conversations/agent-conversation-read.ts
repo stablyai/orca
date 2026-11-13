@@ -24,10 +24,7 @@ import {
 import { createWorkerOutputSourceIdentity } from '../orchestration/workers/transcripts/worker-output-cursor'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
-import {
-  sameProviderKey,
-  type AgentProviderKey
-} from '../../agent-hooks/identity/agent-provider-key'
+import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
 import {
@@ -90,7 +87,8 @@ async function readChat(
     cursor &&
     head &&
     head.epoch === cursor.journal.epoch &&
-    head.sequence <= cursor.journal.sequence
+    // Only exact equality: a cursor ahead of the journal takes history's own reset path.
+    head.sequence === cursor.journal.sequence
   ) {
     return {
       orcaSessionId,
@@ -138,12 +136,12 @@ async function readTerminalTranscript(
     throw invalidCursor()
   }
   const locate = (
-    knownKey?: AgentProviderKey
+    known?: TerminalAgentTranscriptSource
   ): Promise<TerminalAgentTranscriptSource | null | undefined> =>
     agentHookServer.terminalAgentTranscriptSource(
       orcaSessionId,
       () => ctx.runtime.readLocalSleepingAgentSessions(),
-      knownKey
+      known
     )
   const source = await locate()
   if (source === undefined) {
@@ -192,7 +190,7 @@ async function readTerminalTranscript(
     transcript.sourceFingerprint
   ])
   // The conversation must still name the file just read: its row may have moved on meanwhile.
-  const after = await locate(key)
+  const after = await locate(source)
   if (
     (cursor?.s === 'transcript' && cursor.i !== sourceIdentity) ||
     !after ||
