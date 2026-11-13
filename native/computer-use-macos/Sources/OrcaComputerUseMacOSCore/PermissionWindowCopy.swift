@@ -58,9 +58,9 @@ public struct PermissionWindowCopy: Equatable, Sendable {
         checkingTitle: "正在检查计算机使用权限",
         readyTitle: "计算机使用功能已就绪",
         enableTitle: "启用 Orca 计算机使用功能",
-        checkingSubtitle: "正在检查辅助功能和屏幕截图权限。",
-        readySubtitle: "当你提出要求时，Orca 可以使用本地应用。",
-        permissionSubtitle: "授予权限，以便 Orca 在你提出要求时使用应用。",
+        checkingSubtitle: "正在检查辅助功能和屏幕截图权限",
+        readySubtitle: "当你提出要求时，Orca 可以使用本地应用",
+        permissionSubtitle: "授予权限，以便 Orca 在你提出要求时使用应用",
         accessibilityTitle: "辅助功能",
         accessibilityDetail: "读取并控制应用界面",
         screenshotsTitle: "屏幕截图",
@@ -69,8 +69,8 @@ public struct PermissionWindowCopy: Equatable, Sendable {
         allowButton: "允许",
         doneButton: "完成",
         dragWindowTitle: "拖入 Orca Computer Use",
-        dragAccessibilityInstruction: "将 Orca Computer Use 拖入上方列表以允许辅助功能。",
-        dragScreenshotsInstruction: "将 Orca Computer Use 拖入上方列表以允许屏幕截图。",
+        dragAccessibilityInstruction: "将 Orca Computer Use 拖入上方列表以允许辅助功能",
+        dragScreenshotsInstruction: "将 Orca Computer Use 拖入上方列表以允许屏幕截图",
         closeButtonDescription: "关闭"
     )
 

@@ -7253,7 +7253,8 @@
           "todo": "À faire",
           "inProgress": "En cours",
           "inReview": "En revue",
-          "done": "Terminé"
+          "done": "Terminé",
+          "numbered": "Statut {{number}}"
         }
       },
       "shared": {
@@ -15352,7 +15353,6 @@
           "HomeSlide": {
             "a4c3f7b7aa": "Tâches",
             "cf3f98fa3f": "Déconnecté",
-            "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Ordinateurs",
             "af761a0c0d": "Paramètres",
             "5d94e8ddcc": "Orca"
@@ -15361,34 +15361,11 @@
             "0bb39f8fe6": "Envoyer",
             "69334b4b10": "Dictée vocale",
             "29f2d13839": "Saisissez une commande…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Coller",
             "985373052e": "Basculer en mode téléphone",
-            "58a9ee6003": "avec mise en forme des tool calls. Je vous ajoute le diff ensuite ?",
-            "aa64b519c6": "écran de terminal. Palette Tokyonight, police Menlo, véritable claude",
-            "e75112c834": "J'ai remplacé la diapositive pair-scan par un",
-            "3ce3e8c892": "14 réussis, 1 ignoré (1,8 s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Diapositive pair-scan remplacée par une session de terminal",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Édition",
-            "fc83e0d5ef": "⎿ Lecture de 2103 lignes",
-            "80cc356591": "Lecture",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Fichiers",
             "94febb0976": "Contrôle de code source",
             "8d6516312d": "2 terminaux · claude actif",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Retour"
           },
           "WorktreeListSlide": {
@@ -15397,7 +15374,6 @@
             "22971156df": "Dépôt",
             "17f9e0d226": "Récents",
             "0e3e809a4b": "Filtre",
-            "b4271864bd": "MacBook Pro",
             "cefd048225": "Retour"
           }
         },

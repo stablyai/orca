@@ -7349,7 +7349,8 @@
           "todo": "Yapılacak",
           "inProgress": "Devam ediyor",
           "inReview": "İncelemede",
-          "done": "Tamamlandı"
+          "done": "Tamamlandı",
+          "numbered": "Durum {{number}}"
         }
       },
       "shared": {
@@ -15376,7 +15377,6 @@
           "HomeSlide": {
             "a4c3f7b7aa": "Görevler",
             "cf3f98fa3f": "Bağlantı Kesildi",
-            "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Masaüstleri",
             "af761a0c0d": "Ayarlar",
             "5d94e8ddcc": "Orca"
@@ -15385,34 +15385,11 @@
             "0bb39f8fe6": "Gönder",
             "69334b4b10": "Sesli yazdırma",
             "29f2d13839": "Bir komut yazın…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Yapıştır",
             "985373052e": "Telefon moduna geç",
-            "58a9ee6003": "tool-call biçimlendirmesi. Sırada diff eklememi ister misiniz?",
-            "aa64b519c6": "terminal ekranı. Tokyonight paleti, Menlo, gerçek claude",
-            "e75112c834": "Eşleştirme tarama slaytını yüksek çözünürlüklü bir",
-            "3ce3e8c892": "14 geçti, 1 atlandı (1.8sn)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Eşleştirme tarama slaytı terminal oturumuyla değiştirildi",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Edit",
-            "fc83e0d5ef": "⎿ 2103 satır okundu",
-            "80cc356591": "Read",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Dosyalar",
             "94febb0976": "Kaynak kontrolü",
             "8d6516312d": "2 terminal · claude etkin",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Geri"
           },
           "WorktreeListSlide": {
@@ -15421,7 +15398,6 @@
             "22971156df": "Repo",
             "17f9e0d226": "Son",
             "0e3e809a4b": "Filtrele",
-            "b4271864bd": "MacBook Pro",
             "cefd048225": "Geri"
           }
         },

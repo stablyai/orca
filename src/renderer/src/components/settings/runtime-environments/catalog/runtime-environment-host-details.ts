@@ -9,6 +9,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../../../shared/protocol-version'
+import { joinSentences } from '../../../../../../shared/sentence-joining'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
@@ -86,7 +87,9 @@ export function getHostDetailsDescription(
       'auto.components.settings.RuntimeEnvironmentsPane.serverRuntimeUnavailableDescription',
       'SSH transport is connected, but the Orca runtime did not answer. The host may still be running.'
     )
-    return details.error ? `${unavailableDescription} ${details.error}` : unavailableDescription
+    return details.error
+      ? joinSentences([unavailableDescription, details.error])
+      : unavailableDescription
   }
   return null
 }

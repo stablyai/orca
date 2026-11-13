@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom-editors'
+import { sentenceStop } from '../../../../shared/sentence-joining'
 
 function detail(title: string, t: Translate = translate): string {
   return isWebClientLocation()
@@ -36,12 +37,18 @@ export function PluginEditorNeedsDesktopNotice({
     'This editor needs the Orca desktop app'
   )
   if (inline) {
+    const headingStop = sentenceStop(heading)
     return (
       <div
         role="status"
         className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground"
       >
-        <span className="font-medium text-foreground">{heading}.</span> {detail(title, t)}
+        <span className="font-medium text-foreground">
+          {heading}
+          {headingStop}
+        </span>
+        {headingStop === '。' ? null : ' '}
+        {detail(title, t)}
       </div>
     )
   }

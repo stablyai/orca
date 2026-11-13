@@ -11,6 +11,7 @@ import {
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import { joinSentences } from '../../../../../../shared/sentence-joining'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -198,11 +199,14 @@ export function WslHostsSection({
                 meta={
                   <span className="truncate">
                     {deferred
-                      ? `${t(
-                          'auto.components.settings.managedServers.row.deferredVersion',
-                          'Update to {{version}} deferred.',
-                          { version: deferred.candidateVersion }
-                        )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code }, t)}`
+                      ? joinSentences([
+                          t(
+                            'auto.components.settings.managedServers.row.deferredVersion',
+                            'Update to {{version}} deferred.',
+                            { version: deferred.candidateVersion }
+                          ),
+                          managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code }, t)
+                        ])
                       : `${unavailableLabel ?? getWslHostRowDetail(status, t)}${
                           !unavailableLabel && status?.detail
                             ? ` — ${wslHostStatusDetailMessage(status)}`

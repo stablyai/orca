@@ -11,6 +11,7 @@ import {
 import { useAppStore } from '../../store/index'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isOwnedSshTargetId,
@@ -255,7 +256,7 @@ export function SshStatusSegment({
         {connectedRuntimeHosts.map((host) => (
           <RuntimeHostStatusRow
             key={host.id}
-            label={host.label}
+            label={translateExecutionHostLabel(host.label, t)}
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl, t)}
             diagnostics={host.remoteControl}
@@ -276,7 +277,7 @@ export function SshStatusSegment({
         {inactiveRuntimeHosts.map((host) => (
           <RuntimeHostStatusRow
             key={host.id}
-            label={host.label}
+            label={translateExecutionHostLabel(host.label, t)}
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl, t)}
             diagnostics={host.remoteControl}

@@ -166,7 +166,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.tab.bar.TabBarCreateEntry.b27864279e': {
     ko: '에이전트 실행',
-    zh: '启动智能体',
+    zh: '启动代理',
     ja: 'Agent を起動'
   },
   'auto.components.sidebar.SidebarNav.c39ab10000': {
@@ -312,7 +312,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里',
+    zh: '你的工作区就在你的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {
@@ -382,12 +382,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.settings.AgentsPane.9bccf48906': {
     ko: '에이전트 위치',
-    zh: '智能体位置',
+    zh: '代理位置',
     ja: 'Agent の場所'
   },
   'auto.components.sidebar.SidebarNav.e518f544b1': {
     ko: '감지된 에이전트 없음',
-    zh: '未检测到智能体',
+    zh: '未检测到代理',
     ja: 'Agent が検出されません'
   },
   'auto.components.onboarding.OnboardingFlow.04ae28d8ca': {

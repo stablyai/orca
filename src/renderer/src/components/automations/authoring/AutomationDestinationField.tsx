@@ -1,6 +1,7 @@
 import React from 'react'
 import { HostCombobox } from '@/components/host-picker/HostCombobox'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { AutomationHostLabel, AutomationHostStatusBadges } from '../hosts/AutomationHostBadges'
 import { Field } from '../automation-page-parts'
 import {
@@ -44,8 +45,8 @@ export function AutomationDestinationField({
         options={groups.flatMap((group) =>
           group.entries.map((entry) => ({
             id: entry.stableKey,
-            label: entry.label,
-            group: group.authorityLabel,
+            label: translateExecutionHostLabel(entry.label, t),
+            group: translateExecutionHostLabel(group.authorityLabel, t),
             disabled: !automationCreateHostEligible(entry),
             content: (
               <span
@@ -65,7 +66,7 @@ export function AutomationDestinationField({
           {t(
             'auto.components.automations.createDestination.noProjects',
             'No projects are set up on {host}. Add one there, or choose another host.'
-          ).replace('{host}', selected.label)}
+          ).replace('{host}', translateExecutionHostLabel(selected.label, t))}
         </p>
       ) : control.moveWarning ? (
         // Prefer the consequential move warning over a duplicate stored-on host label.

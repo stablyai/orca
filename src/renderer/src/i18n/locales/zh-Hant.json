@@ -7193,7 +7193,8 @@
           "todo": "待處理",
           "inProgress": "進行中",
           "inReview": "審核中",
-          "done": "已完成"
+          "done": "已完成",
+          "numbered": "狀態 {{number}}"
         }
       },
       "shared": {
@@ -15185,7 +15186,6 @@
           "HomeSlide": {
             "a4c3f7b7aa": "任務",
             "cf3f98fa3f": "已斷開連線",
-            "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "電腦",
             "af761a0c0d": "設定",
             "5d94e8ddcc": "Orca"
@@ -15194,34 +15194,11 @@
             "0bb39f8fe6": "傳送",
             "69334b4b10": "語音聽寫",
             "29f2d13839": "輸入命令...",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab 鍵",
-            "4930eaaae7": "Esc 鍵",
             "fa22927f13": "貼上",
             "985373052e": "切換到手機模式",
-            "58a9ee6003": "工具呼叫格式化。接下來要我新增差異嗎？",
-            "aa64b519c6": "終端機畫面。Tokyonight 配色、Menlo 字型，以及實際的 claude",
-            "e75112c834": "我已將配對掃描投影片替換為高擬真的",
-            "3ce3e8c892": "14 項通過，1 項略過（1.8 秒）",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "通過",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ 用終端機工作階段替換配對掃描投影片",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "編輯",
-            "fc83e0d5ef": "⎿ 讀取 2103 行",
-            "80cc356591": "讀",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "Shell",
             "606aa93192": "檔案",
             "94febb0976": "原始碼控制",
             "8d6516312d": "2 個終端機 · claude 使用中",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "返回"
           },
           "WorktreeListSlide": {
@@ -15230,7 +15207,6 @@
             "22971156df": "存放庫",
             "17f9e0d226": "最近的",
             "0e3e809a4b": "篩選",
-            "b4271864bd": "MacBook Pro",
             "cefd048225": "返回"
           }
         },

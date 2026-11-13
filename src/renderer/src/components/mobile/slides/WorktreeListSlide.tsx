@@ -15,6 +15,9 @@ type WorktreeRowProps = {
   tapping?: boolean
 }
 
+// A desktop's name comes from the user's machine, so like the worktree rows it is not translated.
+const HOST_NAME = 'MacBook Pro'
+
 export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -30,9 +33,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           </button>
           <div className="mp-wl-host">
             <span className="mp-status-dot is-green" />
-            <span className="mp-wl-host-name">
-              {t('auto.components.mobile.slides.WorktreeListSlide.b4271864bd', 'MacBook Pro')}
-            </span>
+            <span className="mp-wl-host-name">{HOST_NAME}</span>
           </div>
         </div>
         <div className="mp-wl-toolbar">

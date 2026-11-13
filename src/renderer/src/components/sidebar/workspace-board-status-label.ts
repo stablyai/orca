@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Translate only shipped status labels; configured names remain literal. */
 export function translateWorkspaceBoardStatusLabel(status: { id: string; label: string }): string {
@@ -20,7 +21,40 @@ export function translateWorkspaceBoardStatusLabel(status: { id: string; label: 
         ? translate('auto.components.sidebar.workspaceBoardStatus.done', 'Done')
         : status.label
     default:
-      return status.label
+      return translateNumberedStatusLabel(status.label)
+  }
+}
+
+// Why: new statuses ship as "Status N" (workspace-statuses.ts), so that default localizes too.
+function translateNumberedStatusLabel(label: string, t: Translate = translate): string {
+  const numberedStatus = /^Status (\d+)$/.exec(label)
+  return numberedStatus
+    ? t('auto.components.sidebar.workspaceBoardStatus.numbered', 'Status {{number}}', {
+        number: numberedStatus[1]
+      })
+    : label
+}
+
+/** Localize built-in/common workflow names without changing provider-defined custom states. */
+export function translateDefaultWorkflowStateLabel(
+  label: string,
+  t: Translate = translate
+): string {
+  switch (label) {
+    case 'Todo':
+    case 'To do':
+      return t('auto.components.sidebar.workspaceBoardStatus.todo', 'Todo')
+    case 'In progress':
+    case 'In Progress':
+      return t('auto.components.sidebar.workspaceBoardStatus.inProgress', 'In progress')
+    case 'In review':
+    case 'In Review':
+      return t('auto.components.sidebar.workspaceBoardStatus.inReview', 'In review')
+    case 'Done':
+    case 'Completed':
+      return t('auto.components.sidebar.workspaceBoardStatus.done', 'Done')
+    default:
+      return translateNumberedStatusLabel(label, t)
   }
 }
 

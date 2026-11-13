@@ -17,6 +17,7 @@ import {
 } from '../hosts/automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 
 /** Keep status on each host header, including hosts with no rows; unreachable must never read as an empty schedule. */
 
@@ -74,7 +75,7 @@ export function AutomationListHostGroups({
       {groups.map((group) => (
         <section key={group.authorityKey} className="mb-2" data-authority-key={group.authorityKey}>
           <div className="px-2 pb-1 text-[11px] font-medium uppercase text-muted-foreground">
-            {group.authorityLabel}
+            {translateExecutionHostLabel(group.authorityLabel, t)}
           </div>
           {group.hosts.map(({ entry, rows, hostRowCount }) => {
             const action = hostRecoveryAction(entry)

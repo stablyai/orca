@@ -3,7 +3,7 @@ import { ZH_PHRASE_FIXES_ROUND5 } from './locale-zh-phrase-fixes-round5.mjs'
 
 import { JA_PHRASE_FIXES } from './locale-ja-phrase-fixes.mjs'
 
-// Why: Orca names the Agent concept 智能体; 代理 stays for proxy and user-agent copy.
+// Why: this fork's Simplified Chinese names the Agent concept 代理; other machine renderings fold into it.
 const ZH_AGENT_SOURCE = /(?<!user[ -])(?:sub)?agents?\b/i
 
 export const LOCALE_PHRASE_FIXES = {
@@ -134,15 +134,15 @@ export const LOCALE_PHRASE_FIXES = {
     ...KO_PHRASE_FIXES_ROUND4
   ],
   zh: [
-    { pattern: /客服人员/g, replacement: '智能体', whenEnMatches: ZH_AGENT_SOURCE },
+    { pattern: /客服人员/g, replacement: '代理', whenEnMatches: ZH_AGENT_SOURCE },
     { pattern: /会议/g, replacement: '会话', whenEnIncludes: 'session' },
     { pattern: /港口/g, replacement: '端口', whenEnIncludes: 'ort' },
     { pattern: /公关/g, replacement: 'PR', whenEnIncludes: 'PR' },
     { pattern: /虎鲸:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
-    { pattern: /代理商/g, replacement: '智能体', whenEnMatches: ZH_AGENT_SOURCE },
-    { pattern: /代理/g, replacement: '智能体', whenEnMatches: ZH_AGENT_SOURCE },
+    { pattern: /代理商/g, replacement: '代理', whenEnMatches: ZH_AGENT_SOURCE },
+    { pattern: /智能体/g, replacement: '代理', whenEnMatches: ZH_AGENT_SOURCE },
     { pattern: /分支机构/g, replacement: '分支', whenEnIncludes: 'ranch' },
-    { pattern: /座席/g, replacement: '智能体', whenEnMatches: ZH_AGENT_SOURCE },
+    { pattern: /座席/g, replacement: '代理', whenEnMatches: ZH_AGENT_SOURCE },
     { pattern: /汽车/g, replacement: '自动', whenEnIncludes: 'Auto' },
     { pattern: /清爽/g, replacement: '刷新中', whenEnIncludes: 'Refreshing' },
     { pattern: /瓦斯尔/g, replacement: 'WSL', whenEnIncludes: 'wsl' },
@@ -162,7 +162,7 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /入职清单/g, replacement: '入门清单', whenEnIncludes: 'Onboarding checklist' },
     {
       pattern: /发射(?:代理|智能体)/g,
-      replacement: '启动智能体',
+      replacement: '启动代理',
       whenEnMatches: /\bLaunch agent\b/i
     },
     { pattern: /地位/g, replacement: '状态', whenEnIncludes: 'Status' },
