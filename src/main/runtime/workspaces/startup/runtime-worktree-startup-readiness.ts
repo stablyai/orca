@@ -60,7 +60,6 @@ export type StartupFollowupPromptOptions = {
   signal?: AbortSignal
   agentLaunch?: boolean
   terminalCreation?: TerminalReadinessCreation
-  beforeWrite?: (ptyId: string) => void
 }
 
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
@@ -84,7 +83,6 @@ export async function deliverStartupFollowupPrompt(
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
-        options.beforeWrite?.(ptyId)
         host.write(ptyId, `${prompt}\r`, 'launch')
         return true
       }
@@ -97,7 +95,6 @@ export async function deliverStartupFollowupPrompt(
       terminalCreation: options.terminalCreation,
       text: prompt,
       unprovableHost: 'write-if-shell-provable',
-      beforeWrite: options.beforeWrite,
       ...(signal ? { signal } : {})
     })
   } catch (error) {

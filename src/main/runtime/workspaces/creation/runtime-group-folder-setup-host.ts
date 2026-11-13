@@ -14,10 +14,8 @@ import { wslUserAct } from '../startup/workspace-create-activation'
 import { buildWorktreeStartupForAgent } from '../startup/runtime-worktree-agent-startup'
 import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import { createLaunchedAgentWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
-import {
-  deliverStartupFollowupPrompt,
-  pasteWorktreeStartupDraftWhenReady
-} from '../startup/runtime-worktree-startup-readiness'
+import { pasteWorktreeStartupDraftWhenReady } from '../startup/runtime-worktree-startup-readiness'
+import { deliverGroupFolderStartupFollowup } from './runtime-group-folder-followup'
 import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
 
 export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
@@ -108,16 +106,13 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
           void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
           return
         }
-        void deliverStartupFollowupPrompt(
-          this,
-          this.getWorktreeStartupReadinessHost(),
-          handle,
+        void deliverGroupFolderStartupFollowup({
+          runtime: this,
+          host: this.getWorktreeStartupReadinessHost(),
+          terminal,
           followup,
-          {
-            terminalCreation: terminal,
-            beforeWrite: (ptyId) => this.assertGroupStartupInputTarget(terminal, ptyId)
-          }
-        )
+          beforeWrite: (ptyId) => this.assertGroupStartupInputTarget(terminal, ptyId)
+        })
       },
       provision: (options) =>
         this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
