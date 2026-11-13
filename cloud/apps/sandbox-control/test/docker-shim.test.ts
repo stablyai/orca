@@ -86,7 +86,7 @@ describe('the docker shim (PARITY-DOCKER)', { timeout: 20_000 }, () => {
     const first = docker(['run', '--rm', 'hello-world'])
     expect(first.status).toBe(0)
     expect(first.stdout).toBe('real docker run --rm hello-world\n')
-    expect(first.stderr).toContain('Setting up Docker in this workspace (first use, about a minute)')
+    expect(first.stderr).toContain('Setting up Docker in this workspace (first use, about 10 seconds)')
     expect(first.stderr).toContain('Downloading and installing Docker (about 110 MB)')
     expect(first.stderr).not.toContain('E: ')
     expect(first.stderr).toContain('Running containers stop when the workspace sleeps')

@@ -6,7 +6,7 @@ Every Orca Cloud workspace can run Docker. `docker`, `docker compose` and `docke
 
 - **Installed on first use:** the golden image doesn't ship Docker. Shipping it made every workspace create about 5 s slower at p50, measured on dev with a matched A/B pair.
   - `/opt/orca/bin/docker` (first on PATH, `image/vm/docker`) installs Ubuntu's pinned `docker.io`, `docker-compose-v2` and `docker-buildx` on the first `docker` command in a workspace.
-  - It says "Setting up Docker... (first use, about a minute)" and shows a step line. That's about 110 MB to download.
+  - It says "Setting up Docker... (first use, about 10 seconds)" and shows a step line. That's about 110 MB to download, measured at 7.5 s on dev.
   - The install is serialised with a lock, so two first commands install once.
   - It stays on the workspace disk.
 - **Pins:** the versions are pinned in the shim itself. The Worker installs VM scripts into every workspace on start, so bumping them is a Worker deploy.
@@ -27,9 +27,8 @@ Every Orca Cloud workspace can run Docker. `docker`, `docker compose` and `docke
 ## Network and credentials
 
 - **Egress:** the first-use install needs the Ubuntu package archive. Image pulls need the registries. Container traffic leaves through the workspace VM, so the workspace's network policy applies to containers exactly as to the VM.
-  - With open egress (#525, the default once it is deployed), both just work.
-  - The "limited" preset gets the registry hosts in a follow-up after #525.
-  - Until #525 is live, the current allowlist blocks the first-use install.
+  - With open egress (#525, the default), both just work.
+  - The "limited" preset (SANDBOX_EGRESS_PRESET=limited) needs the Ubuntu archive and registry hosts; a follow-up adds them.
 - **Credential hosts:** Orca swaps a placeholder for the real credential on the way out for some hosts: GitHub's git, api.github.com, Orca-account agent sign-ins and egress secrets. Real tokens never enter the VM or containers. Those hosts are TLS-terminated by the provider's proxy, whose certificate containers don't trust by default. A container that must reach one mounts the workspace's proxy CA:
 
   ```sh

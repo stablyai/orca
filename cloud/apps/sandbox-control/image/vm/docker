@@ -40,7 +40,7 @@ exec 8>"${ORCA_DOCKER_LOCK:-/tmp/orca-dockerd.lock}"
 flock -w 600 8 || true
 
 if [ ! -x "$real" ]; then
-  say "orca: Setting up Docker in this workspace (first use, about a minute)..."
+  say "orca: Setting up Docker in this workspace (first use, about 10 seconds)..."
   # shellcheck disable=SC2086 # \$packages is one word per package
   if ! {
     $sudo_cmd env DEBIAN_FRONTEND=noninteractive "${ORCA_DOCKER_APT:-apt-get}" update -qq &&
