@@ -196,16 +196,15 @@ project. Without them, local release builds keep Expo's debug key.
 `.github/workflows/mobile-android-release.yml` always release-signs `dev.orca.app`, the package
 shared by Google Play and GitHub installs. It fails before building if any of these is missing:
 
-| Name                               | Kind     | Value                                                   |
-| ---------------------------------- | -------- | ------------------------------------------------------- |
-| `ORCA_ANDROID_KEYSTORE_BASE64`     | secret   | the release keystore, base64-encoded                    |
-| `ORCA_ANDROID_KEYSTORE_PASSWORD`   | secret   | keystore password                                       |
-| `ORCA_ANDROID_KEY_ALIAS`           | secret   | key alias                                               |
-| `ORCA_ANDROID_KEY_PASSWORD`        | secret   | key password (same as the keystore password for PKCS12) |
-| `ORCA_ANDROID_RELEASE_CERT_SHA256` | variable | the key's certificate SHA-256 fingerprint               |
+| Name                             | Kind   | Value                                                   |
+| -------------------------------- | ------ | ------------------------------------------------------- |
+| `ORCA_ANDROID_KEYSTORE_BASE64`   | secret | the release keystore, base64-encoded                    |
+| `ORCA_ANDROID_KEYSTORE_PASSWORD` | secret | keystore password                                       |
+| `ORCA_ANDROID_KEY_ALIAS`         | secret | key alias                                               |
+| `ORCA_ANDROID_KEY_PASSWORD`      | secret | key password (same as the keystore password for PKCS12) |
 
 After a release-signed build, the workflow checks that the APK's signing certificate matches
-`ORCA_ANDROID_RELEASE_CERT_SHA256` and is not the debug key, and publishes the fingerprint in the
+the SHA-256 pinned in the workflow (`EXPECTED_CERT_SHA256`) and is not the debug key, and publishes the fingerprint in the
 release notes. Android only installs an update signed by the same key as the installed app, so
 the keystore must be backed up: losing it means no existing install can be updated in place.
 

@@ -45,17 +45,16 @@ jobs:
           ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
           ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
           ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
-          ORCA_ANDROID_RELEASE_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
         run: |
           set -euo pipefail
           missing=()
-          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD ORCA_ANDROID_RELEASE_CERT_SHA256; do
+          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD; do
             if [ -z "${!name:-}" ]; then
               missing+=("$name")
             fi
           done
           if [ "${#missing[@]}" -ne 0 ]; then
-            echo "::error::Android release signing is not fully configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
+            echo "::error::Android release signing is not fully configured. Missing secrets: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
             exit 1
           fi
 
@@ -146,7 +145,7 @@ jobs:
       - name: Verify APK and AAB signing certificates
         id: signer
         env:
-          EXPECTED_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+          EXPECTED_CERT_SHA256: '19:68:CC:3A:F4:90:97:24:F7:FA:AC:8D:4E:3C:5E:F9:16:97:AE:FB:69:05:E2:EA:65:0D:19:1B:B3:9F:AD:BC'
         run: |
           set -euo pipefail
           # Expo template debug keystore, public in expo-template-bare-minimum.
@@ -161,13 +160,13 @@ jobs:
             exit 1
           fi
           if [ "$certs" != "$expected" ]; then
-            echo "::error::The APK signing certificate ($certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
+            echo "::error::The APK signing certificate ($certs) does not match the pinned release certificate ($expected)."
             exit 1
           fi
           # Play App Signing re-signs with this same key, which keeps Play and GitHub installs updatable from each other.
           aab_certs="$(keytool -printcert -jarfile android/app/build/outputs/bundle/release/app-release.aab | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | sort -u)"
           if [ "$aab_certs" != "$expected" ]; then
-            echo "::error::The AAB signing certificate ($aab_certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
+            echo "::error::The AAB signing certificate ($aab_certs) does not match the pinned release certificate ($expected)."
             exit 1
           fi
           echo "cert_sha256=$(printf '%s' "$certs" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_OUTPUT"
