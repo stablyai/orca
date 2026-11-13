@@ -16,6 +16,7 @@ import { waitForTerminalComposer } from '../../terminal/wait/terminal-composer-l
 import { RuntimeTerminalWaiterRegistry } from '../../terminal/wait/terminal-waiter-registry'
 import { buildPtyTerminalWaitResult } from '../../terminal/wait/terminal-wait-results'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { LaunchedAgentForeground } from '../../terminal/wait/launched-agent-foreground'
 
 const roots: string[] = []
 afterEach(() => {
@@ -72,7 +73,7 @@ export function fixture(
     lastExitCode: null
   }
   let currentAgent = agent
-  let launchedForeground = unprovableHost ? 'unknown' : 'agent'
+  let launchedForeground: LaunchedAgentForeground = unprovableHost ? 'unknown' : 'agent'
   let ordinaryForeground: string | null = 'codex'
   let afterForeground: (() => void) | undefined
   let afterReady: (() => void) | undefined
