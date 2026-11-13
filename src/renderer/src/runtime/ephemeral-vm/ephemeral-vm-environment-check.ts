@@ -19,8 +19,18 @@ import {
   resolveVmEnvironmentCheckDecision,
   type VmEnvironmentCheckDecision
 } from './ephemeral-vm-environment-check-decision'
-import { triageCloudEnvironmentChecks } from './ephemeral-vm-environment-check-triage'
-import { setCloudSetupNotices } from '@/lib/orca-cloud/cloud-setup-notices-store'
+import {
+  triageCloudEnvironmentChecks,
+  type CloudSetupNotice
+} from './ephemeral-vm-environment-check-triage'
+import {
+  setCloudSetupNotices,
+  type CloudSetupNoticesRecord
+} from '@/lib/orca-cloud/cloud-setup-notices-store'
+import {
+  confirmCloudFetchFailure,
+  type CloudCheckRunner
+} from '@/lib/orca-cloud/cloud-fetch-notice'
 
 // Two 20s network probes, local probes and a login-shell PATH refresh, with headroom for a slow VM.
 const ENVIRONMENT_CHECK_TIMEOUT_MS = 150_000
@@ -158,6 +168,28 @@ function scheduleBlockedSandboxSleep(
 }
 
 /**
+ * Shows what the create's check found in the opened workspace. A failed reach of origin waits for a
+ * confirming check first (ENV-ORIGIN-TOAST): a fresh sandbox can miss its GitHub credential briefly.
+ */
+function publishCloudNotices(
+  record: CloudSetupNoticesRecord,
+  confirm: (
+    record: CloudSetupNoticesRecord,
+    notice: CloudSetupNotice,
+    runCheck: CloudCheckRunner
+  ) => Promise<unknown>
+): void {
+  const fetch = record.notices.find((notice) => notice.kind === 'fetch')
+  const rest = { ...record, notices: record.notices.filter((notice) => notice !== fetch) }
+  setCloudSetupNotices(rest)
+  if (fetch) {
+    void confirm(rest, fetch, runVmEnvironmentCheck).catch((error: unknown) => {
+      console.warn('[orca-cloud] Could not re-check the sandbox reaching GitHub:', error)
+    })
+  }
+}
+
+/**
  * Check the freshly provisioned VM before creating the workspace. Orca Cloud stops only on a fatal
  * check (no checkout, no git, orcad unreachable); everything else opens the workspace and shows
  * there as a notice. Recipe VMs pause on any failed check. Resolves `proceed` to continue (passed,
@@ -168,7 +200,8 @@ export async function gateVmCreateOnEnvironmentCheck(
   creationId: string,
   environmentId: string,
   path: string,
-  cloud?: CloudEnvironmentCheckContext
+  cloud?: CloudEnvironmentCheckContext,
+  confirmFetch: Parameters<typeof publishCloudNotices>[1] = confirmCloudFetchFailure
 ): Promise<VmEnvironmentCheckGateResult> {
   const update = useAppStore.getState().updatePendingWorktreeCreation
   const isPending = (): boolean =>
@@ -205,14 +238,17 @@ export async function gateVmCreateOnEnvironmentCheck(
         }
       })
       if (cloud && triage) {
-        setCloudSetupNotices({
-          environmentId,
-          path: result.worktreePath || path,
-          repoId: cloud.repoId,
-          hostId: cloud.hostId,
-          repoUrl: cloud.repoUrl,
-          notices: triage.notices
-        })
+        publishCloudNotices(
+          {
+            environmentId,
+            path: result.worktreePath || path,
+            repoId: cloud.repoId,
+            hostId: cloud.hostId,
+            repoUrl: cloud.repoUrl,
+            notices: triage.notices
+          },
+          confirmFetch
+        )
       }
       return 'proceed'
     }

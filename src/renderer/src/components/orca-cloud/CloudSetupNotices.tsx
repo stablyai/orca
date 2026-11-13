@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { GitPullRequestArrow, Loader2, Play } from 'lucide-react'
+import { GitPullRequestArrow, Loader2, Play, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { environmentCheckCopy } from '@/components/worktree-creation/environment-check-copy'
@@ -17,6 +17,8 @@ import {
   repoSlug,
   runCloudSetupScript
 } from '@/lib/orca-cloud/cloud-setup-notice-actions'
+import { recheckCloudFetch } from '@/lib/orca-cloud/cloud-fetch-notice'
+import { runVmEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check'
 import { hideCloudToast, showCloudToast, type CloudToastView } from './cloud-toast-stack'
 
 // After Install: GitHub's webhook usually lands within seconds, then the owner may take a while.
@@ -34,7 +36,13 @@ export function cloudSetupNoticeLine(
   notice: CloudSetupNotice,
   record: Pick<CloudSetupNoticesRecord, 'repoUrl'>,
   t: Translate,
-  handlers: { install: () => void; runSetup: () => void; installing: boolean }
+  handlers: {
+    install: () => void
+    runSetup: () => void
+    installing: boolean
+    recheckFetch?: () => void
+    checkingFetch?: boolean
+  }
 ): CloudSetupNoticeLine {
   switch (notice.kind) {
     case 'push':
@@ -63,6 +71,30 @@ export function cloudSetupNoticeLine(
       return {
         text: t('orcaCloud.setupNotices.pushRefused', 'Orca Cloud can’t push from this workspace.'),
         action: null
+      }
+    case 'fetch':
+      // ENV-ORIGIN-TOAST: shown only after a confirming check also failed; Check again re-runs it.
+      return {
+        text: record.repoUrl
+          ? t(
+              'orcaCloud.setupNotices.fetchFailed',
+              'This workspace can’t reach {{repo}} on GitHub right now.',
+              { repo: repoSlug(record.repoUrl) }
+            )
+          : t(
+              'orcaCloud.setupNotices.fetchFailedNoRepo',
+              'This workspace can’t reach its Git remote right now.'
+            ),
+        action: handlers.recheckFetch
+          ? {
+              label: handlers.checkingFetch
+                ? t('orcaCloud.setupNotices.checking', 'Checking…')
+                : t('orcaCloud.setupNotices.checkAgain', 'Check again'),
+              icon: handlers.checkingFetch ? <Loader2 className="animate-spin" /> : <RefreshCw />,
+              run: handlers.recheckFetch,
+              ...(handlers.checkingFetch ? { pending: true } : {})
+            }
+          : null
       }
     case 'setup':
       return {
@@ -151,6 +183,29 @@ function usePushRecheck(
   }
 }
 
+/** Check again on the "can't reach GitHub" line: one doctor run at a time. */
+function useFetchRecheck(environmentId: string | undefined): {
+  checking: boolean
+  recheck: () => void
+} {
+  const [checking, setChecking] = useState(false)
+  const busy = useRef(false)
+  return {
+    checking,
+    recheck: () => {
+      if (!environmentId || busy.current) {
+        return
+      }
+      busy.current = true
+      setChecking(true)
+      void recheckCloudFetch(environmentId, runVmEnvironmentCheck).finally(() => {
+        busy.current = false
+        setChecking(false)
+      })
+    }
+  }
+}
+
 /** The notices as a shared cloud toast view (DS-q chrome: ⚠ warnings, outline actions). */
 export function cloudSetupNoticesView(
   record: Pick<CloudSetupNoticesRecord, 'repoUrl' | 'environmentId'>,
@@ -161,6 +216,8 @@ export function cloudSetupNoticesView(
     install: () => void
     runSetup: (noticeId: string) => void
     dismiss: (noticeId: string) => void
+    recheckFetch?: () => void
+    checkingFetch?: boolean
   }
 ): CloudToastView {
   return {
@@ -170,7 +227,9 @@ export function cloudSetupNoticesView(
       const line = cloudSetupNoticeLine(notice, record, t, {
         install: handlers.install,
         runSetup: () => handlers.runSetup(notice.id),
-        installing: handlers.installing
+        installing: handlers.installing,
+        ...(handlers.recheckFetch ? { recheckFetch: handlers.recheckFetch } : {}),
+        ...(handlers.checkingFetch ? { checkingFetch: true } : {})
       })
       return {
         key: notice.id,
@@ -209,6 +268,7 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
     environmentId,
     notices.some((notice) => notice.kind === 'push')
   )
+  const fetch = useFetchRecheck(environmentId)
   const toastId = environmentId ? cloudSetupToastId(environmentId) : null
   const shown = Boolean(record) && notices.length > 0
   // Showing the same id again updates the toast in place (installing state, a dismissed line).
@@ -227,7 +287,9 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
         installing: push.installing,
         install: () => record.repoUrl && push.startInstall(record.repoUrl),
         runSetup: (noticeId) => void runCloudSetupScript(workspaceId, record, noticeId),
-        dismiss: (noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId)
+        dismiss: (noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId),
+        recheckFetch: fetch.recheck,
+        checkingFetch: fetch.checking
       }),
       // N-03: only over its own workspace; never over Settings or another workspace.
       { scope: { workspaceId } }

@@ -28295,7 +28295,11 @@
       "label": "Workspace setup",
       "installFailed": "Couldn’t open GitHub. Check your connection and try again.",
       "pushReady": "Orca Cloud can push to {{repo}} now.",
-      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace."
+      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace.",
+      "fetchFailed": "This workspace can’t reach {{repo}} on GitHub right now.",
+      "fetchFailedNoRepo": "This workspace can’t reach its Git remote right now.",
+      "checking": "Checking…",
+      "checkAgain": "Check again"
     },
     "toast": {
       "dismiss": "Dismiss"
