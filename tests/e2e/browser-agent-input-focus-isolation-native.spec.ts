@@ -78,24 +78,28 @@ for (const [name, run] of scenarios) {
     )
     test.setTimeout(120_000)
     const ownedWindow = await electronApp.browserWindow(orcaPage)
+    const windowId = await ownedWindow.evaluate((window) => window.id)
+    await ownedWindow.dispose()
     const holder = await startWindowsForegroundHolder()
     try {
       // Why: background launch keeps Orca hidden, and a hidden window cannot be activated at all.
-      await ownedWindow.evaluate((window) => window.showInactive())
-      await expect.poll(() => ownedWindow.evaluate((window) => window.isVisible())).toBe(true)
+      await electronApp.evaluate(({ BrowserWindow }, id) => {
+        BrowserWindow.fromId(id)?.showInactive()
+      }, windowId)
       await holder.take()
       await run(orcaPage, async (pageId) => {
         // Why: a guest press that activates Orca's window pulls it over the app the user is in.
         expect(await holder.foreground()).toMatchObject({ holder: true })
         // The same check must see Orca once it really is activated, or the one above proves nothing.
-        const orcaPid = await electronApp.evaluate(() => process.pid)
-        await ownedWindow.evaluate((window) => window.focus())
+        const orcaPid = await electronApp.evaluate(({ BrowserWindow }, id) => {
+          BrowserWindow.fromId(id)?.focus()
+          return process.pid
+        }, windowId)
         await expect.poll(() => holder.foreground()).toMatchObject({ holder: false, pid: orcaPid })
         await realKeystrokeReachesTerminal(orcaPage, electronApp, holder.press)(pageId)
       })
     } finally {
       await holder.close()
-      await ownedWindow.dispose()
     }
   })
 }

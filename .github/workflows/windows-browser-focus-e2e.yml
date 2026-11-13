@@ -1,0 +1,72 @@
+name: Windows browser agent focus E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to check out
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-browser-focus-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-browser-focus:
+    name: Agent browser input leaves Orca behind the user's app
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      # Why: pnpm must exist before setup-node resolves its dependency cache.
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for Windows E2E
+        run: pnpm exec electron-vite build --mode e2e
+
+      # Why: the hosted Windows desktop has a real foreground, so it can see an agent press activate Orca.
+      - name: Run agent focus checks on the Windows desktop
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: >-
+          pnpm exec playwright test
+          tests/e2e/browser-agent-input-focus-isolation-native.spec.ts
+          --config tests/playwright.config.ts
+          --project=electron-headful
+          --workers=1
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-browser-focus-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
