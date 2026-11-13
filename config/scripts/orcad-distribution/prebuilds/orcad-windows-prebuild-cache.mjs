@@ -23,6 +23,8 @@ export const WINDOWS_PREBUILD_LOCKED_PACKAGES = ['node-pty', 'node-gyp']
 const WINDOWS_PREBUILD_PACKAGE_SCRIPTS = ['build:orcad-prebuilds', 'build:packages']
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   '.github/actions/prepare-orcad-prebuilds/action.yml',
+  'native/journal-file-lock/main.c',
+  'config/scripts/native-build/build-journal-file-lock.mjs',
   'config/patches/node-pty@1.1.0.patch',
   'src/shared/node-runtime-pin.ts',
   'config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs',

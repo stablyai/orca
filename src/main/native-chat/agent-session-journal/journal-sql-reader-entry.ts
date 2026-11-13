@@ -1,8 +1,13 @@
+import {
+  JournalLegacyRetentionError,
+  readJournalLegacySource
+} from './journal-legacy-retention-error'
+import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
-import { journalSqlFailure } from './journal-sql-failure'
+import { journalSqlFailure, journalSqlSourceFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
 import { prepareJournalDomainImport, type JournalDomainImport } from './journal-domain-import'
 import { readJournalSqlDatabase } from './journal-sql-database-read'
@@ -87,14 +92,29 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
         break
+      case 'legacy-proof':
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
         if (!original && existsSync(workerData.originalFilename)) {
-          original = new Database(workerData.originalFilename, {
-            readonly: true,
-            fileMustExist: true,
-            timeout: 5000
+          const openSource = () =>
+            new Database(workerData.originalFilename, {
+              readonly: true,
+              fileMustExist: true,
+              timeout: 5000
+            })
+          original =
+            operation.kind === 'legacy-proof' ? readJournalLegacySource(openSource) : openSource()
+        }
+        if (operation.kind === 'legacy-proof') {
+          if (!original) {
+            throw new Error('legacy source disappeared during proof')
+          }
+          reply({
+            type: 'legacy-proof',
+            id,
+            page: readJournalLegacyProofPage(original, operation.cursor, db)
           })
+          break
         }
         const prepared = original ? prepareJournalDomainImport(original, operation.sessionId) : null
         if (prepared) {
@@ -124,6 +144,14 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
     }
   } catch (error) {
+    if (operation.kind === 'legacy-proof' && error instanceof JournalLegacyRetentionError) {
+      reply({
+        type: 'legacy-proof',
+        id,
+        page: { next: null, sessions: [], retained: error.message, reason: error.reason }
+      })
+      return
+    }
     let retire = operation.kind === 'fork-prepare'
     if (fork) {
       try {
@@ -141,6 +169,13 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       port.close()
       return
     }
-    reply({ type: 'failed', id, error: journalSqlFailure(error) })
+    reply({
+      type: 'failed',
+      id,
+      error:
+        operation.kind === 'conversion-prepare'
+          ? journalSqlSourceFailure(error)
+          : journalSqlFailure(error)
+    })
   }
 })
