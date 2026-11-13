@@ -1586,7 +1586,16 @@
           "seatsChanged": "Seats changed",
           "overageOn": "Turned on overage",
           "overageOff": "Turned off overage",
-          "spendCapChanged": "Changed the overage spend cap"
+          "planStartedDetail": "Plan started ({{plan}}, {{interval}})",
+          "planChangedDetail": "Plan changed to {{plan}}, {{interval}}",
+          "cancelScheduledOn": "Plan set to end on {{date}}",
+          "seatsChangedDetail": "Seats changed from {{from}} to {{to}}",
+          "spendCapChanged2": "Changed the monthly spend cap",
+          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}"
+        },
+        "interval": {
+          "month": "monthly",
+          "year": "annual"
         }
       },
       "sso": {

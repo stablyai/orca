@@ -347,7 +347,7 @@ export function EnterpriseAuditLog(props: EnterpriseAuditLogProps): React.JSX.El
                   className="flex items-center gap-3 py-2 text-xs"
                 >
                   <span className="min-w-0 flex-1 truncate text-foreground" title={event.action}>
-                    {auditEventSentence(event, t)}
+                    {auditEventSentence(event, t, locale)}
                   </span>
                   <span className="w-28 shrink-0 truncate text-muted-foreground">
                     {auditCategoryLabel(event.category, t)}

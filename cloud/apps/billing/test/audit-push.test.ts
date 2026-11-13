@@ -68,7 +68,7 @@ describe('subscription changes', () => {
     expect(control.events().map((event) => [event.action, event.detail ?? null])).toEqual([
       ['billing.plan_started', { plan: 'team', interval: 'month', seats: 2 }],
       ['billing.seats_changed', { seats: 5, previousSeats: 2 }],
-      ['billing.cancel_scheduled', null],
+      ['billing.cancel_scheduled', { endsAt: PERIOD_END * 1000 }],
       ['billing.cancel_reverted', null],
       ['billing.plan_canceled', { plan: 'team' }]
     ])

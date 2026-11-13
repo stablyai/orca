@@ -84,7 +84,10 @@ export async function pushBillingAudit(
   }
 }
 
-type SubscriptionTerms = Pick<SubscriptionRow, 'status' | 'plan' | 'billing_interval' | 'seats' | 'cancel_at_period_end'>
+type SubscriptionTerms = Pick<SubscriptionRow, 'status' | 'plan' | 'billing_interval' | 'seats' | 'cancel_at_period_end'> & {
+  /** When the current period ends (ms): the day a scheduled cancellation takes effect. */
+  current_period_end?: number
+}
 
 const ENDED = new Set(['canceled', 'incomplete_expired'])
 /** Not a plan yet: Checkout made the subscription but the first payment has not gone through. */
@@ -116,7 +119,11 @@ export function subscriptionAuditEvents(before: SubscriptionTerms | null, after:
     events.push({ action: 'billing.seats_changed', at, detail: { seats: after.seats, previousSeats: before!.seats } })
   }
   if (before!.cancel_at_period_end !== after.cancel_at_period_end) {
-    events.push({ action: after.cancel_at_period_end === 1 ? 'billing.cancel_scheduled' : 'billing.cancel_reverted', at })
+    events.push(
+      after.cancel_at_period_end === 1
+        ? { action: 'billing.cancel_scheduled', at, ...(after.current_period_end ? { detail: { endsAt: after.current_period_end } } : {}) }
+        : { action: 'billing.cancel_reverted', at }
+    )
   }
   return events
 }

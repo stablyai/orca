@@ -167,7 +167,7 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     accountId,
     subscriptionAuditEvents(
       known,
-      { status: subscription.status, plan: match.plan, billing_interval: match.interval, seats, cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0 },
+      { status: subscription.status, plan: match.plan, billing_interval: match.interval, seats, cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0, current_period_end: periodEnd * 1000 },
       now
     )
   )

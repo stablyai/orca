@@ -248,10 +248,18 @@ function targetName(event: CloudAuditEvent): string | null {
 }
 
 /** "Created API key “CI deploy”"; an unknown action reads as its machine name. */
-export function auditEventSentence(event: CloudAuditEvent, t: Translate = translate): string {
+export function auditEventSentence(
+  event: CloudAuditEvent,
+  t: Translate = translate,
+  locale?: string
+): string {
   const copy = ACTIONS[event.action]
   if (!copy) {
     return event.action
+  }
+  const detailed = event.detail ? copy.detailed?.(t, event.detail, locale) : null
+  if (detailed) {
+    return detailed
   }
   const name = targetName(event)
   return name && copy.named ? copy.named(t, name) : copy.plain(t)

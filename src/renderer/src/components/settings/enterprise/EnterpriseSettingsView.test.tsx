@@ -390,13 +390,53 @@ describe('copy', () => {
     expect(say('team.deleted', { type: 'team', id: null, label: 'Acme Labs' })).toBe(
       'Deleted the team'
     )
-    expect(say('billing.plan_started', { type: 'plan', id: null })).toBe('Plan started')
-    expect(say('billing.cancel_scheduled', { type: 'plan', id: null })).toBe(
-      'Plan set to end at the next renewal'
+  })
+
+  it('puts what billing recorded into the sentence, and falls back when it recorded nothing', () => {
+    const say = (action: string, detail: Record<string, unknown> | null): string =>
+      auditEventSentence(
+        {
+          id: 'b',
+          at: FIXTURE_NOW,
+          category: 'billing',
+          action,
+          actor: { kind: 'system', userId: null, name: null, via: null },
+          target: { type: 'plan', id: null },
+          detail
+        },
+        undefined,
+        'en-US'
+      )
+    expect(say('billing.plan_started', { plan: 'team', interval: 'month', seats: 2 })).toBe(
+      'Plan started (Team, monthly)'
     )
-    expect(say('billing.spend_cap_changed', { type: 'plan', id: null })).toBe(
-      'Changed the overage spend cap'
+    expect(say('billing.plan_started', null)).toBe('Plan started')
+    expect(say('billing.plan_changed', { plan: 'team', interval: 'year' })).toBe(
+      'Plan changed to Team, annual'
     )
+    expect(say('billing.plan_changed', { plan: 'team' })).toBe('Plan changed')
+    expect(say('billing.seats_changed', { seats: 5, previousSeats: 3 })).toBe(
+      'Seats changed from 3 to 5'
+    )
+    expect(say('billing.seats_changed', { seats: 5 })).toBe('Seats changed')
+    expect(say('billing.plan_canceled', { plan: 'team' })).toBe('Plan ended')
+    expect(say('billing.cancel_scheduled', { endsAt: Date.UTC(2026, 11, 2, 12) })).toBe(
+      'Plan set to end on Dec 2, 2026'
+    )
+    expect(say('billing.cancel_scheduled', null)).toBe('Plan set to end at the next renewal')
+    expect(say('billing.cancel_reverted', null)).toBe('Plan set to renew again')
+    expect(
+      say('billing.spend_cap_changed', { spendCapCents: 5000, previousSpendCapCents: null })
+    ).toBe('Changed the monthly spend cap to $50')
+    expect(say('billing.spend_cap_changed', { spendCapCents: 1250 })).toBe(
+      'Changed the monthly spend cap to $12.50'
+    )
+    // Back to the plan's default cap: no amount to show.
+    expect(say('billing.spend_cap_changed', { previousSpendCapCents: 5000 })).toBe(
+      'Changed the monthly spend cap'
+    )
+    expect(say('billing.overage_enabled', null)).toBe('Turned on overage')
+    expect(say('billing.overage_disabled', null)).toBe('Turned off overage')
   })
 
   it('falls back to the plain sentence when the target has no name', () => {
