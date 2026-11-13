@@ -7,8 +7,8 @@ src/renderer/src/components/feature-wall/setup/FeatureWallSetupChecklist.tsx
 src/renderer/src/components/feature-wall/setup/integrations/use-integration-connection-status.ts
 src/renderer/src/components/integrations/task-trackers/jira-integration-card.tsx
 src/renderer/src/components/integrations/task-trackers/linear-integration-card.tsx
-src/renderer/src/components/new-workspace/use-jira-source-connection.ts
-src/renderer/src/components/new-workspace/use-work-item-source-foundation.ts
+src/renderer/src/components/new-workspace/source-search/use-jira-source-connection.ts
+src/renderer/src/components/new-workspace/source-search/use-work-item-source-foundation.ts
 src/renderer/src/components/settings/skills/linear/LinearAgentSkillPane.tsx
 src/renderer/src/components/settings/tasks/use-task-source-provider-readiness.ts
 src/renderer/src/components/sidebar/workspace-card/details/use-worktree-card-review-details.ts
