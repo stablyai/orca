@@ -69,7 +69,7 @@ export type ClaudeStreamJsonConnectionHandlers = {
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
   onUserDialog?: OnUserDialog
-  /** A transport/process fault; a physical root exit arrives marked observed and is followed by onExit. */
+  /** A transport/process fault; proven root death arrives marked observed and is followed by onExit. */
   onFault?: (error: Error) => void
   /** Report observed root exit once; expected stays true even after an unproven close attempt. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
@@ -178,7 +178,7 @@ export async function openClaudeStreamJsonConnection(
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
       terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
     }
-    // One physical exit reaches both callbacks; mark it first so onFault cannot treat it as live-root.
+    // Proven root death reaches both callbacks; mark it first so onFault cannot treat it as live-root.
     if (managed.rootExitObserved && !closing) {
       withObservedProviderExit(terminalError)
     }

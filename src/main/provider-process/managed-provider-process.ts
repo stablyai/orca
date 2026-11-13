@@ -63,7 +63,7 @@ export type ManagedProviderProcess = {
   readonly processless: boolean
   /** `exited` covers a processless child too; use `rootExitObserved` for "a real process exited". */
   readonly rootVerdict: DescendantTreeVerdict
-  /** A process that existed was seen to exit; never true for a processless child. */
+  /** A process that existed exited or was proven absent; never true for a processless child. */
   readonly rootExitObserved: boolean
   /** Retained close evidence on this handle; a late root event keeps its earlier diagnostic. */
   readonly lastCloseResult: ProviderProcessCloseResult | null
@@ -118,7 +118,6 @@ export function spawnManagedProviderProcess(
   guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
-  let realExitObserved = false
   let spawnFailed = false
   let spawnError: unknown = null
   let lastCloseResult: ProviderProcessCloseResult | null = null
@@ -167,7 +166,6 @@ export function spawnManagedProviderProcess(
     listeners.clear()
   }
   child.on('exit', (code, signal) => {
-    realExitObserved = true
     observeExit({ code, signal, processless: false })
   })
   child.on('providerAbsent', () => observeExit({ code: null, signal: null, processless: false }))
@@ -264,7 +262,7 @@ export function spawnManagedProviderProcess(
       return rootVerdict()
     },
     get rootExitObserved() {
-      return realExitObserved
+      return observed !== null && !observed.processless
     },
     get executableMissing() {
       return spawnAbsence() === 'executable'

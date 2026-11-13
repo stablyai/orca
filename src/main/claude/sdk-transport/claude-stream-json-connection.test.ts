@@ -12,6 +12,12 @@ import {
   type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../structured/launch/claude-structured-launch-resolution'
+import { ClaudeStructuredSessionAdapter } from '../structured/claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from '../structured/claude-structured-session-state'
+import { DaemonServer } from '../../daemon/server/daemon-server'
+import { DaemonClient } from '../../daemon/transport/client/daemon-client'
+import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
+import * as identityProbe from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '../__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -94,6 +100,161 @@ async function open(
 }
 
 describe('Claude stream-json connection', () => {
+  it.skipIf(process.platform === 'win32')(
+    'retires hosted active and idle sessions after proven root absence and permits a fresh send',
+    async () => {
+      const scenario = scriptScenario([
+        { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init' } },
+        { awaitUserMessage: true },
+        {
+          emit: {
+            type: 'user',
+            session_id: SESSION_ID,
+            uuid: 'echo',
+            parent_tool_use_id: null,
+            message: { role: 'user', content: [{ type: 'text', text: 'first' }] }
+          }
+        },
+        { delayMs: 60_000 }
+      ])
+      const server = new DaemonServer({
+        socketPath: join(scenario.cwd, 'daemon.sock'),
+        tokenPath: join(scenario.cwd, 'token'),
+        providerSpawn: true,
+        spawnSubprocess: () => {
+          throw new Error('No PTY in hosted Claude fixture')
+        }
+      })
+      const client = new DaemonClient({
+        socketPath: join(scenario.cwd, 'daemon.sock'),
+        tokenPath: join(scenario.cwd, 'token')
+      })
+      const nonces: string[] = []
+      let liveObserved = false
+      const disconnected = new Set<() => void>()
+      vi.spyOn(client, 'onDisconnected').mockImplementation((listener) => {
+        disconnected.add(listener)
+        return () => disconnected.delete(listener)
+      })
+      const events: ClaudeStructuredSessionEvent[] = []
+      const probe = identityProbe.probeAgentSessionProcessIdentity
+      vi.spyOn(identityProbe, 'probeAgentSessionProcessIdentity').mockImplementation(
+        async (input) => {
+          const proof = await probe(input)
+          if (proof.outcome !== 'pid-absent') {
+            liveObserved = true
+          }
+          return proof
+        }
+      )
+      const request = client.request.bind(client)
+      const querySpy = vi.spyOn(client, 'request').mockImplementation(function <T>(
+        ...args: Parameters<typeof request>
+      ): Promise<T> {
+        // A restarted host has no retained outcome; use a real unknown-nonce query while keeping held signal authority.
+        return args[0] === 'queryProvider'
+          ? request<T>('queryProvider', { nonce: 'f'.repeat(64) })
+          : request<T>(...args)
+      })
+      const exitSpy = vi.spyOn(client, 'onProviderExit').mockImplementation((nonce) => {
+        nonces.push(nonce)
+        return () => {}
+      })
+      const adapter = new ClaudeStructuredSessionAdapter({
+        resolveLaunch: async () => ({
+          ...launchFor(scenario, { ORCA_SDK_CONTRACT_TIMEOUT_MS: '60000' }),
+          claudeConfigDir: scenario.cwd,
+          providerSessionId: SESSION_ID,
+          resumeLeafUuid: null,
+          resumesTranscript: false,
+          continuesChain: false,
+          cliFlag: async () => 'supported'
+        }),
+        onEvent: (event) => {
+          events.push(event)
+        }
+      })
+      const acquire = (sessionId: string, fence = 1) =>
+        adapter.acquire({
+          identity: {
+            sessionId,
+            workspaceId: 'hosted-fixture',
+            hostId: 'local',
+            agent: 'claude',
+            providerHandle: null
+          },
+          fence,
+          spawnToken: `spawn-${sessionId}-${fence}`
+        })
+      const dispatch = (sessionId: string, clientMessageId: string) =>
+        adapter.dispatch({
+          sessionId,
+          clientMessageId,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }
+        })
+      try {
+        await server.start()
+        await client.ensureConnected()
+        installProviderProcessHost(async () => client)
+        await acquire('active')
+        await acquire('idle')
+        await dispatch('active', 'before-loss')
+        client.disconnect()
+        for (const listener of disconnected) {
+          listener()
+        }
+        await vi.waitFor(() => expect(liveObserved).toBe(true), { timeout: 5_000 })
+        expect(events.filter((event) => event.type === 'ended')).toEqual([])
+        await client.ensureConnected()
+        for (const nonce of nonces) {
+          await expect(
+            client.request('signalProvider', { nonce, signal: 'SIGTERM' })
+          ).resolves.toEqual({
+            delivered: true
+          })
+        }
+        await vi.waitFor(
+          () => expect(events.filter((event) => event.type === 'ended')).toHaveLength(2),
+          { timeout: 5_000 }
+        )
+        await adapter.drainObservedExits()
+        expect(
+          events
+            .filter((event) => event.type === 'ended')
+            .map((event) => event.sessionId)
+            .sort()
+        ).toEqual(['active', 'idle'])
+        querySpy.mockRestore()
+        exitSpy.mockRestore()
+        events.length = 0
+        await acquire('active', 2)
+        await expect(dispatch('active', 'after-loss')).resolves.toMatchObject({ state: 'admitted' })
+        await vi.waitFor(
+          () =>
+            expect(events).toContainEqual(
+              expect.objectContaining({
+                type: 'message',
+                sessionId: 'active',
+                message: expect.objectContaining({ type: 'user', uuid: 'echo' })
+              })
+            ),
+          { timeout: 5_000 }
+        )
+      } finally {
+        querySpy.mockRestore()
+        exitSpy.mockRestore()
+        try {
+          await adapter.closeAll()
+        } finally {
+          installProviderProcessHost(async () => null)
+          await server.shutdown()
+          client.disconnect()
+          vi.restoreAllMocks()
+        }
+      }
+    }
+  )
+
   it('completes task Stop through the real SDK while semantic reading is paused', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(launchFor(scenario))

@@ -121,10 +121,18 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       child.stderr.resume()
       child.stdin.end()
       await gate.pending
-      const closed = once(child, 'close')
+      const errors: Error[] = []
+      child.on('error', (error) => errors.push(error))
+      // Forced Stop can reset pending output before the child reports its actual close.
+      const closed = new Promise((resolve) =>
+        child.once('close', (code, signal) => resolve([code, signal]))
+      )
       expect(await child.signalRoot!('SIGTERM')).toBe(true)
       expect(await closed).toEqual([null, 'SIGTERM'])
       expect(child.rootAbsent).toBe(true)
+      for (const error of errors) {
+        expect(error).toMatchObject({ code: 'ECONNRESET' })
+      }
     } finally {
       await gate.close()
     }
