@@ -60,7 +60,7 @@ function fakeHosts(servers: { id: string; live: boolean; wsl?: true }[]) {
     string,
     {
       /** A catalog change unless told otherwise, as ready and reposChanged are. */
-      onChange: (change?: { catalog: boolean }) => void
+      onChange: (change?: { catalog: boolean; agentRowsOnly?: true }) => void
       onClose: () => void
       closed: boolean
       ended: boolean
@@ -279,10 +279,10 @@ describe('PairedServerRowsProducer', () => {
   })
 
   describe('agent row changes', () => {
-    function attached(servers = [{ id: 'box', live: true }]) {
-      const fake = fakeHosts(servers)
+    function attached(demand = { on: true }) {
+      const fake = fakeHosts([{ id: 'box', live: true }])
       const producer = new PairedServerRowsProducer({
-        hasDemand: () => true,
+        hasDemand: () => demand.on,
         hostLabelOverrides: () => new Map()
       })
       producer.attach(fake.hosts)
@@ -374,6 +374,50 @@ describe('PairedServerRowsProducer', () => {
       expect(ids()).toEqual(['y'])
       expect(rowsOf(producer, 'runtime:box')?.freshness).toBe('live')
       expect(snapshotParams()).toEqual([null, 's1', null, null])
+    })
+
+    it('reads nothing for agent notices nobody consumes, then catches up once on the next read', async () => {
+      const demand = { on: false }
+      const { call, watches, producer, ids } = attached(demand)
+      call.mockResolvedValueOnce(psReply([row('a')]))
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+      call.mockClear()
+
+      for (let step = 0; step < 5; step += 1) {
+        watches.get('box')?.onChange({ catalog: false, agentRowsOnly: true })
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      expect(call).not.toHaveBeenCalled()
+
+      demand.on = true
+      call.mockResolvedValueOnce(psReply([row('a'), row('b')]))
+      producer.snapshot()
+      producer.snapshot()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(call).toHaveBeenCalledTimes(1)
+      expect(ids()).toEqual(['a', 'b'])
+    })
+
+    it('keeps the reconnect full read when a reply from before the gap lands after it', async () => {
+      const { call, watches, producer, snapshotParams, state, publishStatus } = attached()
+      call.mockResolvedValueOnce(reply({ worktrees: [row('a')], snapshotId: 's1' }))
+      watches.get('box')?.onChange()
+      await vi.advanceTimersByTimeAsync(0)
+
+      let answer: (response: RuntimeRpcResponse<unknown>) => void = () => {}
+      call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      const beforeGap = producer.refresh('box')
+      state.servers = [{ id: 'box', live: false }]
+      publishStatus()
+      state.servers = [{ id: 'box', live: true }]
+      publishStatus()
+      answer(reply({ worktrees: [row('a')], snapshotId: 's2' }))
+      await beforeGap
+
+      call.mockResolvedValueOnce(reply({ worktrees: [row('a')], snapshotId: 's2' }))
+      await producer.refresh('box')
+      expect(snapshotParams()).toEqual([null, 's1', null])
     })
 
     it('reads an older server in full on every refresh and every 30 s', async () => {

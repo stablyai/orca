@@ -107,7 +107,7 @@ describe('runtime workspace activity facts', () => {
       server.ingestTerminalStatus({
         paneKey: `tab-1:${LEAF}`,
         tabId: 'tab-1',
-        payload: { state: 'working', agentType: 'claude' }
+        payload: { state: 'working', prompt: '', agentType: 'claude' }
       })
       await vi.advanceTimersByTimeAsync(2000)
       expect(events).toContain('worktreeRowsChanged')

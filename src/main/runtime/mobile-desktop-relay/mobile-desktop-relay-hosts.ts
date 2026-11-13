@@ -80,11 +80,15 @@ export type MobileDesktopRelayHosts = {
   /** The saved server list was edited (added, renamed, removed), here or by the CLI. */
   onCatalogChanged?: (listener: () => void) => () => void
   /** Windowless server events: onChange fires on ready, catalog and agent row changes, and reconnect replay.
-   * catalog is false for worktreesChanged and worktreeRowsChanged; repo/project-group writes never emit those alone. */
+   * catalog is false for worktreesChanged and worktreeRowsChanged; repo/project-group writes never emit those alone.
+   * agentRowsOnly marks worktreeRowsChanged: only agent status in the rows moved. */
   watchChanges: (
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
-    callbacks: { onChange: (change: { catalog: boolean }) => void; onClose: () => void }
+    callbacks: {
+      onChange: (change: { catalog: boolean; agentRowsOnly?: true }) => void
+      onClose: () => void
+    }
   ) => MobileDesktopRelayHostWatch
 }
 
