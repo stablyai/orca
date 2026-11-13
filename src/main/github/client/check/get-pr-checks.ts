@@ -30,10 +30,10 @@ import { parseActionsRunId } from './check-detail-field-mapping'
 import { checkRunTimes } from '../../../../shared/source-control/checks/pr-check-time'
 import {
   latestPRChecks,
+  prChecksProbeKey,
   prChecksResourceKey,
+  producePRChecks,
   readPacedPRChecks,
-  recordPRChecksRead,
-  startPRChecksRead,
   type PRChecksRead
 } from './pr-checks-last-outcome'
 import {
@@ -245,10 +245,6 @@ async function readPRChecks(
 }
 
 const checksReads: CoalescedProbes<PRChecksRead> = new Map()
-const checksProbeKey = (resource: string, noCache: boolean) => JSON.stringify([resource, noCache])
-const reading = (resource: string) =>
-  checksReads.has(checksProbeKey(resource, false)) ||
-  checksReads.has(checksProbeKey(resource, true))
 
 /** `timed`: a client's timer tick, which this host may answer from its last read at its PR
  *  auto-refresh cadence. A manual read (`userRefresh`, `noCache`) always reaches the provider. */
@@ -278,27 +274,28 @@ export function getPRChecks(
     }
     // The resource key carries the review generation, so a read after a PR mutation never joins
     // one that started before it; the producer records its own result at its own start order.
+    const noCache = Boolean(options?.noCache)
+    const probeKey = prChecksProbeKey(resource, noCache)
     const read = await runCoalescedProbe(
       checksReads,
-      checksProbeKey(resource, Boolean(options?.noCache)),
-      async (ownsKey) => {
-        const start = startPRChecksRead()
-        const checks = await readPRChecks(
-          repoPath,
-          prNumber,
-          headSha,
-          prRepo,
-          options,
-          connectionId,
-          localGitOptions
-        )
-        const read = { start, checks }
-        // A probe replaced as stale no longer publishes; its callers still get the newest answer.
-        if (ownsKey()) {
-          recordPRChecksRead(resource, read, reading)
-        }
-        return read
-      },
+      probeKey,
+      (ownsKey) =>
+        producePRChecks(
+          resource,
+          noCache,
+          ownsKey,
+          () =>
+            readPRChecks(
+              repoPath,
+              prNumber,
+              headSha,
+              prRepo,
+              options,
+              connectionId,
+              localGitOptions
+            ),
+          () => checksReads.get(probeKey)?.promise
+        ),
       undefined,
       { userRefresh: options?.userRefresh === true }
     )

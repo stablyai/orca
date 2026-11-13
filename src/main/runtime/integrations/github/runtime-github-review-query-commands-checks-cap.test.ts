@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { setPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
-import { _resetPacedPRChecksForTests } from '../../../github/client/check/pr-checks-last-outcome'
+import {
+  _prChecksResultCountForTests,
+  _resetPacedPRChecksForTests
+} from '../../../github/client/check/pr-checks-last-outcome'
 import {
   __resetHostedReviewScopeGenerationsForTests,
   bumpScopeGeneration,
@@ -10,7 +13,7 @@ import {
 
 // Only the provider is faked: each gh call waits for the test to answer it with a check name.
 const provider = vi.hoisted(() => ({
-  calls: [] as { answer: (name: string) => void }[],
+  calls: [] as { answer: (name: string) => void; fail: () => void }[],
   offline: false
 }))
 vi.mock('../../../git/command-runner/hosted-cli/gh-exec-file', () => ({
@@ -51,7 +54,8 @@ vi.mock('../../../git/command-runner/hosted-cli/gh-exec-file', () => ({
                   }
                 }),
                 stderr: ''
-              })
+              }),
+            fail: () => reject(new Error('offline'))
           })
     )
 }))
@@ -177,6 +181,32 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     expect(await names(olderTimed)).toEqual(['manual'])
     expect(await names(timed())).toEqual(['manual'])
     expect(provider.calls).toHaveLength(0)
+    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
+  })
+
+  it('keeps at most 256 completed answers while every one of them is being read again, and a new manual read still works', async () => {
+    const heads = Array.from({ length: 256 }, (_, head) => `cached-head-${head}`)
+    for (const head of heads) {
+      const cached = read({}, head)
+      await vi.waitFor(() => expect(provider.calls).toHaveLength(1), { interval: 1 })
+      provider.calls.shift()!.answer(head)
+      await cached
+    }
+    const rereads = heads.map((head) => read({ noCache: true }, head))
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(256), { interval: 1 })
+    const fresh = read({ noCache: true, userRefresh: true }, 'new-head')
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(257), { interval: 1 })
+    provider.calls.pop()!.answer('new')
+    expect(await names(fresh)).toEqual(['new'])
+    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 256 })
+
+    // Failed reads end their running state as well.
+    provider.offline = true
+    for (const call of provider.calls.splice(0)) {
+      call.fail()
+    }
+    await Promise.allSettled(rereads)
+    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
   })
 
   it('a read after a PR mutation starts its own provider read instead of joining one from before it', async () => {

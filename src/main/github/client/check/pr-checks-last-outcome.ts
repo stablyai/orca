@@ -49,32 +49,77 @@ export function prChecksResourceKey(
   ])
 }
 
-/** Called where a provider read actually starts, so a later start is always the newer answer. */
-export function startPRChecksRead(): PRChecksReadStart {
-  readSequence += 1
-  return { startedAt: Date.now(), sequence: readSequence }
-}
-
-/** `reading(key)`: a producer for that resource is still running. Its newest completed answer is
- *  then the only proof the running one is older, so pressure evicts other answers first; the bound
- *  is exceeded only by resources being read right now. */
-export function recordPRChecksRead(
-  key: string,
-  read: PRChecksRead,
-  reading: (key: string) => boolean
-): void {
+function recordPRChecksRead(key: string, read: PRChecksRead): void {
   const existing = lastReads.get(key)
   if (existing && existing.start.sequence > read.start.sequence) {
     return
   }
   lastReads.delete(key)
   lastReads.set(key, read)
-  for (const oldest of lastReads.keys()) {
-    if (lastReads.size <= MAX_ENTRIES) {
-      break
+  while (lastReads.size > MAX_ENTRIES) {
+    lastReads.delete(lastReads.keys().next().value!)
+  }
+}
+
+export const prChecksProbeKey = (resource: string, noCache: boolean): string =>
+  JSON.stringify([resource, noCache])
+
+/** A provider read of one resource while it runs: when it started, and a newer answer the other
+ *  intent's read finished meanwhile. Kept only while the read runs, under its probe key. */
+type PRChecksTask = { start: PRChecksReadStart; newer?: PRChecksRead }
+const runningTasks = new Map<string, PRChecksTask>()
+
+/**
+ * The producer of one coalesced checks read; joiners only await it. A timed read and a manual
+ * (`noCache`) read of the same resource run side by side, so whichever finishes last must not win
+ * just by finishing: an answer from a read that started later is handed to the older one while it
+ * still runs, and the older one then answers with it and never publishes its own. A read replaced
+ * as stale publishes nothing and answers with its replacement.
+ */
+export async function producePRChecks(
+  resource: string,
+  noCache: boolean,
+  ownsKey: () => boolean,
+  readChecks: () => Promise<PRCheckDetail[]>,
+  replacement: () => Promise<PRChecksRead> | undefined
+): Promise<PRChecksRead> {
+  const key = prChecksProbeKey(resource, noCache)
+  readSequence += 1
+  const task: PRChecksTask = { start: { startedAt: Date.now(), sequence: readSequence } }
+  runningTasks.set(key, task)
+  try {
+    let read: PRChecksRead | undefined
+    let failure: unknown
+    try {
+      read = { start: task.start, checks: await readChecks() }
+    } catch (error) {
+      failure = error
     }
-    if (oldest !== key && !reading(oldest)) {
-      lastReads.delete(oldest)
+    const replaced = ownsKey() ? undefined : replacement()
+    if (replaced) {
+      return await replaced
+    }
+    read ??= task.newer
+    if (!read) {
+      throw failure
+    }
+    if (!ownsKey()) {
+      return read
+    }
+    const answer = task.newer ?? read
+    const other = runningTasks.get(prChecksProbeKey(resource, !noCache))
+    if (
+      other &&
+      other.start.sequence < answer.start.sequence &&
+      (other.newer?.start.sequence ?? 0) < answer.start.sequence
+    ) {
+      other.newer = answer
+    }
+    recordPRChecksRead(resource, answer)
+    return answer
+  } finally {
+    if (runningTasks.get(key) === task) {
+      runningTasks.delete(key)
     }
   }
 }
@@ -110,6 +155,11 @@ export function readPacedPRChecks(
   return entry.checks
 }
 
+export function _prChecksResultCountForTests(): { completed: number; running: number } {
+  return { completed: lastReads.size, running: runningTasks.size }
+}
+
 export function _resetPacedPRChecksForTests(): void {
   lastReads.clear()
+  runningTasks.clear()
 }

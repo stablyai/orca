@@ -1,4 +1,6 @@
 import {
+  getPRAutoRefreshCadenceForHost,
+  scaleReviewRefreshInterval,
   subscribePRAutoRefreshCadence,
   type PRAutoRefreshCadence
 } from '../../../../../../shared/review-refresh-policy'
@@ -12,19 +14,38 @@ export type OwningHostCadence = {
   cadenceHost?: string | null
 }
 
-/** Rebuilds targets through `update` when the cadence of a host that runs one of them changes. A
- *  change on any other host does no work at all, however many rows are visible. */
+/**
+ * Keeps the targets `build` last made and hands them to `apply`. A host's cadence change re-plans
+ * only that host's targets from their own Default interval; nothing is built again, so another
+ * host's change costs no row work however many rows are visible. Store and visibility changes still
+ * call `update` to rebuild the whole set.
+ */
 export function followOwningHostCadence(
-  update: () => readonly VisibleHostedReviewRefreshTarget[]
+  build: () => readonly VisibleHostedReviewRefreshTarget[],
+  apply: (targets: readonly VisibleHostedReviewRefreshTarget[]) => void
 ): { update: () => void; dispose: () => void } {
+  let targets: readonly VisibleHostedReviewRefreshTarget[] = []
   let hosts = new Set<string | null>()
-  const run = (): void => {
-    hosts = new Set(update().map((target) => target.cadenceHost ?? null))
+  const update = (): void => {
+    targets = build()
+    hosts = new Set(targets.map((target) => target.cadenceHost ?? null))
+    apply(targets)
   }
   const dispose = subscribePRAutoRefreshCadence((hostKey) => {
-    if (hosts.has(hostKey)) {
-      run()
+    if (!hosts.has(hostKey)) {
+      return
     }
+    const cadence = getPRAutoRefreshCadenceForHost(hostKey)
+    targets = targets.map((target) =>
+      (target.cadenceHost ?? null) !== hostKey || target.foregroundIntervalMs === undefined
+        ? target
+        : {
+            ...target,
+            cadence,
+            intervalMs: scaleReviewRefreshInterval(target.foregroundIntervalMs, cadence)
+          }
+    )
+    apply(targets)
   })
-  return { update: run, dispose }
+  return { update, dispose }
 }

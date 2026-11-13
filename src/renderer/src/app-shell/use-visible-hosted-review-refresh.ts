@@ -17,16 +17,17 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
     // A changed cadence (this app's or a paired host's) re-plans the targets that host runs.
-    const { update, dispose: stopFollowingCadence } = followOwningHostCadence(() => {
-      const state = useAppStore.getState()
-      const selectedOnly = isWebClientLocation()
-      const targets = [
-        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
-        ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
-      ]
-      scheduler.update(targets)
-      return targets
-    })
+    const { update, dispose: stopFollowingCadence } = followOwningHostCadence(
+      () => {
+        const state = useAppStore.getState()
+        const selectedOnly = isWebClientLocation()
+        return [
+          ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
+          ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
+        ]
+      },
+      (targets) => scheduler.update(targets)
+    )
     const visibilityChanged = (): void => {
       scheduler.setVisible(false)
       update()

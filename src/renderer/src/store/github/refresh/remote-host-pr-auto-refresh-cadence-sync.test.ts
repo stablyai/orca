@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetPRAutoRefreshCadencesForTests,
+  getKnownPRAutoRefreshCadenceForHost,
   getPRAutoRefreshCadenceForHost
 } from '../../../../../shared/review-refresh-policy'
 import type { AppState } from '../../types'
@@ -15,6 +16,7 @@ vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
 }))
 
 import {
+  _hostPRAutoRefreshReadsInFlightForTests,
   installRemoteHostPRAutoRefreshCadenceSync,
   readHostPRAutoRefreshCadence
 } from './remote-host-pr-auto-refresh-cadence-sync'
@@ -192,11 +194,13 @@ describe('remote host PR auto-refresh cadence sync', () => {
     expect(getPRAutoRefreshCadenceForHost('env-7')).toBe('default')
   })
 
-  it('keeps nothing for hosts that come and go, a held changed read included, and reads a re-paired host afresh', async () => {
-    const held: ((value: { prAutoRefresh: string }) => void)[] = []
+  it('keeps nothing for hosts that come and go once their reads end, and reads a re-paired host afresh', async () => {
+    const held: { resolve: (value: { prAutoRefresh: string }) => void; reject: () => void }[] = []
     const reader = vi.fn((id: string) =>
       id === 'env-held'
-        ? new Promise<{ prAutoRefresh: string }>((resolve) => held.push(resolve))
+        ? new Promise<{ prAutoRefresh: string }>((resolve, reject) =>
+            held.push({ resolve, reject: () => reject(new Error('closed')) })
+          )
         : Promise.resolve({ prAutoRefresh: 'reduced' })
     )
     const ids = [...Array.from({ length: 20 }, (_, index) => `env-${index}`), 'env-held']
@@ -209,22 +213,32 @@ describe('remote host PR auto-refresh cadence sync', () => {
     // The held host reports a change while its read is out, then it and the others are unpaired.
     regained.listeners.get('env-held')?.()
     host.set({ runtimeEnvironments: [environment('env-stays')] })
+    // Only the held read's own request may still be settling.
+    expect(_hostPRAutoRefreshReadsInFlightForTests()).toBe(1)
     expect(_trackedHostPRAutoRefreshStateCountForTests()).toBe(0)
 
-    // Paired again before the old read answers: the old answer is dropped, a new read decides.
+    // Paired again before the old read ends: the old read neither answers nor clears the new one.
     host.set({ runtimeEnvironments: [environment('env-stays'), environment('env-held')] })
-    held[0]({ prAutoRefresh: 'off' })
+    held[0].resolve({ prAutoRefresh: 'off' })
     await flush()
     expect(getPRAutoRefreshCadenceForHost('env-held')).toBe('default')
-    held[1]({ prAutoRefresh: 'minimal' })
+    expect(_hostPRAutoRefreshReadsInFlightForTests()).toBe(1)
+    held[1].resolve({ prAutoRefresh: 'minimal' })
     await flush()
     expect(getPRAutoRefreshCadenceForHost('env-held')).toBe('minimal')
-    expect(reader.mock.calls.filter(([id]) => id === 'env-held')).toHaveLength(2)
     expect(getPRAutoRefreshCadenceForHost('env-stays')).toBe('reduced')
 
+    // A read that fails after its host is forgotten ends the same way, with no trailing read.
+    regained.listeners.get('env-held')?.()
+    regained.listeners.get('env-held')?.()
     host.set({ runtimeEnvironments: [] })
+    held[2].reject()
+    await flush()
+    expect(reader.mock.calls.filter(([id]) => id === 'env-held')).toHaveLength(3)
+    expect(_hostPRAutoRefreshReadsInFlightForTests()).toBe(0)
     expect(_trackedHostPRAutoRefreshStateCountForTests()).toBe(0)
-    expect(getPRAutoRefreshCadenceForHost('env-held')).toBe('default')
+    expect(getKnownPRAutoRefreshCadenceForHost('env-held')).toBeNull()
+    expect(getKnownPRAutoRefreshCadenceForHost('env-stays')).toBeNull()
     stop()
   })
 

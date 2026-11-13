@@ -143,7 +143,7 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
-  it('drops an error retry that was already queued when the cadence changes to off', async () => {
+  it('drops an error retry that was already queued when the cadence changes to off, and restores it on Default', async () => {
     const { policy, coordinator } = await loadCoordinatorWithCadence('default')
     getPRForBranchOutcomeMock.mockImplementation(async () => ({
       kind: 'upstream-error',
@@ -164,6 +164,12 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     coordinator.enqueuePRRefresh(makeCandidate(), 'active', 80)
     await vi.advanceTimersByTimeAsync(0)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+
+    // Back on Default the failed row is retried on its own, once its retry time has passed.
+    policy.setPRAutoRefreshCadence('default')
+    coordinator.retimePRRefreshesForCadence()
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(getPRForBranchOutcomeMock.mock.calls.length).toBeGreaterThan(2)
   })
 
   it('moves an already queued error retry to the stretched interval when the cadence changes to reduced', async () => {

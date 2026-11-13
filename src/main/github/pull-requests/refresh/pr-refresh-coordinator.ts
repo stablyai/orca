@@ -29,6 +29,7 @@ import {
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
+import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -126,15 +127,17 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 }
 
 /** A cadence change moves queued visible follow-ups, error retries and their shared schedules to
- *  the new interval, and the gates of queued host jobs with them; "off" drops them. Visible rows
- *  then get the next read the new interval gives them, so a shorter cadence (Off back to Default)
- *  resumes without waiting for the windows to report again. */
+ *  the new interval, and the gates of queued host jobs with them; "off" drops them. Under a timed
+ *  cadence visible rows then get the next read it gives them, so Off back to Default resumes without
+ *  waiting for the windows to report again. Off resumes nothing: a row that failed would otherwise
+ *  be queued again for its gate, an automatic retry Off does not make. */
 export function retimePRRefreshesForCadence(): void {
   retry.retimeErrors(queue)
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
   drainer.hostedJobs.retime()
-  for (const [windowId, candidate] of visibility.reported()) {
+  const timed = getPRAutoRefreshCadence() !== 'off'
+  for (const [windowId, candidate] of timed ? visibility.reported() : []) {
     if (!validateCandidate(candidate)) {
       queue.enqueue(visibility.candidate(refreshKey(candidate), candidate), 'visible', 40, windowId)
     }
