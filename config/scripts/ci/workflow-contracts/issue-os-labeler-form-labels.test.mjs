@@ -174,6 +174,11 @@ describe('retired option strings and headings', () => {
       ])
     await expectReconciled(sections('Desktop only', 'macOS'), ['os:macos'])
     await expectReconciled(sections('', ''), [])
+    // A shadowed legacy value is ignored even when it is not an allowed option.
+    const shadowed = sections('Mobile app', 'iOS')
+      .replace('### Client\n\nMobile', '### Client\n\nSmart fridge')
+      .replace('### Host operating system\n\nLinux', '### Host operating system\n\nTempleOS')
+    await expectReconciled(shadowed, ['os:mobile', 'mobile'])
   })
 
   it('accepts the legacy heading before the current one in the same group', async () => {
