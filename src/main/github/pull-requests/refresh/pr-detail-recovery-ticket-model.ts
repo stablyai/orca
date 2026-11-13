@@ -20,6 +20,7 @@ export type PRDetailRecoveryCaller = {
   callerKey: string
   windowId?: number
   pacingScope?: string
+  isCredentialCurrent?: () => boolean
 }
 
 export type PRDetailRecoveryTicket = {

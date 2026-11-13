@@ -286,4 +286,37 @@ describe('PR detail recovery tickets', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect((await api.snapshot(started.ticketId)).phase).toBe('preparing')
   })
+
+  it('admits the next caller after credential churn without retiring a live caller or replaying a retired one', async () => {
+    const api = await load()
+    const live = { ...CALLER, isCredentialCurrent: () => true }
+    const active = api.startPRDetailRecovery(live, startArgs(1), H2)
+    let retired = false
+    const previous = { callerKey: 'rpc:old-1', isCredentialCurrent: () => !retired }
+    api.startPRDetailRecovery(previous, startArgs(1), H2)
+    for (let index = 2; index < 1_000; index += 1) {
+      api.startPRDetailRecovery(
+        { callerKey: `rpc:old-${index}`, isCredentialCurrent: () => !retired },
+        startArgs(1),
+        H2
+      )
+    }
+    retired = true
+
+    expect(
+      api.startPRDetailRecovery(
+        { callerKey: 'rpc:new', isCredentialCurrent: () => true },
+        startArgs(1),
+        H2
+      ).phase
+    ).toBe('queued')
+    expect(api.startPRDetailRecovery(previous, startArgs(1), H2).terminal).toEqual({
+      kind: 'not-admitted',
+      reason: 'validation'
+    })
+    expect(api.startPRDetailRecovery(live, startArgs(1), H2).ticketId).toBe(active.ticketId)
+
+    await vi.advanceTimersByTimeAsync(200_000)
+    expect(api.startPRDetailRecovery(live, startArgs(1), H2).terminal).toEqual({ kind: 'expired' })
+  })
 })

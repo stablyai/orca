@@ -16,6 +16,7 @@ export function isAdmissibleEpochScope(scope: string): boolean {
 
 type CallerEpochs = {
   scopes: Map<string, number>
+  isCredentialCurrent?: () => boolean
   /** Scopes at or below this generation were retired; their epochs can never be readmitted. */
   retiredGeneration: number
 }
@@ -24,7 +25,7 @@ type CallerEpochs = {
  * Accepted-epoch high-watermarks for the caller's whole lifetime: an old or retired epoch is never
  * readmitted, however long ago it settled. Memory stays bounded by retiring a caller's oldest
  * renderer scope (raising its floor) past the per-caller cap, by refusing new callers past the
- * global cap, and by dropping a caller only at its final retirement (its window is gone). A
+ * global cap, and by dropping a caller only at its final retirement (window or credential gone). A
  * runtime client reconnecting keeps the same caller, so reconnects never reset anti-replay.
  */
 export class PRDetailRecoveryEpochWatermarks {
@@ -47,20 +48,30 @@ export class PRDetailRecoveryEpochWatermarks {
     return this.callers.has(callerKey) || this.callers.size < MAX_CALLERS
   }
 
-  accept(callerKey: string, scope: string, counter: number): void {
+  retiredCaller(): string | null {
+    for (const [key, caller] of this.callers) {
+      if (caller.isCredentialCurrent?.() === false) {
+        return key
+      }
+    }
+    return null
+  }
+
+  accept(caller: PRDetailRecoveryCaller, scope: string, counter: number): void {
+    const { callerKey, isCredentialCurrent } = caller
     const generation = scopeGeneration(scope)
     if (generation === null) {
       return
     }
-    let caller = this.callers.get(callerKey)
-    if (!caller) {
-      caller = { scopes: new Map(), retiredGeneration: -1 }
-      this.callers.set(callerKey, caller)
+    let epochs = this.callers.get(callerKey)
+    if (!epochs) {
+      epochs = { scopes: new Map(), retiredGeneration: -1, isCredentialCurrent }
+      this.callers.set(callerKey, epochs)
     }
-    caller.scopes.set(scope, counter)
-    while (caller.scopes.size > MAX_SCOPES_PER_CALLER) {
+    epochs.scopes.set(scope, counter)
+    while (epochs.scopes.size > MAX_SCOPES_PER_CALLER) {
       let oldest: string | null = null
-      for (const candidate of caller.scopes.keys()) {
+      for (const candidate of epochs.scopes.keys()) {
         if (oldest === null || (scopeGeneration(candidate) ?? 0) < (scopeGeneration(oldest) ?? 0)) {
           oldest = candidate
         }
@@ -68,8 +79,8 @@ export class PRDetailRecoveryEpochWatermarks {
       if (oldest === null) {
         break
       }
-      caller.retiredGeneration = Math.max(caller.retiredGeneration, scopeGeneration(oldest) ?? 0)
-      caller.scopes.delete(oldest)
+      epochs.retiredGeneration = Math.max(epochs.retiredGeneration, scopeGeneration(oldest) ?? 0)
+      epochs.scopes.delete(oldest)
     }
   }
 
@@ -78,3 +89,4 @@ export class PRDetailRecoveryEpochWatermarks {
     this.callers.delete(callerKey)
   }
 }
+import type { PRDetailRecoveryCaller } from './pr-detail-recovery-ticket-model'

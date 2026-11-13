@@ -62,6 +62,10 @@ export class PRDetailRecoveryTickets {
     args: PRDetailRecoveryStartArgs,
     resolved: GitHubPRRefreshCandidate | PRDetailRecoveryNotAdmittedReason
   ): PRDetailRecoverySnapshot {
+    if (caller.isCredentialCurrent?.() === false) {
+      this.cancelCaller(caller.callerKey)
+      return refusedSnapshot(args.identity, { kind: 'not-admitted', reason: 'validation' })
+    }
     const epochKey = `${caller.callerKey}|${args.clientEpoch.scope}`
     const digest = prDetailRecoveryIdentityDigest(args.identity)
     const existing = this.tickets.get(this.byEpoch.get(epochKey) ?? '')
@@ -84,16 +88,20 @@ export class PRDetailRecoveryTickets {
         reason: typeof resolved === 'string' ? resolved : 'validation'
       })
     }
-    if (
+    while (
       this.tickets.size >= PR_DETAIL_RECOVERY_MAX_TICKETS ||
       !this.watermarks.canAccept(caller.callerKey)
     ) {
-      return refusedSnapshot(args.identity, { kind: 'not-admitted', reason: 'capacity' })
+      const retired = this.watermarks.retiredCaller()
+      if (retired === null) {
+        return refusedSnapshot(args.identity, { kind: 'not-admitted', reason: 'capacity' })
+      }
+      this.cancelCaller(retired)
     }
     if (existing && !existing.terminal) {
       this.close(existing, { kind: 'cancelled' })
     }
-    this.watermarks.accept(caller.callerKey, args.clientEpoch.scope, args.clientEpoch.counter)
+    this.watermarks.accept(caller, args.clientEpoch.scope, args.clientEpoch.counter)
     this.acceptSequence += 1
     const ticket = createPRDetailRecoveryTicket(this.deps.queue, this.deps.requests, {
       caller,
