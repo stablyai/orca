@@ -4,10 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import { AutomationService } from './service'
-import { TICK_MS } from './automation-service-tick.test-fixture'
+import { AutomationService } from './automation-service'
+import { TICK_MS } from './testing/automation-service-tick.test-fixture'
 import { createAwakeClock, type AwakeClock } from '../power/awake-clock'
-import { AUTOMATION_WAKE_SETTLE_MS, automationSystemSettled } from './automation-wake-settle'
+import {
+  AUTOMATION_WAKE_SETTLE_MS,
+  automationSystemSettled
+} from './dispatch/automation-wake-settle'
 
 vi.mock('electron', () => ({
   app: {

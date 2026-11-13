@@ -30,7 +30,7 @@
 7 src/main/antigravity/native-file-credentials.ts
 12 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
-1 src/main/automations/external-manager-discovery.ts
+1 src/main/automations/external-managers/external-manager-discovery.ts
 7 src/main/bitbucket/credential-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts

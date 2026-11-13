@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hook-server'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { createRuntimeAutomationRunTerminalObserver } from '../../../../automations/runtime-terminal-run-observer'
+import { createRuntimeAutomationRunTerminalObserver } from '../../../../automations/observation/runtime-terminal-run-observer'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID

@@ -1,27 +1,30 @@
 import type { AutomationUsageClient } from '../../shared/backend-service-contract'
-import { observeAutomationChatRun } from './runtime-chat-run-observer'
-import { readAutomationRunReceipt } from './automation-run-receipt'
-import { publishedLaunchTarget } from './automation-agent-run-result'
-import { launchAutomationChatAgent } from './automation-chat-agent-launch'
+import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
+import { readAutomationRunReceipt } from './launch/automation-run-receipt'
+import { publishedLaunchTarget } from './launch/automation-agent-run-result'
+import { launchAutomationChatAgent } from './launch/automation-chat-agent-launch'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { AutomationService } from './service'
-import { createRunTerminalRetention, type RunTerminalRetention } from './run-terminal-retention'
+import { AutomationService } from './automation-service'
+import {
+  createRunTerminalRetention,
+  type RunTerminalRetention
+} from './terminal-retention/run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { launchAutomationTerminalAgent, runOwnHandle } from './automation-terminal-launch'
+import { launchAutomationTerminalAgent, runOwnHandle } from './launch/automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver
-} from './runtime-terminal-run-observer'
-import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
-import { automationRunSetupSkip } from './automation-run-setup-skip'
-import { automationSystemSettled } from './automation-wake-settle'
+} from './observation/runtime-terminal-run-observer'
+import { closeEarlierHookReviewRunTerminals } from './terminal-retention/hook-review-blocked-run-terminals'
+import { automationRunSetupSkip } from './launch/automation-run-setup-skip'
+import { automationSystemSettled } from './dispatch/automation-wake-settle'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
