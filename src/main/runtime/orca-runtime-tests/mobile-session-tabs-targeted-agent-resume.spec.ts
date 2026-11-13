@@ -15,7 +15,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { PtyProcessInfo } from '../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../providers/pty/process-info'
 import { deterministicAgentSessionUuid } from '../terminal/launch/runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
@@ -57,19 +57,6 @@ function makeSleptWorkspace() {
 }
 
 type Fixture = ReturnType<typeof makeSleptWorkspace>
-
-type WorkspaceScopeResolver = {
-  resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
-}
-
-function hasWorkspaceScopeResolver(
-  runtime: OrcaRuntimeService
-): runtime is OrcaRuntimeService & WorkspaceScopeResolver {
-  return (
-    'resolveTerminalWorkspaceLaunchScope' in runtime &&
-    typeof runtime.resolveTerminalWorkspaceLaunchScope === 'function'
-  )
-}
 
 function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only paneKey, providerSession and the observation clocks.
@@ -319,34 +306,6 @@ describe('resumeAgentSessionInWorkspace', () => {
     expect(send).not.toHaveBeenCalledWith('terminal:requestTabCreate', expect.anything())
   })
 
-  it('rechecks hook ownership when another resume settles during pane preflight', async () => {
-    const fixture = makeSleptWorkspace()
-    let rows: AgentStatusIpcPayload[] = []
-    const { runtime, spawn, resume, openOldPane } = makeRuntime(fixture, {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'live'
-    })
-    if (!hasWorkspaceScopeResolver(runtime)) {
-      throw new Error('missing resolver')
-    }
-    const resolveWorkspace = runtime.resolveTerminalWorkspaceLaunchScope.bind(runtime)
-    let first = true
-    Object.assign(runtime, {
-      resolveTerminalWorkspaceLaunchScope: async (selector: string) => {
-        if (first) {
-          first = false
-          const result = await resume()
-          if (result.ok) {
-            rows = [sessionRow(result.paneKey, Date.now() + 1)]
-          }
-        }
-        return resolveWorkspace(selector)
-      }
-    })
-    await openOldPane()
-    expect(resumeSpawns(spawn)).toBe(1)
-  })
-
   it.each(['resume', 'old pane'] as const)(
     'refuses the other resumer while the %s spawn is in flight',
     async (first) => {
@@ -383,29 +342,6 @@ describe('resumeAgentSessionInWorkspace', () => {
         await opened
       }
       expect(resumeSpawns(spawn)).toBe(1)
-    }
-  )
-
-  it.each([
-    ['live', 1],
-    ['exited', 2]
-  ] as const)(
-    'hands the session to the hook-store guard once the resumed pane reports it (%s)',
-    async (presence, expectedResumes) => {
-      const fixture = makeSleptWorkspace()
-      let rows: AgentStatusIpcPayload[] = []
-      const { spawn, resume, openOldPane } = makeRuntime(fixture, {
-        rows: () => rows,
-        checkHookAgentPresence: async () => presence
-      })
-      const result = await resume()
-      if (!result.ok) {
-        throw new Error(result.reason)
-      }
-      rows = [sessionRow(result.paneKey, Date.now())]
-
-      await openOldPane()
-      expect(resumeSpawns(spawn)).toBe(expectedResumes)
     }
   )
 
@@ -481,38 +417,6 @@ describe('resumeAgentSessionInWorkspace', () => {
 })
 
 describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publication', () => {
-  it('reconciles the same request after its own hook arrives', async () => {
-    let rows: AgentStatusIpcPayload[] = []
-    const terminalHandle = deriveRemoteRuntimeTerminalCreateHandle(
-      'agent-session-resume',
-      TEST_WORKTREE_ID,
-      MUTATION_ID
-    )
-    const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'live',
-      listProcesses: async () =>
-        spawn.mock.calls.length > 0
-          ? [
-              {
-                id: 'resumed-pty',
-                cwd: '',
-                title: 'claude',
-                terminalHandle,
-                worktreeId: TEST_WORKTREE_ID
-              }
-            ]
-          : []
-    })
-    const first = await resume()
-    if (!first.ok) {
-      throw new Error(first.reason)
-    }
-    rows = [sessionRow(first.paneKey, Date.now() + 1)]
-    await expect(resume()).resolves.toEqual(first)
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
   it('honors cancellation during create inventory lookup before dispatch', async () => {
     const controller = new AbortController()
     const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {

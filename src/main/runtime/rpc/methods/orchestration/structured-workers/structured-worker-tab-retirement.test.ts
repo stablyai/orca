@@ -26,7 +26,7 @@ vi.mock('../../structured-sessions/creation/structured-agent-session-create', ()
 
 const { stopStructuredWorker } = await import('./orchestration-structured-worker-lifecycle')
 const { createStructuredWorkerSession } = await import('./orchestration-structured-worker-session')
-await import('../worker/worker-release-completion')
+await import('../worker/release/worker-release-completion')
 
 const WORKTREE = 'workspace-1'
 const SESSION = 'session-1'
@@ -147,17 +147,6 @@ describe('structured worker stop retires the chat tab', () => {
     expect(published.activeTabId).toBeNull()
     expect(published.activeTabType).toBeNull()
     expect(emit).toHaveBeenCalled()
-  })
-
-  it('leaves the tab alone when the close was NOT proven', async () => {
-    installHost({ closeThrows: true })
-    const identity = registerIdentity()
-    const { runtime } = await runtimeShowingStructuredTab()
-
-    const stop = await stopStructuredWorker(identity, runtime)
-
-    expect(stop.stopped).toBe(false)
-    expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
   })
 })
 

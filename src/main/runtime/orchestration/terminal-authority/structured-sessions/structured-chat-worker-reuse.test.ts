@@ -25,7 +25,7 @@ import {
 import { getFollowUpDispatch } from '../../db/dispatch-context/worker-follow-up-lineage'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
-import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
+import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/start/placement/worker-start-agent-placement'
 
 // The worker's chat is created in the rig's real session host, as the production create would.
 vi.mock(
@@ -306,44 +306,59 @@ describe('a send to a finished structured worker', () => {
     const { taskId } = await coordinatorRunAndTask()
     const { identity, firstDispatchId } = await finishedStructuredWorker(taskId, 'none')
     const worker = connectionFor(identity.sessionId)
-    expect(await sendUserMessage(identity.sessionId, 'go')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    worker.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
-    await host.flushStreamedEvents(identity.sessionId)
-    await sendTo(firstDispatchId, 'and the docs')
-    // The mail waits as a card behind the running turn; the worker reports before it is handed over.
-    await vi.waitFor(
-      async () => expect(await queuedCardTexts(identity.sessionId)).toHaveLength(1),
-      WAIT
-    )
+    const reply = Promise.withResolvers<void>()
+    const request = worker.request
+    worker.request = async (...args) => {
+      const response = await request(...args)
+      if (args[0] === 'turn/start') {
+        await reply.promise
+      }
+      return response
+    }
+    try {
+      expect(await sendUserMessage(identity.sessionId, 'go')).toMatchObject({ ok: true })
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+      worker.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+      await host.flushStreamedEvents(identity.sessionId)
+      await sendTo(firstDispatchId, 'and the docs')
+      // The mail waits as a card behind the running turn; the worker reports before it is handed over.
+      await vi.waitFor(
+        async () => expect(await queuedCardTexts(identity.sessionId)).toHaveLength(1),
+        WAIT
+      )
+      expect(worker.steers).toEqual([])
 
-    expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
-      ok: true
-    })
-    // The follow-up took the mail: the old card is gone, its Task waits first, then the mail itself.
-    await vi.waitFor(async () => {
-      const cards = await queuedCardTexts(identity.sessionId)
-      expect(cards).toHaveLength(2)
-      expect(cards[0]).toContain('arrive next, one at a time')
-      expect(isWholeMail(cards[1]!)).toBe(true)
-      expect(cards[1]).toContain('and the docs')
-    }, WAIT)
-    expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
-    worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
-    await host.flushStreamedEvents(identity.sessionId)
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
-    expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
-    await settleTurn(identity.sessionId, 1)
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
-    expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
-    expect(turnText(worker.turns[2]!)).toContain('and the docs')
-    await settleTurn(identity.sessionId, 2)
+      expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
+        ok: true
+      })
+      // The follow-up took the mail: the old card is gone, its Task waits first, then the mail itself.
+      await vi.waitFor(async () => {
+        const cards = await queuedCardTexts(identity.sessionId)
+        expect(cards).toHaveLength(2)
+        expect(cards[0]).toContain('arrive next, one at a time')
+        expect(isWholeMail(cards[1]!)).toBe(true)
+        expect(cards[1]).toContain('and the docs')
+      }, WAIT)
+      expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
+      reply.resolve()
+      worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
+      await host.flushStreamedEvents(identity.sessionId)
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
+      expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
+      await settleTurn(identity.sessionId, 1)
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
+      expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
+      expect(turnText(worker.turns[2]!)).toContain('and the docs')
+      await settleTurn(identity.sessionId, 2)
 
-    const followUp = getFollowUpDispatch(db, firstDispatchId)!
-    await vi.waitFor(
-      () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
-      WAIT
-    )
-    expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
+      const followUp = getFollowUpDispatch(db, firstDispatchId)!
+      await vi.waitFor(
+        () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
+        WAIT
+      )
+      expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
+    } finally {
+      reply.resolve()
+    }
   })
 })

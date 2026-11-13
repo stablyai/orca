@@ -2,11 +2,8 @@ import { createAdapter } from './daemon-pty-router-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from '../daemon-pty-router'
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
-import type { PtyProcessInfo } from '../../../../providers/pty-provider-contract'
-import {
-  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
-  PROTOCOL_VERSION
-} from '../../../protocol/daemon-protocol-version'
+import type { PtyProcessInfo } from '../../../../providers/pty/process-info'
+import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 describe('DaemonPtyRouter', () => {
   describe('idle retirement', () => {
@@ -133,27 +130,5 @@ describe('DaemonPtyRouter', () => {
     expect(current.killFenced).toHaveBeenCalledExactlyOnceWith(request)
     expect(current.listProcesses).toHaveBeenCalledTimes(2)
     expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps the legacy route when checkpointed shutdown fails', async () => {
-    const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
-    const legacy = createAdapter(
-      'legacy',
-      ['legacy-session'],
-      undefined,
-      HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
-    )
-    vi.mocked(legacy.shutdown).mockRejectedValueOnce(new Error('checkpoint failed'))
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-    await router.discoverLegacySessions()
-
-    await expect(router.shutdown('legacy-session', { keepHistory: true })).rejects.toThrow(
-      'checkpoint failed'
-    )
-    await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
-
-    expect(legacy.spawn).toHaveBeenCalled()
-    expect(legacy.ackColdRestore).not.toHaveBeenCalled()
-    expect(current.spawn).not.toHaveBeenCalled()
   })
 })

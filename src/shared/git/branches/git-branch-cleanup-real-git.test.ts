@@ -169,4 +169,50 @@ describe('branch cleanup with real Git', () => {
       (await git(remote, ['rev-parse', 'main'])).stdout
     )
   })
+
+  it.each([
+    ['proves a squash-merged branch that merged main and whose lines main rewrote', true],
+    ['preserves the same branch when main never squashed it', false]
+  ])('%s', async (_label, squashed) => {
+    const writeLines = (last: string) => writeFile(join(remote, 'lines.txt'), `a\nb\nc\n${last}\n`)
+    await writeLines('d')
+    await git(remote, ['add', 'lines.txt'])
+    await git(remote, ['commit', '-qm', 'lines'])
+    await git(remote, ['checkout', '-qb', 'feature'])
+    await writeLines('feature')
+    await git(remote, ['commit', '-qam', 'feature edit'])
+    await git(remote, ['checkout', '-q', 'main'])
+    await commit(remote, 'main-only')
+    await git(remote, ['checkout', '-q', 'feature'])
+    await git(remote, ['merge', '-q', '--no-edit', 'main'])
+    await git(remote, ['checkout', '-q', 'main'])
+    if (squashed) {
+      await git(remote, ['merge', '-q', '--squash', 'feature'])
+      await git(remote, ['commit', '-qm', 'squash feature'])
+    }
+    // A later edit to the same line makes a plain merge conflict, leaving only the patch-id search.
+    await writeLines('main')
+    await git(remote, ['commit', '-qam', 'main edit'])
+    for (let index = 0; index < 3; index += 1) {
+      await commit(remote, `after-${index}`)
+    }
+
+    // patch-id reads its diff from stdin; a conflicted merge-tree still reports its stdout.
+    const runGit: GitBranchCleanupExec = (args, options) =>
+      new Promise((resolve, reject) => {
+        const child = execFile('git', args, { cwd: remote }, (error, stdout) =>
+          error ? reject(Object.assign(error, { stdout })) : resolve({ stdout })
+        )
+        child.stdin?.end(options?.stdin ?? '')
+      })
+
+    await expect(
+      branchHasNoUnmergedChangesOnAnyTarget(
+        runGit,
+        'feature',
+        ['refs/heads/main'],
+        new GitCapabilityCache()
+      )
+    ).resolves.toBe(squashed)
+  })
 })

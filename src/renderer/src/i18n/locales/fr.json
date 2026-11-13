@@ -3786,6 +3786,8 @@
             "15dd899676": "Ajouter à {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "Problème de terminal",
+            "errorTitle": "Erreur de terminal",
             "e4aa243f8c": "Redémarrer le daemon",
             "a7e2fd2699": "signaler un problème",
             "5c8ce20be6": "Si le problème persiste, veuillez",
@@ -7590,8 +7592,6 @@
             "df205a675e": "Intensité de la teinte",
             "ba1d9a0607": "Teinte de la barre latérale"
           },
-          "interfaceDefaultFont": "Police par défaut",
-          "terminalDefaultFont": "Police par défaut",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barre latérale, barre d'état et explorateur de fichiers",
@@ -8512,16 +8512,12 @@
           "5426ecbdcb": "Les scripts locaux ne s'exécuteront pas",
           "95a0411b3e": "template",
           "175daba180": "Exemple",
-          "b20c5df6ca": "Ajoutez un fichier `orca.yaml` pour activer des valeurs par défaut partagées de setup, d'archivage ou d'automatisation d'issues pour ce dépôt. Exemple de modèle :",
-          "56f9a4a1d0": "Utilisation de `orca.yaml`",
           "623e0c9f31": "`orca.yaml` n'a pas pu être analysé",
-          "5a67e4793d": "Aucun `orca.yaml` détecté",
           "07ba35bc68": "Vérifiez l'indentation sous `scripts:`. Les clés de hook doivent être indentées de deux espaces, et les lignes de commande de quatre.",
           "787ca433ef": "Définissez uniquement les clés prises en charge : `scripts`, `setup`, `archive` et `issueCommand`.",
           "ecc73d9125": "Comparez votre fichier au modèle fonctionnel ci-dessous et recopiez cette structure si besoin.",
           "0cc712b823": "Le fichier de configuration principal existe à la racine du dépôt, mais Orca n'a pas encore pu analyser les définitions de hooks prises en charge.",
           "aba825233f": "Le fichier contient des clés de configuration que cette version d'Orca ne reconnaît pas. Vous devrez peut-être mettre à jour Orca, ou vérifier le fichier pour écarter une faute de frappe.",
-          "ca424ff135": "Les hooks partagés et les valeurs par défaut d'automatisation d'issues sont définis dans le dépôt et accessibles à tous ceux qui l'utilisent.",
           "8bfe65fc60": "Utiliser les commandes locales",
           "8d6c56bff8": "Exécuter les deux",
           "0fa21e19ec": "Nom de l'espace de travail, généralement basé sur le nom de branche.",
@@ -8917,8 +8913,7 @@
           "60f8a673a7": "Retour à l'application",
           "6503182299": "Checklist d'intégration",
           "82db1b7de4": "Checklist d'intégration, {{value0}} sur {{value1}} terminés. Afficher le guide de configuration.",
-          "df38d612b7": "Aucun projet ajouté pour le moment.",
-          "3e483e256b": "Aucun paramètre de projet correspondant."
+          "df38d612b7": "Aucun projet ajouté pour le moment."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Statut",
@@ -16477,7 +16472,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Supprimer le lien",
           "cdfe166f6f": "Modifier le lien",
-          "bfc813e909": "Ouvrir le lien",
           "7b0b945fdc": "Collez ou saisissez un lien…",
           "copyLink": "Copier le lien"
         },
@@ -17547,7 +17541,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Afficher moins",
-          "showMore": "Afficher plus"
+          "showMore": "Afficher plus",
+          "copied": "Copié",
+          "copyFailed": "Échec de la copie",
+          "copyPrompt": "Copier le prompt"
         },
         "AutomationDetail": {
           "401f40ae79": "Dépense est.",
@@ -17586,7 +17583,14 @@
           "precheckNone": "Aucune",
           "migrate": "Migrer",
           "migrateNotice": "{{host}} a été mis à niveau vers un nouvel hôte distant. Migrez cette automatisation pour qu'elle continue de s'exécuter.",
-          "needsMigration": "Migration requise"
+          "needsMigration": "Migration requise",
+          "repeats": "Répétition",
+          "missedRunGrace": "Marge de rattrapage",
+          "execution": "Exécution",
+          "notRunYet": "Pas encore exécutée",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} exécution signalée",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} exécutions signalées",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} exécutions signalées"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Annuler",
@@ -20823,7 +20827,7 @@
         "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
         "scrollToLatestOnSendSearchPosition": "position",
         "markNewMessagesTitle": "Signaler les nouveaux messages au retour dans un chat",
-        "markNewMessagesCopy": "En revenant dans un chat, une ligne Nouveau s'affiche au-dessus de ce qui est arrivé pendant votre absence, et le chat y défile si vous lisiez les derniers messages.",
+        "markNewMessagesCopy": "Quand vous revenez dans un chat, une ligne Nouveau marque ce que vous avez manqué si c'est long ou si quelqu'un d'autre a écrit, et y fait défiler la vue. Elle s'estompe une fois vue.",
         "markNewMessagesSearchUnread": "non lu",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message et, si rien n’est saisi, dirige la première carte en attente vers le tour en cours. Les messages contenant des images attendent aussi sous forme de cartes.",
         "inlineVisualsTitle": "Visuels intégrés",
@@ -20918,6 +20922,7 @@
           "about": {
             "parakeetV3": "Rapide. {{languages}} langues européennes.",
             "parakeetV2": "Rapide. Anglais uniquement, et le plus précis en anglais.",
+            "parakeetUnifiedEn": "Anglais uniquement. Les mots s’affichent à mesure que vous parlez.",
             "whisperTiny": "Le plus petit téléchargement. Idéal pour essayer la dictée.",
             "whisperTurbo": "Le plus de langues, environ 100. Lent sans GPU.",
             "senseVoice": "Rapide. Pour le chinois, le japonais et le coréen.",

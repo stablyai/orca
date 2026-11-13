@@ -1,7 +1,7 @@
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import {
   codexReattachedHomeRouteField,
   recordCodexPaneAccountForSpawn

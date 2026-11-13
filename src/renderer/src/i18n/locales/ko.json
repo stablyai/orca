@@ -3457,6 +3457,8 @@
             "15dd899676": "{{value0}}에 추가…"
           },
           "TerminalErrorToast": {
+            "title": "터미널 문제",
+            "errorTitle": "터미널 오류",
             "e4aa243f8c": "데몬 재시작",
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",
@@ -7028,8 +7030,6 @@
             "df205a675e": "색조 강도",
             "ba1d9a0607": "사이드바 색조"
           },
-          "interfaceDefaultFont": "기본 글꼴",
-          "terminalDefaultFont": "기본 글꼴",
           "interfaceTitle": "인터페이스",
           "terminalTitle": "터미널",
           "windowSidebarSummary": "사이드바, 상태 표시줄 및 파일 탐색기",
@@ -7906,16 +7906,12 @@
           "5426ecbdcb": "로컬 스크립트가 실행되지 않습니다.",
           "95a0411b3e": "템플릿",
           "175daba180": "예",
-          "b20c5df6ca": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
-          "56f9a4a1d0": "`orca.yaml` 사용 중",
           "623e0c9f31": "`orca.yaml`을 구문 분석할 수 없습니다",
-          "5a67e4793d": "`orca.yaml`을 찾을 수 없습니다",
           "07ba35bc68": "`scripts:` 아래의 들여쓰기를 확인하세요. 후크 키는 두 칸, 명령 줄은 네 칸을 사용해야 합니다.",
           "787ca433ef": "지원되는 키만 정의하세요: `scripts`, `setup`, `archive`, `issueCommand`.",
           "ecc73d9125": "아래의 작동하는 템플릿과 비교하고 필요한 경우 그 형식을 복사하세요.",
           "0cc712b823": "핵심 구성 파일이 repo 루트에 있지만 Orca가 아직 지원되는 후크 정의를 구문 분석할 수 없습니다.",
           "aba825233f": "파일에는 이 버전의 Orca가 인식하지 못하는 구성 키가 포함되어 있습니다. Orca를 업데이트하거나 파일에 오타가 있는지 확인해야 할 수도 있습니다.",
-          "ca424ff135": "공유 후크 및 이슈 자동화 기본값은 repo에 정의되어 있으며 이를 사용하는 모든 사람이 사용할 수 있습니다.",
           "8bfe65fc60": "로컬 명령 사용",
           "8d6c56bff8": "둘 다 실행",
           "0fa21e19ec": "일반적으로 브랜치 이름을 기반으로 하는 워크스페이스의 이름입니다.",
@@ -8311,8 +8307,7 @@
           "60f8a673a7": "앱으로 돌아가기",
           "6503182299": "온보딩 체크리스트",
           "82db1b7de4": "온보딩 체크리스트, {{value0}}/{{value1}} 완료. 설정 가이드 보기.",
-          "df38d612b7": "아직 추가된 프로젝트가 없습니다.",
-          "3e483e256b": "일치하는 프로젝트 설정이 없습니다."
+          "df38d612b7": "아직 추가된 프로젝트가 없습니다."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "상태",
@@ -15812,7 +15807,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
-          "bfc813e909": "링크 열기",
           "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
           "copyLink": "링크 복사"
         },
@@ -16896,7 +16890,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "접기",
-          "showMore": "더 보기"
+          "showMore": "더 보기",
+          "copied": "복사됨",
+          "copyFailed": "복사하지 못함",
+          "copyPrompt": "프롬프트 복사"
         },
         "AutomationDetail": {
           "host": "호스트",
@@ -16931,7 +16928,12 @@
           "precheckNone": "없음",
           "migrate": "마이그레이션",
           "migrateNotice": "{{host}}이(가) 새 원격 호스트로 업그레이드되었습니다. 계속 실행하려면 이 자동화를 마이그레이션하세요.",
-          "needsMigration": "마이그레이션 필요"
+          "needsMigration": "마이그레이션 필요",
+          "repeats": "반복",
+          "missedRunGrace": "누락된 실행 유예 시간",
+          "execution": "실행",
+          "notRunYet": "아직 실행되지 않음",
+          "usageDetail_other": "토큰 {{tokens}} · 실행 {{known}}/{{count}}회 보고됨"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
@@ -19966,7 +19968,7 @@
         "scrollToLatestOnSendCopy": "위로 스크롤한 상태에서 보내면 최신 메시지로 이동하고 답장을 따라갑니다. 끄면 현재 위치가 유지됩니다.",
         "scrollToLatestOnSendSearchPosition": "위치",
         "markNewMessagesTitle": "채팅으로 돌아올 때 새 메시지 표시",
-        "markNewMessagesCopy": "채팅으로 돌아오면 자리를 비운 동안 도착한 내용 위에 '새 메시지' 선을 표시합니다. 최신 메시지를 보고 있었다면 그 위치로 스크롤합니다.",
+        "markNewMessagesCopy": "채팅으로 돌아왔을 때 놓친 내용이 길거나 다른 사람이 글을 썼다면 '새 메시지' 선으로 그 위치를 표시하고 그곳으로 스크롤합니다. 한 번 보고 나면 서서히 흐려집니다.",
         "markNewMessagesSearchUnread": "읽지 않음",
         "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 진행 중인 턴에 들어가지 않고 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나에 대해 반대로 동작하며, 입력한 내용이 없으면 첫 대기 카드를 진행 중인 턴으로 보냅니다. 이미지가 포함된 메시지도 카드로 대기합니다.",
         "inlineVisualsTitle": "인라인 시각 자료",
@@ -20062,6 +20064,7 @@
           "about": {
             "parakeetV3": "빠름. 유럽 {{languages}}개 언어.",
             "parakeetV2": "빠름. 영어 전용이며 영어에서 가장 정확합니다.",
+            "parakeetUnifiedEn": "영어 전용. 말하는 동안 단어가 표시됩니다.",
             "whisperTiny": "가장 작은 다운로드. 받아쓰기를 체험해 보기에 좋습니다.",
             "whisperTurbo": "가장 많은 약 100개 언어. GPU가 없으면 느립니다.",
             "senseVoice": "빠름. 중국어, 일본어, 한국어용.",

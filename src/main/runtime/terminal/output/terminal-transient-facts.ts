@@ -1,6 +1,6 @@
 import type { OrchestrationMailboxForegroundObservation } from '../../orchestration/mailbox/terminal-pointer/mailbox-pointer-state'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
-import type { PtyTransientFact } from '../../../providers/pty-provider-events'
+import type { PtyTransientFact } from '../../../providers/pty/events'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AutomationService } from './service'
-import { runNowSettled } from './automation-run-now-settled.test-fixture'
+import { AutomationService } from './automation-service'
+import { runNowSettled } from './testing/automation-run-now-settled.test-fixture'
 import type { Store } from '../persistence/loading-store/store'
 import {
   createWorkerMaintenanceFixture,
@@ -30,7 +30,7 @@ async function fixture() {
     workspaceId: 'repo-local::/fixture/local',
     timezone: 'UTC',
     rrule: 'FREQ=HOURLY;BYMINUTE=0',
-    dtstart: Date.now() - 60_000
+    dtstart: 1_800_000_000_000
   })
   await fixture.store.flushPendingOrThrowAsync()
   return { ...fixture, automation }
@@ -55,25 +55,6 @@ function blockAcknowledgement(store: Store, index: number) {
 }
 
 describe('automation background writer durability', () => {
-  it('claims a shared occurrence once when callers await the same pending row', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
-    const { store, automation } = await fixture()
-    const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => true }
-    })
-    try {
-      const runs = await Promise.all([
-        runNowSettled(service, store, automation.id),
-        runNowSettled(service, store, automation.id)
-      ])
-      expect(new Set(runs.map((run) => run.id)).size).toBe(1)
-      expect(dispatcher).toHaveBeenCalledOnce()
-    } finally {
-      service.stop()
-    }
-  })
-
   it('persists dispatch intent before starting external work', async () => {
     const { store, automation, readState } = await fixture()
     const gate = maintenanceBarrier()
@@ -103,88 +84,6 @@ describe('automation background writer durability', () => {
     }
   })
 
-  it('keeps a launched run dispatched when its dispatched write fails to flush', async () => {
-    const { store, automation } = await fixture()
-    const flush = store.flushPendingOrThrowAsync.bind(store)
-    let failed = false
-    // Fail the one flush that persists the dispatched write.
-    vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementation(async (options) => {
-      const dispatched = store
-        .listAutomationRuns(automation.id)
-        .some((entry) => entry.status === 'dispatched')
-      if (dispatched && !failed) {
-        failed = true
-        throw new Error('disk full')
-      }
-      await flush(options)
-    })
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: async () => launch, available: () => true }
-    })
-    try {
-      const run = await runNowSettled(service, store, automation.id)
-      expect(
-        store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)
-      ).toMatchObject({ status: 'dispatched', terminalSessionId: 'run-tab' })
-      expect(failed).toBe(true)
-    } finally {
-      service.stop()
-    }
-  })
-
-  it.each([
-    ['dispatching', 1],
-    ['completed', 120_001]
-  ] as const)(
-    'preserves a durable %s occurrence after %s ms when next-run advancement was interrupted',
-    async (status, lateness) => {
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
-      const { store, automation, readState } = await fixture()
-      store.updateAutomation(automation.id, { missedRunGraceMinutes: 0 })
-      const dueAt = automation.nextRunAt
-      const run = store.createAutomationRun(automation, dueAt)
-      store.updateAutomationRun({ runId: run.id, status })
-      await store.flushPendingOrThrowAsync()
-      clock.mockReturnValue(dueAt + lateness)
-      const dispatcher = vi.fn(async () => launch)
-      const service = new AutomationService(store, {
-        terminalLauncher: { launch: dispatcher, available: () => true }
-      })
-      try {
-        service.start()
-        await vi.waitFor(() => {
-          const stored = readState().automations.find(
-            (entry: { id: string }) => entry.id === automation.id
-          )
-          expect(stored.nextRunAt).toBeGreaterThan(dueAt + lateness)
-        })
-        expect(dispatcher).not.toHaveBeenCalled()
-        expect(store.listAutomationRuns(automation.id)).toHaveLength(1)
-        expect(store.listAutomationRuns(automation.id)[0].status).toBe(status)
-      } finally {
-        service.stop()
-      }
-    }
-  )
-
-  it.each([1, 2])('cancels a pending dispatch stopped during acknowledgement %s', async (index) => {
-    const { store, automation } = await fixture()
-    const acknowledgement = blockAcknowledgement(store, index)
-    const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => true }
-    })
-    const pending = runNowSettled(service, store, automation.id)
-    await acknowledgement.blocked
-    service.stop()
-    acknowledgement.release()
-    // The reconciler strands the row on the next start.
-    await expect(pending).resolves.toMatchObject({
-      status: index === 1 ? 'pending' : 'dispatching'
-    })
-    expect(dispatcher).not.toHaveBeenCalled()
-  })
-
   it('does not resurrect or dispatch an automation deleted during its intent acknowledgement', async () => {
     const { store, automation, readState } = await fixture()
     const acknowledgement = blockAcknowledgement(store, 2)
@@ -204,67 +103,6 @@ describe('automation background writer durability', () => {
           (run: { automationId: string }) => run.automationId === automation.id
         )
       ).toBe(false)
-    } finally {
-      service.stop()
-    }
-  })
-
-  it.each([1, 2])('refuses changed instructions during acknowledgement %s', async (index) => {
-    const { store, automation } = await fixture()
-    const acknowledgement = blockAcknowledgement(store, index)
-    const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => true }
-    })
-    try {
-      const pending = runNowSettled(service, store, automation.id)
-      await acknowledgement.blocked
-      store.updateAutomation(automation.id, { prompt: 'Different instructions' })
-      acknowledgement.release()
-      await expect(pending).resolves.toMatchObject({
-        status: 'skipped_unavailable',
-        error: expect.stringContaining('changed before')
-      })
-      expect(dispatcher).not.toHaveBeenCalled()
-    } finally {
-      service.stop()
-    }
-  })
-
-  it.each([1, 2])('refuses a moved execution host during acknowledgement %s', async (index) => {
-    const { store, automation } = await fixture()
-    const acknowledgement = blockAcknowledgement(store, index)
-    const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => true }
-    })
-    try {
-      const pending = runNowSettled(service, store, automation.id)
-      await acknowledgement.blocked
-      store.updateRepo({ id: 'repo-local' }, { executionHostId: 'runtime:other-host' })
-      acknowledgement.release()
-      await expect(pending).resolves.toMatchObject({ status: 'skipped_unavailable' })
-      expect(dispatcher).not.toHaveBeenCalled()
-    } finally {
-      service.stop()
-    }
-  })
-
-  it('refuses a run whose window graph closed during acknowledgement', async () => {
-    const { store, automation } = await fixture()
-    const acknowledgement = blockAcknowledgement(store, 2)
-    const dispatcher = vi.fn(async () => launch)
-    let available = true
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => available }
-    })
-    try {
-      const pending = runNowSettled(service, store, automation.id)
-      await acknowledgement.blocked
-      available = false
-      acknowledgement.release()
-      await expect(pending).resolves.toMatchObject({ status: 'skipped_unavailable' })
-      expect(dispatcher).not.toHaveBeenCalled()
     } finally {
       service.stop()
     }

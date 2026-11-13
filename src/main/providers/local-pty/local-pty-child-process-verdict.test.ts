@@ -4,7 +4,7 @@ import type * as PtyMasterForegroundObservation from '../../pty/process-retireme
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
 const jobMembers = vi.hoisted(() => vi.fn())
-vi.mock('../windows-pty-job-membership', () => ({
+vi.mock('../foreground/windows/pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: jobMembers,
   isWindowsPtyJobReadable: () => true
 }))
@@ -13,7 +13,7 @@ const { confirmShellForegroundMock } = vi.hoisted(() => ({
   confirmShellForegroundMock: vi.fn()
 }))
 
-vi.mock('../agent-foreground-process', () => ({
+vi.mock('../foreground/agent-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveForegroundMock,
   confirmShellForegroundProcess: confirmShellForegroundMock
 }))
@@ -30,7 +30,7 @@ import { isRetiredPtyMaster } from '../../pty/process-retirement/node-pty-master
 
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
-import { inspectPtyProviderProcess } from '../pty-process-inspection'
+import { inspectPtyProviderProcess } from '../pty/process-inspection'
 
 // Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'

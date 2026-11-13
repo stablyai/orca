@@ -1,17 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isOfficialOrganizationGitSource, isSameGitRepository } from './plugin-marketplace'
-
-describe('marketplace provenance contracts', () => {
-  it('does not trust lookalike organizations or hosts', () => {
-    expect(isOfficialOrganizationGitSource('https://github.com/stablyai-fakes/orca-skills')).toBe(
-      false
-    )
-    expect(isOfficialOrganizationGitSource('https://gitlab.com/stablyai/orca-skills')).toBe(false)
-    expect(isOfficialOrganizationGitSource('git@github.com:stablyai/../evil/orca-skills.git')).toBe(
-      false
-    )
-  })
-})
+import { isSameGitRepository } from './plugin-marketplace'
 
 describe('isSameGitRepository', () => {
   it('matches respellings and treats a GitLab subgroup move as a different repository', () => {

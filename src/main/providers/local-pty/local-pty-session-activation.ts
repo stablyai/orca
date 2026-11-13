@@ -18,7 +18,7 @@ import {
   resolveProcessExitCause
 } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
-import { getAgentForegroundContextPaths } from '../agent-foreground-context-paths'
+import { getAgentForegroundContextPaths } from '../foreground/context-paths'
 import { getSpawnedShellName } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
@@ -49,8 +49,8 @@ import { createWslGuestRootObserver } from '../../../shared/wsl-guest-root-marke
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
-import type { PtySpawnOptions } from '../pty-provider-contract'
-import type { PtySpawnResult } from '../pty-spawn-result'
+import type { PtySpawnOptions } from '../pty/provider-contract'
+import type { PtySpawnResult } from '../pty/spawn-result'
 
 export function activateLocalPtySession(args: {
   id: string

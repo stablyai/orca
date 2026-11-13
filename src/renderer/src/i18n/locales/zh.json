@@ -3652,6 +3652,8 @@
             "15dd899676": "添加到 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "终端问题",
+            "errorTitle": "终端错误",
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
@@ -7241,8 +7243,6 @@
             "ba1d9a0607": "边栏色调"
           },
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出",
-          "interfaceDefaultFont": "默认字体",
-          "terminalDefaultFont": "默认字体",
           "interfaceTitle": "界面",
           "terminalTitle": "终端",
           "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",
@@ -8119,16 +8119,12 @@
           "5426ecbdcb": "本地脚本将不会运行",
           "95a0411b3e": "模板",
           "175daba180": "例子",
-          "b20c5df6ca": "添加\"orca.yaml\"文件以启用此仓库的共享设置、存档或议题自动化默认值，示例模板：",
-          "56f9a4a1d0": "正在使用 `orca.yaml`",
           "623e0c9f31": "无法解析 `orca.yaml`",
-          "5a67e4793d": "未检测到 `orca.yaml`",
           "07ba35bc68": "检查 `scripts:` 下的缩进，钩子键应使用两个空格，命令行应使用四个空格",
           "787ca433ef": "仅定义支持的键：`scripts`、`setup`、`archive` 和 `issueCommand`",
           "ecc73d9125": "将你的文件与下面可用的模板进行比较，并在需要时复制该结构",
           "0cc712b823": "核心配置文件存在于仓库根目录中，但 Orca 尚无法解析支持的钩子定义",
           "aba825233f": "文件含当前版本无法识别的配置键，请更新 Orca 或检查拼写",
-          "ca424ff135": "共享挂钩和议题自动化默认值在仓库中定义，可供所有使用它的人使用",
           "8bfe65fc60": "使用本地命令",
           "8d6c56bff8": "运行两者",
           "0fa21e19ec": "工作区的名称，通常基于分支名称",
@@ -8531,7 +8527,6 @@
           "6503182299": "入门清单",
           "82db1b7de4": "入门清单，已完成 {{value0}}/{{value1}}，显示设置指南",
           "df38d612b7": "尚未添加项目",
-          "3e483e256b": "没有匹配的项目设置",
           "progressComplete": "已完成 {{value0}}/{{value1}}"
         },
         "ShortcutFilterRail": {
@@ -16095,7 +16090,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "删除链接",
           "cdfe166f6f": "编辑链接",
-          "bfc813e909": "打开链接",
           "7b0b945fdc": "粘贴或输入链接...",
           "copyLink": "复制链接"
         },
@@ -17187,7 +17181,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "收起",
-          "showMore": "显示更多"
+          "showMore": "显示更多",
+          "copied": "已复制",
+          "copyFailed": "复制失败",
+          "copyPrompt": "复制提示词"
         },
         "AutomationDetail": {
           "host": "主机",
@@ -17222,7 +17219,12 @@
           "precheckNone": "无",
           "migrate": "迁移",
           "migrateNotice": "{{host}} 已升级为新的远程主机。请迁移此自动化以继续运行。",
-          "needsMigration": "需要迁移"
+          "needsMigration": "需要迁移",
+          "repeats": "重复",
+          "missedRunGrace": "错过运行宽限期",
+          "execution": "执行",
+          "notRunYet": "尚未运行",
+          "usageDetail_other": "{{tokens}} Token · 已报告 {{known}}/{{count}} 次运行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -20313,7 +20315,7 @@
         "turnDiffsSearchChangedFiles": "已更改文件",
         "turnDiffsSearchEdits": "编辑",
         "markNewMessagesTitle": "返回聊天时标记新消息",
-        "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
+        "markNewMessagesCopy": "返回聊天时，如果错过的内容很长或有其他人发了消息，会用“新消息”分隔线标出你错过的内容并滚动到那里。看过之后它会淡出。",
         "markNewMessagesSearchUnread": "未读"
       },
       "voice": {
@@ -20377,6 +20379,7 @@
           "about": {
             "parakeetV3": "速度快。支持 {{languages}} 种欧洲语言。",
             "parakeetV2": "速度快。仅支持英语，英语最准确。",
+            "parakeetUnifiedEn": "仅限英语。说话时即时显示文字。",
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
             "senseVoice": "速度快。适用于中文、日语和韩语。",

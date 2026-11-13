@@ -8,7 +8,7 @@ import {
 } from './spawn-file-foreground-process'
 
 const { members } = vi.hoisted(() => ({ members: vi.fn() }))
-vi.mock('../../providers/windows-pty-job-membership', () => ({
+vi.mock('../../providers/foreground/windows/pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: members
 }))
 

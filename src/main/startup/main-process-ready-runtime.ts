@@ -42,13 +42,14 @@ import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
-import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
+import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
+import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -66,6 +67,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
+  startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)

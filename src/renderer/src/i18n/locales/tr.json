@@ -3994,6 +3994,8 @@
             "15dd899676": "{{value0}}'e Ekle…"
           },
           "TerminalErrorToast": {
+            "title": "Terminal sorunu",
+            "errorTitle": "Terminal hatası",
             "e4aa243f8c": "Arka plan sürecini yeniden başlat",
             "retry": "Yeniden dene",
             "retrying": "Yeniden deneniyor…",
@@ -7684,8 +7686,6 @@
             "df205a675e": "Renk Yoğunluğu",
             "ba1d9a0607": "Kenar Çubuğu Rengi"
           },
-          "interfaceDefaultFont": "Varsayılan yazı tipi",
-          "terminalDefaultFont": "Varsayılan yazı tipi",
           "interfaceTitle": "Arayüz",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Kenar çubuğu, durum çubuğu ve dosya gezgini",
@@ -8605,16 +8605,12 @@
           "5426ecbdcb": "Yerel betikler çalıştırılmayacak",
           "95a0411b3e": "şablon",
           "175daba180": "Örnek",
-          "b20c5df6ca": "Bu repo için paylaşılan kurulum, arşiv veya sorun otomasyonu varsayılanlarını etkinleştirmek üzere bir `orca.yaml` dosyası ekleyin. Örnek şablon:",
-          "56f9a4a1d0": "`orca.yaml` Kullanılıyor",
           "623e0c9f31": "`orca.yaml` ayrıştırılamadı",
-          "5a67e4793d": "`orca.yaml` algılanmadı",
           "07ba35bc68": "`scripts:` altındaki girintiyi kontrol edin. Hook anahtarları iki boşluk, komut satırları ise dört boşluk kullanmalıdır.",
           "787ca433ef": "Yalnızca desteklenen anahtarları tanımlayın: `scripts`, `setup`, `archive` ve `issueCommand`.",
           "ecc73d9125": "Dosyanızı aşağıdaki çalışan şablonla karşılaştırın ve gerekirse aynı yapıyı kopyalayın.",
           "0cc712b823": "Temel yapılandırma dosyası repo kökünde mevcut, ancak Orca desteklenen hook tanımlarını henüz ayrıştıramadı.",
           "aba825233f": "Dosya, Orca'nın bu sürümünün tanımadığı yapılandırma anahtarları içeriyor. Orca'yı güncellemeniz veya dosyada yazım hatası olup olmadığını kontrol etmeniz gerekebilir.",
-          "ca424ff135": "Paylaşılan hook ve sorun otomasyonu varsayılanları repoda tanımlıdır ve repoyu kullanan herkes için kullanılabilir.",
           "8bfe65fc60": "Yerel komutları kullan",
           "8d6c56bff8": "İkisini de çalıştır",
           "0fa21e19ec": "Genellikle branch adına dayanan çalışma alanı adı.",
@@ -9010,8 +9006,7 @@
           "60f8a673a7": "Uygulamaya dön",
           "6503182299": "Başlangıç kontrol listesi",
           "82db1b7de4": "Başlangıç kontrol listesi, {{value1}} adımdan {{value0}} tanesi tamamlandı. Kurulum kılavuzunu göster.",
-          "df38d612b7": "Henüz proje eklenmedi.",
-          "3e483e256b": "Eşleşen proje ayarı yok."
+          "df38d612b7": "Henüz proje eklenmedi."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Durum",
@@ -16490,7 +16485,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Bağlantıyı kaldır",
           "cdfe166f6f": "Bağlantıyı düzenle",
-          "bfc813e909": "Bağlantıyı aç",
           "7b0b945fdc": "Bir bağlantı yapıştırın veya yazın…",
           "copyLink": "Bağlantıyı kopyala"
         },
@@ -17550,7 +17544,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Daha az göster",
-          "showMore": "Daha fazla göster"
+          "showMore": "Daha fazla göster",
+          "copied": "Kopyalandı",
+          "copyFailed": "Kopyalanamadı",
+          "copyPrompt": "İstemi kopyala"
         },
         "AutomationDetail": {
           "host": "Sunucu",
@@ -17587,7 +17584,13 @@
           "precheckNone": "Yok",
           "migrate": "Taşı",
           "migrateNotice": "{{host}} yeni bir uzak ana bilgisayara yükseltildi. Çalışmaya devam etmesi için bu otomasyonu taşıyın.",
-          "needsMigration": "Taşınması gerekiyor"
+          "needsMigration": "Taşınması gerekiyor",
+          "repeats": "Tekrar",
+          "missedRunGrace": "Kaçırılan çalıştırma toleransı",
+          "execution": "Çalıştırma",
+          "notRunYet": "Henüz çalıştırılmadı",
+          "usageDetail_one": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı",
+          "usageDetail_other": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -20653,7 +20656,7 @@
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
         "scrollToLatestOnSendSearchPosition": "konum",
         "markNewMessagesTitle": "Bir sohbete dönünce yeni mesajları işaretle",
-        "markNewMessagesCopy": "Bir sohbete döndüğünüzde, siz yokken gelenlerin üstünde bir Yeni çizgisi gösterilir. En son mesajları okuyorduysanız sohbet oraya kaydırılır.",
+        "markNewMessagesCopy": "Bir sohbete döndüğünüzde, kaçırdıklarınız uzunsa ya da başka biri yazdıysa bir Yeni çizgisi bunları işaretler ve oraya kaydırır. Gördükten sonra yavaşça solar.",
         "markNewMessagesSearchUnread": "okunmamış",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
@@ -20743,6 +20746,7 @@
           "about": {
             "parakeetV3": "Hızlı. {{languages}} Avrupa dili.",
             "parakeetV2": "Hızlı. Yalnızca İngilizce, bunda en doğrusu.",
+            "parakeetUnifiedEn": "Yalnızca İngilizce. Kelimeler siz konuşurken görünür.",
             "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
             "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
             "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",

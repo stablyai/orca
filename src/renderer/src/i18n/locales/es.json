@@ -3515,6 +3515,8 @@
             "15dd899676": "Añadir a {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "Problema del terminal",
+            "errorTitle": "Error del terminal",
             "e4aa243f8c": "Reiniciar servicio",
             "a7e2fd2699": "abre un issue",
             "5c8ce20be6": "Si esto persiste, por favor",
@@ -7319,8 +7321,6 @@
             "ba1d9a0607": "Tinte de la barra lateral"
           },
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
-          "interfaceDefaultFont": "Fuente predeterminada",
-          "terminalDefaultFont": "Fuente predeterminada",
           "interfaceTitle": "Interfaz",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",
@@ -8199,16 +8199,12 @@
           "5426ecbdcb": "Los scripts locales no se ejecutarán",
           "95a0411b3e": "plantilla",
           "175daba180": "Ejemplo",
-          "b20c5df6ca": "Agrega un archivo `orca.yaml` para habilitar valores predeterminados compartidos de configuración, archivado o automatización de Issues para este repositorio. Plantilla de ejemplo:",
-          "56f9a4a1d0": "Usando `orca.yaml`",
           "623e0c9f31": "No se pudo analizar `orca.yaml`",
-          "5a67e4793d": "No se detectó `orca.yaml`",
           "07ba35bc68": "Revisa la indentación bajo `scripts:`. Las claves de hooks deben usar dos espacios y las líneas de comandos deben usar cuatro.",
           "787ca433ef": "Define solo las claves admitidas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compara tu archivo con la plantilla funcional de abajo y copia esa estructura si hace falta.",
           "0cc712b823": "El archivo de configuración principal existe en la raíz del repositorio, pero Orca aún no pudo analizar las definiciones de hooks admitidas.",
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
-          "ca424ff135": "Los valores predeterminados compartidos de hooks y automatización de Issues están definidos en el repositorio y disponibles para todos los que lo usan.",
           "8bfe65fc60": "Usar comandos locales",
           "8d6c56bff8": "Ejecutar ambos",
           "0fa21e19ec": "Nombre del workspace, normalmente basado en el nombre de la rama.",
@@ -8604,8 +8600,7 @@
           "60f8a673a7": "Volver a la app",
           "6503182299": "Checklist de onboarding",
           "82db1b7de4": "Checklist de onboarding, {{value0}} de {{value1}} completados. Mostrar guía de configuración.",
-          "df38d612b7": "Aún no se han agregado proyectos.",
-          "3e483e256b": "No hay ajustes de proyecto coincidentes."
+          "df38d612b7": "Aún no se han agregado proyectos."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Estado",
@@ -16206,7 +16201,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Quitar enlace",
           "cdfe166f6f": "Editar enlace",
-          "bfc813e909": "Abrir enlace",
           "7b0b945fdc": "Pega o escribe un enlace…",
           "copyLink": "Copiar enlace"
         },
@@ -17306,7 +17300,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Mostrar menos",
-          "showMore": "Mostrar más"
+          "showMore": "Mostrar más",
+          "copied": "Copiado",
+          "copyFailed": "No se pudo copiar",
+          "copyPrompt": "Copiar prompt"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17345,7 +17342,14 @@
           "precheckNone": "Ninguna",
           "migrate": "Migrar",
           "migrateNotice": "{{host}} se actualizó a un nuevo host remoto. Migra esta automatización para que siga ejecutándose.",
-          "needsMigration": "Requiere migración"
+          "needsMigration": "Requiere migración",
+          "repeats": "Se repite",
+          "missedRunGrace": "Período de gracia",
+          "execution": "Ejecución",
+          "notRunYet": "Aún no se ha ejecutado",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} ejecución informada",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
@@ -20444,7 +20448,7 @@
         "scrollToLatestOnSendCopy": "Enviar con el chat desplazado hacia arriba salta al último mensaje y sigue la respuesta. Desactívalo para mantener tu posición.",
         "scrollToLatestOnSendSearchPosition": "posición",
         "markNewMessagesTitle": "Marcar los mensajes nuevos al volver a un chat",
-        "markNewMessagesCopy": "Al volver a un chat aparece una línea Nuevo encima de lo que llegó mientras no estabas, y el chat se desplaza hasta ella si estabas leyendo lo más reciente.",
+        "markNewMessagesCopy": "Cuando vuelves a un chat, una línea Nuevo marca lo que te perdiste si es largo o si otra persona escribió, y se desplaza hasta allí. Se desvanece en cuanto la ves.",
         "markNewMessagesSearchUnread": "no leído",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno, en lugar de entrar en el turno en curso. Cmd/Ctrl+Intro hace lo contrario para un mensaje y, si no hay texto escrito, dirige la primera tarjeta en espera al turno en curso. Los mensajes con imágenes también esperan como tarjetas.",
         "inlineVisualsTitle": "Elementos visuales inline",
@@ -20570,6 +20574,7 @@
           "about": {
             "parakeetV3": "Rápido. {{languages}} idiomas europeos.",
             "parakeetV2": "Rápido. Solo inglés, y el más preciso en él.",
+            "parakeetUnifiedEn": "Solo inglés. Las palabras aparecen mientras hablas.",
             "whisperTiny": "La descarga más pequeña. Bueno para probar el dictado.",
             "whisperTurbo": "La mayoría de idiomas, unos 100. Lento sin GPU.",
             "senseVoice": "Rápido. Para chino, japonés y coreano.",
