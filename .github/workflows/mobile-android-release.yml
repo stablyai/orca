@@ -28,6 +28,7 @@ jobs:
     outputs:
       publish_release: ${{ steps.release.outputs.publish_release }}
       version: ${{ steps.release.outputs.version }}
+      play_upload: ${{ steps.play.outputs.upload }}
 
     defaults:
       run:
@@ -37,26 +38,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Release signing is enforced once ORCA_ANDROID_RELEASE_CERT_SHA256 (or ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true)
-      # is set as a repository variable. Until then the build keeps the Expo debug key, with a warning.
+      # dev.orca.app is never built with the public Expo debug key: Play and GitHub installs must share the release key.
       - name: Check release signing configuration
-        id: signing
         env:
           ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
           ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
           ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
           ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
           ORCA_ANDROID_RELEASE_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
-          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ vars.ORCA_ANDROID_REQUIRE_RELEASE_SIGNING }}
         run: |
           set -euo pipefail
-          if [ -z "${ORCA_ANDROID_RELEASE_CERT_SHA256:-}" ] && [ "${ORCA_ANDROID_REQUIRE_RELEASE_SIGNING:-}" != 'true' ]; then
-            message="Android release signing is not enabled, so this APK is signed with the Expo debug key as before. Set the ORCA_ANDROID_RELEASE_CERT_SHA256 repository variable to enable it; see the Android Release Signing section of mobile/README.md."
-            echo "::warning::$message"
-            printf '### Android release signing not enabled\n\n%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
-            echo "mode=debug" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           missing=()
           for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD ORCA_ANDROID_RELEASE_CERT_SHA256; do
             if [ -z "${!name:-}" ]; then
@@ -64,10 +55,9 @@ jobs:
             fi
           done
           if [ "${#missing[@]}" -ne 0 ]; then
-            echo "::error::Android release signing is enabled but not fully configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
+            echo "::error::Android release signing is not fully configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
             exit 1
           fi
-          echo "mode=release" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -90,6 +80,17 @@ jobs:
           MOBILE_ANDROID_PUBLISH_RELEASE: ${{ github.event.inputs.publish_github_release }}
         run: node scripts/prepare-android-release.mjs
 
+      # Published builds also go to Play once its service account exists; until then this skips.
+      - name: Check Play upload configuration
+        id: play
+        if: steps.release.outputs.publish_release == 'true'
+        env:
+          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "${ORCA_PLAY_SERVICE_ACCOUNT_JSON:-}" ]; then
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup JDK 17
         uses: actions/setup-java@v5
         with:
@@ -100,7 +101,6 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Decode release keystore
-        if: steps.signing.outputs.mode == 'release'
         env:
           ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -110,22 +110,41 @@ jobs:
 
       - name: Build Android release APK
         env:
-          # Empty in debug mode, which leaves Gradle on the debug key exactly as before.
-          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ steps.signing.outputs.mode == 'release' && 'true' || '' }}
-          ORCA_ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.mode == 'release' && format('{0}/orca-release.keystore', runner.temp) || '' }}
-          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEYSTORE_PASSWORD || '' }}
-          ORCA_ANDROID_KEY_ALIAS: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_ALIAS || '' }}
-          ORCA_ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_PASSWORD || '' }}
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: 'true'
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/orca-release.keystore
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
         run: cd android && ./gradlew assembleRelease
+
+      # Same key, version and JS bundle as the APK; only the embedded app config differs, and Gradle
+      # regenerates it each run, so the APK above keeps the GitHub update check.
+      - name: Build Play app bundle
+        env:
+          ORCA_ANDROID_DISTRIBUTION: play
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: 'true'
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/orca-release.keystore
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          (cd android && ./gradlew bundleRelease)
+          # Fail rather than ship a Play bundle that sends people to GitHub, or an APK that never checks it.
+          aab_config="$(unzip -p android/app/build/outputs/bundle/release/app-release.aab base/assets/app.config)"
+          apk_config="$(unzip -p android/app/build/outputs/apk/release/app-release.apk assets/app.config)"
+          if [[ "$aab_config" != *'"androidDistribution":"play"'* || "$apk_config" == *androidDistribution* ]]; then
+            echo "::error::The AAB must embed androidDistribution=play and the APK must not."
+            exit 1
+          fi
 
       - name: Remove release keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/orca-release.keystore"
 
       # Why pin the certificate: a regenerated or swapped key would make every installed copy refuse the update.
-      - name: Verify APK signing certificate
+      - name: Verify APK and AAB signing certificates
         id: signer
-        if: steps.signing.outputs.mode == 'release'
         env:
           EXPECTED_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
         run: |
@@ -142,6 +161,12 @@ jobs:
           fi
           if [ "$certs" != "$expected" ]; then
             echo "::error::The APK signing certificate ($certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
+            exit 1
+          fi
+          # Play App Signing re-signs with this same key, which keeps Play and GitHub installs updatable from each other.
+          aab_certs="$(keytool -printcert -jarfile android/app/build/outputs/bundle/release/app-release.aab | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | sort -u)"
+          if [ "$aab_certs" != "$expected" ]; then
+            echo "::error::The AAB signing certificate ($aab_certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
             exit 1
           fi
           echo "cert_sha256=$(printf '%s' "$certs" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_OUTPUT"
@@ -180,6 +205,13 @@ jobs:
           path: |
             mobile/android/app/build/outputs/apk/release/*.apk
             mobile/android/app/build/outputs/apk/release/*.apk.sha256
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-mobile-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
 
       - name: Ensure GitHub release tag
         if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
@@ -283,6 +315,49 @@ jobs:
               android/app/build/outputs/apk/release/*.apk \
               "${{ steps.apk.outputs.checksum }}"
           fi
+
+  # Its own job, after the GitHub release: a Play failure never holds back the APK and can be rerun alone.
+  # Both channels ship the committed versionCode, and Play rejects a reused one, so a missed bump fails here.
+  play-internal-upload:
+    needs: android-build
+    if: needs.android-build.outputs.play_upload == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    env:
+      BUNDLE_FROZEN: 'true'
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: orca-mobile-aab
+          path: mobile/build/play
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Upload to the internal testing track
+        env:
+          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
+          ORCA_PLAY_RELEASE_STATUS: ${{ vars.ORCA_PLAY_RELEASE_STATUS }}
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_OPT_OUT_USAGE: '1'
+        run: bundle exec fastlane android upload_internal aab:"$PWD/build/play/app-release.aab"
 
   # Advisory like the site bump: a failed mirror only leaves orca.dev's "mirror link" on the prior APK.
   release-mirror-r2:

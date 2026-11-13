@@ -939,8 +939,10 @@
       "desktopTooOldBody": "已配对的桌面应用版本过旧，无法与当前的 Orca Mobile 兼容。请更新电脑上的 Orca，然后重新连接此主机",
       "getVersion": "获取 Orca {{version}}",
       "mobileTooOldAppStore": "此桌面需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldGooglePlay": "此桌面需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
       "mobileTooOldGitHubReleases": "此桌面需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机",
       "openAppStore": "打开 App Store",
+      "openGooglePlay": "打开 Google Play",
       "openGitHubReleases": "打开 GitHub Releases",
       "refreshRecoveryNote": "如果仍显示此消息，请移除此主机并重新配对",
       "refreshWorkspaceBody": "此主机的工作区缓存版本低于桌面要求。请重新连接此主机，下载当前版本",
@@ -949,6 +951,7 @@
       "updateMobileTitle": "更新 Orca Mobile",
       "updateRecoveryNote": "已经更新？请返回“主机”并刷新连接。如果仍显示此消息，请移除此主机并重新配对",
       "workspaceNeedsUpdateAppStore": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
+      "workspaceNeedsUpdateGooglePlay": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
       "workspaceNeedsUpdateGitHubReleases": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机"
     },
     "richMarkdownEditor": {

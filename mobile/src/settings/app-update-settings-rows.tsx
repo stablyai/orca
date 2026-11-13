@@ -75,7 +75,8 @@ export function AppUpdateSettingsRows(props: {
   now: number
   checkStatus: AppUpdateCheckRowStatus
   onUpdate: (url: string) => void
-  onCheck: () => void
+  /** Omitted when the build has no update channel to ask; hides the check row. */
+  onCheck?: () => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -105,20 +106,22 @@ export function AppUpdateSettingsRows(props: {
   return (
     <SettingsSection>
       {versionRow}
-      <ListRow
-        key="check"
-        title={t('settings.appUpdateSettingsRows.checkUpdates', 'Check for updates')}
-        value={checkValue}
-        accessibilityLabel={t(
-          'settings.appUpdateSettingsRows.checkUpdatesStatus',
-          'Check for updates, {{status}}',
-          {
-            status: checkValue
-          }
-        )}
-        busy={props.checkStatus === 'checking'}
-        onPress={props.onCheck}
-      />
+      {props.onCheck ? (
+        <ListRow
+          key="check"
+          title={t('settings.appUpdateSettingsRows.checkUpdates', 'Check for updates')}
+          value={checkValue}
+          accessibilityLabel={t(
+            'settings.appUpdateSettingsRows.checkUpdatesStatus',
+            'Check for updates, {{status}}',
+            {
+              status: checkValue
+            }
+          )}
+          busy={props.checkStatus === 'checking'}
+          onPress={props.onCheck}
+        />
+      ) : null}
     </SettingsSection>
   )
 }

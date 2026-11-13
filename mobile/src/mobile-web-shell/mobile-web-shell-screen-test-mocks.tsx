@@ -165,7 +165,10 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         parseMobileWebShellLoadState: parseMobileWebShellLoadState
       }
     },
-    '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
+    '../app-update/use-wall-app-update': () => ({
+      isGooglePlayBuild: false,
+      useWallAppUpdate: () => null
+    }),
     // Keep the real bridge hook; stub only Expo-dependent client lookup.
     '../transport/connection/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })

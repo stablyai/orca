@@ -1,4 +1,4 @@
-import { useWallAppUpdate } from '../app-update/use-wall-app-update'
+import { isGooglePlayBuild, useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
@@ -13,6 +13,7 @@ import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-pol
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
+const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=dev.orca.app'
 
 // Protocol/bundle/page-route walls are terminal: no native workspace fallback; update the relevant app or bundle.
 export type BlockedVerdict =
@@ -42,6 +43,34 @@ function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   }
 }
 
+// Play builds may only update through Play; other Android installs came from GitHub Releases.
+function mobileUpdateChannel(): 'app-store' | 'google-play' | 'github-releases' {
+  if (Platform.OS === 'ios') {
+    return 'app-store'
+  }
+  return isGooglePlayBuild ? 'google-play' : 'github-releases'
+}
+
+function mobileUpdateChannelTarget(t: Translate): { label: string; url: string } {
+  switch (mobileUpdateChannel()) {
+    case 'app-store':
+      return {
+        label: t('components.protocolBlockScreen.openAppStore', 'Open App Store'),
+        url: IOS_APP_STORE_URL
+      }
+    case 'google-play':
+      return {
+        label: t('components.protocolBlockScreen.openGooglePlay', 'Open Google Play'),
+        url: GOOGLE_PLAY_URL
+      }
+    case 'github-releases':
+      return {
+        label: t('components.protocolBlockScreen.openGitHubReleases', 'Open GitHub Releases'),
+        url: RELEASES_URL
+      }
+  }
+}
+
 function blockTitle(remedy: BlockRemedy, t: Translate): string {
   switch (remedy) {
     case 'update-mobile':
@@ -64,26 +93,42 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
     )
   }
   if (verdict.reason === 'mobile-too-old') {
-    return Platform.OS === 'ios'
-      ? t(
+    switch (mobileUpdateChannel()) {
+      case 'app-store':
+        return t(
           'components.protocolBlockScreen.mobileTooOldAppStore',
           'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
         )
-      : t(
+      case 'google-play':
+        return t(
+          'components.protocolBlockScreen.mobileTooOldGooglePlay',
+          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.'
+        )
+      case 'github-releases':
+        return t(
           'components.protocolBlockScreen.mobileTooOldGitHubReleases',
           'This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
         )
+    }
   }
   if (remedy === 'update-mobile') {
-    return Platform.OS === 'ios'
-      ? t(
+    switch (mobileUpdateChannel()) {
+      case 'app-store':
+        return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateAppStore',
           "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
         )
-      : t(
+      case 'google-play':
+        return t(
+          'components.protocolBlockScreen.workspaceNeedsUpdateGooglePlay',
+          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again."
+        )
+      case 'github-releases':
+        return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateGitHubReleases',
           "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
         )
+    }
   }
   return t(
     'components.protocolBlockScreen.desktopTooOldBody',
@@ -97,17 +142,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
-  // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
-  const mobileUpdateTarget =
-    Platform.OS === 'ios'
-      ? {
-          label: t('components.protocolBlockScreen.openAppStore', 'Open App Store'),
-          url: IOS_APP_STORE_URL
-        }
-      : {
-          label: t('components.protocolBlockScreen.openGitHubReleases', 'Open GitHub Releases'),
-          url: RELEASES_URL
-        }
+  const mobileUpdateTarget = mobileUpdateChannelTarget(t)
   const mobileAction = mobileUpdate
     ? {
         label: t('components.protocolBlockScreen.getVersion', 'Get Orca {{version}}', {

@@ -193,10 +193,8 @@ other catalogs may lag and fall back to English. `pnpm verify:mobile-localizatio
 `ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
 project. Without them, local release builds keep Expo's debug key.
 
-`.github/workflows/mobile-android-release.yml` turns release signing on once the
-`ORCA_ANDROID_RELEASE_CERT_SHA256` repository variable (or `ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true`)
-is set. Until then it signs with the debug key as before and adds a warning to the run. Once it is
-on, the workflow fails before building if any of these is missing:
+`.github/workflows/mobile-android-release.yml` always release-signs `dev.orca.app`, the package
+shared by Google Play and GitHub installs. It fails before building if any of these is missing:
 
 | Name                               | Kind     | Value                                                   |
 | ---------------------------------- | -------- | ------------------------------------------------------- |
@@ -210,6 +208,24 @@ After a release-signed build, the workflow checks that the APK's signing certifi
 `ORCA_ANDROID_RELEASE_CERT_SHA256` and is not the debug key, and publishes the fingerprint in the
 release notes. Android only installs an update signed by the same key as the installed app, so
 the keystore must be backed up: losing it means no existing install can be updated in place.
+
+### Google Play
+
+Every run also builds `app-release.aab` (artifact `orca-mobile-aab`) with
+`ORCA_ANDROID_DISTRIBUTION=play`. `app.config.js` turns that into `extra.androidDistribution`, and
+a Play build never checks GitHub for updates or points people at GitHub Releases. Play App Signing
+uses the same key (uploaded with PEPK), so Play and GitHub installs can update each other.
+
+Published runs upload the AAB to Play's internal testing track once these exist; without the secret
+the upload job is skipped:
+
+| Name                             | Kind     | Value                                                                    |
+| -------------------------------- | -------- | ------------------------------------------------------------------------ |
+| `ORCA_PLAY_SERVICE_ACCOUNT_JSON` | secret   | JSON key of a service account with release access in Play Console        |
+| `ORCA_PLAY_RELEASE_STATUS`       | variable | optional; `draft` (default) until the app is published, then `completed` |
+
+Play rejects a versionCode it has seen, so bump `expo.android.versionCode` for every release. An
+AAB uploaded by hand uses up its versionCode too, so the next tagged release needs a higher one.
 
 ## Protocol Version Compatibility
 
@@ -238,7 +254,7 @@ Do **not** bump for additive changes:
 
 Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change that requires a minimum mobile version to function safely. Same for `MIN_COMPATIBLE_DESKTOP_VERSION` from the mobile side.
 
-When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS) or GitHub Releases (Android). When desktop is too old it opens GitHub Releases.
+When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS), Google Play (Play builds) or GitHub Releases (other Android builds). When desktop is too old it opens GitHub Releases.
 
 To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/connection/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 

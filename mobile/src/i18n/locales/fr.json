@@ -981,8 +981,10 @@
       "desktopTooOldBody": "La version d'Orca sur cet ordinateur appairé est trop ancienne pour votre version actuelle d'Orca Mobile. Mettez Orca à jour sur votre ordinateur, puis réessayez de vous connecter à cet hôte.",
       "getVersion": "Obtenir Orca {{version}}",
       "mobileTooOldAppStore": "Cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis l'App Store, puis réessayez de vous connecter à cet hôte.",
+      "mobileTooOldGooglePlay": "Cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis Google Play, puis réessayez de vous connecter à cet hôte.",
       "mobileTooOldGitHubReleases": "Cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis GitHub Releases, puis réessayez de vous connecter à cet hôte.",
       "openAppStore": "Ouvrir l'App Store",
+      "openGooglePlay": "Ouvrir Google Play",
       "openGitHubReleases": "Ouvrir GitHub Releases",
       "refreshRecoveryNote": "Si ce message persiste, supprimez cet hôte et appairez-le à nouveau.",
       "refreshWorkspaceBody": "La version de l'espace de travail en cache pour cet hôte est antérieure à celle attendue par l'ordinateur. Reconnectez-vous à cet hôte pour télécharger la version actuelle.",
@@ -991,6 +993,7 @@
       "updateMobileTitle": "Mettre à jour Orca Mobile",
       "updateRecoveryNote": "Déjà à jour ? Revenez à l'écran Hôtes et actualisez la connexion. Si ce message persiste, supprimez cet hôte et appairez-le à nouveau.",
       "workspaceNeedsUpdateAppStore": "L'espace de travail mobile de cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis l'App Store, puis réessayez de vous connecter à cet hôte.",
+      "workspaceNeedsUpdateGooglePlay": "L'espace de travail mobile de cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis Google Play, puis réessayez de vous connecter à cet hôte.",
       "workspaceNeedsUpdateGitHubReleases": "L'espace de travail mobile de cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis GitHub Releases, puis réessayez de vous connecter à cet hôte."
     },
     "richMarkdownEditor": {

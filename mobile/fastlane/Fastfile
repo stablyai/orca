@@ -238,3 +238,23 @@ platform :ios do
     )
   end
 end
+
+platform :android do
+  desc "Upload a release-signed AAB to Google Play's internal testing track"
+  lane :upload_internal do |options|
+    # Play only accepts draft releases until the app has been published once; then set this to completed.
+    release_status = ENV.fetch("ORCA_PLAY_RELEASE_STATUS", "").strip
+    upload_to_play_store(
+      package_name: load_mobile_app_config.fetch("expo").fetch("android").fetch("package"),
+      json_key_data: ENV.fetch("ORCA_PLAY_SERVICE_ACCOUNT_JSON"),
+      track: "internal",
+      aab: options.fetch(:aab),
+      release_status: release_status.empty? ? "draft" : release_status,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+end
