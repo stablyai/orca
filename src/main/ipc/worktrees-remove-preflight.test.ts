@@ -1,5 +1,6 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetWslAutomountRootsForTests } from '../wsl/filesystem/wsl-automount-root'
 import * as scopedRootsInvalidation from './worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './worktrees/removal/registered-worktree-roots-cache'
 import {
@@ -9,10 +10,23 @@ import {
   removeWorktreeMock,
   getEffectiveHooksMock,
   runHookMock,
-  killAllProcessesForWorktreeMock
+  killAllProcessesForWorktreeMock,
+  gitExecFileAsyncMock,
+  ORIGINAL_PLATFORM,
+  setPlatform
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
+import {
+  mockKnownFeatureWorktree,
+  mockSelectedWslProjectRuntime,
+  makeWorktreeMeta
+} from './worktrees-test-fixtures'
+
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runProcess: runProcessMock
+}))
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   return {
@@ -185,6 +199,87 @@ describe('registerWorktreeHandlers', () => {
     setupWorktreeHandlers()
     vi.spyOn(scopedRootsInvalidation, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
     vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
+  })
+
+  afterEach(() => {
+    setPlatform(ORIGINAL_PLATFORM)
+    resetWslAutomountRootsForTests()
+    vi.restoreAllMocks()
+  })
+
+  it('removes a live custom-root drive checkout with Git instead of pruning its registration', async () => {
+    mockSelectedWslProjectRuntime()
+    resetWslAutomountRootsForTests()
+    const repo = {
+      id: 'repo-1',
+      path: 'C:/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
+    store.getProjectHostSetups.mockReturnValue([])
+    store.getWorktreeMeta.mockReturnValue(
+      makeWorktreeMeta({ orcaCreatedAt: 1, orcaCreationSource: 'desktop' })
+    )
+    const worktrees = mockKnownFeatureWorktree('C:/worktrees/feature', 'C:/repo')
+    const probes: string[] = []
+    runProcessMock.mockImplementation(async ({ args }: { args: string[] }) => {
+      const command = args.at(-1) ?? ''
+      const begin = /printf %s (__ORCA_WSL_CAPTURE_BEGIN_) (\w+__)/.exec(command)
+      const end = /printf %s (__ORCA_WSL_CAPTURE_END_) (\w+__)/.exec(command)
+      if (begin && end) {
+        return {
+          code: 0,
+          signal: null,
+          timedOut: false,
+          stderr: '',
+          stdout: `${begin[1]}${begin[2]}/qamnt/c/\n${end[1]}${end[2]}`
+        }
+      }
+      probes.push(command)
+      if (command === "LC_ALL=C stat -c %F -- '/qamnt/c/worktrees/feature'") {
+        return { code: 0, signal: null, timedOut: false, stderr: '', stdout: 'directory\n' }
+      }
+      return {
+        code: 1,
+        signal: null,
+        timedOut: false,
+        stdout: '',
+        stderr: "stat: cannot statx '/mnt/c/worktrees/feature': No such file or directory\n"
+      }
+    })
+    removeWorktreeMock.mockImplementation(async () => {
+      listWorktreesMock.mockResolvedValue([worktrees[0]])
+      return {}
+    })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::C:/worktrees/feature',
+        force: true
+      })
+    ).resolves.toMatchObject({ catalogVersion: expect.any(Object) })
+
+    expect(probes).toContain("LC_ALL=C stat -c %F -- '/qamnt/c/worktrees/feature'")
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      'C:/repo',
+      'C:/worktrees/feature',
+      true,
+      expect.objectContaining({
+        wslDistro: 'Ubuntu',
+        knownRemovedWorktree: expect.objectContaining({
+          path: 'C:/worktrees/feature',
+          branch: 'feature'
+        })
+      })
+    )
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1::C:/worktrees/feature' })
+    )
+    expect(await listWorktreesMock()).toEqual([expect.objectContaining({ path: 'C:/repo' })])
   })
 
   it('rechecks a local Git lock after the archive hook before teardown', async () => {

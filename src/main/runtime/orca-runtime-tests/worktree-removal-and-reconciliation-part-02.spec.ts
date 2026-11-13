@@ -228,9 +228,14 @@ describe('OrcaRuntimeService', () => {
       stdout: '',
       stderr: ''
     })
-    const removePathSpy = vi
-      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
-      .mockResolvedValue(undefined)
+    const prepareFilesystem = localWorktreeFilesystem.prepareLocalWorktreeFilesystem
+    const removePathSpy = vi.fn().mockResolvedValue(undefined)
+    const preparePathSpy = vi
+      .spyOn(localWorktreeFilesystem, 'prepareLocalWorktreeFilesystem')
+      .mockImplementation(async (...args) => ({
+        ...(await prepareFilesystem(...args)),
+        remove: removePathSpy
+      }))
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     const path = join(TEST_WORKTREE_PATH, 'deep', 'file.txt')
     const cause = Object.assign(new Error('permission denied'), { code: 'EACCES', path })
@@ -251,7 +256,7 @@ describe('OrcaRuntimeService', () => {
       expect(gitSpy).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
     } finally {
-      removePathSpy.mockRestore()
+      preparePathSpy.mockRestore()
       gitSpy.mockRestore()
     }
   })

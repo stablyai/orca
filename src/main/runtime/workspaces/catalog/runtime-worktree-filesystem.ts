@@ -5,8 +5,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isENOENT } from '../../../ipc/filesystem/access/filesystem-path-containment'
 import {
-  getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath
+  prepareLocalWorktreeFilesystem,
+  type LocalWorktreeFilesystem,
+  type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -24,13 +25,17 @@ import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-w
 /** Callers hold a local removal route; an `ssh:` or `runtime:` host is refused before this. */
 export async function isLocalRuntimeWorktreePathMissing(
   worktreePath: string,
-  localWorktreeGitOptions: { wslDistro?: string } = {}
+  localWorktreeGitOptions: LocalWorktreeFilesystemOptions = {},
+  filesystem?: LocalWorktreeFilesystem
 ): Promise<boolean> {
-  const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-  return isWorktreePathMissing(
-    toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-    access.statPath
+  const scope =
+    filesystem ?? (await prepareLocalWorktreeFilesystem([worktreePath], localWorktreeGitOptions))
+  const missing = await isWorktreePathMissing(
+    scope.runtimePath(worktreePath),
+    scope.access.statPath
   )
+  scope.assertCurrent()
+  return missing
 }
 
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {

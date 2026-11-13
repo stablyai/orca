@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
+import { prepareLocalWorktreeFilesystem } from './local-worktree-filesystem'
 import '../../filesystem/host-tree-removal'
 import { isWorktreePathMissing } from './worktree-removal-safety'
 
@@ -77,7 +77,9 @@ describe('local worktree filesystem runtime access', () => {
   ])('reports a missing WSL stat target as ENOENT on %s userland', async (_userland, stderr) => {
     await withPlatform('win32', async () => {
       failExecFile(1, stderr)
-      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+      const { access } = await prepareLocalWorktreeFilesystem(['/mnt/c/repo'], {
+        wslDistro: 'Ubuntu'
+      })
 
       for (const inspect of [access.statPath, access.layoutStatPath, access.realPath]) {
         await expect(inspect('/mnt/c/repo/missing/.git')).rejects.toMatchObject({ code: 'ENOENT' })
@@ -96,7 +98,9 @@ describe('local worktree filesystem runtime access', () => {
     async (_userland, stderr) => {
       await withPlatform('win32', async () => {
         failExecFile(1, stderr)
-        const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+        const { access } = await prepareLocalWorktreeFilesystem(['/mnt/c/repo'], {
+          wslDistro: 'Ubuntu'
+        })
 
         for (const inspect of [access.statPath, access.layoutStatPath, access.realPath]) {
           await expect(inspect('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')

@@ -33,8 +33,7 @@ import {
 } from '../../../workspaces/removal/worktree-removal-home-guard'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import {
-  getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath,
+  prepareLocalWorktreeFilesystem,
   type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
@@ -181,7 +180,11 @@ async function finishInterruptedLocalWorktreeRemoval(
     },
     checkoutDeleteSignal: args.stopSignal
   }
-  if (!native && deletable && (await isCheckoutMissingGitLink(deletable.path, localOptions))) {
+  if (
+    !native &&
+    deletable &&
+    (await isCheckoutMissingGitLink(deletable.path, { ...localOptions, signal: args.stopSignal }))
+  ) {
     // If Git deleted .git first, it cannot remove/validate the checkout; prune registration only and keep all files for the checks below.
     await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath: deletable.path,
@@ -259,18 +262,22 @@ async function isCheckoutMissingGitLink(
   checkoutPath: string,
   options: LocalWorktreeFilesystemOptions
 ): Promise<boolean> {
-  const { statPath } = getLocalWorktreePathAccess(options)
-  const stat = (path: string) => statPath(toLocalWorktreeRuntimePath(path, options))
+  const markerPath = getPathOps(checkoutPath).join(checkoutPath, '.git')
+  const filesystem = await prepareLocalWorktreeFilesystem([checkoutPath, markerPath], options)
+  const stat = (path: string) => filesystem.access.statPath(filesystem.runtimePath(path))
   try {
     await stat(checkoutPath)
   } catch {
+    filesystem.assertCurrent()
     // Git removes a registration whose folder is gone; other errors are Git's to report.
     return false
   }
   try {
-    await stat(getPathOps(checkoutPath).join(checkoutPath, '.git'))
+    await stat(markerPath)
+    filesystem.assertCurrent()
     return false
   } catch (error) {
+    filesystem.assertCurrent()
     return getErrorCode(error) === 'ENOENT'
   }
 }

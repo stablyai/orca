@@ -258,7 +258,7 @@ async function finishLocalWorktreeRemoval({
         await cleanupLocalOrphanedWorktreeDirectory(
           repo.path,
           canonicalWorktreePath,
-          localWorktreeGitOptions,
+          { ...localWorktreeGitOptions, signal: checkoutDeleteSignal },
           (path) => runtime.closeFileWatchersForRemoval(path)
         )
         // Failed removal may retain registration and branch locks; prune stale tracking.
