@@ -46,4 +46,45 @@ describe('normalizeDshEvent', () => {
     )
     expect(answered?.payload.state).toBe('working')
   })
+
+  it('leaves a session-boundary done for SessionStart, not a completion', () => {
+    const started = normalizeAndAccept(state, 'dsh', event('SessionStart', { source: 'startup' }))
+    expect(started?.payload.state).toBe('done')
+    expect(started?.payload.sessionBoundary).toBe(true)
+    // A compact restart shares the lead's session but runs mid-turn.
+    expect(
+      normalizeAndAccept(state, 'dsh', event('SessionStart', { source: 'compact' }))
+    ).toBeNull()
+  })
+
+  it('drops child-agent hooks so a subagent cannot finish the lead pane', () => {
+    const CHILD_SESSION_ID = 'child-session-0000-4000-8000-000000000001'
+    const child = (name: string, extra: Record<string, unknown> = {}) =>
+      event(name, { session_id: CHILD_SESSION_ID, ...extra })
+
+    normalizeAndAccept(state, 'dsh', event('UserPromptSubmit', { prompt: 'delegate this' }))
+    expect(
+      normalizeAndAccept(state, 'dsh', child('SessionStart', { source: 'startup' }))
+    ).toBeNull()
+    expect(normalizeAndAccept(state, 'dsh', child('PreToolUse', { tool_name: 'bash' }))).toBeNull()
+    expect(normalizeAndAccept(state, 'dsh', child('Stop'))).toBeNull()
+
+    const leadStop = normalizeAndAccept(state, 'dsh', event('Stop'))
+    expect(leadStop?.payload.state).toBe('done')
+  })
+
+  it('adopts a remembered child session when the pane resumes it as the lead', () => {
+    const CHILD_SESSION_ID = 'child-session-0000-4000-8000-000000000002'
+    const child = (name: string, extra: Record<string, unknown> = {}) =>
+      event(name, { session_id: CHILD_SESSION_ID, ...extra })
+
+    normalizeAndAccept(state, 'dsh', event('UserPromptSubmit', { prompt: 'lead' }))
+    expect(
+      normalizeAndAccept(state, 'dsh', child('SessionStart', { source: 'startup' }))
+    ).toBeNull()
+
+    const resumed = normalizeAndAccept(state, 'dsh', child('SessionStart', { source: 'resume' }))
+    expect(resumed?.payload.state).toBe('done')
+    expect(normalizeAndAccept(state, 'dsh', child('Stop'))?.payload.state).toBe('done')
+  })
 })
