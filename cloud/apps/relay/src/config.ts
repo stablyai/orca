@@ -36,9 +36,10 @@ const readinessGraceSchema = (defaultMs: number) =>
     z.coerce.number().int().min(0).max(RELAY_MAX_READINESS_GRACE_MS).default(defaultMs)
   )
 
-// Comma-separated list: split, trimmed, empty entries dropped.
+// Comma-separated list, each entry trimmed. Empty entries ('a,,b', 'a,', ' ') are kept so the
+// schema rejects them rather than silently skipping a typo.
 function splitIssuerList(value: string): string[] {
-  return value.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '')
+  return value.split(',').map((entry) => entry.trim())
 }
 
 const IssuerUrlSchema = z.string().url()
@@ -50,8 +51,11 @@ const EnvSchema = z.object({
   // Trusted token issuers, comma-separated (e.g. two during an issuer rotation); each must be a URL.
   ORCA_RELAY_AUTH_ISSUER: z.string().superRefine((value, ctx) => {
     const entries = splitIssuerList(value)
-    const invalid = entries.length === 0 || entries.some((entry) => !IssuerUrlSchema.safeParse(entry).success)
-    if (invalid) ctx.addIssue({ code: 'custom', message: 'Invalid URL' })
+    if (entries.some((entry) => entry === '')) {
+      ctx.addIssue({ code: 'custom', message: 'ORCA_RELAY_AUTH_ISSUER has an empty entry' })
+    } else if (entries.some((entry) => !IssuerUrlSchema.safeParse(entry).success)) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid URL' })
+    }
   }),
   ORCA_RELAY_AUTH_AUDIENCE: z.literal('orca-relay').default('orca-relay'),
   ORCA_RELAY_JWKS_URL: z.string().url(),

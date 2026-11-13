@@ -78,9 +78,13 @@ export type EdgeConfig = {
 
 const configs = new WeakMap<object, EdgeConfig>()
 
-// The trusted token issuers: RELAY_AUTH_ISSUER split on commas, trimmed, empty entries dropped.
+// The trusted token issuers: RELAY_AUTH_ISSUER split on commas and trimmed. Unset or '' means none
+// (as before); an empty entry in a set value ('a,,b', 'a,', ' ') is a config error, not skipped.
 export function relayAuthIssuers(env: Pick<Env, 'RELAY_AUTH_ISSUER'>): string[] {
-  return (env.RELAY_AUTH_ISSUER ?? '').split(',').map((entry) => entry.trim()).filter((entry) => entry !== '')
+  if (!env.RELAY_AUTH_ISSUER) { return [] }
+  const issuers = env.RELAY_AUTH_ISSUER.split(',').map((entry) => entry.trim())
+  if (issuers.some((entry) => entry === '')) { throw new Error('relay_edge_config_issuer') }
+  return issuers
 }
 
 function positiveInt(name: string, value: string | undefined): number {
@@ -110,7 +114,8 @@ export function edgeConfig(env: Env): EdgeConfig {
   // The abort routes reset objects (drop every socket); only the spike backend may turn them on.
   if (env.SPIKE_ADMIN === '1' && backend !== 'spike') { throw new Error('relay_edge_config_spike_admin_outside_spike') }
   if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) { throw new Error('relay_edge_config_jwks') }
-  if (env.RELAY_JWKS_URL && relayAuthIssuers(env).length === 0) { throw new Error('relay_edge_config_issuer') }
+  const issuers = relayAuthIssuers(env)
+  if (env.RELAY_JWKS_URL && issuers.length === 0) { throw new Error('relay_edge_config_issuer') }
   if (!env.RELAY_JWT_AUDIENCE) { throw new Error('relay_edge_config_audience') }
   const config: EdgeConfig = {
     backend,

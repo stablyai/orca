@@ -26,14 +26,20 @@ describe('ORCA_RELAY_AUTH_ISSUER', () => {
     expect(configWithIssuer(ISSUER_A).authIssuer).toBe(ISSUER_A)
   })
 
-  it('parses a comma-separated list, trimming and dropping empty entries', () => {
-    expect(configWithIssuer(` ${ISSUER_A} ,, ${ISSUER_B} ,`).authIssuer).toEqual([ISSUER_A, ISSUER_B])
+  it('parses a comma-separated list into trimmed entries', () => {
+    expect(configWithIssuer(`${ISSUER_A},${ISSUER_B}`).authIssuer).toEqual([ISSUER_A, ISSUER_B])
+    expect(configWithIssuer(` ${ISSUER_A} , ${ISSUER_B} `).authIssuer).toEqual([ISSUER_A, ISSUER_B])
+  })
+
+  it('fails config on an empty entry instead of skipping it', () => {
+    for (const value of ['', ' ', ',', ' , ', `${ISSUER_A},`, `,${ISSUER_A}`, `${ISSUER_A},,${ISSUER_B}`, `${ISSUER_A}, ,${ISSUER_B}`]) {
+      expect(() => configWithIssuer(value), JSON.stringify(value)).toThrow('ORCA_RELAY_AUTH_ISSUER has an empty entry')
+    }
   })
 
   it('fails config when any entry is invalid, as a single invalid value does', () => {
     expect(() => configWithIssuer('not-a-url')).toThrow('Invalid URL')
     expect(() => configWithIssuer(`${ISSUER_A},not-a-url`)).toThrow('Invalid URL')
-    expect(() => configWithIssuer(' , ')).toThrow('Invalid URL')
     expect(() => configWithIssuer(`${ISSUER_A}/path`)).toThrow('ORCA_RELAY_AUTH_ISSUER must be an origin')
     expect(() => configWithIssuer(`${ISSUER_A},${ISSUER_B}/path`)).toThrow('ORCA_RELAY_AUTH_ISSUER must be an origin')
     expect(() => configWithIssuer(`${ISSUER_A},http://issuer-b.example.test`)).toThrow(

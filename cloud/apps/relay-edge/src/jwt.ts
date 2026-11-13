@@ -39,9 +39,9 @@ function keysFor(env: Env): JWTVerifyGetKey {
 export type RelayJwtResult = { ok: true; claims: EdgeClaims } | { ok: false; reason: 'invalid' | 'keys_unavailable' }
 
 export async function verifyRelayJwt(env: Env, token: string): Promise<RelayJwtResult> {
-  // A token is accepted if its `iss` matches any trusted issuer.
-  const issuers = relayAuthIssuers(env)
   try {
+    // A token is accepted if its `iss` matches any trusted issuer; a malformed list rejects all.
+    const issuers = relayAuthIssuers(env)
     const { payload } = await jwtVerify(token, keysFor(env), {
       audience: env.RELAY_JWT_AUDIENCE,
       algorithms: ['ES256'],
