@@ -38,9 +38,8 @@ export class RelayControlOrigin {
   constructor(options: RelayControlOriginOptions) {
     this.options = options
     this.assignment = options.assignment
-    // Reuse the drain path so the pool re-asks the director and rebinds or moves cells.
     this.attachHealth = new RelayDataAttachHealth(options.assignment.cellUrl, () =>
-      options.onDrain(this, { type: 'drain', graceMs: 0, recovery: 'resolve-director' })
+      options.onDataPathUnhealthy(this)
     )
     this.transport = new CloudRelayTransport({
       cellUrl: options.assignment.cellUrl,
@@ -48,10 +47,10 @@ export class RelayControlOrigin {
       generation: 0,
       createSocket: options.createDataSocket,
       onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this),
-      onAttachSettled: (attached) => {
-        // Closing terminates sockets mid-attach; that is not evidence about the path.
+      onDataDialSettled: (connectionId, opened) => {
+        // Closing terminates sockets mid-dial; that is not evidence about the path.
         if (!this.closed) {
-          this.attachHealth.note(attached)
+          this.attachHealth.note(connectionId, opened)
         }
       }
     })

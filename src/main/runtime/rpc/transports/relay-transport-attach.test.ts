@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import { CloudRelayTransport } from './relay-transport'
 
@@ -8,7 +8,13 @@ class FakeDataSocket extends EventEmitter {
   readonly CLOSED = 3
   readyState = 0
   send = vi.fn()
-  terminate = vi.fn(() => this.closeWith(1006))
+  // Like ws: terminating a connecting socket emits error, then close.
+  terminate = vi.fn(() => {
+    if (this.readyState === 0) {
+      this.emit('error', new Error('closed before the connection was established'))
+    }
+    this.closeWith(1006)
+  })
 
   open(): void {
     this.readyState = this.OPEN
@@ -25,7 +31,7 @@ class FakeDataSocket extends EventEmitter {
 
 function setup() {
   const sockets: FakeDataSocket[] = []
-  const outcomes: boolean[] = []
+  const outcomes: [string, boolean][] = []
   const transport = new CloudRelayTransport({
     cellUrl: 'https://relay-c1.example',
     relayHostId: 'host',
@@ -36,7 +42,7 @@ function setup() {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every socket member openConnection and stop use.
       return socket as unknown as WebSocket
     },
-    onAttachSettled: (attached) => outcomes.push(attached)
+    onDataDialSettled: (connectionId, opened) => outcomes.push([connectionId, opened])
   })
   let next = 0
   const open = () =>
@@ -50,56 +56,45 @@ function setup() {
   return { transport, sockets, outcomes, open }
 }
 
-describe('CloudRelayTransport attach outcome', () => {
+describe('CloudRelayTransport data dial outcome', () => {
+  beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('reports success on the first relay frame and nothing more', async () => {
+  it('reports a dial that never opened: deadline or socket error', async () => {
     const { sockets, outcomes, open } = setup()
-    const opening = open()
-    sockets[0].open()
-    await opening
-    sockets[0].emit('message', Buffer.from('{}'), false)
-    sockets[0].emit('message', Buffer.from('{}'), false)
-    sockets[0].closeWith(4404)
-    expect(outcomes).toEqual([true])
-  })
-
-  it('reports a failure for a missed deadline, an error before open and a 4xxx refusal', async () => {
-    vi.useFakeTimers()
-    const { sockets, outcomes, open } = setup()
-
-    // Opened but never attached: the deadline is the phone's attach-timeout.
-    const opened = open()
-    sockets[0].open()
-    await opened
+    const timedOut = open()
+    const timeoutSettled = expect(timedOut).rejects.toThrow()
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(outcomes).toEqual([false])
+    await timeoutSettled
 
     const errored = open()
     sockets[1].emit('error', new Error('ECONNRESET'))
     await expect(errored).rejects.toThrow('ECONNRESET')
-    expect(outcomes).toEqual([false, false])
-
-    const refused = open()
-    sockets[2].open()
-    await refused
-    sockets[2].closeWith(4401)
-    expect(outcomes).toEqual([false, false, false])
+    expect(outcomes).toEqual([
+      ['conn-1', false],
+      ['conn-2', false]
+    ])
   })
 
-  it('does not count ordinary closes after open as attach failures', async () => {
-    vi.useFakeTimers()
-    const { transport, sockets, outcomes, open } = setup()
-    const first = open()
-    sockets[0].open()
-    await first
-    sockets[0].closeWith(1006)
-
-    const second = open()
-    sockets[1].open()
-    await second
-    await transport.stop()
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(outcomes).toEqual([])
+  it('reports an opened dial once and ignores what the phone does after', async () => {
+    const { sockets, outcomes, open } = setup()
+    // Phone leaves mid-attach (edge answers 4401), drops before its first frame (4408), or goes
+    // quiet until the attach deadline: none of these say anything about this host's path.
+    for (const phoneBehaviour of [
+      (socket: FakeDataSocket) => socket.closeWith(4401),
+      (socket: FakeDataSocket) => socket.closeWith(4408),
+      () => vi.advanceTimersByTimeAsync(10_000)
+    ]) {
+      const opening = open()
+      const socket = sockets.at(-1)!
+      socket.open()
+      await opening
+      await phoneBehaviour(socket)
+    }
+    expect(outcomes).toEqual([
+      ['conn-1', true],
+      ['conn-2', true],
+      ['conn-3', true]
+    ])
   })
 })
