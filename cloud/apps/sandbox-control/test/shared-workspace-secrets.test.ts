@@ -82,7 +82,7 @@ const TEAM_AND_REPO = { ANTHROPIC_API_KEY: TEAM_KEY, BAR: 'repo-bar-value', FOO:
 
 describe('personal secrets in shared workspaces (SEC-5)', () => {
   it('resolves no personal owner for a shared row, and fails closed on an unknown visibility', () => {
-    const row = { account_id: 'org:acme', user_id: 'mia', repo_url: 'https://github.com/acme/app' }
+    const row = { account_id: 'org:acme', user_id: 'mia', repo_url: 'https://github.com/acme/app', ownership_transferred_at: null }
     expect(ownersForSandbox({ ...row, visibility: 'private' }).personal).toBe('user:mia')
     expect(ownersForSandbox({ ...row, visibility: 'team' })).toEqual({ org: 'org:acme', personal: null, repo: 'org:acme#github.com/acme/app' })
     expect(ownersForSandbox({ ...row, visibility: undefined as never }).personal).toBeNull()

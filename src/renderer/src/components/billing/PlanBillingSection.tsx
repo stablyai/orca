@@ -180,6 +180,15 @@ export function PlanBillingView({
       <div className="space-y-3">
         <InlineError
           title={t('auto.components.billing.loadFailedTitle', 'Couldn’t load your plan')}
+          detail={
+            result.error === 'billing_org_mismatch'
+              ? t(
+                  // EP-9: auth answered for a different team than this device shows; refused.
+                  'auto.components.billing.loadFailedOtherTeam',
+                  'Orca couldn’t confirm this team’s billing. Try again, or sign out and back in.'
+                )
+              : undefined
+          }
           retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
           onRetry={onRefresh}
           retrying={loading}

@@ -30,7 +30,7 @@ export type ProviderEnv = { env: Record<string, string>; scopes: Record<string, 
 export async function resolvedProviderEnv(
   db: D1Database,
   keyring: Keyring,
-  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility'>
+  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility' | 'ownership_transferred_at'>
 ): Promise<ProviderEnv> {
   const { env: stored, scopes } = await resolveSandboxSecrets(db, keyring, row)
   // The proxy only needs the keys; dropping those of agents not on 'keep' happens at request time

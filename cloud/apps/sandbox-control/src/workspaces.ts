@@ -9,10 +9,11 @@
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
+import type { TeamMembershipCheck } from './team-membership'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
-import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
+import { getSandbox, touchActivity, transferOwnership, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
 import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
@@ -32,7 +33,7 @@ export type WorkspaceAccess = 'owner' | 'granted' | 'can_open' | 'none'
 
 export class WorkspaceError extends Error {
   constructor(
-    readonly code: 'not_found' | 'forbidden' | 'invalid_request' | 'conflict',
+    readonly code: 'not_found' | 'forbidden' | 'invalid_request' | 'conflict' | 'unavailable',
     readonly reason?: string
   ) {
     super(reason ? `${code}:${reason}` : code)
@@ -44,7 +45,8 @@ export const WORKSPACE_ERROR_STATUS: Record<WorkspaceError['code'], number> = {
   not_found: 404,
   forbidden: 403,
   invalid_request: 400,
-  conflict: 409
+  conflict: 409,
+  unavailable: 503
 }
 
 export function isOrgAdmin(caller: SandboxCaller): boolean {
@@ -214,6 +216,8 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       archivedAt: row.archived_at,
       createdBy: row.created_by ?? row.user_id,
       ownerUserId: row.user_id,
+      // Set once the owner was ever changed: the workspace runs in shared mode for credentials.
+      ownershipTransferredAt: row.ownership_transferred_at,
       lastActivityAt: row.last_activity_at ?? row.updated_at,
       lastActivityBy: row.last_activity_by,
       cost: costView(row, compute.get(row.id) ?? 0, now),
@@ -347,7 +351,15 @@ export async function patchWorkspace(
   caller: SandboxCaller,
   row: SandboxRow,
   patch: WorkspacePatch,
-  now: number
+  now: number,
+  /**
+   * Asked once the caller is known to be allowed to hand the workspace over, and before anything
+   * is written: is the new owner in this team right now? (team-membership.ts) Without one, no
+   * hand-off happens.
+   */
+  confirmNewOwner?: TeamMembershipCheck,
+  /** Stops a running workspace before it changes owner (the lifecycle suspend). Without one, a running workspace is not handed over. */
+  stopForTransfer?: (row: SandboxRow) => Promise<unknown>
 ): Promise<{ row: SandboxRow; revoke: 'none' | 'non_owner' | 'all_but_new_owner' }> {
   const metadataOnly = patch.tokenUsdMicros !== undefined && Object.keys(patch).length === 1
   if (metadataOnly) {
@@ -372,6 +384,38 @@ export async function patchWorkspace(
     if (!row.account_id.includes('org:')) {
       throw new WorkspaceError('invalid_request', 'personal_account')
     }
+    // OWNER-TRANSFER: never onto a workspace that is booting or stopping. Its environment may have
+    // been resolved for the previous owner, and what their boot started would run on under the new one.
+    if (row.status !== 'running' && row.status !== 'suspended' && row.status !== 'archived') {
+      throw new WorkspaceError('conflict', `sandbox_${row.status}`)
+    }
+    // Only to someone who is in the team now, by auth's live answer. Anything but a clear yes
+    // refuses, and nothing has been changed yet.
+    const answer = confirmNewOwner ? await confirmNewOwner(row.account_id, patch.ownerUserId) : { unavailable: 'not_configured' }
+    if ('unavailable' in answer) {
+      console.log(JSON.stringify({ event: 'owner_transfer_refused', sandboxId: row.id, reason: answer.unavailable }))
+      throw new WorkspaceError('unavailable', 'membership_unavailable')
+    }
+    if (!answer.member) {
+      throw new WorkspaceError('forbidden', 'not_a_member')
+    }
+  }
+  const transferring = patch.ownerUserId !== undefined && patch.ownerUserId !== row.user_id
+  if (transferring) {
+    // Stop first, so nothing the previous owner left running carries on and the next wake is a new
+    // session with a freshly built, shared-mode environment. A stop that fails refuses the hand-off:
+    // the workspace stays theirs, stopped or not, and nothing else has changed.
+    if (row.status === 'running') {
+      const stopped = stopForTransfer ? await stopForTransfer(row).then(() => true, () => false) : false
+      if (!stopped) {
+        throw new WorkspaceError('conflict', 'stop_failed')
+      }
+    }
+    // One statement, and only if it is stopped at this instant (the previous owner may have woken
+    // it again): the new owner and the transferred mark land together or not at all.
+    if (!(await transferOwnership(db, row.id, patch.ownerUserId!, now))) {
+      throw new WorkspaceError('conflict', 'sandbox_not_stopped')
+    }
   }
   const next = await updateRegistry(db, row.id, {
     ...(patch.title !== undefined ? { name: patch.title } : {}),
@@ -381,7 +425,6 @@ export async function patchWorkspace(
     // Archiving is a lifecycle change (archiveSandbox stops the VM, then sets archived_at); this edit
     // can only clear a label left by an older label-only archive.
     ...(patch.archived === false ? { archived_at: null } : {}),
-    ...(patch.ownerUserId !== undefined ? { user_id: patch.ownerUserId } : {}),
     ...(patch.tokenUsdMicros !== undefined ? { token_usd_micros: patch.tokenUsdMicros } : {})
   })
   if (!next) {
@@ -393,7 +436,7 @@ export async function patchWorkspace(
       console.warn('member_usage_write_failed', String(error))
     )
   }
-  const ownerChanged = patch.ownerUserId !== undefined && patch.ownerUserId !== row.user_id
+  const ownerChanged = transferring
   const wentPrivate = row.visibility === 'team' && next.visibility === 'private'
   const archived = patch.archived === true && row.archived_at === null
   return { row: next, revoke: ownerChanged ? 'all_but_new_owner' : wentPrivate || archived ? 'non_owner' : 'none' }

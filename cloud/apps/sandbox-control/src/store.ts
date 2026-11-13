@@ -63,6 +63,11 @@ export type SandboxRow = {
   archive_expires_at: number | null
   /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */
   created_by: string | null
+  /**
+   * Set when the owner was changed, in the same write, and never cleared (0059). From then on the
+   * workspace is in shared mode for credentials: see isSharedWorkspace and ownersForSandbox.
+   */
+  ownership_transferred_at: number | null
   /** Display name (0020's `name`; the API calls it `title`). */
   name: string | null
   repo_branch: string | null
@@ -119,7 +124,7 @@ export async function insertSandbox(
     SandboxRow,
     'id' | 'account_id' | 'user_id' | 'workspace_id' | 'provider' | 'provider_name' | 'machine_size' | 'region' | 'repo_url'
   > &
-    Partial<Pick<SandboxRow, 'environment_id' | 'environment_build_id' | 'source_snapshot_id' | 'name' | 'repo_branch' | 'visibility' | 'section'>>,
+    Partial<Pick<SandboxRow, 'environment_id' | 'environment_build_id' | 'source_snapshot_id' | 'name' | 'repo_branch' | 'visibility' | 'section' | 'ownership_transferred_at'>>,
   now: number
 ): Promise<SandboxRow> {
   // One transaction: bump the account's counter, then take its value as this row's number (W-123).
@@ -135,14 +140,16 @@ export async function insertSandbox(
       .prepare(
         `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
            machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
-           source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by, number)
-         VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by,
+           ownership_transferred_at, number)
+         VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
            (SELECT last_number FROM org_workspace_counters WHERE account_id = ?))`
       )
       .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
         row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
         row.environment_build_id ?? null, row.source_snapshot_id ?? null, row.user_id, row.name ?? null,
-        row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id, row.account_id)
+        row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id,
+        row.ownership_transferred_at ?? null, row.account_id)
   ])
   const inserted = await getSandbox(db, row.id)
   if (!inserted) {
@@ -234,9 +241,9 @@ const PATCHABLE = new Set<string>([
 ])
 
 export type RegistryPatch = Partial<
-  Pick<SandboxRow, 'name' | 'repo_branch' | 'visibility' | 'section' | 'archived_at' | 'user_id' | 'token_usd_micros'>
+  Pick<SandboxRow, 'name' | 'repo_branch' | 'visibility' | 'section' | 'archived_at' | 'user_id' | 'token_usd_micros' | 'ownership_transferred_at'>
 >
-const REGISTRY_PATCHABLE = new Set<string>(['name', 'repo_branch', 'visibility', 'section', 'archived_at', 'user_id', 'token_usd_micros'])
+const REGISTRY_PATCHABLE = new Set<string>(['name', 'repo_branch', 'visibility', 'section', 'archived_at', 'user_id', 'token_usd_micros', 'ownership_transferred_at'])
 
 /**
  * Registry metadata (title, visibility, owner, ...). Deliberately not a `transition`: it never
@@ -252,6 +259,26 @@ export async function updateRegistry(db: D1Database, id: string, patch: Registry
       .run()
   }
   return getSandbox(db, id)
+}
+
+/**
+ * OWNER-TRANSFER: the new owner and the transferred mark in one statement, and only while the
+ * workspace is stopped. A row that is running or mid-boot at this instant is left untouched
+ * (null), so a hand-off can never land on a live VM or on a boot whose environment was resolved
+ * for the previous owner.
+ */
+export async function transferOwnership(db: D1Database, id: string, newOwnerId: string, now: number): Promise<SandboxRow | null> {
+  const result = await db
+    // Unlike other registry edits this bumps `generation` on purpose: a wake that read the row just
+    // before (still the previous owner's, unmarked) must lose its compare-and-set, not boot a
+    // private environment for them under the new owner.
+    .prepare(
+      `UPDATE sandboxes SET user_id = ?, ownership_transferred_at = ?, generation = generation + 1
+       WHERE id = ? AND status IN ('suspended', 'archived')`
+    )
+    .bind(newOwnerId, now, id)
+    .run()
+  return (result.meta.changes ?? 0) > 0 ? getSandbox(db, id) : null
 }
 
 /** Last activity (open, message, presence) — coarse, at most one write a minute per workspace. */

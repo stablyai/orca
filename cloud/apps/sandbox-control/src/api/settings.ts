@@ -1,6 +1,7 @@
 // Per-account programmatic-access settings, and the per-boot workspace token for the in-VM CLI.
 import type { SandboxProviderApi } from '../sandbox-provider'
 import type { SandboxRow } from '../store'
+import { getSandbox } from '../store'
 import { audit } from './audit'
 import { WORKSPACE_TOKEN_SCOPES, mintApiKey, revokeWorkspaceTokens } from './keys'
 import { installWorkspaceToken } from './vm-agent'
@@ -54,6 +55,13 @@ export async function provisionWorkspaceToken(
 ): Promise<'installed' | 'disabled' | 'failed'> {
   try {
     await revokeWorkspaceTokens(deps.db, row.id, deps.now())
+    // OWNER-TRANSFER: no token for a transferred workspace. It would act as the new owner, and a
+    // file the previous owner left could use it to create a private sibling with that owner's
+    // personal credentials. Read from the database, so a boot racing the transfer sees the flag.
+    const current = await getSandbox(deps.db, row.id)
+    if (!current || current.ownership_transferred_at != null) {
+      return 'disabled'
+    }
     const settings = await getAccountSettings(deps.db, row.account_id)
     if (!settings.vmCliEnabled || !deps.apiUrl) {
       return 'disabled'

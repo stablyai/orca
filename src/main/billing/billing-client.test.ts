@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import {
   BillingServiceError,
@@ -6,7 +6,9 @@ import {
   claimTrial,
   createCheckoutUrl,
   createPortalUrl,
+  BillingOrgMismatchError,
   fetchEntitlement,
+  resetBillingExplicitOrgForTests,
   fetchTeamPlans,
   mintBillingToken
 } from './billing-client'
@@ -30,31 +32,81 @@ function fakeFetch(responses: Record<string, Response>, seen: Seen[] = []): type
   }
 }
 
+/** An unsigned JWT-shaped token with these claims (the desktop only decodes the org claim). */
+function jwt(claims: Record<string, unknown>): string {
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${part({ alg: 'none' })}.${part(claims)}.sig`
+}
+
 describe('billing client', () => {
   it('mints a billing token with the Orca access token and refuses redirects', async () => {
     const seen: Seen[] = []
+    const bt = jwt({ sub: 'u1' })
     const token = await mintBillingToken(
       endpoints,
       'access-1',
+      null,
       fakeFetch(
         {
           [endpoints.billingTokenEndpoint]: Response.json({
-            billingToken: 'bt',
+            billingToken: bt,
             expiresAt: 1
           })
         },
         seen
       )
     )
-    expect(token).toBe('bt')
+    expect(token).toBe(bt)
     expect(new Headers(seen[0]?.init?.headers).get('authorization')).toBe('Bearer access-1')
     expect(seen[0]?.init?.redirect).toBe('error')
+  })
+
+  describe('EP-9: the token is for the team this device shows', () => {
+    beforeEach(() => resetBillingExplicitOrgForTests())
+
+    it('asks auth for this device\'s team explicitly and accepts a token for it', async () => {
+      const seen: Seen[] = []
+      const bt = jwt({ sub: 'u1', org: 'org_paid' })
+      const fetchImpl = fakeFetch({ [endpoints.billingTokenEndpoint]: Response.json({ billingToken: bt, expiresAt: 1 }) }, seen)
+      expect(await mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)).toBe(bt)
+      expect(seen[0]?.init?.body).toBe(JSON.stringify({ orgId: 'org_paid' }))
+    })
+
+    it('refuses a token auth minted for another team (another device switched the shared active team)', async () => {
+      const fetchImpl: typeof fetch = async () =>
+        Response.json({ billingToken: jwt({ sub: 'u1', org: 'org_eval' }), expiresAt: 1 })
+      await expect(mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+      // A personal account never accepts a team token either.
+      await expect(mintBillingToken(endpoints, 'a', null, fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+    })
+
+    it('treats 403 not_a_member as a team-switch error, not a session failure', async () => {
+      const fetchImpl: typeof fetch = async () =>
+        new Response(JSON.stringify({ error: 'not_a_member' }), { status: 403 })
+      await expect(mintBillingToken(endpoints, 'a', 'org_gone', fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+    })
+
+    it('falls back to the empty body on an older auth (400), still checking the claim', async () => {
+      const bodies: (string | undefined)[] = []
+      const fetchImpl: typeof fetch = async (_input, init) => {
+        bodies.push(typeof init?.body === 'string' ? init.body : undefined)
+        return init?.body === '{}'
+          ? Response.json({ billingToken: jwt({ sub: 'u1', org: 'org_paid' }), expiresAt: 1 })
+          : new Response(JSON.stringify({ error: 'invalid_request' }), { status: 400 })
+      }
+      await mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)
+      expect(bodies).toEqual([JSON.stringify({ orgId: 'org_paid' }), '{}'])
+      // Remembered for a while: the next mint skips the body.
+      await mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)
+      expect(bodies.at(-1)).toBe('{}')
+    })
   })
 
   it('surfaces an auth rejection as an Orca session failure so the session refreshes', async () => {
     const call = mintBillingToken(
       endpoints,
       'stale',
+      null,
       fakeFetch({
         [endpoints.billingTokenEndpoint]: new Response(null, { status: 401 })
       })

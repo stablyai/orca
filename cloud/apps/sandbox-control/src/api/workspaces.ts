@@ -154,6 +154,8 @@ export async function createWorkspace(
     hidden?: boolean
     /** Caller-chosen sandbox workspace key (routine runs use one derived from the run, so a crash mid-boot is findable). */
     workspaceId?: string
+    /** OWNER-TRANSFER: made from inside a transferred workspace, so it starts transferred (shared mode). */
+    ownershipTransferredAt?: number | null
   }
 ): Promise<WorkspaceRow> {
   const repo = input.repo ?? (input.project?.repo_url ? { url: input.project.repo_url, ...(input.project.default_ref ? { ref: input.project.default_ref } : {}) } : undefined)
@@ -163,6 +165,7 @@ export async function createWorkspace(
     machineSize: input.machineSize ?? input.project?.machine_size ?? 'standard',
     ...((input.region ?? input.project?.region) ? { region: (input.region ?? input.project?.region)! } : {}),
     ...(repo ? { repo } : {}),
+    ...(input.ownershipTransferredAt != null ? { ownershipTransferredAt: input.ownershipTransferredAt } : {}),
     ...((input.environmentBuildId ?? input.project?.build_id) ? { environmentBuildId: (input.environmentBuildId ?? input.project?.build_id)! } : {})
   })
   await setWorkspaceMeta(life.db, ready.row.id, {

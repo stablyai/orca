@@ -43,31 +43,87 @@ async function readErrorCode(response: Response): Promise<string | null> {
   return parsed.success ? parsed.data.error : null
 }
 
-/** POST to Orca Cloud auth. A 401/403 is surfaced as OrcaCloudRequestError so the caller's
- * session-refresh wrapper refreshes the Orca session once and retries. */
+/** Auth older than the explicit-org body answers 400; skip the body for a while after one. */
+const explicitOrg = { unsupportedUntil: 0 }
+const EXPLICIT_ORG_RETRY_MS = 10 * 60_000
+
+/** The `org` claim of a billing token (null: personal). Decodes only; billing verifies it. */
+export function readBillingTokenOrg(token: string): string | null {
+  let payload: unknown = null
+  try {
+    payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'))
+  } catch {
+    // Reported below without echoing the token.
+  }
+  if (typeof payload !== 'object' || payload === null) {
+    throw new Error('invalid_billing_token')
+  }
+  const org = 'org' in payload ? payload.org : undefined
+  return typeof org === 'string' && org ? org : null
+}
+
+/** The minted token speaks for a different team than the one this device shows (EP-9). */
+export class BillingOrgMismatchError extends Error {
+  constructor(readonly requested: string | null) {
+    super('billing_org_mismatch')
+    this.name = 'BillingOrgMismatchError'
+  }
+}
+
+/**
+ * POST to Orca Cloud auth for a billing token for `orgId`, the team THIS device shows (null:
+ * personal). Auth used to pick the team from the profile's active team, which a user's other
+ * devices share, so one device switching teams made the other read and act on that team's plan
+ * (EP-9). The token's org claim is checked; a token for any other team is refused, never used.
+ * A 401/403 is surfaced as OrcaCloudRequestError so the caller's session refresh retries once.
+ */
 export async function mintBillingToken(
   endpoints: BillingEndpoints,
   accessToken: string,
+  orgId: string | null,
   fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-  const response = await fetchImpl(endpoints.billingTokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${accessToken}`
-    },
-    body: '{}',
-    redirect: 'error',
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-  })
+  const post = (body: string) =>
+    fetchImpl(endpoints.billingTokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${accessToken}`
+      },
+      body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    })
+  const explicit = Date.now() >= explicitOrg.unsupportedUntil
+  let response = await post(explicit ? JSON.stringify({ orgId }) : '{}')
+  if (explicit && response.status === 400) {
+    // Auth older than the explicit-org contract (#761) rejects any body; the claim check below
+    // still refuses a token for the wrong team.
+    explicitOrg.unsupportedUntil = Date.now() + EXPLICIT_ORG_RETRY_MS
+    response = await post('{}')
+  }
   if (!response.ok) {
-    throw new OrcaCloudRequestError(response.status, (await readErrorCode(response)) ?? undefined)
+    const code = (await readErrorCode(response)) ?? undefined
+    if (response.status === 403 && orgId && code === 'not_a_member') {
+      // This device shows a team the person is no longer on: a switch error, not a session one
+      // (refreshing the session would not help).
+      throw new BillingOrgMismatchError(orgId)
+    }
+    throw new OrcaCloudRequestError(response.status, code)
   }
   const body = TokenBody.safeParse(await response.json())
   if (!body.success) {
     throw new Error('invalid_billing_token')
   }
+  if (readBillingTokenOrg(body.data.billingToken) !== orgId) {
+    throw new BillingOrgMismatchError(orgId)
+  }
   return body.data.billingToken
+}
+
+/** Test hook: forget a remembered "auth doesn't take an explicit org". */
+export function resetBillingExplicitOrgForTests(): void {
+  explicitOrg.unsupportedUntil = 0
 }
 
 export async function billingRequest(

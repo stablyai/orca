@@ -79,11 +79,7 @@ async function verifyClaudeToken(credential: string, fetchImpl: typeof fetch): P
   return type === 'authentication_error' ? 'invalid' : 'unknown'
 }
 
-/** D13: a workspace shared with teammates never uses a personal account. Fails closed: only a row
- * known to be private counts as unshared. */
-export function isSharedWorkspace(row: Pick<SandboxRow, 'visibility'>): boolean {
-  return row.visibility !== 'private'
-}
+export { isSharedWorkspace } from './shared-workspace'
 
 export const claudeAccount: AccountProvider = {
   agent: 'claude',

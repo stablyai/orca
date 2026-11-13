@@ -727,6 +727,8 @@ export async function createSandbox(
     useEnvironment?: boolean
     title?: string
     visibility?: 'private' | 'team'
+    /** Set when an in-VM token of a transferred workspace creates this one: it is transferred too. */
+    ownershipTransferredAt?: number | null
     section?: string
     /**
      * The desktop shows the clone as its own step (GET /v1/sandboxes/:id/clone): the repo clones
@@ -831,7 +833,8 @@ export async function createSandbox(
         name: request.title ?? null,
         // A personal account has no team: its workspaces are always private.
         visibility: request.visibility === 'team' && caller.accountId.includes('org:') ? 'team' : 'private',
-        section: request.section ?? null
+        section: request.section ?? null,
+        ownership_transferred_at: request.ownershipTransferredAt ?? null
       },
       deps.now()
     ).catch(async (error: unknown) => {

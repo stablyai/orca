@@ -72,6 +72,9 @@
     "GITHUB_APP_SLUG": "orca-cloud-dev",
     // Cloud setup pages (staging auth): GitHub installs started from a setup session return there.
     "CLOUD_SETUP_ORIGIN": "https://auth-staging.onorca.dev",
+    // Auth's internal API (staging auth is the one that pushes to this Worker): the live "is this
+    // person in the team" check before a workspace changes owner. Unset = hand-offs refused.
+    "AUTH_INTERNAL_ORIGIN": "https://auth-staging.onorca.dev",
     "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
   }
 }
