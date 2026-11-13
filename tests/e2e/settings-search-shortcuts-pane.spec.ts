@@ -32,11 +32,11 @@ test.describe('Settings sidebar search on the Shortcuts pane', () => {
     await expect(orcaPage.getByRole('heading', { name: 'Shortcuts', exact: true })).toBeVisible()
 
     // The sidebar query no longer filters the pane, so every row and the pane's own search stay usable.
-    await expect(orcaPage.getByText('Go to File', { exact: true })).toBeVisible()
+    await expect(orcaPage.getByText('Go to file', { exact: true })).toBeVisible()
     await expect(searchInput).toHaveValue('shortcuts')
     const localSearch = orcaPage.getByPlaceholder('Search command or keys')
     await localSearch.fill('go to')
-    await expect(orcaPage.getByText('Go to File', { exact: true })).toBeVisible()
-    await expect(orcaPage.getByText('Force Reload', { exact: true })).not.toBeVisible()
+    await expect(orcaPage.getByText('Go to file', { exact: true })).toBeVisible()
+    await expect(orcaPage.getByText('Force reload', { exact: true })).not.toBeVisible()
   })
 })

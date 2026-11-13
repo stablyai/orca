@@ -42,9 +42,9 @@ test.describe('Terminal shortcut conflicting with a chord main intercepts', () =
 
     await orcaPage.getByRole('button', { name: /Conflicts/ }).click()
     await expect(orcaPage.getByText('Split terminal right', { exact: true })).toBeVisible()
-    await expect(orcaPage.getByText('Worktree History Forward', { exact: true })).toBeVisible()
+    await expect(orcaPage.getByText('Worktree history forward', { exact: true })).toBeVisible()
     await expect(
-      orcaPage.getByText(/conflicts with .*Worktree History Forward/).first()
+      orcaPage.getByText(/conflicts with .*Worktree history forward/).first()
     ).toBeVisible()
   })
 })
