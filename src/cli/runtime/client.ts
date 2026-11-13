@@ -309,7 +309,7 @@ export class RuntimeClient {
     }
     return openLocalOrca(
       () => this.getCliStatus(),
-      () => this.call<{ requested: boolean }>('desktop.openWindowInBackground'),
+      (options) => this.call<{ requested: boolean }>('desktop.openWindowInBackground', {}, options),
       timeoutMs
     )
   }
