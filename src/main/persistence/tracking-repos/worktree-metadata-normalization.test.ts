@@ -95,6 +95,27 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
 })
 
 describe('gcStaleWorktreeMeta', () => {
+  it('keeps an archived workspace whose checkout was deleted on purpose', () => {
+    const worktreeId = 'r1::/definitely/missing/orca/archived'
+    const state = makeState({
+      repos: [],
+      projects: [],
+      worktreeMeta: {
+        [worktreeId]: {
+          ...makeMeta(),
+          hostId: 'local',
+          comment: 'resume after review',
+          isArchived: true,
+          archivedCheckout: { branch: 'feature/archived', archivedAt: 1 },
+          lastActivityAt: Date.now() - WORKTREE_META_GC_GRACE_MS - 1
+        }
+      }
+    })
+
+    expect(gcStaleWorktreeMeta(state)).toBe(0)
+    expect(state.worktreeMeta[worktreeId]?.comment).toBe('resume after review')
+  })
+
   it('reclaims the identity rows of a collected worktree', () => {
     const worktreeId = 'r1::/definitely/missing/orca/path'
     const identityKey = 'wt2:local:dead'

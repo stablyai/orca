@@ -244,7 +244,7 @@ function submitCheckoutDelete<T>(
       )
 }
 
-/** Restore waits behind any archive or delete still running for this workspace. */
+/** Restore is ordered with this workspace's other commands; one sent during its archive is refused. */
 export function queueWorkspaceRestore<T>(
   runtime: LifecycleRuntime,
   selector: string,
