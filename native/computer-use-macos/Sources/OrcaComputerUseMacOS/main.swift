@@ -847,6 +847,9 @@ final class Provider {
         while !app.app.isFinishedLaunching, !app.app.isTerminated, Date() < deadline {
             Thread.sleep(forTimeInterval: 0.05)
         }
+        if app.app.isTerminated {
+            throw ProviderError.coded("app_launch_failed", "'\(query)' quit while it was starting")
+        }
         return renderLaunch(app, launched: true)
     }
 
@@ -1529,8 +1532,9 @@ private func parsePid(_ query: String) -> pid_t? {
 
 /// An app that isn't running, by absolute path, bundle ID or bundle name in the usual install folders.
 private func installedApplicationURL(_ query: String) -> URL? {
-    if query.hasPrefix("/") {
-        return FileManager.default.fileExists(atPath: query) ? URL(fileURLWithPath: query) : nil
+    let path = (query as NSString).expandingTildeInPath
+    if path.hasPrefix("/") {
+        return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
     }
     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: query) {
         return url

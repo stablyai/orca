@@ -42,7 +42,7 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['app'],
     notes: [
       'Leaves an app that is already running as it is. Use this instead of `open -a` or Start-Process, which bring the app to the front.',
-      'Use --activate only when the user asked for the app to come forward: it takes the keyboard from whatever they are doing.',
+      'Use --activate only when the user asked for the app to come forward: it takes the keyboard from whatever they are doing. It applies only when launch-app starts the app.',
       'macOS and Windows only.'
     ]
   },

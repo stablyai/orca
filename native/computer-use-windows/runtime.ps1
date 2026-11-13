@@ -1577,7 +1577,7 @@ function Resolve-OrcaLaunchExecutable([string]$Query) {
         throw "appNotFound(`"$Query`")"
     }
     $exe = if ($needle.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $needle } else { "$needle.exe" }
-    $command = Get-Command -Name $exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $command = Get-Command -Name ([WildcardPattern]::Escape($exe)) -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -ne $command) { return [string]$command.Source }
     # Why: Start-Process finds apps such as chrome.exe through App Paths, which PATH lookup misses.
     foreach ($hive in @("HKCU:", "HKLM:")) {
@@ -1614,20 +1614,27 @@ function New-OrcaLaunchResult($Process, [bool]$Launched) {
     [pscustomobject]@{ ok = $true; app = New-OrcaAppRecord $Process; launched = $Launched; delivery = $delivery }
 }
 
+function Find-OrcaRunningLaunchTarget([string]$ProcessName) {
+    # Why: starting a running app again usually opens a second window over the user's work; tray-only apps count too.
+    $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+    $running = @(Get-Process -Name ([WildcardPattern]::Escape($ProcessName)) -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session }) |
+        Sort-Object { $_.MainWindowHandle -eq 0 } | Select-Object -First 1
+    if ($null -ne $running) { Assert-OrcaProcessAllowed $running }
+    $running
+}
+
 function Invoke-OrcaLaunchApp($Operation) {
     $query = ([string]$Operation.app).Trim()
     if ([string]::IsNullOrWhiteSpace($query)) { throw 'appNotFound("")' }
-    $processName = [System.IO.Path]::GetFileNameWithoutExtension($query)
-    # Why: starting a running app again usually opens a second window over the user's work; tray-only apps count too.
-    $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
-    $running = @(Get-Process -Name ([WildcardPattern]::Escape($processName)) -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session }) |
-        Sort-Object { $_.MainWindowHandle -eq 0 } | Select-Object -First 1
-    if ($null -ne $running) {
-        Assert-OrcaProcessAllowed $running
-        return New-OrcaLaunchResult $running $false
-    }
+    $queryName = if ([System.IO.Path]::IsPathRooted($query)) { [System.IO.Path]::GetFileName($query) } else { $query }
+    if ($queryName.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $queryName = $queryName.Substring(0, $queryName.Length - 4) }
+    $running = Find-OrcaRunningLaunchTarget $queryName
+    if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
 
     $executable = Resolve-OrcaLaunchExecutable $query
+    # Why: an App Paths alias can name a differently named executable.
+    $running = Find-OrcaRunningLaunchTarget ([System.IO.Path]::GetFileNameWithoutExtension($executable))
+    if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
     $name = [System.IO.Path]::GetFileNameWithoutExtension($executable).ToLowerInvariant().Replace(" ", "")
     foreach ($fragment in $BlockedAppFragments) {
         if ($name.Contains($fragment.Replace(" ", ""))) { throw "appBlocked(`"$name`")" }
@@ -1649,10 +1656,12 @@ function Invoke-OrcaLaunchApp($Operation) {
     if ($null -eq $process) {
         throw "app_launch_failed: the process started for '$query' exited; if it handed off to another process, find that one with list-apps"
     }
-    if (-not $activate -and $process.MainWindowHandle -ne 0) {
+    $result = New-OrcaLaunchResult $process $true
+    # Why: an app that still took the foreground keeps the keyboard; burying it would hide where typing goes.
+    if (-not $activate -and $result.delivery -eq "background" -and $process.MainWindowHandle -ne 0) {
         [void][OrcaDesktopWin32]::SendWindowToBack([IntPtr]$process.MainWindowHandle)
     }
-    New-OrcaLaunchResult $process $true
+    $result
 }
 
 function Get-OrcaHandshake {
