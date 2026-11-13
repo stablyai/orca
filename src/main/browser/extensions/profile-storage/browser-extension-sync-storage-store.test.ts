@@ -1,13 +1,18 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const io = vi.hoisted(() => {
-  const state: { heldMkdir: Promise<void> | null; failingRemovals: number } = {
+  const state: {
+    heldMkdir: Promise<void> | null
+    failingRemovals: number
+    beforeRemove: ((path: string) => Promise<void>) | null
+  } = {
     heldMkdir: null,
-    failingRemovals: 0
+    failingRemovals: 0,
+    beforeRemove: null
   }
   return state
 })
@@ -21,6 +26,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       return fs.mkdir(...args)
     },
     rm: async (...args: Parameters<typeof fs.rm>) => {
+      await io.beforeRemove?.(String(args[0]))
       if (io.failingRemovals > 0) {
         io.failingRemovals--
         throw Object.assign(new Error('resource busy'), { code: 'EBUSY' })
@@ -45,6 +51,7 @@ beforeEach(() => {
 afterEach(() => {
   io.heldMkdir = null
   io.failingRemovals = 0
+  io.beforeRemove = null
   vi.restoreAllMocks()
   rmSync(root, { recursive: true, force: true })
 })
@@ -115,6 +122,44 @@ describe('BrowserExtensionProfileDocumentStore', () => {
     await store.flush()
 
     expect(new BrowserExtensionProfileDocumentStore(root).read('default', EXTENSION)).toEqual({
+      token: 'new'
+    })
+  })
+
+  it('finishes every delete of a failed forget before a later write can land', async () => {
+    const seeded = new BrowserExtensionProfileDocumentStore(root)
+    seeded.write('first', EXTENSION, { token: 'old' })
+    seeded.write('second', EXTENSION, { token: 'old' })
+    await seeded.flush()
+    let release: () => void = () => {}
+    let secondStarted: () => void = () => {}
+    const started = new Promise<void>((resolve) => (secondStarted = resolve))
+    const held = new Promise<void>((resolve) => (release = resolve))
+    io.beforeRemove = async (path) => {
+      if (path.includes(`${sep}first${sep}`)) {
+        throw Object.assign(new Error('resource busy'), { code: 'EBUSY' })
+      }
+      if (path.includes(`${sep}second${sep}`)) {
+        secondStarted()
+        await held
+      }
+    }
+
+    const store = new BrowserExtensionProfileDocumentStore(root)
+    let settled = false
+    const forgotten = store.forgetExtension(EXTENSION).finally(() => (settled = true))
+    // Never read before, yet it must not load the file its pending delete removes.
+    expect(store.read('second', EXTENSION)).toEqual({})
+    await started
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(settled).toBe(false)
+    release()
+    await expect(forgotten).rejects.toThrow('resource busy')
+    io.beforeRemove = null
+    store.write('second', EXTENSION, { token: 'new' })
+    await store.flush()
+
+    expect(new BrowserExtensionProfileDocumentStore(root).read('second', EXTENSION)).toEqual({
       token: 'new'
     })
   })

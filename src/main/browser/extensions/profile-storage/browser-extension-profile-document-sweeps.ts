@@ -44,17 +44,24 @@ async function readdirIfPresent(directory: string): Promise<string[]> {
   }
 }
 
-const REMOVE_OPTIONS = { force: true, maxRetries: 3 }
+// Node retries busy files only in recursive mode, which also removes a plain file.
+const REMOVE_OPTIONS = { force: true, recursive: true, maxRetries: 3 }
+
+/** Settles every removal before reporting a failure, so none outlives its sweep. */
+async function removeAll(paths: string[]): Promise<void> {
+  const results = await Promise.allSettled(paths.map((path) => rm(path, REMOVE_OPTIONS)))
+  const failed = results.find((result) => result.status === 'rejected')
+  if (failed) {
+    throw failed.reason
+  }
+}
 
 export async function deleteSweptDocuments(
   sweep: SweepScope,
   storageDirectory: string
 ): Promise<void> {
   if (sweep.kind === 'profile') {
-    await rm(documentProfileDirectory(storageDirectory, sweep.profileId), {
-      ...REMOVE_OPTIONS,
-      recursive: true
-    })
+    await rm(documentProfileDirectory(storageDirectory, sweep.profileId), REMOVE_OPTIONS)
     return
   }
   if (sweep.kind === 'profileExtension') {
@@ -64,21 +71,21 @@ export async function deleteSweptDocuments(
   }
   if (sweep.kind === 'extension') {
     const profileDirectories = await readdirIfPresent(storageDirectory)
-    await Promise.all(
+    await removeAll(
       profileDirectories.map((directory) =>
-        rm(join(storageDirectory, directory, documentFileName(sweep.extensionId)), REMOVE_OPTIONS)
+        join(storageDirectory, directory, documentFileName(sweep.extensionId))
       )
     )
     return
   }
   const directory = documentProfileDirectory(storageDirectory, sweep.profileId)
   const files = await readdirIfPresent(directory)
-  await Promise.all(
-    files.map((file) => {
-      const extensionId = file.replace(/\.json$/, '')
-      return isChromeExtensionId(extensionId) && !sweep.extensionIds.has(extensionId)
-        ? rm(join(directory, file), REMOVE_OPTIONS)
-        : undefined
-    })
+  await removeAll(
+    files
+      .filter((file) => {
+        const extensionId = file.replace(/\.json$/, '')
+        return isChromeExtensionId(extensionId) && !sweep.extensionIds.has(extensionId)
+      })
+      .map((file) => join(directory, file))
   )
 }

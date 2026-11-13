@@ -164,7 +164,7 @@ export class BrowserExtensionProfileDocumentStore {
     }
   }
 
-  /** Final save on quit; later writes stay readable but are not saved, as after today's last quit flush. */
+  /** Final save on quit; later writes are ignored and forgets refused, as after the old last quit save. */
   close(): Promise<void> {
     this.closed = true
     return this.flush()
@@ -240,10 +240,11 @@ export class BrowserExtensionProfileDocumentStore {
       }
     }
     this.dirty.clear()
+    const deleted = new Set<Sweep>()
     for (const sweep of sweeps) {
       try {
         await deleteSweptDocuments(sweep.scope, this.storageDirectory())
-        this.sweeps.splice(this.sweeps.indexOf(sweep), 1)
+        deleted.add(sweep)
         sweep.settle()
         progressed = true
       } catch (error) {
@@ -251,6 +252,7 @@ export class BrowserExtensionProfileDocumentStore {
         failure = error
       }
     }
+    this.sweeps = this.sweeps.filter((sweep) => !deleted.has(sweep))
     for (const { profileId, extensionId, items } of jobs) {
       // A newer write or a forget replaces the cached document; that write or delete owns the file.
       const isCurrent = () => this.cache.get(profileId)?.get(extensionId) === items
