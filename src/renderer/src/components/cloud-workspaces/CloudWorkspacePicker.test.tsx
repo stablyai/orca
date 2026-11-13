@@ -124,12 +124,11 @@ describe('Open cloud workspace…', () => {
     expect(getCloudWorkspacePickerRequest()).not.toBeNull()
   })
 
-  it('with everything in the sidebar, says so instead of inviting a first workspace', async () => {
+  it('with everything in the sidebar, says there is nothing else to open', async () => {
     listResult = { ok: true, value: [MINE] }
     renderPicker()
     act(() => openCloudWorkspacePicker())
-    expect(await screen.findByText('Your cloud workspaces are already in the sidebar')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'New cloud workspace' })).toBeNull()
+    expect(await screen.findByText('Nothing else to open')).toBeTruthy()
   })
 
   it('a list that could not be read offers Try again', async () => {
