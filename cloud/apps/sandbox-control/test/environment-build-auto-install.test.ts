@@ -65,7 +65,7 @@ describe('environment-build.sh auto_install (PARITY-AUTO-ENV-DEPS)', () => {
     expect(autoInstall).toBeDefined()
     expect(script).toMatch(/elif \[ "\$\{ORCA_AUTO_INSTALL:-\}" = 1 \] && \[ -n "\$first" \]; then\n {2}auto_install "\$first"\n/)
     expect(ENVIRONMENT_BUILD_SCRIPT).toBe(script)
-    // env/ scripts ride in the Worker, not among the golden's VM scripts (so they never need a rotation).
+    // env/ scripts ride in the Worker, not among the golden's VM scripts.
     expect(VM_SCRIPTS as readonly string[]).not.toContain('environment-build.sh')
   })
 
