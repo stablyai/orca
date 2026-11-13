@@ -1,6 +1,7 @@
 import { renderHook, type RenderHookResult } from '@testing-library/react'
 import { expect, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
@@ -99,9 +100,10 @@ export function renderNavigation(count = 1, addressBarValue = 'about:blank'): Na
     unifiedTabsByWorktree: {},
     browserCertificateFailuresByPageId: {},
     browserUrlHistory: [],
-    remoteBrowserPageHandlesByPageId: {
-      'page-a': { environmentId: 'environment-a', remotePageId: 'remote-page-a' }
-    }
+    remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+      { 'page-a': { environmentId: 'environment-a', remotePageId: 'remote-page-a' } },
+      ['page-a']
+    )
   })
   const identity = { mounted: true, active: true, environmentId: 'environment-a' }
   const paneIdentity = {
