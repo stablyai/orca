@@ -16,8 +16,10 @@ import {
   type HeldWatchRoots,
   type WatchRootArgs
 } from './editor-external-watch-local-roots'
+import { WATCHER_IGNORE_DIRS } from '../../../shared/file-watch/filesystem-watch-exclusions'
 
-// Why: native recursive watches don't follow a symlinked folder, so a tab reached through one needs a watch on its own folder.
+// Recursive watches skip generated directories and symlinks; open tabs there need their own folder watch.
+const ignoredWatchDirectories = new Set(WATCHER_IGNORE_DIRS)
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
 let cachedTargets: readonly EditorExternalWatchTarget[] | null = null
@@ -64,8 +66,8 @@ export function selectLocalTabFoldersKey(
 
 type TabFolder = { target: EditorExternalWatchTarget; watchRoot: WatchRootArgs }
 
-/** Holds a watch on each open tab's folder that a symlink below the workspace root leads to. */
-export class SymlinkedTabFolderWatches {
+/** Watches open tab folders omitted by their workspace's recursive watch. */
+export class EditorTabFolderWatches {
   private readonly folders = new Map<string, TabFolder>()
   private readonly watchedByPath = new Map<string, Set<TabFolder>>()
 
@@ -103,19 +105,23 @@ export class SymlinkedTabFolderWatches {
         watchRoot: { worktreePath: folderPath, connectionId: undefined }
       }
       this.folders.set(key, folder)
-      void window.api.fs
-        .hasSymlinkBelowRoot({ rootPath: target.worktreePath, path: folderPath })
-        .catch(() => false)
-        .then((isLinked) => {
-          // Why: the tab may have closed, or the hook unmounted, while main answered.
-          if (!isLinked || this.folders.get(key) !== folder) {
-            return
-          }
-          this.markWatched(folder)
-          void acquireWatchRoot(heldWatchRoots, folder.watchRoot, (error) =>
-            this.onWatchError(target, error)
-          )
-        })
+      const relativeFolder = relativePathInsideRoot(target.worktreePath, folderPath)
+      const isIgnored = relativeFolder?.split('/').some((part) => ignoredWatchDirectories.has(part))
+      const needsWatch = isIgnored
+        ? Promise.resolve(true)
+        : window.api.fs
+            .hasSymlinkBelowRoot({ rootPath: target.worktreePath, path: folderPath })
+            .catch(() => false)
+      void needsWatch.then((required) => {
+        // Why: the tab may have closed, or the hook unmounted, while main answered.
+        if (!required || this.folders.get(key) !== folder) {
+          return
+        }
+        this.markWatched(folder)
+        void acquireWatchRoot(heldWatchRoots, folder.watchRoot, (error) =>
+          this.onWatchError(target, error)
+        )
+      })
     }
   }
 

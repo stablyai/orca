@@ -20,8 +20,8 @@ import {
 } from './editor-external-watch-local-roots'
 import {
   selectLocalTabFoldersKey,
-  SymlinkedTabFolderWatches
-} from './editor-external-watch-symlink-folders'
+  EditorTabFolderWatches
+} from './editor-external-watch-tab-folders'
 
 type FsChangedHandler = (
   payload: FsChangedPayload,
@@ -51,7 +51,7 @@ export function useEditorExternalWatch(): void {
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const heldWatchRootsRef = useRef<HeldWatchRoots>(new Map())
   const fsChangedHandlerRef = useRef<FsChangedHandler | null>(null)
-  const [symlinkedFolders] = useState(() => new SymlinkedTabFolderWatches(warnExternalWatchFailure))
+  const [tabFolders] = useState(() => new EditorTabFolderWatches(warnExternalWatchFailure))
   const tabFoldersKey = useAppStore(
     useCallback(
       (state) => selectLocalTabFoldersKey(state.openFiles, snapshot.targets),
@@ -121,8 +121,8 @@ export function useEditorExternalWatch(): void {
 
   // Why: runs after the target diff so targetsRef holds the targets these folders belong to.
   useEffect(() => {
-    symlinkedFolders.sync(tabFoldersKey, targetsRef.current, heldWatchRootsRef.current)
-  }, [symlinkedFolders, tabFoldersKey])
+    tabFolders.sync(tabFoldersKey, targetsRef.current, heldWatchRootsRef.current)
+  }, [tabFolders, tabFoldersKey])
 
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
@@ -139,9 +139,7 @@ export function useEditorExternalWatch(): void {
             (runtimeEnvironmentId !== null || target.connectionId === connectionId)
         ),
         // Why: a watched tab folder reports under its own path; its workspaces reconcile the events.
-        ...(runtimeEnvironmentId === null
-          ? symlinkedFolders.targetsFor(worktreePath, connectionId)
-          : [])
+        ...(runtimeEnvironmentId === null ? tabFolders.targetsFor(worktreePath, connectionId) : [])
       ]
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
@@ -155,13 +153,13 @@ export function useEditorExternalWatch(): void {
         remoteUnsubscribe()
       }
       remoteWatchUnsubs.clear()
-      symlinkedFolders.clear()
+      tabFolders.clear()
       releaseAllWatchRoots(heldWatchRoots)
       targetsRef.current = []
       unwatchedTargetKeysRef.current = new Set()
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
     }
-  }, [symlinkedFolders])
+  }, [tabFolders])
 }
 
 function subscribeRuntimeTarget(

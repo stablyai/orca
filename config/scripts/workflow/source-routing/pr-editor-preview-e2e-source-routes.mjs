@@ -59,6 +59,17 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
         ].includes(file))
   },
   {
+    id: 'editor.generated-preview-refresh',
+    specs: ['tests/e2e/pdf-viewer-file-rewrite.spec.ts'],
+    matches: (file) =>
+      [
+        'src/shared/file-watch/filesystem-watch-exclusions.ts',
+        'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore.ts',
+        'src/renderer/src/hooks/editor-external-watch-tab-folders.ts',
+        'src/renderer/src/hooks/useEditorExternalWatch.ts'
+      ].includes(file)
+  },
+  {
     id: 'editor.csv-preview',
     specs: [
       'tests/e2e/csv-paged-preview.spec.ts',
