@@ -1,22 +1,22 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { makePR } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
-import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { VisibleHostedReviewRefreshTarget as Target } from '../../../../renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
-import type { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
+import { makePR } from '../../src/main/github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
+import type { PRRefreshOutcome } from '../../src/shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { VisibleHostedReviewRefreshTarget as Target } from '../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
+import type { RuntimeHostedReviewCommands } from '../../src/main/runtime/integrations/reviews/runtime-hosted-review-commands'
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), account: vi.fn(), gate: vi.fn() }))
-vi.mock('../../../github/accounts/github-project-account', () => ({
+vi.mock('../../src/main/github/accounts/github-project-account', () => ({
   githubPRPolicyProjects: () => ({ source: null, selection: String(mocks.account()) }),
   resolveGitHubProjectAccount: mocks.account
 }))
-vi.mock('../../../github/execution/github-operation-slots', () => ({
+vi.mock('../../src/main/github/execution/github-operation-slots', () => ({
   acquire: async () => {},
   release: () => {}
 }))
-vi.mock('../../../github/client/lookup/branch-lookup-resolution', () => ({
+vi.mock('../../src/main/github/client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
-vi.mock('../../../github/pull-requests/refresh/pr-refresh-rate-limit-gate', () => ({
+vi.mock('../../src/main/github/pull-requests/refresh/pr-refresh-rate-limit-gate', () => ({
   prRefreshRateLimitPausedUntil: mocks.gate
 }))
 
@@ -67,7 +67,8 @@ beforeEach(async () => {
   mocks.resolve.mockReset().mockImplementation(async () => found())
   mocks.account.mockReset().mockReturnValue(null)
   mocks.gate.mockReset().mockResolvedValue(null)
-  const { RuntimeHostedReviewCommands: Commands } = await import('./runtime-hosted-review-commands')
+  const { RuntimeHostedReviewCommands: Commands } =
+    await import('../../src/main/runtime/integrations/reviews/runtime-hosted-review-commands')
   const repo = {
     id: 'repo',
     path: '/repo',
@@ -96,7 +97,7 @@ it.each([
   'bounds shared polling for $rows rows and $clients clients over thirty minutes',
   async ({ rows, clients }) => {
     const { createVisibleHostedReviewRefreshScheduler } =
-      await import('../../../../renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
+      await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
     const start = Date.now()
     const spans: { branch: string; startedAt: number; completedAt: number }[] = []
     const deliveries: number[] = []
