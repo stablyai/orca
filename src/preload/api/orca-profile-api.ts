@@ -1,3 +1,4 @@
+import type { OrcaAccountMfaResult } from '../../shared/orca-account-mfa'
 import type {
   CloudSetupGetResult,
   CloudSetupLinkResult,
@@ -84,6 +85,8 @@ export type OrcaProfileApi = {
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
+  /** The signed-in person's own two-factor state and where to manage it. */
+  accountMfa: () => Promise<OrcaAccountMfaResult>
   orgMembersList: (args: OrcaProfileOrgMembersListArgs) => Promise<OrcaProfileOrgMembersListResult>
   orgMemberInvite: (
     args: OrcaProfileOrgMemberInviteArgs

@@ -258,7 +258,17 @@ export type OrcaOrgMember = {
   /** Profile picture from the identity provider (https only); avatars fall back to initials. */
   pictureUrl?: string
   role: OrcaOrgRole
+  /**
+   * Whether the member has two-factor authentication. The server sends it to owners and admins
+   * only, so it is absent for everyone else, and for a member the provider said nothing about.
+   * 'pending': a team policy requires it by `mfaDeadline` and the member has not set it up.
+   */
+  mfa?: OrcaOrgMemberMfa
+  /** Epoch ms the member must have MFA by; only with `mfa: 'pending'`. */
+  mfaDeadline?: number
 }
+
+export type OrcaOrgMemberMfa = 'on' | 'off' | 'pending'
 
 export type OrcaOrgPendingInvite = {
   email: string

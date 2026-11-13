@@ -73,6 +73,7 @@ export const orcaProfilesApi = {
   refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
   signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
   selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),
+  accountMfa: () => ipcRenderer.invoke('orcaProfiles:accountMfa'),
   orgMembersList: (args) => ipcRenderer.invoke('orcaProfiles:orgMembersList', args),
   orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
   orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),

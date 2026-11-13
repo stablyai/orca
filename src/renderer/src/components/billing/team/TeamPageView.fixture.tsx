@@ -124,6 +124,37 @@ export const memberReadOnly = defineFixture({
   )
 })
 
+// What the server sends an owner or admin: every member carries an MFA status.
+const rosterWithMfa: OrcaOrgMembersRoster = {
+  ...roster,
+  members: [
+    { ...roster.members[0]!, mfa: 'on' },
+    { ...roster.members[1]!, mfa: 'off' },
+    { ...roster.members[2]!, mfa: 'pending', mfaDeadline: NOW + 6 * DAY },
+    { ...roster.members[3]!, mfa: 'off' }
+  ]
+}
+
+export const ownerSeesMfaColumn = defineFixture({
+  width,
+  render: () => <Page roster={{ status: 'ok', roster: rosterWithMfa }} />
+})
+
+export const adminSeesMfaColumn = defineFixture({
+  width,
+  render: () => (
+    <Page
+      viewerUserId="u-ada"
+      roster={{ status: 'ok', roster: { ...rosterWithMfa, viewerRole: 'admin' } }}
+    />
+  )
+})
+
+export const mfaColumnNarrow = defineFixture({
+  width: 640,
+  render: () => <Page roster={{ status: 'ok', roster: rosterWithMfa }} />
+})
+
 export const rowBusyAndError = defineFixture({
   width,
   render: () => (

@@ -11,6 +11,8 @@ import type {
   OrcaProfileOrgMembersListArgs,
   OrcaProfileOrgMembersListResult
 } from '../../../shared/orca-profiles'
+import type { OrcaAccountMfaResult } from '../../../shared/orca-account-mfa'
+import { getOrcaProfileAccountMfa } from '../../orca-profiles/cloud-mfa/profile-cloud-mfa-service'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import {
   changeOrcaProfileOrgMemberRole,
@@ -142,6 +144,11 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
     'orcaProfiles:orgCreate',
     async (_event, rawArgs: unknown): Promise<OrcaProfileOrgCreateResult> =>
       createOrcaProfileOrg(getProfileUserDataPath(), { name: orgCreateNameFromUnknown(rawArgs) })
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:accountMfa',
+    async (): Promise<OrcaAccountMfaResult> => getOrcaProfileAccountMfa(getProfileUserDataPath())
   )
 
   ipcMain.handle(

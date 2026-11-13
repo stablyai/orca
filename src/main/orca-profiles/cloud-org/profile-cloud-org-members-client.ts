@@ -1,5 +1,6 @@
 import type {
   OrcaOrgMember,
+  OrcaOrgMemberMfa,
   OrcaOrgMembersRoster,
   OrcaOrgPendingInvite,
   OrcaOrgRole
@@ -53,6 +54,22 @@ function optionalPictureUrl(value: unknown): string | undefined {
   }
 }
 
+const MEMBER_MFA: readonly OrcaOrgMemberMfa[] = ['on', 'off', 'pending']
+
+// Absent for plain members (the server leaves it out); an unknown value is dropped, never guessed.
+function normalizeMemberMfa(
+  record: Record<string, unknown>
+): Pick<OrcaOrgMember, 'mfa' | 'mfaDeadline'> {
+  const mfa = MEMBER_MFA.find((status) => status === record.mfa)
+  if (!mfa) {
+    return {}
+  }
+  const deadline = record.mfaDeadline
+  return mfa === 'pending' && typeof deadline === 'number' && Number.isFinite(deadline)
+    ? { mfa, mfaDeadline: deadline }
+    : { mfa }
+}
+
 function normalizeMember(value: unknown): OrcaOrgMember | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -70,7 +87,8 @@ function normalizeMember(value: unknown): OrcaOrgMember | null {
     ...(optionalPictureUrl(record.pictureUrl)
       ? { pictureUrl: optionalPictureUrl(record.pictureUrl) }
       : {}),
-    role: normalizeRole(record.role, 'member')
+    role: normalizeRole(record.role, 'member'),
+    ...normalizeMemberMfa(record)
   }
 }
 

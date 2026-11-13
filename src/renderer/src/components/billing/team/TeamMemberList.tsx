@@ -25,10 +25,12 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaOrgMember, OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { PersonAvatar } from './TeamAvatar'
 import { invitedAsCopy, memberStatusLabel, roleDescription } from './team-copy'
+import { memberMfaLabel, showMfaColumn } from './team-member-mfa'
 import { assignableRoles, roleLabel } from './team-roles'
 import type { TeamRow } from './team-roster-rows'
 
@@ -229,6 +231,7 @@ function RowMenu({
 export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
+  const mfaColumn = showMfaColumn(props.rows, props.viewerRole)
   return (
     <ul
       className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border"
@@ -300,6 +303,20 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                 ) : null}
               </div>
               {state.busy ? <LoadingSpinner className="size-3.5 shrink-0" /> : null}
+              {mfaColumn ? (
+                // Rendered for every row, invites included, so the role column stays aligned.
+                <span
+                  data-team-mfa={row.kind === 'member' ? (row.member.mfa ?? '') : ''}
+                  className={cn(
+                    'w-24 shrink-0 truncate text-xs',
+                    row.kind === 'member' && row.member.mfa === 'on'
+                      ? 'text-muted-foreground'
+                      : 'text-foreground'
+                  )}
+                >
+                  {row.kind === 'member' ? memberMfaLabel(row.member, locale, t) : null}
+                </span>
+              ) : null}
               {row.kind === 'member' ? (
                 <RoleControl
                   row={row}

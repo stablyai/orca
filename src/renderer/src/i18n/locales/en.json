@@ -13934,6 +13934,15 @@
           "keywordSignOut": "sign out",
           "keywordRelay": "relay",
           "keywordCloud": "cloud",
+          "mfa": {
+            "title": "Two-factor authentication",
+            "on": "On",
+            "off": "Off",
+            "onDescription": "Signing in asks for a code from your authenticator app. Keep your backup codes somewhere safe.",
+            "offDescription": "Add an authenticator app so a stolen password is not enough to sign in. You get backup codes too.",
+            "manage": "Manage in browser",
+            "setUp": "Set up in browser"
+          },
           "github": {
             "disconnectTitle": "Disconnect GitHub?",
             "disconnectBody": "Commits in cloud workspaces will use Orca Cloud's name again.",
@@ -21139,6 +21148,10 @@
           "makeOwnerTitle": "Make {{value0}} an owner?",
           "members": "Members",
           "membersList": "Team members and invites",
+          "mfaOn": "MFA on",
+          "mfaOff": "MFA off",
+          "mfaPending": "MFA pending",
+          "mfaPendingBy": "MFA due {{value0}}",
           "nextInvoice": "Next invoice (est.)",
           "nextInvoiceOn": "{{value0}} · {{value1}}",
           "notAnEmail": "Not an email address",
