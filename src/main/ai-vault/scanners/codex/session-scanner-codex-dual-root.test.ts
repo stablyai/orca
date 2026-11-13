@@ -330,6 +330,7 @@ async function canonicalCopies(nonUser = false) {
       }
     ])
   )
+  await appendFile(real, '\n')
   await copyFile(real, managed)
   return {
     real,
@@ -436,6 +437,7 @@ it('falls back when a growing cached preferred file fails its resume boundary re
       }
     ])
   )
+  await appendFile(fixture.real, '\n')
   await copyFile(fixture.real, fixture.managed)
   reads.failedSlice = fixture.real
   const result = await scanAiVaultSessions(fixture.options)
