@@ -15,6 +15,13 @@ import {
 import type { runAgentModelCatalogListing } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { runAgentModelCatalogSession } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 
+const LEARNED_EFFORTS = [
+  { value: 'low', label: 'Low' },
+  { value: 'high', label: 'High' },
+  { value: 'max', label: 'Max' },
+  { value: 'default', label: 'Default' }
+]
+
 it('publishes inventory before a slow optional effort reply and retains its valid late result', async () => {
   vi.useFakeTimers()
   onTestFinished(() => vi.useRealTimers())
@@ -213,15 +220,19 @@ it.each(['snapshot', 'deadline', 'selected'])(
     await vi.advanceTimersByTimeAsync(6_000)
     // m1 has answered; m2 is still pending, beyond the old optional sweep cutoff.
     if (boundary === 'snapshot') {
-      expect((await h.read(false)).models?.find((row) => row.id === 'm1')?.effortsKnown).toBe(true)
+      expect((await h.read(false)).models?.find((row) => row.id === 'm1')?.efforts).toEqual(
+        LEARNED_EFFORTS
+      )
     } else if (boundary === 'selected') {
-      expect((await h.read(true, 'm1')).models?.find((row) => row.id === 'm1')?.effortsKnown).toBe(
-        true
+      expect((await h.read(true, 'm1')).models?.find((row) => row.id === 'm1')?.efforts).toEqual(
+        LEARNED_EFFORTS
       )
     } else {
       await vi.advanceTimersByTimeAsync(24_000)
     }
-    expect((await observer).models?.find((row) => row.id === 'm1')?.effortsKnown).toBe(true)
+    expect((await observer).models?.find((row) => row.id === 'm1')?.efforts).toEqual(
+      LEARNED_EFFORTS
+    )
     let followed = false
     const follow = h.read().then((answer) => {
       followed = true
@@ -236,7 +247,9 @@ it.each(['snapshot', 'deadline', 'selected'])(
     expect(h.requests[2]?.model).toBe('m4')
     h.answer(2)
     await vi.advanceTimersByTimeAsync(0)
-    expect((await selected).models?.find((row) => row.id === 'm4')?.effortsKnown).toBe(true)
+    expect((await selected).models?.find((row) => row.id === 'm4')?.efforts).toEqual(
+      LEARNED_EFFORTS
+    )
     await follow
     h.answer(3)
     await vi.advanceTimersByTimeAsync(0)

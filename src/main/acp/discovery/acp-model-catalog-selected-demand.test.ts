@@ -84,7 +84,6 @@ it('starts the first OMP listing on demand collected before admission, without a
     waitForListing: true
   })
   expect(result.models?.find((row) => row.id === 'provider/selected')).toMatchObject({
-    effortsKnown: true,
     efforts: [{ value: 'high', label: 'High' }]
   })
   expect(connect).toHaveBeenCalledOnce()
