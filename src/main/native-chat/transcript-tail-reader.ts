@@ -61,7 +61,7 @@ export async function readNativeChatTranscriptTailFile(
   decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
   signal?: AbortSignal,
   onConsumedBoundary?: (boundary: Buffer) => void,
-  sourceOrder = false
+  sourceOrder: boolean | 'cursor' = false
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
@@ -157,7 +157,8 @@ export async function readNativeChatTranscriptTailFile(
       const ordered = inTranscriptFileOrder(
         entry.message,
         latest,
-        sourceOrder ? entry.offset : undefined
+        sourceOrder ? entry.offset : undefined,
+        sourceOrder === true
       )
       latest = ordered.latest
       return { message: ordered.message, offset: entry.offset }
@@ -240,7 +241,8 @@ export async function readNativeChatTranscriptTail(
     filePath?: string
     limit: number
     beforeOffset?: number
-    sourceOrder?: boolean
+    sourceOrder?: boolean | 'cursor'
+    inputEvidence?: boolean
   },
   signal?: AbortSignal
 ): Promise<

@@ -198,6 +198,7 @@ export function restateHookRoot(
     isReplay: undefined,
     hookEventName: exit ? exitEventName : undefined,
     hasExplicitPrompt: undefined,
+    promptSubmissionDigest: undefined,
     agentPresence: {
       agent: completion.agent,
       process,

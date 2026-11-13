@@ -1,3 +1,4 @@
+import { transcriptInputContent } from '../transcript-input-content'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
@@ -79,7 +80,12 @@ export function decodeClaudeTranscriptLine(
   if (!parsed) {
     return null
   }
-  const record = claudeMessageWithoutSyntheticText(claudeQueuedPromptAsUserRecord(parsed) ?? parsed)
+  const sourceRecord = claudeQueuedPromptAsUserRecord(parsed) ?? parsed
+  const inputContent =
+    sourceRecord.type === 'user'
+      ? transcriptInputContent('claude', asRecord(sourceRecord.message)?.content, true)
+      : undefined
+  const record = claudeMessageWithoutSyntheticText(sourceRecord)
   if (!record) {
     return null
   }
@@ -129,6 +135,7 @@ export function decodeClaudeTranscriptLine(
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks, message?.content),
+    ...(inputContent && !isInjectedUserTurn ? { inputContent } : {}),
     // Decode ! command echoes so harness filtering cannot hide them and strand the local echo.
     blocks:
       role === 'user'

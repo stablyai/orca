@@ -1,17 +1,20 @@
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatSourceContext } from '../../../../../../../shared/native-chat/input/native-chat-prompt-observation'
 import type {
   NativeChatMessage,
   NativeChatSession,
   NativeChatTurnLifecycle
 } from '../../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
+import type { IncrementalChatAssembler } from '../assembly/native-chat-incremental-assembler'
 
-export type ReadState =
+export type ReadState = (
   | { phase: 'loading' }
   /** Awaiting an unpublished transcript is unsettled; the empty list is not real history yet. */
   | { phase: 'awaiting' }
   | { phase: 'ready'; messages: NativeChatMessage[] }
   | { phase: 'error'; error: string }
+) & { sourceKey: string | null }
 
 /** loading/awaiting have no settled history; errors remain distinct so their surface stays visible. */
 export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): boolean {
@@ -19,6 +22,12 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 }
 
 export type NativeChatLiveSession = NativeChatSession & {
+  /** Canonical source publication paired with its append/reset provenance, before display folding. */
+  sourceObservation?: {
+    messages: readonly NativeChatMessage[]
+    generation: IncrementalChatAssembler['generation']
+    context?: NativeChatSourceContext
+  }
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** Hook-reported human wait not yet ended by the transcript; absent on hookless lanes. */
@@ -45,6 +54,7 @@ export type NativeChatLiveSession = NativeChatSession & {
 }
 
 export type UseNativeChatLiveSessionArgs = {
+  targetPtyId?: string | null
   /** Composite `${tabId}:${leafId}` hook-entry key. */
   paneKey: string
   agent: AgentType

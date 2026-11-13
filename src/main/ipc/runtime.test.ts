@@ -1,3 +1,7 @@
+import * as ChatBudget from '../../shared/terminal/input/terminal-chat-prompt-budget'
+import { createAgentPromptSubmissionRuntime } from '../runtime/terminal/input/agent-prompt-submission-runtime-test-fixture'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
+import * as RuntimeClock from '../runtime/hosts/runtime-elapsed-clock'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeAllListenersMock, removeHandlerMock, fromWebContentsMock } =
@@ -8,6 +12,13 @@ const { handleMock, onMock, removeAllListenersMock, removeHandlerMock, fromWebCo
     removeHandlerMock: vi.fn(),
     fromWebContentsMock: vi.fn()
   }))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (original) => ({
+  ...(await original<typeof WorktreeListingModule>()),
+  listWorktreesStrict: async () => [
+    { path: '/tmp/worktree-a', head: 'abc', branch: 'test', isBare: false, isMainWorktree: false }
+  ]
+}))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -158,3 +169,96 @@ it('cancels the GitHub host handler through the existing local subscription boun
   unsubscribe(event, { subscriptionId: 'image-cancel' })
   expect(signal.aborted).toBe(true)
 })
+
+it('expires local Chat through the actual dispatcher signal and refuses a packet delayed past its grant', async () => {
+  vi.useFakeTimers()
+  let now = 100000
+  vi.spyOn(RuntimeClock, 'readRuntimeElapsedClock').mockImplementation(() => ({
+    lower: now,
+    upper: now + 1
+  }))
+  try {
+    handleMock.mockClear()
+    const entered = Promise.withResolvers<AbortSignal>()
+    const write = vi.fn((_handle, _prompt, _incarnation, signal: AbortSignal) => {
+      entered.resolve(signal)
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      )
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this terminal.send abort path reads only runtime identity and the mocked Chat writer.
+    registerRuntimeHandlers({ getRuntimeId: () => 'main', sendTerminalChatPrompt: write } as never)
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+    const frame = {}
+    const event = {
+      senderFrame: frame,
+      sender: { mainFrame: frame, id: 14532, once: vi.fn(), on: vi.fn() }
+    }
+    const args = {
+      method: 'terminal.send',
+      params: {
+        terminal: 'terminal',
+        chatPrompt: {
+          agent: 'claude',
+          text: 'body',
+          expiry: { runtimeId: 'main', expiresAtMs: 101000 }
+        },
+        client: { id: 'desktop-1', type: 'desktop' }
+      }
+    }
+    const pending = handler(event, args)
+    const signal = await entered.promise
+    now = 101000
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(signal.aborted).toBe(true)
+    await pending
+    await expect(handler(event, args)).rejects.toThrow('Chat input request expired')
+    expect(write).toHaveBeenCalledOnce()
+  } finally {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  }
+})
+
+it.each([1, 10])(
+  'derives a local Send schedule once through IPC and the actual queued writer (%i sends)',
+  async (count) => {
+    const schedule = vi.spyOn(ChatBudget, 'terminalChatPromptSchedule')
+    vi.spyOn(RuntimeClock, 'readRuntimeElapsedClock').mockReturnValue({
+      lower: 100000,
+      upper: 100001
+    })
+    try {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'omp')
+      handleMock.mockClear()
+      registerRuntimeHandlers(runtime)
+      const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+      const frame = {}
+      const event = {
+        senderFrame: frame,
+        sender: { mainFrame: frame, id: 14533, once: vi.fn(), on: vi.fn() }
+      }
+      const body = 'x'.repeat(100000)
+      for (let index = 0; index < count; index++) {
+        await expect(
+          handler(event, {
+            method: 'terminal.send',
+            params: {
+              terminal: handle,
+              chatPrompt: {
+                agent: 'omp',
+                text: body,
+                expiry: { runtimeId: runtime.getRuntimeId(), expiresAtMs: 110000 }
+              },
+              client: { id: 'desktop-1', type: 'desktop' }
+            }
+          })
+        ).resolves.toMatchObject({ ok: true, result: { send: { bytesWritten: 100071 } } })
+      }
+      expect(writes.filter((text) => text.endsWith('\r'))).toHaveLength(count)
+      expect(schedule).toHaveBeenCalledTimes(count)
+    } finally {
+      vi.restoreAllMocks()
+    }
+  }
+)

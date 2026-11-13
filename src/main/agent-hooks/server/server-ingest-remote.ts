@@ -11,12 +11,7 @@ import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
 } from '../../../shared/agent-hook-listener/listener-limits'
-import {
-  canAcceptClaudeCompactCompletion,
-  isClaudeCompactCompletionConsumed,
-  markClaudeCompactCompletionConsumed,
-  resolveLegacyCompactTrigger
-} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-compact-completion'
+import { reconcileRemoteClaudeCompactCompletion } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-compact-completion'
 import { launchTokenHash } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
@@ -112,6 +107,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       compactTrigger,
       worktreeId,
       promptInteractionKey,
+      promptSubmissionDigest,
       toolUseId,
       claudeSettledRequests,
       toolAgentId,
@@ -196,53 +192,22 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       this.observations.rebind(paneKey)
     }
     const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
-    let acceptedCompactCompletion = false
-    if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
-      // PreCompact alone proves no completed compact, including on older peers.
-      if (hookEventName === 'PreCompact' || source !== 'claude') {
-        return
-      }
-      // Older relays omit the trigger; their state supplies it without bypassing ownership.
-      const effectiveTrigger = resolveLegacyCompactTrigger(compactTrigger, normalizedPayload.state)
-      // Older relays map auto-compaction to working; it resumes the existing turn and must not mint new work.
-      if (effectiveTrigger !== 'manual' || normalizedPayload.agentType !== source) {
-        return
-      }
-      if (
-        isClaudeCompactCompletionConsumed(
-          this.state.claudeConsumedCompactPromptIdByPaneKey,
-          paneKey,
-          providerPromptId
-        ) ||
-        !canAcceptClaudeCompactCompletion(previousStatus, {
-          source,
-          connectionId: trimmedConnectionId,
-          providerPromptId,
-          providerSession
-        })
-      ) {
-        return
-      }
-      markClaudeCompactCompletionConsumed(
-        this.state.claudeConsumedCompactPromptIdByPaneKey,
-        paneKey,
-        providerPromptId
-      )
-      // Older relays omit the boundary flag; stamp it so compact completion stays silent.
-      if (normalizedPayload.sessionBoundary !== true) {
-        normalizedPayload = { ...normalizedPayload, sessionBoundary: true }
-      }
-      acceptedCompactCompletion = true
+    const compact = reconcileRemoteClaudeCompactCompletion({
+      source,
+      hookEventName,
+      compactTrigger,
+      providerPromptId,
+      paneKey,
+      trimmedConnectionId,
+      providerSession,
+      previousStatus,
+      normalizedPayload,
+      consumed: this.state.claudeConsumedCompactPromptIdByPaneKey
+    })
+    if (!compact) {
+      return
     }
-    // Accepted compact completions retain the summarized turn label, including trigger-stripped replays.
-    if (
-      source === 'claude' &&
-      (compactTrigger !== undefined || acceptedCompactCompletion) &&
-      normalizedPayload.prompt.length === 0 &&
-      previousStatus?.payload.prompt
-    ) {
-      normalizedPayload = { ...normalizedPayload, prompt: previousStatus.payload.prompt }
-    }
+    normalizedPayload = compact.payload
     const applyClaudeBackgroundWork =
       normalizedPayload.agentType === 'claude' &&
       typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
@@ -267,6 +232,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       connectionId: trimmedConnectionId,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
       promptInteractionKey,
+      promptSubmissionDigest,
       hookEventName,
       providerPromptId,
       grokPromptBoundary,

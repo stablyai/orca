@@ -1,3 +1,4 @@
+import type { NativeChatInputContent } from './transcript/native-chat-input-content'
 import type { AgentSessionProviderContextBoundary } from '../agent-session/agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
@@ -211,6 +212,9 @@ export type NativeChatBlock =
 
 /** Structured rows preserve journal producer linkage; terminal-backed rows omit it. */
 export type NativeChatMessage = AgentJournalProducerLinkage & {
+  /** Decoder-origin submitted content; never inferred from projected display blocks. */
+  inputContent?: NativeChatInputContent
+
   /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole

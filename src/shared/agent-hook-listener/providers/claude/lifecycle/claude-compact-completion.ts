@@ -1,3 +1,4 @@
+import type { AgentHookEventPayload } from '../../../listener-event'
 // PreCompact alone also occurs on aborted compact, so it cannot mark working (STA-2915/STA-4613). Only manual PostCompact clears the pane; auto resumes a turn that emits Stop.
 
 import {
@@ -77,4 +78,107 @@ export function resolveLegacyCompactTrigger(
     return compactTrigger
   }
   return payloadState === 'done' ? 'manual' : undefined
+}
+
+export function readLocalClaudeCompactTrigger(
+  source: AgentHookSource,
+  eventName: unknown,
+  hookPayloadRecord: Record<string, unknown>
+): { trigger: 'manual' | 'auto' | undefined } | null {
+  const compactTrigger =
+    source === 'claude' &&
+    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
+    (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
+      ? hookPayloadRecord.trigger
+      : undefined
+  // Reject malformed Claude compacts without suppressing other providers' normalizers.
+  if (
+    source === 'claude' &&
+    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
+    compactTrigger === undefined
+  ) {
+    return null
+  }
+  return { trigger: compactTrigger }
+}
+
+export function retainClaudeCompactPrompt<T extends AgentHookEventPayload['payload']>(
+  source: AgentHookSource | undefined,
+  compactTrigger: 'manual' | 'auto' | undefined,
+  acceptedCompactCompletion: boolean,
+  normalizedPayload: T,
+  previousPrompt: string | undefined
+): T {
+  if (
+    source === 'claude' &&
+    (compactTrigger !== undefined || acceptedCompactCompletion) &&
+    normalizedPayload.prompt.length === 0 &&
+    previousPrompt
+  ) {
+    normalizedPayload = { ...normalizedPayload, prompt: previousPrompt }
+  }
+  return normalizedPayload
+}
+
+export function reconcileRemoteClaudeCompactCompletion({
+  source,
+  hookEventName,
+  compactTrigger,
+  providerPromptId,
+  paneKey,
+  trimmedConnectionId,
+  providerSession,
+  previousStatus,
+  normalizedPayload,
+  consumed
+}: {
+  source: AgentHookSource | undefined
+  hookEventName?: string
+  compactTrigger?: 'manual' | 'auto'
+  providerPromptId?: string
+  paneKey: string
+  trimmedConnectionId: string | null
+  providerSession?: AgentProviderSessionMetadata
+  previousStatus?: ClaudeCompactCompletionOwner & { payload: { prompt: string } }
+  normalizedPayload: AgentHookEventPayload['payload']
+  consumed: Parameters<typeof isClaudeCompactCompletionConsumed>[0]
+}): { payload: AgentHookEventPayload['payload']; acceptedCompactCompletion: boolean } | null {
+  let acceptedCompactCompletion = false
+  if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
+    // PreCompact alone proves no completed compact, including on older peers.
+    if (hookEventName === 'PreCompact' || source !== 'claude') {
+      return null
+    }
+    // Older relays omit the trigger; their state supplies it without bypassing ownership.
+    const effectiveTrigger = resolveLegacyCompactTrigger(compactTrigger, normalizedPayload.state)
+    // Older relays map auto-compaction to working; it resumes the existing turn and must not mint new work.
+    if (effectiveTrigger !== 'manual' || normalizedPayload.agentType !== source) {
+      return null
+    }
+    if (
+      isClaudeCompactCompletionConsumed(consumed, paneKey, providerPromptId) ||
+      !canAcceptClaudeCompactCompletion(previousStatus, {
+        source,
+        connectionId: trimmedConnectionId,
+        providerPromptId,
+        providerSession
+      })
+    ) {
+      return null
+    }
+    markClaudeCompactCompletionConsumed(consumed, paneKey, providerPromptId)
+    // Older relays omit the boundary flag; stamp it so compact completion stays silent.
+    if (normalizedPayload.sessionBoundary !== true) {
+      normalizedPayload = { ...normalizedPayload, sessionBoundary: true }
+    }
+    acceptedCompactCompletion = true
+  }
+  normalizedPayload = retainClaudeCompactPrompt(
+    source,
+    compactTrigger,
+    acceptedCompactCompletion,
+    normalizedPayload,
+    previousStatus?.payload.prompt
+  )
+  return { payload: normalizedPayload, acceptedCompactCompletion }
 }

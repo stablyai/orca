@@ -1,3 +1,4 @@
+import { transcriptInputContent } from '../transcript-input-content'
 // OMP history is a tree, but this stateless decoder renders file order, including abandoned branches.
 // Correct branch selection requires state across records.
 
@@ -121,7 +122,14 @@ export function decodeOmpTranscriptLine(
       ...ompServing(message)
     }
   }
-  return { id, role: role === 'user' ? 'user' : 'system', blocks, timestamp, source: 'transcript' }
+  return {
+    id,
+    role: role === 'user' ? 'user' : 'system',
+    blocks,
+    timestamp,
+    source: 'transcript',
+    ...(role === 'user' ? { inputContent: transcriptInputContent('omp', message.content) } : {})
+  }
 }
 
 function ompServing(

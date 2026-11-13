@@ -6,12 +6,14 @@ import {
 } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-occurrence'
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
-  prunePendingSends,
-  visibleNativeChatPendingSends,
-  type NativeChatPendingSend
+  nativeChatPendingSendPlacement
 } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
+import {
+  mobileNativeChatLegacyPendingSummary,
+  type MobileNativeChatLegacyPending
+} from '../mobile-native-chat-legacy-pending'
 
-export type MobileNativeChatPendingMessage = NativeChatPendingSend & {
+export type MobileNativeChatPendingMessage = MobileNativeChatLegacyPending & {
   // Phone-local preview URIs; these echoes retire only once their preview binds to a transcript row.
   images?: string[]
 }
@@ -23,7 +25,7 @@ export type MobileNativeChatSendOrigin = {
   pendingKey: string | null
   normalizedText: string
   boundary: Pick<
-    NativeChatPendingSend,
+    MobileNativeChatLegacyPending,
     'afterMessageId' | 'afterMessageTimestamp' | 'afterEmptyTranscriptSessionId'
   >
   sentAt: number
@@ -96,20 +98,24 @@ export function retireLandedMobileNativeChatPending(
   current: MobileNativeChatPendingMessage[],
   landedImagePendingIds: ReadonlySet<string>
 ): MobileNativeChatPendingMessage[] {
-  const kept = new Set(prunePendingSends(current, messages))
+  const { retained } = mobileNativeChatLegacyPendingSummary(current, messages)
+  const kept = new Map(
+    current.filter((item) => retained.has(item.id)).map((item) => [item.id, item])
+  )
   let changed = false
   const next = current.flatMap((item) => {
+    const survivor = kept.get(item.id)
     if (landedImagePendingIds.has(item.id)) {
       changed = true
       // The preview now lives on its row; a caption stays a plain send so it can retire with glued neighbours.
-      if (!kept.has(item) || nativeChatPendingContentKey(item) === 'empty') {
+      if (!survivor || nativeChatPendingContentKey(item) === 'empty') {
         return []
       }
-      const { images: _bound, ...caption } = item
+      const { images: _bound, ...caption } = survivor
       return [caption]
     }
-    if (kept.has(item) || item.images?.length) {
-      return [item]
+    if (survivor || item.images?.length) {
+      return [survivor ?? item]
     }
     changed = true
     return []
@@ -121,7 +127,25 @@ export function visibleMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[]
 ): MobileNativeChatPendingMessage[] {
-  const visible = new Set(visibleNativeChatPendingSends(current, messages))
-  const next = current.filter((item) => visible.has(item) || Boolean(item.images?.length))
+  const { visible } = mobileNativeChatLegacyPendingSummary(current, messages)
+  const next = current.filter((item) => visible.has(item.id) || Boolean(item.images?.length))
   return next.length === current.length ? current : next
+}
+
+export function mobileNativeChatPendingAsMessages(
+  pending: MobileNativeChatPendingMessage[],
+  messages: readonly NativeChatMessage[],
+  workingEpoch?: number | null
+): NativeChatMessage[] {
+  const { visible } = mobileNativeChatLegacyPendingSummary(pending, messages)
+  return pending
+    .filter((entry) => visible.has(entry.id))
+    .map((entry) => ({
+      id: `pending:${entry.id}`,
+      role: 'user',
+      blocks: entry.text.trim() ? [{ type: 'text', text: entry.text }] : [],
+      timestamp: entry.sentAt,
+      pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch),
+      source: 'scrape'
+    }))
 }

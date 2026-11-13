@@ -19,6 +19,7 @@ type AssemblyCache = {
 
 function cloneAssembler(assembler: IncrementalChatAssembler): IncrementalChatAssembler {
   return {
+    generation: assembler.generation,
     byId: new Map(assembler.byId),
     byTurn: new Map(assembler.byTurn),
     messages: assembler.messages
@@ -44,7 +45,14 @@ export function useNativeChatAssembledMessages(args: {
   sessionId: string | null
   baseMessages: readonly NativeChatMessage[]
   appended: NativeChatMessage[]
-}): { assembledMessages: NativeChatMessage[]; normalizedMessages: NativeChatMessage[] } {
+}): {
+  assembledMessages: NativeChatMessage[]
+  normalizedMessages: NativeChatMessage[]
+  sourceObservation: {
+    messages: readonly NativeChatMessage[]
+    generation: IncrementalChatAssembler['generation']
+  }
+} {
   const committedCacheRef = useRef<AssemblyCache | null>(null)
   const { agent, sessionId, baseMessages, appended } = args
 
@@ -83,5 +91,9 @@ export function useNativeChatAssembledMessages(args: {
     () => prepareNativeChatLiveMessages(assembly.assembledMessages, agent),
     [agent, assembly.assembledMessages]
   )
-  return { assembledMessages: assembly.assembledMessages, normalizedMessages }
+  const sourceObservation = useMemo(
+    () => ({ messages: assembly.assembledMessages, generation: assembly.assembler.generation }),
+    [assembly]
+  )
+  return { assembledMessages: assembly.assembledMessages, normalizedMessages, sourceObservation }
 }

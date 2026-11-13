@@ -133,3 +133,55 @@ it('keeps the legacy path, asking once, when the desktop predates pane roots', a
     await stop()
   }
 })
+
+it('forwards only the original proved root prompt while retaining processless status', async () => {
+  const { post, forward, stop } = await relay(async () => ({
+    root: { pid: 100, startTime: `${BOOT}:10000` },
+    incarnation: 'inc-1'
+  }))
+  try {
+    await post(4001, { hook_event_name: 'SessionStart', session_id: 'parent' })
+    await post(4001, {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'parent',
+      prompt: 'original'
+    })
+    expect(forward.mock.lastCall?.[0]).toMatchObject({
+      agentPresence: { process: { pid: 4001 }, sessionOwner: true },
+      promptSubmissionDigest: '0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5'
+    })
+    await post(null, {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'parent',
+      prompt: 'unproved'
+    })
+    expect(forward.mock.lastCall?.[0]).toMatchObject({
+      agentPresence: { process: { pid: 4001 }, sessionOwner: true },
+      payload: { prompt: 'unproved' }
+    })
+    expect(forward.mock.lastCall?.[0].promptSubmissionDigest).toBeUndefined()
+  } finally {
+    await stop()
+  }
+})
+
+it('does not turn a cached prompt into a fresh submission when root proof arrives late', async () => {
+  const root = Promise.withResolvers<unknown>()
+  const { post, forward, stop } = await relay(() => root.promise)
+  try {
+    await post(4001, {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'parent',
+      prompt: 'original'
+    })
+    const restated = Promise.withResolvers<AgentHookRelayEnvelope>()
+    forward.mockImplementation((event) => restated.resolve(event))
+    root.resolve({ root: { pid: 100, startTime: `${BOOT}:10000` }, incarnation: 'inc-1' })
+    const event = await restated.promise
+    expect(event.agentPresence).toMatchObject({ process: { pid: 4001 }, sessionOwner: true })
+    expect(event.hookEventName).toBeUndefined()
+    expect(event.promptSubmissionDigest).toBeUndefined()
+  } finally {
+    await stop()
+  }
+})

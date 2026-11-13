@@ -64,7 +64,8 @@ export function readOpenCode2TranscriptSignal(
 
 function messageItems(
   value: unknown,
-  record: Record<string, unknown> | null
+  record: Record<string, unknown> | null,
+  inputEvidence = false
 ): OpenCodeTranscriptItem[] {
   const row = asRecord(value)
   if (
@@ -103,14 +104,18 @@ function messageItems(
     throw new Error('OpenCode transcript message contains invalid JSON')
   }
   const content = Array.isArray(record.content)
-    ? record.content
+    ? [...record.content]
     : typeof record.text === 'string'
       ? [{ type: 'text', text: record.text }]
-      : []
-  if (row.type === 'user' && Array.isArray(record.files)) {
-    for (const file of record.files) {
+      : [null]
+  if (record.content !== undefined && !Array.isArray(record.content)) {
+    content.push(null)
+  }
+  if (row.type === 'user' && record.files !== undefined) {
+    for (const file of Array.isArray(record.files) ? record.files : [null]) {
       const attachment = asRecord(file)
       if (!attachment) {
+        content.push(null)
         continue
       }
       const url =
@@ -119,15 +124,13 @@ function messageItems(
           : typeof attachment.data === 'string' && typeof attachment.mime === 'string'
             ? `data:${attachment.mime};base64,${attachment.data}`
             : null
-      if (url) {
-        content.push({ type: 'file', url, mime: attachment.mime, filename: attachment.name })
-      }
+      content.push({ type: 'file', url, mime: attachment.mime, filename: attachment.name })
     }
   }
   const parts = content.flatMap((value) => {
     const item = asRecord(value)
     if (!item) {
-      return []
+      return [{ message_id: messageId, time_updated: updatedAt, data: 'null' }]
     }
     if (item.type !== 'tool') {
       return [{ message_id: messageId, time_updated: updatedAt, data: JSON.stringify(item) }]
@@ -172,7 +175,8 @@ function messageItems(
       timestamp: row.time_created
     },
     parts,
-    blocks
+    blocks,
+    inputEvidence
   )
   const fingerprint = `${updatedAt}:${createHash('sha256').update(row.data).digest('hex')}`
   return messages.toReversed().map((message) => ({
@@ -188,6 +192,7 @@ export function readOpenCode2TranscriptPage(
     sessionId: string
     limit: number
     beforeMessageRowId?: number
+    inputEvidence?: boolean
   }
 ): OpenCodeTranscriptPage | null {
   if (!hasOpenCode2Session(db, args.sessionId)) {
@@ -230,7 +235,7 @@ export function readOpenCode2TranscriptPage(
           row.type === 'idle' &&
           ['succeeded', 'interrupted', 'failed'].includes(String(record?.outcome))
       })
-      const mapped = messageItems(value, record)
+      const mapped = messageItems(value, record, args.inputEvidence)
       cursor = row.cursor
       for (const item of mapped) {
         pageBytes += Buffer.byteLength(JSON.stringify(item))

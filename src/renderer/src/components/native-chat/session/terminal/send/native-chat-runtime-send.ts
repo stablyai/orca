@@ -32,12 +32,16 @@ import {
 
 /** Cancellation suppresses remaining scheduled writes and is safe after completion. */
 export type NativeChatSendHandle = {
+  /** Delivery callbacks retain/reject the echo themselves, including detached host requests. */
+  settlesOwnOutcome?: true
   cancel: (keepInput?: boolean) => void
   /** Time after which every scheduled write has fired and the handle can drop. */
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
   outcome?: Promise<NativeChatPtySubmissionOutcome>
+  /** Operation-owned completion survives cancellation of the current UI observer. */
+  dispatchOutcome?: Promise<NativeChatPtySubmissionOutcome>
 }
 
 /** Serialize clear/body/delayed Enter per PTY; a CR sharing the paste write can be swallowed. */
@@ -83,6 +87,7 @@ export function sendNativeChatMessage(
       )
     },
     {
+      dispatchScope: options?.dispatchScope,
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
     }
   )

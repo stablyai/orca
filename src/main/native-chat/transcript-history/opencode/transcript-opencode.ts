@@ -38,6 +38,7 @@ export type OpenCodeTranscriptDeps = {
       sessionId: string
       limit: number
       beforeMessageRowId?: number
+      inputEvidence?: boolean
       agent?: 'zcode'
     },
     signal?: AbortSignal
@@ -60,7 +61,13 @@ export type OpenCodeTailResult =
   | { error: string; notFound?: true }
 
 export async function readOpenCodeNativeChatTranscriptTail(
-  args: { sessionId: string; limit: number; beforeOffset?: number; agent?: 'zcode' },
+  args: {
+    sessionId: string
+    limit: number
+    beforeOffset?: number
+    agent?: 'zcode'
+    inputEvidence?: boolean
+  },
   deps: OpenCodeTranscriptDeps = {},
   signal?: AbortSignal
 ): Promise<OpenCodeTailResult> {
@@ -79,6 +86,7 @@ export async function readOpenCodeNativeChatTranscriptTail(
         dbPath,
         sessionId: args.sessionId,
         limit,
+        inputEvidence: args.inputEvidence,
         ...(args.beforeOffset !== undefined ? { beforeMessageRowId: args.beforeOffset } : {}),
         ...(args.agent ? { agent: args.agent } : {})
       },

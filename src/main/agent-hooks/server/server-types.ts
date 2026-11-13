@@ -10,6 +10,7 @@ import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { NativeChatPromptSubmission } from '../../../shared/native-chat/input/native-chat-prompt-observation'
 
 export type HookServerStartOptions = {
   env?: string
@@ -62,6 +63,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   agentIdentity?: RowAgentIdentity
   /** The lead's full final reply for the turn `leadTurnKey` names; main-process only, never persisted or published. */
   acceptedReply?: { text: string; leadTurnKey: number }
+  promptSubmissions?: readonly NativeChatPromptSubmission[]
 }
 
 // Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
@@ -81,6 +83,8 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'terminalHandle'
   | 'acceptedReply'
   | 'replyCandidate'
+  | 'promptSubmissionDigest'
+  | 'promptSubmissions'
 > & {
   launchTokenHash?: string
 }

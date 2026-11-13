@@ -1,3 +1,4 @@
+import { sendTerminalChatPrompt } from './terminal-chat-prompt-send'
 import {
   isTerminalInputPaused,
   TerminalInputPausedError
@@ -53,6 +54,7 @@ export const TERMINAL_SEND_METHODS = [
           caller,
           clientId,
           signal,
+          terminalChatSchedule,
           orchestrationMutation,
           recordMutationReceipt,
           markMutationEffectPossible,
@@ -61,6 +63,9 @@ export const TERMINAL_SEND_METHODS = [
         assertSequenceBinding
       ) => {
         const inputSource = terminalInputSourceForClient(params.client, caller)
+        if (params.chatPrompt) {
+          return sendTerminalChatPrompt(runtime, params, inputSource, signal, terminalChatSchedule)
+        }
         await assertTerminalSendTextWithinLimit(params.text)
         await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
         if (params.text) {

@@ -23,9 +23,9 @@ import type { MobileNativeChatSession } from '../use-mobile-native-chat-session'
 import type { MobileNativeChatResolution } from '../mobile-native-chat-eligibility'
 
 import {
-  pendingSendsAsMessages,
-  type NativeChatPendingSend
-} from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
+  mobileNativeChatPendingAsMessages,
+  type MobileNativeChatPendingMessage
+} from './mobile-native-chat-pending-echo'
 
 const NO_MESSAGES: NativeChatMessage[] = []
 
@@ -47,7 +47,7 @@ export function useMobileNativeChatTerminalTurn(args: {
   session: Pick<MobileNativeChatSession, 'messages' | 'transcriptLifecycle'> | null
   /** The newest pending echo; a new one is a new send, which ends Stop's suppression like desktop. */
   latestPendingId: string | null
-  pending?: NativeChatPendingSend[]
+  pending?: MobileNativeChatPendingMessage[]
   hasPromptCard: boolean
   scopeKey: string
   stop: () => Promise<boolean>
@@ -72,7 +72,10 @@ export function useMobileNativeChatTerminalTurn(args: {
   const workingEpoch =
     liveWorking || live.hookAwaitingInput ? (status?.turnStartedAt ?? null) : undefined
   const messagesWithPending = useMemo(
-    () => [...messages, ...pendingSendsAsMessages(args.pending ?? [], messages, workingEpoch)],
+    () => [
+      ...messages,
+      ...mobileNativeChatPendingAsMessages(args.pending ?? [], messages, workingEpoch)
+    ],
     [messages, args.pending, workingEpoch]
   )
   // Throttle status-part previews to avoid reparsing the whole accumulated markdown per part.

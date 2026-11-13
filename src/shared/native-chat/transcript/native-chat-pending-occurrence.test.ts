@@ -109,7 +109,13 @@ describe('pending sends typed through an agent TUI', () => {
       'pending:a',
       'pending:c'
     ])
-    expect(prunePendingSends(pending, landed)).toBe(pending)
+    const committed = prunePendingSends(pending, landed)
+    expect(committed.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
+    expect(committed[1].sourceReceipt).toEqual({ sessionId: '', id: 'queued-image' })
+    expect(pendingSendsAsMessages(committed, landed).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:c'
+    ])
     const replied = [...landed, message('reply', 'assistant', 'ok', 120)]
     const remaining = prunePendingSends(pending, replied)
     expect(remaining.map((entry) => entry.id)).toEqual(['a', 'c'])
@@ -118,5 +124,16 @@ describe('pending sends typed through an agent TUI', () => {
       'pending:c'
     ])
     expect(prunePendingSends(remaining, replied).map((entry) => entry.id)).toEqual(['a', 'c'])
+    const sequential = prunePendingSends(committed, replied)
+    expect(sequential.map((entry) => entry.id)).toEqual(['a', 'c'])
+    expect(pendingSendsAsMessages(sequential, replied).map((row) => row.id)).toEqual([
+      'pending:a',
+      'pending:c'
+    ])
+    const uncertain = [send('uncertain', { writeUnconfirmedAt: 101 }), send('delivered')]
+    expect(pendingSendsAsMessages(uncertain, landed).map((row) => row.id)).toEqual([
+      'pending:uncertain'
+    ])
+    expect(prunePendingSends(uncertain, replied).map((entry) => entry.id)).toEqual(['uncertain'])
   })
 })

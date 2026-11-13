@@ -18,7 +18,7 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-l
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
-  pairedClaudeNonAgentWork,
+  pairAcceptedClaudeStatusFields,
   shouldKeepClaudePermissionVisible,
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
@@ -26,6 +26,7 @@ import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
+import { retainNativeChatPromptSubmissions } from './server-status-identity'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
@@ -265,26 +266,23 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    // Preserve terminal joins only within one host; settlement lists vouch only for this transition.
-    const {
-      claudeRunningNonAgentTask: _unpaired,
-      claudeSettledRequests: _settled,
-      ...unpairedPayload
-    } = effectivePayload
-    const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)
-    const pairedPayload =
-      runningNonAgentTask === undefined
-        ? unpairedPayload
-        : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
-    const enriched = deriveCliWriterTopology(
-      {
-        ...this.attachStatusTiming(pairedPayload, now, observedAt),
-        observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
-      },
-      rowBefore,
-      this.cliWriterExecutionMatches,
-      newRun,
-      incoming.agentPresence?.process
+    const pairedPayload = pairAcceptedClaudeStatusFields(previous, effectivePayload)
+    const enriched = retainNativeChatPromptSubmissions(
+      deriveCliWriterTopology(
+        {
+          ...this.attachStatusTiming(pairedPayload, now, observedAt),
+          observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+        },
+        rowBefore,
+        this.cliWriterExecutionMatches,
+        newRun,
+        incoming.agentPresence?.process
+      ),
+      previous,
+      origin === 'hook' && !restated && !incoming.isReplay && !incoming.toolAgentId
+        ? incoming.promptSubmissionDigest
+        : undefined,
+      sender
     )
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&

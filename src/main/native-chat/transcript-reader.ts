@@ -28,7 +28,7 @@ export type ReadTranscriptResult =
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   filePath?: string
-  sourceOrder?: boolean
+  sourceOrder?: boolean | 'cursor'
 }
 
 /** Read the full transcript with no message cap; skip malformed/unknown records using the tailer’s decoders. */
@@ -90,7 +90,7 @@ export async function readNativeChatTranscript(
 async function readTranscript(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null,
-  sourceOrder = false
+  sourceOrder: boolean | 'cursor' = false
 ): Promise<NativeChatMessage[]> {
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
   const { messages } = await decodeTranscriptStream(

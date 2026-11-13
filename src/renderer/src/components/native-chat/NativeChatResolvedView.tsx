@@ -1,4 +1,7 @@
-import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
+import {
+  useNativeChatDeliveryProjection,
+  useNativeChatPendingProjection
+} from './session/terminal/delivery/use-native-chat-delivery-projection'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/class-names'
@@ -31,8 +34,7 @@ import { useNativeChatInteractiveSend } from './session/terminal/send/use-native
 import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
-import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
+import { shouldPruneLaunchPrompt } from './drafts/native-chat-launch-prompt'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend
@@ -86,6 +88,7 @@ export function NativeChatResolvedView({
   const keybindings = useAppStore((s) => s.keybindings)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
+    targetPtyId,
     paneKey,
     agent,
     sessionId,
@@ -210,16 +213,12 @@ export function NativeChatResolvedView({
     surfaceReady: shownPromptCard !== null
   })
 
-  const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
-    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
-  )
-  const messagesWithPending = useMemo(
-    () =>
-      pendingMessages.length === 0
-        ? sessionAfterCommandBoundaries.messages
-        : [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
-    [sessionAfterCommandBoundaries.messages, pendingMessages]
+  const { pendingMessages, messagesWithPending } = useNativeChatPendingProjection(
+    pending,
+    sessionAfterCommandBoundaries.messages,
+    sendWorkingEpoch,
+    session.sessionId,
+    session.sourceObservation?.context
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
@@ -258,11 +257,10 @@ export function NativeChatResolvedView({
     ) {
       setWorkingInterrupted(false)
     }
-    if (liveWorking && workingEpoch != null) {
-      previousWorkingEpochRef.current = workingEpoch
-    }
     if (!liveWorking) {
       previousWorkingEpochRef.current = null
+    } else if (workingEpoch != null) {
+      previousWorkingEpochRef.current = workingEpoch
     }
   }, [liveWorking, workingInterrupted, workingEpoch])
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
@@ -303,6 +301,7 @@ export function NativeChatResolvedView({
     fileLinkContext,
     onFind: find.open
   })
+
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   const root = (

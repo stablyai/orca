@@ -1,3 +1,5 @@
+import { codexSummaryText, codexTurnItemBlocks } from '../transcript-codex-content'
+import { transcriptInputContent, codexEventInputContent } from '../transcript-input-content'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
@@ -66,7 +68,18 @@ function codexUnwrappedResponseItem(
   const decodedBlocks = codexTurnItemBlocks(record.content)
   const blocks =
     role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
-  return role && blocks.length > 0 ? { id, role, blocks, timestamp, source: 'transcript' } : null
+  return role && blocks.length > 0
+    ? {
+        id,
+        role,
+        blocks,
+        timestamp,
+        source: 'transcript',
+        ...(role === 'user'
+          ? { inputContent: transcriptInputContent('codex', record.content) }
+          : {})
+      }
+    : null
 }
 
 function codexResponseItem(
@@ -86,7 +99,13 @@ function codexResponseItem(
     if (blocks.length === 0) {
       return null
     }
-    return { id, role, blocks, timestamp, source: 'transcript' }
+    return {
+      id,
+      role,
+      blocks,
+      timestamp,
+      source: 'transcript'
+    }
   }
   if (payload.type === 'reasoning') {
     const text = extractString(payload.text) ?? codexSummaryText(payload.summary)
@@ -160,7 +179,14 @@ function codexEventMessage(
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
     return text
-      ? { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
+      ? {
+          id,
+          role: 'user',
+          blocks: [{ type: 'text', text }],
+          timestamp,
+          source: 'transcript',
+          inputContent: codexEventInputContent(payload)
+        }
       : null
   }
   if (payload.type === 'agent_message') {
@@ -201,7 +227,14 @@ function codexCompletedTurnItem(
     return null
   }
   if (item.type === 'UserMessage' || item.type === 'user_message') {
-    return { id, role: 'user', blocks, timestamp, source: 'transcript' }
+    return {
+      id,
+      role: 'user',
+      blocks,
+      timestamp,
+      source: 'transcript',
+      inputContent: transcriptInputContent('codex', item.content, true)
+    }
   }
   if (item.type === 'AgentMessage' || item.type === 'agent_message') {
     return { id, role: 'assistant', blocks, timestamp, source: 'transcript' }
@@ -221,45 +254,6 @@ function codexCompactionMarker(id: string, timestamp: number | null): NativeChat
   }
 }
 
-function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {
-  if (!Array.isArray(content)) {
-    return []
-  }
-  const blocks: NativeChatBlock[] = []
-  for (const value of content) {
-    const item = asRecord(value)
-    if (!item) {
-      continue
-    }
-    if (
-      item.type === 'text' ||
-      item.type === 'Text' ||
-      item.type === 'input_text' ||
-      item.type === 'output_text'
-    ) {
-      const text = extractString(item.text)
-      if (text) {
-        blocks.push({ type: 'text', text })
-      }
-      continue
-    }
-    if (item.type === 'image' || item.type === 'Image' || item.type === 'input_image') {
-      const url = extractString(item.image_url) ?? extractString(item.url)
-      if (url) {
-        blocks.push({ type: 'image-ref', url })
-      }
-      continue
-    }
-    if (item.type === 'local_image' || item.type === 'LocalImage') {
-      const path = extractString(item.path)
-      if (path) {
-        blocks.push({ type: 'image-ref', path })
-      }
-    }
-  }
-  return blocks
-}
-
 /** Preserve raw argument shape for all consumers; callers needing structure decode it themselves. */
 function codexCallInput(payload: Record<string, unknown>): unknown {
   if (payload.arguments !== undefined) {
@@ -277,20 +271,6 @@ function codexToolResult(output: unknown, callId: string | null): NativeChatBloc
     ...(callId ? { callId } : {}),
     ...(isError ? { isError: true } : {})
   }
-}
-
-function codexSummaryText(summary: unknown): string | null {
-  if (!Array.isArray(summary)) {
-    return null
-  }
-  const parts: string[] = []
-  for (const item of summary) {
-    const text = extractString(asRecord(item)?.text) ?? extractString(item)
-    if (text) {
-      parts.push(text)
-    }
-  }
-  return parts.length ? parts.join('\n') : null
 }
 
 function parseTimestamp(value: unknown): number | null {

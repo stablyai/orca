@@ -53,6 +53,18 @@ export class TerminalRunFactsRegister {
     { incarnationId: string | null; firstInputAt: number | null }
   >()
   private readonly inputListeners = new Set<(ptyId: string, now: number) => void>()
+  private readonly inputListenersByPty = new Map<string, Set<() => void>>()
+  onPtyInput(ptyId: string, listener: () => void): () => void {
+    const listeners = this.inputListenersByPty.get(ptyId) ?? new Set()
+    this.inputListenersByPty.set(ptyId, listeners)
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) {
+        this.inputListenersByPty.delete(ptyId)
+      }
+    }
+  }
 
   /** Called on driving input from any client (not launch writes or replies); keep it cheap. */
   onInput(listener: (ptyId: string, now: number) => void): () => void {
@@ -127,6 +139,9 @@ export class TerminalRunFactsRegister {
       }
       for (const listener of this.inputListeners) {
         listener(ptyId, now)
+      }
+      for (const listener of this.inputListenersByPty.get(ptyId) ?? []) {
+        listener()
       }
       const pending = this.pendingByPtyId.get(ptyId)
       if (pending) {

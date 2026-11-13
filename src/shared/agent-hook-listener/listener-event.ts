@@ -34,6 +34,8 @@ export type AgentHookEventPayload = {
   restoredUnconfirmed?: true
   /** Distinguish duplicate delivery from same-text reruns when provider evidence permits. */
   promptInteractionKey?: string
+  /** Exact original prompt-submit text digest; admission consumes it, never persisted. */
+  promptSubmissionDigest?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */

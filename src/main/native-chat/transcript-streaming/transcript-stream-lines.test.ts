@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
+import { decodeClaudeTranscriptLine } from '../transcript-decoding/transcript-line-decoders-claude'
 import { describe, expect, it } from 'vitest'
-import { splitTranscriptStreamLines } from './transcript-stream-lines'
+import { decodeTranscriptStream, splitTranscriptStreamLines } from './transcript-stream-lines'
 
 describe('bounded transcript records', () => {
   async function collect(chunks: (Buffer | string)[], limit: number) {
@@ -28,4 +29,23 @@ describe('bounded transcript records', () => {
       'record exceeds 3 byte limit'
     )
   })
+})
+
+it('retains a legacy paging cursor without changing its backward-clock clamp', async () => {
+  const source = `${[
+    '{"type":"user","uuid":"first","timestamp":2000,"message":{"content":"first"}}',
+    '{"type":"user","uuid":"second","timestamp":1000,"message":{"content":"second"}}'
+  ].join('\n')}\n`
+  const result = await decodeTranscriptStream(
+    Readable.from([source]),
+    '/qa/session.jsonl',
+    0,
+    decodeClaudeTranscriptLine,
+    true,
+    Infinity,
+    'cursor'
+  )
+  expect(result.messages.map((message) => message.timestamp)).toEqual([2000000, 2000001])
+  expect(result.messages.map((message) => message.transcriptOffset)).toEqual([0, 78])
+  expect(result.messages.every((message) => message.transcriptOrder === undefined)).toBe(true)
 })

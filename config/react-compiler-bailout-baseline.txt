@@ -246,7 +246,6 @@
 1 src/renderer/src/components/native-chat/session/structured/writes/use-structured-agent-session-stop-press.ts
 16 src/renderer/src/components/native-chat/session/terminal/assembly/use-native-chat-assembled-messages.ts
 1 src/renderer/src/components/native-chat/session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice.ts
-1 src/renderer/src/components/native-chat/session/terminal/delivery/use-native-chat-pending-delivery.ts
 2 src/renderer/src/components/native-chat/session/terminal/read/use-native-chat-live-session.ts
 3 src/renderer/src/components/native-chat/session/terminal/read/use-native-chat-retained-session.ts
 1 src/renderer/src/components/native-chat/tools/lines/NativeChatToolOutput.tsx

@@ -1,3 +1,4 @@
+import { TerminalPromptInputQueue } from './terminal-chat-input-ownership'
 import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
@@ -15,6 +16,8 @@ import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
 export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
+  protected readonly promptInputs = new TerminalPromptInputQueue(this.terminalRunFacts)
+
   protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
 
   protected async serializeAgentPromptSubmission<T>(
@@ -22,21 +25,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     generation: number,
     submit: () => Promise<T>
   ): Promise<T> {
-    const queueKey = `${ptyId}\u0000${generation}`
-    const previous = this.agentPromptSubmissionTailByPtyId.get(queueKey) ?? Promise.resolve()
-    const submission = previous.catch(() => undefined).then(submit)
-    const tail = submission.then(
-      () => undefined,
-      () => undefined
-    )
-    this.agentPromptSubmissionTailByPtyId.set(queueKey, tail)
-    try {
-      return await submission
-    } finally {
-      if (this.agentPromptSubmissionTailByPtyId.get(queueKey) === tail) {
-        this.agentPromptSubmissionTailByPtyId.delete(queueKey)
-      }
-    }
+    return this.promptInputs.serialize(ptyId, generation, submit)
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {

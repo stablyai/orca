@@ -128,6 +128,16 @@ export function applyRelayHookEvent(
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
+    promptSubmissionDigest:
+      incoming.agentPresence?.process &&
+      unflagged.agentPresence?.process &&
+      unflagged.agentPresence.sessionOwner &&
+      !unflagged.agentPresence.fallback &&
+      !unflagged.agentPresence.ended &&
+      !unflagged.agentPresence.suspended &&
+      isSameAgentProcess(incoming.agentPresence.process, unflagged.agentPresence.process)
+        ? unflagged.promptSubmissionDigest
+        : undefined,
     ...reduceHostTurnEnd(
       previousCodexTurnContext(previous, revised),
       revised,

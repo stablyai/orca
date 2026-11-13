@@ -9,7 +9,7 @@ import type { RuntimeEnvironmentCall } from './runtime-environment-call'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 
 /** A one-shot socket that sends only after its own `status.get` names `expectedRuntimeId`; null otherwise. */
-async function sendOneShotRequestOnRuntime(
+export async function sendOneShotRequestOnRuntime(
   connection: PairedRuntimeConnection,
   call: RuntimeEnvironmentCall,
   expectedRuntimeId: string
@@ -36,7 +36,7 @@ async function sendOneShotRequestOnRuntime(
       },
       requestSignal,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-      undefined,
+      call.requestSelection,
       requestPreparation
     )
   } catch (error) {

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { RpcContext } from '../../core'
+import { prepareNativeChatMessages } from '../../../../../shared/native-chat/transcript/native-chat-message-preparation'
+import { prunePendingSends } from '../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 
 // Return a deterministic transcript with an oversized tool result to verify client-specific clipping.
 const OVERSIZED = 'x'.repeat(5000)
@@ -163,6 +165,114 @@ function activeWatcherArgs(): NonNullable<typeof watcher.args> {
 }
 
 describe('nativeChat.readSession clientKind truncation gating', () => {
+  it.each(['text', 'path'] as const)(
+    'never certifies shortened source %s after relay or repeated preparation',
+    async (kind) => {
+      const text = kind === 'text' ? 'y'.repeat(70_000) : 'caption'
+      const images = kind === 'path' ? [`/${'a'.repeat(600)}.png`] : []
+      cachedResult.value = {
+        messages: [
+          {
+            ...makeTextMessage(text),
+            role: 'user',
+            blocks: [
+              { type: 'text', text },
+              ...images.map((path) => ({ type: 'image-ref' as const, path }))
+            ],
+            inputContent: { provider: 'codex', textDigest: 'a'.repeat(64), images }
+          }
+        ]
+      }
+      const pending = {
+        id: 'pending',
+        text,
+        sourceAgent: 'codex' as const,
+        sentAt: 0
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered readSession contract returns pages of the fixture transcript messages.
+      const result = (await readSessionHandler()(
+        { agent: 'codex', sessionId: 's' },
+        ctxWith('mobile')
+      )) as { messages: NativeChatMessage[] }
+      const once = prepareNativeChatMessages(result.messages, 'codex')
+      const twice = prepareNativeChatMessages(once, 'codex')
+      expect(prunePendingSends([pending], twice)).toEqual([
+        kind === 'text'
+          ? pending
+          : {
+              ...pending,
+              sourceReceipt: { sessionId: '', id: 'a-1' },
+              receiptMembers: ['pending'],
+              receiptProof: 'legacy',
+              receiptGlue: false
+            }
+      ])
+      expect(twice[0].inputContent).toBeUndefined()
+    }
+  )
+
+  it('budgets source evidence with the whole row and preserves the file cursor when paging', async () => {
+    const rows = [1, 2, 3].map((order) => ({
+      ...makeTextMessage('x'.repeat(800_000)),
+      id: `user-${order}`,
+      role: 'user' as const,
+      transcriptOrder: order * 100,
+      inputContent: {
+        provider: 'codex' as const,
+        textDigest: 'a'.repeat(64),
+        images: []
+      }
+    }))
+    cachedResult.value = { messages: rows }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered readSession contract returns pages of the fixture transcript messages.
+    const result = (await readSessionHandler()(
+      { agent: 'codex', sessionId: 's', capabilities: { transcriptSourceOrder: 1 } },
+      ctxWith('runtime')
+    )) as { messages: NativeChatMessage[] }
+    expect(result).toMatchObject({ hasMore: true, beforeOffset: 200 })
+    expect(result.messages.map((row) => row.id)).toEqual(['user-2', 'user-3'])
+
+    cachedResult.value = {
+      messages: [{ ...rows[0], blocks: [{ type: 'text', text: 'x'.repeat(3_000_000) }] }]
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered readSession contract returns pages of the fixture transcript messages.
+    const oversized = (await readSessionHandler()(
+      { agent: 'codex', sessionId: 's', capabilities: { transcriptSourceOrder: 1 } },
+      ctxWith('runtime')
+    )) as { messages: NativeChatMessage[] }
+    expect(oversized.messages[0].role).toBe('system')
+    expect(oversized.messages[0].inputContent).toBeUndefined()
+    expect(JSON.stringify(oversized).length).toBeLessThan(1_000)
+  })
+
+  it('pages every large legacy-client row without exposing the internal cursor', async () => {
+    const rows = [1, 2, 3].map((order) => ({
+      ...makeTextMessage('x'.repeat(800_000)),
+      id: `legacy-${order}`,
+      transcriptOffset: order * 100
+    }))
+    cachedResult.value = { messages: rows }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered readSession contract returns pages of the fixture transcript messages.
+    const first = (await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('runtime')
+    )) as { messages: NativeChatMessage[]; beforeOffset: number; hasMore: boolean }
+    expect(first.messages.map((row) => row.id)).toEqual(['legacy-2', 'legacy-3'])
+    expect(first).toMatchObject({ beforeOffset: 200, hasMore: true })
+    expect(
+      first.messages.every(
+        (row) => row.transcriptOffset === undefined && row.transcriptOrder === undefined
+      )
+    ).toBe(true)
+    cachedResult.value = { messages: rows.slice(0, 1) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered readSession contract returns pages of the fixture transcript messages.
+    const older = (await readSessionHandler()(
+      { agent: 'claude', sessionId: 's', beforeOffset: first.beforeOffset },
+      ctxWith('runtime')
+    )) as { messages: NativeChatMessage[] }
+    expect(older.messages.map((row) => row.id)).toEqual(['legacy-1'])
+  })
+
   it('clips oversized tool output for mobile clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
     const result = await readSessionHandler()(

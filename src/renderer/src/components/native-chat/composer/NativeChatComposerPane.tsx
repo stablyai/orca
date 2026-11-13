@@ -135,8 +135,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const resolveTarget = useCallback(
-      () => (targetPtyId ? { ptyId: targetPtyId } : null),
-      [targetPtyId]
+      () => (targetPtyId ? { ptyId: targetPtyId, paneKey } : null),
+      [targetPtyId, paneKey]
     )
 
     const attachments = useNativeChatComposerAttachments({

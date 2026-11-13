@@ -1,3 +1,14 @@
+import {
+  canReuseStatusProviderSession,
+  statusRetainsResumableIdentity
+} from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import type {
+  AgentStatusPayload,
+  AgentStatusRouting,
+  AgentStatusMetadata,
+  AgentLaunchConfigRegistryEntry,
+  AgentLaunchConfigRegistrationMetadata
+} from './agent-status-contract'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,
@@ -8,10 +19,6 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type {
-  AgentLaunchConfigRegistryEntry,
-  AgentLaunchConfigRegistrationMetadata
-} from './agent-status-contract'
 import { getLeafIdFromPaneKey, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 
@@ -199,4 +206,68 @@ export function retirePaneLaunchNote(state: PaneNoteCopies, paneKey: string): Pa
     }
   }
   return patch
+}
+
+export function resolveLiveStatusLaunchContext(
+  state: AppState,
+  paneKey: string,
+  existing: AgentStatusEntry | undefined,
+  payload: AgentStatusPayload,
+  routing: AgentStatusRouting | undefined,
+  metadata: AgentStatusMetadata | undefined,
+  agentType: AgentType | undefined
+) {
+  const canReuseExistingProviderSession = canReuseStatusProviderSession(existing, {
+    agentType: agentType,
+    state: payload.state
+  })
+  const providerSession =
+    metadata?.providerSession ??
+    (canReuseExistingProviderSession ? existing.providerSession : undefined)
+  const existingProviderSession = canReuseExistingProviderSession
+    ? existing.providerSession
+    : undefined
+  const providerSessionChanged =
+    Boolean(metadata?.providerSession && existingProviderSession) &&
+    !agentProviderSessionsEqual(agentType, metadata?.providerSession, existingProviderSession)
+  const statusTabId = routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
+  const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
+  const registryEntry = state.agentLaunchConfigByPaneKey[paneKey]
+  const registryMatched = registryEntryMatchesStatus({
+    entry: registryEntry,
+    paneKey,
+    agentType: agentType,
+    tabId: statusTabId,
+    terminalHandle: statusTerminalHandle,
+    launchToken: metadata?.launchToken,
+    providerSession,
+    existingProviderSession,
+    providerSessionChanged
+  })
+  const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
+  const retainsResumableRecoveryIdentity = statusRetainsResumableIdentity(
+    { agentType: agentType, state: payload.state },
+    providerSession
+  )
+  // Local main's note-or-null or a paired host's frame fact; an OSC update says nothing.
+  const launchAttested = ownerLaunchAttested(metadata?.launchConfig, existing, agentType)
+  const launchConfigSource = invocationLaunchConfig({
+    statement: metadata?.launchConfig,
+    launchAttested,
+    registry: matchedRegistryLaunchConfig,
+    record: state.sleepingAgentSessionsByPaneKey[paneKey],
+    agentType: agentType,
+    providerSession
+  })
+  return {
+    providerSession,
+    providerSessionChanged,
+    statusTabId,
+    statusTerminalHandle,
+    registryEntry,
+    registryMatched,
+    retainsResumableRecoveryIdentity,
+    launchAttested,
+    launchConfigSource
+  }
 }

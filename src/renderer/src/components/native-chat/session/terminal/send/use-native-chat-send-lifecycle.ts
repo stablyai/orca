@@ -31,7 +31,7 @@ export function useNativeChatSendLifecycle(
           clearTimeout(cleanupTimer)
         }
         handle.cancel(keepInput)
-        if (pendingId) {
+        if (pendingId && !handle.settlesOwnOutcome) {
           onSettled?.(pendingId)
         }
       }

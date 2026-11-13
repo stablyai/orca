@@ -186,8 +186,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
 
-  protected readonly agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
-
   protected readonly agentPromptLifecycleByPtyId = new Map<
     string,
     { status: AgentStatus | null; workingSequence: number; updatedAt: number }

@@ -15,6 +15,7 @@ import type SyncDatabase from '../../../sqlite/sync-database'
 import { rowsOf, rowsWithinBudget } from './transcript-opencode-row-budget'
 import {
   opencodeMessages,
+  type OpenCodePartRow,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
 // Cursors are opaque provider order: SQLite rowid in v1, session sequence in v2.
@@ -112,13 +113,9 @@ export function readOpenCodeTranscriptSignal(
   }
 }
 
-export function readOpenCodeTranscriptPage(args: {
-  dbPath: string
-  sessionId: string
-  limit: number
-  beforeMessageRowId?: number
-  agent?: 'zcode'
-}): OpenCodeTranscriptPage | null {
+export function readOpenCodeTranscriptPage(
+  args: Parameters<typeof readOpenCode2TranscriptPage>[1] & { dbPath: string; agent?: 'zcode' }
+): OpenCodeTranscriptPage | null {
   const db = openOpenCodeDatabaseReadonly(args.dbPath)
   try {
     const v2 = readOpenCode2TranscriptPage(db, args)
@@ -182,7 +179,15 @@ export function readOpenCodeTranscriptPage(args: {
       hasMore = rows.length > limit
       const selected = hasMore ? rows.slice(0, limit) : rows
       cursor = selected.at(-1)!.message_rowid
-      const mapped = mapMessageRows(db, args.sessionId, selected, rawBudget, forkTip, args.agent)
+      const mapped = mapMessageRows(
+        db,
+        args.sessionId,
+        selected,
+        rawBudget,
+        forkTip,
+        args.agent,
+        args.inputEvidence
+      )
       pageBytes += Buffer.byteLength(JSON.stringify(mapped))
       if (pageBytes > 16 * 1024 * 1024) {
         throw new Error('OpenCode transcript page exceeds its byte limit')
@@ -223,29 +228,24 @@ type MessageRow = {
   data: string | null
 }
 
-type PartRow = {
-  message_id: string
-  time_updated: number
-  data: string | null
-}
-
 function mapMessageRows(
   db: SyncDatabase,
   sessionId: string,
   rows: MessageRow[],
   rawBudget: { bytes: number },
   forkTip: OpenCodeForkTipEvent[],
-  agent?: 'zcode'
+  agent?: 'zcode',
+  inputEvidence = false
 ): OpenCodeTranscriptItem[] {
   if (rows.length === 0) {
     return []
   }
-  const partsByMessage = new Map<string, PartRow[]>()
+  const partsByMessage = new Map<string, OpenCodePartRow[]>()
   const ids = rows.map((row) => row.id)
   for (let start = 0; start < ids.length; start += PART_ID_BATCH) {
     const batch = ids.slice(start, start + PART_ID_BATCH)
     const placeholders = batch.map(() => '?').join(', ')
-    const partRows = rowsWithinBudget<PartRow>(
+    const partRows = rowsWithinBudget<OpenCodePartRow>(
       db.prepare(
         `SELECT message_id, time_updated, CASE WHEN length(CAST(data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data FROM part p
          WHERE session_id = ? AND message_id IN (${placeholders})
@@ -288,7 +288,9 @@ function mapMessageRows(
       },
       row.data === null
         ? [{ message_id: row.id, time_updated: row.time_updated, data: null }]
-        : partList
+        : partList,
+      [],
+      inputEvidence
     )
     const updated = partList.reduce(
       (max, row) => (row.time_updated > max ? row.time_updated : max),

@@ -31,6 +31,7 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
       typeof value.dbPath === 'string' &&
       'sessionId' in value &&
       typeof value.sessionId === 'string' &&
+      (!('inputEvidence' in value) || typeof value.inputEvidence === 'boolean') &&
       (!('limit' in value) ||
         (typeof value.limit === 'number' &&
           Number.isSafeInteger(value.limit) &&

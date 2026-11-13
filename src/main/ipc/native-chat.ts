@@ -30,7 +30,7 @@ export type NativeChatReadSessionArgs = {
   wakeWslDistro?: boolean
 }
 
-// Bound parsing and rendering to the recent window; pagination raises the limit.
+const desktopReadOptions = { sourceOrder: true, inputEvidence: true } as const
 
 async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
@@ -43,7 +43,7 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
     sessionId,
     transcriptPath,
     limit,
-    sourceOrder: true
+    ...desktopReadOptions
   })
 }
 
@@ -197,7 +197,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
     sessionId,
     transcriptPath: opened.transcriptPath,
     initialLimit: limit,
-    sourceOrder: true,
+    ...desktopReadOptions,
     onTranscriptPending: () => {
       if (!canPublish()) {
         return

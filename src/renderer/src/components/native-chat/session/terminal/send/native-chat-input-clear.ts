@@ -1,3 +1,4 @@
+import type { NativeChatPtyDispatchScope } from './native-chat-pty-send-queue'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../../../shared/agent-launch/startup/agent-tui-input-clear'
 
@@ -5,6 +6,7 @@ import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../../../shared/agent-lau
 export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
 
 export type NativeChatSendOptions = {
+  dispatchScope?: NativeChatPtyDispatchScope
   /** The host refused a write; nothing after it was sent. */
   onWriteRejected?: () => void
   /** A write's acknowledgment was lost; it may or may not have landed. */

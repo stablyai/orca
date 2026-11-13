@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { TerminalChatPromptParam } from '../terminal-chat-prompt-params'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
@@ -177,6 +178,7 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   text: OptionalString,
+  chatPrompt: TerminalChatPromptParam,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
   // Why: older hosts strip this optional intent and retain their direct-send behavior.
@@ -337,9 +339,7 @@ export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
 
-export const TerminalCloseAll = TerminalStop
-
-export const TerminalSleep = TerminalStop
+export { TerminalStop as TerminalCloseAll, TerminalStop as TerminalSleep }
 
 export const TerminalStopExact = TerminalStop.extend({
   expectedPtyIds: z.array(requiredString('Missing PTY ID')).min(1),

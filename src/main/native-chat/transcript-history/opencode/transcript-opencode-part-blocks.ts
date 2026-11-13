@@ -1,3 +1,4 @@
+import { transcriptInputContent } from '../../transcript-input-content'
 import { fileURLToPath } from 'node:url'
 import type {
   NativeChatBlock,
@@ -22,9 +23,13 @@ export const OPENCODE_TRANSCRIPT_MAX_ROW_BYTES = 2 * 1024 * 1024
 export function opencodeMessages(
   message: Pick<NativeChatMessage, 'id' | 'role' | 'timestamp'>,
   partRows: OpenCodePartRow[],
-  additionalBlocks: NativeChatBlock[] = []
+  additionalBlocks: NativeChatBlock[] = [],
+  inputEvidence = false
 ): NativeChatMessage[] {
-  const { blocks, reasoning, notices } = opencodeMessageContent(partRows)
+  const { blocks, reasoning, notices, inputContent } = opencodeMessageContent(
+    partRows,
+    inputEvidence && message.role === 'user'
+  )
   blocks.push(...additionalBlocks)
   const messages: NativeChatMessage[] = []
   if (reasoning.length > 0) {
@@ -37,7 +42,12 @@ export function opencodeMessages(
     })
   }
   if (blocks.length > 0) {
-    messages.push({ ...message, blocks, source: 'transcript' })
+    messages.push({
+      ...message,
+      blocks,
+      source: 'transcript',
+      ...(inputContent ? { inputContent } : {})
+    })
   }
   if (notices.length > 0) {
     messages.push({
@@ -51,15 +61,23 @@ export function opencodeMessages(
   return messages
 }
 
-function opencodeMessageContent(partRows: OpenCodePartRow[]): {
+function opencodeMessageContent(
+  partRows: OpenCodePartRow[],
+  user: boolean
+): {
   blocks: NativeChatBlock[]
   reasoning: NativeChatBlock[]
   notices: NativeChatTextBlock[]
+  inputContent?: ReturnType<typeof transcriptInputContent>
 } {
   const blocks: NativeChatBlock[] = []
   const reasoning: NativeChatBlock[] = []
   const notices: NativeChatTextBlock[] = []
+  const source: unknown[] = []
   for (const partRow of partRows) {
+    if (user) {
+      source.push(null)
+    }
     if (partRow.data === null) {
       const { text, presentation } = agentSessionHostStatusBody('history-item-too-large')
       notices.push({ type: 'text', text, presentation })
@@ -68,6 +86,11 @@ function opencodeMessageContent(partRows: OpenCodePartRow[]): {
     const part = parseJsonObject(partRow.data)
     if (!part) {
       continue
+    }
+    if (user && part.synthetic === true && part.type === 'text') {
+      source.pop()
+    } else if (user) {
+      source[source.length - 1] = opencodeInputPart(part)
     }
     switch (part.type) {
       case 'text': {
@@ -114,7 +137,30 @@ function opencodeMessageContent(partRows: OpenCodePartRow[]): {
         break
     }
   }
-  return { blocks, reasoning, notices }
+  return {
+    blocks,
+    reasoning,
+    notices,
+    ...(user ? { inputContent: transcriptInputContent('opencode', source) } : {})
+  }
+}
+
+function opencodeInputPart(part: Record<string, unknown>): unknown {
+  if (part.type !== 'file') {
+    return part
+  }
+  if (typeof part.mime !== 'string' || !part.mime.startsWith('image/')) {
+    return null
+  }
+  const url = typeof part.url === 'string' ? part.url : null
+  if (url?.startsWith('file://')) {
+    try {
+      return { type: 'local_image', path: fileURLToPath(url) }
+    } catch {
+      return null
+    }
+  }
+  return { type: 'local_image', path: url && !/^(data:|https?:)/i.test(url) ? url : null }
 }
 
 function opencodeFileBlock(part: Record<string, unknown>): NativeChatImageRefBlock | null {
