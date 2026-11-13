@@ -18,6 +18,7 @@ export function openClientHostedUrlBesideBrowserPage(args: {
   worktreeId: string
   url: string
   activate: boolean
+  onOpened?: (pageId: string) => void
 }): void {
   const store = useAppStore.getState()
   const sourcePage = findPage(store.browserPagesByWorkspace, args.sourcePageId)
@@ -35,6 +36,8 @@ export function openClientHostedUrlBesideBrowserPage(args: {
   const sourceTab = sourcePage
     ? findWorkspace(store.browserTabsByWorktree, sourcePage.workspaceId)
     : null
+  // The host's page snapshot proves the opener's profile; mirrored workspace metadata may not carry it.
+  const profileId = handle?.browserProfileId ?? sourceTab?.sessionProfileId
   const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(store, args.sourcePageId, args.worktreeId)
   // Why not createBrowserTab: that lands in the streamed pane, which a headless runtime cannot show.
   // Omit placementPreference so preparation uses the same auto choice as the new-tab button.
@@ -42,8 +45,9 @@ export function openClientHostedUrlBesideBrowserPage(args: {
     worktreeId: args.worktreeId,
     environmentId,
     url: args.url,
-    ...(sourceTab?.sessionProfileId ? { profileId: sourceTab.sessionProfileId } : {}),
+    ...(profileId ? { profileId } : {}),
     ...(sourceUnifiedTab ? { clientAfterTabId: sourceUnifiedTab.id } : {}),
+    ...(args.onOpened ? { onMaterialized: args.onOpened } : {}),
     focusOnCreate: args.activate,
     selectWorktree: false,
     stagedTitle: redactKagiSessionToken(args.url),
