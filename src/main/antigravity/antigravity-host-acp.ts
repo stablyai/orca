@@ -11,6 +11,8 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
 import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
   createAntigravityHostCredentialBackend,
@@ -59,6 +61,20 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
 type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
 const checks = new Map<string, HostCheck>()
+
+export function expireAntigravityHostAcpChecks(homePath?: string): void {
+  checks.clear()
+  if (homePath !== undefined) {
+    agentModelCatalogStore.expireAgent(
+      'antigravity',
+      agentModelCatalogFingerprint({
+        agent: 'antigravity',
+        accountHome: antigravityHostAccountHome(homePath),
+        wslDistro: null
+      })
+    )
+  }
+}
 
 class IncompatibleHostAcp extends Error {}
 

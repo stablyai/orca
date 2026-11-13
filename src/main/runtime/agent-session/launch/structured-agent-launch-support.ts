@@ -113,9 +113,13 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 export async function structuredAgentHostLaunchSources(
   agent: StructuredAgentId,
   runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
-    resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
+    resolveStructuredAgentAccountHome(
+      agent: StructuredAgentId,
+      purpose?: 'read' | 'identity'
+    ): Promise<AgentSessionAccountHome>
   },
-  signal: AbortSignal
+  signal: AbortSignal,
+  purpose: 'read' | 'identity' = 'read'
 ): Promise<{
   accountHome: AgentSessionAccountHome
   env: Record<string, string>
@@ -137,7 +141,7 @@ export async function structuredAgentHostLaunchSources(
     release()
   }
   return {
-    accountHome: await runtime.resolveStructuredAgentAccountHome(agent),
+    accountHome: await runtime.resolveStructuredAgentAccountHome(agent, purpose),
     env: await environment.resolveAgentEnvironment(agent),
     commandSettings: settings,
     // The chat host's own state root (ensureStructuredAgentSessionHost).

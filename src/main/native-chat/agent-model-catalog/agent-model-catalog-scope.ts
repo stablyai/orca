@@ -40,7 +40,8 @@ export async function resolveAgentModelCatalogScope(
   if (record && !isNativeLocalLocation(record.location)) {
     return { base, fingerprint: base, exact: false }
   }
-  const probe = deps.probes?.[params.agent]
+  const registeredProbe = deps.probes?.[params.agent]
+  const probe = registeredProbe?.supportsAccount?.(home) === false ? undefined : registeredProbe
   // Fixed when its readers asked: no chat closing later turns a shared refresh passive.
   const savedOnly = () => !!params.savedOnly
   if (params.legacy) {

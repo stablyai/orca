@@ -90,8 +90,8 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           }
         }
       : {}),
-    // New chats prefer a compatible host program, which their account home then pins; reads such
-    // as Orca's own sign-in keep the agent's account.
+    // New chats and sessionless catalog reads share the active backend; `identity` reads keep the
+    // agent's managed home.
     resolveAccountHome: async (
       { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
@@ -99,7 +99,7 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
       // A host program without the chat's permission mode never takes it; `own` sets none.
       const host =
         spec.hostBackend &&
-        purpose === 'launch' &&
+        (purpose === 'launch' || purpose === 'read') &&
         (permissionMode === undefined ||
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
