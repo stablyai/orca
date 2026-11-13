@@ -10,7 +10,13 @@ import type {
   OrcaCloudAgentsErrorCode
 } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { RowShell } from './orca-cloud-account-row-shell'
-import { agentName, keyPhrase, productName, setupFailureCopy } from './orca-cloud-accounts-copy'
+import {
+  agentName,
+  keyPhrase,
+  productName,
+  setupFailureCopy,
+  setupFailureTone
+} from './orca-cloud-accounts-copy'
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
 import { ActiveRow, ChoiceRow } from './OrcaCloudActiveRow'
 import { SetupRow } from './OrcaCloudSetupRow'
@@ -86,7 +92,7 @@ export function AccountRow({
       content = (
         <RowShell
           agent={agent}
-          tone="error"
+          tone={setupFailureTone(row.error)}
           title={copy.title}
           detail={copy.detail}
           actions={

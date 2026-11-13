@@ -372,7 +372,7 @@ describe('Codex account in workspaces (D10, D13)', () => {
     // RS-4: still a 403 (a 401 would start Codex's own token refresh), now with words Codex prints.
     expect(refused.status).toBe(403)
     expect(JSON.parse(refused.body)).toEqual({
-      detail: 'Your ChatGPT sign-in for Orca Cloud isn’t available here. Renew it in Orca: Settings → Agent accounts.'
+      detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Agent accounts.'
     })
     expect(lastEnv('/opt/orca/bin/orca-sandbox-env').ORCA_CODEX_AUTH_PLACEHOLDER).toBeUndefined()
   })

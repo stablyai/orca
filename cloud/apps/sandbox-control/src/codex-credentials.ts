@@ -183,7 +183,7 @@ export const codexAccount: AccountProvider = {
     status: 403,
     contentType: 'application/json',
     body: JSON.stringify({
-      detail: 'Your ChatGPT sign-in for Orca Cloud isn’t available here. Renew it in Orca: Settings → Agent accounts.'
+      detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Agent accounts.'
     })
   },
   credential: async (db, keyring, userId, now) => {
