@@ -111,9 +111,18 @@ Compiled per sandbox by `compileNetworkPolicy()` (workspace sandboxes: `egressPo
 - **Preset `limited`** (`SANDBOX_EGRESS_PRESET=limited`, operator-wide for now; a per-workspace choice can come
   later): the allowlist, **no `"*"` entry** (unlisted domains don't resolve). Default list: package registries
   (npm, pypi, crates, go proxy, rubygems), github.com + codeload + objects, agent APIs (Anthropic, OpenAI/ChatGPT,
-  Google), and Orca endpoints, plus declared MCP and custom provider hosts.
+  Google), and Orca endpoints, plus declared MCP and custom provider hosts. Any other non-empty value of the
+  variable also means `limited` (fails closed). The switch applies at a sandbox's next policy write (create, wake,
+  git token refresh, secret/MCP refresh); a running sandbox with no GitHub App install gets no periodic rewrite, so
+  it stays open until it sleeps, wakes or its secrets change.
+- What open costs (E3 review F2): only swapped credentials (GitHub tokens, Orca-account placeholders, model keys in
+  SWAPPED_CREDENTIALS) are protected by claims. Other secrets that are real inside the VM (team/repo/personal
+  secrets such as DB_PASSWORD, the Cursor access token, the Copilot session token, the workspace API token) had the
+  allowlist as their only containment; under `"*"` anything in the workspace can send them to any host.
 - Under both presets, credential hosts get `[...inject rules, {response: 403 orca-egress-denied}]`: a request without our placeholder is
-  refused, so the real token can't be paired with an attacker-chosen request shape.
+  refused, so the real token can't be paired with an attacker-chosen request shape. Under `"*"` this 403 is fail-fast
+  behaviour, not containment: an alias (www.github.com, a trailing-dot name) goes through the wildcard, but the swap
+  only ever happens on the exact claim host (and for forwards only at our proxy).
 - GitHub: VM sets `http.https://github.com/.extraheader = Authorization: Basic b64(x-access-token:<placeholder>)` so
   every git request carries the placeholder (git otherwise sends an unauthenticated probe first, which the trailing
   deny would 403). The control plane mints a 1h GitHub App installation token and rewrites the policy before expiry.
