@@ -43,7 +43,7 @@ export function withRenamedAccount<
   }
 }
 
-type AccountRenameContext = {
+export type AccountRenameContext = {
   accountOwner: RuntimeClientTarget
   hostLabel: string
   isCurrentAccountOwner: () => boolean
