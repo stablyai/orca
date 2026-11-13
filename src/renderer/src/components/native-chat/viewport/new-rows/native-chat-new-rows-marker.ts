@@ -3,7 +3,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useOrcaWindowForegroundFocused } from '@/hooks/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
-import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalPosition,
+  AgentJournalRenderItem
+} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
+import { runningStructuredAgentSessionTurnId } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { useAppStore } from '@/store'
 import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import {
@@ -24,7 +29,7 @@ type NativeChatLeftAt = {
   position: AgentJournalPosition
   /** A growing reply counts as missed from the position immediately before it. */
   writing: { key: string; size: number; before: AgentJournalPosition } | null
-  /** A turn was running, whether or not it had drawn a reply yet. */
+  /** The host had a turn running, whether or not it had drawn a row yet. */
   running: boolean
   /** The reader's prompts there were, by row key: a key stays the same from send to journal. */
   prompts: ReadonlySet<string>
@@ -40,7 +45,8 @@ function rowSize(slot: NativeChatTranscriptSlot): number {
 
 function nativeChatLeftAt(
   slots: readonly NativeChatTranscriptSlot[],
-  waitingSlots: readonly NativeChatTranscriptSlot[]
+  waitingSlots: readonly NativeChatTranscriptSlot[],
+  running: boolean
 ): NativeChatLeftAt {
   const all = [...slots, ...waitingSlots]
   // Later user prompts or held sends do not stop the turn’s latest assistant row from growing.
@@ -66,8 +72,6 @@ function nativeChatLeftAt(
       }
     }
   }
-  // The prompt that opened a turn is in it, so a turn that has drawn no reply yet still counts.
-  const running = slots.some((slot) => slot.kind === 'message' && slot.activeTurnIsWorking)
   return { position: newestRowPosition(all), writing, prompts, queuedPrompts, running }
 }
 
@@ -138,9 +142,9 @@ function nativeChatPromptRanWhileAway(
   if (!left.prompts.has(key)) {
     return true
   }
-  // A queued send ran behind a turn that was running (with or without a reply drawn yet), or behind
-  // work the reader missed. The host also holds a chat's first send while the chat opens; no turn
-  // runs then, so that one runs first, its reply the answer awaited.
+  // A queued send ran behind a turn the host had running (drawn or not), or behind work the reader
+  // missed. The host also holds a chat's first send while the chat opens; no turn runs then, so that
+  // one runs first, its reply the answer awaited.
   return (
     left.queuedPrompts.has(key) &&
     (left.running ||
@@ -200,7 +204,10 @@ export function useNativeChatNewRowsMarker(
   /** Rows held behind the running turn: seen and missed like any other, drawn outside `slots`. */
   waitingSlots: readonly NativeChatTranscriptSlot[],
   /** The pane is the one showing, and shows what the host holds now. */
-  isShowingLatest: boolean
+  isShowingLatest: boolean,
+  /** The host's journal: its turn record, not row liveness, says whether a turn is running. A held
+   *  first send has no turn yet, and a turn the provider opened may have drawn no row. */
+  host: { items: readonly AgentJournalRenderItem[]; latestTurn?: AgentSessionLatestTurn | null }
 ): {
   /** The marker to draw, when rows were missed and a line helps. */
   marker: NativeChatNewRowsMarkerState | undefined
@@ -272,7 +279,17 @@ export function useNativeChatNewRowsMarker(
       const marked =
         (seen.look === 'line' || seen.look === 'measure') &&
         nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
-      setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
+      setSeen({
+        ...seen,
+        watching,
+        left: marked
+          ? null
+          : nativeChatLeftAt(
+              slots,
+              waitingSlots,
+              runningStructuredAgentSessionTurnId(host) !== null
+            )
+      })
     }
   }
   const { missed, look } = seen

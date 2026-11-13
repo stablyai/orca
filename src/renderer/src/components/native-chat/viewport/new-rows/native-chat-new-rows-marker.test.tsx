@@ -54,6 +54,14 @@ function slotsOf(
   })
 }
 
+/** The host's journal as far as the marker reads it: whether its newest turn record is running. */
+const hostTurn = (running: boolean) => ({
+  items: [],
+  latestTurn: running
+    ? { itemId: 'turn', observedAt: 0, turn: { turnId: 'turn', state: 'running' as const } }
+    : null
+})
+
 const SEEN = [row('prompt', 1, 'user'), row('reply', 2)]
 const LATER = [...SEEN, row('answer', 3), row('more', 4)]
 const ASKED = [row('prompt', 1, 'user')]
@@ -116,7 +124,8 @@ describe('useNativeChatNewRowsMarker', () => {
         useNativeChatNewRowsMarker(
           slotsOf(props.messages, props.turn ?? turn),
           slotsOf(props.waiting ?? []),
-          props.showing
+          props.showing,
+          hostTurn((props.turn ?? turn)?.working === true)
         ),
       { initialProps }
     )
