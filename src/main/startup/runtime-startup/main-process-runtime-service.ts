@@ -62,6 +62,7 @@ import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
+import { watchRemovedRuntimeEnvironmentConnections } from '../../ipc/runtime-environments/runtime-environment-removed-connections'
 import { openOffscreenBrowserPageLink } from '../../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
@@ -175,6 +176,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
     }
   })
+  app.once(
+    'will-quit',
+    watchRemovedRuntimeEnvironmentConnections(getRuntimeEnvironmentRegistryRoot())
+  )
   // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
   setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
   setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(app.getPath('userData'), targetId))

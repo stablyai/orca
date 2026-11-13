@@ -104,6 +104,16 @@ export function resetRuntimeEnvironmentStatusOwners(): void {
   }
 }
 
+export function listCachedRuntimeEnvironmentIds(): string[] {
+  return [
+    ...new Set([
+      ...statusOwners.keys(),
+      ...requestConnections.keys(),
+      ...sharedControlConnections.keys()
+    ])
+  ]
+}
+
 export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {
   return statusOwners.get(environmentId)?.owner.read() ?? null
 }

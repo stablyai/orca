@@ -2,11 +2,13 @@ import { withReconnectJitter } from '../../reconnect-jitter'
 
 const ACTIVE_RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000]
 const IDLE_RECONNECT_DELAYS_MS = [...ACTIVE_RECONNECT_DELAYS_MS, 60_000, 120_000, 300_000]
+export const MAX_IDLE_RECONNECT_ATTEMPTS = 20
 
 export class SharedControlReconnectScheduler {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
   private pendingOpen: (() => void) | null = null
+  private parked = false
 
   get isScheduled(): boolean {
     return this.timer !== null
@@ -70,7 +72,18 @@ export class SharedControlReconnectScheduler {
       this.scheduleWithDefaultBackoff(args.intentionallyClosed, args.open)
       return
     }
+    if (this.attempt >= MAX_IDLE_RECONNECT_ATTEMPTS) {
+      this.parked = true
+      return
+    }
     this.scheduleWithIdleBackoff(args.intentionallyClosed, args.open)
+  }
+
+  resumeParked(): void {
+    if (this.parked) {
+      this.parked = false
+      this.attempt = 0
+    }
   }
 
   // Why: OS resume / browser online should advance an already-scheduled reconnect, not start a new one.
