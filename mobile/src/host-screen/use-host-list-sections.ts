@@ -3,12 +3,13 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
 import type { Section, SectionRepo, Worktree } from '../worktree/workspace-list-types'
 import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
+import type { MobileLineageStores } from '../worktree/mobile-workspace-lineage'
 import { useLastVisitedWorktreeOnHost } from '../worktree/use-last-visited-worktree-on-host'
 import { rowFiltersForView } from '../worktree/workspace-view-settings'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
@@ -17,6 +18,8 @@ import { buildHostFeedSections, buildPreFeedSections } from './host-sidebar-feed
 import { useHostRepoIconDataUrls } from './use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from './use-host-sidebar-feed'
 import type { HostScreenState } from './use-host-screen-state'
+import { indexHiddenProjects } from '../../../src/shared/hidden-projects'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -27,6 +30,8 @@ export type HostListSectionsInputs = {
   hostContextOf: WorktreeHostContextOf
   /** The desktop's platform, which names its own host; never the phone's. */
   hostPlatform: NodeJS.Platform | null
+  /** The host's own store identity (status.get), for parents on another machine. */
+  hostInstallationId: string | undefined
   state: HostScreenState
 }
 
@@ -56,6 +61,7 @@ function useFilterRepos(
 function useLegacyHostListSections({
   displayWorktrees,
   hostContextOf,
+  hostInstallationId,
   state
 }: HostListSectionsInputs): HostListSections {
   const projectCatalog = useMemo(
@@ -75,6 +81,10 @@ function useLegacyHostListSections({
   )
   const collapsedGroups = useCollapsedGroups(state)
   const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
+  const lineageStores = useMemo<MobileLineageStores>(
+    () => ({ ownInstallationId: hostInstallationId, servers: state.serverWorkspaces.hosts }),
+    [hostInstallationId, state.serverWorkspaces.hosts]
+  )
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
     hostContextOf,
@@ -88,12 +98,14 @@ function useLegacyHostListSections({
     filterCatalogRepos: state.servedProjectSections?.repos ?? state.desktopRepos,
     collapsedGroups,
     workspaceStatuses: state.view.workspaceStatuses,
-    repoHostIdByRepoId: state.repoHostIdByRepoId
+    repoHostIdByRepoId: state.repoHostIdByRepoId,
+    lineageStores
   })
   return { ...sectionsResult, collapsedGroups, projectOrderBy: projectCatalog.projectOrderBy }
 }
 
 const NO_SECTIONS: Section[] = []
+const PHONE_FEED_LINEAGE = { acceptLegacyLineage: true }
 
 function useFeedHostListSections({
   client,
@@ -125,7 +137,8 @@ function useFeedHostListSections({
     [state.view, projectOrderBy, domains, hostPlatform]
   )
   const built = useMemo(
-    () => (domains ? buildSidebarFeedRows(domains, catalog, view) : null),
+    // The phone keeps nesting by an older server's edges without instance ids, as it always has.
+    () => (domains ? buildSidebarFeedRows(domains, catalog, view, PHONE_FEED_LINEAGE) : null),
     [domains, catalog, view]
   )
   const lastVisited = useLastVisitedWorktreeOnHost(hostId)
@@ -149,12 +162,14 @@ function useFeedHostListSections({
               view: state.view,
               search: state.search,
               repoHostIdByRepoId: state.repoHostIdByRepoId,
-              lastVisited
+              lastVisited,
+              hiddenProjects: indexHiddenProjects(catalog.repos, LOCAL_EXECUTION_HOST_ID)
             })
           : NO_SECTIONS,
     [
       built,
       preFeed,
+      catalog,
       displayWorktrees,
       hostContextOf,
       state.view,

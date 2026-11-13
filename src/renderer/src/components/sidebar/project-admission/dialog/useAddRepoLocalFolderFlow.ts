@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
   createNestedRepoTelemetryAttemptId
 } from '../../../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
+import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
 import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNestedReviewState'
@@ -17,17 +16,18 @@ import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
-import { showSkippedBatchFoldersToast } from '../completion/add-repo-skipped-folders-toast'
-
-type LocalPathAddResult =
-  | { status: 'completed'; repo: Repo }
-  | { status: 'cancelled' | 'paused' | 'skipped' }
-
-type LocalPathAddMode = 'single' | 'batch'
+import {
+  addLocalPathsForGeneration,
+  usePickedLocalPathsAutoAdd,
+  type LocalPathAddMode,
+  type LocalPathAddResult
+} from './add-repo-local-path-batch'
 
 export function useAddRepoLocalFolderFlow({
   isOpen,
   droppedLocalPath,
+  pickedLocalPaths = null,
+  onPickedPathsUnsettled,
   activeRuntimeEnvironmentId,
   addRepoPath,
   openModal,
@@ -44,6 +44,9 @@ export function useAddRepoLocalFolderFlow({
 }: {
   isOpen: boolean
   droppedLocalPath: string
+  pickedLocalPaths?: readonly string[] | null
+  /** Close a suppressed start dialog when pre-picked paths finish without opening nested review or another modal. */
+  onPickedPathsUnsettled?: () => void
   activeRuntimeEnvironmentId: string | null | undefined
   addRepoPath: RepoSlice['addRepoPath']
   openModal: AppState['openModal']
@@ -69,10 +72,12 @@ export function useAddRepoLocalFolderFlow({
 } {
   const localAddGenRef = useRef(0)
   const droppedLocalPathHandledRef = useRef<string | null>(null)
+  const pickedLocalPathsHandledRef = useRef<readonly string[] | null>(null)
 
   const resetLocalFolderFlow = useCallback((): void => {
     localAddGenRef.current++
     droppedLocalPathHandledRef.current = null
+    pickedLocalPathsHandledRef.current = null
   }, [])
 
   const clearNestedScanState = useCallback((): void => {
@@ -170,7 +175,7 @@ export function useAddRepoLocalFolderFlow({
           return { status: 'cancelled' }
         }
         if (!repo) {
-          return { status: 'paused' }
+          return { status: 'failed' }
         }
         if (isGitRepoKind(repo)) {
           // Why: a transient non-authoritative refresh must not strand a persisted repo.
@@ -232,42 +237,16 @@ export function useAddRepoLocalFolderFlow({
   )
 
   const handleAddLocalPaths = useCallback(
-    async (paths: string[], source: AddRepoExistingWorkspaceSource, gen: number): Promise<void> => {
-      const gitRepoIds: string[] = []
-      const shouldDeferGitRepoReady = paths.length > 1
-      let skippedCount = 0
-      for (const path of paths) {
-        const result = await addLocalPathForGeneration(
-          path,
-          source,
-          gen,
-          shouldDeferGitRepoReady ? 'batch' : 'single'
-        )
-        if (result.status === 'skipped') {
-          skippedCount++
-          continue
-        }
-        if (result.status !== 'completed') {
-          return
-        }
-        if (isGitRepoKind(result.repo)) {
-          gitRepoIds.push(result.repo.id)
-        }
-      }
-      if (gen !== localAddGenRef.current) {
-        return
-      }
-      if (skippedCount > 0) {
-        showSkippedBatchFoldersToast()
-      }
-      if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
-        await onGitRepoReady(
-          gitRepoIds[0],
-          source,
-          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
-        )
-      }
-    },
+    (paths: readonly string[], source: AddRepoExistingWorkspaceSource, gen: number) =>
+      addLocalPathsForGeneration({
+        paths,
+        source,
+        gen,
+        isCurrentGen: () => gen === localAddGenRef.current,
+        activeRuntimeEnvironmentId,
+        addLocalPathForGeneration,
+        onGitRepoReady
+      }),
     [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
   )
 
@@ -283,6 +262,24 @@ export function useAddRepoLocalFolderFlow({
       void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
     }
   }, [droppedLocalPath, handleAddLocalPath, isOpen, offerWslHost])
+
+  const finishAddAttempt = useCallback((): void => {
+    clearNestedScanState()
+    setIsAdding(false)
+    setAddProjectBusyLabel(null)
+  }, [clearNestedScanState, setAddProjectBusyLabel, setIsAdding])
+
+  usePickedLocalPathsAutoAdd({
+    isOpen,
+    pickedLocalPaths,
+    pickedLocalPathsHandledRef,
+    localAddGenRef,
+    offerWslHost,
+    addPaths: handleAddLocalPaths,
+    onUnsettled: onPickedPathsUnsettled,
+    setIsAdding,
+    onFinishAttempt: finishAddAttempt
+  })
 
   const handleBrowse = useCallback(async (): Promise<void> => {
     const gen = ++localAddGenRef.current

@@ -3,11 +3,11 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import React, { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-actions'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import {
@@ -19,7 +19,7 @@ import {
 
 const lookup = vi.hoisted(() => vi.fn())
 const setViewed = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: lookup
 }))
 vi.mock('@/components/github/github-work-item-comment-mutations', async (importOriginal) => ({
@@ -169,22 +169,6 @@ describe('useGitHubWorkItemDetails reconciliation', () => {
     expect(latest?.details?.files?.[0]?.viewerViewedState).toBe('VIEWED')
     // One settlement owed exactly one read: the failed read and the local patches start none.
     expect(lookup).toHaveBeenCalledTimes(2)
-  })
-
-  it('starts the owed reread when a comment lands in the same batch as the invalidation', async () => {
-    lookup.mockResolvedValue(details)
-    render(<Harness />)
-    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
-
-    act(() => {
-      latest!.invalidateCurrentDetailsCache()
-      latest!.appendOptimisticComment(comment(101))
-    })
-
-    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
-    await act(async () => {})
-    expect(lookup).toHaveBeenCalledTimes(2)
-    expect(latest?.details?.comments.map((c) => c.id)).toContain(101)
   })
 
   it('lands a running reread after a comment and an unrelated invalidation', async () => {

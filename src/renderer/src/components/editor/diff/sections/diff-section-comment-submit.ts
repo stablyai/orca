@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { DiffSection } from './diff-section-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

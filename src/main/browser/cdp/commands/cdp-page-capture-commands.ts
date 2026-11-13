@@ -1,6 +1,7 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
-import { captureScreenshot, type CapturePaintHold } from './cdp-screenshot'
+import { captureScreenshot } from './cdp-screenshot'
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import type { CdpClientResponseWriter } from '../transport/cdp-client-response-writer'
 import { readRemoteCliAdmittedPage } from '../../routing/input-ownership/remote-cli-page-admission'

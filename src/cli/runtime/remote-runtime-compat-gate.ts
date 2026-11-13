@@ -9,7 +9,9 @@ import type {
   RuntimeOrchestrationEnvelope
 } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import { markEnvironmentUsed } from './environments'
+import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
+import { prepareRecipeVmEnvironmentCall } from './recipe-vm-wake-gate'
+import { resolveRemoteConnection } from './runtime-remote-pairing'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import type {
   sendWebSocketRequest,
@@ -23,13 +25,14 @@ type WebSocketTransport = {
 
 export class RemoteRuntimeCompatGate {
   private checked = false
+  private connectionAfterWake: PairedRuntimeConnection | null = null
 
   constructor(
     private readonly userDataPath: string,
     private readonly environmentSelector: string | null
   ) {}
 
-  send<TResult>(args: {
+  async send<TResult>(args: {
     transport: WebSocketTransport
     connection: PairedRuntimeConnection
     method: string
@@ -38,9 +41,26 @@ export class RemoteRuntimeCompatGate {
     envelope?: RuntimeOrchestrationEnvelope
     requestSelection?: RuntimeRequestSelection
   }): Promise<RuntimeRpcResponse<TResult>> {
+    // A recipe VM's server is gone while the VM sleeps; only the desktop that owns it can wake it.
+    if (
+      this.environmentSelector &&
+      (await prepareRecipeVmEnvironmentCall(
+        this.userDataPath,
+        this.environmentSelector,
+        args.method
+      )) === 'reload'
+    ) {
+      // A resume re-pairs the VM's server: this and later requests use the saved pairing.
+      this.connectionAfterWake = resolveRemoteConnection(
+        this.userDataPath,
+        null,
+        this.environmentSelector
+      )
+    }
+    const connection = this.connectionAfterWake ?? args.connection
     if (!args.requestSelection && (this.checked || args.method === 'status.get')) {
       return args.transport.sendWebSocketRequest<TResult>(
-        args.connection,
+        connection,
         args.method,
         args.params,
         args.timeoutMs,
@@ -48,7 +68,7 @@ export class RemoteRuntimeCompatGate {
       )
     }
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
-      args.connection,
+      connection,
       args.method,
       args.params,
       args.timeoutMs,
@@ -58,7 +78,7 @@ export class RemoteRuntimeCompatGate {
         }
         this.noteVerifiedStatus(response.result)
         if (this.environmentSelector) {
-          markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+          recordRuntimeEnvironmentUsage(this.userDataPath, this.environmentSelector, {
             runtimeId: response._meta.runtimeId
           })
         }

@@ -55,6 +55,10 @@ export type WorkspaceSpaceApi = {
   ) => () => void
   requestWorktreeRefresh?: () => Promise<void>
   onWorktreeRefreshRequested?: (callback: () => void) => () => void
+  requestIssueRefresh?: (worktreeId: string, executionHostId?: ExecutionHostId) => Promise<void>
+  onIssueRefreshRequested?: (
+    callback: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+  ) => () => void
   publishWindowAnalysis?: (analysis: WorkspaceSpaceAnalysis) => Promise<void>
   onWindowAnalysis?: (callback: (analysis: WorkspaceSpaceAnalysis) => void) => () => void
 }

@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeDeleteState } from '../../../../store/slices/worktree-helpers'
+import type { WorktreeDeleteState } from '../../../../store/slices/worktrees/teardown/worktree-delete-state-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 export function getDeleteStateForWorktreeHost(

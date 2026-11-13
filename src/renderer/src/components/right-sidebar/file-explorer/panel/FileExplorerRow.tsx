@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import {
   encodeWorkspaceFilePaths,
@@ -9,15 +9,14 @@ import {
   WORKSPACE_FILE_PATHS_MIME,
   writeWorkspaceFileDragSourceIfResolved,
   type WorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
-import { RENAME_HOTSPOT_ATTR } from '../tree/file-explorer-dir-toggle-timing'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileExplorerRowDrag } from '../mutations/useFileExplorerRowDrag'
-import { translate } from '@/i18n/i18n'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { useTranslate } from '@/i18n/use-translate'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { createMultiSelectDragGhost } from '../mutations/file-explorer-multi-drag-image'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
@@ -115,6 +114,7 @@ export function FileExplorerRow({
   onNativeDragTargetChange,
   onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
+  const t = useTranslate()
   const showLoadError = node.isDirectory && isExpanded && !isLoading && loadError !== null
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
@@ -228,8 +228,6 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            // Suppress directory toggling on the second click of a filename double-click rename.
-            {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
@@ -243,15 +241,6 @@ export function FileExplorerRow({
                   ? { color: 'var(--git-decoration-ignored)' }
                   : undefined
             }
-            onDoubleClick={(e) => {
-              // Outside-link rows are browse-only, so their name double-click pins the preview instead.
-              if (node.outsideProject) {
-                return
-              }
-              // Keep icon/empty-row double-clicks available for pin preview and directory toggling.
-              e.stopPropagation()
-              onStartRename(node)
-            }}
           >
             {node.name}
           </span>
@@ -269,7 +258,7 @@ export function FileExplorerRow({
             </span>
           ) : isIgnored ? (
             <CircleSlash
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.right.sidebar.FileExplorerRow.e26010014a',
                 'Ignored by .gitignore'
               )}

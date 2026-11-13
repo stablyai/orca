@@ -18,7 +18,7 @@ const { jiraGetProjectStatusOrderMock } = vi.hoisted(() => ({
   jiraGetProjectStatusOrderMock: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-client', () => ({
   jiraGetProjectStatusOrder: (...args: unknown[]) => jiraGetProjectStatusOrderMock(...args)
 }))
 

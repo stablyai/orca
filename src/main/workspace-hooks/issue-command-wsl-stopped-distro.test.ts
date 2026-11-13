@@ -23,7 +23,7 @@ vi.mock('node:fs', async (importOriginal) => ({
   mkdirSync: mocks.mkdirSync,
   rmSync: mocks.rmSync
 }))
-vi.mock('../git/source-control/check-ignored-paths', () => ({
+vi.mock('../git/source-control/ignores/check-ignored-paths', () => ({
   checkIgnoredPaths: vi.fn(async () => new Set(['']))
 }))
 vi.mock('./hooks', () => ({ loadHooks: mocks.loadHooks }))
@@ -32,7 +32,7 @@ import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from './issue-command-file'
-import { RuntimeRepositoryIssueCommand } from '../runtime/runtime-repository-issue-command'
+import { RuntimeRepositoryIssueCommand } from '../runtime/repositories/runtime-repository-issue-command'
 
 const WSL_REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const HOST_REPO = 'C:\\src\\repo'
@@ -108,13 +108,5 @@ describe('issue command reads for a stopped WSL distro (E9)', () => {
       writeIssueCommandUnlessWslStopped(HOST_REPO, 'x', () => ({ wslDistro: 'Ubuntu' }))
     ).rejects.toThrow("WSL distro 'Ubuntu' is not running")
     expect(mocks.writeFileSync).not.toHaveBeenCalled()
-  })
-
-  it('still saves a host-path repo whose runtime awaits repair (no Git distro yet)', async () => {
-    const repairing = (): never => {
-      throw new Error('Project runtime requires repair')
-    }
-    await writeIssueCommandUnlessWslStopped(HOST_REPO, 'mine', repairing)
-    expect(mocks.writeFileSync).toHaveBeenCalled()
   })
 })

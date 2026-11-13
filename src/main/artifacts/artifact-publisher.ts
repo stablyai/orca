@@ -2,8 +2,8 @@ import type {
   ArtifactListItem,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../shared/artifacts'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+} from '../../shared/artifacts/artifacts'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import {
   artifactRequest,
   type ArtifactWriteBody,

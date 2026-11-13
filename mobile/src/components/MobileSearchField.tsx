@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react'
 import {
-  InteractionManager,
   Pressable,
   View,
   type StyleProp,
-  type TextInput,
   type TextInputProps,
-  type ViewStyle
+  type ViewStyle,
+  type TextInputInstance
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -14,6 +13,7 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TextField } from './composer-input/TextField'
+import { runAfterInteractions } from '../platform/after-interactions'
 
 // Delay focus until opening chrome settles; native autoFocus alone often shows caret without iOS/Android keyboard.
 const SEARCH_AUTO_FOCUS_DELAY_MS = 120
@@ -57,7 +57,7 @@ export function MobileSearchField({
 }: MobileSearchFieldProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   const clearVisible = showClear ?? value.length > 0
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export function MobileSearchField({
 
     let timeout: ReturnType<typeof setTimeout> | undefined
     // Wait for press/layout completion before focusing so soft keyboard appears.
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = runAfterInteractions(() => {
       timeout = setTimeout(() => {
         inputRef.current?.focus()
       }, SEARCH_AUTO_FOCUS_DELAY_MS)

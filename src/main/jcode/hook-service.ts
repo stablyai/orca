@@ -5,23 +5,21 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import {
-  buildWindowsAgentHookPostCommand,
-  createManagedCommandMatcher,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   readTextFileRemote,
-  writeManagedScriptRemote,
   writeTextFileRemoteAtomic
-} from '../agent-hooks/installer-utils-remote'
+} from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildWindowsHookEnvironmentGuardLines,
   POSIX_HOOK_STDIN_DRAIN_COMMAND,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   applyJcodeManagedHooks,
   parseJcodeHooksTable,

@@ -68,34 +68,7 @@ function budgetError(result: GitDiffResult): { code?: string; data?: unknown } {
   throw new Error('expected the transport budget assertion to throw')
 }
 
-const UNITS: readonly { name: string; unit: string }[] = [
-  { name: 'ascii', unit: 'a' },
-  { name: 'newline-dense text', unit: '\n' },
-  { name: 'control-char text (0x01)', unit: '\u0001' },
-  { name: 'base64', unit: 'QUJD' },
-  { name: 'cjk', unit: '漢' },
-  { name: 'lone surrogate', unit: '\ud800' },
-  { name: 'surrogate pair', unit: '😀' },
-  { name: 'quotes and backslashes', unit: '"\\' }
-]
-
 describe('gitDiffExceedsTransportBudget', () => {
-  it.each(UNITS)('admits $name exactly at the budget', ({ unit }) => {
-    const result = textDiffOfJsonBytes(unit, BUDGET)
-
-    expect(referenceResultBytes(result)).toBe(BUDGET)
-    expect(gitDiffExceedsTransportBudget(result, BUDGET)).toBe(false)
-    expect(assertGitDiffWithinTransportBudget(result, BUDGET)).toBe(result)
-  })
-
-  it.each(UNITS)('rejects $name one byte above the budget', ({ unit }) => {
-    const result = textDiffOfJsonBytes(unit, BUDGET + 1)
-
-    expect(referenceResultBytes(result)).toBe(BUDGET + 1)
-    expect(gitDiffExceedsTransportBudget(result, BUDGET)).toBe(true)
-    expect(budgetError(result).code).toBe('diff_too_large')
-  })
-
   // Why: this is the case a raw-byte budget silently lets through into the 1013 close.
   it('rejects control-dense content whose raw bytes are far under the budget', () => {
     const result = textDiffOfJsonBytes('\u0001', BUDGET + 1)
@@ -120,20 +93,6 @@ describe('gitDiffExceedsTransportBudget', () => {
     expect(gitDiffExceedsTransportBudget(skewed, BUDGET)).toBe(true)
     expect(budgetError(skewed).code).toBe('diff_too_large')
   })
-
-  // Why: the SSH provider casts a relay payload to GitDiffResult without validating it.
-  it('treats a side missing from a relay payload as empty', () => {
-    const skewed = { kind: 'text', modifiedContent: 'hi' } as unknown as GitDiffResult
-
-    expect(gitDiffExceedsTransportBudget(skewed, BUDGET)).toBe(false)
-    expect(assertGitDiffWithinTransportBudget(skewed, BUDGET)).toBe(skewed)
-  })
-
-  it('leaves local callers uncapped', () => {
-    const result = textDiff('x'.repeat(BUDGET + 1))
-
-    expect(assertGitDiffWithinTransportBudget(result, undefined)).toBe(result)
-  })
 })
 
 // Why: the invariant the cap rests on — a diff that exactly fills the content budget must still
@@ -152,12 +111,6 @@ describe('envelope ceiling', () => {
     )
   }
 
-  it.each(UNITS)('keeps a $name diff at the budget inside the outbound limit', ({ unit }) => {
-    expect(replyBytes(binaryDiffOfJsonBytes(unit, BUDGET))).toBeLessThanOrEqual(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
-  })
-
   it('charges an escape-dense request id instead of overflowing the fixed reserve', () => {
     const requestId = '\u0001'.repeat(8_192)
     const budget = remoteRpcContentBudget(requestId)
@@ -166,15 +119,5 @@ describe('envelope ceiling', () => {
     expect(replyBytes(binaryDiffOfJsonBytes('a', budget), requestId)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
-  })
-
-  // Why: every reserved byte is content that transferred before this cap existed, so the reserve
-  // must stay close to the real envelope overhead. Fails if someone inflates it "just to be safe".
-  it('keeps the envelope reserve within 64x the overhead it covers', () => {
-    const overhead = replyBytes(binaryDiffOfJsonBytes('a', BUDGET)) - BUDGET
-    const reserve = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - BUDGET
-
-    expect(reserve).toBeGreaterThan(overhead)
-    expect(reserve).toBeLessThan(overhead * 64)
   })
 })

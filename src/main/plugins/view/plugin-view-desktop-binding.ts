@@ -1,11 +1,11 @@
 import { app, nativeImage, type BrowserWindow } from 'electron'
-import { setPluginViewForRpc } from '../../runtime/rpc/methods/plugin-view'
+import { setPluginViewForRpc } from '../../runtime/rpc/methods/plugins/plugin-view'
 import { listPluginsForClients } from '../plugin-client-list'
 import type { PluginService } from '../plugin-service'
 import {
   livePluginFrameGuests,
   setPluginFrameGuestLogSink
-} from '../panels/plugin-frame-guest-diagnostics'
+} from '../panels/guest-isolation/plugin-frame-guest-diagnostics'
 import { createPluginViewDesktop } from './plugin-view-desktop'
 import { isPluginShotWindowShown } from './plugin-shot-policy'
 import { setPluginHostRendererRequest } from './plugin-host-renderer-actions'

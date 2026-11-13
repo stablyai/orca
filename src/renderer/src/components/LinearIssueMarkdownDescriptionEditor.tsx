@@ -14,14 +14,16 @@ import {
 } from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
 import { RichMarkdownTableControls } from '@/components/editor/rich-markdown/tables/RichMarkdownTableControls'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { cn } from '@/lib/utils'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
+import { recomputeOn } from '@/lib/recompute-on'
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
@@ -55,6 +57,7 @@ export function LinearIssueMarkdownDescriptionEditor({
   disabled,
   submitShortcutLabel
 }: LinearIssueMarkdownDescriptionEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
@@ -64,15 +67,15 @@ export function LinearIssueMarkdownDescriptionEditor({
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
   // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
-  const codec = useMemo(() => {
-    void language
-    return createRichMarkdownEditorCodec()
-  }, [language])
-  const linearIssueMarkdownExtensions = useMemo(() => {
-    // Language keys editor recreation because Tiptap freezes translated extension options.
-    void language
-    return createLinearIssueMarkdownExtensions(codec)
-  }, [codec, language])
+  const codec = useMemo(
+    () => recomputeOn([language], () => createRichMarkdownEditorCodec()),
+    [language]
+  )
+  // Language keys editor recreation because Tiptap freezes translated extension options.
+  const linearIssueMarkdownExtensions = useMemo(
+    () => recomputeOn([language], () => createLinearIssueMarkdownExtensions(codec)),
+    [codec, language]
+  )
 
   const editor = useEditor(
     {
@@ -85,7 +88,7 @@ export function LinearIssueMarkdownDescriptionEditor({
         attributes: {
           class: 'rich-markdown-editor',
           spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
-          'aria-label': translate(
+          'aria-label': t(
             'auto.components.LinearIssueWorkspace.issueDescriptionLabel',
             'Issue description'
           )
@@ -175,12 +178,12 @@ export function LinearIssueMarkdownDescriptionEditor({
         <span className="flex items-center gap-1">
           <span>{submitShortcutLabel}</span>
           <span>
-            {translate('auto.components.LinearIssueMarkdownDescriptionEditor.a7301a11f3', 'save')}
+            {t('auto.components.LinearIssueMarkdownDescriptionEditor.a7301a11f3', 'save')}
           </span>
         </span>
         <span className="text-muted-foreground/35">·</span>
         <span>
-          {translate('auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef', 'Markdown')}
+          {t('auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef', 'Markdown')}
         </span>
       </div>
       {disabled ? (

@@ -47,32 +47,31 @@ export function claudeBackgroundArgs(strictMcp = true, userArgs: readonly string
 export function claudeTextGenerationToolArgs(attempt: {
   strictMcp?: boolean
   legacyToolPolicy?: boolean
+  /** No tools at all, for a prompt that is the user's own words. */
+  toolFree?: boolean
 }): string[] {
+  const tools = attempt.toolFree ? [] : CLAUDE_TEXT_GENERATION_TOOLS
   // Explicit modes outrank a settings defaultMode of plan; the variadic tool lists stay before it.
   if (attempt.legacyToolPolicy) {
     // Older CLIs drop bare-name denied built-ins from the catalog, leaving the same tools. Their
     // plan mode never refused allowed MCP tools and their matcher has no `mcp__*`, so nothing changes there.
-    const denied = LEGACY_CLAUDE_BUILTIN_TOOLS.filter(
-      (tool) => !CLAUDE_TEXT_GENERATION_TOOLS.includes(tool)
-    )
+    const denied = LEGACY_CLAUDE_BUILTIN_TOOLS.filter((tool) => !tools.includes(tool))
     // Root-path grants (`//` is the filesystem root; Windows paths match via their /c/... form) allow
     // reads outside the checkout; a bare grant would also override a user's path-specific ask rule there.
-    const granted = CLAUDE_TEXT_GENERATION_TOOLS.map((tool) => `${tool}(//**)`)
+    const granted = tools.map((tool) => `${tool}(//**)`)
     return [
       '--disallowedTools',
       denied.join(','),
-      '--allowedTools',
-      granted.join(','),
+      ...(granted.length > 0 ? ['--allowedTools', granted.join(',')] : []),
       '--permission-mode',
       'default'
     ]
   }
   return [
     '--tools',
-    CLAUDE_TEXT_GENERATION_TOOLS.join(','),
+    tools.join(','),
     // dontAsk refuses reads outside the checkout unless the tools are also granted.
-    '--allowedTools',
-    CLAUDE_TEXT_GENERATION_TOOLS.join(','),
+    ...(tools.length > 0 ? ['--allowedTools', tools.join(',')] : []),
     // Without strict MCP, managed servers load; deny their tools so this attempt matches the strict one.
     ...(attempt.strictMcp === false ? ['--disallowedTools', 'mcp__*'] : []),
     '--permission-mode',

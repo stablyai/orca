@@ -6,15 +6,15 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
-import { setWindowMaterialSuppressed } from '../window/window-material-suppression'
+import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
-import { quitProcess } from '../startup/process-quit-request'
+import { quitProcess } from '../startup/quit/process-quit-request'
 import type { Store } from '../persistence/loading-store/store'
-import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
+import { getDevInstanceIdentity } from '../startup/profile-startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
@@ -29,7 +29,7 @@ import {
 import {
   isMarkdownDocumentName,
   markdownDocumentFromFilePath
-} from '../../shared/markdown-document-paths'
+} from '../../shared/file-listing/markdown-document-paths'
 import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
 import {
   registerRendererShutdownCheckpointHandler,
@@ -37,9 +37,10 @@ import {
 } from './renderer-shutdown-checkpoint'
 import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
-import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
+import { isProfileStateSaveDelayed } from '../startup/profile-startup/profile-state-save-delay'
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
+import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
 
 import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
@@ -148,6 +149,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     return detection
   })
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
+  ipcMain.handle('app:getMacosUpgradeSupport', (_event, minimumMacosVersion: unknown) =>
+    getMacosUpgradeSupport(minimumMacosVersion)
+  )
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 

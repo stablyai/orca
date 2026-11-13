@@ -1,4 +1,4 @@
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import { createTerminalKeyChordInput } from './terminal-key-chord-input'
 import { getTerminalLiveSpecialKeyId } from './terminal-live-input'
@@ -9,10 +9,12 @@ const FIELD_CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 
 // RN Web skips composing Enter keydowns; beforeinput line breaks recover those submits.
 // Submitted keydowns are cancelled, preventing duplicates; candidate acceptance emits insertCompositionText and remains untouched.
+// A commit's last input event still reports composing and none follows compositionend, so report the commit here.
 export function bindTerminalTextFieldSubmit(
-  node: TextInput | null,
+  node: TextInputInstance | null,
   onSubmit: () => void,
-  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
+  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean,
+  onCompositionEnd?: (text: string) => void
 ): () => void {
   if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLTextAreaElement)) {
     return () => {}
@@ -36,6 +38,7 @@ export function bindTerminalTextFieldSubmit(
   }
   const endComposition = (): void => {
     composing = false
+    onCompositionEnd?.(field.value)
   }
   const captureKeyChord = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) {

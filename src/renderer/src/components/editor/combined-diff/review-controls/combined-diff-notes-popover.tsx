@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
-import { translate } from '@/i18n/i18n'
+import { getDiffCommentLineLabel } from '@/lib/source-control/review/comments/diff-comment-compat'
+import { useTranslate } from '@/i18n/use-translate'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 
 export function DiffNotesPreviewPopover({
@@ -26,6 +26,7 @@ export function DiffNotesPreviewPopover({
   onCopy: () => void
   onClear: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const remainingCount = Math.max(0, totalCount - comments.length)
 
   return (
@@ -33,9 +34,7 @@ export function DiffNotesPreviewPopover({
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
         <div className="flex min-w-0 items-center gap-1.5 font-medium text-foreground">
           <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
-          <span>
-            {translate('auto.components.editor.CombinedDiffViewer.bb84b4c374', 'AI notes')}
-          </span>
+          <span>{t('auto.components.editor.CombinedDiffViewer.bb84b4c374', 'AI notes')}</span>
           <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
             {totalCount}
           </span>
@@ -50,7 +49,7 @@ export function DiffNotesPreviewPopover({
             disabled={totalCount === 0}
           >
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-            {translate('auto.components.editor.CombinedDiffViewer.88b70d0ef5', 'Copy')}
+            {t('auto.components.editor.CombinedDiffViewer.88b70d0ef5', 'Copy')}
           </Button>
           <Button
             type="button"
@@ -61,7 +60,7 @@ export function DiffNotesPreviewPopover({
             disabled={totalCount === 0}
           >
             <Trash2 className="size-3" />
-            {translate('auto.components.editor.CombinedDiffViewer.84898c548d', 'Clear')}
+            {t('auto.components.editor.CombinedDiffViewer.84898c548d', 'Clear')}
           </Button>
         </div>
       </div>
@@ -72,7 +71,7 @@ export function DiffNotesPreviewPopover({
               <span className="min-w-0 flex-1 truncate font-mono">{comment.filePath}</span>
               {comment.sentAt ? (
                 <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none">
-                  {translate('auto.components.editor.CombinedDiffViewer.1da745c551', 'Sent')}
+                  {t('auto.components.editor.CombinedDiffViewer.1da745c551', 'Sent')}
                 </span>
               ) : null}
               <span className="shrink-0 tabular-nums">
@@ -86,7 +85,7 @@ export function DiffNotesPreviewPopover({
         ))}
         {remainingCount > 0 && (
           <div className="px-2 py-1 text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.editor.CombinedDiffViewer.moreNotesInSourceControl',
               '{{count}} more notes in Source Control',
               { count: remainingCount, defaultValue_one: '{{count}} more note in Source Control' }
@@ -111,6 +110,7 @@ export function ClearDiffNotesDialog({
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog
       open={open}
@@ -125,10 +125,10 @@ export function ClearDiffNotesDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
+            {t('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.editor.CombinedDiffViewer.clearNotesConfirm',
               'Clear {{count}} notes from this worktree?',
               {
@@ -145,7 +145,7 @@ export function ClearDiffNotesDialog({
             onClick={() => setOpen(false)}
             disabled={isClearingNotes}
           >
-            {translate('auto.components.editor.CombinedDiffViewer.0f806a2ab1', 'Cancel')}
+            {t('auto.components.editor.CombinedDiffViewer.0f806a2ab1', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -154,7 +154,7 @@ export function ClearDiffNotesDialog({
             disabled={isClearingNotes || diffCommentCount === 0}
           >
             <Trash2 className="size-4" />
-            {translate('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
+            {t('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
           </Button>
         </DialogFooter>
       </DialogContent>

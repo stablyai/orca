@@ -1,9 +1,10 @@
 import { classifyTerminalCreationFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import {
   isCurrentPtyExit,
   ptyIncarnationById,

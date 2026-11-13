@@ -28,6 +28,7 @@ export type HooksApi = {
     effectiveContent: string | null
     localFilePath: string
     source: 'local' | 'shared' | 'none'
+    localUntracked?: true
     refusedWslDistro?: string
   }>
   writeIssueCommand: (args: {

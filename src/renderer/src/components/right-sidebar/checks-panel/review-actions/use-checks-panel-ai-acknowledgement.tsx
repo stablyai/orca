@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
+import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,
@@ -15,13 +15,14 @@ import type { ChecksPanelControllerState } from '../use-checks-panel-controller-
 import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
 import type { ChecksPanelPollingState } from '../refresh/use-checks-panel-polling'
 import { buildSnapshottedThreadResolver } from '../comments/pr-comment-snapshotted-thread-resolver'
-import { markPRCommentThreadResolved } from '@/lib/pr-comment-thread-resolution'
+import { markPRCommentThreadResolved } from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
 import { resolveGitLabMRDiscussionForChecks } from '../gitlab-review-client'
 import { clearPRCommentsListSelection } from '../comments/pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksAgentComposerState } from '../panel-state-types'
 import type { ChecksPanelReview } from '../checks-panel-review'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ChecksPanelAiAcknowledgementInput = Pick<
   ChecksPanelControllerState,
@@ -42,6 +43,7 @@ type ChecksPanelAiAcknowledgementInput = Pick<
   Pick<ChecksPanelPollingState, 'fetchGitLabDetails'>
 
 export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgementInput) {
+  const t = useTranslate()
   const {
     addPRConversationComment,
     addPRReviewCommentReply,
@@ -303,7 +305,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
           .catch((err) => {
             console.warn('Failed to acknowledge selected review comments after AI launch:', err)
             toast.error(
-              translate(
+              t(
                 'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
                 'Started the agent, but could not resolve or reply on the selected comments.'
               )

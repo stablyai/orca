@@ -14,6 +14,7 @@ type TranscriptWakeup<T> = {
   watcherBound: boolean
   nextBindAt: number
   scheduled: boolean
+  delayMs: number
   eventPending: boolean
   initialCheck: boolean
 }
@@ -44,7 +45,8 @@ export class AgentTranscriptPollScheduler<T> {
     })
   }
 
-  schedule(key: string, value: T, filePath?: string): void {
+  /** An explicit `delayMs` shorter than the pending one (a Muse hook ending a quiet back-off) replaces it. */
+  schedule(key: string, value: T, filePath?: string, delayMs?: number): void {
     let entry = this.entries.get(key)
     if (entry && entry.filePath !== filePath) {
       this.clear(key)
@@ -57,6 +59,7 @@ export class AgentTranscriptPollScheduler<T> {
         watcherBound: false,
         nextBindAt: 0,
         scheduled: false,
+        delayMs: this.delayMs,
         eventPending: false,
         initialCheck: true
       }
@@ -76,6 +79,7 @@ export class AgentTranscriptPollScheduler<T> {
           }
           watchedEntry.eventPending = true
           watchedEntry.scheduled = true
+          watchedEntry.delayMs = this.delayMs
           this.deadlines.schedule(key, watchedEntry, this.delayMs)
         }
         entry.watcher = createTranscriptNativeWatcher(
@@ -92,7 +96,7 @@ export class AgentTranscriptPollScheduler<T> {
     }
     entry.value = value
     // The pending callback reads this entry's latest hook, so repeated hooks need neither a new watch nor a new timer.
-    if (entry.scheduled) {
+    if (entry.scheduled && !(delayMs !== undefined && delayMs < entry.delayMs)) {
       return
     }
     const now = performance.now()
@@ -100,9 +104,15 @@ export class AgentTranscriptPollScheduler<T> {
       entry.watcherBound = entry.watcher.bind()
       entry.nextBindAt = now + ROOT_RECONCILIATION_MS
     }
-    const delay = entry.watcherBound && !entry.initialCheck ? ROOT_RECONCILIATION_MS : this.delayMs
+    const delay =
+      delayMs ?? (entry.watcherBound && !entry.initialCheck ? ROOT_RECONCILIATION_MS : this.delayMs)
     entry.scheduled = true
+    entry.delayMs = delay
     this.deadlines.schedule(key, entry, delay)
+  }
+
+  peek(key: string): T | undefined {
+    return this.entries.get(key)?.value
   }
 
   clear(key: string): void {

@@ -24,11 +24,16 @@ vi.mock('../../../components/LoadingSpinner', () => ({ LoadingSpinner: 'LoadingS
 vi.mock('./MobileNativeChatReasoningRow', () => ({
   MobileNativeChatReasoningBody: 'ReasoningBody'
 }))
+vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog: () => null }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+vi.mock('./MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
 vi.mock('../visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
+}))
+vi.mock('../visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
 }))
 
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'

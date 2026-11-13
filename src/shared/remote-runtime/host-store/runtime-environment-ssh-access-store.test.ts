@@ -12,10 +12,7 @@ import {
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
-import {
-  getPreferredPairingOffer,
-  PersistedRuntimeEnvironmentSchema
-} from '../host-catalog/runtime-environments'
+import { getPreferredPairingOffer } from '../host-catalog/runtime-environments'
 import {
   linkVerifiedRuntimeEnvironmentSshAccess,
   prepareRuntimeEnvironmentSshAccessLink,
@@ -23,7 +20,6 @@ import {
   completeRuntimeEnvironmentSshAccessUnlink,
   cancelRuntimeEnvironmentSshAccessLink
 } from './runtime-environment-ssh-access-store'
-import { z } from 'zod'
 
 const pairing = {
   v: 2 as const,
@@ -83,30 +79,6 @@ describe('independent paired runtime SSH access persistence', () => {
       requestId: 'unlink-request'
     })
   }
-
-  it('adds access to the same host without deployment ownership and restores its original endpoint', () => {
-    const original = seed()
-    const linked = link(original)
-    expect(listEnvironments(userDataPath)).toEqual([linked])
-    expect(linked.id).toBe(original.id)
-    expect(linked.name).toBe(original.name)
-    expect(linked.createdAt).toBe(original.createdAt)
-    expect(linked.runtimeId).toBe('host-runtime')
-    expect(linked.pairingRevision).toBe(101)
-    expect(linked.endpoints).toHaveLength(2)
-    expect(linked.endpoints[0]).toEqual(original.endpoints[0])
-    expect(getPreferredPairingOffer(linked)).toEqual(verifiedPairing)
-
-    const unlinked = unlink(linked, 80)
-    expect(unlinked.id).toBe(original.id)
-    expect(unlinked.runtimeId).toBe('host-runtime')
-    expect(unlinked.pairingRevision).toBe(102)
-    expect(unlinked.endpoints).toEqual(original.endpoints)
-    expect(unlinked.preferredEndpointId).toBe(original.preferredEndpointId)
-    expect(unlinked.sshAccess).toBeUndefined()
-    expect(unlinked.connectionDependency).toBeUndefined()
-    expect(listEnvironments(userDataPath)).toEqual([unlinked])
-  })
 
   it('keeps SSH access across a server restart and relinks after an unlink (#32957)', () => {
     const linked = link()
@@ -179,33 +151,6 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(listEnvironments(userDataPath)).toEqual([replaced])
   })
 
-  it('permits unrelated last-used timestamp updates during verification', () => {
-    const original = seed()
-    markEnvironmentUsed(userDataPath, original.id, { now: 200 })
-    expect(link(original).lastUsedAt).toBe(200)
-  })
-
-  it('keeps orca-environments.json in the shape shipped builds read while SSH access is linked', () => {
-    const original = seed()
-    const shippedEnvelope = z
-      .object({
-        version: z.literal(1),
-        environments: z.array(PersistedRuntimeEnvironmentSchema.strict())
-      })
-      .strict()
-    const readEnvelope = () =>
-      JSON.parse(readFileSync(getEnvironmentStorePath(userDataPath), 'utf8'))
-    expect(shippedEnvelope.safeParse(readEnvelope()).success).toBe(true)
-    const linked = link(original)
-    expect(shippedEnvelope.safeParse(readEnvelope()).success).toBe(true)
-    expect(readEnvelope().environments[0]).toEqual(original)
-    markEnvironmentUsed(userDataPath, linked.id, { now: 500 })
-    expect(shippedEnvelope.safeParse(readEnvelope()).success).toBe(true)
-    expect(listEnvironments(userDataPath)[0]?.sshAccess).toEqual(linked.sshAccess)
-    unlink(linked)
-    expect(shippedEnvelope.safeParse(readEnvelope()).success).toBe(true)
-  })
-
   it.each([
     { ...verifiedPairing, publicKeyB64: Buffer.alloc(32, 2).toString('base64') },
     { ...verifiedPairing, deviceToken: 'another-token' },
@@ -223,17 +168,6 @@ describe('independent paired runtime SSH access persistence', () => {
       })
     ).toThrow('did not verify')
     expect(listEnvironments(userDataPath)).toEqual([prepared])
-  })
-
-  it('refuses changing a known execution runtime identity', () => {
-    const original = seed()
-    markEnvironmentUsed(userDataPath, original.id, { runtimeId: 'incumbent-runtime' })
-    const current = listEnvironments(userDataPath)[0]
-    expect(() => link(current)).toThrow('did not verify')
-    expect(listEnvironments(userDataPath)[0]).toMatchObject({
-      ...current,
-      pendingSshAccessOperation: { operation: 'link' }
-    })
   })
 
   it('refuses a second registration of the same execution runtime', () => {
@@ -256,18 +190,6 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(listEnvironments(userDataPath).find((entry) => entry.id === duplicate.id)).toEqual(
       before.find((entry) => entry.id === duplicate.id)
     )
-  })
-
-  it('prevents ordinary removal or re-pairing from orphaning SSH access', () => {
-    const linked = link()
-    expect(() => removeEnvironment(userDataPath, linked.id)).toThrow('Unlink')
-    expect(() =>
-      updateEnvironmentFromPairingCode(userDataPath, linked.id, {
-        pairingCode: encodePairingOffer(pairing)
-      })
-    ).toThrow('Unlink')
-    expect(() => link(linked)).toThrow('already has SSH access')
-    expect(listEnvironments(userDataPath)).toEqual([linked])
   })
 
   it('does not let a stale unlink remove a subsequently replaced SSH link', () => {

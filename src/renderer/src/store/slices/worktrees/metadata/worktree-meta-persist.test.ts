@@ -14,10 +14,12 @@ const mocks = vi.hoisted(() => ({
   target: { kind: 'environment', environmentId: 'env-1' } as RuntimeClientTarget
 }))
 
-vi.mock('../../../../runtime/runtime-rpc-client', () => ({
+vi.mock('../../../../runtime/rpc/compatibility/runtime-capability-proof', () => ({
   assertRuntimeEnvironmentCapability: mocks.assertCapability,
-  callRuntimeRpc: mocks.callRuntimeRpc,
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
+}))
+vi.mock('../../../../runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
 }))
 
 vi.mock('@/i18n/i18n', () => ({

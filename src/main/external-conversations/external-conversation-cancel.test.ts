@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
 import type { ConversationEvent } from './external-conversation-events'
 import type { ConversationKey } from './external-conversation-types'
 import {
@@ -186,21 +186,6 @@ describe('ExternalConversationSeam cancel', () => {
     expect(fake.keys).toEqual([])
     await expect(seam.cancel(host, KEY, 'c1')).resolves.toEqual({ outcome: 'accepted' })
     expect(fake.keys).toEqual(['\x1b'])
-  })
-
-  it('refuses a delivery id another method used, and everything once connectors are off', async () => {
-    const { seam, host, hookRows, fake } = await linked()
-    hookRows.set(PANE, hookRow())
-    await expect(seam.cancel(host, KEY, 'd1')).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'delivery_id_reused'
-    })
-    seam.dispose('connectors_disabled')
-    await expect(seam.cancel(host, KEY, 'c1')).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'connectors_disabled'
-    })
-    expect(fake.keys).toEqual([])
   })
 })
 

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { getWorkspaceCleanupAgentEvidence } from '@/store/slices/workspace-cleanup-agent-evidence'
+import { getWorkspaceCleanupAgentEvidence } from '@/store/slices/workspace-cleanup/workspace-cleanup-agent-evidence'
 import { withWorkspaceCleanupAgentStopApproval } from './workspace-cleanup-agent-stop-approval'
 
 export type WorkspaceCleanupAgentStopRequest = {

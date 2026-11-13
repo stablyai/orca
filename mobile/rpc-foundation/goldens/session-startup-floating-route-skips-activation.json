@@ -16,41 +16,22 @@
         "allowEmptyLoaded": false
       }
     },
+    "481b4ed03a28": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 7,
+      "value": {}
+    },
     "6419a011f13b": {
       "name": "clear-terminal-cache",
       "ordinal": 1,
       "value": {}
     },
-    "7953dfb08a13": {
-      "name": "fetch-terminals",
+    "6afa2a4d3bfe": {
+      "name": "clear-delayed-action-timers",
       "ordinal": 8,
-      "value": {
-        "allowEmptyLoaded": true
-      }
-    },
-    "95c8385db422": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 4,
       "value": {}
     },
-    "968d084a5a35": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 10,
-      "value": {}
-    },
-    "a193ad4304cb": {
-      "name": "fetch-terminals",
-      "ordinal": 7,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "aab012c297bd": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 2,
-      "value": {}
-    },
-    "acf0370bfacc": {
+    "854cb236952a": {
       "actionSheetRequestSeq": 1,
       "activeHandle": {
         "$rpc": "null"
@@ -63,11 +44,17 @@
       },
       "closedTabTombstones": 0,
       "initializedHandles": [],
+      "sessionTabs": [],
       "terminalsLoaded": false
     },
-    "bc94d6f00eeb": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 9,
+    "95c8385db422": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 4,
+      "value": {}
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
       "value": {}
     },
     "e927128e41fc": {
@@ -95,7 +82,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -114,16 +101,14 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
             "e927128e41fc",
             "95c8385db422",
             "38b377793c34",
-            "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13"
+            "4669e4d646e8"
           ]
         }
       },
@@ -135,7 +120,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -143,10 +128,8 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "bc94d6f00eeb",
-            "968d084a5a35"
+            "481b4ed03a28",
+            "6afa2a4d3bfe"
           ]
         }
       }

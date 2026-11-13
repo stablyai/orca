@@ -57,6 +57,35 @@ afterEach(() => {
 })
 
 describe('useListMultiSelection', () => {
+  it('looks up a single selection without rescanning a stable corpus', () => {
+    for (const size of [750, 7500]) {
+      let reads = 0
+      const items = Array.from({ length: size }, (_, index) => ({
+        get key() {
+          reads++
+          return `row-${index}`
+        }
+      }))
+      render(items)
+      reads = 0
+      for (let index = 0; index < 10; index++) {
+        act(() => selection.updateSelectionForGesture(gesture({}), items[index]))
+      }
+      expect(reads).toBe(10)
+      expect(selection.selectedItems).toEqual([items[9]])
+    }
+  })
+
+  it('retains render order and the first occurrence of duplicate keys', () => {
+    const duplicateB = { key: 'b' }
+    render([a, b, duplicateB, c])
+    act(() => selection.toggleSelection(c))
+    act(() => selection.toggleSelection(duplicateB))
+    act(() => selection.toggleSelection(a))
+    expect(selection.selectedItems).toEqual([a, b, c])
+    expect(selection.getItemForKey('b')).toBe(b)
+  })
+
   it('prunes rows that stop rendering and falls back to a surviving anchor', () => {
     setPlatform(false)
     render([a, b, c, d])

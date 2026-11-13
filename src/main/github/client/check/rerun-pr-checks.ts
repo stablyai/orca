@@ -1,10 +1,16 @@
-import { withGitHubRepoExecution } from '../../github-repository-identity'
-import type { GitHubRerunPRChecksResult } from '../../../../shared/github/check-types'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
+import {
+  withGitHubRepoExecution,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import type { GitHubRerunPRChecksResult } from '../../../../shared/github/checks/check-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
 // Keep real error parsing available when tests mock gh-utils.
-import { extractExecError } from '../../../git/exec-error'
-import { classifyRerunChecksError } from '../../gh-error-classification'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { classifyRerunChecksError } from '../../api/gh-error-classification'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { getPRChecks } from './get-pr-checks'
 import { parseActionsRunId } from './check-detail-field-mapping'
 import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'

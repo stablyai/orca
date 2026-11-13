@@ -1,7 +1,12 @@
 import { ORCA_BROWSER_CLI_COMMAND_KEYS } from '../../shared/orca-browser-cli-commands'
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
+  {
+    name: 'browser-extension',
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-extension'],
+    load: async () => (await import('./browser-extension.js')).BROWSER_EXTENSION_HANDLERS
+  },
   {
     name: 'browser-identity',
     keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-identity'],

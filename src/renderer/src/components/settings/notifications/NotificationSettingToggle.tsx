@@ -20,7 +20,7 @@ export function NotificationSettingToggle({
   icon
 }: NotificationSettingToggleProps): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           {icon}

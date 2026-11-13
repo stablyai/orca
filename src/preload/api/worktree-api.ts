@@ -1,3 +1,5 @@
+import type { WorkspaceMetadataSet } from '../../shared/worktree/workspace-metadata-set'
+import type { SparsePresetFailure } from '../../shared/worktree/sparse-preset-failure'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -28,6 +30,8 @@ import type {
   CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult,
+  RunApprovedWorktreeSetupArgs,
+  RunApprovedWorktreeSetupResult,
   SparsePreset
 } from '../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
@@ -63,6 +67,8 @@ export type WorktreeApi = {
   scanStartingWslDistro?: (args: { repoId: string }) => Promise<void>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
+  /** Absent on clients whose host cannot run an existing worktree's approved setup. */
+  runApprovedSetup?: (args: RunApprovedWorktreeSetupArgs) => Promise<RunApprovedWorktreeSetupResult>
   /** Local creates report progress by creationId; remote/runtime creates emit nothing. */
   onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void) => () => void
   prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
@@ -132,12 +138,16 @@ export type WorktreeApi = {
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>
+    /** Read through validCrossStoreLineage; older hosts omit it. */
+    crossStoreLineage?: Record<string, unknown>
+    /** This store's identity, which other stores' records name; absent when unknown. */
+    installationId?: string
   }>
   updateLineage: (args: {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
-  }) => Promise<WorktreeLineage | null>
+  }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
@@ -148,6 +158,7 @@ export type WorktreeApi = {
   onHeadIdentitiesChanged: (
     callback: (data: { repoId: string; identities: WorktreeHeadIdentity[] }) => void
   ) => () => void
+  onMetadataSet?: (callback: (set: WorkspaceMetadataSet) => void) => () => void
   onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
   onRemoteBranchConflict: (
     callback: (data: WorktreeRemoteBranchConflictEvent) => void
@@ -199,7 +210,7 @@ export type SparsePresetsApi = {
     id?: string
     name: string
     directories: string[]
-  }) => Promise<SparsePreset>
+  }) => Promise<SparsePreset | SparsePresetFailure>
   remove: (args: { repoId: string; presetId: string }) => Promise<void>
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }

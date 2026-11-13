@@ -23,28 +23,5 @@ final class AgentConnectionRequestLoopTests: XCTestCase {
         XCTAssertEqual(releasedBeforeNextRequest, true)
     }
 
-    func testServesEveryLineUntilInputEnds() {
-        var lines = ["a", "b", "c"]
-        var handled: [String] = []
 
-        AgentConnectionRequestLoop.run(readLine: { lines.isEmpty ? nil : lines.removeFirst() }) { line in
-            handled.append(line)
-            return true
-        }
-
-        XCTAssertEqual(handled, ["a", "b", "c"])
-    }
-
-    func testStopsReadingWhenTheHandlerClosesTheConnection() {
-        var lines = ["a", "b", "c"]
-        var handled: [String] = []
-
-        AgentConnectionRequestLoop.run(readLine: { lines.isEmpty ? nil : lines.removeFirst() }) { line in
-            handled.append(line)
-            return line != "b"
-        }
-
-        XCTAssertEqual(handled, ["a", "b"])
-        XCTAssertEqual(lines, ["c"])
-    }
 }

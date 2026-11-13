@@ -1,9 +1,11 @@
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { useAppStore } from '@/store'
-import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
+import { hasUndoneContextualTourAction } from '../../../../shared/contextual-tour-action-steps'
+import { useAppStore } from '@/store/index'
+import { runActiveNativeChatSplit } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import {
   getContextualTour,
-  hasUndoneContextualTourAction,
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
@@ -11,7 +13,7 @@ import type { ContextualTourOutcome } from '../../../../shared/feature-education
 import {
   trackContextualTourOutcome,
   trackContextualTourShown
-} from '@/lib/feature-education-telemetry'
+} from '@/diagnostics/telemetry/feature-education-telemetry'
 import { isContextualTourAllowedForModal } from './contextual-tour-gate'
 import {
   areContextualTourRenderStatesEqual,
@@ -25,14 +27,16 @@ import {
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
-import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { CHROME_WEB_STORE_HOME_URL } from '../../../../shared/browser/extensions/browser-extension-webstore'
 
 export function ContextualTourOverlay(): JSX.Element | null {
+  const t = useTranslate()
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
   const activeStepIndex = useAppStore((s) => s.activeContextualTourStepIndex)
   const activeTourSource = useAppStore((s) => s.activeContextualTourSource)
@@ -54,6 +58,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       : false
   )
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
@@ -68,6 +73,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
   const [renderState, setRenderState] = useState<ActiveTourRenderState | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
@@ -259,7 +265,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
 
   useLayoutEffect(() => {
     measureTourOverlay()
-  }, [activeTabId, activeTabType, measureTourOverlay])
+  }, [activeBrowserTabId, activeTabId, activeTabType, measureTourOverlay])
 
   useEffect(() => {
     if (
@@ -368,6 +374,15 @@ export function ContextualTourOverlay(): JSX.Element | null {
         })
         openSettingsPage()
       },
+      openChromeWebStore: () =>
+        openBrowserProfileTab(
+          CHROME_WEB_STORE_HOME_URL,
+          renderState.targetElement.getAttribute('data-browser-profile-id')
+        ),
+      reportChromeWebStoreOpenFailure: () =>
+        toast.error(
+          t('browser.extensions.openWebStoreFailed', "Couldn't open the Chrome Web Store.")
+        ),
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
       splitActiveChat: () => {

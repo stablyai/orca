@@ -1,30 +1,34 @@
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
-import {
-  settleStructuredAgentLaunchPrompt,
-  type StagedStructuredLaunchPrompt
-} from './structured-agent-session-launch-prompt'
-import type { StructuredAgentSessionResumeSource } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { settleStructuredAgentLaunchPrompt } from './structured-agent-session-launch-prompt'
+import type {
+  StagedStructuredLaunchPrompt,
+  StructuredLaunchPromptOptions
+} from './structured-agent-session-staged-prompt'
+import type {
+  StructuredAgentSessionForkSource,
+  StructuredAgentSessionResumeSource
+} from '../../../../../shared/agent-session/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
-import type { AgentLaunchRequestId } from '../../agent-launch-request-id'
+
 import type { StructuredAgentSessionCreateGate } from './structured-agent-session-launch-errors'
 
-export type StructuredAgentLaunchOptions = {
+export type StructuredAgentLaunchOptions = StructuredLaunchPromptOptions & {
   /** The user action this start serves; only a re-delivery of it joins its chat. */
-  requestId: AgentLaunchRequestId
+  requestId: string
   /** Background launches never ask host publication to select their tab. */
   activate?: boolean
-  prompt?: string
-  promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
-  onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
   /** An unsent composer draft that moves into this chat once its session exists. */
   draftFromScope?: string
   // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
+  /** Client-only admission requirement; reacquired from the child after reload. */
+  forkRequiresInheritedOriginal?: boolean
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
@@ -157,6 +161,11 @@ export function joinLaunchDelivery(
   return mode ? { ...rest, promptDelivery: mode } : rest
 }
 
-export function promptOwner(options: StructuredAgentLaunchOptions): { callerKeepsText?: true } {
-  return options.promptKeptByCaller ? { callerKeepsText: true } : {}
+export function promptOwner(options: StructuredAgentLaunchOptions) {
+  return {
+    ...(options.promptKeptByCaller ? { callerKeepsText: true as const } : {}),
+    attachments: options.promptAttachments,
+    skills: options.promptSkills,
+    prepare: options.preparePrompt
+  }
 }

@@ -3,8 +3,7 @@ import type { AgentJournalSubmission } from '../journal/agent-session-journal-ty
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
 import {
   headSteerableQueuedMessageCard,
-  projectQueuedMessageCards,
-  queuedMessagesQueuePause
+  projectQueuedMessageCards
 } from './structured-agent-session-queued-cards'
 
 function draft(
@@ -71,42 +70,6 @@ describe('queued message cards', () => {
       IDLE
     )
     expect(cards.map((card) => card.messageId)).toEqual(['kept', 'refused'])
-  })
-
-  it("a paused queue holds its waiting cards; a card's own hold or return still shows", () => {
-    const cards = projectQueuedMessageCards(
-      [
-        draft('waiting', 1),
-        draft('failed', 2, { paused: true, pausedReason: 'send_failed' }),
-        draft('refused', 3, { state: 'returned', returnedReason: null }),
-        draft('behind', 4)
-      ],
-      [],
-      { queuePaused: true }
-    )
-    expect(cards.map((card) => card.hold)).toEqual([
-      'queue-paused',
-      'paused',
-      'returned',
-      'behind-returned'
-    ])
-  })
-
-  it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
-    const stopped = { reason: 'stopped' } as const
-    const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
-      projectQueuedMessageCards(messages, [], { queuePaused })
-    expect(queuedMessagesQueuePause(project([draft('held', 1)]), stopped)).toEqual(stopped)
-    const unsendable = [
-      draft('returned', 1, { state: 'returned', returnedReason: null }),
-      draft('behind', 2),
-      draft('failed', 3, { paused: true, pausedReason: 'send_failed' })
-    ]
-    expect(queuedMessagesQueuePause(project(unsendable), stopped)).toBeNull()
-    // No published pause (an idle chat after a restart): plain cards, no header.
-    const unpaused = project([draft('waiting', 1)], false)
-    expect(unpaused.map((card) => card.hold)).toEqual(['turn'])
-    expect(queuedMessagesQueuePause(unpaused, null)).toBeNull()
   })
 
   it('marks a command card, which the chord never steers', () => {

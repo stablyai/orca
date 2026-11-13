@@ -1,29 +1,29 @@
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 import type { AppStarSource } from '../../shared/gh-star-source'
-import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../shared/github/check-types'
+import type { GhAuthDiagnostic } from '../../shared/github/accounts/auth-types'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../shared/github/checks/check-types'
 import type {
   GitHubCommentResult,
   GitHubPRReviewCommentInput,
   GitHubReactionContent,
   PRComment
-} from '../../shared/github/comment-types'
+} from '../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
   PRRefreshOutcome
-} from '../../shared/github/pull-request-refresh-types'
+} from '../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubViewer,
   PRInfo
-} from '../../shared/github/pull-request-types'
-import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
+} from '../../shared/github/pull-requests/pull-request-types'
+import type { GetRateLimitResult } from '../../shared/github/api/rate-limit-types'
 import type { GitHubRepoSelectorArgs } from './github-work-item-api'
 
 export type GithubPullRequestApi = {

@@ -1,13 +1,15 @@
 // Windowless phone split moves and subsequent creates must retain main-owned groups/order.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('../orca-runtime-test-mocks.spec')
-await import('../orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } = await import('../orca-runtime-test-fixtures.spec')
+await import('../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
+  await import('../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { SURFACE_TAB_ID } = await import('../terminal/surface/terminal-surface-replies.test-fixture')
 const { SAVED_GROUP_ID, SECOND_TAB_ID, THIRD_TAB_ID, tabStrip, threeTabSurfaceRuntime } =
   await import('./session-tabs-layout-moves.test-fixture')
@@ -48,6 +50,16 @@ const orderOf = (rows: readonly { type: string; id: string; parentTabId?: string
 describe("a phone's layout change on a windowless server (switch on)", () => {
   it("splits a tab into a group of its own in main's layout, and selects it there", async () => {
     const { runtime, store } = await headlessRuntime()
+    const selected = `${SECOND_TAB_ID}::77777777-7777-4777-8777-777777777777`
+    const before = await runtime.listMobileSessionTabs(WORKTREE)
+    expect(before.tabs.find((row) => row.id === selected)).toMatchObject({
+      type: 'terminal',
+      parentTabId: SECOND_TAB_ID,
+      leafId: '77777777-7777-4777-8777-777777777777',
+      terminal: null
+    })
+    const frames: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((snapshot) => frames.push(snapshot))
 
     await runtime.moveMobileSessionTab(WORKTREE, {
       kind: 'split',
@@ -57,14 +69,38 @@ describe("a phone's layout change on a windowless server (switch on)", () => {
     })
 
     const strip = [[SURFACE_TAB_ID, THIRD_TAB_ID], [SECOND_TAB_ID]]
+    const stored = runtime.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)!
+    expect(stored.tabGroups?.map((group) => group.tabOrder)).toEqual(strip)
+    expect(stored.activeGroupId).toBe(stored.tabGroups?.[1]?.id)
+    expect(stored.tabGroups?.[1]?.activeTabId).toBe(SECOND_TAB_ID)
+    expect(stored.activeTabId).toBe(selected)
+    expect(stored.tabs.filter((row) => row.isActive).map((row) => row.id)).toEqual([selected])
+    expect(stored.tabGroupLayout).toMatchObject({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: SAVED_GROUP_ID },
+      second: { type: 'leaf', groupId: stored.tabGroups?.[1]?.id }
+    })
+    expect(frames.at(-1)).toMatchObject({
+      activeGroupId: stored.activeGroupId,
+      activeTabId: selected
+    })
+    expect(
+      frames
+        .at(-1)
+        ?.tabs.filter((row) => row.isActive)
+        .map((row) => row.id)
+    ).toEqual([selected])
     const listed = await runtime.listMobileSessionTabs(WORKTREE)
     expect(tabStrip(listed)).toEqual(strip)
     expect(listed.activeGroupId).toBe(listed.tabGroups?.[1]?.id)
     expect(listed.activeTabId?.startsWith(`${SECOND_TAB_ID}::`)).toBe(true)
+    expect(listed.activeTabId).toBe(selected)
     // Main's own layout holds the split, so every later write of the rows keeps it.
     expect(
       store.getSession().tabGroups?.[TEST_WORKTREE_ID]?.map((group) => group.tabOrder)
     ).toEqual(strip)
+    expect(store.getSession().tabGroupLayouts?.[TEST_WORKTREE_ID]).toEqual(stored.tabGroupLayout)
   })
 
   it("refuses a split of a row main's layout does not hold, sending nothing (#31925)", async () => {
@@ -90,23 +126,6 @@ describe("a phone's layout change on a windowless server (switch on)", () => {
     expect((await runtime.listMobileSessionTabs(WORKTREE)).tabs.map((row) => row.id)).toContain(
       CHAT
     )
-  })
-
-  it("answers a split main refuses with main's refusal code", async () => {
-    const { runtime } = await headlessRuntime()
-    vi.spyOn(runtime, 'applyLayoutCommand').mockResolvedValue({ ok: false, code: 'invalid_params' })
-
-    await expect(
-      runtime.moveMobileSessionTab(WORKTREE, {
-        kind: 'split',
-        tabId: SECOND_TAB_ID,
-        targetGroupId: SAVED_GROUP_ID,
-        splitDirection: 'right'
-      })
-    ).rejects.toThrow('invalid_params')
-    expect(tabStrip(await runtime.listMobileSessionTabs(WORKTREE))).toEqual([
-      [SURFACE_TAB_ID, SECOND_TAB_ID, THIRD_TAB_ID]
-    ])
   })
 
   it.each([

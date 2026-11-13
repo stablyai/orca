@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
+import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../src/shared/worktree/create-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSwitch } from './MobileSwitch'
 import { ListGroup, ListRow } from './list/ListGroup'

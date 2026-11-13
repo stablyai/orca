@@ -14,6 +14,7 @@ export type ContextualTourRequestDecision =
         | 'auto-disabled'
         | 'onboarding'
         | 'seen'
+        | 'already-progressed'
         | 'session-consumed'
         | 'active-tour'
         | 'modal'
@@ -79,8 +80,10 @@ export function getContextualTourStartStepIndex(
     step.requiredForStart === true ? [index] : []
   )
   const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  // Never start before the user's latest done step, so steps added ahead of it don't rewind the tour.
+  const lastDoneIndex = tour.steps.findLastIndex((step) => isStepDone(step))
   for (const candidate of candidates) {
-    let startIndex = candidate
+    let startIndex = Math.max(candidate, lastDoneIndex)
     while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
       const nextIndex = getNextVisibleContextualTourStepIndex({
         tour,
@@ -147,6 +150,7 @@ export function getContextualTourRequestDecision(args: {
   autoEligible: boolean
   onboardingVisible: boolean
   seenIds: readonly string[]
+  progressBlocked: boolean
   sessionConsumed: boolean
   activeTourId: string | null
   activeModal: string
@@ -165,6 +169,9 @@ export function getContextualTourRequestDecision(args: {
   }
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
+  }
+  if (args.progressBlocked) {
+    return { kind: 'blocked', reason: 'already-progressed' }
   }
   if (args.sessionConsumed) {
     return { kind: 'blocked', reason: 'session-consumed' }

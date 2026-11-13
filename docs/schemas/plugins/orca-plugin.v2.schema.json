@@ -208,9 +208,9 @@
         },
         "events": {
           "default": [],
-          "description": "Events delivered to the plugin worker. At most 4.",
+          "description": "Events delivered to the plugin worker. At most 5.",
           "x-orca-since": "1.4.160",
-          "maxItems": 4,
+          "maxItems": 5,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
@@ -283,6 +283,16 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/ThemeContribution"
+          }
+        },
+        "fonts": {
+          "default": [],
+          "description": "Font families for the terminal, editor and interface font pickers. At most 8.",
+          "x-orca-since": "1.4.253",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FontContribution"
           }
         },
         "syntaxes": {
@@ -726,7 +736,8 @@
             "workspace.created",
             "workspace.removed",
             "agent.status.changed",
-            "workspace.changed"
+            "workspace.changed",
+            "editor.typography.changed"
           ],
           "description": "Event delivered to the plugin worker.",
           "x-orca-since": "1.4.160",
@@ -734,7 +745,8 @@
             "workspace.created": "1.4.245",
             "workspace.removed": "1.4.245",
             "agent.status.changed": "1.4.160",
-            "workspace.changed": "1.4.246"
+            "workspace.changed": "1.4.246",
+            "editor.typography.changed": "1.4.256"
           }
         }
       },
@@ -742,7 +754,7 @@
         "on"
       ],
       "additionalProperties": false,
-      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability."
     },
     "HookContribution": {
       "type": "object",
@@ -939,6 +951,83 @@
       ],
       "additionalProperties": false,
       "description": "A titled theme file."
+    },
+    "FontContribution": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9 _.-]{0,46}[A-Za-z0-9])?$",
+          "description": "Family name shown in the font pickers. Orca adds the plugin id, so a plugin font never replaces an installed or built-in font of the same name.",
+          "x-orca-since": "1.4.253",
+          "examples": [
+            "Geist"
+          ]
+        },
+        "faces": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FontFaceContribution"
+          },
+          "description": "The family's files, at most 8. All of a plugin's font files together may be at most 8 MB.",
+          "x-orca-since": "1.4.253"
+        }
+      },
+      "required": [
+        "family",
+        "faces"
+      ],
+      "additionalProperties": false,
+      "description": "A font family the user can pick for the terminal, editor or interface. It applies only once picked."
+    },
+    "FontFaceContribution": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "allOf": [
+            {
+              "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+            },
+            {
+              "pattern": "\\.woff2?$"
+            }
+          ],
+          "description": "WOFF or WOFF2 file, at most 2 MB; its first bytes must match its extension. TTF, OTF and font collections are refused. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.253",
+          "examples": [
+            "fonts/Geist-Variable.woff2"
+          ]
+        },
+        "weight": {
+          "description": "CSS weight this file draws, or a range for a variable font. Defaults to `400`.",
+          "x-orca-since": "1.4.253",
+          "examples": [
+            "400",
+            "100 900"
+          ],
+          "type": "string",
+          "pattern": "^(?:[1-9]\\d{0,2}|1000)(?: (?:[1-9]\\d{0,2}|1000))?$"
+        },
+        "style": {
+          "description": "Whether this file is the italic face. Defaults to `normal`.",
+          "x-orca-since": "1.4.253",
+          "type": "string",
+          "enum": [
+            "normal",
+            "italic"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "One file of a font family."
     },
     "SyntaxContribution": {
       "type": "object",
@@ -1491,7 +1580,12 @@
             "notifications:show",
             "storage:own",
             "secrets:own",
-            "settings:own"
+            "settings:own",
+            "appearance:write",
+            "workspace:create",
+            "automation:read",
+            "automation:write",
+            "history:read"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1505,7 +1599,12 @@
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
-            "settings:own": "1.4.160"
+            "settings:own": "1.4.160",
+            "appearance:write": "1.4.249",
+            "workspace:create": "1.4.259",
+            "automation:read": "1.4.259",
+            "automation:write": "1.4.259",
+            "history:read": "1.4.259"
           }
         }
       },

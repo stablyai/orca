@@ -349,7 +349,7 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 10,
+          "maxItems": 15,
           "type": "array",
           "items": {
             "type": "string",
@@ -363,7 +363,12 @@
               "notifications:show",
               "storage:own",
               "secrets:own",
-              "settings:own"
+              "settings:own",
+              "appearance:write",
+              "workspace:create",
+              "automation:read",
+              "automation:write",
+              "history:read"
             ]
           }
         },
@@ -564,6 +569,7 @@
             "themes",
             "terminalThemes",
             "iconThemes",
+            "fonts",
             "syntaxes",
             "customEditors",
             "newFiles",

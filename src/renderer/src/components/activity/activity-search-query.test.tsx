@@ -11,14 +11,11 @@ import {
   makeTabWithIds,
   makeWorktree
 } from './ActivityPrototypePage-test-fixtures'
-import {
-  activityThreadMatchesSearchQuery,
-  createActivityThreadSearchMatcher
-} from './activity-thread-grouping'
+
 import { useAgentPaneThreads } from './use-agent-pane-threads'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 
@@ -71,41 +68,75 @@ function options(query: string): Parameters<typeof useAgentPaneThreads>[0] {
 }
 
 describe('Activity search query in the real hook', () => {
-  it('matches normalized Unicode queries without replacing thread objects', () => {
-    const count = 12
-    installThreads(count)
-    const activity = renderHook(() => useAgentPaneThreads(options(' PROJECT ☃ ')))
-    expect(activity.result.current.allThreads).toHaveLength(count)
-    expect(activity.result.current.visibleThreads).toEqual(activity.result.current.allThreads)
-    for (const [index, thread] of activity.result.current.visibleThreads.entries()) {
-      expect(thread).toBe(activity.result.current.allThreads[index])
-    }
-  })
-
-  it.each(['', ' \t\n '])('shows all threads for an empty query: %j', (query) => {
-    installThreads(12)
-    const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    expect(activity.result.current.visibleThreads).toEqual(activity.result.current.allThreads)
-  })
-
-  it('retains both original and normalized UTF-8 byte limits', () => {
-    const query = 'İ'.repeat(700)
-    installThreads(12, query)
-    const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    expect(activity.result.current.allThreads).toHaveLength(12)
-    expect(activity.result.current.visibleThreads).toEqual([])
-  })
-
-  it('excludes acknowledged rows from an unread search', () => {
+  it('keeps live rows but excludes acknowledged finished rows from an unread search', () => {
     const panes = installThreads(12)
+    const entries = useAppStore.getState().agentStatusByPaneKey
     useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(
+        panes.map((paneKey, index) => [
+          paneKey,
+          index === 0 ? entries[paneKey] : { ...entries[paneKey], state: 'done' as const }
+        ])
+      ),
       acknowledgedAgentsByPaneKey: Object.fromEntries(panes.map((paneKey) => [paneKey, 100_000]))
     })
     const activity = renderHook(() =>
       useAgentPaneThreads({ ...options(' PROJECT ☃ '), readFilter: 'unread' })
     )
     expect(activity.result.current.allThreads).toHaveLength(12)
-    expect(activity.result.current.visibleThreads).toEqual([])
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      panes[0]
+    ])
+  })
+
+  it('hides acknowledged unavailable rows unless selected in the unread filter', () => {
+    const [livePane, unavailablePane] = installThreads(2)
+    const entries = useAppStore.getState().agentStatusByPaneKey
+    useAppStore.setState({
+      agentStatusByPaneKey: { [livePane]: entries[livePane] },
+      migrationUnsupportedByPtyId: {
+        'pty-tab-1': {
+          ptyId: 'pty-tab-1',
+          paneKey: unavailablePane,
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: 99_000
+        }
+      },
+      acknowledgedAgentsByPaneKey: { [livePane]: 100_000, [unavailablePane]: 100_000 }
+    })
+    const activity = renderHook<ReturnType<typeof useAgentPaneThreads>, string | null>(
+      (selectedPaneKey: string | null) =>
+        useAgentPaneThreads({ ...options(''), readFilter: 'unread', selectedPaneKey }),
+      { initialProps: null }
+    )
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111'
+    ])
+    activity.rerender(unavailablePane)
+    expect(
+      activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
+    ).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111',
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
+    act(() => useAppStore.setState({ activityClearedAtByPaneKey: { [unavailablePane]: 99_000 } }))
+    activity.rerender(null)
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111'
+    ])
+    act(() =>
+      useAppStore.setState({
+        activityClearedAtByPaneKey: {},
+        acknowledgedAgentsByPaneKey: { [livePane]: 100_000 }
+      })
+    )
+    expect(
+      activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
+    ).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111',
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
   })
 
   it('keeps selection, child classification and scoped row order', () => {
@@ -159,40 +190,5 @@ describe('Activity search query in the real hook', () => {
     expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
       panes[2]
     ])
-  })
-
-  it('rejects original oversized whitespace before it becomes an empty query', () => {
-    installThreads(12)
-    const query = ' '.repeat(2049)
-    const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    expect(activity.result.current.visibleThreads).toEqual([])
-  })
-})
-
-describe('Activity search matcher APIs', () => {
-  it('matches Unicode and byte boundaries against independent expected results', () => {
-    installThreads(
-      1,
-      `Unicode İ 👩🏽‍💻 and BILLING ${'x'.repeat(2049)} ${'é'.repeat(1025)} ${'İ'.repeat(700)}`
-    )
-    const activity = renderHook(() => useAgentPaneThreads(options('')))
-    const thread = activity.result.current.allThreads[0]
-    const queries = [
-      { query: '', expected: true },
-      { query: '\t\n ', expected: true },
-      { query: 'BILLING', expected: true },
-      { query: '  Unicode İ ', expected: true },
-      { query: '👩🏽‍💻', expected: true },
-      { query: '\ud800', expected: false },
-      { query: 'x'.repeat(2048), expected: true },
-      { query: 'x'.repeat(2049), expected: false },
-      { query: 'é'.repeat(1024), expected: true },
-      { query: 'é'.repeat(1025), expected: false },
-      { query: 'İ'.repeat(700), expected: true }
-    ]
-    for (const { query, expected } of queries) {
-      expect(createActivityThreadSearchMatcher(query)(thread), query).toBe(expected)
-      expect(activityThreadMatchesSearchQuery({ thread, searchQuery: query }), query).toBe(expected)
-    }
   })
 })

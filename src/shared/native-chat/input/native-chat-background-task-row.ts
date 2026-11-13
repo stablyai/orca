@@ -72,7 +72,7 @@ const SETTLED_VERBS: Record<string, string> = {
   idle: 'was stopped'
 }
 
-/** Frozen journal fallback for clients without task blocks (mobile). Preserve the provider’s summary/error verbatim as its only failure report.
+/** Frozen journal fallback for readers without task blocks (older mobile builds, worker transcripts). Preserve the provider’s summary/error verbatim as its only failure report.
  * For live tasks claim only started: fallback readers cannot reconcile/recheck liveness after the writer exits. */
 export function backgroundTaskFallbackText(block: NativeChatBackgroundTaskBlock): string {
   const sentence = block.summary?.trim() || block.error?.trim()
@@ -142,4 +142,12 @@ export function claimBackgroundTaskTwins(
     }
   }
   return { twinTextIndexes, unpairedRows }
+}
+
+/** What a block-rendering surface draws around its task rows: no task blocks and no fallback twins, but real adjacent prose. */
+export function withoutBackgroundTaskRows(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
+  const { twinTextIndexes } = claimBackgroundTaskTwins(blocks)
+  return blocks.filter(
+    (block, index) => !isBackgroundTaskBlock(block) && !twinTextIndexes.has(index)
+  )
 }

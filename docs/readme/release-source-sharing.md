@@ -99,7 +99,7 @@ Tests cover concurrent publication, lock heartbeats and eviction, independent br
 corrupt seeds, fallback, the opt-out, and preserved read-only files. Run them with:
 
 ```sh
-ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/cross-version-wire/release-source-cache.unit.test.ts tests/e2e/cross-version-wire/release-source-retention.unit.test.ts tests/e2e/cross-version-wire/release-checkout.unit.test.ts tests/e2e/cross-version-wire/release-checkout-tree.unit.test.ts tests/e2e/cross-version-wire/release-missing-packages.unit.test.ts config/scripts/space-sharing-copy.test.ts
+ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/cross-version-wire/release-source-cache.unit.test.ts tests/e2e/cross-version-wire/release-source-retention.unit.test.ts tests/e2e/cross-version-wire/release-checkout.unit.test.ts tests/e2e/cross-version-wire/release-checkout-tree.unit.test.ts tests/e2e/cross-version-wire/release-missing-packages.unit.test.ts config/scripts/artifact-storage/reflink-copy/space-sharing-copy.test.ts
 ```
 
 ## P3 remains an experiment

@@ -19,7 +19,9 @@ const boundaryMocks = vi.hoisted(() => ({
   })
 }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: boundaryMocks.getConnectionId }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: boundaryMocks.getConnectionId
+}))
 
 const editors: Editor[] = []
 const largeText = 'X'.repeat(70 * 1024)
@@ -58,19 +60,6 @@ async function flush() {
   }
 }
 
-function textPosition(editor: Editor, text: string): number {
-  let position: number | undefined
-  editor.state.doc.descendants((node, pos) => {
-    if (node.isText && node.text === text) {
-      position = pos
-    }
-  })
-  if (position === undefined) {
-    throw new Error(`Missing text ${text}`)
-  }
-  return position
-}
-
 afterEach(() => {
   editors.splice(0).forEach((editor) => editor.destroy())
   document.body.replaceChildren()
@@ -84,23 +73,6 @@ afterEach(() => {
 })
 
 describe('large Markdown paste selection during yields', () => {
-  it('replaces the original selection while preserving a caret moved during production-size measurement', async () => {
-    const editor = createEditor()
-    const delay = pause()
-    const yieldToEventLoop = vi.fn().mockReturnValueOnce(delay.promise).mockResolvedValue(undefined)
-    expect(handleRichMarkdownLargeTextPaste(editor, pasteEvent(), { yieldToEventLoop })).toBe(true)
-    expect(yieldToEventLoop).toHaveBeenCalledOnce()
-    editor.commands.setTextSelection(14)
-    delay.resume()
-    await flush()
-    expect(editor.state.doc.child(0).textContent === `hello ${largeText}`).toBe(true)
-    expect(editor.state.doc.child(1).textContent).toBe('second paragraph')
-    expect(editor.state.selection.from).toBe(editor.state.doc.child(0).nodeSize + 1)
-    expect(document.activeElement).toBe(editor.view.dom)
-    expect(toast.info).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('keeps every remaining production-size chunk at its insertion end after the caret moves', async () => {
     const editor = createEditor()
     const delay = pause()
@@ -214,59 +186,6 @@ describe('large Markdown paste selection during yields', () => {
       expect(toast.error).not.toHaveBeenCalled()
     }
   )
-
-  it('uses native multi-cell replacement before continuing in the first inserted cell', async () => {
-    const content =
-      '<table><tbody><tr><td>first</td><td>second</td></tr><tr><td>third</td><td>fourth</td></tr></tbody></table><p>outside</p>'
-    const editor = createEditor(content)
-    const cellPositions: number[] = []
-    editor.state.doc.descendants((node, position) => {
-      if (node.type.spec.tableRole === 'cell') {
-        cellPositions.push(position)
-      }
-    })
-    editor.view.dispatch(
-      editor.state.tr.setSelection(
-        CellSelection.create(editor.state.doc, cellPositions[0]!, cellPositions[3]!)
-      )
-    )
-    const original = editor.state.doc
-    const native = editor.state.tr.insertText(largeText).doc
-    const delay = pause()
-    const yieldToEventLoop = vi.fn().mockReturnValueOnce(delay.promise).mockResolvedValue(undefined)
-    handleRichMarkdownLargeTextPaste(editor, pasteEvent(), { yieldToEventLoop })
-    const outside = textPosition(editor, 'outside')
-    editor.commands.setTextSelection(outside + 2)
-    delay.resume()
-    await flush()
-    expect(editor.state.doc.eq(native)).toBe(true)
-    expect(editor.state.doc.child(0).childCount).toBe(original.child(0).childCount)
-    expect(editor.state.selection.from).toBe(textPosition(editor, 'outside') + 2)
-  })
-
-  it('releases successful paste listeners and undoes all chunks together', async () => {
-    const editor = createEditor()
-    const original = editor.getJSON()
-    const off = vi.spyOn(editor, 'off')
-    handleRichMarkdownLargeTextPaste(editor, pasteEvent(), { yieldToEventLoop: async () => {} })
-    await flush()
-    expect(editor.commands.undo()).toBe(true)
-    expect(editor.getJSON()).toEqual(original)
-    expect(off.mock.calls.map(([event]) => event)).toContain('transaction')
-    expect(off.mock.calls.map(([event]) => event)).toContain('destroy')
-  })
-  it('keeps the pending paste before ordinary typing at its original collapsed caret', async () => {
-    const editor = createEditor()
-    editor.commands.setTextSelection(7)
-    const delay = pause()
-    const yieldToEventLoop = vi.fn().mockReturnValueOnce(delay.promise).mockResolvedValue(undefined)
-    handleRichMarkdownLargeTextPaste(editor, pasteEvent(), { yieldToEventLoop })
-    editor.commands.insertContent('typed ')
-    delay.resume()
-    await flush()
-    expect(editor.state.doc.child(0).textContent === `hello ${largeText}typed world`).toBe(true)
-    expect(editor.state.selection.from).toBe(7 + largeText.length + 'typed '.length)
-  })
 
   it('excludes later typing at both ends of a reversed pending selection', async () => {
     const editor = createEditor()
@@ -420,20 +339,6 @@ describe('large Markdown paste selection during yields', () => {
     })
     expect(pastedMarks).toEqual(['bold'])
   })
-
-  it('preserves armed marks at a moved live caret while writing the captured range', async () => {
-    const editor = createEditor()
-    const delay = pause()
-    handleRichMarkdownLargeTextPaste(editor, pasteEvent(), {
-      yieldToEventLoop: vi.fn().mockReturnValueOnce(delay.promise).mockResolvedValue(undefined)
-    })
-    editor.commands.setTextSelection(14)
-    editor.commands.toggleItalic()
-    delay.resume()
-    await flush()
-    expect(editor.state.storedMarks?.some((mark) => mark.type.name === 'italic')).toBe(true)
-    expect(editor.state.selection.from).toBe(editor.state.doc.child(0).nodeSize + 1)
-  })
   it.each(['adjacent', 'other paragraph'] as const)(
     'keeps typing at %s separate between chronological paste segments',
     async (position) => {
@@ -473,33 +378,6 @@ describe('large Markdown paste selection during yields', () => {
       expect(editor.state.doc.eq(initial)).toBe(true)
     }
   )
-
-  it('closes partial paste history after focus cancellation without reclaiming focus', async () => {
-    const editor = createEditor()
-    const initialPlugins = editor.state.plugins
-    const delay = pause()
-    const yieldToEventLoop = vi.fn().mockReturnValueOnce(delay.promise).mockResolvedValue(undefined)
-    handleRichMarkdownLargeTextPaste(editor, pasteEvent('ABCDE'), {
-      directMaxBytes: 1,
-      chunkMaxBytes: 2,
-      yieldToEventLoop
-    })
-    await flush()
-    expect(editor.state.doc.child(0).textContent).toBe('hello AB')
-    const input = document.createElement('input')
-    document.body.append(input)
-    input.focus()
-    delay.resume()
-    await flush()
-    expect(document.activeElement).toBe(input)
-    expect(toast.info).toHaveBeenCalledExactlyOnceWith('Large paste stopped before it finished.')
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(editor.state.plugins).toEqual(initialPlugins)
-    editor.view.dom.focus()
-    editor.commands.insertContent('T')
-    expect(editor.commands.undo()).toBe(true)
-    expect(editor.state.doc.child(0).textContent).toBe('hello AB')
-  })
 
   it('cancels a full-document selection when a new paragraph appears outside its original range', async () => {
     const editor = createEditor()

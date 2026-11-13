@@ -1,8 +1,8 @@
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionLifecycleJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLifecycleJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   codexGoalJournalDigest,
   codexGoalJournalIdentity,

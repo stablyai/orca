@@ -1,5 +1,5 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'

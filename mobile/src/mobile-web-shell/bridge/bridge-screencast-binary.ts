@@ -1,7 +1,7 @@
 import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
-} from '../../transport/browser-screencast-protocol'
+} from '../../browser/screencast/browser-screencast-protocol'
 import type { BridgeHostMessage } from './bridge-envelope'
 
 // Decode only base64 image bytes; format/frameSeq/metadata already cross in JSON, so no socket wire header needs parsing.

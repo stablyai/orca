@@ -1,9 +1,9 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
-import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'
 import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
 import type { TerminalBulkCloseController } from './use-terminal-bulk-close-actions'
 

@@ -1,14 +1,14 @@
-import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
+import { classifyExactGitHubOperation } from '../../../src/shared/github/work-items/exact-work-item-operation'
 import {
   captureGitHubInvocation,
   GITHUB_TARGET_CHECK_TIMED_OUT,
   requireExactGitHubOperations,
   githubOperationResponse
-} from '../transport/github-target-invocation'
-import { openRpcRequestBudget } from '../transport/rpc-request-budget'
-import type { RpcClient } from '../transport/rpc-client'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import type { RpcResponse } from '../transport/types'
+} from '../source-control/review/github-target-invocation'
+import { openRpcRequestBudget } from '../transport/rpc/rpc-request-budget'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'

@@ -1,23 +1,23 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
-import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
-import { executePluginCommand } from '@/lib/plugin-command-execution'
-import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { getSelectedTextForFileSearch } from '../lib/files/search/file-search-selection'
+import { registerAppCommandDispatcher } from '@/lib/app-commands/app-command-dispatch'
+import { executePluginCommand } from '@/lib/plugins/commands/plugin-command-execution'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
-} from '@/lib/plugin-command-keybindings'
-import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+} from '@/lib/plugins/commands/plugin-command-keybindings'
+import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   folderRelativePathToIncludeGlob,
   selectedExplorerFolderRelativePath
 } from '../components/right-sidebar/file-explorer/content-search/file-search-include-pattern'
-import { usePluginCommands } from '@/store/plugin-panels'
-import { useAppStore } from '../store'
+import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { useAppStore } from '../store/index'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
@@ -34,7 +34,8 @@ import {
 } from './app-command-handlers'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { textInputOwnsComposition } from '../../../shared/text-input-shortcut-policy'
 import { isAgentTerminalPreviewTarget } from '../components/dashboard-popout/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */
@@ -192,23 +193,21 @@ export function useGlobalKeybindings(args: {
         return
       }
 
-      if (
-        globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
-          context,
-          terminalShortcutPolicy
-        })
-      ) {
-        return
-      }
+      const matchOptions = { context, terminalShortcutPolicy }
+      const targetYields = (actionId?: KeybindingActionId): boolean =>
+        globalShortcutTargetYields(input, shortcutPlatform, keybindings, matchOptions, actionId)
+      const matchAppShortcut = (actionId: KeybindingActionId): boolean =>
+        matchShortcut(actionId) && !targetYields(actionId)
 
-      // Reviewed plugin chords beat built-in defaults only in app focus; terminal/editor/browser retain their own authority.
-      if (context === 'app') {
+      // Reviewed plugin chords beat built-in defaults; in a terminal they follow the terminal shortcut policy like built-ins.
+      if (!targetYields()) {
         const pluginCommand = findPluginCommandForKeybinding(
           pluginCommands,
           input,
           shortcutPlatform,
           keybindings,
-          Boolean(activeWorktreeId)
+          Boolean(activeWorktreeId),
+          matchOptions
         )
         if (pluginCommand) {
           input.preventDefault()
@@ -222,26 +221,23 @@ export function useGlobalKeybindings(args: {
       }
 
       const handlers = createAppCommandHandlers(state, input, context)
-      if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
-        return
-      }
       if (
-        matchShortcut('sidebar.childWorkspaces.toggle') &&
+        matchAppShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {
         return
       }
-      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
+      if (matchAppShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
-        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
+        if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {
           return
         }
       }
 
       // Run this unbound alias after built-ins; claim it only when unsent review notes exist.
-      if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
+      if (canRevealRightSidebar && matchAppShortcut('sourceControl.sendReviewNotes')) {
         if (actions.openDiffNotesSendMenuForActiveWorktree()) {
           input.preventDefault()
           notifyTerminalCapture('sourceControl.sendReviewNotes')
@@ -249,10 +245,14 @@ export function useGlobalKeybindings(args: {
       }
     }
 
-    const onKeyDown = (e: KeyboardEvent): void => {
-      const detected = doubleTapDetector.process(
+    const detectDoubleTap = (e: KeyboardEvent, type: 'keyDown' | 'keyUp') => {
+      if (textInputOwnsComposition(e)) {
+        doubleTapDetector.reset()
+        return null
+      }
+      return doubleTapDetector.process(
         toModifierDoubleTapEvent({
-          type: 'keyDown',
+          type,
           code: e.code,
           key: e.key,
           shift: e.shiftKey,
@@ -263,6 +263,9 @@ export function useGlobalKeybindings(args: {
         }),
         Date.now()
       )
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const detected = detectDoubleTap(e, 'keyDown')
       if (e.repeat) {
         return
       }
@@ -294,18 +297,7 @@ export function useGlobalKeybindings(args: {
     }
 
     const onKeyUp = (e: KeyboardEvent): void => {
-      doubleTapDetector.process(
-        toModifierDoubleTapEvent({
-          type: 'keyUp',
-          code: e.code,
-          key: e.key,
-          shift: e.shiftKey,
-          control: e.ctrlKey,
-          alt: e.altKey,
-          meta: e.metaKey
-        }),
-        Date.now()
-      )
+      detectDoubleTap(e, 'keyUp')
     }
 
     // Blur must disarm an unfinished gesture.

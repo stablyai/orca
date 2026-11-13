@@ -26,7 +26,7 @@ import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cac
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
-} from '../../native-chat/wsl-transcript-fs-gate'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-gate'
 
 let releaseStall: (() => void) | undefined
 let tempRoot: string | undefined
@@ -81,6 +81,8 @@ describe('AI Vault session titles with a stalled WSL transcript lstat', () => {
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 
     const { titles } = await pending
-    expect(titles).toEqual([{ agent: 'claude', sessionId: LOCAL_SESSION_ID, title: 'hello world' }])
+    expect(titles).toEqual([
+      { agent: 'claude', sessionId: LOCAL_SESSION_ID, title: 'hello world', kind: 'fallback' }
+    ])
   })
 })

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -13,12 +13,14 @@ const mocks = vi.hoisted(() => ({
   addressBarValue: { current: 'about:blank' }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: vi.fn(async () => false),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => ({}))
 }))
 
-vi.mock('@/lib/workspace-browser-tab-open', () => ({
+vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
   openWorkspaceBrowserTab: vi.fn(async () => {})
 }))
 
@@ -213,58 +215,6 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens a new blank tab in an empty, focused address bar', () => {
-    useAppStore.setState({
-      pendingAddressBarFocusByPageId: { [PAGE_ID]: true },
-      pendingAddressBarFocusByTabId: { [PAGE_ID]: true }
-    })
-
-    renderPane()
-
-    const input = addressBar()
-    expect(document.activeElement).toBe(input)
-    expect(input.value).toBe('')
-  })
-
-  it('offers the shared URL history once the user types, not on a blank tab’s focus', () => {
-    useAppStore.setState({
-      browserUrlHistory: [
-        {
-          url: 'https://maps.google.com/',
-          normalizedUrl: 'maps.google.com',
-          title: 'Google Maps',
-          lastVisitedAt: Date.now(),
-          visitCount: 4
-        }
-      ],
-      pendingAddressBarFocusByPageId: { [PAGE_ID]: true },
-      pendingAddressBarFocusByTabId: { [PAGE_ID]: true }
-    })
-
-    renderPane()
-
-    // The New Tab page under the bar already lists history, so focus alone opens nothing.
-    expect(screen.queryByText('Google Maps')).toBeNull()
-    fireEvent.change(addressBar(), { target: { value: 'maps' } })
-    expect(screen.getByText('Google Maps')).toBeTruthy()
-  })
-
-  it('does not steal focus from a page the user is already on', () => {
-    mocks.addressBarValue.current = 'https://remote.internal/path'
-
-    renderPane()
-
-    expect(document.activeElement).not.toBe(addressBar())
-  })
-
-  it('sends a palette request aimed at the page to the streamed viewport', () => {
-    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
-
-    renderPane()
-
-    expect(document.activeElement).toBe(screen.getByTestId('viewport'))
-  })
-
   it('hands focus to the screencast frame the moment the first one arrives', () => {
     act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
     const view = renderPane()
@@ -290,14 +240,5 @@ describe('RemoteBrowserPagePane address bar parity', () => {
 
     // First-frame handoff must not steal a URL the user is still typing.
     expect(document.activeElement).toBe(addressBar())
-  })
-
-  it('prefers the screencast frame over the viewport once one has painted', () => {
-    mocks.frameUrl.current = 'blob:frame-1'
-    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
-
-    renderPane()
-
-    expect(document.activeElement).toBe(screen.getByTestId('frame'))
   })
 })

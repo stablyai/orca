@@ -10,7 +10,6 @@ import {
   OPENAI_THINKING_LEVELS,
   parseAntigravityModels,
   parseClaudeModels,
-  parseCodexModels,
   parseCursorModels,
   parseLineModels,
   parsePiModels,
@@ -38,6 +37,8 @@ export type CommitMessageModel = {
   isDefault?: boolean
   /** Tokens the model's context window holds, where the listing states it. */
   contextWindowTokens?: number
+  /** The versioned model an alias row runs; absent from older remote hosts. */
+  resolvedModel?: string
 }
 
 export type TextGenerationFlag = {
@@ -59,6 +60,7 @@ export type CommitMessageAgentSpec = {
     strictMcp?: boolean
     /** Claude only: the tool-policy syntax older CLIs accept. */
     legacyToolPolicy?: boolean
+    toolFree?: boolean
     userArgs?: readonly string[]
   }) => string[]
   /** User recipe args replace generated singleton alias groups; repeats make yargs parse arrays and crash. Default: model flag only. */
@@ -67,13 +69,19 @@ export type CommitMessageAgentSpec = {
   effortFlag: readonly TextGenerationFlag[]
   modelSource: 'static' | 'dynamic'
   /** Discover models on main for dynamic sources. */
-  modelDiscovery?: {
-    binary: string
-    args: string[]
-    /** Written to the CLI's stdin, for CLIs whose listing is request-driven. */
-    stdinPayload?: string
-    parse: (stdout: string) => CommitMessageModel[]
-  }
+  modelDiscovery?:
+    | {
+        binary: string
+        args: string[]
+        /** Written to the CLI's stdin, for CLIs whose listing is request-driven. */
+        stdinPayload?: string
+        parse: (stdout: string) => CommitMessageModel[]
+      }
+    | {
+        binary: string
+        /** Listed over the CLI's app-server `model/list`; main owns the app-server arguments. */
+        listing: 'codex-app-server'
+      }
   models: CommitMessageModel[]
   defaultModelId: string
 }
@@ -89,6 +97,8 @@ export type CommitMessageModelCapability = {
   isDefault?: boolean
   /** Absent from an older remote host; readers then treat the window as unknown. */
   contextWindowTokens?: number
+  /** The versioned model an alias row runs; absent from an older remote host. */
+  resolvedModel?: string
 }
 
 export type CommitMessageAgentCapability = {
@@ -130,7 +140,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     CLAUDE_THINKING_LEVELS,
     OPENAI_THINKING_LEVELS,
     parseClaudeModels,
-    parseCodexModels,
     parseLineModels,
     parsePiModels,
     withOpenAiThinking

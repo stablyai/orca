@@ -12,14 +12,17 @@
     "outDir": "../mobile/node_modules/.cache/phone-host-contract-types"
   },
   "files": [
-    "../src/main/runtime/runtime-github-repository-query-commands.ts",
-    "../src/main/runtime/rpc/methods/github-repo-work-item-methods.ts",
+    "../src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts",
+    "../src/main/runtime/rpc/methods/source-control/github/github-repo-work-item-methods.ts",
     "../src/main/runtime/orca-runtime.ts",
     "../src/main/runtime/rpc/core.ts",
-    "../src/main/runtime/rpc/dispatcher-request-parsing.ts",
-    "../src/main/github/issue-field-options.ts",
-    "../src/main/runtime/runtime-worktree-ps-summaries.ts",
-    "../src/types/build-constants.d.ts"
+    "../src/main/runtime/rpc/dispatch/dispatcher-request-parsing.ts",
+    "../src/main/github/issues/issue-field-options.ts",
+    "../src/main/runtime/workspaces/process-listing/runtime-worktree-ps-summaries.ts",
+    "../src/types/build-constants.d.ts",
+    "../src/main/native-chat/transcript-decoding/transcript-line-decoders-claude.ts",
+    "../src/main/codex/structured/items/codex-thread-item-identity.ts",
+    "../src/main/codex/structured/items/codex-structured-item-translation.ts"
   ],
   "include": ["../src/shared/**/*.ts", "../src/shared/**/*.tsx"],
   "exclude": [

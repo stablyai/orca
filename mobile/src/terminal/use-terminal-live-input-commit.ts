@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
@@ -40,7 +40,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly framesLivePaste?: (handle: string) => boolean
   readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
   readonly connected: boolean
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
 }
@@ -53,6 +53,7 @@ type TerminalLiveInputCommitHandlers = {
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
+  readonly handleLiveInputCompositionEnd: (text: string) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
   readonly sendLiveInputClick: (handle: string, bytes: string) => Promise<boolean>
@@ -232,6 +233,12 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     ]
   )
 
+  // A commit with no trailing input event would otherwise stay held until the next key.
+  const handleLiveInputCompositionEnd = useCallback(
+    (text: string) => handleLiveInputChange({ nativeEvent: { text, isComposing: false } }),
+    [handleLiveInputChange]
+  )
+
   const getLiveInputInteractionGeneration = useCallback(
     () => liveInputInteractionGenerationRef.current,
     []
@@ -311,6 +318,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
     sendLiveInputClick

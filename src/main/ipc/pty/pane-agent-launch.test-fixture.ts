@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { partialRuntimeStore } from '../../runtime/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import type { AgentStartupSettings } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { PtySpawnIpcArgs } from './ipc/spawn-types'
 import { createPtyIpcSpawnState } from './ipc/spawn-state'
@@ -16,7 +16,10 @@ export async function planQueuedPaneAgentLaunch(
     tabId: 'tab-1',
     leafId: '11111111-1111-4111-8111-111111111111'
   },
-  pane: Pick<PtySpawnIpcArgs, 'connectionId' | 'commandDelivery' | 'startupCommandDelivery'> = {}
+  pane: Pick<
+    PtySpawnIpcArgs,
+    'connectionId' | 'commandDelivery' | 'startupCommandDelivery' | 'trustWorktreeId' | 'cwd'
+  > = {}
 ): Promise<PtySpawnIpcArgs> {
   const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => settings }))
   const discovery = vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({

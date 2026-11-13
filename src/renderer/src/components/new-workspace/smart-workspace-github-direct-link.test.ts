@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/repositories/links'
 import type { RepoOption } from './smart-workspace-name-field-model'
 import { resolveSmartWorkspaceGithubDirectLink } from './smart-workspace-github-direct-link'
 

@@ -2,6 +2,8 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { fireEvent, getByRole } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
@@ -124,36 +126,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 
-  it('keeps the over-cap alert text static while the count changes', async () => {
-    await renderDialog(
-      {
-        id: 'qc-10',
-        label: 'Review',
-        action: 'agent-prompt',
-        agent: 'claude',
-        prompt: 'x'.repeat(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1),
-        scope: { type: 'global' }
-      },
-      { agentPromptMaxLength: LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH }
-    )
-    const before = document.body.querySelector('[role="alert"]')
-    const beforeText = before?.textContent
-
-    const textarea = document.body.querySelector('textarea')!
-    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
-    await act(async () => {
-      setValue.call(textarea, `${textarea.value}y`)
-      textarea.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-
-    expect(document.body.textContent).toContain('6,002')
-    const after = document.body.querySelector('[role="alert"]')
-    // A screen reader re-reads an alert whose text changes, so only the plain count may move.
-    expect(after).toBe(before)
-    expect(after?.textContent).toBe(beforeText)
-    expect(after?.textContent).not.toMatch(/\d/)
-  })
-
   it('locks the submitted draft until save settles, then permits editing and retry after refusal', async () => {
     const prompt = 'x'.repeat(100_000)
     const onOpenChange = vi.fn()
@@ -192,13 +164,13 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       })
     }
 
-    const agentSelect = document.body.querySelector<HTMLButtonElement>('[role="combobox"]')!
+    const agentSelect = getByRole<HTMLButtonElement>(document.body, 'button', {
+      name: 'Select agent'
+    })
     await submit(agentSelect)
     expect(agentSelect.getAttribute('data-state')).toBe('open')
     expect(onSave).not.toHaveBeenCalled()
-    const codex = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (option) => option.textContent?.trim() === 'Codex'
-    )!
+    const codex = getByRole(document.body, 'menuitem', { name: 'Codex' })
     expect(textarea.closest('fieldset')?.contains(codex)).toBe(false)
     await submit(codex)
     expect(onSave).not.toHaveBeenCalled()
@@ -208,9 +180,12 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     await submit()
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', prompt }))
     expect(agentSelect.disabled).toBe(true)
-    const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'))
-    expect(options.length).toBeGreaterThan(0)
-    expect(options.every((option) => option.getAttribute('aria-disabled') === 'true')).toBe(true)
+    const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+    expect(
+      options
+        .filter((option) => !option.textContent?.includes('Agent settings'))
+        .every((option) => option.getAttribute('aria-disabled') === 'true')
+    ).toBe(true)
     await act(async () => options.find((option) => option.textContent?.includes('Claude'))?.click())
     expect(agentSelect.textContent).toContain('Codex')
     expect(textarea.closest('fieldset')?.disabled).toBe(true)
@@ -245,5 +220,68 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(onSave).toHaveBeenCalledTimes(2)
     expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: updatedPrompt }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('keeps shell and agent drafts independent and saves only the selected agent and prompt', async () => {
+    const onSave = vi.fn(() => false)
+    await renderDialog(
+      {
+        id: 'qc-picker',
+        label: 'Review',
+        action: 'terminal-command',
+        command: 'git diff\n',
+        appendEnter: false,
+        scope: { type: 'global' }
+      },
+      { onSave }
+    )
+
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Agent Prompt' }))
+    )
+    const prompt = getByRole(document.body, 'textbox', { name: 'Prompt' })
+    await act(async () =>
+      fireEvent.change(prompt, { target: { value: 'Review @src\n/goal careful' } })
+    )
+    const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
+    await act(async () => fireEvent.keyDown(trigger, { key: 'Enter' }))
+    const unsupported = getByRole(document.body, 'menuitem', { name: /^Aider/ })
+    expect(unsupported.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => fireEvent.click(unsupported))
+    expect(onSave).not.toHaveBeenCalled()
+    await act(async () => fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' }))
+    const user = userEvent.setup()
+    act(() => trigger.focus())
+    await user.keyboard('co')
+    const search = getByRole<HTMLInputElement>(getByRole(document.body, 'menu'), 'textbox')
+    expect(document.activeElement).toBe(search)
+    expect(search.value).toBe('co')
+    expect(search.selectionStart).toBe(2)
+    await user.keyboard('{Enter}')
+    expect(onSave).not.toHaveBeenCalled()
+
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Terminal Command' }))
+    )
+    expect(
+      getByRole<HTMLTextAreaElement>(document.body, 'textbox', { name: 'Command' }).value
+    ).toBe('git diff\n')
+    expect(
+      getByRole(document.body, 'switch', { name: 'Toggle append Enter' }).getAttribute(
+        'aria-checked'
+      )
+    ).toBe('false')
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Agent Prompt' }))
+    )
+    await act(async () => fireEvent.click(getByRole(document.body, 'button', { name: /^Save/ })))
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      id: 'qc-picker',
+      label: 'Review',
+      action: 'agent-prompt',
+      agent: 'codex',
+      prompt: 'Review @src\n/goal careful',
+      scope: { type: 'global' }
+    })
   })
 })

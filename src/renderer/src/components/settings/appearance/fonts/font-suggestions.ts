@@ -8,6 +8,21 @@ export function mergeFontSuggestions(
   return Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...systemFonts, ...previousFonts]))
 }
 
+/** Plugin families right after the default font, ahead of the installed ones. */
+export function withPluginFontSuggestions(
+  suggestions: readonly string[],
+  pluginFamilies: readonly string[]
+): string[] {
+  if (pluginFamilies.length === 0) {
+    return [...suggestions]
+  }
+  const [first, ...rest] = suggestions
+  const head = first === DEFAULT_APP_FONT_FAMILY ? [first] : []
+  return Array.from(
+    new Set([...head, ...pluginFamilies, ...(head.length > 0 ? rest : suggestions)])
+  )
+}
+
 export function getFallbackTerminalFonts(): string[] {
   const nav =
     typeof navigator !== 'undefined'

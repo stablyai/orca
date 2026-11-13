@@ -1,14 +1,18 @@
+import { useSourceControlState } from '../panel/worktree-scope'
 import { useCallback, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   ensureDetectedAgentsForWorktree,
   readAgentInventoryForWorktree,
   readAgentInventoryForTarget
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { sourceControlLaunchWorkspace } from './source-control-launch-agent-args-applicability'
-import { acquireAgentLaunchChoices, useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import {
+  acquireAgentLaunchChoices,
+  useChatProgramFacts
+} from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 
 type LaunchTarget = Parameters<typeof sourceControlLaunchWorkspace>[0]
 
@@ -24,7 +28,7 @@ export function useSourceControlLaunchableAgents(args: {
   const workspace = sourceControlLaunchWorkspace(target)
   useChatProgramFacts(workspace, active && !connectionUnavailable)
   // Source Control renders with the dialog closed; only an open dialog lists agents.
-  const detected = useAppStore((state) =>
+  const detected = useSourceControlState((state) =>
     !active
       ? null
       : worktreeId

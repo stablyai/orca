@@ -1,9 +1,8 @@
 import type { Dirent } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
-  claudeSettingsMayPickModel,
-  codexConfigMayPickModel,
   ompSettingsMayPickModel,
   openCodeAgentFileMayPickModel,
   openCodeConfigMayPickModel,
@@ -78,13 +77,6 @@ const OPENCODE_PROJECT_MODEL_LAYERS: ProjectModelLayers = {
 }
 
 const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
-  codex: { files: files(['.codex/config.toml'], codexConfigMayPickModel) },
-  claude: {
-    files: files(
-      ['.claude/settings.json', '.claude/settings.local.json'],
-      claudeSettingsMayPickModel
-    )
-  },
   opencode: OPENCODE_PROJECT_MODEL_LAYERS,
   opencode2: OPENCODE_PROJECT_MODEL_LAYERS,
   // OMP also merges other agents' project settings.
@@ -203,7 +195,8 @@ export async function workspaceMayOverrideDefaultModel(input: {
   workspacePath: string
   accountHomePath: string | null
 }): Promise<boolean> {
-  if (!agentReadsProjectModelConfig(input.agent)) {
+  // Claude and Codex pickers follow the account wherever the chat runs.
+  if (!agentReadsProjectModelConfig(input.agent) || independentAgentModelCatalog(input.agent)) {
     return false
   }
   // Unknown project layers may override defaults anywhere.

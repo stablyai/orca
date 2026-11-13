@@ -3,11 +3,13 @@ import { Check, Copy, Files } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type {
   PRConflictSummary,
+  ProviderCheckSummary,
   PRMergeableState
-} from '../../../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type ConflictReview = {
+  checksSummary?: ProviderCheckSummary
   mergeable: PRMergeableState
   conflictSummary?: PRConflictSummary
 }
@@ -21,6 +23,7 @@ export function buildMergeabilityRecalculationCommands(): string {
 }
 
 export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.JSX.Element | null {
+  const t = useTranslate()
   const files = pr.conflictSummary?.files ?? []
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
@@ -31,25 +34,18 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.right.sidebar.checks.panel.content.commitsBehind',
           '{{count}} commits behind',
           { count: commitsBehind, defaultValue_one: '{{count}} commit behind' }
         )}{' '}
-        (
-        {translate(
-          'auto.components.right.sidebar.checks.panel.content.baseCommitLabel',
-          'base commit:'
-        )}{' '}
+        ({t('auto.components.right.sidebar.checks.panel.content.baseCommitLabel', 'base commit:')}{' '}
         <span className="font-mono text-[10px]">{pr.conflictSummary!.baseCommit}</span>)
       </div>
       <div className="mt-2 flex items-center gap-2">
         <Files className="size-3.5 shrink-0 text-muted-foreground" />
         <div className="text-[11px] text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.0975eeaaef',
-            'Conflicting files'
-          )}
+          {t('auto.components.right.sidebar.checks.panel.content.0975eeaaef', 'Conflicting files')}
         </div>
       </div>
       <div className="mt-2 space-y-1.5">
@@ -76,21 +72,22 @@ export function MergeConflictNotice({
   pr: ConflictReview
   isRefreshingConflictDetails: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
     return null
   }
   const locallyClean = pr.conflictSummary?.localMergeState === 'clean'
-  let noticeBody = translate(
+  let noticeBody = t(
     'auto.components.right.sidebar.checks.panel.content.ae8a04ef17',
     'Conflict file details are unavailable'
   )
   if (isRefreshingConflictDetails) {
-    noticeBody = translate(
+    noticeBody = t(
       'auto.components.right.sidebar.checks.panel.content.73d0675356',
       'Refreshing conflict details…'
     )
   } else if (locallyClean) {
-    noticeBody = translate(
+    noticeBody = t(
       'auto.components.right.sidebar.checks.panel.content.f5bc5c4cf1',
       'The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.'
     )
@@ -100,7 +97,7 @@ export function MergeConflictNotice({
   return (
     <div className="border-t border-border px-3 py-3">
       <div className="text-[11px] font-medium text-foreground">
-        {translate(
+        {t(
           'auto.components.right.sidebar.checks.panel.content.87cd07c69a',
           'This branch has conflicts that must be resolved'
         )}
@@ -116,6 +113,7 @@ function MergeabilityRecalculationCommandBox({
 }: {
   commands: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   const isMountedRef = useRef(false)
@@ -160,7 +158,7 @@ function MergeabilityRecalculationCommandBox({
     <div className="mt-3 rounded-md border border-border bg-accent/20 p-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-medium text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.checks.panel.content.5bc9bda2af',
             'Run from this worktree'
           )}
@@ -171,18 +169,15 @@ function MergeabilityRecalculationCommandBox({
           variant="outline"
           size="xs"
           onClick={copyCommands}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.checks.panel.content.e87fb3d929',
             'Copy mergeability refresh commands'
           )}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
           {copied
-            ? translate('auto.components.right.sidebar.checks.panel.content.1e53e45072', 'Copied')
-            : translate(
-                'auto.components.right.sidebar.checks.panel.content.084c516efb',
-                'Copy commands'
-              )}
+            ? t('auto.components.right.sidebar.checks.panel.content.1e53e45072', 'Copied')
+            : t('auto.components.right.sidebar.checks.panel.content.084c516efb', 'Copy commands')}
         </Button>
       </div>
       <pre className="scrollbar-sleek mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background px-2 py-1.5 font-mono text-[10px] leading-4 text-foreground">

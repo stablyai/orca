@@ -3,7 +3,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 const CLAIM_BYTES = 4_096
 

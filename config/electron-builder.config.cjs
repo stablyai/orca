@@ -4,46 +4,56 @@ const { join, resolve } = require('node:path')
 const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
-} = require('./scripts/macos-folder-usage-descriptions.cjs')
-const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
+} = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
+const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
   verifyPackagedDaemonEntryBoots,
   verifyPackagedMacTerminalHostBoots
-} = require('./scripts/verify-packaged-daemon-entry.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-daemon-entry.cjs')
 const {
   buildMacTerminalHost,
   macTerminalHostSignIgnore,
   verifyMacTerminalHost
-} = require('./scripts/macos-terminal-host-bundle.cjs')
+} = require('./scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const {
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
+  normalizeElectronArchitecture,
   prunePackagedRuntimeNodeModules,
+  readPackage,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const { copyPackagedTranscribeCpp } = require('./packaged-transcribe-cpp.cjs')
 const {
   assertNoWindowsExecutablesInRuntimeNodeModules
 } = require('./packaged-windows-only-runtime-files.cjs')
-const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const {
+  verifyLinuxGlibcFloor
+} = require('./scripts/native-build/linux/verify-linux-glibc-floor.cjs')
 const {
   verifyPackagedWindowsAgentHook
-} = require('./scripts/verify-packaged-windows-agent-hook.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-windows-agent-hook.cjs')
 const {
   ensureBundledWaylandClipboard,
   finalizePackagedWaylandClipboard
 } = require('./wayland-clipboard-resources.cjs')
-const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
+const {
+  writeMacBuildCompatibility
+} = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
 const {
   MOBILE_WEB_BUNDLE_DIR,
   assertMobileWebBundleBuilt
-} = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
-const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs')
+const {
+  verifyPackagedPluginResources,
+  verifyPackagedPluginTypings
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs')
 const {
   assertPackagedServeSelectionEntry,
   assertPackagedWebClient
-} = require('./scripts/verify-packaged-serve-payload.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-serve-payload.cjs')
 const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
@@ -52,24 +62,32 @@ const {
 } = require('./bundled-ripgrep-resources.cjs')
 const {
   verifyPackagedWindowsNodePty
-} = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-node-pty-job-ownership.cjs')
 const {
   assertOrcadTemplateBuilt,
   finalizePackagedOrcadTemplate,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
   orcadTemplateMacSignIgnore
-} = require('./scripts/packaged-orcad-template.cjs')
-const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+} = require('./scripts/orcad-distribution/template/packaged-orcad-template.cjs')
+const {
+  verifySkillsCliRuntime
+} = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
-const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const {
+  verifyStaticAppImagePackage
+} = require('./scripts/desktop-distribution/appimage/static-appimage-package-contract.cjs')
 const {
   appImageNodeRuntimeFpmArgs,
   placeAppImageNodeRuntime,
   verifyAppImageNodeRuntimeServesPty
-} = require('./scripts/appimage-node-runtime.cjs')
-const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
-const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
+} = require('./scripts/desktop-distribution/linux/appimage-node-runtime.cjs')
+const {
+  signWindowsUninstallerViaSignPath
+} = require('./scripts/desktop-distribution/windows/windows-uninstaller-signing.cjs')
+const {
+  buildMacShipItScheduling
+} = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
@@ -132,6 +150,12 @@ const bundledPluginResources = {
   from: 'resources/plugins/launch',
   to: 'plugins/launch'
 }
+// electron-builder always drops `*.d.ts` from app files, so `orca plugin types` reads these copies.
+const pluginAuthorTypingsResources = {
+  from: 'resources/plugins',
+  to: 'plugins',
+  filter: ['declarative/*.d.ts', 'types/*.d.ts']
+}
 // Packaged main/CLI/SSH/speech paths lack pnpm links; copy runtime closure so bare requires cannot fall through to checkout dependencies.
 // Ship only the 166KB emoji dataset used by worktree naming, not all 49MB of emojibase-data.
 const emojiShortcodeDatasetResource = {
@@ -144,24 +168,12 @@ const commonExtraResources = [
   orcadTemplateNodeModulesExtraResource,
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
+  pluginAuthorTypingsResources,
   skillFreshnessResources,
   ...agentBrowserSkillResources,
   nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
-// Native speech addons need real disk paths; copy only the artifact target’s variant.
-const macSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-darwin-${arch}',
-  to: 'node_modules/sherpa-onnx-darwin-${arch}'
-}
-const linuxSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-linux-${arch}',
-  to: 'node_modules/sherpa-onnx-linux-${arch}'
-}
-const winSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-win-x64',
-  to: 'node_modules/sherpa-onnx-win-x64'
-}
 // electron-builder replaces these defaults when `depends` is configured; retain
 // Electron's loader requirements alongside Orca's headless-host dependencies.
 const debElectronRuntimeDependencies = [
@@ -307,8 +319,8 @@ module.exports = {
     '!resources/native-chat-visuals/**',
     // extraResources already ships plugin bytes; exclude source duplicates.
     '!resources/plugins/launch/**',
-    // Platform extraResources selects speech natives; asar would duplicate it and ship other variants.
-    '!node_modules/sherpa-onnx*{,/**/*}',
+    // afterPack copies the target's speech engine to resources/node_modules; asar would duplicate it and ship other variants.
+    '!node_modules/{transcribe-cpp,@transcribe-cpp,koffi,@koromix}{,/**/*}',
     // CLI shim belongs beside resources/bin/orca.exe; unpacking source creates a second .cmd without its executable (#7351).
     '!resources/win32{,/**/*}'
   ],
@@ -323,35 +335,42 @@ module.exports = {
     'out/main/antigravity/**',
     'out/main/claude/**',
     'out/main/codex/**',
+    // The CLI loads the socket-dir check; tsc-emitted output also needs its mode constants beside it.
+    'out/main/daemon/endpoint/publication/daemon-{socket-endpoint-path,private-file-modes}.js',
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',
     'out/main/gemini/**',
-    'out/main/gitlab/project-ref-parser.js',
+    'out/main/gitlab/projects/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/filesystem/asar-transparent-fs.js',
     'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
-    'out/main/plugins/plugin-authoring-checks.js',
-    // `orca plugin types` copies the author typings from here in Node mode.
-    'resources/plugins/declarative/orca*.d.ts',
+    'out/main/plugins/plugin-artifact-validation.js',
+    'out/main/plugins/plugin-content-hash.js',
+    'out/main/plugins/plugin-catalog-release-entry.js',
+    'out/main/environment-doctor/environment-doctor.js',
+    'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
-    'resources/plugins/types/*.d.ts',
-    'out/main/skills/bundled-skill-install/cli-entry.js',
-    'out/main/startup/http1-compatibility-marker.js',
+    'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
+    'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
+    'out/main/startup/network-compatibility/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
+    'out/main/agent-identity-worker-entry.js',
+    'out/main/session-search-worker-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
-    'out/main/orcad/orcad-stale-lock-reclaim.js',
+    'out/main/orcad/instance-lock/orcad-stale-lock-reclaim.js',
+    'out/main/orcad/profile-state/orcad-host-identity-reset.js',
     'out/main/chunks/**',
     'out/renderer/**',
     'out/mobile-web/**',
@@ -424,6 +443,13 @@ module.exports = {
       writeMacBuildCompatibility(resourcesDir, { version, commit, architecture })
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
+    // Before the prune, which drops the copied packages' type declarations too.
+    copyPackagedTranscribeCpp(
+      readPackage,
+      resourcesDir,
+      context.electronPlatformName,
+      normalizeElectronArchitecture(context.arch)
+    )
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     // Gate native glibc floor after pruning foreign CPU variants; GLIBC_2.34 once broke Ubuntu 20.04 startup (#9902).
@@ -468,6 +494,7 @@ module.exports = {
     }
     // Validate real electron-builder output so broken extraResources mappings fail before shipping.
     verifyPackagedPluginResources(resourcesDir)
+    verifyPackagedPluginTypings(resourcesDir)
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
@@ -526,7 +553,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...windowsRuntimeResources,
-      winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -583,10 +609,15 @@ module.exports = {
         rank: 'Alternate'
       }))
     ],
+    // Set for ONNX Runtime (#22690, #39135), now gone; transcribe-cpp needs 11.0, Electron 12.0. Kept until
+    // Kelvin decides. The update-manifest gate reads this from Info.plist.
+    minimumSystemVersion: '13.4',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    ...(isMacRelease ? { sign: resolve(__dirname, 'scripts/sign-mac-app.mjs') } : {}),
+    ...(isMacRelease
+      ? { sign: resolve(__dirname, './scripts/desktop-distribution/macos/sign-mac-app.mjs') }
+      : {}),
     signIgnore: [
       ...bundledRipgrepMacSignIgnore,
       ...orcadTemplateMacSignIgnore,
@@ -602,7 +633,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
-      macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -667,7 +697,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
-      linuxSpeechNativeResource,
       {
         from: 'native/wayland-clipboard/.build/${arch}/orca-wayland-clipboard',
         to: 'bin/orca-wayland-clipboard'

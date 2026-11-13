@@ -8,6 +8,7 @@ import { FEATURE_TIP_IDS } from '../../../src/shared/feature-tips'
 const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',
   'browser',
+  'browser-extensions',
   'tasks',
   'automations',
   'workspace-creation'
@@ -45,7 +46,9 @@ export function getE2ECompletedOnboardingProfile() {
       browserImportHintHidden: true,
       // Suppress the usage-display toast in completed-user fixtures.
       usagePercentageDisplayChangeNoticeDismissed: true,
-      statusBarCompactChangeNoticeDismissed: true
+      statusBarCompactChangeNoticeDismissed: true,
+      // Shown once when a Codex terminal appears; it can land mid-test and close an open menu.
+      codexTerminalServerIsolationNoticeSeen: true
     }
   }
 }

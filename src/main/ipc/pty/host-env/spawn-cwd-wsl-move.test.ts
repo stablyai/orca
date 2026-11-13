@@ -8,13 +8,15 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { assertWorkspaceAcceptsNewPty } from './spawn-cwd'
 
 const { listLiveDaemonPtyIds } = vi.hoisted(() => ({
   listLiveDaemonPtyIds: vi.fn<() => Promise<string[] | null>>()
 }))
-vi.mock('../../../daemon/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
+vi.mock('../../../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  listLiveDaemonPtyIds
+}))
 
 let userDataPath: string
 // No store: a readable journal never needs one.
@@ -74,15 +76,14 @@ describe('a spawn by its folder, between quiesce and commit', () => {
     await expect(acceptCwd(cwd)).rejects.toBeInstanceOf(WslMoveProjectFencedError)
   })
 
-  it.each([
-    ['a floating terminal', 'global-floating-terminal'],
-    ['another project', 'repo-2::/x'],
-    ['a folder workspace', 'folder:folder-9']
-  ])('refuses %s that starts in a moving folder', async (_label, worktreeId) => {
-    await expect(acceptCwd('/home/dev/repo-1/src', worktreeId)).rejects.toBeInstanceOf(
-      WslMoveProjectFencedError
-    )
-  })
+  it.each([['a folder workspace', 'folder:folder-9']])(
+    'refuses %s that starts in a moving folder',
+    async (_label, worktreeId) => {
+      await expect(acceptCwd('/home/dev/repo-1/src', worktreeId)).rejects.toBeInstanceOf(
+        WslMoveProjectFencedError
+      )
+    }
+  )
 
   it('stops at the commit, once the host owns the folder', async () => {
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))

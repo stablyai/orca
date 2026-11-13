@@ -9,3 +9,14 @@ export function useOpenMobileAccounts(): (hostId: string) => void {
     [openHostStackRoute]
   )
 }
+
+/** Opens one host's Accounts from a screen that navigates through its own router, as the page does. */
+export function useOpenHostAccounts(
+  router: { push: (href: string) => void },
+  hostId: string
+): () => void {
+  return useCallback(
+    () => router.push(`/h/${encodeURIComponent(hostId)}/accounts`),
+    [router, hostId]
+  )
+}

@@ -2,6 +2,8 @@ import type { MountAdapter } from '../recording-scenario'
 import { hookMount } from '../hook-mount'
 import { projectObservable } from '../observable-model'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as HomeWorktreeFetch from '../../../worktree/home-host-worktree-fetch'
+import type * as HomeWorktreeInfo from '../../../worktree/home-worktree-info'
 
 const HOST = 'host-1'
 const REPO = 'repo-1'
@@ -11,31 +13,55 @@ export function worktreeCatalogMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'worktree.home-catalog': (context) => {
-      const fetchInfo = modules.load(
+      const { homeWorktreeCountsQuery } = modules.load<typeof HomeWorktreeFetch>(
         'mobile/src/worktree/home-host-worktree-fetch.ts'
-      ).fetchHomeHostWorktreeInfo
+      )
+      const { homeWorktreeInfo } = modules.load<typeof HomeWorktreeInfo>(
+        'mobile/src/worktree/home-worktree-info.ts'
+      )
+      type Counts = Parameters<typeof homeWorktreeInfo>[1]['data']
       let info: Record<string, unknown> = {}
+      let counts: Counts = undefined
       let disposed = false
+      // Home's card for one desktop, read on the connection it was asked on.
+      const publish = (failed: boolean) => {
+        const card = homeWorktreeInfo(
+          HOST,
+          { data: counts, dataUpdatedAt: Date.now(), failed },
+          () => true
+        )
+        info = card ? { [HOST]: card } : {}
+        const effect = () => context.effect('info', projectObservable(info))
+        if (context.captureObservation) {
+          context.captureObservation('catalog effect projection', effect)
+        } else {
+          effect()
+        }
+      }
       return {
         action(name) {
           if (name === 'unmount') {
             disposed = true
             return
           }
-          return fetchInfo(
-            context.client,
-            HOST,
-            (update: (value: Record<string, unknown>) => Record<string, unknown>) => {
-              info = update(info)
-              const publish = () => context.effect('info', projectObservable(info))
-              if (context.captureObservation) {
-                context.captureObservation('catalog effect projection', publish)
-              } else {
-                publish()
+          return homeWorktreeCountsQuery
+            .fetch(context.client, { exec: 'local' }, {}, counts, {
+              live: false,
+              previousFromStore: false
+            })
+            .then(
+              (next) => {
+                if (!disposed) {
+                  counts = next
+                  publish(false)
+                }
+              },
+              () => {
+                if (!disposed) {
+                  publish(true)
+                }
               }
-            },
-            () => disposed
-          )
+            )
         },
         state: () => projectObservable(info),
         dispose: () => {

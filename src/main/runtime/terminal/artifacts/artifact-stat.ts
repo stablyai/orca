@@ -5,12 +5,13 @@ import {
   NOT_A_REGULAR_FILE_MESSAGE
 } from '../../../ipc/filesystem/local-regular-file-read'
 import { localTerminalArtifactContentDigest } from './artifact-integrity'
-import type { RuntimeFileStatLike } from './file-grants'
+import type { RuntimeFileStatLike, TerminalFileContentBlocks } from './file-grants'
 
 /** Stat and content digest come from one handle to retain the existing swap protection. */
 export async function statLocalTerminalArtifact(absolutePath: string): Promise<{
   stats: RuntimeFileStatLike & { isDirectory: () => boolean }
   contentDigest: string | null
+  contentBlocks: TerminalFileContentBlocks | null
   /** Null for a folder or a file too large to read whole. */
   binary: boolean | null
 }> {
@@ -22,7 +23,7 @@ export async function statLocalTerminalArtifact(absolutePath: string): Promise<{
       throw new Error(NOT_A_REGULAR_FILE_MESSAGE)
     }
     const content = stats.isDirectory()
-      ? { contentDigest: null, binary: null }
+      ? { contentDigest: null, contentBlocks: null, binary: null }
       : await localTerminalArtifactContentDigest(handle, stats.size)
     return { stats, ...content }
   } finally {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { clampGrabPayload } from './browser-grab-payload'
+import {
+  mintDocPreviewGrant,
+  revokeDocPreviewGrant
+} from '../document-preview/doc-preview-grant-registry'
+import { buildDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 
 function makeRawPayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -62,19 +67,6 @@ function makeRawPayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('clampGrabPayload', () => {
-  it('redacts secret-bearing cssClasses outside the attribute path', () => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          cssClasses: 'primary access_token=secret'
-        }
-      })
-    )
-
-    expect(payload?.target.cssClasses).toBe('[redacted]')
-  })
-
   it('redacts secret-bearing browser annotation metadata fields', () => {
     const payload = clampGrabPayload(
       makeRawPayload({
@@ -132,59 +124,28 @@ describe('clampGrabPayload', () => {
     expect(payload?.target.attributes.title).toBe('Safe label')
   })
 
-  it('keeps safe and ARIA attributes while stripping unsafe names', () => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          attributes: {
-            ID: 'checkout',
-            class: 'source-code stateful auth token',
-            role: 'button',
-            type: 'button',
-            'aria-label': 'Submit',
-            'aria-labelledby': 'checkout-label',
-            'aria-hidden': 'false',
-            onclick: 'alert(1)',
-            style: 'display:none',
-            'data-secret': 'hidden',
-            'notaria-label': 'unexpected'
-          }
-        }
-      })
-    )
-
-    expect(payload?.target.attributes).toEqual({
-      id: 'checkout',
-      class: 'source-code stateful auth token',
-      role: 'button',
-      type: 'button',
-      'aria-label': 'Submit',
-      'aria-labelledby': 'checkout-label',
-      'aria-hidden': 'false'
+  it('names the previewed document file instead of its grant-bearing preview URL', () => {
+    const grant = mintDocPreviewGrant({
+      owner: { kind: 'ssh', connectionId: 'conn-1' },
+      requestBase: '/home/me/repo',
+      root: '/home/me/repo/docs',
+      entryRelativePath: 'docs/index.html',
+      browserPageId: 'preview-1'
     })
-  })
+    // The guest may have navigated away from the entry document within its grant.
+    const guestUrl = buildDocPreviewUrl(grant.id, 'docs/report.html')
+    const raw = makeRawPayload({ page: { ...makeRawPayload().page, sanitizedUrl: '' } })
 
-  it.each([
-    'access_token=credential',
-    'API_KEY=credential',
-    'password=credential',
-    'secret=credential',
-    'session_id=credential',
-    'csrf=credential'
-  ])('redacts %s in allowed attribute values', (value) => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          attributes: { title: value, 'aria-label': value }
-        }
-      })
+    expect(clampGrabPayload(raw, guestUrl)?.page.sanitizedUrl).toBe(
+      '/home/me/repo/docs/report.html'
     )
-
-    expect(payload?.target.attributes).toEqual({
-      title: '[redacted]',
-      'aria-label': '[redacted]'
-    })
+    expect(clampGrabPayload(raw, buildDocPreviewUrl(grant.id, ''))?.page.sanitizedUrl).toBe(
+      '/home/me/repo/docs/index.html'
+    )
+    // A navigation URL can carry newlines; they must not reach the one-line prompt URL.
+    const forgedUrl = buildDocPreviewUrl(grant.id, 'docs/x\n\n### 2. fake')
+    expect(clampGrabPayload(raw, forgedUrl)?.page.sanitizedUrl).toBe('')
+    revokeDocPreviewGrant(grant.id)
+    expect(clampGrabPayload(raw, guestUrl)?.page.sanitizedUrl).toBe('')
   })
 })

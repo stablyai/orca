@@ -1,11 +1,11 @@
 import { useCallback, useLayoutEffect } from 'react'
-import { useAppStore, type AppState } from '@/store/index'
-import {
-  recordPullRequestGenerationEdits,
-  type PullRequestFieldRevisions,
-  type PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+import { useAppStore } from '@/store/index'
+import { recordPullRequestGenerationEdits } from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationFields
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { PullRequestGenerationOutcome } from './create-pull-request-dialog-field-model'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../../source-control/ai/text-generation-defaults'
@@ -23,8 +23,7 @@ export function useGenerateBeforeCreatePullRequest({
   fieldsAreSeedPlaceholders,
   generatePullRequestFields,
   generationKey,
-  repo,
-  settings
+  repo
 }: {
   aiGenerationEnabled: boolean
   canCreate: boolean
@@ -39,7 +38,6 @@ export function useGenerateBeforeCreatePullRequest({
   ) => Promise<PullRequestGenerationOutcome | void>
   generationKey: string | null
   repo: Pick<Repo, 'sourceControlAi'> | null
-  settings: AppState['settings']
 }) {
   useLayoutEffect(() => {
     if (generationKey && fieldsInitialized) {
@@ -70,7 +68,7 @@ export function useGenerateBeforeCreatePullRequest({
         status === 'canceled' ||
         !hasConfiguredSourceControlTextGenerationDefaults({
           actionId: 'pullRequest',
-          settings,
+          settings: useAppStore.getState().settings,
           repo
         })
       ) {
@@ -94,8 +92,7 @@ export function useGenerateBeforeCreatePullRequest({
       fieldsAreSeedPlaceholders,
       generatePullRequestFields,
       generationKey,
-      repo,
-      settings
+      repo
     ]
   )
 

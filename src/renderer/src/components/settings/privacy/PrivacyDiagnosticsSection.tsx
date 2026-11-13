@@ -6,15 +6,17 @@ import type {
   DiagnosticsStatusPayload
 } from '../../../../../preload/api/telemetry-api'
 import { Label } from '../../ui/label'
-import { Separator } from '../../ui/separator'
 import {
   getDiagnosticBundleDescription,
   PrivacyDiagnosticBundleControls
 } from './PrivacyDiagnosticBundleControls'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { diagnosticsErrorText } from './diagnostics-bundle-error-copy'
+import { PRIVACY_SETTING_ANCHORS } from './privacy-search'
 
 export function PrivacyDiagnosticsSection(): React.JSX.Element {
+  const t = useTranslate()
   const [status, setStatus] = useState<DiagnosticsStatusPayload | null>(null)
   const [bundle, setBundle] = useState<DiagnosticsBundlePayload | null>(null)
   const [previewOpened, setPreviewOpened] = useState(false)
@@ -268,14 +270,13 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       {status?.disabledReason ? (
         <DiagnosticsDisabledStateNote reason={status.disabledReason} />
       ) : null}
-      <Separator />
       <PrivacyDiagnosticsRow
         icon={<FileText className="size-4" />}
-        title={translate(
+        title={t(
           'auto.components.settings.PrivacyDiagnosticsSection.af2fc82cde',
           'Send app diagnostics to support'
         )}
-        description={getDiagnosticBundleDescription({ bundle, previewOpened, ticketId })}
+        description={getDiagnosticBundleDescription({ bundle, previewOpened, ticketId }, t)}
       >
         <PrivacyDiagnosticBundleControls
           status={status}
@@ -306,28 +307,29 @@ function DiagnosticsDisabledStateNote({
 }: {
   reason: NonNullable<DiagnosticsStatusPayload['disabledReason']>
 }): React.JSX.Element {
+  const t = useTranslate()
   const message =
     reason === 'do_not_track'
-      ? translate(
+      ? t(
           'auto.components.settings.PrivacyDiagnosticsRows.5a7cbe069a',
           'DO_NOT_TRACK=1 is set — creating and sending diagnostic files is disabled.'
         )
       : reason === 'orca_telemetry_disabled'
-        ? translate(
+        ? t(
             'auto.components.settings.PrivacyDiagnosticsRows.63d03261d1',
             'ORCA_TELEMETRY_DISABLED=1 is set — creating and sending diagnostic files is disabled.'
           )
         : reason === 'orca_diagnostics_disabled'
-          ? translate(
+          ? t(
               'auto.components.settings.PrivacyDiagnosticsRows.d37e92a06b',
               'ORCA_DIAGNOSTICS_DISABLED=1 is set — app diagnostics are off.'
             )
           : reason === 'ci'
-            ? translate(
+            ? t(
                 'auto.components.settings.PrivacyDiagnosticsRows.5ebb31e1fb',
                 'Running in CI — diagnostics are off.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.PrivacyDiagnosticsRows.e27c8d45bf',
                 'Diagnostics are disabled by an environment variable.'
               )
@@ -351,7 +353,11 @@ function PrivacyDiagnosticsRow({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div
+      id={PRIVACY_SETTING_ANCHORS.diagnostics}
+      data-settings-row=""
+      className="flex items-center justify-between gap-4 py-2"
+    >
       <div className="flex min-w-0 flex-1 items-start gap-2.5">
         <div className="mt-0.5 text-muted-foreground">{icon}</div>
         <div className="min-w-0 space-y-0.5">

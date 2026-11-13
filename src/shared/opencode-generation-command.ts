@@ -1,6 +1,58 @@
 import { findOptionOccurrence } from './command-option-occurrence'
 import type { CommitMessagePlan } from './source-control/ai/generation/commit-message-plan'
 
+export function isDirectOpenCodeGenerationCommand(binary: string, prefixArgs: string[]): boolean {
+  return /(?:^|[\\/])opencode2?(?:\.(?:cmd|exe))?$/i.test(binary) && !prefixArgs.includes('--')
+}
+
+/** Only these launchers expose an unambiguous executable operand. */
+export function openCodeGenerationLauncherBoundary(
+  binary: string,
+  prefixArgs: string[]
+): number | null {
+  if (!/(?:^|[\\/])(?:npx|bunx)(?:\.(?:cmd|exe))?$/i.test(binary)) {
+    return null
+  }
+  const flags = new Set([
+    '-y',
+    '--yes',
+    '--no',
+    '--no-install',
+    '--ignore-existing',
+    '--offline',
+    '-q',
+    '--quiet'
+  ])
+  for (let index = 0; index < prefixArgs.length; index++) {
+    const token = prefixArgs[index]
+    if (token === '--') {
+      return /(?:^|[\\/])npx(?:\.(?:cmd|exe))?$/i.test(binary) &&
+        prefixArgs[index + 1] !== undefined &&
+        isDirectOpenCodeGenerationCommand(prefixArgs[index + 1], [])
+        ? index + 2
+        : null
+    }
+    if (isDirectOpenCodeGenerationCommand(token, [])) {
+      return index + 1
+    }
+    if (flags.has(token)) {
+      continue
+    }
+    if (token === '-p' || token === '--package') {
+      if (prefixArgs[index + 1] === undefined) {
+        return null
+      }
+      index++
+      continue
+    }
+    if (token.startsWith('--package=')) {
+      continue
+    }
+    return null
+  }
+  return null
+}
+
 export function mergeOpenCodeGenerationArgs(
   agentId: string,
   binary: string,
@@ -9,9 +61,8 @@ export function mergeOpenCodeGenerationArgs(
 ): string[] {
   if (
     (agentId === 'opencode' || agentId === 'opencode2') &&
-    /(?:^|[\\/])opencode2?(?:\.(?:cmd|exe))?$/i.test(binary) &&
-    args[0] === 'run' &&
-    !prefixArgs.includes('--')
+    isDirectOpenCodeGenerationCommand(binary, prefixArgs) &&
+    args[0] === 'run'
   ) {
     return ['run', ...prefixArgs, ...args.slice(1)]
   }

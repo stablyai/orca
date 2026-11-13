@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { terminalCopyTrimsGutterRead } from '../transport/settings-read-operations'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import { terminalCopyTrimsGutterRead } from './terminal-copy-settings-operations'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 // Mirror desktop copy-gutter policy once per connection; mobile has no settings stream and defaults trimming on.
 export function useTerminalCopyTrimsGutter(

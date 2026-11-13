@@ -1,4 +1,8 @@
 import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
+import {
   hasTranscriptConsumers,
   transcriptConsumers,
   type TranscriptMessage,
@@ -64,6 +68,16 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
       } catch {
         this.readers.splice(index, 1)
       }
+    }
+  }
+
+  async drain(): Promise<void> {
+    throwIfAiVaultScanCancelled(this.start?.signal)
+    if (this.start?.indexing) {
+      await waitForAiVaultScan(
+        Promise.all(this.readers.flatMap((reader) => (reader.drain ? [reader.drain()] : []))),
+        this.start.signal
+      )
     }
   }
 

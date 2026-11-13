@@ -1,6 +1,6 @@
 import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
-import type { AgentGenerationFailureOutput } from './agent-failure-output'
+import type { AgentGenerationFailureOutput } from './failures/agent-failure-output'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
@@ -50,6 +50,7 @@ export type TextGenerationOperation =
   | 'branch-name'
   | 'jira-issue-summary'
   | 'conversation-name'
+  | 'dictation-cleanup'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
@@ -128,4 +129,5 @@ export type LocalSourceControlPlanInput = {
   operation: TextGenerationOperation
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent
+  timeoutMs?: number
 }

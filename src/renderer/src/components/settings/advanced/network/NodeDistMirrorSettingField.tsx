@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { normalizeNodeDistMirrorUrl } from '../../../../../../shared/node-dist-mirror'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { nodeDistMirrorRefusalText } from '@/ssh/ssh-host-node-download-copy'
 
 type MirrorDraft = { source: string; text: string; error: string | null }
@@ -18,6 +18,7 @@ export function NodeDistMirrorSettingField({
   value,
   onCommit
 }: NodeDistMirrorSettingFieldProps): React.JSX.Element {
+  const t = useTranslate()
   const source = value ?? ''
   const [draft, setDraft] = useState<MirrorDraft>({ source, text: source, error: null })
   // Store reconciliation so returning source values cannot revive an obsolete draft.
@@ -42,7 +43,7 @@ export function NodeDistMirrorSettingField({
   return (
     <div className="space-y-2">
       <Label htmlFor="settings-node-dist-mirror-url">
-        {translate(
+        {t(
           'auto.components.settings.AdvancedNetworkSettingsSection.nodeDistMirrorLabel',
           'Node.js Download Mirror'
         )}
@@ -57,7 +58,7 @@ export function NodeDistMirrorSettingField({
             e.currentTarget.blur()
           }
         }}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.AdvancedNetworkSettingsSection.nodeDistMirrorPlaceholder',
           'https://mirror.example.com/nodejs/dist'
         )}
@@ -72,7 +73,7 @@ export function NodeDistMirrorSettingField({
         <p className="text-xs text-destructive">{current.error}</p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.AdvancedNetworkSettingsSection.nodeDistMirrorDescription',
             'Optional. A copy of nodejs.org/dist that Orca uses first when it installs Node on SSH and WSL servers. Each file is still checked against the release Orca expects.'
           )}

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   type ExecutionHostScope,
   toRuntimeExecutionHostId

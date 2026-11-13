@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
-import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getWorkspaceFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
+import { getRouteForLocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import {
   getExplorerDisplayRootOptions,
   resolveExplorerDisplayRootChoice,
@@ -15,7 +16,7 @@ import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
 import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
@@ -39,13 +40,14 @@ import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisi
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
-import { useWslHostUnavailableReason } from '../../../terminal-pane/use-wsl-host-unavailable-reason'
-import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
-import { translate } from '@/i18n/i18n'
+import { useWslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
+import { useWslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
@@ -55,7 +57,7 @@ function FileExplorerFiles(): React.JSX.Element {
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const wslHostUnavailable = useWslHostUnavailableReason(activeWorktreeId)
-  const stoppedWslHost = useStoppedWslHost(activeWorktreeId)
+  const stoppedWslHost = useWslHostReadOutage(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   // Why: a folder workspace has no repo row, so only the catalog owner names its SSH host.
@@ -65,7 +67,9 @@ function FileExplorerFiles(): React.JSX.Element {
       runtimeEnvironmentId
     })
   )
-  const expandedDirs = useAppStore((s) => s.expandedDirs)
+  const activeExpandedDirs = useAppStore((s) =>
+    activeWorktreeId ? s.expandedDirs[activeWorktreeId] : undefined
+  )
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -93,11 +97,7 @@ function FileExplorerFiles(): React.JSX.Element {
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
-  const expanded = useMemo(
-    () =>
-      activeWorktreeId ? (expandedDirs[activeWorktreeId] ?? new Set<string>()) : new Set<string>(),
-    [activeWorktreeId, expandedDirs]
-  )
+  const expanded = useMemo(() => activeExpandedDirs ?? new Set<string>(), [activeExpandedDirs])
 
   const effectiveExpanded = useMemo(
     () =>
@@ -229,11 +229,8 @@ function FileExplorerFiles(): React.JSX.Element {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
         {explorerView === 'search'
-          ? translate(
-              'auto.components.right.sidebar.Search.98c8435e36',
-              'Select a workspace to search'
-            )
-          : translate(
+          ? t('auto.components.right.sidebar.Search.98c8435e36', 'Select a workspace to search')
+          : t(
               'auto.components.right.sidebar.FileExplorer.79b1537dd3',
               'Select a workspace to browse files'
             )}
@@ -343,7 +340,7 @@ function FileExplorerFiles(): React.JSX.Element {
               <SearchResultsPane {...searchPanel.resultsProps} />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.right.sidebar.Search.98c8435e36',
                   'Select a workspace to search'
                 )}

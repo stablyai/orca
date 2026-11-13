@@ -1,3 +1,4 @@
+import { StructuredAgentSessionCreateUnknownOutcomeError } from './structured-agent-session-launch-errors'
 import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
@@ -8,20 +9,20 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agen
 import {
   type StructuredLaunchState,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import {
   prepareStructuredLaunchPromptForCreate,
   hasStagedStructuredLaunchPrompt,
   issueStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
-} from './structured-agent-session-launch-prompt'
+} from './structured-agent-session-staged-prompt'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
 } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,
@@ -47,18 +48,24 @@ export function prepareStructuredLaunchCreateMessage(
   }
   // Options without a model overlay the host's remembered model selection.
   const optionsMode: StructuredAgentSessionCreateParams['optionsMode'] =
-    hostTakesExplicitOptions && state.selection.explicit?.model !== undefined
+    !intent.params.forkFrom &&
+    hostTakesExplicitOptions &&
+    state.selection.explicit?.model !== undefined
       ? 'replace-model-selection'
       : undefined
   if (intent.createMessageSupport !== true) {
     prepareLegacyStructuredLaunchPrompts(intent.sessionId)
     intent.createPrepared = true
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(intent.sessionId)
     return
   }
   const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
-  const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
-  if (hadPrompt || firstMessage) {
+  const { firstMessage, deferred } = prepareStructuredLaunchPromptForCreate(
+    intent.sessionId,
+    intent.target,
+    intent.sendSkillsSupport === true
+  )
+  if (!deferred && (hadPrompt || firstMessage)) {
     const beforeCreate = intent.beforeCreate
     intent.beforeCreate = () =>
       beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
@@ -87,7 +94,7 @@ export function prepareStructuredLaunchCreateMessage(
     }
   }
   intent.createPrepared = true
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(intent.sessionId)
 }
 
 /** Hosts before options-mode may refuse an action's mode (older permission tables): the chat takes
@@ -109,6 +116,10 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
   selection?: Readonly<Record<string, string>>
 } {
   const { intent } = state
+  // A fork's options are its source's, which the host copies.
+  if (intent.params.forkFrom) {
+    return {}
+  }
   const overlay = structuredLaunchOptionOverlay(state)
   const requested = structuredLaunchRequestedOptions({ ...state.selection, held: overlay })
   const firstFrame = firstFrameOptionState(intent.agent, intent.target, {
@@ -183,4 +194,31 @@ export function publishStructuredLaunchCreateOptions(
     console.warn('[native-chat] applying a launch option failed', error)
   })
   return receipt
+}
+
+/** Every sender waits on the launch promise, so picks held during launch reach the host first. */
+export function publishWithHeldOptions(
+  state: StructuredLaunchState,
+  created: Promise<StructuredAgentLaunchReceipt>
+): Promise<StructuredAgentLaunchReceipt> {
+  state.intent.prepareCreate = (hostTakesExplicitOptions) =>
+    prepareStructuredLaunchCreateMessage(state, hostTakesExplicitOptions)
+  const publishing: Promise<StructuredAgentLaunchReceipt> = created
+    .then((receipt) =>
+      state.promise === publishing
+        ? publishStructuredLaunchCreateOptions(state, receipt)
+        : state.intent.params.firstMessage
+          ? receipt
+          : state.promise
+    )
+    .catch((error: unknown) => {
+      if (state.promise !== publishing && state.intent.params.firstMessage) {
+        throw new StructuredAgentSessionCreateUnknownOutcomeError(
+          'Opening message outcome belongs to the current attempt.',
+          'agent_session_operation_unknown'
+        )
+      }
+      throw error
+    })
+  return publishing
 }

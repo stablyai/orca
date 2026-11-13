@@ -1,8 +1,8 @@
-import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestPreparation,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
 
@@ -10,16 +10,12 @@ import {
   type KnownRuntimeEnvironment,
   getPreferredPairedRuntimeConnection
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import {
-  markEnvironmentUsed,
-  resolveEnvironment
-} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime/remote-runtime-client'
+import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import {
   isRuntimeEnvironmentCapabilityOutcomeCurrent,
@@ -92,6 +88,7 @@ export function executeSupportRoutedCall(args: {
   expectedRuntimeId?: string
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
+  prepareRequest?: RuntimeRequestPreparation
 }): Promise<RuntimeRpcResponse<unknown>> {
   return routeRuntimeEnvironmentCallBySupport({
     userDataPath: args.userDataPath,
@@ -111,7 +108,8 @@ export function executeSupportRoutedCall(args: {
             args.params,
             args.timeoutMs,
             args.envelope,
-            args.signal
+            args.signal,
+            args.prepareRequest
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined
@@ -123,11 +121,12 @@ export function executeSupportRoutedCall(args: {
             args.timeoutMs,
             args.envelope,
             args.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            args.prepareRequest
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
-        markEnvironmentUsed(args.userDataPath, environmentId, {
+        recordRuntimeEnvironmentUsage(args.userDataPath, environmentId, {
           runtimeId: response._meta.runtimeId
         })
       }
@@ -144,7 +143,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
   callbacks: SubscriptionCallbacks
   isCurrent: () => boolean
   signal?: AbortSignal
-}): Promise<RemoteRuntimeSubscription> {
+}): Promise<RemoteRuntimeTransportSubscription> {
   let markedUsed = false
   let supportOutcome: SupportRoute['outcome'] | null = null
   const callbacks = subscriptionCallbacks(args, () => {
@@ -178,7 +177,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     },
     unsupported: (route) => {
       supportOutcome = route.outcome
-      return subscribeRemoteRuntimeRequest(
+      return subscribeRemoteRuntimeTransport(
         route.connection,
         args.method,
         args.params,
@@ -300,14 +299,4 @@ function subscriptionCallbacks(
       args.callbacks.onClose()
     }
   }
-}
-
-export function shouldUseSharedControlEnvelope(
-  method: string,
-  params: unknown,
-  envelope: RuntimeOrchestrationEnvelope | undefined
-): RuntimeOrchestrationEnvelope | undefined {
-  return envelope && method.startsWith('orchestration.') && !isOrchestrationMutation(method, params)
-    ? envelope
-    : undefined
 }

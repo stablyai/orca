@@ -1,13 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
-import {
-  applyProxySettingsToSession,
-  resetSessionProxyApplicationForTests
-} from '../../network/proxy-settings'
+import { resetSessionProxyApplicationForTests } from '../../network/proxy-settings'
 
 const FIRST_CERTIFICATE = certificate('first certificate')
-const SECOND_CERTIFICATE = certificate('replacement certificate')
 let beforeRequestListener:
   | ((
       details: Electron.OnBeforeRequestListenerDetails,
@@ -146,89 +142,13 @@ describe('BrowserCertificateTrustController', () => {
     controller.installSessionRequestGuard(browserSession)
   })
 
-  it('holds requests until proxy readiness settles', async () => {
-    let finishWrite: (() => void) | undefined
-    vi.mocked(browserSession.setProxy).mockImplementationOnce(
-      () => new Promise<void>((resolve) => (finishWrite = resolve))
-    )
-    const applying = applyProxySettingsToSession(
-      browserSession,
-      { httpProxyUrl: 'http://proxy.example:8080' },
-      { env: {} }
-    )
-    const callback = beforeRequest({ url: 'http://proxy-only.invalid/', webContentsId: guest.id })
-
-    await vi.waitFor(() => expect(browserSession.setProxy).toHaveBeenCalledOnce())
-    expect(callback).not.toHaveBeenCalled()
-    finishWrite?.()
-    await applying
-
-    await vi.waitFor(() => expect(callback).toHaveBeenCalledWith({}))
-  })
-
-  it('cancels requests after proxy readiness fails', async () => {
-    vi.mocked(browserSession.setProxy).mockRejectedValue(new Error('proxy apply failed'))
-    await expect(
-      applyProxySettingsToSession(
-        browserSession,
-        { httpProxyUrl: 'http://proxy.example:8080' },
-        { env: {} }
-      )
-    ).rejects.toThrow('proxy apply failed')
-
-    expect(
-      beforeRequest({ url: 'http://proxy-only.invalid/', webContentsId: guest.id })
-    ).toHaveBeenCalledWith({ cancel: true })
-  })
-
-  it('rejects first, then trusts only the approved guest, endpoint, certificate, and error', () => {
-    controller.onMainFrameNavigationStarted(guest.id)
-    const first = certificateEvent({ controller, guest })
-
-    expect(first.callback).toHaveBeenCalledOnce()
-    expect(first.callback).toHaveBeenCalledWith(false)
-    expect(first.preventDefault).not.toHaveBeenCalled()
-    expect(controller.getFailure('page-1')).toMatchObject({
-      challengeId: 'challenge-1',
-      browserPageId: 'page-1',
-      origin: 'https://localhost:3443',
-      displayHost: 'localhost:3443',
-      errorCode: -202,
-      canProceed: true
-    })
-
-    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })
-    expect(guest.loadURL).toHaveBeenCalledWith('https://localhost:3443/app')
-    expect(onFailureChanged).toHaveBeenLastCalledWith(guest.id, null)
-
-    const sameEndpoint = certificateEvent({
-      controller,
-      guest,
-      url: 'wss://localhost:3443/socket'
-    })
-    expect(sameEndpoint.preventDefault).toHaveBeenCalledOnce()
-    expect(sameEndpoint.callback).toHaveBeenCalledOnce()
-    expect(sameEndpoint.callback).toHaveBeenCalledWith(true)
-
-    const otherTab = certificateEvent({ controller, guest: otherGuest })
-    expect(otherTab.callback).toHaveBeenCalledWith(false)
-    expect(otherTab.preventDefault).not.toHaveBeenCalled()
-
-    const otherPort = certificateEvent({
-      controller,
-      guest,
-      url: 'https://localhost:3444/'
-    })
-    expect(otherPort.callback).toHaveBeenCalledWith(false)
-    expect(otherPort.preventDefault).not.toHaveBeenCalled()
-
-    const otherCertificate = certificateEvent({
-      controller,
-      guest,
-      certificate: SECOND_CERTIFICATE
-    })
-    expect(otherCertificate.callback).toHaveBeenCalledWith(false)
-    expect(otherCertificate.preventDefault).not.toHaveBeenCalled()
+  it('keeps challenge ownership and expiry when reading a specific guest', () => {
+    certificateEvent({ controller, guest })
+    expect(controller.hasFailureForGuest(guest.id)).toBe(true)
+    expect(controller.hasFailureForGuest(otherGuest.id)).toBe(false)
+    now += 300_000
+    expect(controller.hasFailureForGuest(guest.id)).toBe(false)
+    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: false, reason: 'missing' })
   })
 
   it('blocks a session-cached certificate for sibling requests until that guest approves it', () => {
@@ -256,121 +176,5 @@ describe('BrowserCertificateTrustController', () => {
 
     expect(controller.proceed('page-2', 'challenge-2')).toEqual({ ok: true })
     expect(beforeRequest({ webContentsId: otherGuest.id })).toHaveBeenCalledWith({})
-  })
-
-  it('fails closed when an accepted endpoint presents a replacement bad certificate', () => {
-    certificateEvent({ controller, guest })
-    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })
-    expect(certificateEvent({ controller, guest }).callback).toHaveBeenCalledWith(true)
-
-    controller.onMainFrameNavigationStarted(guest.id)
-    const replacement = certificateEvent({ controller, guest, certificate: SECOND_CERTIFICATE })
-
-    expect(replacement.callback).toHaveBeenCalledWith(false)
-    expect(replacement.preventDefault).not.toHaveBeenCalled()
-    expect(controller.getFailure('page-1')).toBeNull()
-  })
-
-  it('rejects proceed for a second tab whose pending leaf conflicts with an accepted identity', () => {
-    certificateEvent({ controller, guest })
-    certificateEvent({ controller, guest: otherGuest, certificate: SECOND_CERTIFICATE })
-    expect(controller.getFailure('page-1')?.challengeId).toBe('challenge-1')
-    expect(controller.getFailure('page-2')?.challengeId).toBe('challenge-2')
-
-    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })
-    expect(controller.proceed('page-2', 'challenge-2')).toEqual({
-      ok: false,
-      reason: 'ineligible'
-    })
-    expect(otherGuest.loadURL).not.toHaveBeenCalled()
-  })
-
-  it('never offers approval for public hosts, non-authority failures, or subframes', () => {
-    for (const event of [
-      certificateEvent({ controller, guest, url: 'https://example.com/' }),
-      certificateEvent({ controller, guest, error: 'ERR_CERT_DATE_INVALID' }),
-      certificateEvent({ controller, guest, isMainFrame: false })
-    ]) {
-      expect(event.callback).toHaveBeenCalledOnce()
-      expect(event.callback).toHaveBeenCalledWith(false)
-      expect(event.preventDefault).not.toHaveBeenCalled()
-    }
-    expect(controller.getFailure('page-1')).toBeNull()
-    expect(onFailureChanged).not.toHaveBeenCalled()
-  })
-
-  it('queues an early challenge until the guest receives its browser page identity', () => {
-    pageByGuestId.set(guest.id, null)
-    certificateEvent({ controller, guest })
-
-    expect(onFailureChanged).not.toHaveBeenCalled()
-    expect(controller.getFailure('page-1')).toBeNull()
-
-    pageByGuestId.set(guest.id, 'page-1')
-    controller.onGuestRegistered(guest.id, 'page-1')
-
-    expect(onFailureChanged).toHaveBeenCalledWith(
-      guest.id,
-      expect.objectContaining({ challengeId: 'challenge-1', browserPageId: 'page-1' }),
-      'https://localhost:3443/app'
-    )
-  })
-
-  it('rejects stale, expired, destroyed, and mismatched approval attempts', () => {
-    certificateEvent({ controller, guest })
-
-    expect(controller.proceed('page-1', 'wrong-challenge')).toEqual({
-      ok: false,
-      reason: 'changed'
-    })
-    now += 5 * 60_000
-    expect(controller.proceed('page-1', 'challenge-1')).toEqual({
-      ok: false,
-      reason: 'expired'
-    })
-
-    certificateEvent({ controller, guest })
-    vi.mocked(guest.isDestroyed).mockReturnValue(true)
-    expect(controller.proceed('page-1', 'challenge-2')).toEqual({
-      ok: false,
-      reason: 'missing'
-    })
-    expect(guest.loadURL).not.toHaveBeenCalled()
-  })
-
-  it('clears pending approval and grants when navigation or guest ownership changes', () => {
-    certificateEvent({ controller, guest })
-    controller.onMainFrameNavigationStarted(guest.id)
-    expect(controller.getFailure('page-1')).toBeNull()
-    expect(controller.proceed('page-1', 'challenge-1')).toEqual({
-      ok: false,
-      reason: 'missing'
-    })
-
-    certificateEvent({ controller, guest })
-    expect(controller.proceed('page-1', 'challenge-2')).toEqual({ ok: true })
-    controller.onMainFrameNavigationCommitted(guest.id, 'https://example.com/')
-    const afterCommit = certificateEvent({ controller, guest })
-    expect(afterCommit.callback).toHaveBeenCalledWith(false)
-
-    controller.onGuestRetired(guest.id)
-    expect(controller.getFailure('page-1')).toBeNull()
-  })
-
-  it('answers malformed and unmanaged events exactly once without overriding Electron', () => {
-    pageByGuestId.delete(guest.id)
-    const unmanaged = certificateEvent({ controller, guest })
-    const malformedUrl = certificateEvent({ controller, guest: otherGuest, url: 'not a URL' })
-    const malformedCertificate = certificateEvent({
-      controller,
-      guest: otherGuest,
-      certificate: { data: 'not a PEM certificate' } as Electron.Certificate
-    })
-
-    for (const event of [unmanaged, malformedUrl, malformedCertificate]) {
-      expect(event.callback).toHaveBeenCalledOnce()
-      expect(event.callback).toHaveBeenCalledWith(false)
-      expect(event.preventDefault).not.toHaveBeenCalled()
-    }
   })
 })

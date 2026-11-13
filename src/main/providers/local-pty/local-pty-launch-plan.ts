@@ -2,7 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
-import { resolveUnixPaneShellPath } from '../../daemon/shell-ready'
+import { resolveUnixPaneShellPath } from '../../daemon/shell-readiness/shell-ready'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {
@@ -17,11 +17,11 @@ import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
   type WindowsPowerShellShellFamily
-} from '../windows-powershell'
-import { buildWindowsPowerShellSpawnAttempts } from '../windows-shell-fallback-chain'
-import { resolveWindowsShellLaunchArgs } from '../windows-shell-args'
-import { assertSafeAgentStartupCwd } from '../pty-default-cwd'
-import type { PtySpawnOptions } from '../pty-provider-contract'
+} from '../shell-launch/windows/powershell'
+import { buildWindowsPowerShellSpawnAttempts } from '../shell-launch/windows/shell-fallback-chain'
+import { resolveWindowsShellLaunchArgs } from '../shell-launch/windows/shell-args'
+import { assertSafeAgentStartupCwd } from '../working-directory/default-cwd'
+import type { PtySpawnOptions } from '../pty/provider-contract'
 
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
 type LocalPtyLaunchSeed = {

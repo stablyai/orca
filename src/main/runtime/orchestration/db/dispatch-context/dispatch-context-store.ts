@@ -1,16 +1,21 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
-import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import {
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../coordinator/dispatch/task-dispatch-refusal'
+import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
+import { retireRemotePlacement } from '../remote-owned/remote-placement-hold'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -94,6 +99,8 @@ export function createDispatchContext(
       from: 'ready',
       to: 'dispatched'
     })
+    // The Task runs here now; an earlier attempt on a paired server no longer speaks for it.
+    retireRemotePlacement(this, taskId)
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow
@@ -120,9 +127,10 @@ export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
-    | DispatchContextRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  return this.db
+    .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+    .get(dispatchId) as DispatchContextRow | undefined
 }
 
 export function commitDispatchLaunchTokenHash(

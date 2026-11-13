@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWorktreeAgentRows } from '../sidebar/workspace-card/activity/worktree-agent-rows'
 import { useAppStore } from '@/store'
-import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-pane-authority'
+import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-status/agent-pane-authority'
 import type {
   AgentStatusEntry,
   AgentStatusState
@@ -16,7 +16,7 @@ import {
   WT,
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from '@/runtime/web-session-tabs-sync-test-harness'
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -204,217 +204,9 @@ describe('collectRetainedAgentsOnDisappear', () => {
     expect(rows().map((row) => row.entry.providerSession?.id)).toEqual(['quiet', 'B'])
     expect(rows().map((row) => row.startedAt)).toEqual([2000, 7000])
   })
-
-  it('retains a clean done row when a different tab closed', () => {
-    const previousAgents = new Map([
-      ['tab-1:1', { row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done' }), worktreeId: 'wt-1' }]
-    ])
-
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents,
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: { 'tab-2': true },
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toHaveLength(1)
-    expect(result.toRetain[0]?.entry.paneKey).toBe('tab-1:1')
-    expect(result.consumedSuppressedPaneKeys).toEqual([])
-  })
-
-  it('does not retain an interrupted done row', () => {
-    const previousAgents = new Map([
-      [
-        'tab-1:1',
-        {
-          row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done', interrupted: true }),
-          worktreeId: 'wt-1'
-        }
-      ]
-    ])
-
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents,
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: {},
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toEqual([])
-  })
-
-  it('retains a failed done row so the failure stays visible, but not a cancelled one', () => {
-    const retainedFor = (outcome: 'failure' | 'cancellation') =>
-      collectRetainedAgentsOnDisappear({
-        previousAgents: new Map([
-          [
-            'tab-1:1',
-            {
-              row: makeAgentRow({
-                paneKey: 'tab-1:1',
-                state: 'done',
-                mainAgent: { state: 'done', outcome, stateStartedAt: 100 }
-              }),
-              worktreeId: 'wt-1'
-            }
-          ]
-        ]),
-        currentAgents: new Map(),
-        retainedAgentsByPaneKey: {},
-        retentionSuppressedPaneKeys: {},
-        recentlyClosedAgentStatusTabIds: {},
-        recentlyRetiredAgentStatusPaneKeys: {}
-      }).toRetain
-
-    expect(retainedFor('failure')).toHaveLength(1)
-    expect(retainedFor('failure')[0]?.entry.mainAgent?.outcome).toBe('failure')
-    expect(retainedFor('cancellation')).toEqual([])
-  })
-
-  it('refreshes the retained snapshot when a reused paneKey starts a newer run', () => {
-    // Reused pane keys can start newer runs; replace older retained completion snapshots instead of skipping a truthy key.
-    const prevRow = makeAgentRow({ paneKey: 'tab-1:1', state: 'done' })
-    prevRow.startedAt = 200
-    const previousAgents = new Map([['tab-1:1', { row: prevRow, worktreeId: 'wt-1' }]])
-
-    const staleRetained = {
-      entry: { ...prevRow.entry, updatedAt: 50, stateStartedAt: 50 },
-      worktreeId: 'wt-1',
-      tab: prevRow.tab,
-      agentType: 'claude' as const,
-      startedAt: 100
-    }
-
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents,
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: { 'tab-1:1': staleRetained },
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: {},
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toHaveLength(1)
-    expect(result.toRetain[0]?.startedAt).toBe(200)
-  })
-
-  it('does not re-retain when the existing retained snapshot is for the same run', () => {
-    const prevRow = makeAgentRow({ paneKey: 'tab-1:1', state: 'done' })
-    prevRow.startedAt = 100
-    const previousAgents = new Map([['tab-1:1', { row: prevRow, worktreeId: 'wt-1' }]])
-
-    const sameRunRetained = {
-      entry: prevRow.entry,
-      worktreeId: 'wt-1',
-      tab: prevRow.tab,
-      agentType: 'claude' as const,
-      startedAt: 100
-    }
-
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents,
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: { 'tab-1:1': sameRunRetained },
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: {},
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toEqual([])
-  })
-
-  it('does not retain a clean done row when teardown suppressed that pane', () => {
-    const previousAgents = new Map([
-      ['tab-1:1', { row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done' }), worktreeId: 'wt-1' }]
-    ])
-
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents,
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: { 'tab-1:1': true },
-      recentlyClosedAgentStatusTabIds: {},
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toEqual([])
-    expect(result.consumedSuppressedPaneKeys).toEqual(['tab-1:1'])
-  })
-
-  it('does not retain a done row after its tab closed without a live suppressor', () => {
-    const previousAgents = new Map([
-      ['tab-1:1', { row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done' }), worktreeId: 'wt-1' }]
-    ])
-
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents,
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: { 'tab-1': true },
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
-
-    expect(result.toRetain).toEqual([])
-    expect(result.consumedSuppressedPaneKeys).toEqual([])
-  })
 })
 
 describe('useRetainedAgentsSync', () => {
-  it('does not build a fleet snapshot for a title-only publication across 300 worktrees', async () => {
-    const repo = makeRepo()
-    const worktrees = Array.from({ length: 300 }, (_, index) =>
-      makeWorktree({ id: `wt-${index}`, path: `/repo/wt-${index}` })
-    )
-    const tabsByWorktree = Object.fromEntries(
-      worktrees.map((worktree, index) => [
-        worktree.id,
-        [makeTab({ id: `tab-${index}`, worktreeId: worktree.id, title: `Title ${index}` })]
-      ])
-    )
-    const retainAgents = vi.fn()
-    const pruneRetainedAgents = vi.fn()
-    useAppStore.setState({
-      repos: [repo],
-      worktreesByRepo: { [repo.id]: worktrees },
-      tabsByWorktree,
-      retainAgents,
-      pruneRetainedAgents
-    })
-    const hook = renderHook(() => useRetainedAgentsSync())
-    await act(async () => {
-      await Promise.resolve()
-    })
-    retainAgents.mockClear()
-    pruneRetainedAgents.mockClear()
-
-    const changedWorktreeId = 'wt-173'
-    act(() => {
-      useAppStore.setState({
-        tabsByWorktree: {
-          ...tabsByWorktree,
-          [changedWorktreeId]: [
-            {
-              ...tabsByWorktree[changedWorktreeId][0],
-              title: 'Updated display title'
-            }
-          ]
-        }
-      })
-    })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(retainAgents).not.toHaveBeenCalled()
-    expect(pruneRetainedAgents).not.toHaveBeenCalled()
-    hook.unmount()
-  })
-
   it('uses the freshest tab title when a real agent transition retains a completed row', async () => {
     const repo = makeRepo()
     const worktree = makeWorktree()

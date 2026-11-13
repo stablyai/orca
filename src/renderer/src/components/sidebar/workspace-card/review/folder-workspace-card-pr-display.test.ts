@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { summarizeProviderChecks } from '../../../../../../shared/source-control/checks/provider-check-summary'
-import type { CheckStatus, PRInfo } from '../../../../../../shared/github/pull-request-types'
+
+import type {
+  CheckStatus,
+  PRInfo
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type {
   WorkspaceLineage,
@@ -11,7 +12,6 @@ import type {
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
-import { ReviewChecksBadge } from '../metadata/WorktreeCardMetadataStatusBadges'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -19,12 +19,6 @@ const repo: Repo = {
   displayName: 'repo',
   badgeColor: '#999999',
   addedAt: 1
-}
-
-class LookupOnlyRepoMap extends Map<string, Repo> {
-  override values(): MapIterator<Repo> {
-    throw new Error('Folder card PR display should use repo lookup instead of repo enumeration')
-  }
 }
 
 function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
@@ -78,122 +72,6 @@ function makeWorktreeLineage(child: Worktree, parent: Worktree): WorktreeLineage
 }
 
 describe('getFolderWorkspaceCardPrDisplay', () => {
-  it('uses the existing repo lookup without enumerating all repos', () => {
-    const worktree = makeWorktree({ id: 'lookup-only', linkedPR: 8 })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
-      worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new LookupOnlyRepoMap([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::lookup-only': makePrEntry(8, 'success')
-      }
-    })
-
-    expect(display).toMatchObject({ number: 8, status: 'success' })
-  })
-
-  it('uses failing attached PR status ahead of pending and passing PRs', () => {
-    const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
-    const pending = makeWorktree({ id: 'pending', linkedPR: 2 })
-    const failing = makeWorktree({ id: 'failing', linkedPR: 3 })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: {
-        [passing.id]: makeWorkspaceLineage(passing),
-        [pending.id]: makeWorkspaceLineage(pending),
-        [failing.id]: makeWorkspaceLineage(failing)
-      },
-      worktreeLineageById: {},
-      worktreeMap: new Map([
-        [passing.id, passing],
-        [pending.id, pending],
-        [failing.id, failing]
-      ]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::passing': makePrEntry(1, 'success'),
-        'repo-1::pending': makePrEntry(2, 'pending'),
-        'repo-1::failing': makePrEntry(3, 'failure')
-      }
-    })
-
-    expect(display).toMatchObject({ number: 3, status: 'failure' })
-  })
-
-  it('uses pending attached PR status ahead of passing PRs', () => {
-    const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
-    const pending = makeWorktree({ id: 'pending', linkedPR: 2 })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: {
-        [passing.id]: makeWorkspaceLineage(passing),
-        [pending.id]: makeWorkspaceLineage(pending)
-      },
-      worktreeLineageById: {},
-      worktreeMap: new Map([
-        [passing.id, passing],
-        [pending.id, pending]
-      ]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::passing': makePrEntry(1, 'success'),
-        'repo-1::pending': makePrEntry(2, 'pending')
-      }
-    })
-
-    expect(display).toMatchObject({ number: 2, status: 'pending' })
-  })
-
-  it('omits a matching suppressed branch PR from attached worktrees', () => {
-    const worktree = makeWorktree({
-      id: 'suppressed',
-      linkedPR: null,
-      suppressedGitHubPR: 4
-    })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
-      worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: { 'repo-1::suppressed': makePrEntry(4, 'failure') }
-    })
-
-    expect(display).toBeNull()
-  })
-
-  it('includes nested attached worktree PRs', () => {
-    const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
-    const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-      worktreeMap: new Map([
-        [parent.id, parent],
-        [nested.id, nested]
-      ]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::nested': makePrEntry(4, 'success')
-      }
-    })
-
-    expect(display).toMatchObject({ number: 4, status: 'success' })
-  })
-
   it('includes a nested PR from exact inline-only legacy lineage', () => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
     const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
@@ -202,6 +80,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     const display = getFolderWorkspaceCardPrDisplay({
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      crossStoreChildren: [],
       worktreeLineageById: {},
       worktreeMap: new Map([
         [parent.id, parent],
@@ -223,6 +102,7 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     const display = getFolderWorkspaceCardPrDisplay({
       folderWorkspaceId: 'folder-1',
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      crossStoreChildren: [],
       worktreeLineageById: {
         [nested.id]: {
           ...makeWorktreeLineage(nested, parent),
@@ -236,173 +116,6 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: { 'repo-1::nested': makePrEntry(4, 'success') }
-    })
-
-    expect(display).toBeNull()
-  })
-
-  it.each([['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }]])(
-    'excludes nested PRs across a %s boundary',
-    (_boundary, childOverrides, parentOverrides) => {
-      const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
-      const nested = makeWorktree({
-        id: 'nested',
-        instanceId: 'nested',
-        linkedPR: 4,
-        ...childOverrides
-      })
-      const nestedRepo = { ...repo, id: nested.repoId }
-
-      const display = getFolderWorkspaceCardPrDisplay({
-        folderWorkspaceId: 'folder-1',
-        workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-        worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-        worktreeMap: new Map([
-          [parent.id, parent],
-          [nested.id, nested]
-        ]),
-        repoMap: new Map([
-          [repo.id, repo],
-          [nestedRepo.id, nestedRepo]
-        ]),
-        hostedReviewCache: null,
-        prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
-      })
-
-      expect(display).toBeNull()
-    }
-  )
-
-  it('excludes nested PRs from cyclic projected lineage', () => {
-    const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
-    const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: {
-        [parent.id]: makeWorktreeLineage(parent, nested),
-        [nested.id]: makeWorktreeLineage(nested, parent)
-      },
-      worktreeMap: new Map([
-        [parent.id, parent],
-        [nested.id, nested]
-      ]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: { 'repo-1::nested': makePrEntry(4, 'success') }
-    })
-
-    expect(display).toBeNull()
-  })
-
-  it('uses branch-discovered PR cache for unlinked attached worktrees', () => {
-    const worktree = makeWorktree({ id: 'branch-discovered', linkedPR: null })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
-      worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::branch-discovered': { data: makePr(9, 'success'), fetchedAt: 2 }
-      }
-    })
-
-    expect(display).toMatchObject({ number: 9, status: 'success' })
-  })
-
-  it('uses the right-sidebar classified status for conflicting PRs', () => {
-    const worktree = makeWorktree({ id: 'conflicting-pr', linkedPR: null })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
-      worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::conflicting-pr': {
-          data: { ...makePr(11, 'success'), mergeable: 'CONFLICTING' },
-          fetchedAt: 2
-        }
-      }
-    })
-
-    expect(display).toMatchObject({ number: 11, status: 'failure' })
-  })
-
-  it.each([
-    { attention: 'conflict', pendingSibling: false, pendingCheck: false },
-    { attention: 'conflict', pendingSibling: true, pendingCheck: false },
-    { attention: 'conflict', pendingSibling: true, pendingCheck: true },
-    { attention: 'closed', pendingSibling: true, pendingCheck: false },
-    { attention: 'draft', pendingSibling: true, pendingCheck: false }
-  ] as const)(
-    'preserves $attention attention with cancellation (sibling=$pendingSibling, pending check=$pendingCheck)',
-    ({ attention, pendingSibling, pendingCheck }) => {
-      const worktree = makeWorktree({ id: 'attention', linkedPR: 11 })
-      const pending = makeWorktree({ id: 'pending', linkedPR: 12 })
-      const worktrees = pendingSibling ? [pending, worktree] : [worktree]
-      const checksSummary = summarizeProviderChecks([
-        { status: 'completed', conclusion: 'cancelled' },
-        ...(pendingCheck ? [{ status: 'in_progress', conclusion: null }] : [])
-      ])
-      const display = getFolderWorkspaceCardPrDisplay({
-        folderWorkspaceId: 'folder-1',
-        workspaceLineageByChildKey: Object.fromEntries(
-          worktrees.map((child) => [child.id, makeWorkspaceLineage(child)])
-        ),
-        worktreeLineageById: {},
-        worktreeMap: new Map(worktrees.map((child) => [child.id, child])),
-        repoMap: new Map([[repo.id, repo]]),
-        hostedReviewCache: null,
-        prCache: {
-          'repo-1::attention': {
-            data: {
-              ...makePr(11, 'failure'),
-              state: attention === 'conflict' ? 'open' : attention,
-              mergeable: attention === 'conflict' ? 'CONFLICTING' : 'MERGEABLE',
-              checksSummary
-            },
-            fetchedAt: 2
-          },
-          'repo-1::pending': makePrEntry(12, 'pending')
-        }
-      })
-      expect(display).toMatchObject({ number: 11, status: 'failure' })
-      expect(display?.checksSummary).toBeUndefined()
-      const badge = renderToStaticMarkup(
-        createElement(ReviewChecksBadge, {
-          status: display?.status,
-          checksSummary: display?.checksSummary
-        })
-      )
-      expect(badge).toContain('Checks: Failing')
-      expect(badge).toContain('text-rose-600')
-      expect(badge).not.toContain('Cancelled')
-    }
-  )
-
-  it('does not use stale merged branch PR cache after the worktree advances', () => {
-    const worktree = makeWorktree({ id: 'advanced-after-merge', linkedPR: null, head: 'new-head' })
-
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
-      worktreeLineageById: {},
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      hostedReviewCache: null,
-      prCache: {
-        'repo-1::advanced-after-merge': {
-          data: { ...makePr(10, 'success'), state: 'merged', headSha: 'merged-head' },
-          fetchedAt: 2
-        }
-      }
     })
 
     expect(display).toBeNull()

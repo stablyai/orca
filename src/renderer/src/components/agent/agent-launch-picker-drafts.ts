@@ -5,10 +5,10 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   useSyncExternalStore
 } from 'react'
-import { sameSourceControlSetupSelection } from '../../lib/source-control-agent-launch-picker'
-import { shallow } from 'zustand/shallow'
+import { sameAgentPickerSetupSource as sameSource } from './agent-launch-picker-setup-source'
 import {
   agentPickerDraft,
   type AgentPickerDraft,
@@ -18,21 +18,22 @@ import {
 
 import {
   type AgentPickerRetainedSetup as RetainedSetup,
-  currentAgentPickerDraft
+  currentAgentPickerDraft,
+  launchAgentPickerDraft
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import {
   launchDraftSource,
   nativeChatLaunchPromptDraftScopeKey
-} from '../native-chat/native-chat-launch-draft-source'
-import {
-  subscribeToNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
+} from '../native-chat/drafts/native-chat-launch-draft-source'
+import { subscribeToNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
+import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
 
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
 const appSession: AgentPickerDraftOwner = {}
 const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
+// Why: a form re-derives its source (and may reset its scope) from each pick; the open panel stays the authority.
+const pickedSetups = new WeakSet<RetainedSetup>()
 
 export function invalidateAgentPickerDrafts(scope: AgentPickerDraftOwner) {
   sessionDrafts.set(scope, new Map())
@@ -47,32 +48,6 @@ export function useAgentPickerDraftScope(resetSignal?: unknown) {
     [scope]
   )
   return scope
-}
-
-function sameSource(before?: AgentPickerDraft, after?: AgentPickerDraft) {
-  if (before === after) {
-    return true
-  }
-  if (!before || !after || before.agent !== after.agent) {
-    return false
-  }
-  const a = before.recipeEdits?.selection
-  const b = after.recipeEdits?.selection
-  if (a && b) {
-    return sameSourceControlSetupSelection(
-      { ...a, current: { ...a.current, surface: b.current.surface } },
-      b
-    )
-  }
-  return (
-    !a &&
-    !b &&
-    before.arguments === after.arguments &&
-    before.choices.model === after.choices.model &&
-    before.choices.permissionMode === after.choices.permissionMode &&
-    shallow(before.choices.options, after.choices.options) &&
-    shallow(before.delegated, after.delegated)
-  )
 }
 
 export function retireAgentPickerDrafts(
@@ -150,9 +125,12 @@ export function useAgentPickerSetup({
     [mode, open, launchKey]
   )
   useSyncExternalStore(subscribe, () => read()?.draft)
+  // The last pick the form took while this panel is open, carried into a record its scope reset recreates.
+  const [picked, setPicked] = useState<AgentPickerDraft>()
   const matches = useCallback(
-    (record: RetainedSetup) => sameSource(record.source, initial),
-    [initial]
+    (record: RetainedSetup) =>
+      (open && pickedSetups.has(record)) || sameSource(record.source, initial),
+    [open, initial]
   )
   const lifetime = useMemo(
     () => ({
@@ -178,8 +156,11 @@ export function useAgentPickerSetup({
           agent: entry.agent,
           preset: originalPreset,
           source: initial,
-          draft: authored ?? seed ?? agentPickerDraft(entry),
+          draft: authored ?? (open ? picked : undefined) ?? seed ?? agentPickerDraft(entry),
           active: open
+        }
+        if (open && picked) {
+          pickedSetups.add(record)
         }
         if (mode === 'launch') {
           writeLaunchSetupOptions(launchKey, record.draft, slot, record)
@@ -202,6 +183,7 @@ export function useAgentPickerSetup({
       initial,
       seed,
       open,
+      picked,
       mode,
       launchKey,
       slot,
@@ -216,21 +198,32 @@ export function useAgentPickerSetup({
     }
   }, [lifetime])
   useLayoutEffect(() => {
-    if ((mode === 'launch' || !open) && !read()) {
+    const current = read()
+    if (!open && current) {
+      pickedSetups.delete(current)
+    }
+    if ((mode === 'launch' || !open) && !current) {
       return
     }
     const activeRecord = acquire()
     activeRecord.active = open
+    if (open && pickedSetups.has(activeRecord)) {
+      // The form now derives its source from this record's pick, so later edits survive a close.
+      activeRecord.source = initial
+    }
     if (activeRecord !== retained) {
       publish()
     }
     return () => {
       activeRecord.active = false
     }
-  }, [open, read, acquire, retained, mode])
+  }, [open, read, acquire, retained, mode, initial])
   let record = retained && matches(retained) ? retained : undefined
   const currentDraft = (draft: AgentPickerDraft) => {
-    const current = currentAgentPickerDraft(entry, draft)
+    const current =
+      mode === 'launch'
+        ? launchAgentPickerDraft(entry, draft)
+        : currentAgentPickerDraft(entry, draft)
     return currentSurface && currentSurface !== current.surface
       ? { ...current, surface: currentSurface }
       : current
@@ -264,6 +257,7 @@ export function useAgentPickerSetup({
     getDraft,
     change,
     activate: () => {
+      setPicked(undefined)
       if (
         live.current === lifetime &&
         sessionDrafts.get(draftScope) === collection &&
@@ -275,7 +269,8 @@ export function useAgentPickerSetup({
         publish()
       }
     },
-    accept: (draft: AgentPickerDraft) => {
+    /** `pick`: the form applies this while the panel stays open (select mode). */
+    accept: (draft: AgentPickerDraft, pick = false) => {
       if (!getDraft()) {
         return false
       }
@@ -290,6 +285,10 @@ export function useAgentPickerSetup({
           }
         : draft
       store(accepted)
+      if (pick) {
+        pickedSetups.add(record!)
+        setPicked(accepted)
+      }
       return true
     }
   }

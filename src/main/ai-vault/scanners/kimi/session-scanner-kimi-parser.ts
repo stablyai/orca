@@ -1,16 +1,20 @@
 import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import {
   openTranscriptReadStream,
   wslGatedReadFile
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
 import {
   kimiPrimaryAgentWirePath,
   kimiSessionIdFromStatePath,
@@ -19,25 +23,35 @@ import {
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { numberValue } from '../../session-scanner-token-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import {
+  extractContentText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 // State supplies metadata, session_index supplies cwd, and the wire transcript supplies messages and usage.
 export async function parseKimiSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   let stateRecord: Record<string, unknown> | null
   try {
-    stateRecord = asRecord(
-      JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
+    const parsed: unknown = JSON.parse(
+      await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal)
     )
+    stateRecord = asRecord(parsed)
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Propagate WSL refusal so an unreachable state file is not cached as no session.
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw error
     }
     return null
@@ -51,7 +65,8 @@ export async function parseKimiSessionFile(
 
   // Kimi resume requires the indexed work directory; session IDs alone are not sufficient.
   const workDirBySessionId = await readKimiWorkDirBySessionId(
-    kimiSessionIndexPathFromStatePath(file.path)
+    kimiSessionIndexPathFromStatePath(file.path),
+    signal
   )
   accumulator.cwd = workDirBySessionId.get(sessionId) ?? null
 
@@ -60,14 +75,19 @@ export async function parseKimiSessionFile(
   updateTimeline(accumulator, extractString(stateRecord.createdAt))
   updateTimeline(accumulator, extractString(stateRecord.updatedAt))
 
-  await consumeKimiWireTranscript(accumulator, kimiPrimaryAgentWirePath(file.path, stateRecord))
+  await consumeKimiWireTranscript(
+    accumulator,
+    kimiPrimaryAgentWirePath(file.path, stateRecord),
+    signal
+  )
 
   return finalizeSession(accumulator, platform)
 }
 
 async function consumeKimiWireTranscript(
   accumulator: SessionAccumulator,
-  wirePath: string
+  wirePath: string,
+  signal?: AbortSignal
 ): Promise<void> {
   let pendingAssistantText: string[] = []
   const flushAssistant = (): void => {
@@ -79,10 +99,11 @@ async function consumeKimiWireTranscript(
     }
   }
 
-  const input = openTranscriptReadStream(wirePath, { encoding: 'utf-8' }, 'scan')
+  const input = openTranscriptReadStream(wirePath, { encoding: 'utf-8' }, 'scan', signal)
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
+      await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -106,8 +127,12 @@ async function consumeKimiWireTranscript(
       }
     }
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Metadata-only sessions may list, but WSL refusal must propagate so missing wire content remains retryable.
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw error
     }
   } finally {
@@ -116,6 +141,7 @@ async function consumeKimiWireTranscript(
     input.destroy()
   }
   flushAssistant()
+  await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
 }
 
 function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown): void {

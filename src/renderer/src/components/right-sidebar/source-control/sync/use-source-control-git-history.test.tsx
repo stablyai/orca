@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-status-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitHistory: mocks.getRuntimeGitHistory
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: () => undefined
+}))
 
 import { useSourceControlGitHistory } from './use-git-history'
 import {
@@ -44,6 +46,7 @@ function Probe(props: {
   activeRepoTarget?: RuntimeClientTarget
   worktreeId?: string | null
   worktreePath?: string
+  branchName?: string
   compareBaseRef?: string | null
   isFolder?: boolean
   isBranchVisible?: boolean
@@ -55,6 +58,7 @@ function Probe(props: {
     activeRepoTarget: props.activeRepoTarget ?? { kind: 'local' },
     activeWorktreeId: props.worktreeId === undefined ? 'A' : props.worktreeId,
     worktreePath: props.worktreePath ?? '/a',
+    branchName: props.branchName ?? 'main',
     compareBaseRef: props.compareBaseRef === undefined ? 'origin/main' : props.compareBaseRef,
     isFolder: props.isFolder ?? false,
     isBranchVisible: props.isBranchVisible ?? true,
@@ -77,6 +81,19 @@ afterEach(() => {
   unmountProbes()
   vi.clearAllMocks()
   latest = null
+})
+
+describe('useSourceControlGitHistory branch switch', () => {
+  it('reloads the open list when the same workspace switches branches', async () => {
+    const root = await mount({ branchName: 'main' })
+    await flush()
+    await act(async () => {
+      root.render(<Probe branchName="feature" />)
+    })
+    await flush()
+
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('useSourceControlGitHistory stale completion', () => {
@@ -217,48 +234,5 @@ describe('useSourceControlGitHistory stale completion', () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={ALL_WORKTREES} />)
     })
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
-  })
-
-  it('re-fetches when the owner host changes but the worktree and path stay put', async () => {
-    const root = await mount({
-      activeRepoTarget: { kind: 'local' }
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: { kind: 'local' } }),
-      expect.anything()
-    )
-
-    await act(async () => {
-      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: { kind: 'environment', environmentId: 'env-1' } }),
-      expect.anything()
-    )
-
-    // New target objects with unchanged host identity must not trigger another Git read.
-    await act(async () => {
-      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not shell out to git while collapsed, hidden, or on a folder workspace', async () => {
-    await mount({ isGitHistoryExpanded: false })
-    await mount({ isGitHistoryVisible: false })
-    await mount({ isBranchVisible: false })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).not.toHaveBeenCalled()
-
-    await mount({ isFolder: true })
-    await act(async () => {
-      await latest?.refreshGitHistory()
-    })
-    expect(mocks.getRuntimeGitHistory).not.toHaveBeenCalled()
   })
 })

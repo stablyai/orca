@@ -1,3 +1,4 @@
+import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
 import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project-groups'
 import {
   computeWorktreeSidebarHeaderDropPreview,
@@ -89,27 +90,6 @@ export function mapSidebarProjectHeaderDropIndexToSiblingInsertIndex(args: {
   return Math.max(0, Math.min(args.siblingCount, adjustedDropIndex))
 }
 
-function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
-  if (!virtualRow) {
-    return null
-  }
-  const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
-  if (rawStart === null) {
-    return null
-  }
-  const start = Number(rawStart)
-  return Number.isFinite(start) ? start : null
-}
-
-function getOptionalNumberAttribute(element: HTMLElement, attribute: string): number | undefined {
-  const rawValue = element.getAttribute(attribute)
-  if (rawValue === null) {
-    return undefined
-  }
-  const value = Number(rawValue)
-  return Number.isFinite(value) ? value : undefined
-}
-
 export function measureProjectHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectHeaderDragBucketKey
@@ -127,20 +107,16 @@ export function measureProjectHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
-    const rect = element.getBoundingClientRect()
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
     rects.push({
       repoId,
       bucketKey: elementBucketKey,
       headerIndex,
-      top,
-      bottom: top + rect.height,
-      sectionBottom: getOptionalNumberAttribute(element, 'data-repo-header-section-end')
+      ...measureSidebarHeaderDragRect(
+        element,
+        container,
+        containerRect,
+        'data-repo-header-section-end'
+      )
     })
   })
   rects.sort((left, right) => left.top - right.top)

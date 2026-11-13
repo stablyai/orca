@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-11-02T00:00:00.000Z",
+  "platform": "darwin",
+  "command": ["claude"],
+  "env": {
+    "TERM": "xterm-256color"
+  },
+  "cols": 100,
+  "rows": 30,
+  "note": "Claude Code 2.1.316; real PTY with a throwaway CLAUDE_CONFIG_DIR and HOME in an already-trusted scratch git repo; a project .mcp.json declares one new server. No keys sent; capture ends with the startup menu owning the screen. Fake API key and scratch paths scrubbed with same-length replacements.",
+  "exitCode": -9
+}

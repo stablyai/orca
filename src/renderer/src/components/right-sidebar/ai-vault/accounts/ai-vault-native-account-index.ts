@@ -3,7 +3,7 @@ import type {
   CodexManagedAccountSummary
 } from '../../../../../../shared/managed-account-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { accountRuntimeScope, type NativeAccountBinding } from './ai-vault-account-binding'
 import {
   SavedAccountIndex,

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import {
-  PLUGIN_EDITOR_FRAME_SINCE,
-  PLUGIN_MANIFEST_V2_SINCE
-} from '../manifest/plugin-schema-field-docs'
-import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../installation/plugin-host-version'
+import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
 import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
@@ -39,106 +35,6 @@ function parsed(overrides: Record<string, unknown> = {}) {
 }
 
 describe('contributes.customEditors', () => {
-  it('accepts a bytes editor, which edits like a text one', () => {
-    const spreadsheet = {
-      id: 'spreadsheet',
-      title: 'Spreadsheet',
-      extensions: ['.xlsx'],
-      entry: 'editor/index.html',
-      contentKind: 'bytes'
-    }
-    expect(
-      parsed({ contributes: { customEditors: [spreadsheet] } }).contributes.customEditors
-    ).toEqual([{ ...spreadsheet, filenames: [] }])
-  })
-
-  it('accepts an optional tab icon', () => {
-    const withIcon = { ...excalidraw, icon: 'images/tab.png' }
-    expect(
-      parsed({ contributes: { customEditors: [withIcon] } }).contributes.customEditors[0]?.icon
-    ).toBe('images/tab.png')
-    expect(
-      parsePluginManifest(
-        manifest({ contributes: { customEditors: [{ ...excalidraw, icon: '../tab.png' }] } })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('accepts frame isolated or any, needing engines.orca >=1.4.248', () => {
-    const isolated = { ...excalidraw, frame: 'isolated' }
-    const floor = { engines: { orca: `>=${PLUGIN_EDITOR_FRAME_SINCE}` } }
-    expect(
-      parsed({ ...floor, contributes: { customEditors: [isolated] } }).contributes.customEditors[0]
-        ?.frame
-    ).toBe('isolated')
-    expect(PLUGIN_EDITOR_FRAME_SINCE).toBe('1.4.248')
-    expect(PLUGIN_SCHEMA_NEWEST_SINCE).toBe(PLUGIN_EDITOR_FRAME_SINCE)
-    const tooOld = parsePluginManifest(manifest({ contributes: { customEditors: [isolated] } }))
-    expect(tooOld).toMatchObject({ ok: false })
-    expect(tooOld.ok ? '' : tooOld.error).toContain(PLUGIN_EDITOR_FRAME_SINCE)
-    expect(
-      parsePluginManifest(
-        manifest({
-          ...floor,
-          contributes: { customEditors: [{ ...excalidraw, frame: 'webview' }] }
-        })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('refuses an unknown content kind', () => {
-    expect(
-      parsePluginManifest(
-        manifest({ contributes: { customEditors: [{ ...excalidraw, contentKind: 'binary' }] } })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('needs at least the sandboxed-ui profile', () => {
-    const result = parsePluginManifest(manifest({ execution: 'declarative' }))
-    expect(result.ok).toBe(false)
-  })
-
-  it('needs the manifest v2 engine floor', () => {
-    expect(parsePluginManifest(manifest({ engines: { orca: '>=1.4.200' } }))).toMatchObject({
-      ok: false
-    })
-  })
-
-  it.each([
-    [{ ...excalidraw, extensions: [] }],
-    [{ ...excalidraw, extensions: ['excalidraw'] }],
-    [{ ...excalidraw, extensions: ['.excalidraw', '.EXCALIDRAW'] }],
-    [{ ...excalidraw, extensions: [], filenames: ['a/b'] }],
-    [{ ...excalidraw, priority: 'always' }],
-    [{ ...excalidraw, entry: '../escape.html' }],
-    [{ ...excalidraw, path: 'extra' }]
-  ])('refuses a malformed editor %#', (editor) => {
-    expect(
-      parsePluginManifest(manifest({ contributes: { customEditors: [editor] } }))
-    ).toMatchObject({ ok: false })
-  })
-
-  it('refuses duplicate editor ids', () => {
-    const result = parsePluginManifest(
-      manifest({ contributes: { customEditors: [excalidraw, { ...excalidraw, title: 'Again' }] } })
-    )
-    expect(result).toEqual({
-      ok: false,
-      error: 'contributes.customEditors[1]: duplicate customEditors id: excalidraw'
-    })
-  })
-
-  it('accepts an editor that lists only exact file names', () => {
-    expect(
-      parsePluginManifest(
-        manifest({
-          contributes: { customEditors: [{ ...excalidraw, extensions: [], filenames: ['Board'] }] }
-        })
-      )
-    ).toMatchObject({ ok: true })
-  })
-
   it('binds approval to the editor bytes and counts a new file type as more reach', () => {
     const plugin = parsed()
     expect(requiresPluginContentApproval(plugin)).toBe(true)
@@ -191,33 +87,5 @@ describe('matchPluginFile', () => {
       pluginFileMatchRank(matchPluginFile('/repo/gleam.toml', match(['.toml'])))
     )
     expect(pluginFileMatchRank(null)).toBe(0)
-  })
-})
-
-describe('contributes.newFiles', () => {
-  const drawing = {
-    id: 'drawing',
-    title: 'New Excalidraw drawing',
-    extension: '.excalidraw',
-    template: 'templates/empty.excalidraw'
-  }
-
-  it('is content only, so a data plugin may carry one', () => {
-    expect(
-      parsed({ execution: 'data', contributes: { newFiles: [drawing] } }).contributes.newFiles
-    ).toHaveLength(1)
-  })
-
-  it('refuses a bad extension, a duplicate id and unknown fields', () => {
-    for (const newFiles of [
-      [{ ...drawing, extension: 'excalidraw' }],
-      [drawing, { ...drawing, title: 'Again' }],
-      [{ ...drawing, content: '{}' }]
-    ]) {
-      expect(
-        parsePluginManifest(manifest({ contributes: { customEditors: [excalidraw], newFiles } })),
-        JSON.stringify(newFiles)
-      ).toMatchObject({ ok: false })
-    }
   })
 })

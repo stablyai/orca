@@ -2,8 +2,8 @@ import { ChevronsUp } from 'lucide-react'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 export function WorktreeListScrollToTopButton({
   onClick,
@@ -12,10 +12,8 @@ export function WorktreeListScrollToTopButton({
   onClick: () => void
   className?: string
 }): React.JSX.Element {
-  const label = translate(
-    'auto.components.sidebar.WorktreeListScrollToTopButton.jumpToTop',
-    'Jump to top'
-  )
+  const t = useTranslate()
+  const label = t('auto.components.sidebar.WorktreeListScrollToTopButton.jumpToTop', 'Jump to top')
 
   return (
     <div

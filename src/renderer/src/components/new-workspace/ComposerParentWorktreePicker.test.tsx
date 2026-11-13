@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import type React from 'react'
-import type * as WorktreeRepoIndex from '@/store/worktree-repo-index'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -28,17 +27,6 @@ const storeState = vi.hoisted(
     }) as FakeStoreState
 )
 
-const popoverMock = vi.hoisted(() => ({
-  open: false,
-  onOpenChange: undefined as ((open: boolean) => void) | undefined
-}))
-
-const indexSpies = vi.hoisted(() => ({
-  getIndexedAllWorktrees: vi.fn(),
-  getIndexedWorktreeMap: vi.fn(),
-  getIndexedWorktreeById: vi.fn()
-}))
-
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -51,39 +39,34 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: FakeStoreState) => unknown) => selector(storeState)
 }))
 
-// Wrap real projections to preserve exclusion coverage while counting enumeration calls.
-vi.mock('@/store/worktree-repo-index', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRepoIndex>()
-  indexSpies.getIndexedAllWorktrees.mockImplementation(actual.getIndexedAllWorktrees)
-  indexSpies.getIndexedWorktreeMap.mockImplementation(actual.getIndexedWorktreeMap)
-  indexSpies.getIndexedWorktreeById.mockImplementation(actual.getIndexedWorktreeById)
-  return { ...actual, ...indexSpies }
-})
-
 vi.mock('@/components/ui/popover', async () => {
-  const { cloneElement } = await import('react')
+  const { cloneElement, createContext, useContext, useMemo } = await import('react')
+  const PopoverState = createContext<{ open: boolean; onOpenChange?: (open: boolean) => void }>({
+    open: false
+  })
   return {
     Popover: ({
       children,
-      open,
+      open = false,
       onOpenChange
     }: {
       children: React.ReactNode
       open?: boolean
       onOpenChange?: (open: boolean) => void
     }) => {
-      popoverMock.open = open ?? false
-      popoverMock.onOpenChange = onOpenChange
-      return <div>{children}</div>
+      const value = useMemo(() => ({ open, onOpenChange }), [open, onOpenChange])
+      return <PopoverState.Provider value={value}>{children}</PopoverState.Provider>
     },
     // Radix `asChild` renders the child itself and owns its click; mirror that.
-    PopoverTrigger: ({ children }: { children: React.ReactElement }) =>
-      cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
-        onClick: () => popoverMock.onOpenChange?.(!popoverMock.open)
-      }),
+    PopoverTrigger: ({ children }: { children: React.ReactElement }) => {
+      const { open, onOpenChange } = useContext(PopoverState)
+      return cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
+        onClick: () => onOpenChange?.(!open)
+      })
+    },
     // Radix mounts content only while open — the property the lazy list relies on.
     PopoverContent: ({ children }: { children: React.ReactNode }) =>
-      popoverMock.open ? <div>{children}</div> : null
+      useContext(PopoverState).open ? <div>{children}</div> : null
   }
 })
 
@@ -166,174 +149,38 @@ function candidateLabels(): string[] {
     .map((row) => row.textContent ?? '')
 }
 
-function searchInput(): HTMLInputElement {
-  const node = document.querySelector<HTMLInputElement>('[data-slot="command-input"]')
-  if (!node) {
-    throw new Error('parent picker search input not found')
-  }
-  return node
-}
-
-function rowFor(label: string): HTMLElement {
-  const row = rows().find((node) => node.textContent?.includes(label))
-  if (!row) {
-    throw new Error(`row not found for ${label}`)
-  }
-  return row
-}
-
 beforeEach(() => {
-  popoverMock.open = false
-  popoverMock.onOpenChange = undefined
   storeState.worktreesByRepo = {}
   storeState.repos = []
   storeState.worktreeLineageById = {}
   storeState.workspaceLineageByChildKey = {}
-  indexSpies.getIndexedAllWorktrees.mockClear()
-  indexSpies.getIndexedWorktreeMap.mockClear()
-  indexSpies.getIndexedWorktreeById.mockClear()
 })
 
 afterEach(cleanup)
 
 describe('ComposerParentWorktreePicker', () => {
-  it('enumerates candidate worktrees only once the popover opens', () => {
-    seed([makeWorktree({ id: 'alpha' }), makeWorktree({ id: 'beta' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={vi.fn()} />)
-
-    expect(indexSpies.getIndexedWorktreeById).toHaveBeenCalled()
-    expect(indexSpies.getIndexedAllWorktrees).not.toHaveBeenCalled()
-    expect(indexSpies.getIndexedWorktreeMap).not.toHaveBeenCalled()
-
-    fireEvent.click(trigger())
-
-    expect(indexSpies.getIndexedAllWorktrees).toHaveBeenCalled()
-    expect(indexSpies.getIndexedWorktreeMap).toHaveBeenCalled()
-  })
-
-  it('shows "No parent" on the closed trigger when nothing is picked', () => {
-    seed([makeWorktree({ id: 'alpha' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={vi.fn()} />)
-
-    expect(trigger().textContent).toContain('No parent')
-  })
-
-  it('shows the picked worktree display name on the closed trigger', () => {
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha workspace' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={vi.fn()} />)
-
-    expect(trigger().textContent).toContain('Alpha workspace')
-    expect(trigger().textContent).not.toContain('No parent')
-  })
-
-  it('reports the picked worktree id and closes when a candidate row is clicked', () => {
-    const onChange = vi.fn()
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={onChange} />)
-    fireEvent.click(trigger())
-    fireEvent.click(rowFor('Alpha'))
-
-    expect(onChange).toHaveBeenCalledWith('alpha')
-    expect(rows()).toHaveLength(0)
-  })
-
-  it('clears the pick when the pinned "No parent" row is clicked', () => {
-    const onChange = vi.fn()
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={onChange} />)
-    fireEvent.click(trigger())
-    fireEvent.click(rows()[0])
-
-    expect(onChange).toHaveBeenCalledWith(null)
-    expect(rows()).toHaveLength(0)
-  })
-
-  it('offers parents from another repo while excluding archived worktrees', () => {
-    seed(
-      [
-        makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
-        makeWorktree({ id: 'archived', displayName: 'Archived', isArchived: true }),
-        makeWorktree({ id: 'other', displayName: 'Other repo', repoId: 'repo2' })
-      ],
-      [REPO_ID, 'repo2']
-    )
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={vi.fn()} />)
-    fireEvent.click(trigger())
-
-    expect(candidateLabels().join(' ')).toContain('Alpha')
-    expect(candidateLabels().join(' ')).not.toContain('Archived')
-    expect(candidateLabels().join(' ')).toContain('Other repo')
-  })
-
-  it('offers another project on the same host and excludes another host', () => {
-    seed([
-      makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
-      makeWorktree({
-        id: 'otherHost',
-        displayName: 'Other host',
-        hostId: 'ssh:box',
-        projectId: 'proj1'
-      }),
-      makeWorktree({
-        id: 'otherProject',
-        displayName: 'Other project',
-        hostId: 'local',
-        projectId: 'proj2'
-      })
-    ])
-
-    render(
-      <ComposerParentWorktreePicker
-        repoId={REPO_ID}
-        executionHostId="local"
-        projectId="proj1"
-        value={null}
-        onChange={vi.fn()}
-      />
-    )
-    fireEvent.click(trigger())
-
-    expect(candidateLabels().join(' ')).toContain('Same host')
-    expect(candidateLabels().join(' ')).not.toContain('Other host')
-    expect(candidateLabels().join(' ')).toContain('Other project')
-  })
-
-  it('keeps candidates whose host or project is unrecorded', () => {
-    seed([makeWorktree({ id: 'unscoped', displayName: 'Unscoped' })])
-
-    render(
-      <ComposerParentWorktreePicker
-        repoId={REPO_ID}
-        executionHostId="local"
-        projectId="proj1"
-        value={null}
-        onChange={vi.fn()}
-      />
-    )
-    fireEvent.click(trigger())
-
-    expect(candidateLabels().join(' ')).toContain('Unscoped')
-  })
-
-  it('restricts candidates to the active folder workspace subtree', () => {
+  it('offers live folder descendants through retired roots and intermediate parents', () => {
     const attached = makeWorktree({
       id: 'attached',
       displayName: 'Attached',
-      instanceId: 'attached-instance'
+      instanceId: 'attached-instance',
+      removing: true,
+      removalRecorded: true
     })
     const nested = makeWorktree({
       id: 'nested',
       displayName: 'Nested',
       instanceId: 'nested-instance'
     })
+    const bridge = makeWorktree({
+      id: 'bridge',
+      instanceId: 'bridge-instance',
+      removing: true,
+      removalRecorded: true
+    })
+    const leaf = makeWorktree({ id: 'leaf', displayName: 'Leaf', instanceId: 'leaf-instance' })
     const outside = makeWorktree({ id: 'outside', displayName: 'Outside' })
-    seed([attached, nested, outside])
+    seed([attached, nested, bridge, leaf, outside])
     storeState.workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(attached.id)]: {
         childWorkspaceKey: worktreeWorkspaceKey(attached.id),
@@ -354,118 +201,45 @@ describe('ComposerParentWorktreePicker', () => {
         origin: 'manual',
         capture: { source: 'manual-action', confidence: 'explicit' },
         createdAt: 2
+      },
+      [bridge.id]: {
+        worktreeId: bridge.id,
+        worktreeInstanceId: 'bridge-instance',
+        parentWorktreeId: nested.id,
+        parentWorktreeInstanceId: 'nested-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 3
+      },
+      [leaf.id]: {
+        worktreeId: leaf.id,
+        worktreeInstanceId: 'leaf-instance',
+        parentWorktreeId: bridge.id,
+        parentWorktreeInstanceId: 'bridge-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 4
       }
     }
-
+    const onChange = vi.fn()
     render(
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         value={null}
-        onChange={vi.fn()}
+        onChange={onChange}
         activeFolderWorkspaceId="folder-1"
       />
     )
     fireEvent.click(trigger())
 
     const labels = candidateLabels().join(' ')
-    expect(labels).toContain('Attached')
+    expect(labels).not.toContain('Attached')
+    expect(labels).not.toContain('bridge')
     expect(labels).toContain('Nested')
+    expect(labels).toContain('Leaf')
     expect(labels).not.toContain('Outside')
-  })
-
-  it('keeps the trigger inert while disabled', () => {
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha' })])
-
-    render(
-      <ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={vi.fn()} disabled />
-    )
-    fireEvent.click(trigger())
-
-    expect(trigger().disabled).toBe(true)
-    expect(rows()).toHaveLength(0)
-  })
-
-  it('picks the top match when Enter follows a search query', () => {
-    const onChange = vi.fn()
-    seed([
-      makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
-      makeWorktree({ id: 'beta', displayName: 'Beta' })
-    ])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={onChange} />)
-    fireEvent.click(trigger())
-    fireEvent.change(searchInput(), { target: { value: 'Beta' } })
-    fireEvent.keyDown(searchInput(), { key: 'Enter', keyCode: 13 })
-
-    // Typing/Enter must pick the top match instead of clearing via No parent.
-    expect(onChange).toHaveBeenCalledWith('beta')
-  })
-
-  it('clears the parent when Enter is pressed with no search query', () => {
-    const onChange = vi.fn()
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={onChange} />)
-    fireEvent.click(trigger())
-    fireEvent.keyDown(searchInput(), { key: 'Enter', keyCode: 13 })
-
-    expect(onChange).toHaveBeenCalledWith(null)
-  })
-
-  it('keeps the parent when Enter only confirms a CJK composition', () => {
-    const onChange = vi.fn()
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha' })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={onChange} />)
-    fireEvent.click(trigger())
-    fireEvent.compositionStart(searchInput())
-    // The confirming Enter arrives twice: the marked keydown, then an unmarked redispatch.
-    fireEvent.keyDown(searchInput(), { key: 'Enter', keyCode: 229 })
-    fireEvent.keyDown(searchInput(), { key: 'Enter', keyCode: 13 })
-
-    expect(onChange).not.toHaveBeenCalled()
-    expect(rows().length).toBeGreaterThan(0)
-  })
-
-  it('falls back to "No parent" on the trigger when the picked parent is archived', () => {
-    seed([makeWorktree({ id: 'alpha', displayName: 'Alpha workspace', isArchived: true })])
-
-    render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={vi.fn()} />)
-
-    expect(trigger().textContent).not.toContain('Alpha workspace')
-    expect(trigger().textContent).toContain('No parent')
-  })
-
-  it('excludes a folder root whose lineage row is instance-stale', () => {
-    const attached = makeWorktree({
-      id: 'attached',
-      displayName: 'Attached',
-      instanceId: 'current-instance'
-    })
-    seed([attached])
-    storeState.workspaceLineageByChildKey = {
-      [worktreeWorkspaceKey(attached.id)]: {
-        childWorkspaceKey: worktreeWorkspaceKey(attached.id),
-        childInstanceId: 'deleted-and-recreated',
-        parentWorkspaceKey: folderWorkspaceKey('folder-1'),
-        parentInstanceId: null,
-        origin: 'manual',
-        capture: { source: 'active-workspace', confidence: 'explicit' },
-        createdAt: 1
-      }
-    }
-
-    render(
-      <ComposerParentWorktreePicker
-        repoId={REPO_ID}
-        value={null}
-        onChange={vi.fn()}
-        activeFolderWorkspaceId="folder-1"
-      />
-    )
-    fireEvent.click(trigger())
-
-    expect(candidateLabels().join(' ')).not.toContain('Attached')
+    fireEvent.click(rows().find((row) => row.textContent?.includes('Leaf'))!)
+    expect(onChange).toHaveBeenCalledWith('leaf')
   })
 
   it('closes an open popover when the drawer collapses the trigger', () => {

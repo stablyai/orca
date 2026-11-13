@@ -1,4 +1,4 @@
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { BridgeHost, BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
@@ -53,6 +53,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   holdToPage?: (json: string) => boolean
   rewriteToPage?: (json: string) => string
   routeGrants?: readonly string[]
+  pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
   sessionEstablished?: boolean
   clientIdentity?: string | null
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>

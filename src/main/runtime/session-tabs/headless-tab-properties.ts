@@ -8,11 +8,11 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../shared/workspace-layout/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { cloneTerminalLayoutSnapshot } from '../mobile-session-layout-projection'
+import { cloneTerminalLayoutSnapshot } from '../terminal/surface/mobile-session-layout-projection'
 import {
   sameStringRecord,
   terminalLayoutNodeEqual
-} from '../../../shared/workspace-layout/terminal-layout-equality'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 
 type HeadlessPaneLayoutEdit = {
   tabId: string

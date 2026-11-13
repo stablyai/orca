@@ -1,123 +1,84 @@
-import { useRef, useState } from 'react'
-import {
-  Crosshair,
-  ExternalLink,
-  MessageSquarePlus,
-  PenTool,
-  Share2,
-  SquareCode,
-  X
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { useRef } from 'react'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
 import {
   BrowserNavigationControlRow,
   type BrowserNavigationControls
 } from './browser-navigation-control-row'
-import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
-import type {
-  BrowserChromeFoldedTool,
-  BrowserChromeOverflowMenuProps
-} from './browser-chrome-folded-tools'
 import {
   BROWSER_CHROME_FOLD_ORDER,
   useBrowserChromeToolFold,
   type BrowserChromeFoldStage
 } from './use-browser-chrome-tool-fold'
 import {
-  BrowserChromeElementToolButtons,
-  type BrowserChromeElementTools
-} from './browser-chrome-element-tool-buttons'
+  BrowserAnnotateSplitButton,
+  type BrowserChromeElementTools,
+  type BrowserChromeMarkupTool,
+  type BrowserChromeNoteActions
+} from './browser-annotate-split-button'
 import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
 
-export type { BrowserChromeElementTools } from './browser-chrome-element-tool-buttons'
-
-export type BrowserChromeMarkupTool = {
-  active: boolean
-  disabled: boolean
-  onToggle: () => void
-  /** Only the owning visible browser pane may consume the discovery hint; hidden panes misplace it and previews would spend it prematurely. */
-  canShowDiscoveryHint: boolean
-}
-
-export type BrowserChromeShareControl = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  anchorRef?: React.RefObject<HTMLButtonElement | null>
-}
+export type {
+  BrowserChromeElementTools,
+  BrowserChromeMarkupTool,
+  BrowserChromeNoteActions
+} from './browser-annotate-split-button'
 
 export type BrowserChromeToolAction = {
   onSelect: () => void
   label: string
   disabled?: boolean
-  /** True when the surface's overflow menu already exposes this action. */
-  alreadyInOverflowMenu?: boolean
 }
 
-function BrowserChromeActionButton({
-  action,
-  icon: Icon
-}: {
-  action: BrowserChromeToolAction
-  icon: LucideIcon
-}): React.JSX.Element {
-  return (
-    <Button
-      size="icon"
-      variant="ghost"
-      className="h-7 w-7"
-      onClick={action.onSelect}
-      title={action.label}
-      aria-label={action.label}
-      disabled={action.disabled}
-    >
-      <Icon className="size-4" />
-    </Button>
-  )
+export type BrowserChromeOverflowMenuProps = {
+  triggerRef: React.RefObject<HTMLButtonElement | null>
+  /** Run after menu close without focus return; focusing the ⋯ trigger would immediately dismiss a new popover or dialog. */
+  deferUntilClose: (action: () => void) => void
+  onMenuCloseAutoFocus: (event: Event) => void
 }
 
-/** Use one toolbar for browsing and document previews so tools cannot drift; each surface explicitly omits inapplicable tools. */
+/**
+ * One row for browsing and document previews: navigation, the address, one agent tool and ⋯.
+ * Page actions live in the address slot; browser actions live in each surface's ⋯ menu.
+ */
 export function BrowserChromeToolbar({
   controls,
   addressSlot,
   reloadControl,
   reloadLabel,
-  importControl,
   extensionActions,
   elementTools,
   markup,
+  notes,
   shareControl,
-  viewSource,
-  openExternal,
   overflowMenu,
   closeTabOwner,
   showTourAnchors = false,
-  pinnedStage
+  pinAnnotateLabel = false
 }: {
   controls: BrowserNavigationControls
   addressSlot: React.ReactNode
   reloadControl?: React.ReactNode
   reloadLabel?: string
-  /** Cookie import — a browsing session concept; null where there is no session to import into. */
-  importControl?: ((compact: boolean) => React.ReactNode) | null
-  /**
-   * Extension buttons; null where the page's session runs no extensions (doc preview, route and
-   * SSH pages). `compact` folds the pinned buttons, leaving the extensions menu.
-   */
-  extensionActions?: ((compact: boolean) => React.ReactNode) | null
-  elementTools: BrowserChromeElementTools | null
+  /** Pinned extension buttons; null where the page's session runs no extensions. `compact` hides them, and unpinned popups anchor to ⋯. */
+  extensionActions?:
+    | ((
+        compact: boolean,
+        menuTriggerRef: React.RefObject<HTMLButtonElement | null>
+      ) => React.ReactNode)
+    | null
+  elementTools: BrowserChromeElementTools
   markup: BrowserChromeMarkupTool
-  shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
-  viewSource: BrowserChromeToolAction | null
-  openExternal: BrowserChromeToolAction | null
+  notes?: BrowserChromeNoteActions | null
+  /** Share beside a document chip, which can't hold a nested button the way the address field does. */
+  shareControl?: React.ReactNode
   overflowMenu: (props: BrowserChromeOverflowMenuProps) => React.ReactNode
   /** The page whose tab the toolbar X closes in a floating split, where the panel's one tab row may be showing another split. */
   closeTabOwner: { worktreeId: string; browserPageId: string }
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
-  /** Keeps the active contextual-tour control measurable while the remaining tools still fold. */
-  pinnedStage?: BrowserChromeFoldStage
+  /** Keeps the tour's target fully labelled while it is pointed at. */
+  pinAnnotateLabel?: boolean
 }): React.JSX.Element {
   const closeTab = useFloatingSplitBrowserClose(
     closeTabOwner.worktreeId,
@@ -126,81 +87,16 @@ export function BrowserChromeToolbar({
   const rowRef = useRef<HTMLDivElement>(null)
   const overflowTriggerRef = useRef<HTMLButtonElement>(null)
   const present: Record<BrowserChromeFoldStage, boolean> = {
-    'import-label': importControl != null,
-    import: importControl != null,
-    external: openExternal !== null,
-    devtools: viewSource !== null,
-    share: shareControl != null,
     extensions: extensionActions != null,
-    draw: true,
-    grab: elementTools !== null,
-    annotate: elementTools !== null
+    'annotate-label': !pinAnnotateLabel
   }
-  const stages = BROWSER_CHROME_FOLD_ORDER.filter(
-    (stage) => present[stage] && stage !== pinnedStage
+  const folded = useBrowserChromeToolFold(
+    rowRef,
+    BROWSER_CHROME_FOLD_ORDER.filter((stage) => present[stage])
   )
-  const folded = useBrowserChromeToolFold(rowRef, stages)
 
-  const [sharePopoverOpen, setSharePopoverOpen] = useState(false)
   const afterMenuCloseRef = useRef<(() => void) | null>(null)
-
-  const foldedTools: BrowserChromeFoldedTool[] = []
-  if (elementTools && folded.has('grab')) {
-    foldedTools.push({
-      stage: 'grab',
-      label: translate('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element'),
-      icon: Crosshair,
-      onSelect: () => elementTools.onStartIntent('copy'),
-      disabled: elementTools.disabled,
-      shortcut: elementTools.grabShortcutLabel,
-      active: elementTools.activeIntent === 'copy'
-    })
-  }
-  if (elementTools && folded.has('annotate')) {
-    foldedTools.push({
-      stage: 'annotate',
-      label: translate(
-        'auto.components.browser.pane.BrowserPane.fc9be38f6f',
-        'Annotate page element'
-      ),
-      icon: MessageSquarePlus,
-      onSelect: () => elementTools.onStartIntent('annotate'),
-      disabled: elementTools.disabled,
-      shortcut: elementTools.annotateShortcutLabel,
-      count: elementTools.annotationCount,
-      active: elementTools.activeIntent === 'annotate'
-    })
-  }
-  if (folded.has('draw')) {
-    foldedTools.push({
-      stage: 'draw',
-      label: translate('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot'),
-      icon: PenTool,
-      onSelect: markup.onToggle,
-      disabled: markup.disabled,
-      active: markup.active
-    })
-  }
-  if (shareControl && folded.has('share')) {
-    foldedTools.push({
-      stage: 'share',
-      label: translate(
-        'auto.components.artifacts.ArtifactPublishButton.a4a49da6af',
-        'Share as artifact'
-      ),
-      icon: Share2,
-      onSelect: () => setSharePopoverOpen(true),
-      deferUntilMenuClose: true
-    })
-  }
-  if (viewSource && folded.has('devtools') && !viewSource.alreadyInOverflowMenu) {
-    foldedTools.push({ stage: 'devtools', icon: SquareCode, ...viewSource })
-  }
-  if (openExternal && folded.has('external') && !openExternal.alreadyInOverflowMenu) {
-    foldedTools.push({ stage: 'external', icon: ExternalLink, ...openExternal })
-  }
-
-  const runAfterMenuClose = (action: () => void): void => {
+  const deferUntilClose = (action: () => void): void => {
     afterMenuCloseRef.current = action
   }
   const onMenuCloseAutoFocus = (event: Event): void => {
@@ -212,7 +108,6 @@ export function BrowserChromeToolbar({
     event.preventDefault()
     action()
   }
-  const showFoldedAnnotationDot = folded.has('annotate') && (elementTools?.annotationCount ?? 0) > 0
 
   return (
     <BrowserNavigationControlRow
@@ -223,56 +118,38 @@ export function BrowserChromeToolbar({
       reloadLabel={reloadLabel}
       showTourAnchors={showTourAnchors}
     >
-      {folded.has('import') ? null : importControl?.(folded.has('import-label'))}
-
-      {elementTools ? (
-        <BrowserChromeElementToolButtons
-          tools={elementTools}
-          showGrab={!folded.has('grab')}
-          showAnnotate={!folded.has('annotate')}
-          showTourAnchors={showTourAnchors}
-        />
-      ) : null}
-
-      {folded.has('draw') ? null : (
-        <MarkupDrawButton
-          onClick={markup.onToggle}
-          disabled={markup.disabled}
-          active={markup.active}
-          surfaceActive={markup.canShowDiscoveryHint}
-        />
-      )}
-
-      {shareControl?.({
-        open: sharePopoverOpen,
-        onOpenChange: setSharePopoverOpen,
-        anchorRef: folded.has('share') ? overflowTriggerRef : undefined
-      })}
-
-      {viewSource && !folded.has('devtools') ? (
-        <BrowserChromeActionButton action={viewSource} icon={SquareCode} />
-      ) : null}
-
-      {openExternal && !folded.has('external') ? (
-        <BrowserChromeActionButton action={openExternal} icon={ExternalLink} />
-      ) : null}
-
-      {extensionActions?.(folded.has('extensions'))}
-
-      <span className="relative inline-flex">
+      {shareControl}
+      <BrowserAnnotateSplitButton
+        tools={elementTools}
+        markup={markup}
+        notes={notes}
+        compact={folded.has('annotate-label')}
+        showTourAnchors={showTourAnchors}
+      />
+      <span className="flex shrink-0 items-center">
+        {extensionActions?.(folded.has('extensions'), overflowTriggerRef)}
         {overflowMenu({
           triggerRef: overflowTriggerRef,
-          tools: foldedTools,
-          deferUntilClose: runAfterMenuClose,
+          deferUntilClose,
           onMenuCloseAutoFocus
         })}
-        {/* Why: keeps pending annotations visible once the annotate button has folded into ⋯. */}
-        {showFoldedAnnotationDot ? (
-          <span className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-background" />
-        ) : null}
       </span>
-
-      {closeTab ? <BrowserChromeActionButton action={closeTab} icon={X} /> : null}
+      {closeTab ? (
+        <>
+          <span className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={closeTab.onSelect}
+            title={closeTab.label}
+            aria-label={closeTab.label}
+            disabled={closeTab.disabled}
+          >
+            <X className="size-4" />
+          </Button>
+        </>
+      ) : null}
     </BrowserNavigationControlRow>
   )
 }

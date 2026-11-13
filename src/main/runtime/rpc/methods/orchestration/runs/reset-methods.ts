@@ -1,9 +1,12 @@
-import { defineMethod } from '../../../core'
-import { ResetParams } from '../schemas'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { ResetParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { listLiveRemoteRunLinkEnvironments } from '../../../../orchestration/db/remote-owned/remote-run-links'
 
 export const ORCHESTRATION_RESET_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.reset',
+    access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: ResetParams,
     handler: (params, { runtime }) => {
@@ -17,11 +20,13 @@ export const ORCHESTRATION_RESET_METHODS = [
       if (params.all) {
         runtime.stopOrchestrationFederationRelay()
         db.resetAll()
+        resumeOwedCancels(runtime)
         return resetting({ reset: 'all' })
       }
       if (params.tasks) {
         runtime.stopOrchestrationFederationRelay()
         const removed = db.resetTasks()
+        resumeOwedCancels(runtime)
         return resetting(removed ? { reset: 'tasks', removed } : { reset: 'tasks' })
       }
       if (params.messages) {
@@ -32,3 +37,10 @@ export const ORCHESTRATION_RESET_METHODS = [
     }
   })
 ]
+
+/** A reset owes each paired server a cancel of the Runs it coordinated there; their pull loop sends it. */
+function resumeOwedCancels(runtime: OrcaRuntimeService): void {
+  if (listLiveRemoteRunLinkEnvironments(runtime.getOrchestrationDb()).length > 0) {
+    runtime.ensureOrchestrationFederationRelay()
+  }
+}

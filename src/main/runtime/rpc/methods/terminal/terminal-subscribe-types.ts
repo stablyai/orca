@@ -19,9 +19,14 @@ export type TerminalSubscriptionArgs = {
   emit: TerminalSubscriptionEmit
   ptyId: string
   clientId: string | undefined
+  // The authenticated device, whose departure ends this view; request ids are client-declared.
+  viewerDeviceId: string | undefined
+  pairedDeviceId: string | undefined
   isMobile: boolean
   supportsDesktopViewportClaims: boolean
   supportsWriteUnavailable: boolean
+  /** The stream's snapshot reached the client and it is now live. */
+  onEstablished?: () => void
   missingHeadlessStateBeforeMobileFit: boolean
   rendererMountRequestedBeforePty: boolean
   serializerGenerationBeforeMobileFit: number

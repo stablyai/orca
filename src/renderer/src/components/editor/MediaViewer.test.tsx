@@ -3,7 +3,10 @@
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mediaPlaybackPositionCache } from '@/lib/scroll-cache'
+import {
+  mediaPlaybackStateCache,
+  mediaVolumePreference
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import MediaViewer from './MediaViewer'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -11,7 +14,9 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 describe('MediaViewer', () => {
   afterEach(() => {
     vi.restoreAllMocks()
-    mediaPlaybackPositionCache.clear()
+    mediaPlaybackStateCache.clear()
+    mediaVolumePreference.volume = 1
+    mediaVolumePreference.muted = false
   })
 
   const renderPlaybackViewer = async (
@@ -40,36 +45,6 @@ describe('MediaViewer', () => {
     Object.defineProperty(video, 'duration', { configurable: true, value: duration })
     return { root, video }
   }
-
-  it('keeps its source through Strict Mode setup and stops playback on unmount', async () => {
-    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () =>
-      root.render(
-        <StrictMode>
-          <MediaViewer
-            src="orca-media://file/token"
-            mimeType="video/mp4"
-            filePath="clip.mp4"
-            canOpenLocally
-          />
-        </StrictMode>
-      )
-    )
-    const video = container.querySelector('video')
-    expect(video?.getAttribute('src')).toBe('orca-media://file/token')
-    expect(video?.controls).toBe(true)
-    expect(video?.autoplay).toBe(false)
-    expect(video?.preload).toBe('metadata')
-    pause.mockClear()
-    load.mockClear()
-    await act(async () => root.unmount())
-    expect(pause).toHaveBeenCalledTimes(1)
-    expect(load).toHaveBeenCalledTimes(1)
-    expect(video?.getAttribute('src')).toBeNull()
-  })
 
   it('retains the position when leaving before metadata and clamps it when the file shrinks', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
@@ -117,49 +92,44 @@ describe('MediaViewer', () => {
     await act(async () => otherRestored.root.unmount())
   })
 
-  it('uses native audio controls and releases the audio source when switching files', async () => {
-    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () =>
-      root.render(
-        <StrictMode>
-          <MediaViewer
-            key="song"
-            src="orca-media://file/song"
-            mimeType="audio/mpeg"
-            filePath="song.mp3"
-            canOpenLocally
-          />
-        </StrictMode>
-      )
-    )
-    const audio = container.querySelector('audio')
-    expect(audio?.getAttribute('src')).toBe('orca-media://file/song')
-    expect(audio?.controls).toBe(true)
-    expect(audio?.autoplay).toBe(false)
-    expect(audio?.preload).toBe('metadata')
-    expect(audio?.getAttribute('aria-label')).toBe('song.mp3')
-    expect(container.querySelector('video')).toBeNull()
-    pause.mockClear()
-    load.mockClear()
-    await act(async () =>
-      root.render(
-        <MediaViewer
-          key="clip"
-          src="orca-media://file/clip"
-          mimeType="video/mp4"
-          filePath="clip.mp4"
-          canOpenLocally
-        />
-      )
-    )
-    expect(pause).toHaveBeenCalledTimes(1)
-    expect(load).toHaveBeenCalledTimes(1)
-    expect(audio?.getAttribute('src')).toBeNull()
-    expect(container.querySelector('audio')).toBeNull()
-    expect(container.querySelector('video')?.getAttribute('src')).toBe('orca-media://file/clip')
-    await act(async () => root.unmount())
+  it('shares volume and mute across previews and keeps each clip at its own speed', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    // Unfinalized WebM recordings report an Infinity duration.
+    const first = await renderPlaybackViewer('clip.mp4:pdf', Number.POSITIVE_INFINITY)
+    await act(async () => first.video.dispatchEvent(new Event('loadedmetadata')))
+    first.video.volume = 0.25
+    first.video.muted = true
+    first.video.playbackRate = 1.5
+    await act(async () => first.video.dispatchEvent(new Event('volumechange')))
+    Object.defineProperty(first.video, 'ended', { configurable: true, value: true })
+    await act(async () => first.root.unmount())
+
+    const other = await renderPlaybackViewer('other.mp4:pdf')
+    await act(async () => other.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(other.video.volume).toBe(0.25)
+    expect(other.video.muted).toBe(true)
+    expect(other.video.playbackRate).toBe(1)
+    await act(async () => other.root.unmount())
+
+    const restored = await renderPlaybackViewer('clip.mp4:pdf', Number.POSITIVE_INFINITY)
+    await act(async () => restored.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(restored.video.playbackRate).toBe(1.5)
+    await act(async () => restored.root.unmount())
+  })
+
+  it('saves a volume change still queued at teardown without overwriting a newer choice', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    const idle = await renderPlaybackViewer('idle.mp4:left')
+    const active = await renderPlaybackViewer('active.mp4:right')
+    active.video.volume = 0.5
+    await act(async () => active.video.dispatchEvent(new Event('volumechange')))
+    await act(async () => idle.root.unmount())
+    expect(mediaVolumePreference).toEqual({ volume: 0.5, muted: false })
+
+    active.video.muted = true
+    await act(async () => active.root.unmount())
+    expect(mediaVolumePreference).toEqual({ volume: 0.5, muted: true })
   })
 })

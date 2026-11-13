@@ -1,12 +1,20 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import type { DeveloperPermissionId } from '../../../../../shared/developer-permissions-types'
+
+export const DEVELOPER_PERMISSIONS_OVERVIEW_ID = 'developer-permissions-overview'
+
+export function getDeveloperPermissionSettingId(id: DeveloperPermissionId): string {
+  return `developer-permissions-${id}`
+}
 
 export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: DEVELOPER_PERMISSIONS_OVERVIEW_ID,
     title: translate(
-      'auto.components.settings.developer.permissions.search.e92cb0896d',
-      'Developer Permissions'
+      'auto.components.settings.developer.permissions.search.ad085fa291',
+      'Developer permissions'
     ),
     description: translate(
       'auto.components.settings.developer.permissions.search.bc8ac95310',
@@ -36,9 +44,10 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ]
   },
   {
+    targetSectionId: getDeveloperPermissionSettingId('microphone'),
     title: translate(
-      'auto.components.settings.developer.permissions.search.302c0c42f9',
-      'Microphone and Camera'
+      'auto.components.settings.developer.permissions.search.16490ec4cd',
+      'Microphone and camera'
     ),
     description: translate(
       'auto.components.settings.developer.permissions.search.6eca1636b7',
@@ -80,9 +89,10 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ]
   },
   {
+    targetSectionId: getDeveloperPermissionSettingId('screen'),
     title: translate(
-      'auto.components.settings.developer.permissions.search.39bb49e662',
-      'Screen Recording and Accessibility'
+      'auto.components.settings.developer.permissions.search.70ffdc218d',
+      'Screen recording and accessibility'
     ),
     description: translate(
       'auto.components.settings.developer.permissions.search.2e5d98ab56',
@@ -144,6 +154,7 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ]
   },
   {
+    targetSectionId: getDeveloperPermissionSettingId('local-network'),
     title: translate(
       'auto.components.settings.developer.permissions.search.3363889768',
       'LAN, USB, and Bluetooth'

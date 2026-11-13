@@ -1,14 +1,14 @@
 import type { TaskPageGitHubCacheReconciliationModel } from './use-task-page-github-cache-reconciliation'
 import { useState, useMemo, useEffect } from 'react'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { useAppStore } from '@/store/index'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   resolveVanishedNewIssueRepoReset,
   isNewIssueDraftContentful
 } from '@/components/task-page/task-page-new-issue-draft'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconciliationModel) {
   const { settings, repos, selectedRepos } = model
   const [newIssueOpen, setNewIssueOpen] = useState(false)

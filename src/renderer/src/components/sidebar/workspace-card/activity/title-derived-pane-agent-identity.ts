@@ -2,7 +2,7 @@ import { titleShowsNoAgent } from '../../../../../../shared/agent-status/process
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 export const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   'Claude Code': 'claude',

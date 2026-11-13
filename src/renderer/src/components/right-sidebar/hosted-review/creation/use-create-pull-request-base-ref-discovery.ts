@@ -1,12 +1,13 @@
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useSourceControlScope } from '../../source-control/panel/worktree-scope'
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { useAppStore } from '@/store/index'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefDetails
-} from '@/runtime/runtime-repo-client'
+} from '@/runtime/source-control/references/runtime-repo-client'
 import {
   normalizeHostedReviewBaseRef as stripBaseRef,
   normalizeCreateReviewBaseSearchResults
@@ -33,19 +34,24 @@ export function useCreatePullRequestBaseRefDiscovery({
   setBaseSearchPending,
   setBaseSearchError
 }: CreatePullRequestBaseRefDiscoveryOptions): string | null {
+  const viewActive = useAppStateViewActive()
+  const scope = useSourceControlScope()
   // Stamp the repo so an old default cannot suppress stacked-PR lookup after navigation.
   const [repoDefault, setRepoDefault] = useState<{ repoId: string; baseRef: string } | null>(null)
   const repoDefaultBaseRef = repoDefault?.repoId === repoId ? repoDefault.baseRef : null
   // Refs belong to the repo owner, which may differ from the focused host.
-  const repoHostId = useAppStore((s) => {
-    const repo = findRepoForHost(s.repos, repoId, { settings: s.settings })
+  const repoHostId = useAppStateValue((s) => {
+    const repo = findRepoForHost(s.repos, repoId, {
+      settings: s.settings,
+      hostId: scope?.executionHostId
+    })
     return repo ? getRepoExecutionHostId(repo) : null
   })
 
   // Resolve the repo default separately; eligibility’s defaultBaseRef can be the worktree’s own base.
   useEffect(() => {
     // Cache the stable repo default to avoid an RPC on every composer opening.
-    if (!open || repoDefaultBaseRef || !repoHostId) {
+    if (!viewActive || !open || repoDefaultBaseRef || !repoHostId) {
       return
     }
     let stale = false
@@ -59,17 +65,17 @@ export function useCreatePullRequestBaseRefDiscovery({
     return () => {
       stale = true
     }
-  }, [open, repoDefaultBaseRef, repoHostId, repoId])
+  }, [open, repoDefaultBaseRef, repoHostId, repoId, viewActive])
 
   useEffect(() => {
-    if (!open || base || !repoDefaultBaseRef) {
+    if (!viewActive || !open || base || !repoDefaultBaseRef) {
       return
     }
     setBase(repoDefaultBaseRef)
-  }, [base, open, repoDefaultBaseRef, setBase])
+  }, [base, open, repoDefaultBaseRef, setBase, viewActive])
 
   useEffect(() => {
-    if (!open || !repoHostId || baseQuery.trim().length < 2) {
+    if (!viewActive || !open || !repoHostId || baseQuery.trim().length < 2) {
       setBaseResults([])
       setBaseSearchPending(false)
       setBaseSearchError(null)
@@ -108,6 +114,7 @@ export function useCreatePullRequestBaseRefDiscovery({
     }
   }, [
     baseQuery,
+    viewActive,
     open,
     repoHostId,
     repoId,

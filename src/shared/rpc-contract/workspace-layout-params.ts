@@ -107,7 +107,7 @@ const OpenEditorTabCommand = z.object({
   type: z.literal('openEditorTab'),
   ...OnTab,
   fileId: z.string().min(1),
-  contentType: z.enum(['editor', 'diff', 'conflict-review', 'check-details']),
+  contentType: z.enum(['editor', 'diff', 'conflict-review', 'check-details', 'git-graph']),
   file: EditorFileRecord.optional(),
   view: EditorViewRecord.optional(),
   groupId: z.string().min(1).optional(),
@@ -135,7 +135,8 @@ const MovePaneToNewTabCommand = z.object({
 const AiVaultTitle = z.object({
   agent: z.enum(['claude', 'codex']),
   sessionId: z.string(),
-  title: z.string()
+  title: z.string(),
+  kind: z.enum(['named', 'fallback']).optional().catch(undefined)
 })
 
 /** A tab's rename: a title as the window stores it today; null clears it. */

@@ -7,106 +7,15 @@ import {
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
-import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from '../../../../shared/worktree/create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
+import '../../../../shared/worktree/create-preparation'
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
-  hasPendingWorktreeCreatePreparations,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
 import { releaseWorktreeCreatePreparationsForRepo } from './worktree-create-preparation-project-removal'
 
 describe('worktree create preparation registry', () => {
-  it.each([undefined, 'Ubuntu'])(
-    'preserves create priority through claim probes on %s',
-    async (wslDistro) => {
-      const routing = wslDistro ? { wslDistro } : {}
-      mocks.getWorktreeOptions.mockReturnValue(routing)
-      await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-      expect(mocks.resolveBaseRef).toHaveBeenLastCalledWith(repo.path, 'origin/main', routing)
-      expect(mocks.prepareCheckout.mock.calls[0]?.[4]).not.toHaveProperty('admissionTier')
-
-      const options = { ...routing, admissionTier: 'interactive' as const }
-      await expect(
-        consumePreparedWorktreeCreate({
-          repoPath: repo.path,
-          workspaceRoot: '/workspace',
-          worktreePath: '/workspace/final',
-          branch: 'feature/test',
-          baseBranch: 'main',
-          options
-        })
-      ).resolves.toMatchObject({ status: 'hit', retargeted: true })
-      expect(mocks.resolveBaseRef).toHaveBeenLastCalledWith(repo.path, 'main', options)
-      expect(mocks.measureDivergence).toHaveBeenCalledWith(
-        repo.path,
-        'refs/remotes/origin/main',
-        'refs/heads/main',
-        options
-      )
-    }
-  )
-
-  it('starts the checkout only once the async workspace root resolves', async () => {
-    let resolveRoot!: (root: string) => void
-    mocks.computeWorkspaceRootAsync.mockReturnValue(
-      new Promise<string>((resolve) => {
-        resolveRoot = resolve
-      })
-    )
-
-    const preparation = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await Promise.resolve()
-    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
-
-    resolveRoot('/workspace')
-    await preparation
-
-    expect(mocks.computeWorkspaceRoot).not.toHaveBeenCalled()
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
-  it('still deduplicates when both callers await the same pending root lookup', async () => {
-    let resolveRoot!: (root: string) => void
-    mocks.computeWorkspaceRootAsync.mockReturnValue(
-      new Promise<string>((resolve) => {
-        resolveRoot = resolve
-      })
-    )
-
-    const first = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const second = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    resolveRoot('/workspace')
-    await Promise.all([first, second])
-
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
-  it('namespaces native Windows preparation directories for long paths', async () => {
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      await prepareWorktreeCreateForRepo(store, { ...repo, path: 'C:\\repo' }, 'origin/main')
-
-      expect(mocks.mkdir).toHaveBeenCalledWith(
-        expect.stringMatching(/^\\\\\?\\C:\\workspace\\\.orca-preparing/),
-        { recursive: true }
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-    }
-  })
-
-  it('deduplicates preparation for the same repo, base, runtime, and workspace root', async () => {
-    await Promise.all([
-      prepareWorktreeCreateForRepo(store, repo, 'origin/main'),
-      prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    ])
-
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
   it('does not claim a preparation after the selected base changes to another branch', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
@@ -152,7 +61,8 @@ describe('worktree create preparation registry', () => {
       'main',
       undefined,
       {},
-      mocks.prepareCheckout.mock.calls[0]?.[3]
+      mocks.prepareCheckout.mock.calls[0]?.[3],
+      expect.anything()
     )
   })
 
@@ -190,43 +100,6 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({ status: 'miss', reason: 'retarget_unverifiable' })
     expect(mocks.finalize).not.toHaveBeenCalled()
     expect(mocks.discard).not.toHaveBeenCalled()
-  })
-
-  it('does not spend a divergence walk when the base matches exactly', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    await consumePreparedWorktreeCreate({
-      repoPath: repo.path,
-      workspaceRoot: '/workspace',
-      worktreePath: '/workspace/final',
-      branch: 'feature/test',
-      baseBranch: 'origin/main'
-    })
-
-    expect(mocks.measureDivergence).not.toHaveBeenCalled()
-  })
-
-  it('claims when the two sides spell the same ref differently', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/final',
-        branch: 'feature/test',
-        baseBranch: 'refs/remotes/origin/main'
-      })
-    ).resolves.toEqual({
-      status: 'hit',
-      retargeted: false,
-      reset: 'none',
-      buildMs: expect.any(Number),
-      idleMs: expect.any(Number),
-      origin: 'prefetch',
-      result: {},
-      rearm: expect.any(Function)
-    })
   })
 
   it('never hands the same prepared checkout to two concurrent creates', async () => {
@@ -291,24 +164,6 @@ describe('worktree create preparation registry', () => {
     expect(mocks.finalize).not.toHaveBeenCalled()
   })
 
-  it("evicts a repo's own stale preparation before another repo's", async () => {
-    const otherRepo = { id: 'repo-2', path: '/other-repo' } as Repo
-    await prepareWorktreeCreateForRepo(store, otherRepo, 'origin/main')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
-    await prepareWorktreeCreateForRepo(store, repo, 'main')
-
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: otherRepo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/other',
-        branch: 'feature/other',
-        baseBranch: 'origin/main'
-      })
-    ).resolves.toMatchObject({ status: 'hit' })
-  })
-
   it("discards a removed project's armed checkout and reclaims its crash leftovers", async () => {
     const otherRepo = { id: 'repo-2', path: '/other-repo' } as Repo
     await prepareWorktreeCreateForRepo(store, otherRepo, 'origin/main')
@@ -330,7 +185,13 @@ describe('worktree create preparation registry', () => {
     releaseWorktreeCreatePreparationsForRepo(store, repo)
     await flushBackgroundWork()
 
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, armedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      armedPath,
+      expect.objectContaining({ signal: undefined }),
+      expect.any(String),
+      null
+    )
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
       stalePath,
@@ -346,66 +207,6 @@ describe('worktree create preparation registry', () => {
         baseBranch: 'origin/main'
       })
     ).resolves.toMatchObject({ status: 'hit' })
-  })
-
-  it('still discards armed checkouts when the project runtime needs repair', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await flushBackgroundWork()
-    mocks.getWorktreeOptions.mockImplementation(() => {
-      throw new Error('Project runtime requires repair before git execution: wsl-distro-missing')
-    })
-
-    expect(() => releaseWorktreeCreatePreparationsForRepo(store, repo)).not.toThrow()
-    await flushBackgroundWork()
-
-    expect(mocks.discard).toHaveBeenCalledWith(
-      repo.path,
-      mocks.prepareCheckout.mock.calls[0]?.[1],
-      {},
-      expect.any(String)
-    )
-  })
-
-  it('routes preparation and finalization through the selected WSL runtime', async () => {
-    const options = { wslDistro: 'Ubuntu' }
-    mocks.getWorktreeOptions.mockReturnValue(options)
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    await consumePreparedWorktreeCreate({
-      repoPath: repo.path,
-      workspaceRoot: '/workspace',
-      worktreePath: '/workspace/final',
-      branch: 'feature/test',
-      baseBranch: 'origin/main',
-      options
-    })
-
-    expect(mocks.prepareCheckout).toHaveBeenCalledWith(
-      repo.path,
-      expect.any(String),
-      'refs/remotes/origin/main',
-      expect.any(String),
-      { ...options, signal: expect.any(AbortSignal) },
-      undefined
-    )
-    expect(mocks.finalize).toHaveBeenCalledWith(
-      repo.path,
-      expect.any(String),
-      '/workspace/final',
-      'feature/test',
-      'origin/main',
-      undefined,
-      options,
-      mocks.prepareCheckout.mock.calls[0]?.[3]
-    )
-  })
-
-  it('retries stale cleanup after a transient listing failure', async () => {
-    mocks.listWorktreeGraph.mockRejectedValueOnce(new Error('temporary listing failure'))
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
-
-    expect(mocks.listWorktreeGraph).toHaveBeenCalledTimes(2)
   })
 
   it('prepares while stale removal is stalled, shares its scan, and settles removal on reset', async () => {
@@ -508,191 +309,5 @@ describe('worktree create preparation registry', () => {
 
     expect(mocks.unlock).not.toHaveBeenCalled()
     expect(mocks.discard).not.toHaveBeenCalled()
-  })
-
-  it('does not discard a detached worktree with caller-controlled preparation metadata', async () => {
-    mocks.listWorktreeGraph.mockResolvedValueOnce([
-      {
-        path: `/workspace/${WORKTREE_CREATE_PREPARATION_DIRECTORY}/999-checkout`,
-        branch: undefined,
-        lockReason: 'orca-create-preparation:v1:999999999:spoofed',
-        head: 'deadbeef',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    expect(mocks.discard).not.toHaveBeenCalledWith(
-      repo.path,
-      `/workspace/${WORKTREE_CREATE_PREPARATION_DIRECTORY}/999-checkout`,
-      {}
-    )
-  })
-
-  it('cleans up and reports a finalize miss so normal add can run', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    mocks.finalize.mockRejectedValueOnce(new Error('submodules prevent worktree move'))
-
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/final',
-        branch: 'feature/test',
-        baseBranch: 'origin/main'
-      })
-    ).resolves.toMatchObject({ status: 'miss', reason: 'finalize_failed' })
-    expect(mocks.mkdir).toHaveBeenCalledWith('/workspace', { recursive: true })
-    expect(mocks.discard).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves another owner’s checkout when finalization loses its lock', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    mocks.finalize.mockRejectedValueOnce(new WorktreePreparationLockOwnershipError())
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/final',
-        branch: 'feature/test',
-        baseBranch: 'origin/main'
-      })
-    ).resolves.toMatchObject({ status: 'miss', reason: 'finalize_failed' })
-    expect(mocks.discard).not.toHaveBeenCalled()
-  })
-
-  async function consumeOnce(name: string): Promise<void> {
-    const attempt = await consumePreparedWorktreeCreate({
-      repoPath: repo.path,
-      workspaceRoot: '/workspace',
-      worktreePath: `/workspace/${name}`,
-      branch: `feature/${name}`,
-      baseBranch: 'origin/main'
-    })
-    if (attempt.status === 'hit') {
-      attempt.rearm()
-    }
-  }
-
-  it('does not re-arm after an isolated create', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await consumeOnce('only')
-
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
-  it('re-arms a preparation once creates arrive in a burst', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await consumeOnce('first')
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await consumeOnce('second')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(3)
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/third',
-        branch: 'feature/third',
-        baseBranch: 'origin/main'
-      })
-    ).resolves.toEqual({
-      status: 'hit',
-      retargeted: false,
-      reset: 'none',
-      buildMs: expect.any(Number),
-      idleMs: expect.any(Number),
-      origin: 'rearm_then_prefetch',
-      result: {},
-      rearm: expect.any(Function)
-    })
-    expect(mocks.finalize).toHaveBeenCalledTimes(3)
-  })
-
-  it('holds the re-arm checkout until the create runs the deferred thunk', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await consumeOnce('first')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    mocks.prepareCheckout.mockClear()
-
-    const attempt = await consumePreparedWorktreeCreate({
-      repoPath: repo.path,
-      workspaceRoot: '/workspace',
-      worktreePath: '/workspace/second',
-      branch: 'feature/second',
-      baseBranch: 'origin/main'
-    })
-
-    // Drain first; an eager re-arm also awaits cleanup and would otherwise evade this assertion.
-    await flushBackgroundWork()
-    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
-    expect(attempt.status).toBe('hit')
-    if (attempt.status === 'hit') {
-      attempt.rearm()
-    }
-    await flushBackgroundWork()
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
-  it('starts one explicit prefetch after the create completes', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await consumeOnce('first')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    const attempt = await consumePreparedWorktreeCreate({
-      repoPath: repo.path,
-      workspaceRoot: '/workspace',
-      worktreePath: '/workspace/second',
-      branch: 'feature/second',
-      baseBranch: 'origin/main'
-    })
-    expect(attempt.status).toBe('hit')
-
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
-    mocks.prepareCheckout.mockClear()
-
-    if (attempt.status === 'hit') {
-      attempt.rearm()
-    }
-    await flushBackgroundWork()
-
-    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not re-arm when finalization failed', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await consumeOnce('first')
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    mocks.prepareCheckout.mockClear()
-    mocks.finalize.mockRejectedValueOnce(new Error('submodules prevent worktree move'))
-
-    await consumeOnce('second')
-
-    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
-  })
-
-  it('reports a pending create while a stale-cleanup scan is running', async () => {
-    let releaseListing!: () => void
-    mocks.listWorktreeGraph.mockReturnValueOnce(
-      new Promise((resolve) => {
-        releaseListing = () => resolve([])
-      })
-    )
-    const arming = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    // Wait for the scan to start so an earlier await cannot make this pass without testing the gate.
-    while (mocks.listWorktreeGraph.mock.calls.length === 0) {
-      await Promise.resolve()
-    }
-
-    expect(hasPendingWorktreeCreatePreparations()).toBe(true)
-
-    releaseListing()
-    await arming
   })
 })

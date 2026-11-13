@@ -4,10 +4,11 @@ import type {
   SearchFileResult,
   SearchMatch,
   SearchResult
-} from '../../../../../../shared/code-search-types'
+} from '../../../../../../shared/file-search/code-search-types'
 import type { SearchRow } from './search-rows'
 import { FileResultRow, MatchResultRow } from './SearchResultItems'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 const SEARCH_VIRTUAL_OVERSCAN = 12
 
@@ -23,24 +24,23 @@ type SearchResultsPaneProps = {
   onMatchClick: (fileResult: SearchFileResult, match: SearchMatch) => void
 }
 
-function formatSearchResultSummary(matchCount: number, fileCount: number): string {
-  const results = translate(
-    'auto.components.right.sidebar.Search.resultCount',
-    '{{count}} results',
-    { count: matchCount, defaultValue_one: '{{count}} result' }
-  )
-  const files = translate('auto.components.right.sidebar.Search.fileCount', '{{count}} files', {
+function formatSearchResultSummary(
+  matchCount: number,
+  fileCount: number,
+  t: Translate = translate
+): string {
+  const results = t('auto.components.right.sidebar.Search.resultCount', '{{count}} results', {
+    count: matchCount,
+    defaultValue_one: '{{count}} result'
+  })
+  const files = t('auto.components.right.sidebar.Search.fileCount', '{{count}} files', {
     count: fileCount,
     defaultValue_one: '{{count}} file'
   })
-  return translate(
-    'auto.components.right.sidebar.Search.resultsInFiles',
-    '{{results}} in {{files}}',
-    {
-      results,
-      files
-    }
-  )
+  return t('auto.components.right.sidebar.Search.resultsInFiles', '{{results}} in {{files}}', {
+    results,
+    files
+  })
 }
 
 export function SearchResultsPane({
@@ -54,6 +54,7 @@ export function SearchResultsPane({
   onToggleCollapsedFile,
   onMatchClick
 }: SearchResultsPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -87,9 +88,9 @@ export function SearchResultsPane({
     <>
       {!error && results && (rows.length > 0 || results.truncated) && (
         <div className="px-2 py-1 text-2xs text-muted-foreground border-b border-border">
-          {formatSearchResultSummary(results.totalMatches, results.files.length)}{' '}
+          {formatSearchResultSummary(results.totalMatches, results.files.length, t)}{' '}
           {results.truncated &&
-            translate('auto.components.right.sidebar.Search.dcc294f28d', '(results truncated)')}
+            t('auto.components.right.sidebar.Search.dcc294f28d', '(results truncated)')}
         </div>
       )}
 
@@ -138,25 +139,19 @@ export function SearchResultsPane({
 
         {!error && !hasCommittedResults && query && !loading && (
           <div className="flex items-center justify-center h-32 text-muted-foreground text-xs">
-            {translate('auto.components.right.sidebar.Search.d56d140747', 'Press Enter to search')}
+            {t('auto.components.right.sidebar.Search.d56d140747', 'Press Enter to search')}
           </div>
         )}
 
         {!error && hasCommittedResults && results?.totalMatches === 0 && !loading && (
           <div className="px-3 py-6 text-xs text-muted-foreground">
-            {translate(
-              'fileSearch.noResults',
-              'No results. Try another search or adjust your filters.'
-            )}
+            {t('fileSearch.noResults', 'No results. Try another search or adjust your filters.')}
           </div>
         )}
 
         {!error && !query && (
           <div className="flex items-center justify-center h-32 text-muted-foreground text-xs">
-            {translate(
-              'auto.components.right.sidebar.Search.1abfb25a66',
-              'Type to search in files'
-            )}
+            {t('auto.components.right.sidebar.Search.1abfb25a66', 'Type to search in files')}
           </div>
         )}
       </div>

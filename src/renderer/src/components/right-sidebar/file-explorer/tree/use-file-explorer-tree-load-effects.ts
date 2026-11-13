@@ -6,9 +6,9 @@ import { decideExpandedDirLoad } from '../watching/file-explorer-stale-dir-cache
 import { clearFileExplorerUndoHistory } from '../mutations/fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
 import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
-import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 
 type UseFileExplorerTreeLoadEffectsParams = {
   /** The store worktree id, keying the user's own switches to this workspace. */

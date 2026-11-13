@@ -2,13 +2,17 @@ import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-o
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type {
+  PendingSidebarRowReveal,
+  PendingSidebarWorktreeReveal
+} from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
@@ -23,6 +27,8 @@ import {
   rowKeyMatchesRenderRow
 } from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
+import { useAppStore } from '@/store'
+import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 
 export const MAX_REVEAL_RETRIES = 8
 
@@ -41,6 +47,7 @@ export type PendingSidebarRevealArgs = {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  lineageParentIdentities?: SidebarLineageParentIdentities
   collapsedGroups: Set<string>
   toggleGroup: (key: string) => void
   groupBy: WorktreeGroupBy
@@ -112,10 +119,31 @@ export function resolvePendingSidebarReveal(args: {
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
 }
 
+// A hidden project's rows never render, so waiting for one would hold the request until unhide.
+function isRevealTargetInHiddenProject(
+  worktrees: readonly Worktree[],
+  defaultHostId: ExecutionHostId,
+  request: PendingSidebarWorktreeReveal
+): boolean {
+  const target = worktrees.find(
+    (worktree) =>
+      worktree.id === request.worktreeId &&
+      (!request.executionHostId || !worktree.hostId || worktree.hostId === request.executionHostId)
+  )
+  // The sidebar's own default host, so the reveal and the rows agree on unstamped rows.
+  return (
+    target !== undefined &&
+    indexHiddenProjects(useAppStore.getState().repos, defaultHostId).isRowHidden({
+      repoId: target.repoId,
+      hostId: target.hostId ?? request.executionHostId
+    })
+  )
+}
+
 export function resolvePendingWorktreeRevealTarget(
   args: Pick<
     PendingSidebarRevealArgs,
-    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy'
+    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy' | 'defaultHostId'
   >,
   request: PendingSidebarWorktreeReveal
 ) {
@@ -139,12 +167,13 @@ export function resolvePendingWorktreeRevealTarget(
       : 'scroll-and-clear'
     : resolvePendingSidebarReveal({
         targetIndex,
-        targetWorktreeStillExists: sidebarWorkspaceStillExists(
-          request.worktreeId,
-          args.worktrees,
-          selectFolderWorkspaces(args),
-          request.executionHostId
-        )
+        targetWorktreeStillExists:
+          sidebarWorkspaceStillExists(
+            request.worktreeId,
+            args.worktrees,
+            selectFolderWorkspaces(args),
+            request.executionHostId
+          ) && !isRevealTargetInHiddenProject(args.worktrees, args.defaultHostId, request)
       })
   return { targetIndex, outcome }
 }

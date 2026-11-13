@@ -12,7 +12,7 @@ import {
   LEAF_ID,
   SECOND_LEAF_ID,
   resetWebSessionTabsSyncTestState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({ useAppStore: { setState: vi.fn() } }))
 beforeEach(resetWebSessionTabsSyncTestState)

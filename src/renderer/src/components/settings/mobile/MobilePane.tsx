@@ -6,18 +6,19 @@ import {
   getPairedMobileDevicesSnapshot,
   usePairedMobileDevices
 } from '../../mobile/paired-mobile-devices'
-import { useMobilePairingDevicePolling } from './pairing/mobile-pairing-device-polling'
+import { useMobilePairingDevicePolling } from '../../mobile/pairing/mobile-pairing-device-polling'
 import { useMobilePairedDeviceRevocation } from './pairing/use-mobile-paired-device-revocation'
-import type { MobileNetworkInterface } from './pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../../shared/pairing-address-auto-selection'
 import { MachineNameField } from '../../machine-identity/MachineNameField'
 import { MobilePairingQrSection } from './pairing/MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './pairing/MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
-import { MobilePairingConnectionOptions } from './pairing/MobilePairingConnectionOptions'
+import { MobilePairingConnectionOptions } from '../../mobile/pairing/MobilePairingConnectionOptions'
 import { MobilePairingSetupSection } from './pairing/MobilePairingSetupSection'
 import { MobileRelayMintFailureNotice } from '../../mobile/mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from '../../mobile/WindowsFirewallNotice'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
@@ -25,20 +26,23 @@ import {
 import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
-import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
+import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
+import { MOBILE_SETTING_ANCHORS, shouldOpenMobilePairingAddress } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
+  const t = useTranslate()
   const autoRestoreFitMs = useAppStore((s) => s.settings?.mobileAutoRestoreFitMs ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [qrSize, setQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [qrExpiresAt, setQrExpiresAt] = useState<number | null>(null)
   const [qrError, setQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [qrEnlarged, setQrEnlarged] = useState(false)
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
+  const [networkInterfaces, setNetworkInterfaces] = useState<PairingNetworkInterface[]>([])
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
@@ -185,6 +189,7 @@ export function MobilePane(): React.JSX.Element {
             setQrDataUrl(result.qrDataUrl)
             setQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
+            setQrExpiresAt(result.expiresAt ?? null)
             setQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
             setEndpoint(result.endpoint)
@@ -328,6 +333,9 @@ export function MobilePane(): React.JSX.Element {
     }
   }, [devicesLoaded, loadDevices])
 
+  // Refresh ahead of expiry; the old code stays valid for a phone mid-scan.
+  usePairingOfferExpiry(pairingUrl != null ? qrExpiresAt : null, () => void generateQR())
+
   useMobilePairingDevicePolling({
     deviceCountAtQr,
     currentDeviceCount: devices.length,
@@ -335,83 +343,93 @@ export function MobilePane(): React.JSX.Element {
   })
 
   return (
-    <div className="space-y-6">
-      <MachineNameField id="mobile-machine-name" />
+    <>
+      {/* empty:hidden drops the row (and its rule) when the field renders nothing on web clients. */}
+      <div data-settings-row="" className="py-4 empty:hidden">
+        <MachineNameField id="mobile-machine-name" />
+      </div>
 
-      <MobilePairingSetupSection
-        connectionMode={connectionMode}
-        canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
-        addressDisclosureForcedOpen={shouldOpenMobilePairingAddress(settingsSearchQuery)}
-        connectionPathControl={
-          <MobilePairingConnectionOptions
-            value={connectionMode}
-            onChange={changeConnectionMode}
-            relayMintFailed={relayMintFailure != null && connectionMode === 'automatic'}
-            relayMintRetrying={
-              relayMintFailure != null && connectionMode === 'automatic' && loading
-            }
-          />
-        }
-        networkInterfaces={networkInterfaces}
-        customAddresses={customAddresses}
-        selectedAddress={selectedAddress}
-        selectedAddressIsCustom={selectedAddressIsCustom}
-        onSelectedAddressChange={handleSelectedAddressChange}
-        onCustomAddressSelect={handleCustomAddressSelect}
-        onCustomAddressRemove={handleCustomAddressRemove}
-        refreshingNetworkInterfaces={refreshingNetworkInterfaces}
-        onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ notifyOnError: true })}
-        loading={loading}
-        hasQrCode={qrDataUrl != null}
-        showGenerateAction={relayMintFailure == null}
-        onGenerateQr={() => void generateQR({ rotate: qrDataUrl != null })}
-      />
-
-      {relayMintFailure != null && connectionMode === 'automatic' ? (
-        <MobileRelayMintFailureNotice
-          failure={relayMintFailure}
-          onUseLan={() => changeConnectionMode('local-only')}
-          onRetry={() => void generateQR({ rotate: true })}
-          onCopyDiagnostics={() => void copyRelayDiagnostics()}
-          busy={loading}
+      <div id={MOBILE_SETTING_ANCHORS.pairing} data-settings-row="" className="space-y-6 py-4">
+        <MobilePairingSetupSection
+          connectionMode={connectionMode}
+          canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
+          addressDisclosureForcedOpen={shouldOpenMobilePairingAddress(settingsSearchQuery)}
+          connectionPathControl={
+            <MobilePairingConnectionOptions
+              value={connectionMode}
+              onChange={changeConnectionMode}
+              relayMintFailed={relayMintFailure != null && connectionMode === 'automatic'}
+              relayMintRetrying={
+                relayMintFailure != null && connectionMode === 'automatic' && loading
+              }
+            />
+          }
+          networkInterfaces={networkInterfaces}
+          customAddresses={customAddresses}
+          selectedAddress={selectedAddress}
+          selectedAddressIsCustom={selectedAddressIsCustom}
+          onSelectedAddressChange={handleSelectedAddressChange}
+          onCustomAddressSelect={handleCustomAddressSelect}
+          onCustomAddressRemove={handleCustomAddressRemove}
+          refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+          onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ notifyOnError: true })}
+          loading={loading}
+          hasQrCode={qrDataUrl != null}
+          showGenerateAction={relayMintFailure == null}
+          onGenerateQr={() => void generateQR({ rotate: qrDataUrl != null })}
         />
-      ) : null}
 
-      <span className="sr-only" role="status" aria-live="polite">
-        {pairingUrl != null && !loading
-          ? translate('auto.components.settings.MobilePane.pairingCodeReady', 'Pairing code ready')
-          : ''}
-      </span>
+        {relayMintFailure != null && connectionMode === 'automatic' ? (
+          <MobileRelayMintFailureNotice
+            failure={relayMintFailure}
+            onUseLan={() => changeConnectionMode('local-only')}
+            onRetry={() => void generateQR({ rotate: true })}
+            onCopyDiagnostics={() => void copyRelayDiagnostics()}
+            busy={loading}
+          />
+        ) : null}
 
-      <MobilePairingQrSection
-        qrDataUrl={qrDataUrl}
-        qrSize={qrSize}
-        qrError={qrError}
-        pairingUrl={pairingUrl}
-        endpoint={endpoint}
-        qrEnlarged={qrEnlarged}
-        codeCopied={codeCopied}
-        onQrEnlargedChange={setQrEnlarged}
-        onCodeCopiedChange={setCodeCopied}
-        onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
-      />
+        <span className="sr-only" role="status" aria-live="polite">
+          {pairingUrl != null && !loading
+            ? t('auto.components.settings.MobilePane.pairingCodeReady', 'Pairing code ready')
+            : ''}
+        </span>
 
-      <WindowsFirewallNotice
-        pairingReady={pairingUrl != null}
-        address={selectedAddress}
-        usingRelay={connectionMode === 'automatic'}
-      />
+        <MobilePairingQrSection
+          qrDataUrl={qrDataUrl}
+          qrSize={qrSize}
+          qrError={qrError}
+          pairingUrl={pairingUrl}
+          endpoint={endpoint}
+          refreshesAutomatically={qrExpiresAt != null}
+          qrEnlarged={qrEnlarged}
+          codeCopied={codeCopied}
+          onQrEnlargedChange={setQrEnlarged}
+          onCodeCopiedChange={setCodeCopied}
+          onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
+        />
 
-      <MobilePairedDevicesSection
-        devices={devices}
-        hasQrCode={qrDataUrl != null}
-        onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
-      />
+        <WindowsFirewallNotice
+          pairingReady={pairingUrl != null}
+          address={selectedAddress}
+          usingRelay={connectionMode === 'automatic'}
+        />
+      </div>
 
-      <MobileAutoRestoreFitSection
-        autoRestoreFitMs={autoRestoreFitMs}
-        onAutoRestoreFitChange={(ms) => void updateSettings({ mobileAutoRestoreFitMs: ms })}
-      />
-    </div>
+      <div id={MOBILE_SETTING_ANCHORS.devices} data-settings-row="" className="py-4">
+        <MobilePairedDevicesSection
+          devices={devices}
+          hasQrCode={qrDataUrl != null}
+          onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
+        />
+      </div>
+
+      <div data-settings-row="" className="py-4">
+        <MobileAutoRestoreFitSection
+          autoRestoreFitMs={autoRestoreFitMs}
+          onAutoRestoreFitChange={(ms) => void updateSettings({ mobileAutoRestoreFitMs: ms })}
+        />
+      </div>
+    </>
   )
 }

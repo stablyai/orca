@@ -1,11 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import {
-  createManagedCommandMatcher,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath

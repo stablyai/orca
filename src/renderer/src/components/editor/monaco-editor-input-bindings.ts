@@ -4,6 +4,9 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
+import { formatSelectionReference } from './selection-copy'
+import { openAddToChatMenuAt } from '../native-chat/selection-quotes/add-to-chat-point-menu'
+import { formatNativeChatQuote } from '../native-chat/selection-quotes/native-chat-quote-selection'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import {
   installEditorAddReviewNoteShortcut,
@@ -98,6 +101,44 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       state.showRightSidebarSearch({ query })
     }
   })
+  const addToChatAction = editorInstance.addAction({
+    id: 'orca.addSelectionToChat',
+    label: translate('components.native-chat.addSelectionToChat', 'Add to chat'),
+    precondition: 'editorHasSelection',
+    contextMenuGroupId: '9_cutcopypaste',
+    contextMenuOrder: 5,
+    run: () => {
+      const model = editorInstance.getModel()
+      // Every cursor's range, in document order, so a multi-cursor or column selection keeps them all.
+      const selections = (editorInstance.getSelections() ?? [])
+        .filter((selection) => !selection.isEmpty())
+        .sort((a, b) => a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn)
+      const last = selections.at(-1)
+      if (!worktreeId || !model || !last) {
+        return
+      }
+      const reference = selections
+        .map((selection) =>
+          formatSelectionReference({
+            relativePath: propsRef.current.relativePath,
+            language: propsRef.current.language,
+            selection,
+            selectedText: model.getValueInRange(selection)
+          })
+        )
+        .join('\n\n')
+      // The target list opens under the end of the last range, where the user's eye already is.
+      const visible = editorInstance.getScrolledVisiblePosition(last.getEndPosition())
+      const box = editorDomNode.getBoundingClientRect()
+      openAddToChatMenuAt({
+        worktreeId,
+        quote: formatNativeChatQuote(reference),
+        launchSource: 'native_chat',
+        x: box.left + (visible?.left ?? 0),
+        y: box.top + (visible ? visible.top + visible.height : 0)
+      })
+    }
+  })
   const onLargeTextPaste = (event: ClipboardEvent): void => {
     if (!event.composedPath().includes(editorDomNode)) {
       return
@@ -127,6 +168,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       cleanupAddReviewNoteShortcut()
       pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
+      addToChatAction.dispose()
     }
   }
 }

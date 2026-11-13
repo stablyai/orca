@@ -2,7 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import {
   MANAGED_HOOK_TIMEOUT_SECONDS,
   type HookDefinition
-} from '../../../agent-hooks/installer-utils'
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHookTrustEntries,
   removeHookTrustEntries,

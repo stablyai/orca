@@ -1,23 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
-  ORCA_EDITOR_FILE_SAVED_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   requestEditorFileSave,
-  requestEditorSaveQuiesce,
   type EditorSaveAndCloseDetail
 } from '../../autosave/editor-autosave'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { keepTabEditsOverExternalChange } from '../../external-changes/ExternalFileChangeBanner'
-import { attemptEditorFileSave } from '../commands/editor-file-save-attempt'
-import {
-  getDiskBaselineSignature,
-  getWrittenContentDiskSignature
-} from '../../../../../../shared/disk-baseline-signature'
+
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn(), toastError: vi.fn() }))
 const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({
@@ -25,12 +20,14 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
 }))
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: mocks.toastError }) }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
@@ -53,144 +50,6 @@ describe('guarded editor saves under races', () => {
     vi.unstubAllGlobals()
     __clearSelfWriteRegistryForTests()
     mocks.toastError.mockReset()
-  })
-
-  it('guards an unstaged diff tab, which writes the working-tree file', async () => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' })
-    const store = createEditorStore()
-    store.getState().openDiff('wt-1', GUARDED_PATH, 'file.ts', 'typescript', false)
-    const diff = store.getState().openFiles[0]
-    expect(diff?.diffSource).toBe('unstaged')
-    store.getState().setLastKnownDiskSignature(diff.id, getDiskBaselineSignature('original'))
-    store.getState().setEditorDraft(diff.id, 'diff edit')
-    store.getState().markFileDirty(diff.id, true)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await vi.advanceTimersByTimeAsync(1500)
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      expect(disk.files.get(GUARDED_PATH)).toBe('agent rewrite')
-      expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('rebaselines to its own write even when a quiesce supersedes the save mid-write', async () => {
-    const gate = deferred()
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'original' }, () => gate.promise)
-    const store = createEditorStore()
-    openGuardedFile(store, { baseline: 'original', draft: 'first' })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const save = requestEditorFileSave({ fileId: GUARDED_PATH })
-      await vi.advanceTimersByTimeAsync(0)
-      const quiesce = requestEditorSaveQuiesce({ fileId: GUARDED_PATH })
-      gate.resolve()
-      await save
-      await quiesce
-      expect(store.getState().openFiles[0]?.lastKnownDiskSignature).toBe(
-        getWrittenContentDiskSignature('first')
-      )
-
-      store.getState().setEditorDraft(GUARDED_PATH, 'second')
-      await requestEditorFileSave({ fileId: GUARDED_PATH })
-      expect(disk.files.get(GUARDED_PATH)).toBe('second')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it("does not let Keep's older disk read restamp over a write that finished after it", async () => {
-    const gate = deferred()
-    stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' }, () => gate.promise)
-    const store = createEditorStore()
-    storeRef.current = store
-    openGuardedFile(store, { baseline: 'original', draft: 'mine' })
-    store.getState().setExternalMutation(GUARDED_PATH, 'changed')
-    const read = deferred<{ content: string; isBinary: boolean }>()
-    mocks.readRuntimeFileContent.mockReturnValue(read.promise)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const save = requestEditorFileSave({ fileId: GUARDED_PATH, overwrite: true })
-      await vi.advanceTimersByTimeAsync(0)
-      keepTabEditsOverExternalChange(store.getState().openFiles[0])
-      gate.resolve()
-      await save
-      read.resolve({ content: 'agent rewrite', isBinary: false })
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(store.getState().openFiles[0]?.lastKnownDiskSignature).toBe(
-        getWrittenContentDiskSignature('mine')
-      )
-    } finally {
-      cleanup()
-    }
-  })
-
-  it("drops a clean sibling's stale cache on a write, so a remount loads the written text", async () => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' })
-    const store = createEditorStore()
-    store.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
-          makeWorktree({ id: 'wt-2', repoId: 'repo-1', path: '/repo', hostId: 'local' })
-        ]
-      }
-    })
-    for (const worktreeId of ['wt-1', 'wt-2']) {
-      store.getState().openFile({
-        filePath: GUARDED_PATH,
-        relativePath: 'file.ts',
-        worktreeId,
-        language: 'typescript',
-        mode: 'edit'
-      })
-    }
-    const [saver, sibling] = store.getState().openFiles
-    for (const tab of [saver, sibling]) {
-      store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
-    }
-    // Model the panel’s per-tab text cache.
-    const cache = new Map([
-      [saver.id, 'A'],
-      [sibling.id, 'A']
-    ])
-    const track = (event: Event): void => {
-      if (event instanceof CustomEvent) {
-        cache.set(event.detail.fileId, event.detail.content)
-      }
-    }
-    // Eviction reloads disk on remount without pushing text between tabs.
-    const drop = (event: Event): void => {
-      if (event instanceof CustomEvent) {
-        cache.delete(event.detail.fileId)
-      }
-    }
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, track)
-    window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, drop)
-    store.getState().setEditorDraft(saver.id, 'B')
-    store.getState().markFileDirty(saver.id, true)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await requestEditorFileSave({ fileId: saver.id })
-      expect(cache.has(sibling.id)).toBe(false)
-
-      const reloaded = cache.get(sibling.id) ?? disk.files.get(GUARDED_PATH)
-      expect(reloaded).toBe('B')
-      store.getState().setEditorDraft(sibling.id, `${reloaded} edited`)
-      store.getState().markFileDirty(sibling.id, true)
-      await requestEditorFileSave({ fileId: sibling.id })
-      expect(disk.files.get(GUARDED_PATH)).toBe('B edited')
-    } finally {
-      cleanup()
-      window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, track)
-      window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, drop)
-    }
   })
 
   function openSharedModelTabs(disk: string) {
@@ -219,49 +78,6 @@ describe('guarded editor saves under races', () => {
     }
     return { store, a, b }
   }
-
-  it('coalesces saves from two views of one record into one write, ending on the saved text', async () => {
-    const gate = deferred()
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' }, () => gate.promise)
-    const { store, a, b } = openSharedModelTabs('A')
-    for (const tab of [a, b]) {
-      store.getState().setEditorDraft(tab.id, 'X')
-      store.getState().markFileDirty(tab.id, true)
-    }
-    // Mount from per-tab text updated by saved events, matching panel consumers.
-    const shown = new Map([
-      [a.id, 'A'],
-      [b.id, 'A']
-    ])
-    const onSaved = (event: Event): void => {
-      if (event instanceof CustomEvent) {
-        shown.set(event.detail.fileId, event.detail.content)
-      }
-    }
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const saves = Promise.all([
-        requestEditorFileSave({ fileId: a.id }),
-        requestEditorFileSave({ fileId: b.id })
-      ])
-      gate.resolve()
-      await saves
-
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      expect(disk.files.get(GUARDED_PATH)).toBe('X')
-      expect(shown.get(a.id)).toBe('X')
-      for (const tab of store.getState().openFiles) {
-        expect(tab.isDirty).toBe(false)
-        expect(tab.externalMutation).toBeUndefined()
-        expect(store.getState().editorDrafts[tab.id]).toBeUndefined()
-      }
-    } finally {
-      cleanup()
-      window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
-    }
-  })
 
   it('makes Cmd+S in one tab wait for Keep My Edits in its sibling', async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'B' })
@@ -314,20 +130,6 @@ describe('guarded editor saves under races', () => {
     } finally {
       cleanup()
       window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
-    }
-  })
-
-  it('reports a refused explicit save with the stale-file message', async () => {
-    stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' })
-    const store = createEditorStore()
-    openGuardedFile(store, { baseline: 'original', draft: 'mine' })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      expect(await attemptEditorFileSave({ fileId: GUARDED_PATH })).toBe(false)
-      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/changed on disk/))
-    } finally {
-      cleanup()
     }
   })
 

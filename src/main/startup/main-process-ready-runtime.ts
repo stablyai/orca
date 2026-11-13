@@ -5,43 +5,51 @@ import { StarNagService } from '../star-nag/service'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { browserManager } from '../browser/browser-manager'
+import {
+  DESKTOP_RPC_CALLER,
+  LOCAL_CLI_RPC_CALLER
+} from '../runtime/rpc/callers/rpc-caller-identity'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserClientPageCommandError } from '../browser/client-pages/execution/browser-client-page-command-failure'
-import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
-import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-scheduling-guard'
-import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
-import { handleGpuChildCrash } from './gpu-lifecycle'
-import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
+import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
+import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
+import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
+import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
+import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
-import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
+import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-hook-startup'
+import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
-import { installFirstWorkRenameHookSubscription } from './branch-rename-hook'
-import { initializeMainProcessAccountServices } from './main-process-account-services'
+import { installFirstWorkRenameHookSubscription } from './workspace-startup/branch-rename-hook'
+import { initializeMainProcessAccountServices } from './agent-accounts/main-process-account-services'
 import {
   initializeMainProcessRuntime,
   configureRuntimeServices
-} from './main-process-runtime-service'
-import { initializeMainProcessAutomations } from './main-process-automations'
-import { initializeMainProcessPlugins } from './main-process-plugins'
+} from './runtime-startup/main-process-runtime-service'
+import { initializeMainProcessAutomations } from './runtime-startup/main-process-automations'
+import { initializeMainProcessPlugins } from './plugin-startup/main-process-plugins'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
 } from '../workspaces/removal/worktree-trash'
-import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
-import { runAfterFirstWindowShown } from './first-window-deferral'
-import { logStartupMilestone } from './startup-diagnostics'
-import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
-import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
-import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { loadWorktreeRemovalRecordsForStore } from './workspace-startup/worktree-removal-records-load'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
+import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
+import { logStartupMilestone } from './diagnostics/startup-diagnostics'
+import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
+import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
+import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
+import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
+import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
+import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -59,6 +67,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
+  startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)
@@ -71,15 +80,15 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
   void state.agentBrowserBridge.sweepOrphanedSessions()
-  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime })
+  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
   configureBrowserClientPageAutomationRuntime({
     browserManager,
     getAgentBrowserBridge: () => state.agentBrowserBridge,
-    executeRpc: async (method, params, signal) => {
+    executeRpc: async (method, params, agent, signal) => {
       const response = await browserClientAutomationDispatcher.dispatch(
         { id: randomUUID(), authToken: 'local-browser-client-automation', method, params },
-        // Why: forwarded automation comes from a remote agent's CLI; the cursor and tab badge key off it.
-        { signal, caller: { kind: 'local-cli' } }
+        // Why: the cursor, glow and tab badge key off an agent caller; relayed people are not one.
+        { signal, caller: agent ? LOCAL_CLI_RPC_CALLER : DESKTOP_RPC_CALLER }
       )
       if (!response.ok) {
         const mismatch = BrowserExpectedUrlMismatch.safeParse(response.error.data)
@@ -117,6 +126,20 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // The startup pass ran before browser sessions and any window existed, so `browser-cookies` paused.
   runAfterFirstWindowShown(() => {
     void runGatedWslMoveDesktopRewritePass({ userDataPath: app.getPath('userData') })
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
+  runAfterFirstWindowShown(() => {
+    app.on('browser-window-focus', startSpeechModelWarmup(store))
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  runAfterFirstWindowShown(() => {
+    startClaudeCodeThemeSync({
+      getSettings: () => store.getSettings(),
+      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+      onAppFocused: (listener) => app.on('browser-window-focus', listener),
+      userDataPath: app.getPath('userData')
+    })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.

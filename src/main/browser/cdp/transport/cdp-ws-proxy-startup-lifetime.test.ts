@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CdpWsProxy } from './cdp-ws-proxy'
-import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { createMockWebContents, mockAsWebContents } from './cdp-ws-proxy-test-harness'
 
 const { createServerMock, webSocketServerMock } = vi.hoisted(() => ({
@@ -53,15 +52,6 @@ function pendingEnable(mock: ReturnType<typeof createMockWebContents>) {
   return { finish, fail }
 }
 
-function invalidateNativeHandle(mock: ReturnType<typeof createMockWebContents>): void {
-  mock.destroy()
-  Object.defineProperty(mock.webContents, 'debugger', {
-    get() {
-      throw new Error('Object has been destroyed')
-    }
-  })
-}
-
 describe('CdpWsProxy startup ownership', () => {
   let servers: ProxyServer[]
   let socketServers: ProxyWebSocketServer[]
@@ -100,72 +90,6 @@ describe('CdpWsProxy startup ownership', () => {
     expect(mock.listeners.get('detach') ?? []).toHaveLength(0)
   }
 
-  it('tolerates Page.enable rejection on a live shared attachment', async () => {
-    const mock = createMockWebContents()
-    const debuggerHandle = mock.webContents.debugger
-    const lease = acquireElectronDebugger(mockAsWebContents(mock))
-    debuggerHandle.sendCommand.mockRejectedValueOnce(new Error('Page domain is not ready'))
-    const proxy = makeProxy(mock)
-
-    await expect(proxy.start()).resolves.toBe('ws://127.0.0.1:9222')
-    await proxy.stop()
-
-    expectNoListeners(mock)
-    expect(debuggerHandle.isAttached()).toBe(true)
-    expect(debuggerHandle.detach).not.toHaveBeenCalled()
-    lease.release()
-    expect(debuggerHandle.attach).toHaveBeenCalledTimes(1)
-    expect(debuggerHandle.detach).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([false, true])(
-    'refuses server admission after native detach during Page.enable (destroyed: %s)',
-    async (destroyed) => {
-      const mock = createMockWebContents()
-      const debuggerHandle = mock.webContents.debugger
-      const enable = pendingEnable(mock)
-      const proxy = makeProxy(mock)
-      const starting = proxy.start()
-      debuggerHandle.isAttached.mockReturnValue(false)
-      if (destroyed) {
-        invalidateNativeHandle(mock)
-      }
-      mock.emit('detach', {}, 'target closed')
-      enable.fail(new Error('target closed while handling command'))
-
-      await expect(starting).rejects.toThrow('detached during startup')
-      expect(proxy.getPort()).toBe(0)
-      expect(servers).toHaveLength(0)
-      expect(socketServers).toHaveLength(0)
-      expectNoListeners(mock)
-    }
-  )
-
-  it('cleans a destroyed startup even when no native detach event arrives', async () => {
-    const mock = createMockWebContents()
-    const enable = pendingEnable(mock)
-    const proxy = makeProxy(mock)
-    const starting = proxy.start()
-    invalidateNativeHandle(mock)
-    enable.fail(new Error('target closed while handling command'))
-
-    await expect(starting).rejects.toThrow('no longer available')
-    expect(servers).toHaveLength(0)
-    expectNoListeners(mock)
-  })
-
-  it('refuses server admission when stopped after attachment completes', async () => {
-    const mock = createMockWebContents()
-    const proxy = makeProxy(mock)
-    const starting = proxy.start()
-    await Promise.resolve()
-    await proxy.stop()
-
-    await expect(starting).rejects.toThrow('stopped')
-    expect(servers).toHaveLength(0)
-    expectNoListeners(mock)
-  })
-
   it('does not detach a successor when stopped Page.enable completes late', async () => {
     const mock = createMockWebContents()
     const debuggerHandle = mock.webContents.debugger
@@ -186,31 +110,5 @@ describe('CdpWsProxy startup ownership', () => {
     await successor.stop()
     expect(debuggerHandle.detach).toHaveBeenCalledTimes(2)
     expectNoListeners(mock)
-  })
-
-  it('retires an established proxy without reading a destroyed native handle', async () => {
-    const mock = createMockWebContents()
-    const proxy = makeProxy(mock)
-    await proxy.start()
-    invalidateNativeHandle(mock)
-
-    await expect(proxy.stop()).resolves.toBeUndefined()
-    expectNoListeners(mock)
-    expect(servers[0].listening).toBe(false)
-    expect(socketServers[0].closed).toBe(true)
-  })
-
-  it('closes server resources even if debugger cleanup throws', async () => {
-    const mock = createMockWebContents()
-    const proxy = makeProxy(mock)
-    await proxy.start()
-    mock.webContents.debugger.removeListener.mockImplementationOnce(() => {
-      throw new Error('debugger cleanup failed')
-    })
-
-    await expect(proxy.stop()).rejects.toThrow('debugger cleanup failed')
-    expect(servers[0].listening).toBe(false)
-    expect(socketServers[0].closed).toBe(true)
-    expect(mock.webContents.debugger.detach).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { WorkspaceLinkedItem } from '../worktree/types'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 

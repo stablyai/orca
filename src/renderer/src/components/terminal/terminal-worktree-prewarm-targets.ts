@@ -1,7 +1,9 @@
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { getSleepingRecordTabId } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
+import '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { parkedTerminalTabCoverage } from '../terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { getSleepingRecordTabId } from '@/lib/sleeping-agent-wake-requests'
-import { resolveParkedTerminalPaneCandidates } from '../terminal-pane/terminal-parked-tab-watchers'
 
 export function selectRevealTerminalTabIds(state: AppState, worktreeId: string): Set<string> {
   const revealTabIds = new Set<string>()
@@ -23,7 +25,9 @@ export function selectRevealTerminalTabIds(state: AppState, worktreeId: string):
 
 export function selectSleepingTabIds(state: AppState, worktreeId: string): Set<string> {
   const tabIds = new Set<string>()
-  for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
+  for (const record of sleepingAgentRecordIndex
+    .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)) {
     const tabId = record.worktreeId === worktreeId ? getSleepingRecordTabId(record) : null
     if (tabId) {
       tabIds.add(tabId)
@@ -43,7 +47,7 @@ export function scheduleTerminalPrewarmStage(callback: () => void): () => void {
 }
 
 export function resolveReattachPtyIds(tab: TerminalTab, state: AppState): string[] {
-  return resolveParkedTerminalPaneCandidates(tab, state).flatMap((pane) =>
+  return parkedTerminalTabCoverage(tab.worktreeId, tab, state).panes.flatMap((pane) =>
     pane.ptyId ? [pane.ptyId] : []
   )
 }

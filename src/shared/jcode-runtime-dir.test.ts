@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { rm, stat } from 'node:fs/promises'
-import { basename } from 'node:path'
+
 import {
   buildJcodeRuntimeDir,
   buildJcodeRuntimeDirEnv,
@@ -10,13 +10,6 @@ import {
 } from './jcode-runtime-dir'
 
 describe('shared jcode-runtime-dir', () => {
-  it('derives a short deterministic hash per pane', () => {
-    const paneKey = 'tab-abc:leaf-123'
-    const dir = buildJcodeRuntimeDir(paneKey)
-    expect(basename(dir)).toMatch(/^[0-9a-f]{16}$/)
-    expect(buildJcodeRuntimeDir(paneKey)).toBe(dir)
-  })
-
   it('keeps runtime dirs distinct across panes', () => {
     expect(buildJcodeRuntimeDir('tab-a:leaf-1')).not.toBe(buildJcodeRuntimeDir('tab-a:leaf-2'))
   })

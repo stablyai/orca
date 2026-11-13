@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** installationId persists per profile; HMAC machineBinding hints at moved/copied profiles and is never identity alone. */
 export const RuntimeHostDescriptorSchema = z.object({

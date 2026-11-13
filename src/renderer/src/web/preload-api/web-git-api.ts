@@ -1,6 +1,8 @@
+import { createGitCommitActionsApi } from './web-git-commit-actions-api'
+import { createGitHistoryApi } from './web-git-history-api'
 import type { PreloadApi } from '../../../../preload/api-types'
-import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime-environment-call'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { callAbortableRuntimeEnvironment } from '../../runtime/rpc/calls/abortable-runtime-environment-call'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'
@@ -86,19 +88,16 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         paths
       })
     },
+    atRiskLocalFiles: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.atRiskLocalFiles', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
     // Why: the "add huge folder to .gitignore" flow is desktop-only; the web runtime makes no offer, so return no candidates.
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
-    history: async ({ worktreePath, limit, baseRef, branchOnly, skip }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.history', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        limit,
-        baseRef,
-        branchOnly,
-        skip
-      })
-    },
+    ...createGitHistoryApi(),
     mutationInFlight: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.mutationInFlight', {
@@ -228,6 +227,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         message
       })
     },
+    ...createGitCommitActionsApi(),
     completeMerge: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.completeMerge', {

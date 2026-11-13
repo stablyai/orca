@@ -4,21 +4,20 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache-identity'
+import { useAppStore } from '@/store/index'
+import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache/cache-identity'
 import type {
   GitHubProjectSettings,
-  GitHubProjectTable,
   GitHubProjectViewSummary
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import type {
   GetProjectViewTableResult,
   GitHubProjectViewError
-} from '../../../../shared/github/project-result-types'
+} from '../../../../shared/github/projects/project-result-types'
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github/project-identity'
+} from '../../../../shared/github/projects/project-identity'
 import type { ResolvedProjectSelection } from './project-picker-selection'
 import { listProjectViewsForRuntime } from './project-picker-runtime'
 import { filterProjectTableRowsBySelectedRepos } from './project-row-filtering'
@@ -28,7 +27,7 @@ import {
   getVisibleProjectTable,
   type CachedVisibleProjectTable
 } from './project-visible-table-cache'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
 
 export function useProjectViewTable(
   selectedRepoIds: ReadonlySet<string>,
@@ -270,4 +269,3 @@ const EMPTY_PROJECT_SETTINGS: GitHubProjectSettings = {
 }
 
 export type ProjectViewTableState = ReturnType<typeof useProjectViewTable>
-export type ProjectViewTable = GitHubProjectTable

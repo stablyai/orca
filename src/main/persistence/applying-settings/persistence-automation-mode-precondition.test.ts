@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { RuntimeAutomationController } from '../../runtime/runtime-automation-controller'
+import { RuntimeAutomationController } from '../../runtime/integrations/automations/runtime-automation-controller'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),

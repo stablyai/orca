@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
+import { DOC_PREVIEW_PARTITION } from '../../../../../shared/document-preview/doc-preview-scheme'
 import { destroyPersistentWebview, webviewRegistry } from '../host-guest/webview-registry'
 import {
   useSshWorkspaceBrowserRoute,
@@ -22,6 +23,7 @@ export function SshRoutedBrowserPageGate({
   pageIds: readonly string[]
   children: (routedPartition: string | null) => React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   const { state, retry, tryWithoutProbe, browseFromThisDevice } = useSshWorkspaceBrowserRoute(
     worktreeId,
     sessionProfileId
@@ -61,34 +63,36 @@ export function SshRoutedBrowserPageGate({
         <Globe className="size-5 text-muted-foreground" />
         {state.kind === 'preparing' ? (
           <div className="text-sm font-medium text-foreground">
-            {translate('browser.sshRoute.preparingTitle', 'Connecting through the SSH host')}
+            {t('browser.sshRoute.preparingTitle', 'Connecting through the SSH host')}
           </div>
         ) : (
           <>
-            <div className="text-sm font-medium text-foreground">{errorTitle(state.errorKind)}</div>
+            <div className="text-sm font-medium text-foreground">
+              {errorTitle(state.errorKind, t)}
+            </div>
             <div className="text-xs leading-5 text-muted-foreground">
-              {errorDescription(state.errorKind)}
+              {errorDescription(state.errorKind, t)}
             </div>
             {state.errorKind === 'unknown' ? (
               // Keep raw diagnostic errors collapsed beneath plain-language recovery.
               <details className="max-w-full text-xs leading-5 text-muted-foreground">
                 <summary className="cursor-pointer select-none">
-                  {translate('browser.sshRoute.showDetails', 'Show details')}
+                  {t('browser.sshRoute.showDetails', 'Show details')}
                 </summary>
                 <div className="mt-1 break-words">{state.message}</div>
               </details>
             ) : null}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <Button type="button" variant="outline" size="sm" onClick={retry}>
-                {translate('browser.sshRoute.retry', 'Retry')}
+                {t('browser.sshRoute.retry', 'Retry')}
               </Button>
               {state.errorKind === 'forwarding-blocked' ? (
                 <Button type="button" variant="outline" size="sm" onClick={tryWithoutProbe}>
-                  {translate('browser.sshRoute.tryAnyway', 'Try anyway')}
+                  {t('browser.sshRoute.tryAnyway', 'Try anyway')}
                 </Button>
               ) : null}
               <Button type="button" variant="ghost" size="sm" onClick={browseFromThisDevice}>
-                {translate('browser.sshRoute.browseLocally', 'Browse from this device instead')}
+                {t('browser.sshRoute.browseLocally', 'Browse from this device instead')}
               </Button>
             </div>
           </>
@@ -98,33 +102,33 @@ export function SshRoutedBrowserPageGate({
   )
 }
 
-function errorTitle(kind: SshWorkspaceBrowserRouteErrorKind): string {
+function errorTitle(kind: SshWorkspaceBrowserRouteErrorKind, t: Translate = translate): string {
   if (kind === 'forwarding-blocked') {
-    return translate(
-      'browser.sshRoute.forwardingBlockedTitle',
-      'The SSH server blocks browser traffic'
-    )
+    return t('browser.sshRoute.forwardingBlockedTitle', 'The SSH server blocks browser traffic')
   }
   if (kind === 'ssh-unavailable') {
-    return translate('browser.sshRoute.sshUnavailableTitle', 'SSH connection unavailable')
+    return t('browser.sshRoute.sshUnavailableTitle', 'SSH connection unavailable')
   }
-  return translate('browser.sshRoute.errorTitle', 'SSH browser routing unavailable')
+  return t('browser.sshRoute.errorTitle', 'SSH browser routing unavailable')
 }
 
-function errorDescription(kind: SshWorkspaceBrowserRouteErrorKind): string {
+function errorDescription(
+  kind: SshWorkspaceBrowserRouteErrorKind,
+  t: Translate = translate
+): string {
   if (kind === 'forwarding-blocked') {
-    return translate(
+    return t(
       'browser.sshRoute.forwardingBlockedDescription',
       'This server refuses TCP forwarding (often “AllowTcpForwarding no” in its sshd config), which browsing through it requires. Ask its administrator to allow forwarding, or browse from this device instead.'
     )
   }
   if (kind === 'ssh-unavailable') {
-    return translate(
+    return t(
       'browser.sshRoute.sshUnavailableDescription',
       "Pages in this workspace browse through its SSH host, and that connection isn't available right now. Reconnect the host, then retry."
     )
   }
-  return translate(
+  return t(
     'browser.sshRoute.errorDescription',
     'Pages in this workspace browse through its SSH host, and routing could not be set up.'
   )

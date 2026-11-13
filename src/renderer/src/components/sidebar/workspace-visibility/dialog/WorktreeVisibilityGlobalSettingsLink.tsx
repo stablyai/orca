@@ -1,9 +1,9 @@
 import type React from 'react'
 import { Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { useAppStore } from '@/store/index'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -27,6 +27,7 @@ function openGlobalWorktreeVisibilitySettings(): void {
 }
 
 function GlobalSettingsButton(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       type="button"
@@ -36,7 +37,7 @@ function GlobalSettingsButton(): React.JSX.Element {
       onClick={openGlobalWorktreeVisibilitySettings}
     >
       <Settings className="size-3.5" />
-      {translate(
+      {t(
         'auto.components.sidebar.WorktreeVisibilityDialog.openGlobalSettings',
         'Manage in Global Settings'
       )}
@@ -51,6 +52,7 @@ export function WorktreeVisibilityGlobalSettingsLink({
   repo: Repo
   visibilityDefaults?: WorktreeVisibilityDefaults
 }): React.JSX.Element {
+  const t = useTranslate()
   const inherited = listInheritedWorktreeVisibilitySources(repo, visibilityDefaults)
   if (inherited.length === 0) {
     return <GlobalSettingsButton />
@@ -59,7 +61,7 @@ export function WorktreeVisibilityGlobalSettingsLink({
   return (
     <div className="grid gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.sidebar.WorktreeVisibilityDialog.globalSettingsSources',
           'These sources have a global setting you can override here:'
         )}
@@ -68,10 +70,10 @@ export function WorktreeVisibilityGlobalSettingsLink({
         {inherited.map(({ source, globalVisibility }) => (
           <li key={worktreeVisibilitySourceRowKey(source)} className="contents">
             <span className="truncate font-mono text-[11px] text-foreground/85">
-              {getWorktreeVisibilitySourceLabel(source)}
+              {getWorktreeVisibilitySourceLabel(source, t)}
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {worktreeVisibilityValueLabel(globalVisibility)}
+              {worktreeVisibilityValueLabel(globalVisibility, t)}
             </span>
           </li>
         ))}

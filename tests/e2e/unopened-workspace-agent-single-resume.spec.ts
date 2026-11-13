@@ -2,9 +2,9 @@
 // Reject a second fresh-tab resume that would put two agents on one transcript.
 import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { expect, test } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'

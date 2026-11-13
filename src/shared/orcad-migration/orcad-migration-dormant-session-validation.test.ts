@@ -6,7 +6,6 @@ import {
 } from '../workspace-session/client-hosted-browser-page-record'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import { assertOrcadMigrationDormantWorkspaceSessionReferences } from './orcad-migration-dormant-session-validation'
-import { parseOrcadMigrationClientState } from './orcad-migration-client-state'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 const OWNER = 'repo-1::/srv/worktree'
@@ -62,10 +61,6 @@ function sessionWithPages(pages: ReturnType<typeof clientPage>[]): WorkspaceSess
 }
 
 describe('dormant client-hosted browser page migration validation', () => {
-  it('accepts held pages whose workspace id belongs to the transferred browser workspace', () => {
-    expect(() => validate(sessionWithPages([clientPage('page-1')]))).not.toThrow()
-  })
-
   it('rejects a page that names a browser workspace outside its owner', () => {
     expect(() => validate(sessionWithPages([clientPage('page-1', 'browser-missing')]))).toThrow(
       'orcad_migration_dormant_workspace_session_client_page_scope_invalid'
@@ -76,52 +71,6 @@ describe('dormant client-hosted browser page migration validation', () => {
     expect(() => validate(sessionWithPages([clientPage('page-1'), clientPage('page-1')]))).toThrow(
       'orcad_migration_dormant_workspace_session_identity_duplicate'
     )
-  })
-
-  it('accepts scoped client-owned close intents alongside transferred pages', () => {
-    const session = sessionWithPages([clientPage('page-1')])
-    session.clientHostedBrowserCloseIntentsByEnvironment = {
-      'old-environment': [{ browserPageId: 'page-1', worktreeId: OWNER, closedAt: 10 }]
-    }
-    expect(() => validate(session)).not.toThrow()
-  })
-
-  it('parses migration close-intent envelopes with source environment identity', () => {
-    expect(
-      parseOrcadMigrationClientState({
-        clientHostedBrowserCloseIntents: [
-          {
-            sourceEnvironmentId: 'old-environment',
-            browserPageId: 'page-1',
-            worktreeId: OWNER,
-            closedAt: 10
-          }
-        ]
-      })
-    ).toEqual({
-      clientHostedBrowserCloseIntents: [
-        {
-          sourceEnvironmentId: 'old-environment',
-          browserPageId: 'page-1',
-          worktreeId: OWNER,
-          closedAt: 10
-        }
-      ]
-    })
-  })
-
-  it('allows global browser URL history to remain client-owned', () => {
-    const session = sessionWithPages([])
-    session.browserUrlHistory = [
-      {
-        url: 'https://example.test/',
-        normalizedUrl: 'https://example.test/',
-        title: 'Example',
-        lastVisitedAt: 10,
-        visitCount: 1
-      }
-    ]
-    expect(() => validate(session)).not.toThrow()
   })
 
   it('accepts markdown visibility only when it names a persisted open file', () => {

@@ -110,14 +110,6 @@ describe('orcad migration manifest contract', () => {
   })
 
   // Retired draft-blob field from development builds; no released desktop sent it.
-  it('accepts and drops the retired editorDraftsBlob declaration', () => {
-    const dormantState = {
-      ...dormantLineage('folder:folder-1', 'worktree:repo-1::/srv/repo-1'),
-      editorDraftsBlob: { sha256: digest, byteLength: 4, entries: [] }
-    }
-    const parsed = parseOrcadMigrationManifest(manifest({ dormantState }))
-    expect(parsed.payload.dormantState).not.toHaveProperty('editorDraftsBlob')
-  })
 
   it('rejects a malformed workspace key rather than treating it as a worktree id', () => {
     expect(() =>

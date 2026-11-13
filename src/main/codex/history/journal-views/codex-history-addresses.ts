@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   codexNonMessageIdentity,
   isCodexMessageItemType,

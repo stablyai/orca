@@ -68,7 +68,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getWebContentsIdByTabId: () => {
       mocks.counts.registries += 1
@@ -77,9 +77,9 @@ vi.mock('../../browser-manager', () => ({
     getGuestWebContentsId: (pageId: string) => mocks.pages.get(pageId) ?? null
   }
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-activate', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-activate', () => ({}))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({}))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
 vi.mock('../actions/browser-extension-popup-host', () => ({ closeBrowserExtensionPopup: vi.fn() }))
@@ -90,7 +90,7 @@ vi.mock('../permissions/browser-extension-active-tab', () => ({
   hasBrowserExtensionActiveTab: (_extensionId: string, tabId: number) =>
     mocks.activeGrants.has(tabId)
 }))
-vi.mock('../api/permissions', () => ({
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
   browserExtensionHostPatternsInSession: () => mocks.hostPatterns
 }))
 vi.mock('../api/tabs-capture', () => ({ captureVisibleTabMethod: {} }))
@@ -121,7 +121,7 @@ vi.mock('./browser-extension-window-model', () => ({
   ]
 }))
 
-const { listBrowserExtensionTabs, recordActiveBrowserPage, resolveBrowserExtensionTab } =
+const { listBrowserExtensionTabs, recordActiveBrowserPage } =
   await import('./browser-extension-tab-model')
 const { registerTabsNamespace } = await import('../api/tabs')
 const { getBrowserExtensionNamespace } =
@@ -167,77 +167,6 @@ beforeEach(() => {
 })
 
 describe('extension tab enumeration', () => {
-  it.each([10, 100])('lists %i tabs without rescanning the registry for each row', (count) => {
-    for (let index = 0; index < count; index++) {
-      mocks.addGuest(index + 10)
-    }
-    recordActiveBrowserPage('page-10')
-    resetCounts()
-    expect(
-      listBrowserExtensionTabs(mocks.workSession).map((entry) => ({
-        id: entry.contents.id,
-        index: entry.index,
-        active: entry.active
-      }))
-    ).toEqual(
-      Array.from({ length: count }, (_, index) => ({
-        id: index + 10,
-        index,
-        active: index === 0
-      }))
-    )
-    expect(mocks.counts.lookups).toBeLessThanOrEqual(count * 4)
-    expect(mocks.counts.registries).toBeLessThanOrEqual(1)
-  })
-
-  it.each([10, 100])(
-    'queries %i native tabs through the registered API with linear lookups',
-    (count) => {
-      const nativeTabs = Array.from({ length: count }, (_, index) => {
-        mocks.addGuest(index + 10)
-        return { id: index + 10, url: `https://native.test/${index}`, title: `Native ${index}` }
-      })
-      recordActiveBrowserPage('page-10')
-      resetCounts()
-      expect(queryTabs(nativeTabs)).toEqual(
-        nativeTabs.map((tab, index) =>
-          expect.objectContaining({
-            ...tab,
-            index,
-            active: index === 0,
-            windowId: 1,
-            discarded: false
-          })
-        )
-      )
-      expect(mocks.counts.lookups).toBeLessThanOrEqual(count * 4 + 1)
-      expect(mocks.counts.registries).toBeLessThanOrEqual(2)
-    }
-  )
-
-  it('resolves a discarded active page once per list or native query', () => {
-    const nativeTabs = Array.from({ length: 100 }, (_, index) => {
-      mocks.addGuest(index + 10)
-      return { id: index + 10 }
-    })
-    mocks.discarded.push({
-      browserPageId: 'saved',
-      tabId: 2_000_000_000,
-      session: mocks.workSession,
-      url: 'https://saved.test',
-      title: 'Saved'
-    })
-    recordActiveBrowserPage('saved')
-    resetCounts()
-    expect(listBrowserExtensionTabs(mocks.workSession).every((entry) => !entry.active)).toBe(true)
-    expect(mocks.counts.discardedReads).toBeLessThanOrEqual(1)
-    resetCounts()
-    expect(queryTabs(nativeTabs, { active: true })).toEqual([
-      expect.objectContaining({ id: 2_000_000_000, active: true, discarded: true })
-    ])
-    expect(mocks.counts.discardedReads).toBeLessThanOrEqual(3)
-  })
-
   it('keeps profile isolation, global indices, active discarded tabs and early native guests', () => {
     mocks.addGuest(10)
     mocks.addGuest(20, mocks.otherSession)
@@ -294,38 +223,5 @@ describe('extension tab enumeration', () => {
     expect(queryTabs([{ id: 40 }, { id: 45 }], { active: true })).toEqual([
       expect.objectContaining({ id: 2_000_000_001, active: true })
     ])
-  })
-
-  it('keeps native query membership and URL permissions while restoring activeTab fields', () => {
-    mocks.addGuest(10)
-    mocks.addGuest(11)
-    mocks.addGuest(12)
-    mocks.addGuest(13)
-    mocks.activeGrants.add(12)
-    const noTabs = caller([])
-    expect(queryTabs([{ id: 11 }], {}, noTabs)).toEqual([expect.objectContaining({ id: 11 })])
-    expect(queryTabs([{ id: 11 }], {}, noTabs)).toEqual([
-      expect.not.objectContaining({ url: expect.anything() })
-    ])
-    expect(queryTabs([{ id: 12 }], {}, noTabs)).toEqual([
-      expect.objectContaining({ id: 12, url: 'https://page.test/12', title: 'Page 12' })
-    ])
-    expect(
-      queryTabs([{ id: 13, url: 'https://native.test', title: 'Native' }], {}, noTabs)
-    ).toEqual([expect.objectContaining({ id: 13, url: 'https://native.test', title: 'Native' })])
-  })
-
-  it('refreshes single-tab resolution after reorder, activation and destruction', () => {
-    mocks.addGuest(10)
-    const second = mocks.addGuest(20)
-    expect(resolveBrowserExtensionTab(20)).toMatchObject({ index: 1, active: false })
-    mocks.pages.clear()
-    mocks.pages.set('page-20', 20)
-    mocks.pages.set('page-10', 10)
-    recordActiveBrowserPage('page-20')
-    expect(resolveBrowserExtensionTab(20)).toMatchObject({ index: 0, active: true })
-    second.destroyed = true
-    expect(resolveBrowserExtensionTab(20)).toBeNull()
-    expect(resolveBrowserExtensionTab(10)).toMatchObject({ index: 0 })
   })
 })

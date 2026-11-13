@@ -1,0 +1,254 @@
+import { constants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import path from 'node:path'
+import type { AgentHookTarget } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import {
+  extractExecutableToken,
+  hasPathSeparatorToken,
+  isSafeExecutableBasename
+} from '../../../shared/managed-agent-command-token'
+import type { ManagedAgentHookTarget } from '../../../shared/managed-agent-hook-targets'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../../startup/shell-environment/hydrate-shell-path'
+import { mergePersistedWindowsPathAsync } from '../../pty/environment/windows-environment-path'
+import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
+import {
+  isUnderWindowsDriveMount,
+  readGuestWindowsDriveMounts
+} from '../../ipc/wsl-guest-windows-drive-path'
+
+export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
+export type LocalCliPresenceByAgent = Partial<
+  Record<
+    AgentHookTarget,
+    { state: 'found'; executablePath: string } | { state: Exclude<LocalCliPresenceState, 'found'> }
+  >
+>
+
+type FileProbe = {
+  isExecutableFile: (filePath: string) => Promise<boolean>
+}
+
+type HydrationResult =
+  | { ok: true; segments: string[] }
+  | { ok: false; segments: []; failureReason?: string }
+
+type DetectOptions = {
+  pathEnv?: string
+  platform?: NodeJS.Platform
+  pathDelimiter?: string
+  pathExt?: string
+  fileProbe?: FileProbe
+  hydratePath?: () => Promise<HydrationResult>
+  shouldHydrateShellPath?: boolean
+  homeDir?: string
+  /** Windows drive mounts to skip in a WSL guest; defaults to this process's own. */
+  guestWindowsDriveMounts?: readonly string[]
+}
+
+type CommandOverrideSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined
+
+const DEFAULT_WINDOWS_EXTENSIONS = ['.COM', '.EXE', '.BAT', '.CMD']
+const CANDIDATE_PROBE_CONCURRENCY = 8
+
+function pathApiForPlatform(platform: NodeJS.Platform) {
+  return platform === 'win32' ? path.win32 : path.posix
+}
+
+async function isExecutableFile(filePath: string, platform: NodeJS.Platform): Promise<boolean> {
+  try {
+    const fileStat = await stat(filePath)
+    if (!fileStat.isFile()) {
+      return false
+    }
+    if (platform === 'win32') {
+      return true
+    }
+    await access(filePath, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function pathEntries(pathEnv: string, delimiter: string): string[] {
+  return [...new Set(pathEnv.split(delimiter).filter(Boolean))]
+}
+
+function windowsPathExts(value: string | undefined): string[] {
+  const source = value?.length ? value : DEFAULT_WINDOWS_EXTENSIONS.join(';')
+  return [
+    ...new Set(
+      source
+        .split(';')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => (part.startsWith('.') ? part : `.${part}`))
+        .map((part) => part.toUpperCase())
+    )
+  ]
+}
+
+function candidateFileNames(
+  candidate: string,
+  platform: NodeJS.Platform,
+  pathExt?: string
+): string[] {
+  if (platform !== 'win32' || pathApiForPlatform(platform).extname(candidate)) {
+    return [candidate]
+  }
+  return windowsPathExts(pathExt).map((suffix) => `${candidate}${suffix}`)
+}
+
+function overrideTokenForAgent(
+  settings: CommandOverrideSettings,
+  target: ManagedAgentHookTarget,
+  platform: NodeJS.Platform
+): string | null {
+  return extractExecutableToken(settings?.agentCmdOverrides?.[target.tuiAgent], { platform })
+}
+
+function expandHomePathToken(token: string, platform: NodeJS.Platform, homeDir: string): string {
+  if (token === '~') {
+    return homeDir
+  }
+  if (token.startsWith('~/') || (platform === 'win32' && token.startsWith('~\\'))) {
+    return pathApiForPlatform(platform).join(homeDir, token.slice(2))
+  }
+  return token
+}
+
+async function probePathCandidate(
+  candidate: string,
+  dirs: readonly string[],
+  platform: NodeJS.Platform,
+  fileProbe: FileProbe,
+  pathExt?: string
+): Promise<string | null> {
+  if (!isSafeExecutableBasename(candidate)) {
+    return null
+  }
+  for (const dir of dirs) {
+    for (const fileName of candidateFileNames(candidate, platform, pathExt)) {
+      if (await fileProbe.isExecutableFile(pathApiForPlatform(platform).join(dir, fileName))) {
+        return pathApiForPlatform(platform).join(dir, fileName)
+      }
+    }
+  }
+  return null
+}
+
+function isPlatformAbsolutePath(candidate: string, platform: NodeJS.Platform): boolean {
+  return platform === 'win32' ? path.win32.isAbsolute(candidate) : path.posix.isAbsolute(candidate)
+}
+
+async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
+  if (options.shouldHydrateShellPath) {
+    await hydrateAgentCliShellPath(options.hydratePath)
+  }
+}
+
+export async function hydrateAgentCliShellPath(
+  hydratePath: () => Promise<HydrationResult> = hydrateShellPath
+): Promise<void> {
+  try {
+    const result = await hydratePath()
+    if (result.ok) {
+      mergePathSegments(result.segments)
+    }
+  } catch (error) {
+    console.warn('[agent-hooks] Shell PATH hydration failed; using inherited PATH:', error)
+  }
+}
+
+async function resolveSearchPath(
+  options: DetectOptions,
+  platform: NodeJS.Platform
+): Promise<string> {
+  if (options.pathEnv !== undefined) {
+    return options.pathEnv
+  }
+  if (platform !== 'win32') {
+    return process.env.PATH ?? ''
+  }
+  // Why: terminals launch with the registry PATH, so a CLI installed after Orca started runs in a pane but stays invisible to the inherited PATH (#17672).
+  const env = { ...process.env }
+  try {
+    await mergePersistedWindowsPathAsync(env)
+  } catch (error) {
+    console.warn(
+      '[agent-hooks] Persisted Windows PATH refresh failed; using inherited PATH:',
+      error
+    )
+  }
+  return env[resolvePathEnvKey(env, platform)] ?? ''
+}
+
+export async function detectLocalManagedAgentCliPresence(
+  targets: readonly ManagedAgentHookTarget[],
+  settings: CommandOverrideSettings,
+  options: DetectOptions = {}
+): Promise<LocalCliPresenceByAgent> {
+  await maybeHydrateShellPath(options)
+  const platform = options.platform ?? process.platform
+  const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
+  const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
+  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
+    (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
+  )
+  const homeDir = options.homeDir ?? homedir()
+  const fileProbe = options.fileProbe ?? {
+    isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)
+  }
+  const candidates = new Set<string>()
+  for (const target of targets) {
+    for (const candidate of target.executableCandidates) {
+      if (!hasPathSeparatorToken(candidate)) {
+        candidates.add(candidate)
+      }
+    }
+    const override = overrideTokenForAgent(settings, target, platform)
+    if (override && !hasPathSeparatorToken(override)) {
+      candidates.add(override)
+    }
+  }
+  // Candidates probe independently; each keeps its own ordered PATH walk so first-match wins.
+  const uniqueCandidates = [...candidates]
+  const probed = await mapWithConcurrency(uniqueCandidates, CANDIDATE_PROBE_CONCURRENCY, (c) =>
+    probePathCandidate(c, dirs, platform, fileProbe, options.pathExt)
+  )
+  const found = new Map<string, string>()
+  for (const [index, executablePath] of probed.entries()) {
+    if (executablePath) {
+      found.set(uniqueCandidates[index], executablePath)
+    }
+  }
+  const result: LocalCliPresenceByAgent = {}
+  for (const target of targets) {
+    const override = overrideTokenForAgent(settings, target, platform)
+    if (override && hasPathSeparatorToken(override)) {
+      const expanded = expandHomePathToken(override, platform, homeDir)
+      if (!isPlatformAbsolutePath(expanded, platform)) {
+        result[target.agent] = { state: 'unknown' }
+        continue
+      }
+      result[target.agent] = (await fileProbe.isExecutableFile(expanded))
+        ? { state: 'found', executablePath: expanded }
+        : { state: 'missing' }
+      continue
+    }
+    const targetCandidates = [...target.executableCandidates, ...(override ? [override] : [])]
+    const executablePath = targetCandidates
+      .map((candidate) => found.get(candidate))
+      .find((candidate): candidate is string => candidate !== undefined)
+    result[target.agent] = executablePath
+      ? { state: 'found', executablePath }
+      : { state: 'missing' }
+  }
+  return result
+}

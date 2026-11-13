@@ -1,0 +1,67 @@
+import type {
+  AgentJournalCursor,
+  AgentSessionJournalIdentity
+} from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { JournalReducerState } from '../projection/journal-reducer'
+import type { JournalHostDatabase } from '../database/journal-host-database'
+import type { JournalReplacementItem } from './journal-epoch-replacement'
+import { publishNewEpoch } from './journal-epoch-rollover'
+import type { JournalLoad } from '../replay/journal-open'
+import type { JournalEpochRow, AgentJournalEpochReason } from '../durable-rows/journal-row-schema'
+import type { JournalOperationReceipt, JournalRowWriter } from '../writing/journal-row-writer'
+import { rewindJournalContext } from './journal-context-rewind'
+
+export class JournalEpochController {
+  constructor(
+    private readonly deps: {
+      inputReceipt: Parameters<typeof rewindJournalContext>[0]['inputReceipt']
+      cards: Parameters<typeof rewindJournalContext>[0]['cards']
+      identity: AgentSessionJournalIdentity
+      now: () => number
+      mintEpoch: () => string
+      database: () => JournalHostDatabase
+      state: () => JournalReducerState
+      writer: JournalRowWriter
+      adopt: (loaded: JournalLoad) => void
+    }
+  ) {}
+
+  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
+    publishNewEpoch({
+      expectedEpoch,
+      database: this.deps.database(),
+      identity: this.deps.identity,
+      epoch: this.deps.mintEpoch(),
+      reason,
+      fence,
+      now: this.deps.now(),
+      queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
+      onPublished: this.deps.adopt
+    })
+  }
+
+  roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
+    return this.replace(reason, fence, [])
+  }
+
+  replace(
+    reason: AgentJournalEpochReason,
+    fence: number,
+    items: readonly JournalReplacementItem[],
+    receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt,
+    providerHandle = agentSessionJournalProviderHandle(this.deps.identity),
+    historyOrigin?: JournalEpochRow['historyOrigin']
+  ): Promise<AgentJournalCursor> {
+    return rewindJournalContext({
+      state: this.deps.state,
+      writer: this.deps.writer,
+      cards: this.deps.cards,
+      fence,
+      items,
+      receipt,
+      inputReceipt: this.deps.inputReceipt,
+      boundary: { reason, providerHandle, historyOrigin }
+    })
+  }
+}

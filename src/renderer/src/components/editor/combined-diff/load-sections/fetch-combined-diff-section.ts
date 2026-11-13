@@ -2,8 +2,8 @@ import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
-} from '@/runtime/runtime-git-diff-client'
-import type { OpenFile } from '@/store/slices/editor'
+} from '@/runtime/source-control/git/runtime-git-diff-client'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitBranchChangeEntry,
   GitDiffResult

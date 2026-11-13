@@ -93,7 +93,7 @@ jobs:
             if git fetch --no-tags --depth=1 origin "$PUSH_BASE" &&
                git diff --name-only --no-renames -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-changes" &&
                git diff --name-only --no-renames --diff-filter=M -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-modified"; then
-              node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
+              node config/scripts/node-server/qualification/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
             else
               echo 'should_run=true' >> "$GITHUB_OUTPUT"
             fi
@@ -107,7 +107,7 @@ jobs:
           if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-changes" &&
              git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-modified" &&
              git diff --raw --no-renames --no-abbrev -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-native-diff"; then
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
+            node config/scripts/node-server/qualification/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
           else
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
@@ -127,13 +127,13 @@ jobs:
           ALLOW_TEST_ONLY_NATIVE_SKIP: ${{ github.event_name == 'pull_request' && !inputs.build_template && inputs.ref == '' }}
         run: |
           if [ "$EVENT_NAME" = push ]; then
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
+            node config/scripts/node-server/qualification/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
           else
             NATIVE_SCOPE_ARGS=()
             if [ "$ALLOW_TEST_ONLY_NATIVE_SKIP" = true ]; then
               NATIVE_SCOPE_ARGS=(--pull-request --diff-paths "$RUNNER_TEMP/node-server-native-diff")
             fi
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
+            node config/scripts/node-server/qualification/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
           fi
 
   persistence:
@@ -183,8 +183,18 @@ jobs:
       # Design D7 upgrade and rollback: the last Bun orcad, built from a main commit that shipped
       # it, using the current Bun pin beside this checkout's Node slot; hand-over skips once PROTOCOL_VERSION
       # moves past the Bun daemon's. Install its pinned dependencies independently of this checkout.
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Find installed Bun
+        id: installed-bun
         if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: runner.os == 'Linux' && steps.installed-bun.outputs.found != 'true'
         with:
           bun-version-file: config/.bun-version
           no-cache: true
@@ -234,10 +244,10 @@ jobs:
           BUN_EXECUTABLE: ${{ steps.bun-orcad.outputs.executable }}
       - name: Build the host-target desktop server template
         if: runner.os == 'Linux'
-        run: node config/scripts/build-orcad-template.mjs --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
+        run: node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
       - name: Verify a structured chat from the desktop server template
         if: runner.os == 'Linux'
-        run: pnpm test:node-server --artifact src/main/orcad/orcad-packaged-structured-chat.integration.test.ts --maxWorkers=2
+        run: pnpm test:node-server --artifact src/main/orcad/testing/structured-chat/orcad-packaged-structured-chat.integration.test.ts --maxWorkers=2
       # Only a Windows runner compiles it; arm64 cross-compiles here.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
       # orcad's instance lock and stop proof read a PID's creation time through it; the x64 binary this
@@ -246,10 +256,10 @@ jobs:
         if: inputs.build_template && matrix.os == 'windows-2022'
         shell: bash
         run: |
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=arm64
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-process-tree-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-process-tree-addon.mjs; else printf %s config/scripts/build-windows-process-tree-addon.mjs; fi)" --arch=x64
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-process-tree-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-process-tree-addon.mjs; else printf %s config/scripts/build-windows-process-tree-addon.mjs; fi)" --arch=arm64
           node -e "
-          const { assertWindowsProcessTreeCreationTime } = require('./config/scripts/windows-process-tree-creation-time.cjs')
+          const { assertWindowsProcessTreeCreationTime } = require(require('node:fs').existsSync('./config/scripts/native-build/windows/windows-process-tree-creation-time.cjs') ? './config/scripts/native-build/windows/windows-process-tree-creation-time.cjs' : './config/scripts/windows-process-tree-creation-time.cjs')
           const addon = require('./.build/windows-process-tree/x64/windows-process-tree.node')
           assertWindowsProcessTreeCreationTime({ module: addon })
           const own = addon.getProcessCreationTime(process.pid)
@@ -280,14 +290,14 @@ jobs:
       # orcad's data-root privacy check fails closed without it, so every Windows slot needs one.
       # Older requested refs use the previous security implementation and have no addon builder.
       - name: Build the Windows security addons for the desktop template
-        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/build-windows-security-addon.mjs') != ''
+        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
         shell: bash
         run: |
-          node config/scripts/build-windows-security-addon.mjs --arch=x64
-          node config/scripts/build-windows-security-addon.mjs --arch=arm64
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-security-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-security-addon.mjs; else printf %s config/scripts/build-windows-security-addon.mjs; fi)" --arch=x64
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-security-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-security-addon.mjs; else printf %s config/scripts/build-windows-security-addon.mjs; fi)" --arch=arm64
           node -e "require('./.build/windows-security/x64/windows-security.node').currentUserSid()"
       - name: Keep the Windows security addons for the desktop template
-        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/build-windows-security-addon.mjs') != ''
+        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
         uses: actions/upload-artifact@v7
         with:
           name: orcad-windows-security
@@ -416,7 +426,7 @@ jobs:
       - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
         run: |
           pnpm build:orcad-prebuilds
-          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds --require-slots "$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds --smoke
       - uses: actions/download-artifact@v8
         with:
@@ -462,7 +472,7 @@ jobs:
       # smokes with that Node. devtoolset-10 supplies C++20; the slot links libstdc++ statically.
       - name: Build and smoke the glibc 2.17 compat slot under the glibc-217 Node
         run: |
-          compat_node="$(node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --print-runtime)"
+          compat_node="$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --slot=linux-x64-glibc217 --print-runtime)"
           case "$compat_node" in
             "$GITHUB_WORKSPACE"/*) ;;
             *) echo "glibc-217 Node cached outside the workspace: $compat_node" >&2; exit 1 ;;
@@ -476,10 +486,10 @@ jobs:
             quay.io/pypa/manylinux2014_x86_64@sha256:6f74cabeac2432570aa4bfdb29f7c1f30313d4d6654d764c44e574b6ffdd4ed5 bash -s <<'GLIBC217_COMPAT_SLOT'
           set -eu
           export PATH="$(dirname "$COMPAT_NODE"):$PATH"
-          node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217
-          node config/scripts/build-orcad-prebuilds.mjs --require-slots linux-x64-glibc217
+          node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --slot=linux-x64-glibc217
+          node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --require-slots linux-x64-glibc217
           # The image's devtoolset LD_LIBRARY_PATH must not stand in for a host C++ runtime.
-          env -u LD_LIBRARY_PATH node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke
+          env -u LD_LIBRARY_PATH node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --slot=linux-x64-glibc217 --smoke
           GLIBC217_COMPAT_SLOT
       - name: Keep the glibc 2.17 compat slot for the desktop template
         if: inputs.build_template
@@ -540,7 +550,7 @@ jobs:
           npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm build:orcad-prebuilds
-          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds --require-slots "$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds --smoke
           NODE_SERVER_PREPARATION
       - uses: actions/download-artifact@v8
@@ -637,7 +647,7 @@ jobs:
           name: orcad-windows-cli-launcher
           path: .build/windows-cli-launcher
       - name: Collect the Windows security addons
-        if: hashFiles('config/scripts/build-windows-security-addon.mjs') != ''
+        if: hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
         uses: actions/download-artifact@v8
         with:
           name: orcad-windows-security
@@ -645,7 +655,7 @@ jobs:
       - name: Merge the lanes and gate the full slot matrix
         shell: bash
         run: |
-          node config/scripts/merge-orcad-prebuilds.mjs "$RUNNER_TEMP"/orcad-prebuild-lanes/*
+          node "$(if [ -f config/scripts/orcad-distribution/prebuilds/merge-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/merge-orcad-prebuilds.mjs; else printf %s config/scripts/merge-orcad-prebuilds.mjs; fi)" "$RUNNER_TEMP"/orcad-prebuild-lanes/*
           pnpm build:orcad-prebuilds --require-slots
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
       # The page the qualification lanes tested, not a rebuild.

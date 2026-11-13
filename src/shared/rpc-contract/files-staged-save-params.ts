@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { STAGED_FILE_SAVE_LIMITS } from '../staged-file-save'
+import { STAGED_FILE_SAVE_LIMITS } from '../file-write/staged-file-save'
 import {
   FileMutationOpen,
   FileWriteDiskPreconditionParam,
