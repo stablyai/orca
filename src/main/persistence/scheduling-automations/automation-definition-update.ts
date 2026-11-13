@@ -213,6 +213,9 @@ export function mergeAutomationUpdate(
     delete merged[key]
   }
   Object.assign(merged, automationCanonicalLaunchSetup(launchSetupUpdate))
+  if (definedUpdates.onNoReusableSession === 'skip' && merged.reuseSession !== true) {
+    throw new Error('Skipping an unusable previous session requires session reuse.')
+  }
   assertAutomationExtraAgentArgs(merged)
   settleAutomationTriggers(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
