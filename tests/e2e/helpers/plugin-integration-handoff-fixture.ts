@@ -119,7 +119,7 @@ export async function writeIntegrationHandoffFixture(root: string): Promise<void
         id: 'acme-tasks',
         name: 'AcmeTasks',
         version: '1.0.0',
-        engines: { orca: '>=1.4.258' },
+        engines: { orca: '>=1.4.259' },
         pluginApi: 1,
         main: 'worker.ts',
         contributes: {
