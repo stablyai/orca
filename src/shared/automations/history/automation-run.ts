@@ -135,6 +135,12 @@ export type AutomationRun = {
   errorParams?: Record<string, string | number>
   startedAt: number | null
   dispatchedAt: number | null
+  /**
+   * When the agent's terminal or chat session opened, even if the run failed afterwards
+   * (prompt delivery, a partial start). Survives terminal retention clearing the pane key.
+   * Absent on older records and on runs that never launched.
+   */
+  launchedAt?: number
   createdAt: number
   /** Persist unique run numbers; retention makes retained count unsuitable. */
   runNumber?: number
@@ -174,6 +180,8 @@ export type AutomationDispatchResult = {
   errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
+  /** The agent's terminal or session opened at this time; kept once recorded. */
+  launchedAt?: number
   setupSkippedReason?: AutomationRunSetupSkippedReason
   setupSkippedContent?: SetupTrustMismatch
 }
