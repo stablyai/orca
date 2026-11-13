@@ -73,7 +73,8 @@ export type OrcaProfileApi = {
   findProjectProfiles: (
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
-  connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+  /** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+  connectCurrent: (args?: { openBrowser?: boolean }) => Promise<ConnectCurrentOrcaProfileResult>
   signInProgress: () => Promise<OrcaCloudSignInProgress | null>
   onSignInProgressChanged: (
     /** `end` says why a sign-in stopped when the UI should tell the user (it timed out). */

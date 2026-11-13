@@ -14,8 +14,8 @@ import {
 
 function notPairedMessage(): string {
   return translate(
-    'auto.lib.orcaCloud.pairedWake.notPaired',
-    'This workspace is no longer linked to this computer. Open it again from Cloud workspaces on Home.'
+    'auto.lib.orcaCloud.pairedWake.notPaired2',
+    'This workspace is no longer linked to this computer. Use Open cloud workspace… to link it again.'
   )
 }
 
@@ -55,6 +55,24 @@ async function waitUntilRunning(workspaceId: string): Promise<boolean> {
   }
 }
 
+/** Its pairing is gone: the waking card says so, with "Open cloud workspace…" to pair it again. */
+function notPaired(workspaceId: string, quiet: boolean | undefined): PairedWakeResult {
+  const message = notPairedMessage()
+  if (!quiet) {
+    const at = Date.now()
+    noteCloudWakeProgress({
+      workspaceId,
+      phase: 'failed',
+      source: 'open',
+      startedAt: at,
+      at,
+      message,
+      notPaired: true
+    })
+  }
+  return { ok: false, message, reason: 'not_paired' }
+}
+
 export type PairedWakeResult = { ok: true } | { ok: false; message: string; reason?: string }
 
 /** Is this sidebar id a paired cloud workspace (registered by the paired registry)? */
@@ -72,14 +90,14 @@ export async function wakePairedCloudWorkspace(
 ): Promise<PairedWakeResult> {
   const environmentId = getCloudWorkspaceSnapshot().paired[workspaceId]
   if (!environmentId) {
-    return { ok: false, message: notPairedMessage() }
+    return notPaired(workspaceId, options.quiet)
   }
   const sandboxId = await resolveCloudRowSandboxId({
     id: workspaceId,
     hostId: toRuntimeExecutionHostId(environmentId)
   })
   if (!sandboxId) {
-    return { ok: false, message: notPairedMessage() }
+    return notPaired(workspaceId, options.quiet)
   }
   const startedAt = Date.now()
   const source = options.source ?? 'open'

@@ -67,7 +67,7 @@ export const orcaProfilesApi = {
     )
   },
   findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
-  connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
+  connectCurrent: (args) => ipcRenderer.invoke('orcaProfiles:connectCurrent', args),
   signInProgress: () => ipcRenderer.invoke('orcaProfiles:signInProgress'),
   cancelSignIn: () => ipcRenderer.invoke('orcaProfiles:cancelSignIn'),
   refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),

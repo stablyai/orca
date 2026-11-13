@@ -8,7 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { TeammateProfile } from '../../../../shared/cloud-workspaces/team-presence-wire'
 import { useOrgRoster } from '../billing/team/use-org-roster'
-import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
+import { openCloudWorkspacePicker } from '../cloud-workspaces/cloud-workspace-picker-store'
 import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
 import { openCloudWorkspace } from '../cloud-workspaces/open-cloud-workspace'
 import { pokeRefusalCopy } from './poke-copy'
@@ -107,7 +107,7 @@ function ProfileBody({ userId }: { userId: string }): React.JSX.Element {
       }}
       onShowAllWorkspaces={() => {
         closeTeammateProfile()
-        openCloudWorkspacesHome({ scope: 'team', by: userId })
+        openCloudWorkspacePicker({ kind: 'teammate', userId })
       }}
       onTurnOnPokes={() => {
         closeTeammateProfile()

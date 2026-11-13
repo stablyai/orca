@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), error: vi.fn() } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/orca-cloud/paired-cloud-sleep', () => ({
-  sleepPairedCloudSandboxes: mocks.sleepPairedCloudSandboxes
+  sleepPairedCloudSandboxes: mocks.sleepPairedCloudSandboxes,
+  isPairedCloudSleepTarget: (id: string) => id === 'repo::/workspace/orca-sandbox-paired'
 }))
 vi.mock('@/lib/orca-cloud/cloud-sleep-failure-toast', () => ({
   toastCloudSleepFailure: () => true
@@ -23,7 +24,7 @@ vi.mock('./workspace-sleep-target', () => ({
 
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { resetWorktreeSleepViewForTests, sleepCopySave } from '@/lib/worktree-sleep-view'
-import { runSleepWorktrees } from './sleep-worktree-flow'
+import { PAIRED_HOST_SLEEP_TIMEOUT_MS, runSleepWorktrees } from './sleep-worktree-flow'
 
 const T0 = 1_800_000_000_000
 const PAIRED = 'repo::/workspace/orca-sandbox-paired'
@@ -64,5 +65,40 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
     mocks.sleepPairedCloudSandboxes.mockResolvedValue([PAIRED])
     await runSleepWorktrees([PAIRED])
     expect(sleepCopySave(PAIRED)).toBeNull()
+  })
+})
+
+describe('a paired host-side Sleep that never finishes (PAIRED-ARCHIVE-STALL, n40b)', () => {
+  function hangHostSleep(): void {
+    window.api.worktrees.sleep = () => new Promise<never>(() => undefined)
+  }
+
+  it('is left behind after the timeout: the control plane still sleeps the paired sandbox', async () => {
+    hangHostSleep()
+    const done = runSleepWorktrees([PAIRED])
+    await vi.advanceTimersByTimeAsync(PAIRED_HOST_SLEEP_TIMEOUT_MS)
+    const results = await done
+    expect(mocks.sleepPairedCloudSandboxes).toHaveBeenCalledWith([PAIRED])
+    // Nothing reported as not slept, so an Archive waiting on this Sleep goes ahead.
+    expect(results.every((result) => result.completed)).toBe(true)
+  })
+
+  it('a non-paired workspace in the same batch reports the timeout as a failure', async () => {
+    hangHostSleep()
+    const done = runSleepWorktrees([PAIRED, LOCAL])
+    await vi.advanceTimersByTimeAsync(PAIRED_HOST_SLEEP_TIMEOUT_MS)
+    await done
+    // The local row was not slept: it is not handed to the paired sleep.
+    expect(mocks.sleepPairedCloudSandboxes).toHaveBeenCalledWith([PAIRED])
+  })
+
+  it('without a paired target nothing is bounded: an owned or local Sleep waits as before', async () => {
+    let finished = false
+    hangHostSleep()
+    void runSleepWorktrees([LOCAL]).then(() => {
+      finished = true
+    })
+    await vi.advanceTimersByTimeAsync(PAIRED_HOST_SLEEP_TIMEOUT_MS * 2)
+    expect(finished).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { EmptyState, ErrorState, SkeletonRows } from './CloudWorkspacesStates'
+import { ErrorState, PickerEmptyState, SkeletonRows } from './CloudWorkspacesStates'
 
 const WIDTH = 720
 
@@ -7,22 +7,28 @@ function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="rounded-xl border border-border bg-card p-1">{children}</div>
 }
 
-/** Every empty state the list can show: team, mine, archived and filtered. */
+/** Every empty state "Open cloud workspace…" can show. */
 export const empty = defineFixture({
   width: WIDTH,
   render: () => (
     <div className="flex flex-col gap-3">
       <Card>
-        <EmptyState scope="team" archived={false} filtered={false} />
+        <PickerEmptyState reason={{ kind: 'none' }} onCreate={() => {}} />
       </Card>
       <Card>
-        <EmptyState scope="mine" archived={false} filtered={false} />
+        <PickerEmptyState reason={{ kind: 'all-in-sidebar' }} />
       </Card>
       <Card>
-        <EmptyState scope="team" archived filtered={false} />
+        <PickerEmptyState reason={{ kind: 'search' }} />
       </Card>
       <Card>
-        <EmptyState scope="team" archived={false} filtered />
+        <PickerEmptyState reason={{ kind: 'archived' }} />
+      </Card>
+      <Card>
+        <PickerEmptyState reason={{ kind: 'none-running' }} />
+      </Card>
+      <Card>
+        <PickerEmptyState reason={{ kind: 'teammate', name: 'Grace Hopper' }} />
       </Card>
     </div>
   )

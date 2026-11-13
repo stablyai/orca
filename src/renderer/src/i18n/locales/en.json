@@ -1575,7 +1575,27 @@
           "routineRun": "Ran a routine",
           "routineRunStart": "A routine run started",
           "routineRunFinish": "A routine run finished",
-          "routineWebhook": "Replaced a routine’s webhook URL"
+          "routineWebhook": "Replaced a routine’s webhook URL",
+          "memberJoined": "Joined the team",
+          "teamDelete": "Deleted the team",
+          "planStarted": "Plan started",
+          "planChanged": "Plan changed",
+          "planCanceled": "Plan ended",
+          "cancelScheduled": "Plan set to end at the next renewal",
+          "cancelReverted": "Plan set to renew again",
+          "seatsChanged": "Seats changed",
+          "overageOn": "Turned on overage",
+          "overageOff": "Turned off overage",
+          "planStartedDetail": "Plan started ({{plan}}, {{interval}})",
+          "planChangedDetail": "Plan changed to {{plan}}, {{interval}}",
+          "cancelScheduledOn": "Plan set to end on {{date}}",
+          "seatsChangedDetail": "Seats changed from {{from}} to {{to}}",
+          "spendCapChanged2": "Changed the monthly spend cap",
+          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}"
+        },
+        "interval": {
+          "month": "monthly",
+          "year": "annual"
         }
       },
       "sso": {
@@ -2589,7 +2609,7 @@
           "archiveSleepFailed": "It’s still running. Your files are safe."
         },
         "pairedWake": {
-          "notPaired": "This workspace is no longer linked to this computer. Open it again from Cloud workspaces on Home."
+          "notPaired2": "This workspace is no longer linked to this computer. Use Open cloud workspace… to link it again."
         }
       },
       "cli": {
@@ -21106,7 +21126,8 @@
           "noTabGroup": "Can’t run “{{action}}” — no tab group is available.",
           "noMovableChat": "Can’t run “{{action}}” — no movable chat is active.",
           "clientUnsupported": "Can’t run “{{action}}” — this client and runtime do not support it.",
-          "notCloudWorkspace": "Can’t run “{{action}}” — the active workspace isn’t a cloud workspace."
+          "notCloudWorkspace": "Can’t run “{{action}}” — the active workspace isn’t a cloud workspace.",
+          "noOrcaCloud": "Can’t run “{{action}}” — sign in to Orca Cloud first."
         }
       },
       "plugins": {
@@ -21569,9 +21590,6 @@
       "cloudWorkspaces": {
         "archive": "Archive",
         "archived": "Archived",
-        "byAnyone": "By anyone",
-        "byMe": "By me",
-        "byMember": "By {{value0}}",
         "cancel": "Cancel",
         "chatGone": "That chat is no longer open in this workspace. Showing the workspace instead.",
         "chatLinkCopied": "Chat link copied",
@@ -21580,8 +21598,6 @@
         "copyLink": "Copy link",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
-        "emptyFilteredBody": "Try another owner or repository.",
-        "emptyFilteredTitle": "Nothing matches these filters",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
@@ -21597,13 +21613,8 @@
         "errorUnknownInline": "Something went wrong. Nothing was changed.",
         "errorUnreachable": "Orca Cloud isn't reachable right now. Nothing was changed. Try again.",
         "errorUnreachableInline": "Orca Cloud isn't reachable right now. Nothing was changed.",
-        "filterByOwner": "Filter by owner",
-        "filterByRepository": "Filter by repository",
         "goToChat": "Go to {{value0}}'s chat",
         "goToTeammateChat": "Go to a teammate's chat",
-        "heading": "Cloud workspaces",
-        "inAnyRepo": "In any repo",
-        "inRepo": "In {{value0}}",
         "justNow": "just now",
         "linkNotFound": "This link points to a private workspace, another team, or a workspace that was deleted.",
         "loading": "Loading cloud workspaces",
@@ -21616,16 +21627,10 @@
         "memberViewing": "{{value0}} is viewing",
         "memberYou": "{{value0}} (you)",
         "moreMembers": "{{count}} more",
-        "move": "Move",
-        "moveToSection": "Move to section",
-        "newSection": "New section",
-        "newSectionEllipsis": "New section…",
         "noAccess": "You don't have access to this workspace. Ask its owner to share it with the team.",
-        "noSection": "No section",
         "nowPrivate": "Now private. Teammates’ devices were disconnected.",
         "open": "Open",
         "openFailed": "Couldn't open the workspace. Your files are safe. Try again.",
-        "openedFromLink": "Opened from link: {{title}}",
         "opening": "Opening",
         "ownerChanged": "Owner changed",
         "private": "Private",
@@ -21647,10 +21652,6 @@
         "sandboxHoursTitle": "Sandbox hours",
         "scopeMine": "Mine",
         "scopeTeam": "Team",
-        "sectionCount_one": "{{count}} workspace",
-        "sectionCount_other": "{{count}} workspaces",
-        "sectionName": "Section name",
-        "sectionNamePlaceholder": "e.g. Payments",
         "serverNotSaved": "Couldn't add the workspace to this computer. Your files are safe. Try again.",
         "shareWithTeam": "Share with team",
         "sharedWithTeam": "Shared with team",
@@ -21673,21 +21674,15 @@
         "youAreViewing": "You are viewing",
         "view": "View",
         "viewAsleep": "View read-only copy",
-        "routines": "Routines",
         "archiveConfirmTitle": "Archive {{name}}?",
         "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
         "showCloudWorkspaces": "Show cloud workspaces",
         "deleteConfirmTitle": "Delete {{name}}?",
         "sleep": "Sleep",
         "deleteWorkspace": "Delete…",
-        "showRunningOnly": "Show running only",
-        "running": "Running",
-        "showRoutineRuns": "Show routine runs",
-        "routineRuns": "Routine runs",
         "routineRun": "Routine run",
         "routineRunTooltip": "Started by a routine. It's deleted when the run ends.",
         "routineRunOf": "Routine · {{name}}",
-        "routineRunsHidden": "Routine runs · {{count}}",
         "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
@@ -21695,28 +21690,13 @@
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
         "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "viewOwnerProfile": "View {{name}}'s profile",
-        "pinned": "Pinned",
-        "sectionActions": "Actions for section {{name}}",
-        "moveSectionUp": "Move section up",
-        "moveSectionDown": "Move section down",
         "linkCopiedShort": "Link copied",
         "copyLinkTo": "Copy link to {{number}}",
         "copyLinkHint": "Teammates with access can open this workspace",
-        "unpin": "Unpin",
-        "pin": "Pin",
-        "moveUp": "Move up",
-        "moveDown": "Move down",
         "linkNoAccess": "You don't have access to {{number}}.",
         "linkOtherTeam2": "{{number}} is in {{team}}.",
         "linkSwitchTeam": "Switch and open",
         "prefsSaveFailed": "Couldn't save that change, so your other devices won't show it. Try again.",
-        "movedTo": "Moved {{name}} to position {{position}} in {{group}}",
-        "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
-        "pinnedName": "Pinned {{name}}",
-        "unpinnedName": "Unpinned {{name}}",
-        "otherWorkspaces": "Other workspaces",
-        "listMetaCount_one": "{{count}} workspace",
-        "listMetaCount_other": "{{count}} workspaces",
         "restartElsewhere": "Restart it from the computer that created it.",
         "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
         "shareFailed": "Couldn’t change who can open it. Try again.",
@@ -21725,7 +21705,6 @@
         "copyLinkToChat": "Copy link to this chat",
         "linkToNumber": "Link to {{number}}",
         "archiveConfirmStops": "{{owner}}'s agents in this workspace will stop.",
-        "archivedCount": "Archived ({{count}})",
         "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
@@ -24037,7 +24016,6 @@
         "addRepository": "Add a GitHub repository",
         "moreAccess": "Give Orca Cloud access to more repositories…",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
-        "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
         "agentNotStarted": "{{agent}} didn’t start because the workspace was still getting ready. Start it from the workspace.",
         "theAgent": "The agent",
         "showMore": "Show more repositories…",
@@ -24054,7 +24032,8 @@
         "checkAgain": "Check again",
         "reposUnavailable": "Couldn’t load GitHub repositories.",
         "retryRepos": "Retry",
-        "reposLoading": "Loading…"
+        "reposLoading": "Loading…",
+        "openLater2": "Your cloud workspace started, but this computer couldn’t open it yet. Try again, or open it later from Open cloud workspace…"
       },
       "agentLabel": "Agent"
     },
@@ -24460,11 +24439,37 @@
     "cloudWorkspaces": {
       "newCloudWorkspace": "New cloud workspace",
       "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
-      "emptyMineYoursTitle": "You don’t have any cloud workspaces yet.",
       "emptyFirstTitle": "Start your first cloud workspace",
-      "emptyAllArchivedTitle": "All your cloud workspaces are archived",
-      "showArchivedCount": "Show archived ({{count}})",
-      "emptyAllArchivedBody": "Unarchive one to keep working, or start a new one."
+      "picker": {
+        "title": "Open cloud workspace",
+        "description": "Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.",
+        "teammateTitle": "{{name}}’s cloud workspaces",
+        "teammateDescription": "The ones they own or started that you can see.",
+        "runningTitle": "Your running cloud workspaces",
+        "runningDescription": "Put one to sleep or delete it to free a running slot, then try again.",
+        "teamTitle": "Your team’s cloud workspaces",
+        "teamDescription": "Delete these, archived ones too, before deleting the team.",
+        "search": "Search cloud workspaces",
+        "searchPlaceholder": "Search by title, repository, owner or W-number…",
+        "inSidebarNote_one": "{{count}} more is already in your sidebar.",
+        "inSidebarNote_other": "{{count}} more are already in your sidebar.",
+        "emptySearchTitle": "Nothing matches your search",
+        "emptySearchBody": "Try a title, repository, branch, owner or W-number.",
+        "emptyAllInSidebarTitle": "Your cloud workspaces are already in the sidebar",
+        "emptyAllInSidebarBody": "Workspaces teammates share, and ones you start on another computer, show up here.",
+        "emptyRunningTitle": "None of yours are running",
+        "emptyRunningBody": "Teammates’ running workspaces can count toward the limit too. Try again in a moment.",
+        "emptyTeammateTitle": "{{name}} has no cloud workspaces you can see",
+        "emptyTeammateBody": "Private workspaces only show to their owner.",
+        "menuItem": "Open cloud workspace…",
+        "paletteDescription": "Open a cloud workspace that isn’t in your sidebar yet.",
+        "verbs": {
+          "cloudWorkspace": "cloud workspace",
+          "sharedWorkspace": "shared workspace",
+          "teammate": "teammate",
+          "orcaCloud": "orca cloud"
+        }
+      }
     },
     "worktreeCreation": {
       "pendingNativeChat": {
@@ -28002,11 +28007,16 @@
       "archived": "A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted."
     },
     "primaryDelete": {
-      "noSandbox": "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
+      "noSandbox2": "Orca couldn't find this workspace's sandbox. Find it in Open cloud workspace… to delete it."
     },
     "opensAndWakes": "Opens and wakes when you select it.",
     "sleepFailedUnnamed": "Couldn’t put this workspace to sleep",
-    "cloudWorkspaceTitle": "Cloud workspace"
+    "cloudWorkspaceTitle": "Cloud workspace",
+    "notPaired": {
+      "title": "{{name}} isn’t linked to this computer",
+      "body": "Open it again to link it. Your files and chats are saved.",
+      "titleUnnamed": "This workspace isn’t linked to this computer"
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -28388,6 +28398,7 @@
       "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
       "expired": "{{agent}} sign-in expired",
       "notStarted": "{{agent}} hasn’t started. Open the workspace to start it.",
+      "setUpNotStarted": "{{agent}} is set up. Open the workspace to start it.",
       "notStartedRow": "{{agent}} hasn’t started"
     },
     "chatSignIn": {
@@ -29475,6 +29486,7 @@
     "copyLink": "Copy link",
     "moreOptions": "More link options",
     "copyLinkFailed": "Couldn’t copy the link.",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "signInLinkHint": "Open it in any browser on this computer."
   }
 }

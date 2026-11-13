@@ -7,6 +7,7 @@ import type {
   CloudAuditCategory,
   CloudAuditEvent
 } from '../../../../../shared/cloud-api/cloud-api-types'
+import { ACCOUNT_AUDIT_ACTIONS, type ActionCopy } from './enterprise-audit-account-copy'
 
 export function auditCategoryLabel(category: CloudAuditCategory, t: Translate = translate): string {
   switch (category) {
@@ -32,10 +33,6 @@ export function auditCategoryLabel(category: CloudAuditCategory, t: Translate = 
       return t('settings.enterprise.audit.category.other', 'Other')
   }
 }
-
-type Sentence = (t: Translate) => string
-/** `named` takes the thing's name ({{name}}): a key, a secret, a teammate, a workspace. */
-type ActionCopy = { plain: Sentence; named?: (t: Translate, name: string) => string }
 
 const ACTIONS: Record<string, ActionCopy> = {
   'api_key.create': {
@@ -214,52 +211,7 @@ const ACTIONS: Record<string, ActionCopy> = {
     named: (t, name) =>
       t('settings.enterprise.audit.action.secretDeleteNamed', 'Deleted secret {{name}}', { name })
   },
-  'member.invited': {
-    plain: (t) => t('settings.enterprise.audit.action.memberInvite', 'Invited a teammate'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.memberInviteNamed', 'Invited {{name}}', { name })
-  },
-  'member.invite_revoked': {
-    plain: (t) => t('settings.enterprise.audit.action.inviteRevoke', 'Canceled an invite'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.inviteRevokeNamed', 'Canceled the invite for {{name}}', {
-        name
-      })
-  },
-  'member.removed': {
-    plain: (t) => t('settings.enterprise.audit.action.memberRemove', 'Removed a teammate'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.memberRemoveNamed', 'Removed {{name}} from the team', {
-        name
-      })
-  },
-  'member.left': {
-    plain: (t) => t('settings.enterprise.audit.action.memberLeft', 'Left the team')
-  },
-  'member.role_changed': {
-    plain: (t) => t('settings.enterprise.audit.action.roleChange', 'Changed a teammate’s role'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.roleChangeNamed', 'Changed the role of {{name}}', {
-        name
-      })
-  },
-  'member.role_synced': {
-    plain: (t) =>
-      t(
-        'settings.enterprise.audit.action.roleSync',
-        'Updated a teammate’s API keys to match their role'
-      )
-  },
-  'team.created': {
-    plain: (t) => t('settings.enterprise.audit.action.teamCreate', 'Created the team')
-  },
-  'team.renamed': {
-    plain: (t) => t('settings.enterprise.audit.action.teamRename', 'Renamed the team'),
-    named: (t, name) =>
-      t('settings.enterprise.audit.action.teamRenameNamed', 'Renamed the team to “{{name}}”', {
-        name
-      })
-  },
+  ...ACCOUNT_AUDIT_ACTIONS,
   'routine.create': {
     plain: (t) => t('settings.enterprise.audit.action.routineCreate', 'Created a routine')
   },
@@ -296,10 +248,18 @@ function targetName(event: CloudAuditEvent): string | null {
 }
 
 /** "Created API key “CI deploy”"; an unknown action reads as its machine name. */
-export function auditEventSentence(event: CloudAuditEvent, t: Translate = translate): string {
+export function auditEventSentence(
+  event: CloudAuditEvent,
+  t: Translate = translate,
+  locale?: string
+): string {
   const copy = ACTIONS[event.action]
   if (!copy) {
     return event.action
+  }
+  const detailed = event.detail ? copy.detailed?.(t, event.detail, locale) : null
+  if (detailed) {
+    return detailed
   }
   const name = targetName(event)
   return name && copy.named ? copy.named(t, name) : copy.plain(t)

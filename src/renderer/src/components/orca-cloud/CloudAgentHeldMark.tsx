@@ -42,13 +42,19 @@ export function CloudAgentHeldMark({
   const agent = agentName(hold.agent, t)
   const waiting = hold.reason === 'awaitingStart'
   const label = waiting
-    ? t(
-        'orcaCloud.agentHold.notStarted',
-        '{{agent}} hasn’t started. Open the workspace to start it.',
-        {
-          agent
-        }
-      )
+    ? hold.awaiting === 'setUp'
+      ? t(
+          'orcaCloud.agentHold.setUpNotStarted',
+          '{{agent}} is set up. Open the workspace to start it.',
+          { agent }
+        )
+      : t(
+          'orcaCloud.agentHold.notStarted',
+          '{{agent}} hasn’t started. Open the workspace to start it.',
+          {
+            agent
+          }
+        )
     : hold.reason === 'accountExpired'
       ? t('orcaCloud.agentHold.expired', '{{agent}} sign-in expired', { agent })
       : t('orcaCloud.agentHold.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })

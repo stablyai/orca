@@ -29,6 +29,7 @@ function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
     canManageBilling: true,
     teamAction: teamSwitch ? switchTeamAction : null,
     continueInBrowser: noop,
+    continueLink: async () => 'https://auth.example/setup/abc',
     startTrial: noop,
     fixBilling: noop,
     installGitHub: noop,
