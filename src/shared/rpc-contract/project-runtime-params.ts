@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { projectAgentLaunchDefaultSchema } from '../agent-launch/project-agent-launch-default'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -58,7 +59,8 @@ export const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
 export const ProjectUpdate = z.object({
   projectId: requiredString('Missing project ID'),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional(),
+    agentLaunchDefault: projectAgentLaunchDefaultSchema.nullable().optional()
   })
 })
 

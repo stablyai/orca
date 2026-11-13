@@ -7,6 +7,7 @@ import type { RepoSlice } from '../repos/repo-state'
 import { getProjectSetupRuntimeTarget } from './project-host-routing'
 import { mergeUpdatedProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
+import { sameProjectAgentLaunchDefault } from '../../../../shared/agent-launch/project-agent-launch-default'
 
 export function createProjectUpdateActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -33,6 +34,16 @@ export function createProjectUpdateActions(
         }
         // Why: the merge spreads updatedProject.sourceRepoIds, which throws if the host sent a non-array.
         const normalizedProject = normalizeProjectRow(updatedProject)
+        if (
+          'agentLaunchDefault' in updates &&
+          (!('agentLaunchDefault' in normalizedProject) ||
+            !sameProjectAgentLaunchDefault(
+              normalizedProject.agentLaunchDefault,
+              updates.agentLaunchDefault
+            ))
+        ) {
+          return false
+        }
         const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
         set((state) => ({
           projects: state.projects.map((project) =>

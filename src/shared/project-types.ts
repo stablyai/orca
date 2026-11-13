@@ -6,6 +6,7 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { RepoSourceControlAiOverrides } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { Repo, RepoKind } from './repo-types'
 import type { ProjectHostSetupTarget } from './project-host-setup-target'
+import type { ProjectAgentLaunchDefault } from './agent-launch/project-agent-launch-default'
 
 export type ProjectProviderIdentity = {
   provider: 'github'
@@ -24,6 +25,7 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  agentLaunchDefault?: ProjectAgentLaunchDefault | null
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -31,7 +33,7 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference' | 'agentLaunchDefault'>>
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

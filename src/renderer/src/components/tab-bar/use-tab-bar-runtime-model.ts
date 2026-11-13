@@ -5,8 +5,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store/index'
 import { buildStatusMap } from '../../lib/source-control/paths/git-path-decoration'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { getConnectionIdForWorktreeCopy } from '@/lib/workspace/ownership/connection-owner-resolution'
+import {
+  getConnectionIdFromState,
+  getConnectionIdForWorktreeCopy
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'

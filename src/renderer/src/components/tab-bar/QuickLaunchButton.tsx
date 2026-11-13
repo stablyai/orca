@@ -70,6 +70,7 @@ function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | nul
 export function useTabAgentMenuLaunch({
   worktreeId,
   groupId,
+  resolveGroupId,
   onFocusTerminal,
   prompt,
   promptDelivery,
@@ -80,6 +81,7 @@ export function useTabAgentMenuLaunch({
   onFocusHostTerminal,
   onFocusChat
 }: QuickLaunchAgentMenuItemsProps & {
+  resolveGroupId?: () => string
   onFocusHostTerminal?: () => void
   /** A New Chat opened at once: its composer takes the focus the menu gives back. */
   onFocusChat?: (tabId: string) => void
@@ -118,7 +120,7 @@ export function useTabAgentMenuLaunch({
             )
           : {}),
         worktreeId,
-        groupId,
+        groupId: resolveGroupId?.() ?? groupId,
         // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.
         ...(prompt !== undefined ? { prompt } : draft?.prompt ? { prompt: draft.prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
@@ -163,6 +165,7 @@ export function useTabAgentMenuLaunch({
     [
       worktreeId,
       groupId,
+      resolveGroupId,
       onFocusTerminal,
       prompt,
       promptDelivery,

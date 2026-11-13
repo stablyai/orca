@@ -164,7 +164,12 @@ export function renderTabBarSurface(
           </TooltipContent>
         </Tooltip>
       ) : null}
-      <WorkspaceCreateMenu props={props} runtime={runtime} createMenu={createMenu} />
+      <WorkspaceCreateMenu
+        props={props}
+        runtime={runtime}
+        createMenu={createMenu}
+        hideTriggerWhenNarrow={hasTabs}
+      />
     </div>
   )
 }

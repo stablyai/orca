@@ -1,7 +1,8 @@
 import React from 'react'
 import type { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { Plus } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ export function WorkspaceCreateMenu({
   runtime,
   createMenu,
   trigger,
+  hideTriggerWhenNarrow = false,
   onClosed,
   onOpenChange,
   onEscapeKeyDown
@@ -31,10 +33,12 @@ export function WorkspaceCreateMenu({
   runtime: TabBarRuntimeModel
   createMenu: TabBarCreateMenuController
   trigger?: React.ReactNode
+  hideTriggerWhenNarrow?: boolean
   onClosed?: () => void
   onOpenChange?: (open: boolean) => void
   onEscapeKeyDown?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     worktreeId,
     terminalOnly = false,
@@ -90,10 +94,13 @@ export function WorkspaceCreateMenu({
       <DropdownMenuTrigger asChild>
         {trigger ?? (
           <button
-            className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className={cn(
+              'ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              hideTriggerWhenNarrow && '@max-[86px]/tab-strip:hidden'
+            )}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             data-contextual-tour-target="tab-create-menu"
           >
             <Plus className="w-3.5 h-3.5" />

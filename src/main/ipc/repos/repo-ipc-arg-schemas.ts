@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { projectAgentLaunchDefaultSchema } from '../../../shared/agent-launch/project-agent-launch-default'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
@@ -64,7 +65,8 @@ const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
 export const ProjectUpdateIpcArgs = z.object({
   projectId: z.string().min(1),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional(),
+    agentLaunchDefault: projectAgentLaunchDefaultSchema.nullable().optional()
   })
 })
 

@@ -255,6 +255,12 @@
       "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
       "keywordShow": "show",
       "keywordUnhide": "unhide"
+    },
+    "projectDefault": {
+      "title": "Default AI",
+      "saveFailed": "Could not save the project default AI.",
+      "clear": "Clear project default",
+      "launch": "Launch {{setup}}"
     }
   },
   "app": {

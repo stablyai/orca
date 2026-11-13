@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { ProjectDefaultAgentMenuItem } from '@/components/agent/ProjectDefaultAgentMenuItem'
 import React from 'react'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
@@ -142,6 +143,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           <SlidersHorizontal className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
         </DropdownMenuItem>
+        <ProjectDefaultAgentMenuItem repo={repo} />
         <DropdownMenuItem
           onSelect={() => actions.onOpenRepoSettings(repo.id, getRepositoryIconSectionId(repo.id))}
         >

@@ -40,6 +40,7 @@ import { createWebPlatformApi } from './preload-api/web-platform-api'
 import { createWebPluginsApi } from './preload-api/web-plugins-api'
 import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
 import { createReposApi } from './preload-api/web-repositories-api'
+import { createWebProjectsApi } from './preload-api/web-projects-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
 import { createWebJiraApi } from './preload-api/web-jira-api'
 import { callRuntimeResult } from './preload-api/web-runtime-calls'
@@ -67,10 +68,14 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
+function createWebPreloadApi(): Omit<
+  Partial<PreloadApi>,
+  'settings' | 'plugins' | 'speech' | 'projects'
+> & {
   settings: Partial<PreloadApi['settings']>
   plugins: Partial<PreloadApi['plugins']>
   speech: Partial<PreloadApi['speech']>
+  projects: Partial<PreloadApi['projects']>
 } {
   return {
     ...createWebAppApi(),
@@ -93,6 +98,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
+    projects: createWebProjectsApi(),
     worktrees: createWorktreesApi(),
     fs: createFileApi(),
     git: createGitApi(),

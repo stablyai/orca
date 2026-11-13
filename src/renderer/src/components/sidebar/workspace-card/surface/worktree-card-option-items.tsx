@@ -109,7 +109,7 @@ export function WorktreeCardLayoutMenuItem({
     ...CARD_LAYOUT_OPTIONS,
     {
       id: 'compact-header',
-      label: translate('sidebar.cardLayout.compactHeader', 'Compact header')
+      label: t('sidebar.cardLayout.compactHeader', 'Compact header')
     }
   ]
   const cardLayout = compactHeader ? 'compact-header' : compact ? 'compact' : 'detailed'

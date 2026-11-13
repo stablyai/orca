@@ -1,4 +1,5 @@
 import { focusWorktreeCreateTriggerAfterDismissal } from './worktree-create-menu-dismissal-focus'
+import { ProjectAgentLaunchButton } from '@/components/tab-bar/ProjectAgentLaunchButton'
 import { afterPendingWorkspaceTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
 import { useState, useRef, useLayoutEffect, useCallback } from 'react'
@@ -7,7 +8,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { workspaceRootGroupId } from '../../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useTabGroupWorkspaceModel } from '@/components/tab-group/useTabGroupWorkspaceModel'
@@ -18,13 +19,14 @@ import { WorkspaceCreateMenu } from '@/components/tab-bar/WorkspaceCreateMenu'
 import type { TabBarProps } from '@/components/tab-bar/tab-bar-props'
 
 function Trigger(props: React.ComponentProps<typeof Button>): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon-xs"
       className="size-5 shrink-0"
-      aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+      aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
       {...props}
     >
       <Plus className="size-3.5" />
@@ -91,6 +93,11 @@ export function WorktreeCreateButton({
           }}
         />
       )}
+      <ProjectAgentLaunchButton
+        worktreeId={worktreeId}
+        executionHostId={executionHostId}
+        disabled={disabled}
+      />
     </span>
   )
 }

@@ -1,7 +1,7 @@
 import React from 'react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
 
 type Props = {
@@ -29,14 +29,15 @@ export function WorktreeCardAgentList({
   renderAgent,
   renderHeader
 }: Props): React.JSX.Element {
-  const subjectLabel = translate('sidebar.agentSummary.agentCount', '{{count}} agents', {
+  const t = useTranslate()
+  const subjectLabel = t('sidebar.agentSummary.agentCount', '{{count}} agents', {
     count: agents.length,
     defaultValue_one: '{{count}} agent'
   })
   const listProps = {
     ref: rootRef,
     role: hasLineage ? 'tree' : 'group',
-    'aria-label': translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents'),
+    'aria-label': t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents'),
     onClick: stopBubble,
     onDoubleClick: stopBubble,
     onMouseDown: stopBubble,

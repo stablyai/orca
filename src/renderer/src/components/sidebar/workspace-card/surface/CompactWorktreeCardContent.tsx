@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link2 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { MetadataActionIcon } from '../metadata/WorktreeCardMetadataControls'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
@@ -18,6 +18,7 @@ export function CompactWorktreeCardContent({
 }: {
   card: WorktreeCardController
 }): React.JSX.Element {
+  const t = useTranslate()
   const presentation = buildWorktreeCardPresentation(card)
   const branchLabel =
     !card.isFolder && card.branch !== card.visibleCardTitle.trim() ? card.branch : undefined
@@ -29,7 +30,7 @@ export function CompactWorktreeCardContent({
       {renderWorktreeCardIndicators(card)}
       {!card.affiliateListMode && (
         <MetadataActionIcon
-          label={translate('workspace.links.addReference', 'Add reference')}
+          label={t('workspace.links.addReference', 'Add reference')}
           onClick={card.handleManageLinks}
           onPointerDown={card.stopQuickActionPointerPropagation}
         >
