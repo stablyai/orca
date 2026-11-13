@@ -112,7 +112,14 @@ function prepare(userDataPath: string): Ready {
         auth.config,
         active,
         userDataPath,
-        async (session) => call(await mintBillingToken(endpoints, session.accessToken), endpoints)
+        async (session) =>
+          call(
+            // The team this device shows, from the same profile whose session this is (a local
+            // profile switch mid-call must not pair one profile's session with another's team);
+            // never auth's shared "active team" (EP-9).
+            await mintBillingToken(endpoints, session.accessToken, active.profile.cloud?.activeOrgId ?? null),
+            endpoints
+          )
       )
       return result.status === 'ok' ? result.value : 'signed-out'
     }

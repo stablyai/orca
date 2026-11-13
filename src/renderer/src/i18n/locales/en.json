@@ -21738,7 +21738,8 @@
         },
         "usageAlertsNoteLevels": "Owners and admins are alerted in Orca at {{levels}} of your team’s sandbox hours.",
         "usageAlertsNoteGeneric": "Owners and admins are alerted in Orca as your team’s sandbox hours run low.",
-        "openPlanUnavailable": "Checkout for this plan isn’t working right now. Try again in a few minutes, or contact us and we’ll set you up."
+        "openPlanUnavailable": "Checkout for this plan isn’t working right now. Try again in a few minutes, or contact us and we’ll set you up.",
+        "loadFailedOtherTeam": "Orca couldn’t confirm this team’s billing. Try again, or sign out and back in."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
