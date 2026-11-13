@@ -47,7 +47,12 @@ export function createAgentStatusLaunchActions(
         })
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
         let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
-        if (existingSleepingRecord && entryMatchesRegistry && existingEntry) {
+        if (
+          existingSleepingRecord &&
+          !existingSleepingRecord.mailWake &&
+          entryMatchesRegistry &&
+          existingEntry
+        ) {
           const worktreeId =
             existingEntry.worktreeId ??
             existingSleepingRecord.worktreeId ??

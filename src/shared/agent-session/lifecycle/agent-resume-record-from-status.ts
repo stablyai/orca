@@ -157,6 +157,9 @@ export function liveResumeRecordChange(
   existing: SleepingAgentSessionRecord | undefined,
   live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
+  if (existing?.mailWake) {
+    return null
+  }
   if (live) {
     return recoveryRecordMatches(existing, live) ? null : { set: live }
   }
@@ -174,6 +177,9 @@ export function capturedResumeRecord(args: {
   launchConfigOf: () => SleepingAgentLaunchConfig | undefined
 }): SleepingAgentSessionRecord | null {
   const { entry, existing, mode, capturedAt } = args
+  if (existing?.mailWake) {
+    return null
+  }
   const origin = mode === 'quit' ? ('quit' as const) : ('live' as const)
   if (entry.state === 'done') {
     if (

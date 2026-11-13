@@ -1,3 +1,7 @@
+import { restoreUndispatchedMailWake } from '@/components/terminal-pane/pty-connection/startup/pane-resume-record'
+import { patchWorkspaceSessionByHost } from '../../workspace/persistence/workspace-session-host-persistence'
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { waitForAgentPaneSleep } from '@/store/terminals/agent-pane-sleep-in-flight'
 import { WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT } from '@/constants/terminal'
 import type { WakeHibernatedAgentsWorktreeDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
@@ -25,8 +29,12 @@ type BackgroundSleepingAgentWakeDispatcherOptions = {
 /** Buffer main’s one-shot mobile wake until sleeping records hydrate; early listener attachment otherwise drops the only event and leaves frozen panes. */
 export function createBackgroundSleepingAgentWakeDispatcher(
   options: BackgroundSleepingAgentWakeDispatcherOptions = {}
-): { request: (worktreeId: string) => void; dispose: () => void } {
+): {
+  request: (worktreeId: string, paneKey?: string, prepareOnly?: boolean) => void | Promise<boolean>
+  dispose: () => void
+} {
   const pendingWorktreeIds = new Set<string>()
+  const pendingPanes = new Map<() => void, () => void>()
   const isWorkspaceSessionReady =
     options.isWorkspaceSessionReady ?? (() => useAppStore.getState().workspaceSessionReady)
   const subscribeToStore =
@@ -43,13 +51,32 @@ export function createBackgroundSleepingAgentWakeDispatcher(
     pendingWorktreeIds.clear()
     unsubscribeReadiness?.()
     unsubscribeReadiness = null
+    for (const resume of pendingPanes.keys()) {
+      resume()
+    }
+    pendingPanes.clear()
     for (const worktreeId of worktreeIds) {
       wake(worktreeId)
     }
   }
 
   return {
-    request(worktreeId) {
+    request(worktreeId, paneKey, prepareOnly): void | Promise<boolean> {
+      if (paneKey && !disposed) {
+        return new Promise<boolean>((resolve, reject) => {
+          const resume = () =>
+            void wakeSleepingPaneInBackground(worktreeId, paneKey, prepareOnly).then(
+              resolve,
+              reject
+            )
+          if (isWorkspaceSessionReady()) {
+            resume()
+          } else {
+            pendingPanes.set(resume, () => resolve(false))
+            unsubscribeReadiness ??= subscribeToStore(flushWhenReady)
+          }
+        })
+      }
       if (disposed || !worktreeId) {
         return
       }
@@ -63,14 +90,26 @@ export function createBackgroundSleepingAgentWakeDispatcher(
     dispose() {
       disposed = true
       pendingWorktreeIds.clear()
+      for (const cancel of pendingPanes.values()) {
+        cancel()
+      }
+      pendingPanes.clear()
       unsubscribeReadiness?.()
       unsubscribeReadiness = null
     }
   }
 }
 
-function dispatchBackgroundMount(worktreeId: string, tabIds: readonly string[] | undefined): void {
-  requestBackgroundTerminalWorktreeMount({ worktreeId, ...(tabIds ? { tabIds } : {}) })
+function dispatchBackgroundMount(
+  worktreeId: string,
+  tabIds: readonly string[] | undefined,
+  paneKey?: string
+): void {
+  requestBackgroundTerminalWorktreeMount({
+    worktreeId,
+    ...(tabIds ? { tabIds } : {}),
+    ...(paneKey ? { wakePaneKey: paneKey } : {})
+  })
 }
 
 function getCanonicalPassiveWakeRecords(
@@ -130,10 +169,14 @@ function getCanonicalPassiveWakeRecords(
 }
 
 /** Wake mobile-visible sleepers without desktop navigation: wake mounted hibernated panes and collect claims; target-mount unmounted passive hibernation tabs; resume other records without navigation, skipping claims; mount those activate:false resume tabs so startup reaches PTYs. Skip restoreOnTabOpenOnly records to preserve explicit sleep. PTYs republish automatically, so await no spawn. */
-export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
+export function wakeSleepingAgentsForWorktreeInBackground(
+  worktreeId: string,
+  paneKey?: string
+): void {
   const sleptRecords = sleepingAgentRecordIndex
     .entries(useAppStore.getState().sleepingAgentSessionsByPaneKey, worktreeId)
     .map(([, record]) => record)
+    .filter((record) => !paneKey || record.paneKey === paneKey)
   // No sleepers means no mounting: phone browsing must not accumulate desktop workspaces/PTYS.
   if (sleptRecords.length === 0) {
     return
@@ -143,9 +186,16 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   const wokenClaimKeys = new Set<string>()
   window.dispatchEvent(
     new CustomEvent<WakeHibernatedAgentsWorktreeDetail>(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, {
-      detail: { worktreeId, wokenClaimKeys }
+      detail: { worktreeId, wokenClaimKeys, paneKey }
     })
   )
+  if (paneKey) {
+    const tabId = sleptRecords[0] && getSleepingRecordTabId(sleptRecords[0])
+    if (tabId) {
+      dispatchBackgroundMount(worktreeId, [tabId], paneKey)
+    }
+    return
+  }
   // Why: main resumes a workspace sleep's placed records; the steps below are the window's own hibernation and stranded sleeps.
   const state = useAppStore.getState()
   const worktreeRecords = sleptRecords.filter(
@@ -173,7 +223,8 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
     // If tab identity is unresolved, mount the whole workspace rather than strand recovery.
     dispatchBackgroundMount(
       worktreeId,
-      hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
+      hasUntargetablePassiveRecord ? undefined : [...passiveTabIds],
+      paneKey
     )
   }
   const resumeOptions = {
@@ -188,4 +239,53 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
     return
   }
   resumeSleepingAgentSessionsForWorktree(worktreeId, resumeOptions)
+}
+
+async function wakeSleepingPaneInBackground(
+  worktreeId: string,
+  paneKey: string,
+  prepareOnly?: boolean
+): Promise<boolean> {
+  await waitForAgentPaneSleep(paneKey)
+  if (prepareOnly) {
+    return true
+  }
+  const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
+  if (
+    !record ||
+    record.worktreeId !== worktreeId ||
+    record.origin !== 'worktree-sleep' ||
+    isWorkspaceSleepRecord(record)
+  ) {
+    return false
+  }
+  const captured: SleepingAgentSessionRecord = {
+    ...record,
+    origin: 'quit',
+    restoreOnTabOpenOnly: true,
+    mailWake: {
+      id: createNonSecureContextUuid(),
+      capturedAt: record.capturedAt,
+      startedAt: Date.now()
+    }
+  }
+  useAppStore.getState().rememberSleepingAgentSession(captured, record)
+  try {
+    await patchWorkspaceSessionByHost(
+      window.api.session,
+      {
+        sleepingAgentSessionsByPaneKey: useAppStore.getState().sleepingAgentSessionsByPaneKey
+      },
+      useAppStore.getState()
+    ).written
+    await window.api.session.flush()
+  } catch (error) {
+    restoreUndispatchedMailWake(captured)
+    throw error
+  }
+  if (useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey] !== captured) {
+    return false
+  }
+  wakeSleepingAgentsForWorktreeInBackground(worktreeId, paneKey)
+  return true
 }

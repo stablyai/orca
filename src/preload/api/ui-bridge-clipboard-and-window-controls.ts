@@ -1,3 +1,4 @@
+import { sleepingMailUiApi } from './ui-sleeping-mail-api'
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
@@ -83,12 +84,7 @@ export const uiClipboardAndWindowControlsApi = {
   respondProjectMovePause: (response) => {
     ipcRenderer.send('ui:projectMovePauseResponse', response)
   },
-  onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
-      callback(data)
-    ipcRenderer.on('ui:resumeSleepingAgents', listener)
-    return () => ipcRenderer.removeListener('ui:resumeSleepingAgents', listener)
-  },
+  ...sleepingMailUiApi,
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: AgentPaneActivityRequest) =>
       callback(data)

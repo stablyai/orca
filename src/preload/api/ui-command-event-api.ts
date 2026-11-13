@@ -1,3 +1,4 @@
+import type { SleepingMailUiApi } from './ui-sleeping-mail-api'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -305,7 +306,6 @@ export type UiCommandEventApi = {
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
   onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
   respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
-  onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void
-}
+} & SleepingMailUiApi

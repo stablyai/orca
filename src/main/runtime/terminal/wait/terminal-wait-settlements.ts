@@ -194,6 +194,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
   }
 
+  protected mailWakeShellOccupied(ptyId: string): boolean {
+    const screen = this.readWholeScreenModel(ptyId)
+    return (
+      !screen ||
+      this.isPtyAwaitingUserInput(ptyId) ||
+      this.hasComposerDraft(ptyId, screen.emulator.getCursorLineContext())
+    )
+  }
+
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
   private ptyDeliveryHold(ptyId: string): 'prompt' | 'draft' | 'restoring' | null {

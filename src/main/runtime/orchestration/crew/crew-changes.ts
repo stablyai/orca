@@ -1,6 +1,8 @@
 export type CrewFacet = 'topology' | 'records' | 'status' | 'names' | 'traffic'
 export type CrewInvalidation = ReadonlySet<CrewFacet> & {
   readonly recordIds?: readonly string[]
+  readonly mailboxOwners?: ReadonlySet<string>
+  readonly mailGlobal?: true
   readonly trafficAddresses?: ReadonlySet<string>
 }
 

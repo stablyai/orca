@@ -11,7 +11,8 @@ import type { SendRecipientWarning } from './recipient-routing'
 /** The receipt line for mail the delivery gate would hold right now; null when it would deliver.
  *  Never throws: the mail is already stored, so a failed read must not fail the send. */
 export async function sendDeliveryHoldWarning(
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'> &
+    Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
   db: OrchestrationDb,
   recipient: string
 ): Promise<SendRecipientWarning | null> {
@@ -24,30 +25,36 @@ export async function sendDeliveryHoldWarning(
 }
 
 async function readDeliveryHoldWarning(
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'> &
+    Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
   db: OrchestrationDb,
   recipient: string
 ): Promise<SendRecipientWarning | null> {
-  const hold = await readMailboxDeliveryHold(recipient, {
-    chatSessionFor: (mailbox) => {
-      const custody = structuredMailboxCustody(mailbox, db)
-      return typeof custody === 'object' ? custody.sessionId : null
-    },
-    readChatAdmit: readStructuredMailAdmitFacts,
-    terminalFor: (mailbox) => {
-      if (mailbox.startsWith('run:')) {
-        return mailbox
-      }
-      if (!mailbox.startsWith('dispatch:')) {
-        return mailbox
-      }
-      const dispatch = db.getDispatchContextById(mailbox.slice('dispatch:'.length))
-      return dispatch?.status === 'dispatched' ? dispatch.assignee_handle : null
-    },
-    readTerminalHold: (handle) => runtime.readTerminalMailHold(handle)
-  })
+  const hold =
+    (await runtime.readSleepingMailHold?.(recipient)) ??
+    (await readMailboxDeliveryHold(recipient, {
+      chatSessionFor: (mailbox) => {
+        const custody = structuredMailboxCustody(mailbox, db)
+        return typeof custody === 'object' ? custody.sessionId : null
+      },
+      readChatAdmit: readStructuredMailAdmitFacts,
+      terminalFor: (mailbox) => {
+        if (mailbox.startsWith('run:')) {
+          return mailbox
+        }
+        if (!mailbox.startsWith('dispatch:')) {
+          return mailbox
+        }
+        const dispatch = db.getDispatchContextById(mailbox.slice('dispatch:'.length))
+        return dispatch?.status === 'dispatched' ? dispatch.assignee_handle : null
+      },
+      readTerminalHold: (handle) => runtime.readTerminalMailHold(handle)
+    }))
   return hold &&
-    (!recipient.startsWith('run:') || hold.kind === 'not-foreground' || hold.kind === 'not-live')
+    (!recipient.startsWith('run:') ||
+      hold.kind === 'not-foreground' ||
+      hold.kind === 'not-live' ||
+      hold.kind === 'asleep')
     ? {
         code: 'recipient_delivery_held',
         recipient,
@@ -59,7 +66,8 @@ async function readDeliveryHoldWarning(
 /** A stored send's receipt with the hold line added, when the delivery gate would hold it. */
 export async function withDeliveryHoldWarning<T>(
   sent: T,
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'> &
+    Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
   db: OrchestrationDb,
   recipient: string
 ): Promise<T | (T & { warnings: unknown[] })> {

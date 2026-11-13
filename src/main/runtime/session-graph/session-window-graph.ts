@@ -254,6 +254,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     }
     const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
     this.markGraphReady(windowId)
+    if (!graphWasReady) {
+      queueMicrotask(() => this.retrySleptMailboxWakes())
+    }
     if (
       isAuthoritativeGraphPublisher &&
       (windowId === HEADLESS_RUNTIME_WINDOW_ID || graph.mobileSessionTabs !== undefined)

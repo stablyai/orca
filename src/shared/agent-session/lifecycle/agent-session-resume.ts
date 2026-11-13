@@ -1,3 +1,5 @@
+import type { SleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+import type { MailWakeCustody } from './mail-wake-custody'
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
 import { readClaudePermissionMode } from './provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
@@ -57,12 +59,7 @@ export type AgentProviderSessionMetadata = {
   permissionMode?: string
 }
 
-export type SleepingAgentLaunchConfig = {
-  agentCommand?: string
-  agentArgs: string
-  agentEnv: Record<string, string>
-  ompResumeFilePath?: string
-}
+export type { SleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 
 export type SleepingAgentSessionRecord = {
   paneKey: string
@@ -84,6 +81,7 @@ export type SleepingAgentSessionRecord = {
   launchConfig?: SleepingAgentLaunchConfig
   /** Worktree-sleep/legacy records open fresh tabs on activation. quit/live records belong to restored panes; only their cold-restore path consumes them to avoid duplicating warm sessions (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
+  mailWake?: MailWakeCustody
   /** Explicit-sleep finished panes resume only when their own tab opens; mobile wake must not mount/respawn every slept tab (#11598). */
   restoreOnTabOpenOnly?: boolean
 }

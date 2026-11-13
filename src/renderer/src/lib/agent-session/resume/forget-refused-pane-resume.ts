@@ -37,6 +37,7 @@ export function forgetRefusedPaneResume(
   if (
     expected &&
     saved &&
+    !saved.mailWake &&
     saved.capturedAt === expected.capturedAt &&
     saved.updatedAt === expected.updatedAt &&
     namesRefusedResume(refused, saved)

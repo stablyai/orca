@@ -104,7 +104,22 @@ export const sleepingAgentSessionRecordSchema = z
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
-    restoreOnTabOpenOnly: z.boolean().optional()
+    restoreOnTabOpenOnly: z.boolean().optional(),
+    mailWake: z
+      .object({
+        id: z.string().min(1),
+        startedAt: z.number().finite().positive(),
+        capturedAt: z.number().finite().positive(),
+        attempt: z
+          .object({
+            ptyId: z.string().min(1),
+            incarnationId: z.string().min(1),
+            launchToken: z.string().min(1),
+            startedAt: z.number().finite().positive()
+          })
+          .optional()
+      })
+      .optional()
   })
   .refine(
     (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,

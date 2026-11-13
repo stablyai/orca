@@ -40,6 +40,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     try {
       const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
+      this.deps.wakeSleepingRecipient?.(handle, reservedTypes)
       // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
       if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
         return

@@ -67,7 +67,11 @@ export function rememberRunCoordinatorHandle(
     )
     .run(runId, terminalHandle)
   if (changed.changes) {
-    this.crewChanges.notify(new Set(['topology']))
+    this.crewChanges.notify(
+      Object.assign(new Set(['topology'] as const), {
+        trafficAddresses: new Set([`run:${runId}`, terminalHandle])
+      })
+    )
   }
 }
 
