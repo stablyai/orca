@@ -77,7 +77,7 @@ export const toast = frame(
         {
           key: 'mfa',
           text: 'Acme Engineering requires MFA from December 2, 2026.',
-          action: { label: 'Set up MFA', primary: true, link: setupUrl, onClick: noop }
+          action: { label: 'Set up MFA', primary: true, onClick: noop }
         }
       ]
     }}

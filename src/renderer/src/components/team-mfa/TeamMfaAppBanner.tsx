@@ -42,8 +42,8 @@ export function TeamMfaSidebarBanner(): React.JSX.Element | null {
           action: {
             label: t('auto.components.teamMfa.setUp', 'Set up MFA'),
             primary: true,
-            // Opens the account page in the browser, so the chevron offers Copy link.
-            link: toast.setupUrl,
+            // A plain button: toasts no longer carry a Copy link chevron (AUTH-ONLY-COPY-LINK).
+            // The sidebar card and Settings, Account keep the split button.
             onClick: () => {
               void window.api.shell.openUrl(toast.setupUrl)
               hideCloudToast(id)
