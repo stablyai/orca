@@ -285,6 +285,7 @@ export default function CommunityPage(): React.JSX.Element {
               mutate={catalog.mutate}
               loadMore={catalog.loadMore}
               loading={catalog.loading}
+              onChooseAccount={() => void chooseAccount()}
             />
           )
         ) : (

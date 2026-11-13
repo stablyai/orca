@@ -25762,6 +25762,10 @@
     "activityOverTime": "Activity over time",
     "proposedVolume": "How much work is being proposed?",
     "localWeeks": "PR submissions by week in your time zone. The first and last weeks can be incomplete.",
-    "reloadActivity": "Reload data"
+    "reloadActivity": "Reload data",
+    "myPRs": "My PRs",
+    "myPRsRuntime": "Update this Orca host to use My PRs.",
+    "authoredBy": "Authored by",
+    "myPRsAccount": "Choose a GitHub account on this host to show your PRs."
   }
 }

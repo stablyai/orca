@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowRight, ImageIcon } from 'lucide-react'
+import { ArrowDown, ArrowRight, ImageIcon, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -25,7 +25,8 @@ export function CommunityCatalog({
   onOpen,
   mutate,
   loadMore,
-  loading
+  loading,
+  onChooseAccount
 }: {
   page: CommunityPage
   query: CommunityQuery
@@ -34,11 +35,13 @@ export function CommunityCatalog({
   mutate: (action: CommunityFeatureAction) => Promise<CommunityFeaturesSnapshot>
   loadMore: () => Promise<void>
   loading: boolean
+  onChooseAccount: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
   const [allAreas, setAllAreas] = useState(false)
   const features = Object.values(page.personal.features)
+  const rows = query.mine && !page.viewer ? [] : page.rows
   const tabs = [
     { id: 'explore', label: t('community.explore', 'Explore'), count: null },
     {
@@ -94,6 +97,22 @@ export function CommunityCatalog({
           {t('community.searchAction', 'Search')}
         </Button>
         <Button
+          variant={query.mine ? 'secondary' : 'outline'}
+          aria-pressed={!!query.mine}
+          disabled={page.viewer === undefined}
+          onClick={() => {
+            if (query.mine || page.viewer) {
+              onQuery({ ...query, mine: !query.mine })
+            } else {
+              onChooseAccount()
+            }
+          }}
+        >
+          <UserRound className="size-4" />
+          {t('community.myPRs', 'My PRs')}
+          {page.viewer && <Badge variant="secondary">{page.mineCount ?? 0}</Badge>}
+        </Button>
+        <Button
           variant={query.images ? 'secondary' : 'outline'}
           aria-pressed={!!query.images}
           onClick={() => onQuery({ ...query, images: !query.images })}
@@ -127,6 +146,18 @@ export function CommunityCatalog({
           </SelectContent>
         </Select>
       </form>
+      {(query.mine || page.viewer === undefined) && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {page.viewer === undefined
+            ? t('community.myPRsRuntime', 'Update this Orca host to use My PRs.')
+            : page.viewer
+              ? `${t('community.authoredBy', 'Authored by')} @${page.viewer}`
+              : t(
+                  'community.myPRsAccount',
+                  'Choose a GitHub account on this host to show your PRs.'
+                )}
+        </p>
+      )}
       <div className="grid grid-cols-3 gap-3">
         {[
           {
@@ -205,9 +236,10 @@ export function CommunityCatalog({
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          {page.total.toLocaleString(locale)} {t('community.results', 'matching proposals')}
+          {(query.mine && !page.viewer ? 0 : page.total).toLocaleString(locale)}{' '}
+          {t('community.results', 'matching proposals')}
         </span>
-        {(query.query || query.area || query.kind || query.images) && (
+        {(query.query || query.area || query.kind || query.images || query.mine) && (
           <Button
             variant="ghost"
             size="sm"
@@ -217,9 +249,9 @@ export function CommunityCatalog({
           </Button>
         )}
       </div>
-      {page.rows.length ? (
+      {rows.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {page.rows.map((pr) => (
+          {rows.map((pr) => (
             <CommunityProposalCard
               key={pr.number}
               pr={pr}
@@ -242,7 +274,7 @@ export function CommunityCatalog({
           )}
         </div>
       )}
-      {page.nextOffset !== null && (
+      {page.nextOffset !== null && !(query.mine && !page.viewer) && (
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => void loadMore()} disabled={loading}>
             <ArrowDown className="size-4" />

@@ -4,7 +4,7 @@ Enable **Community previews** in Settings → Experimental. Custom builds with a
 
 ## Browse changes
 
-**Proposals** lists open pull requests from `stablyai/orca`. These proposals are not in official Orca yet. Explore, Saved, and Viewed share one catalog. Cards show author-linked images, saved state, and whether the source changed since the last visit. Areas are inferred from titles, not maintainer-assigned labels.
+**Proposals** lists open pull requests from `stablyai/orca`. These proposals are not in official Orca yet. Explore, Saved, and Viewed share one catalog. **My PRs** filters these views to the GitHub account selected on that host. Choose an account when prompted. Search accepts a PR number, `#number`, or a full `stablyai/orca` PR link; an exact lookup can load a PR missing from the cached catalog. Cards show author-linked images, saved state, and whether the source changed since the last visit. Areas are inferred from titles, not maintainer-assigned labels.
 
 The catalog refreshes asynchronously, with two concurrent GitHub requests, paged fetching, cached results, cancellation, and rate-limit feedback. The UI requests 12 results at a time. Choose an existing GitHub CLI account on the selected host for authenticated limits. Orca stores the account name, not another copy of its token.
 

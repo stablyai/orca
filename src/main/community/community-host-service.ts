@@ -17,7 +17,7 @@ import { CommunityCatalogStore } from './community-catalog-store'
 import { CommunityGitHubSource } from './community-github-source'
 import { CommunityService } from './community-service'
 import { CommunityFeatureStore } from './community-feature-store'
-import { queryCommunityCatalog } from './community-catalog-query'
+import { communityQueryNumber, queryCommunityCatalog } from './community-catalog-query'
 import { communityGitHubDetail } from './community-github-detail'
 import { CommunityPublishedData } from './community-published-data'
 import { CommunityCandidateService } from './community-candidate-service'
@@ -96,10 +96,22 @@ export class CommunityHostService {
   }
   async list(query: CommunityQuery) {
     await this.initialize()
-    const [{ catalog, status }, personal] = await Promise.all([
-      this.catalog.read(),
-      this.features.read()
-    ])
+    const [snapshot, personal] = await Promise.all([this.catalog.read(), this.features.read()])
+    let { catalog } = snapshot
+    const { status } = snapshot
+    const number = communityQueryNumber(query.query)
+    if (number !== null && !catalog?.pullRequests.some((row) => row.number === number)) {
+      const row = await this.catalog.detail(number)
+      catalog = {
+        repository: 'stablyai/orca',
+        capturedAt: row.observedAt ?? new Date().toISOString(),
+        sourceUrl: 'https://github.com/stablyai/orca/pulls',
+        groups: [],
+        screenshots: {},
+        ...catalog,
+        pullRequests: [...(catalog?.pullRequests ?? []), row]
+      }
+    }
     if (catalog && query.view && query.view !== 'explore') {
       const known = new Set(catalog.pullRequests.map((row) => row.number))
       const archived = Object.values(personal.features).filter(
@@ -122,10 +134,11 @@ export class CommunityHostService {
         { ...catalog, pullRequests: [...catalog.pullRequests, ...captured] },
         personal,
         status,
-        query
+        query,
+        this.user
       )
     }
-    return queryCommunityCatalog(catalog, personal, status, query)
+    return queryCommunityCatalog(catalog, personal, status, query, this.user)
   }
   async mutate(action: CommunityFeatureAction) {
     if (action.action === 'select' || action.action === 'visit' || action.action === 'save') {

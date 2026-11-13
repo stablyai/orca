@@ -15,6 +15,7 @@ export type CommunityQuery = {
   area?: string
   kind?: string
   images?: boolean
+  mine?: boolean
   sort?: 'updated' | 'popular' | 'oldest'
   offset?: number
   limit?: number
@@ -30,6 +31,8 @@ export type CommunitySummary = {
   weeks: { date: string; count: number }[]
 }
 export type CommunityPage = {
+  viewer?: string | null
+  mineCount?: number
   rows: CommunityPullRequest[]
   total: number
   nextOffset: number | null

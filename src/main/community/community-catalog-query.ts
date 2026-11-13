@@ -45,24 +45,36 @@ export function communitySummary(catalog: CommunityCatalog | null): CommunitySum
       .map(([date, count]) => ({ date, count }))
   }
 }
+export function communityQueryNumber(text: string | undefined): number | null {
+  const match = text
+    ?.trim()
+    .match(/^(?:#|https:\/\/github\.com\/stablyai\/orca\/pull\/)?([1-9]\d{0,9})\/?$/i)
+  const number = match ? Number(match[1]) : 0
+  return number > 0 && number <= 2_147_483_647 ? number : null
+}
 export function queryCommunityCatalog(
   catalog: CommunityCatalog | null,
   personal: CommunityFeaturesSnapshot,
   status: CommunitySyncStatus,
-  query: CommunityQuery
+  query: CommunityQuery,
+  viewer: string | null = null
 ): CommunityPage {
+  const number = communityQueryNumber(query.query)
   const words = query.query?.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean) ?? []
   const rows = (catalog?.pullRequests ?? [])
     .map((pr) => ({ ...pr, ...classifyCommunityPullRequest(pr.title) }))
     .filter((row) => {
       const feature = personal.features[row.number]
       return (
+        (!query.mine || (viewer !== null && row.author.toLowerCase() === viewer.toLowerCase())) &&
         (!query.area || row.area === query.area) &&
         (!query.kind || row.kind === query.kind) &&
         (!query.images || row.imageUrls.length > 0) &&
-        words.every((word) =>
-          `${row.number} ${row.title} ${row.author}`.toLocaleLowerCase().includes(word)
-        ) &&
+        (number !== null
+          ? row.number === number
+          : words.every((word) =>
+              `${row.number} ${row.title} ${row.author}`.toLocaleLowerCase().includes(word)
+            )) &&
         (!query.view ||
           query.view === 'explore' ||
           (query.view === 'saved'
@@ -82,6 +94,12 @@ export function queryCommunityCatalog(
   const offset = query.offset ?? 0
   const limit = Math.min(60, query.limit ?? 12)
   return {
+    viewer,
+    mineCount: viewer
+      ? (catalog?.pullRequests ?? []).filter(
+          (row) => row.author.toLowerCase() === viewer.toLowerCase()
+        ).length
+      : 0,
     rows: rows.slice(offset, offset + limit),
     total: rows.length,
     nextOffset: offset + limit < rows.length ? offset + limit : null,
