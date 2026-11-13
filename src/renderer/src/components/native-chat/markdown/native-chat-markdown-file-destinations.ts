@@ -6,6 +6,8 @@ import { formatFileLinkLocation } from '../../../../../shared/file-links/file-li
 
 type MarkdownNode = {
   type: string
+  value?: string
+  alt?: string | null
   url?: string
   identifier?: string
   title?: string | null
@@ -13,6 +15,35 @@ type MarkdownNode = {
 }
 
 const SCHEME_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
+const IMAGE_DESTINATION_PATTERN = /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i
+
+function isImageDestination(url: string | undefined): url is string {
+  return Boolean(url && IMAGE_DESTINATION_PATTERN.test(url.split(/[?#]/, 1)[0]!))
+}
+
+/** A paragraph holding only a text link to an image shows that image instead of a link. */
+function promoteImageLinkParagraph(paragraph: MarkdownNode): void {
+  const [link, ...rest] = (paragraph.children ?? []).filter(
+    (child) => child.type !== 'text' || child.value?.trim()
+  )
+  if (
+    rest.length > 0 ||
+    link?.type !== 'link' ||
+    !isImageDestination(link.url) ||
+    !link.children?.every((child) => child.type === 'text')
+  ) {
+    return
+  }
+  const text = link.children.map((child) => child.value ?? '').join('')
+  paragraph.children = [
+    {
+      type: 'image',
+      url: link.url,
+      title: link.title,
+      alt: text === link.url ? '' : text
+    }
+  ]
+}
 
 /**
  * Sanitize keeps only the protocols it knows, so a `file:` link or image naming a file loses its
@@ -21,6 +52,9 @@ const SCHEME_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
  * chat's host. Web links and plain paths are left as written.
  */
 function rewriteFileDestinations(node: MarkdownNode, definitions: Map<string, MarkdownNode>): void {
+  if (node.type === 'paragraph') {
+    promoteImageLinkParagraph(node)
+  }
   const definition =
     (node.type === 'linkReference' || node.type === 'imageReference') && node.identifier
       ? definitions.get(node.identifier.toUpperCase())

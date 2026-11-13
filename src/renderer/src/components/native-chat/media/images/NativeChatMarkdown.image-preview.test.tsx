@@ -231,6 +231,20 @@ describe('native chat Markdown image preview', () => {
     }
   })
 
+  it('shows a standalone link to an image as an image and keeps inline links as links', async () => {
+    render(
+      <Transcript
+        content={
+          '[Chart](screenshots/chart.png)\n\nSee [the chart](screenshots/inline.png) for details.\n\n[Report](docs/report.md)'
+        }
+      />
+    )
+    expect(await screen.findByRole('button', { name: /View image: Chart/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /inline\.png|the chart/ })).toBeNull()
+    expect(screen.getByText('the chart').closest('a')).not.toBeNull()
+    expect(screen.getByText('Report').closest('a')).not.toBeNull()
+  })
+
   it('closes the preview when the owning chat becomes hidden', () => {
     const { rerender } = render(<Transcript />)
     fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
