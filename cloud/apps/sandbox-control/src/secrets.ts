@@ -2,6 +2,7 @@
 //   GET    /v1/secrets?scope=org|personal|repo[&repo=owner/name]   -> {secrets: [metadata]}
 //   PUT    /v1/secrets/:scope/:NAME[?repo=owner/name] {value}       -> {secret: metadata}
 //   DELETE /v1/secrets/:scope/:NAME[?repo=owner/name]               -> {deleted: true}
+//   GET    /v1/secrets/activity?view=personal                       -> {events, nextCursor} (secret-events.ts)
 // Values are write-only: no route returns them, only a last-4 hint for long values. Org secrets
 // (and repo secrets of an org account) need owner/admin of that org to write; any member may list
 // names. Personal secrets belong to the user alone. Values are never logged.
@@ -11,6 +12,15 @@ import type { Env } from './env'
 import { createKeyring, type Keyring, type SecretBinding } from './secrets-crypto'
 import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
 import type { SandboxRow } from './store'
+import {
+  activityAccounts,
+  activityLimit,
+  actorOf,
+  deleteEventStatement,
+  listSecretEvents,
+  writeEventStatement,
+  type SecretActor
+} from './secret-events'
 
 export type SecretScope = 'org' | 'personal' | 'repo'
 export type SecretKind = 'env' | 'agent_key'
@@ -246,7 +256,9 @@ export async function putSecret(
   db: D1Database,
   keyring: Keyring,
   input: { scope: SecretScope; ownerId: string; name: string; value: string; updatedBy: string },
-  now: number
+  now: number,
+  /** Who to record in the activity log (SEC-4); every API write passes one. */
+  actor?: SecretActor
 ): Promise<SecretView> {
   checkName(input.name)
   checkValue(input.name, input.value)
@@ -265,7 +277,7 @@ export async function putSecret(
   }
   const sealed = await keyring.seal({ scope: input.scope, ownerId: input.ownerId, name: input.name }, input.value)
   const hint = hintFor(input.value)
-  await db
+  const upsert = db
     .prepare(
       `INSERT INTO secrets (scope, owner_id, name, kek_id, wrapped_dek, ciphertext, hint, created_at, updated_at, updated_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -274,16 +286,30 @@ export async function putSecret(
          updated_by = excluded.updated_by`
     )
     .bind(input.scope, input.ownerId, input.name, sealed.kekId, sealed.wrappedDek, sealed.ciphertext, hint, now, now, input.updatedBy)
-    .run()
+  if (actor) {
+    // The activity record first (it reads whether the row exists), in the same transaction as the write.
+    await db.batch([writeEventStatement(db, input, actor, now), upsert])
+  } else {
+    await upsert.run()
+  }
   return view({ scope: input.scope, owner_id: input.ownerId, name: input.name, hint, updated_at: now, updated_by: input.updatedBy })
 }
 
-export async function deleteSecret(db: D1Database, scope: SecretScope, ownerId: string, name: string): Promise<boolean> {
-  const result = await db
-    .prepare('DELETE FROM secrets WHERE scope = ? AND owner_id = ? AND name = ?')
-    .bind(scope, ownerId, name)
-    .run()
-  return result.meta.changes === 1
+export async function deleteSecret(
+  db: D1Database,
+  scope: SecretScope,
+  ownerId: string,
+  name: string,
+  actor?: SecretActor,
+  now: number = Date.now()
+): Promise<boolean> {
+  const remove = db.prepare('DELETE FROM secrets WHERE scope = ? AND owner_id = ? AND name = ?').bind(scope, ownerId, name)
+  if (!actor) {
+    return (await remove.run()).meta.changes === 1
+  }
+  // The record is written only if the row exists, in the same transaction as the delete.
+  const [, result] = await db.batch([deleteEventStatement(db, { scope, ownerId, name }, actor, now), remove])
+  return result?.meta.changes === 1
 }
 
 /**
@@ -472,6 +498,29 @@ export async function handleSecretsRoute(
       secrets: await effectiveSecrets(db, caller, repoQuery)
     })
   }
+  if (url.pathname === '/v1/secrets/activity') {
+    if (request.method !== 'GET') {
+      return json({ error: 'not_found' }, 404)
+    }
+    // Personal only: the team's secret events are read through the unified Enterprise audit log
+    // (GET /v1/audit-log), which gates them on the plan's audit_log entitlement and owner/admin.
+    const view = url.searchParams.get('view') ?? 'personal'
+    if (view !== 'personal') {
+      return json({ error: 'invalid_request', reason: 'invalid_view' }, 400)
+    }
+    const allowed = activityAccounts(caller, view, personalOwner(caller.userId, caller.dev === true))
+    if ('error' in allowed) {
+      return json({ error: 'forbidden', reason: allowed.error }, 403)
+    }
+    return json(
+      await listSecretEvents(db, allowed.accounts, {
+        now,
+        cursor: url.searchParams.get('cursor'),
+        limit: activityLimit(url.searchParams.get('limit'))
+      })
+    )
+  }
+  const actor = actorOf(caller)
   const batchMatch = /^\/v1\/secrets\/([a-z]+)\/batch$/.exec(url.pathname)
   if (batchMatch) {
     const scope = ScopeSchema.safeParse(batchMatch[1])
@@ -498,13 +547,13 @@ export async function handleSecretsRoute(
     }
     for (const [name, value] of Object.entries(body.data.set ?? {})) {
       await attempt(name, async () => {
-        written.push(await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value, updatedBy: caller.userId }, now))
+        written.push(await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value, updatedBy: caller.userId }, now, actor))
       })
     }
     for (const name of body.data.delete ?? []) {
       await attempt(name, async () => {
         checkName(name)
-        if (await deleteSecret(db, scope.data, owner, name)) {
+        if (await deleteSecret(db, scope.data, owner, name, actor, now)) {
           deleted.push(name)
         }
       })
@@ -543,7 +592,7 @@ export async function handleSecretsRoute(
     if (!body.success) {
       return json({ error: 'invalid_request' }, 400)
     }
-    const secret = await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value: body.data.value, updatedBy: caller.userId }, now)
+    const secret = await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value: body.data.value, updatedBy: caller.userId }, now, actor)
     console.log(JSON.stringify({ event: 'secret_written', scope: scope.data, name, by: caller.userId }))
     onChange({ scope: scope.data, ownerId: owner })
     return json({ secret })
@@ -551,7 +600,7 @@ export async function handleSecretsRoute(
   if (request.method === 'DELETE') {
     const owner = ownerFor(caller, scope.data, repoParam, true)
     checkName(name)
-    if (!(await deleteSecret(db, scope.data, owner, name))) {
+    if (!(await deleteSecret(db, scope.data, owner, name, actor, now))) {
       return json({ error: 'not_found' }, 404)
     }
     console.log(JSON.stringify({ event: 'secret_deleted', scope: scope.data, name, by: caller.userId }))
