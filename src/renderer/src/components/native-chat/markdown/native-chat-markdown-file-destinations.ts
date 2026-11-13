@@ -22,25 +22,36 @@ function isImageDestination(url: string | undefined): url is string {
 }
 
 /** A paragraph holding only a text link to an image shows that image instead of a link. */
-function promoteImageLinkParagraph(paragraph: MarkdownNode): void {
+function promoteImageLinkParagraph(
+  paragraph: MarkdownNode,
+  definitions: Map<string, MarkdownNode>
+): void {
   const [link, ...rest] = (paragraph.children ?? []).filter(
     (child) => child.type !== 'text' || child.value?.trim()
   )
   if (
     rest.length > 0 ||
-    link?.type !== 'link' ||
-    !isImageDestination(link.url) ||
+    !link ||
+    (link.type !== 'link' && link.type !== 'linkReference') ||
     !link.children?.every((child) => child.type === 'text')
   ) {
+    return
+  }
+  const definition =
+    link.type === 'linkReference' && link.identifier
+      ? definitions.get(link.identifier.toUpperCase())
+      : undefined
+  const url = definition?.url ?? link.url
+  if (!isImageDestination(url)) {
     return
   }
   const text = link.children.map((child) => child.value ?? '').join('')
   paragraph.children = [
     {
       type: 'image',
-      url: link.url,
-      title: link.title,
-      alt: text === link.url ? '' : text
+      url,
+      title: definition?.title ?? link.title,
+      alt: text === url ? '' : text
     }
   ]
 }
@@ -53,7 +64,7 @@ function promoteImageLinkParagraph(paragraph: MarkdownNode): void {
  */
 function rewriteFileDestinations(node: MarkdownNode, definitions: Map<string, MarkdownNode>): void {
   if (node.type === 'paragraph') {
-    promoteImageLinkParagraph(node)
+    promoteImageLinkParagraph(node, definitions)
   }
   const definition =
     (node.type === 'linkReference' || node.type === 'imageReference') && node.identifier
