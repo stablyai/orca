@@ -1,3 +1,5 @@
+import { refreshSleepingMailOwners } from './sleeping-mail-owner-mailboxes'
+import { sessionCrewChanges, type CrewInvalidation } from '../../crew/crew-changes'
 import { replaceMailWakeRecord } from '../../../session-lifecycle/projection/retained-mail-wake-attempt'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import {
@@ -118,13 +120,16 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       { consumesTerminalSideEffects: false }
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
-    this.crewChanges.subscribe((facets) => {
+    const changed = (facets: CrewInvalidation) => {
       if (facets.has('traffic') || facets.has('topology') || facets.has('records')) {
         this.publishSleepingMail(
-          facets.has('topology') || facets.has('records') ? undefined : facets.trafficAddresses
+          facets.mailGlobal ? undefined : (facets.trafficAddresses ?? []),
+          facets.mailboxOwners
         )
       }
-    })
+    }
+    this.crewChanges.subscribe(changed)
+    sessionCrewChanges.subscribe(changed)
     this.store?.onWorkspaceSessionWritten?.((hostId) => {
       const hosts =
         hostId === null ? (this.store?.getWorkspaceSessionHostIds?.() ?? ['local']) : [hostId]
@@ -132,7 +137,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         const changed = this.refreshSleepingRecords(host)
         this.watchMailWakeInvocations()
         if (changed) {
-          queueMicrotask(() => this.retrySleptMailboxWakes())
+          queueMicrotask(() => this.publishSleepingMail([]))
         } else {
           this.publishSleepingMail([])
         }
@@ -221,7 +226,10 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   private sleepingMailPublicationQueued = false
   private sleepingMailPublication = ''
 
-  protected publishSleepingMail(mailboxes?: Iterable<string>): void {
+  protected publishSleepingMail(mailboxes?: Iterable<string>, owners?: Iterable<string>): void {
+    for (const owner of owners ?? []) {
+      this.changedSleepingPanes.add(owner)
+    }
     if (mailboxes) {
       for (const mailbox of mailboxes) {
         this.sleepingMailAddresses.add(mailbox)
@@ -240,7 +248,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
           return
         }
         const global = this.globalSleepingMailInvalidation
-        const affected = new Set(this.changedSleepingPanes)
+        let affected = new Set(this.changedSleepingPanes)
+        const addresses = new Set(this.sleepingMailAddresses)
         this.changedSleepingPanes.clear()
         if (global && (this.sleepingRecords.size || this.sleptMailboxWake.hasTrackedMail)) {
           this.sleptMailboxWake.reconcile()
@@ -248,11 +257,12 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
             affected.add(pane)
           }
         } else {
-          for (const mailbox of this.sleepingMailAddresses) {
-            for (const pane of this.sleptMailboxWake.refresh(mailbox)) {
-              affected.add(pane)
-            }
-          }
+          affected = refreshSleepingMailOwners(
+            this.sleptMailboxWake,
+            this._orchestrationDb,
+            affected,
+            addresses
+          )
         }
         this.globalSleepingMailInvalidation = false
         this.sleepingMailAddresses.clear()
@@ -262,11 +272,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
             await this.editMailWakeRecord(record, withoutMailWake(record))
           }
         }
-        if (global) {
-          for (const pane of this.sleepingRecords.keys()) {
-            for (const mailbox of this.sleptMailboxWake.mailboxesForPane(pane)) {
-              this.sleptMailboxWake.request(mailbox)
-            }
+        for (const pane of global ? this.sleepingRecords.keys() : affected) {
+          for (const mailbox of this.sleptMailboxWake.mailboxesForPane(pane)) {
+            this.sleptMailboxWake.request(mailbox)
           }
         }
         const settledIds = [...this.settledMailWakeIds]

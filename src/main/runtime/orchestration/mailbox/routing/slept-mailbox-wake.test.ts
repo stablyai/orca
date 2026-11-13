@@ -1,6 +1,8 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { OrchestrationMailboxPointerDelivery } from '../terminal-pointer/mailbox-pointer-delivery'
+import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
+import { ORCHESTRATION_REPLY_METHOD } from '../../../rpc/methods/orchestration/messaging/reply-method'
 import { MailWakeInvocations } from './mail-wake-invocations'
 import { admitsMailWakeRetry } from './mail-wake-retry-admission'
 import {
@@ -36,6 +38,24 @@ const record: SleepingAgentSessionRecord = {
   updatedAt: 1
 }
 const settled = () => new Promise<void>((resolve) => setImmediate(resolve))
+
+const mailNotifier = (
+  resume: RuntimeNotifier['resumeSleepingAgents'],
+  bell?: RuntimeNotifier['sleepingMailChanged']
+): RuntimeNotifier => ({
+  worktreesChanged: vi.fn(),
+  reposChanged: vi.fn(),
+  activateWorktree: vi.fn(),
+  createTerminal: vi.fn(),
+  splitTerminal: vi.fn(),
+  renameTerminal: vi.fn(),
+  focusTerminal: vi.fn(),
+  closeTerminal: vi.fn(),
+  terminalFitOverrideChanged: vi.fn(),
+  terminalDriverChanged: vi.fn(),
+  resumeSleepingAgents: resume,
+  sleepingMailChanged: bell
+})
 
 it('wakes only the automatic sleeper owed deliverable mail, coalesces it, and retries a failed wake on availability', async () => {
   const db = new OrchestrationDb(':memory:')
@@ -156,20 +176,7 @@ it('holds manual Sleep through the sender receipt and keeps its bell until mail 
   )
   const resume = vi.fn(async () => true)
   const bell = vi.fn()
-  const notifier: RuntimeNotifier = {
-    worktreesChanged: vi.fn(),
-    reposChanged: vi.fn(),
-    activateWorktree: vi.fn(),
-    createTerminal: vi.fn(),
-    splitTerminal: vi.fn(),
-    renameTerminal: vi.fn(),
-    focusTerminal: vi.fn(),
-    closeTerminal: vi.fn(),
-    terminalFitOverrideChanged: vi.fn(),
-    terminalDriverChanged: vi.fn(),
-    resumeSleepingAgents: resume,
-    sleepingMailChanged: bell
-  }
+  const notifier = mailNotifier(resume, bell)
   try {
     runtime.setNotifier(notifier)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -454,11 +461,16 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
     delivery.request(mailbox)
     await settled()
     expect(wake).toHaveBeenCalledTimes(1)
+    sleeping = null
+    delivery.refresh(mailbox)
+    sleeping = record
+    delivery.request(mailbox)
+    await settled()
+    expect(wake).toHaveBeenCalledTimes(1)
     db.markAsRead([message.id])
     delivery.refresh(mailbox)
-    expect(Reflect.get(delivery, 'succeeded').size).toBe(0)
-    expect(Reflect.get(delivery, 'failed').size).toBe(0)
-    expect(Reflect.get(delivery, 'attempted').size).toBe(0)
+    expect(delivery.failedToWake(retained)).toBe(false)
+    expect(delivery.heldWorktrees()).toEqual([])
 
     for (let i = 0; i < 20; i++) {
       sleeping = record
@@ -480,9 +492,8 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
       db.markAsRead([row.id])
       delivery.refresh(handle)
     }
-    expect(Reflect.get(delivery, 'succeeded').size).toBe(0)
-    expect(Reflect.get(delivery, 'failed').size).toBe(0)
-    expect(Reflect.get(delivery, 'attempted').size).toBe(0)
+    expect(wake).toHaveBeenCalledTimes(21)
+    expect(delivery.failedToWake(record)).toBe(false)
     expect(delivery.heldWorktrees()).toEqual([])
   } finally {
     db.close()
@@ -499,7 +510,7 @@ it.each([10, 100])(
     const records: Record<string, SleepingAgentSessionRecord> = {}
     const mailboxes: string[] = []
     for (let i = 0; i < count; i++) {
-      const key = `tab-${i}:11111111-1111-4111-8111-111111111111`
+      const key = `tab-${i}:11111111-1111-4111-8111-${String(i).padStart(12, '0')}`
       records[key] = new Proxy(
         {
           ...record,
@@ -537,6 +548,13 @@ it.each([10, 100])(
         db.insertMessage({ runId: run.id, from: 'worker', to: mailbox, subject: 'done' })
       }
     }
+    const task = db.createTask({ spec: 'local completion', runId: mailboxes[0]!.slice(4) })
+    const dispatch = createRootDispatch(
+      db,
+      task.id,
+      'term_local_worker',
+      'tab-0:11111111-1111-4111-8111-000000000000'
+    )
     let session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: records }
     const readSession = vi.fn(() => session)
     const runtime = new OrcaRuntimeService(
@@ -564,24 +582,20 @@ it.each([10, 100])(
       readSession.mockClear()
       statusChanged('unrelated:11111111-1111-4111-8111-111111111111')
       expect(visits).toBe(0)
-      statusChanged('tab-0:11111111-1111-4111-8111-111111111111')
+      statusChanged('tab-0:11111111-1111-4111-8111-000000000000')
       // A status event needs only this pane's attempt and PTY identity; no session inventory.
       expect(visits).toBeLessThanOrEqual(4)
       expect(readSession).not.toHaveBeenCalled()
       const inventory = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
       const fullRows = vi.spyOn(db, 'getUndeliveredUnreadMessages')
       const newest = vi.spyOn(db, 'getUndeliveredUnreadSequence')
-      runtime.crewChanges.notify(
-        Object.assign(new Set(['traffic'] as const), { trafficAddresses: new Set([mailboxes[0]!]) })
-      )
+      db.completeDispatch(dispatch.id)
       await settled()
       expect(inventory).not.toHaveBeenCalled()
       expect(fullRows).not.toHaveBeenCalled()
-      // Refresh and the custody check each need one scalar newest-sequence row for the affected mailbox.
-      expect(newest.mock.calls.length).toBeLessThanOrEqual(3)
-      expect(
-        newest.mock.results.filter((result) => result.value !== undefined).length
-      ).toBeLessThanOrEqual(3)
+      expect(newest.mock.calls.filter(([mailbox]) => mailbox !== mailboxes[0])).toEqual([])
+      // One affected Run: refresh, custody validation and each start-stage revalidation; no N-dependent work.
+      expect(newest.mock.calls.length).toBeLessThanOrEqual(8)
       expect(newest).toHaveBeenCalled()
       session = {
         ...session,
@@ -604,9 +618,18 @@ it.each([10, 100])(
       await settled()
       visits = 0
       readSession.mockClear()
-      statusChanged('tab-0:11111111-1111-4111-8111-111111111111')
+      statusChanged('tab-0:11111111-1111-4111-8111-000000000000')
       expect(visits).toBe(0)
       expect(readSession).not.toHaveBeenCalled()
+      session = { ...session, sleepingAgentSessionsByPaneKey: {} }
+      sessionWritten('local')
+      await settled()
+      inventory.mockClear()
+      newest.mockClear()
+      db.completeDispatch(dispatch.id)
+      await settled()
+      expect(inventory).not.toHaveBeenCalled()
+      expect(newest).not.toHaveBeenCalled()
     } finally {
       db.close()
     }
@@ -640,19 +663,7 @@ it('holds unknown dispatch custody but retries a positively undispatched wake on
   const resume = vi.fn(
     async (_workspace: string, _pane?: string, prepare?: boolean) => prepare === true
   )
-  const notifier: RuntimeNotifier = {
-    worktreesChanged: vi.fn(),
-    reposChanged: vi.fn(),
-    activateWorktree: vi.fn(),
-    createTerminal: vi.fn(),
-    splitTerminal: vi.fn(),
-    renameTerminal: vi.fn(),
-    focusTerminal: vi.fn(),
-    closeTerminal: vi.fn(),
-    terminalFitOverrideChanged: vi.fn(),
-    terminalDriverChanged: vi.fn(),
-    resumeSleepingAgents: resume
-  }
+  const notifier = mailNotifier(resume)
   try {
     const run = db.createRun({
       objective: 'refused launch',
@@ -666,7 +677,8 @@ it('holds unknown dispatch custody but retries a positively undispatched wake on
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     await settled()
     expect(await runtime.readSleepingMailHold(mailbox)).toMatchObject({
-      resuming: true,
+      resuming: false,
+      openTab: true,
       liveShell: false
     })
     runtime.retrySleptMailboxWakes()
@@ -684,6 +696,104 @@ it('holds unknown dispatch custody but retries a positively undispatched wake on
       ['repo::/workspace', 'tab:11111111-1111-4111-8111-111111111111']
     ])
     expect(session.sleepingAgentSessionsByPaneKey?.[paneKey]?.mailWake).toBeUndefined()
+  } finally {
+    runtime.setNotifier(null)
+    db.close()
+  }
+})
+
+it('clears the original workspace hold and custody when another terminal replies to its last mail', async () => {
+  const db = new OrchestrationDb(':memory:')
+  let session: WorkspaceSessionState = {
+    ...getDefaultWorkspaceSession(),
+    sleepingAgentSessionsByPaneKey: {
+      [paneKey]: {
+        ...record,
+        origin: 'quit',
+        restoreOnTabOpenOnly: true,
+        mailWake: { id: 'reply-custody', capturedAt: 1, startedAt: 100 }
+      }
+    }
+  }
+  let written: (host: ExecutionHostId | null) => void = () => {}
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => ['local'],
+      setWorkspaceSession: (next) => {
+        session = next
+        written('local')
+      },
+      runDurableMutation: async (mutation) => mutation().value,
+      onWorkspaceSessionWritten: (listener) => {
+        written = listener
+        return () => {}
+      }
+    })
+  )
+  const bell = vi.fn()
+  runtime.setNotifier(
+    mailNotifier(
+      vi.fn(async () => false),
+      bell
+    )
+  )
+  try {
+    const run = db.createRun({
+      objective: 'reply consumes mail',
+      coordinatorHandle: 'term_asleep',
+      coordinatorPaneKey: paneKey
+    })
+    const mailbox = `run:${run.id}`
+    const sender = db.createRun({
+      objective: 'sender',
+      coordinatorHandle: 'term_sender',
+      coordinatorPaneKey: null
+    })
+    const original = db.insertMessage({
+      runId: run.id,
+      from: `run:${sender.id}`,
+      to: mailbox,
+      subject: 'question'
+    })
+    runtime.setOrchestrationDb(db)
+    runtime.retrySleptMailboxWakes()
+    await settled()
+    expect(await runtime.readSleepingMailHold(mailbox)).toMatchObject({
+      kind: 'asleep',
+      resuming: false
+    })
+    expect(bell).toHaveBeenLastCalledWith(['folder:workspace'])
+    const inventory = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
+    const originalInvalidation = vi.fn()
+    const unwatch = db.crewChanges.subscribe((event) => {
+      if (event.trafficAddresses?.has(mailbox)) {
+        originalInvalidation(db.getMessageById(original.id)?.read)
+      }
+    })
+    db.db.exec('BEGIN IMMEDIATE')
+    db.markAsRead([original.id])
+    expect(originalInvalidation).not.toHaveBeenCalled()
+    db.db.exec('ROLLBACK')
+    await settled()
+    expect(originalInvalidation).not.toHaveBeenCalled()
+    expect(await runtime.readSleepingMailHold(mailbox)).not.toBeNull()
+    await ORCHESTRATION_REPLY_METHOD.handler(
+      ORCHESTRATION_REPLY_METHOD.params.parse({
+        id: original.id,
+        from: 'term_other',
+        body: 'answer'
+      }),
+      { runtime }
+    )
+    await settled()
+    unwatch()
+    expect(originalInvalidation).toHaveBeenCalledWith(1)
+    expect(db.getMessageById(original.id)?.read).toBe(1)
+    expect(await runtime.readSleepingMailHold(mailbox)).toBeNull()
+    expect(session.sleepingAgentSessionsByPaneKey?.[paneKey]?.mailWake).toBeUndefined()
+    expect(inventory).not.toHaveBeenCalled()
+    expect(bell).toHaveBeenLastCalledWith([], ['reply-custody'])
   } finally {
     runtime.setNotifier(null)
     db.close()

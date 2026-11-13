@@ -1,3 +1,4 @@
+import { sleepingMailOwnerMailboxes } from './sleeping-mail-owner-mailboxes'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -76,7 +77,11 @@ export class SleptMailboxWake {
   private selection(mailbox: string, reservedTypes?: ReadonlySet<string>) {
     const db = this.deps.db()
     const paneKey = db && mailboxOwnerPane(db, mailbox)
-    if (!db || !paneKey) {
+    if (
+      !db ||
+      !paneKey ||
+      (!mailWakeObligation(this.deps.record(paneKey)) && !this.succeeded.has(mailbox))
+    ) {
       return null
     }
     const sequence = selectOrchestrationPointerSequence({
@@ -90,7 +95,9 @@ export class SleptMailboxWake {
 
   refresh(mailbox: string): string[] {
     const before = this.owed.get(mailbox)
-    const next = this.selection(mailbox)
+    const selection = this.selection(mailbox)
+    const next =
+      selection && mailWakeObligation(this.deps.record(selection.paneKey)) ? selection : null
     if (before) {
       const handles = this.byPane.get(before.paneKey)
       handles?.delete(mailbox)
@@ -106,7 +113,11 @@ export class SleptMailboxWake {
       this.byPane.set(next.paneKey, handles)
     }
     const success = this.succeeded.get(mailbox)
-    if (!next || success?.paneKey !== next.paneKey || success.sequence !== next.sequence) {
+    if (
+      !selection ||
+      success?.paneKey !== selection.paneKey ||
+      success.sequence !== selection.sequence
+    ) {
       this.succeeded.delete(mailbox)
     }
     const attempted = this.attempted.get(mailbox)
@@ -126,17 +137,24 @@ export class SleptMailboxWake {
   }
 
   get hasTrackedMail(): boolean {
-    return this.owed.size > 0 || this.attempted.size > 0
+    return this.owed.size > 0 || this.attempted.size > 0 || this.succeeded.size > 0
   }
 
   reconcile(): void {
     const handles = new Set(this.deps.db()?.getUndeliveredUnreadMailboxHandles() ?? [])
-    for (const handle of this.owed.keys()) {
+    for (const handle of [...this.owed.keys(), ...this.succeeded.keys()]) {
       handles.add(handle)
     }
     for (const handle of handles) {
       this.refresh(handle)
     }
+  }
+
+  discover(paneKey: string): readonly string[] {
+    const db = this.deps.db()
+    return db && mailWakeObligation(this.deps.record(paneKey))
+      ? sleepingMailOwnerMailboxes(db, paneKey)
+      : []
   }
 
   mailboxesForPane(paneKey: string): readonly string[] {

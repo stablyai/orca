@@ -1,3 +1,4 @@
+import { captureMessageMutation } from './message-mutation-invalidation'
 import { undeliveredInboxQuery, type UndeliveredInboxOptions } from './undelivered-inbox-query'
 import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
@@ -18,6 +19,7 @@ function runBatchedMessageMutation(
   if (ids.length === 0) {
     return
   }
+  const changed = captureMessageMutation(db, ids)
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
@@ -31,6 +33,7 @@ function runBatchedMessageMutation(
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
     throw error
   }
+  changed()
 }
 
 export function getUnreadMessages(

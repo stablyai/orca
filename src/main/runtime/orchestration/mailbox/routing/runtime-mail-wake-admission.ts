@@ -66,7 +66,7 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
       shellInFront: async (ptyId) =>
         (await this.readLaunchedAgentForeground(ptyId, record.agent)) === 'shell'
     })
-    // Host-side input fencing is required before a proven failed invocation may be stopped.
+    // TEMPORARY: STA-15118 requires host input fencing before automatic surviving-shell replacement.
     return false
   }
 
@@ -77,25 +77,32 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
       return null
     }
     const attempt = record.mailWake?.attempt
-    const pty = this.getPtyRecordForPaneKey(record.paneKey)
-    const liveShell =
-      !!attempt &&
-      pty?.connected === true &&
-      pty.ptyId === attempt.ptyId &&
-      pty.incarnationId === attempt.incarnationId &&
-      pty.launchToken === attempt.launchToken &&
-      pty.launchIncarnationId === attempt.incarnationId &&
-      pty.worktreeId === record.worktreeId &&
-      pty.connectionId === (record.connectionId ?? null) &&
-      this.mailWakeInvocations.ended(record) &&
-      (await this.readLaunchedAgentForeground(attempt.ptyId, record.agent)) === 'shell' &&
-      this.getPtyRecordForPaneKey(record.paneKey) === pty &&
-      this.sleepingMailRecord(record.paneKey) === record
+    const matchingAttempt = () => {
+      const pty = this.getPtyRecordForPaneKey(record.paneKey)
+      return (
+        !!attempt &&
+        pty?.connected === true &&
+        pty.ptyId === attempt.ptyId &&
+        pty.incarnationId === attempt.incarnationId &&
+        pty.launchToken === attempt.launchToken &&
+        pty.launchIncarnationId === attempt.incarnationId &&
+        pty.worktreeId === record.worktreeId &&
+        pty.connectionId === (record.connectionId ?? null) &&
+        this.terminalRunFacts.readProcessStartedAt(attempt.ptyId, attempt.incarnationId) !== null
+      )
+    }
+    const foreground =
+      attempt && matchingAttempt()
+        ? await this.readLaunchedAgentForeground(attempt.ptyId, record.agent)
+        : 'unknown'
+    const current = matchingAttempt() && this.sleepingMailRecord(record.paneKey) === record
+    const ended = this.mailWakeInvocations.ended(record)
+    const liveShell = current && ended && foreground === 'shell'
     return {
       kind: 'asleep',
       waking:
         mailWakeObligation(record) === 'automatic' && !this.sleptMailboxWake.failedToWake(record),
-      resuming: mailWakeObligation(record) === 'retained' && !liveShell,
+      resuming: current && !ended && foreground === 'agent',
       agentName: TUI_AGENT_DISPLAY_NAMES[record.agent],
       openTab: record.restoreOnTabOpenOnly === true,
       failed: this.sleptMailboxWake.failedToWake(record),
