@@ -1,4 +1,9 @@
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import {
+  assertLegacyAiVaultResumeCommandAllowed,
+  hasLegacyAiVaultResumeCommand
+} from '../../../ai-vault/structured-sessions/structured-session-ownership'
+import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import type { TerminalChatInput } from './terminal-chat-input-ownership'
 import type { AgentPromptExpectedBinding } from './agent-prompt-write-options'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
@@ -30,6 +35,35 @@ import {
 } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+  private async chatReceiverIsShell(binding: AgentPromptExpectedBinding): Promise<boolean> {
+    const controller = this.ptyController
+    if (!controller) {
+      return false
+    }
+    try {
+      if (await controller.confirmShellForeground?.(binding.ptyId)) {
+        return true
+      }
+      if (!controller.supportsForegroundObservation?.(binding.ptyId)) {
+        return false
+      }
+      const inspected = await controller.inspectProcess?.(binding.ptyId, {
+        foregroundOnly: true,
+        expectedIncarnationId: binding.processIncarnation
+      })
+      const observation = inspected?.foregroundObservation
+      return (
+        isTerminalForegroundObservation(observation) &&
+        observation.ptyId === binding.ptyId &&
+        observation.ptyIncarnationId === binding.processIncarnation &&
+        observation.verdict === 'observed' &&
+        observation.foregroundKind === 'shell'
+      )
+    } catch {
+      return false
+    }
+  }
+
   sendTerminalChatPrompt(
     handle: string,
     prompt: TerminalChatPrompt,
@@ -150,6 +184,30 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithW
           const frames = entry.frames!
           const scheduleText = frames[0]
           const platform = this.getPtyWriteHostPlatform(binding.ptyId)
+          if (
+            hasLegacyAiVaultResumeCommand(scheduleText) &&
+            (await waitForAgentPromptPromise(this.chatReceiverIsShell(binding), entry.signal))
+          ) {
+            let refusal: unknown
+            try {
+              await waitForAgentPromptPromise(
+                assertLegacyAiVaultResumeCommandAllowed(scheduleText, () =>
+                  this.ensureStructuredAgentSessionHost()
+                ),
+                entry.signal
+              )
+            } catch (error) {
+              refusal = error
+            }
+            const stillShell = await waitForAgentPromptPromise(
+              this.chatReceiverIsShell(binding),
+              entry.signal
+            )
+            assertWritable()
+            if (stillShell && refusal) {
+              throw refusal
+            }
+          }
           await write(frames[1])
           const joined = agentPromptSubmitJoinsPasteFrame(agent)
           const gate = joined

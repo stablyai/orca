@@ -48,6 +48,7 @@ export function sendNativeChatHostPrompt({
       cancel: () => {},
       settleAfterMs: 0,
       outcome: Promise.resolve('not-submitted'),
+      dispatchOutcome: Promise.resolve('not-submitted'),
       settled: Promise.resolve()
     }
   }
@@ -62,6 +63,8 @@ export function sendNativeChatHostPrompt({
   const active = (): boolean => !detached && performance.now() < deadline
   const previous = reservation.previous
   let outcome: NativeChatPtySubmissionOutcome = 'not-submitted'
+  let observerOutcome: NativeChatPtySubmissionOutcome | undefined
+  const dispatchCompletion = Promise.withResolvers<NativeChatPtySubmissionOutcome>()
   const complete = Promise.withResolvers<void>()
   const expired = Promise.withResolvers<void>()
   const operation = previous.then(async () => {
@@ -144,6 +147,7 @@ export function sendNativeChatHostPrompt({
           ))
       outcome = dispatched && !refusedBeforeWrite ? 'uncertain' : 'not-submitted'
     } finally {
+      dispatchCompletion.resolve(outcome)
       input = null
       complete.resolve()
       reservation.releasePayload()
@@ -158,13 +162,16 @@ export function sendNativeChatHostPrompt({
     input = null
     if (!dispatched) {
       reservation.releasePayload()
+      dispatchCompletion.resolve('not-submitted')
     }
     legacy?.cancel(keepInput)
-    outcome = dispatched ? 'uncertain' : 'not-submitted'
+    observerOutcome = dispatched ? 'uncertain' : 'not-submitted'
     complete.resolve()
   }
   const timer = setTimeout(() => {
     cancel()
+    dispatchCompletion.resolve(dispatched ? 'uncertain' : 'not-submitted')
+    reservation.releasePayload()
     expired.resolve()
   }, OBSERVATION_MS)
   const settled = complete.promise.then(() => {})
@@ -176,7 +183,8 @@ export function sendNativeChatHostPrompt({
     settlesOwnOutcome: true,
     settleAfterMs: OBSERVATION_MS,
     settled,
-    outcome: settled.then(() => outcome),
+    outcome: settled.then(() => observerOutcome ?? outcome),
+    dispatchOutcome: dispatchCompletion.promise,
     cancel
   }
   reservation.track(handle, tail)

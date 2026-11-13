@@ -144,3 +144,46 @@ it('runs old-host fallback inside its reserved slot before a following composer 
   await command.settled
   expect(writes).toEqual(['first', '/compact'])
 })
+
+it('keeps final dispatch refusal separate from an observer detached after handoff', async () => {
+  const started = Promise.withResolvers<void>()
+  const response = Promise.withResolvers<unknown>()
+  mocks.call.mockImplementation(async (_target, method) => {
+    if (method === 'terminal.resolvePane') {
+      return { terminal: { ptyId: 'pty', handle: 'terminal' } }
+    }
+    started.resolve()
+    return response.promise
+  })
+  const handle = send('repeat ')
+  await started.promise
+  handle.cancel()
+  await expect(handle.outcome).resolves.toBe('uncertain')
+  response.resolve({
+    send: {
+      accepted: false,
+      writeSettlement: { outcome: 'refused', reason: 'provider_refused_write' }
+    }
+  })
+  await expect(handle.dispatchOutcome).resolves.toBe('not-submitted')
+})
+
+it('finishes an unresolved local dispatch at its finite expiry even when IPC never replies', async () => {
+  vi.useFakeTimers()
+  try {
+    const started = Promise.withResolvers<void>()
+    mocks.call.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.resolvePane') {
+        return { terminal: { ptyId: 'pty', handle: 'terminal' } }
+      }
+      started.resolve()
+      return new Promise(() => {})
+    })
+    const handle = send('never replies')
+    await started.promise
+    await vi.advanceTimersByTimeAsync(65000)
+    await expect(handle.dispatchOutcome).resolves.toBe('uncertain')
+  } finally {
+    vi.useRealTimers()
+  }
+})

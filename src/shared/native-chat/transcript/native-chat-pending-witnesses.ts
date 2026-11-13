@@ -3,6 +3,7 @@ import { isImageRefBlock } from '../native-chat-types'
 import { normalizedNativeChatUserMessageText } from './native-chat-image-transcript-markers'
 import {
   nativeChatReceiptWindow,
+  canClaimNativeChatReceipt,
   type NativeChatReceiptSnapshot,
   type NativeChatReceiptRow,
   liveNativeChatReceiptDependencies
@@ -46,6 +47,7 @@ export function nativeChatPendingWitnesses(
   options: { prospective?: boolean; onlyRows?: ReadonlySet<string> } = {}
 ): NativeChatPendingWitness[] {
   const count = pending.length
+  const eligible = pending.map((entry) => canClaimNativeChatReceipt(entry, options.prospective))
   const windows = pending.map((entry) => nativeChatReceiptWindow(entry, snapshot, sessionId))
   const glueWindows = pending.map((entry) =>
     nativeChatReceiptWindow(entry, snapshot, sessionId, true)
@@ -64,7 +66,9 @@ export function nativeChatPendingWitnesses(
   const dependencies = options.prospective ? [] : liveNativeChatReceiptDependencies(pending)
   const locked = new Map(
     pending.flatMap((entry, index) =>
-      entry.sourceReceipt?.sessionId === sessionId ? [[entry.sourceReceipt.id, index] as const] : []
+      eligible[index] && entry.sourceReceipt?.sessionId === sessionId
+        ? [[entry.sourceReceipt.id, index] as const]
+        : []
     )
   )
   const candidates = new Map<string, NativeChatPendingWitness[]>()
@@ -77,6 +81,9 @@ export function nativeChatPendingWitnesses(
     glue = false,
     glueMembers?: Set<number>
   ): void {
+    if (members.some((index) => !eligible[index])) {
+      return
+    }
     if (options.onlyRows && !options.onlyRows.has(row.message.id)) {
       return
     }
@@ -135,12 +142,15 @@ export function nativeChatPendingWitnesses(
   }
   const ranks = new Map<string, number>()
   const legacy = pending.flatMap((entry, index) =>
-    !entry.sourceAgent || (options.prospective && entry.evidenceModePending)
+    eligible[index] && (!entry.sourceAgent || (options.prospective && entry.evidenceModePending))
       ? [{ entry: { ...entry, sourceAgent: undefined }, index }]
       : []
   )
   const hasLegacyImages = legacy.some(({ entry }) => entry.imagePaths?.length)
   for (const [index, entry] of pending.entries()) {
+    if (!eligible[index]) {
+      continue
+    }
     const projected = { ...entry, sourceAgent: undefined }
     const key = nativeChatPendingMatchKey(projected)
     const rank = entry.matchingOccurrence ?? (ranks.get(key) ?? 0) + 1

@@ -13,6 +13,7 @@ export { releaseEmptyTranscriptClaims } from './native-chat-pending-legacy'
 
 // Bounds reconciliation cost; each open send rescans the transcript.
 export const NATIVE_CHAT_PENDING_SEND_LIMIT = 8
+export type NativeChatPendingDispatchOutcome = 'not-submitted' | 'uncertain' | 'submitted'
 
 export type NativeChatPendingSend = {
   id: string
@@ -26,6 +27,9 @@ export type NativeChatPendingSend = {
   receiptDependencies?: NativeChatReceiptDependency[]
   /** Capability can still resolve to the shipped legacy path until the dispatch callback finishes. */
   evidenceModePending?: true
+  /** A source row cannot commit an operation before its final transport disposition. */
+  dispatchPending?: true
+  dispatchOutcome?: Promise<NativeChatPendingDispatchOutcome>
   /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
   delivery?: 'unconfirmed' | 'rejected'
   recovery?: true

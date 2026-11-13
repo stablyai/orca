@@ -6,6 +6,11 @@ import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty
 import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import {
+  installOwnership,
+  PROVIDER_SESSION
+} from '../../ai-vault/structured-sessions/structured-session-ownership.test-support'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeListingModule>()),
@@ -16,11 +21,13 @@ vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) =
 
 async function createRuntime(
   settle?: (data: string) => WriteSettlement | Promise<WriteSettlement>,
-  agent: TuiAgent = 'omp'
+  agent: TuiAgent = 'omp',
+  controller?: Partial<NonNullable<Parameters<OrcaRuntimeService['setPtyController']>[0]>>
 ) {
   let current: OrcaRuntimeService
   const writes: string[] = []
   const fixture = await createAgentPromptSubmissionRuntime(() => {}, agent, undefined, undefined, {
+    ...controller,
     writeWithSettlement: (ptyId, data, kind) => {
       current.terminalRunFacts.recordInput(ptyId, kind, data)
       writes.push(data)
@@ -49,7 +56,92 @@ function send(runtime: OrcaRuntimeService, handle: string, text: string) {
 }
 
 describe('host-owned Chat input', () => {
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    setStructuredAgentSessionHost(null)
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('blocks an owned resume only at a proven shell and preserves the identical agent prompt', async () => {
+    installOwnership()
+    const text = `codex resume ${PROVIDER_SESSION}`
+    const shell = await createRuntime(undefined, 'omp', {
+      confirmShellForeground: async () => true
+    })
+    vi.spyOn(shell.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
+    await expect(send(shell.runtime, shell.handle, text)).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    expect(shell.writes).toEqual([])
+
+    const agent = await createRuntime(undefined, 'omp', {
+      confirmShellForeground: async () => false,
+      supportsForegroundObservation: () => true,
+      inspectProcess: async (ptyId, options) => ({
+        foregroundProcess: 'codex',
+        hasChildProcesses: true,
+        foregroundObservation: {
+          ptyId,
+          ptyIncarnationId: options!.expectedIncarnationId!,
+          authorityGeneration: 'host-agent',
+          observationEpoch: 1,
+          capturedAgeMs: 0,
+          verdict: 'observed',
+          source: 'windows-console',
+          foregroundKind: 'non-shell',
+          processName: 'codex'
+        }
+      })
+    })
+    await expect(send(agent.runtime, agent.handle, text)).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    expect(agent.writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), `${text}\r`])
+
+    const unknown = await createRuntime()
+    await expect(send(unknown.runtime, unknown.handle, text)).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    expect(unknown.writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), `${text}\r`])
+  })
+
+  it('rechecks the receiver after ownership lookup and does not probe ordinary messages', async () => {
+    installOwnership()
+    const lookup = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    let shell = true
+    const { runtime, handle, writes } = await createRuntime(undefined, 'omp', {
+      confirmShellForeground: async () => shell
+    })
+    vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockImplementation(() => {
+      entered.resolve()
+      return lookup.promise
+    })
+    const text = `codex resume ${PROVIDER_SESSION}`
+    const pending = send(runtime, handle, text)
+    await entered.promise
+    shell = false
+    lookup.resolve()
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    expect(writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), `${text}\r`])
+
+    const foreground = vi.fn(async () => true)
+    const ordinary = await createRuntime(undefined, 'omp', { confirmShellForeground: foreground })
+    const lookupOrdinary = vi.spyOn(ordinary.runtime, 'ensureStructuredAgentSessionHost')
+    await expect(send(ordinary.runtime, ordinary.handle, 'hello')).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    expect(lookupOrdinary).not.toHaveBeenCalled()
+    expect(foreground).not.toHaveBeenCalled()
+    expect(ordinary.writes).toEqual(['\x15'.repeat(29) + '\x0b'.repeat(29), 'hello\r'])
+  })
 
   it('serializes two admitted sends without either invalidating its sibling and writes one joined Enter each', async () => {
     const { runtime, handle, writes } = await createRuntime()

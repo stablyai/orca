@@ -9,6 +9,16 @@ export type NativeChatSourceBoundary = NativeChatSourceReceipt & {
   position?: NativeChatSourcePosition
 }
 
+export function canClaimNativeChatReceipt(
+  entry: NativeChatPendingSend,
+  prospective = false
+): boolean {
+  return !(
+    entry.sourceAgent &&
+    (entry.delivery === 'rejected' || (!prospective && entry.dispatchPending))
+  )
+}
+
 export function nativeChatSourcePosition(
   message: NativeChatMessage
 ): NativeChatSourcePosition | undefined {
@@ -153,6 +163,7 @@ export function liveNativeChatReceiptDependencies(
           const member = byId.get(id)
           return (
             member &&
+            canClaimNativeChatReceipt(member, true) &&
             member.sourceReceipt?.sessionId !== dependency.receipt.sessionId &&
             (dependency.proof === 'source'
               ? !!member.sourceAgent

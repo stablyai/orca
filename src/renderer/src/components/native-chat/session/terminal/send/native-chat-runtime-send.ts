@@ -40,6 +40,8 @@ export type NativeChatSendHandle = {
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
   outcome?: Promise<NativeChatPtySubmissionOutcome>
+  /** Operation-owned completion survives cancellation of the current UI observer. */
+  dispatchOutcome?: Promise<NativeChatPtySubmissionOutcome>
 }
 
 /** Serialize clear/body/delayed Enter per PTY; a CR sharing the paste write can be swallowed. */

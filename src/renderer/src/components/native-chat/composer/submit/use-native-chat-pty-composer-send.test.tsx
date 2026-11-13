@@ -2,6 +2,9 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
+import { useNativeChatPendingDelivery } from '../../session/terminal/delivery/use-native-chat-pending-delivery'
+import { clearPendingSendCacheForTests } from '../../session/terminal/delivery/native-chat-pending'
+import { pendingSendsAsMessages } from '../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 
 const mocks = vi.hoisted(() => ({ host: vi.fn(), image: vi.fn(), text: vi.fn() }))
 vi.mock('../../session/terminal/send/native-chat-host-prompt', () => ({
@@ -35,16 +38,23 @@ vi.mock('@/store/index', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  clearPendingSendCacheForTests()
   const handle = { cancel: vi.fn(), settleAfterMs: 0 }
   mocks.host.mockReturnValue(handle)
   mocks.image.mockReturnValue(handle)
 })
 afterEach(cleanup)
 
+const emptySession = { messages: [] }
+
 function composer(draft: string) {
-  const optimistic = vi.fn(() => 'pending')
-  const hook = renderHook(() =>
-    useNativeChatPtyComposerSend({
+  const hook = renderHook(() => {
+    const delivery = useNativeChatPendingDelivery({
+      paneKey: 'pane',
+      agent: 'codex',
+      session: emptySession
+    })
+    const send = useNativeChatPtyComposerSend({
       agent: 'codex',
       draft,
       draftScopeKey: 'pane',
@@ -54,7 +64,8 @@ function composer(draft: string) {
       launchDraftResolved: true,
       resolveTarget: () => ({ ptyId: 'pty', paneKey: 'pane' }),
       classifySend: () => 'chat',
-      onOptimisticSend: optimistic,
+      onOptimisticSend: delivery.record,
+      optimisticSendOutcome: delivery,
       sessionOptionsSurface: null,
       terminalTabId: 'tab',
       trackPendingSend: vi.fn(),
@@ -64,32 +75,41 @@ function composer(draft: string) {
       clearImageAttachments: vi.fn(),
       setNotice: vi.fn()
     })
-  )
-  return { hook, optimistic }
+    return { send, messages: pendingSendsAsMessages(delivery.pending) }
+  })
+  return { hook }
 }
 
 it.each(['', 'caption', '/model'])(
   'keeps image send %j on the shipped attachment writer',
   (text) => {
-    const { hook, optimistic } = composer(text)
-    act(() => expect(hook.result.current()).toBe(true))
+    const { hook } = composer(text)
+    act(() => expect(hook.result.current.send()).toBe(true))
     expect(mocks.image).toHaveBeenCalledWith('codex', 'pty', text, ['/tmp/original.png'], {})
     expect(mocks.host).not.toHaveBeenCalled()
-    expect(optimistic).toHaveBeenCalledWith(text, ['/tmp/original.png'], false, undefined)
+    expect(hook.result.current.messages[0].blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/original.png' },
+      ...(text ? [{ type: 'text', text }] : [])
+    ])
   }
 )
 
 it('uses the retry attachments rather than the current draft to choose the writer', () => {
-  const { hook, optimistic } = composer('unsent draft')
+  const { hook } = composer('unsent draft')
   act(() =>
-    expect(hook.result.current({ text: 'retry', imagePaths: ['/tmp/retry.png'] })).toBe(true)
+    expect(hook.result.current.send({ text: 'retry', imagePaths: ['/tmp/retry.png'] })).toBe(true)
   )
   expect(mocks.image).toHaveBeenCalledWith('codex', 'pty', 'retry', ['/tmp/retry.png'], {})
   expect(mocks.host).not.toHaveBeenCalled()
-  expect(optimistic).toHaveBeenCalledWith('retry', ['/tmp/retry.png'], true, undefined)
-  act(() => expect(hook.result.current({ text: 'text retry' })).toBe(true))
+  expect(hook.result.current.messages[0].blocks).toEqual([
+    { type: 'image-ref', path: '/tmp/retry.png' },
+    { type: 'text', text: 'retry' }
+  ])
+  act(() => expect(hook.result.current.send({ text: 'text retry' })).toBe(true))
   expect(mocks.host).toHaveBeenCalledWith(
     expect.objectContaining({ prompt: { agent: 'codex', text: 'text retry' } })
   )
-  expect(optimistic).toHaveBeenLastCalledWith('text retry', [], true, 'codex')
+  expect(hook.result.current.messages.at(-1)?.blocks).toEqual([
+    { type: 'text', text: 'text retry' }
+  ])
 })

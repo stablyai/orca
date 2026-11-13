@@ -48,6 +48,47 @@ function send(id: string, text: string, imagePaths?: string[]): NativeChatPendin
 }
 beforeEach(() => clearPendingSendCacheForTests())
 
+it('retains recoverable input through observation churn and keeps surviving frontiers useful', () => {
+  appendPendingSendCache(scope, { ...send('parked', 'original'), delivery: 'unconfirmed' })
+  for (let index = 0; index < 256; index++) {
+    observePendingSendCache(
+      { paneKey: `observed-${index}`, agent: 'opencode' },
+      [{ ...answer, id: `frontier-${index}` }],
+      session
+    )
+  }
+  expect(readPendingSendCache(scope).map((entry) => entry.text)).toEqual(['original'])
+  const recent = { paneKey: 'observed-255', agent: 'opencode' }
+  expect(appendPendingSendCache(recent, send('new', 'next'), session)[0].sourceBoundary?.id).toBe(
+    'frontier-255'
+  )
+  const evicted = { paneKey: 'observed-0', agent: 'opencode' }
+  expect(appendPendingSendCache(evicted, send('unknown', 'next'), session)[0].sourceBoundary).toBe(
+    undefined
+  )
+  writePendingSendCache(scope, [])
+  observePendingSendCache(scope, [answer], session)
+  expect(appendPendingSendCache(scope, send('again', 'next'), session)[0].sourceBoundary?.id).toBe(
+    'answer'
+  )
+})
+
+it('does not promote pending owners on observation or evict them for new empty scopes', () => {
+  for (let index = 0; index < 128; index++) {
+    appendPendingSendCache(
+      { paneKey: `pending-${index}`, agent: 'opencode' },
+      send(`send-${index}`, 'original')
+    )
+  }
+  const oldest = { paneKey: 'pending-0', agent: 'opencode' }
+  observePendingSendCache(oldest, [answer], session)
+  observePendingSendCache({ paneKey: 'empty', agent: 'opencode' }, [answer], session)
+  expect(readPendingSendCache(oldest).map((entry) => entry.id)).toEqual(['send-0'])
+  appendPendingSendCache({ paneKey: 'new-pending', agent: 'opencode' }, send('new', 'next'))
+  expect(readPendingSendCache(oldest)).toEqual([])
+  expect(readPendingSendCache({ paneKey: 'pending-1', agent: 'opencode' })[0].id).toBe('send-1')
+})
+
 it('holds a pathless image receipt through cache remount and paging without reclaiming it', () => {
   const pending = ['first', 'second'].map((id) => ({
     id,
@@ -485,6 +526,53 @@ it('keeps source position domains separate while retaining strict, inclusive and
       [
         { ...offset, timestamp: null },
         { ...offsetAnswer, timestamp: null }
+      ],
+      session
+    )
+  ).toEqual([])
+})
+
+it('keeps rejected Codex originals out of receipt rank and preserves prospective exclusions for unresolved siblings', () => {
+  const rejected: NativeChatPendingSend = {
+    ...send('rejected', 'repeat '),
+    sourceAgent: 'codex',
+    delivery: 'rejected'
+  }
+  const accepted: NativeChatPendingSend = { ...send('accepted', 'repeat'), sourceAgent: 'codex' }
+  const receipt = {
+    ...row('repeat', 'receipt'),
+    inputContent: {
+      provider: 'codex' as const,
+      textDigest: createHash('sha256').update('repeat').digest('hex'),
+      images: []
+    }
+  }
+  const messages = [receipt, answer]
+  expect(
+    prunePendingSends([rejected, accepted], messages, session).map((entry) => [
+      entry.id,
+      entry.text
+    ])
+  ).toEqual([['rejected', 'repeat ']])
+  const unresolved: NativeChatPendingSend = {
+    ...rejected,
+    id: 'unresolved',
+    delivery: undefined,
+    dispatchPending: true
+  }
+  const retained = prunePendingSends([accepted, unresolved], messages, session)
+  expect(retained.map((entry) => entry.id)).toEqual(['unresolved'])
+  const resolved = retained.map((entry) => ({ ...entry, dispatchPending: undefined }))
+  expect(prunePendingSends(resolved, messages, session).map((entry) => entry.id)).toEqual([
+    'unresolved'
+  ])
+  expect(
+    prunePendingSends(
+      resolved,
+      [
+        ...messages,
+        { ...receipt, id: 'new-receipt', transcriptOrder: 10 },
+        { ...answer, id: 'new-answer', transcriptOrder: 11 }
       ],
       session
     )

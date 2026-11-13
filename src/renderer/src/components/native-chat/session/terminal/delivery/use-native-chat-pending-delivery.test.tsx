@@ -525,3 +525,51 @@ it.each(['repeat', 'repeat '])(
     expect(mounted.result.current.pending).toEqual([])
   }
 )
+
+it.each([false, true])(
+  'reconciles an idle source-before-result send after remount=%s with the earlier composer listener',
+  async (remount) => {
+    const completion = Promise.withResolvers<'submitted'>()
+    let mounted = mountOwned()
+    let id = ''
+    act(() => {
+      id = mounted.result.current.record('repeat', undefined, false, 'opencode', completion.promise)
+      const finish = mounted.result.current.finishDispatch
+      void completion.promise.then((outcome) => finish(id, completion.promise, outcome))
+    })
+    if (remount) {
+      mounted.unmount()
+      mounted = mountOwned()
+    }
+    mounted.rerender({
+      messages: [boundary, sourceRow('repeat', 'receipt'), { ...boundary, id: 'reply' }]
+    })
+    expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
+    await act(async () => {
+      completion.resolve('submitted')
+      await completion.promise
+    })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)
+
+it('keeps the raw original when a source row precedes a definite refusal and cannot settle another scope', async () => {
+  const completion = Promise.withResolvers<'not-submitted'>()
+  const mounted = mountOwned()
+  let id = ''
+  act(() => {
+    id = mounted.result.current.record('repeat ', undefined, false, 'opencode', completion.promise)
+    const finish = mounted.result.current.finishDispatch
+    void completion.promise.then((outcome) => finish(id, completion.promise, outcome))
+  })
+  mounted.rerender({
+    messages: [boundary, sourceRow('repeat ', 'receipt'), { ...boundary, id: 'reply' }]
+  })
+  await act(async () => {
+    completion.resolve('not-submitted')
+    await completion.promise
+  })
+  expect(
+    mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
+  ).toEqual([[id, 'repeat ', 'rejected']])
+})

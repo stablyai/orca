@@ -6,6 +6,7 @@ import {
   nativeChatSourceReceiptKey,
   liveNativeChatReceiptDependencies,
   nativeChatReceiptDependencyKey,
+  canClaimNativeChatReceipt,
   type NativeChatReceiptDependency
 } from './native-chat-source-receipts'
 import {
@@ -59,7 +60,7 @@ export function reconcileNativeChatPendingSends(
   const snapshot = nativeChatReceiptSnapshot(messages)
   const locked = new Map<string, NativeChatPendingWitness>()
   for (const [index, entry] of pending.entries()) {
-    if (entry.sourceReceipt?.sessionId !== sessionId) {
+    if (!canClaimNativeChatReceipt(entry) || entry.sourceReceipt?.sessionId !== sessionId) {
       continue
     }
     const key = nativeChatSourceReceiptKey(entry.sourceReceipt)
@@ -109,7 +110,7 @@ export function reconcileNativeChatPendingSends(
     requires: 0,
     witnesses: [...locked.values()],
     rows: pending.map((entry) =>
-      entry.sourceReceipt?.sessionId === sessionId
+      canClaimNativeChatReceipt(entry) && entry.sourceReceipt?.sessionId === sessionId
         ? (snapshot.boundaries.get(entry.sourceReceipt.id) ?? -1)
         : Infinity
     )

@@ -1,7 +1,14 @@
+import type { NativeChatPendingDispatchOutcome } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
+
 export type NativeChatOptimisticSendOutcome = {
   /** The host refused the write: mark the echo "Message not sent". */
   setSourceEvidence?: (pendingId: string, source: boolean) => void
   finishSourceEvidence?: (pendingId: string) => void
+  finishDispatch?: (
+    pendingId: string,
+    promise: Promise<NativeChatPendingDispatchOutcome>,
+    outcome: NativeChatPendingDispatchOutcome
+  ) => void
   reject: (pendingId: string) => void
   /** The write acknowledgment was lost: hold the echo, then flag it unconfirmed. */
   holdUnconfirmed: (pendingId: string) => void

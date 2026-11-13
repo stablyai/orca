@@ -6,9 +6,10 @@ import {
   type NativeChatSourceBoundary
 } from '../../../../../../../shared/native-chat/transcript/native-chat-source-receipts'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/native-chat-scope-cache'
+import { NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX } from '../../../../../../../shared/native-chat/native-chat-scope-cache'
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
+  type NativeChatPendingDispatchOutcome,
   type NativeChatPendingSend
 } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import type { NativeChatLaunchPrompt } from '@/components/native-chat/drafts/native-chat-launch-prompt'
@@ -37,6 +38,22 @@ type PendingOwner = {
 const pendingSendCache = new Map<string, PendingOwner>()
 let pendingSendCounter = 0
 
+function retainPendingOwner(key: string, owner: PendingOwner, promote = false): void {
+  if (promote || !owner.pending.length) {
+    pendingSendCache.delete(key)
+  }
+  pendingSendCache.set(key, owner)
+  if (pendingSendCache.size <= NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX) {
+    return
+  }
+  // Reading history cannot displace a recoverable input, including the newly observed scope.
+  const replaceable = [...pendingSendCache].find(([, value]) => !value.pending.length)?.[0]
+  const oldest = replaceable ?? pendingSendCache.keys().next().value
+  if (oldest !== undefined) {
+    pendingSendCache.delete(oldest)
+  }
+}
+
 function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
   return `${scope.paneKey}\0${scope.agent}`
 }
@@ -47,12 +64,13 @@ export function readPendingSendCache(scope: NativeChatPendingSendScope): NativeC
 
 export function writePendingSendCache(
   scope: NativeChatPendingSendScope,
-  pending: NativeChatPendingSend[]
+  pending: NativeChatPendingSend[],
+  promote = false
 ): NativeChatPendingSend[] {
   const next = releaseNativeChatReceiptDependencies(pending.slice(-NATIVE_CHAT_PENDING_SEND_LIMIT))
   const key = pendingSendScopeKey(scope)
   const owner = pendingSendCache.get(key)
-  setBoundedScopeCacheEntry(pendingSendCache, key, { ...owner, pending: next })
+  retainPendingOwner(key, { ...owner, pending: next }, promote)
   return next
 }
 
@@ -70,7 +88,7 @@ export function observePendingSendCache(
   const message = last?.source === 'transcript' ? last : undefined
   if (!message) {
     if (owner.sessionId !== sessionId) {
-      setBoundedScopeCacheEntry(pendingSendCache, key, {
+      retainPendingOwner(key, {
         ...owner,
         sessionId,
         boundary: undefined,
@@ -89,7 +107,7 @@ export function observePendingSendCache(
       generation &&
       (owner.search?.generation !== generation || owner.search.length !== messages.length)
     ) {
-      setBoundedScopeCacheEntry(pendingSendCache, key, {
+      retainPendingOwner(key, {
         ...owner,
         search: { generation, length: messages.length, found: true }
       })
@@ -115,7 +133,7 @@ export function observePendingSendCache(
     }
   }
   if (generation || owner.sessionId !== sessionId || advances) {
-    setBoundedScopeCacheEntry(pendingSendCache, key, {
+    retainPendingOwner(key, {
       ...owner,
       sessionId,
       search: generation ? { generation, length: messages.length, found: advances } : undefined,
@@ -159,7 +177,7 @@ export function appendPendingSendCache(
         }
       : entry
   const next = entry.sourceAgent ? captured : assignNativeChatPendingOccurrence(existing, captured)
-  return writePendingSendCache(scope, [...existing, next])
+  return writePendingSendCache(scope, [...existing, next], true)
 }
 
 export function resolvePendingSendEvidence(
@@ -176,7 +194,8 @@ export function resolvePendingSendEvidence(
   const resolved = {
     ...entry,
     sourceAgent: source === undefined ? entry.sourceAgent : source ? agent : undefined,
-    evidenceModePending: undefined
+    evidenceModePending: undefined,
+    ...(source === false ? { dispatchPending: undefined, dispatchOutcome: undefined } : {})
   }
   const key = nativeChatPendingContentKey(resolved)
   const before = entries
@@ -196,6 +215,34 @@ export function resolvePendingSendEvidence(
         )
       : resolved
   return [...before, next, ...entries.slice(index + 1)]
+}
+
+export function finishPendingSendDispatch(
+  entries: NativeChatPendingSend[],
+  id: string,
+  promise: Promise<NativeChatPendingDispatchOutcome>,
+  outcome: NativeChatPendingDispatchOutcome
+): NativeChatPendingSend[] {
+  const entry = entries.find(
+    (candidate) =>
+      candidate.id === id && candidate.dispatchPending && candidate.dispatchOutcome === promise
+  )
+  if (!entry) {
+    return entries
+  }
+  return entries.map((candidate) =>
+    candidate !== entry
+      ? candidate
+      : {
+          ...entry,
+          dispatchPending: undefined,
+          dispatchOutcome: undefined,
+          evidenceModePending: undefined,
+          ...(outcome === 'not-submitted'
+            ? { delivery: 'rejected' as const }
+            : { writeUnconfirmedAt: entry.writeUnconfirmedAt ?? Date.now() })
+        }
+  )
 }
 
 export function clearPendingSendCacheForTests(): void {

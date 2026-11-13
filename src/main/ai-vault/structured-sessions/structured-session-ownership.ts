@@ -221,6 +221,10 @@ export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResu
   }
 }
 
+export function hasLegacyAiVaultResumeCommand(command: string): boolean {
+  return parseResumeInvocations(command).length > 0
+}
+
 export async function assertLegacyAiVaultResumeCommandAllowed(
   command: string,
   ensureHost: () => Promise<void>
