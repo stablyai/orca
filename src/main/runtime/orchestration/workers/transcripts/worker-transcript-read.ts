@@ -3,13 +3,19 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../../../native-chat/session-file-resolver'
-import { nativeChatLineDecoderForAgent } from '../../../../native-chat/transcript-tail-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  type NativeChatLineDecoder
+} from '../../../../native-chat/transcript-tail-reader'
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
-import { readForwardLocalWorkerTranscriptPage } from './worker-transcript-local-read'
-import { readInitialLocalWorkerTranscriptPageReusing } from './worker-transcript-initial-page-cache'
+import {
+  readForwardLocalWorkerTranscriptPage,
+  readInitialLocalWorkerTranscriptPage
+} from './worker-transcript-local-read'
+import { readInitialWorkerTranscriptReusing } from './worker-transcript-initial-read-cache'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -70,10 +76,27 @@ export async function readWorkerTranscript(args: {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
   }
   const limit = clampWorkerTranscriptLimit(args.limit)
+  const resolvedPath = filePath
+  const read = () => readResolvedWorkerTranscript(resolvedPath, decode, limit, args)
+  // A first read of an unchanged file serves its settled page; any other read scans.
+  return args.offset === undefined && args.expectedSourceFingerprint === undefined
+    ? readInitialWorkerTranscriptReusing(resolvedPath, [limit, decode], read)
+    : read()
+}
+
+async function readResolvedWorkerTranscript(
+  filePath: string,
+  decode: NativeChatLineDecoder,
+  limit: number,
+  args: Pick<
+    Parameters<typeof readWorkerTranscript>[0],
+    'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint'
+  >
+): Promise<WorkerTranscriptReadResult> {
   try {
     const page =
       args.offset === undefined
-        ? await readInitialLocalWorkerTranscriptPageReusing(filePath, limit, decode)
+        ? await readInitialLocalWorkerTranscriptPage(filePath, limit, decode)
         : await readForwardLocalWorkerTranscriptPage(
             filePath,
             args.offset,

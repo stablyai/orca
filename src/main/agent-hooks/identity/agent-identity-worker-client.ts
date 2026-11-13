@@ -11,9 +11,12 @@ import type {
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import type {
-  AgentIdentityWorkerRequest,
-  AgentIdentityWorkerResponse
+import {
+  isReverseLookupUnavailable,
+  REVERSE_LOOKUP_UNAVAILABLE,
+  type AgentIdentityWorkerRequest,
+  type AgentIdentityWorkerResponse,
+  type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
 
 const WORKER_ENTRY_FILENAME = 'agent-identity-worker-entry.js'
@@ -32,11 +35,11 @@ export type AgentIdentityClient = {
   providerKeyOf(
     path: string,
     orcaSessionId: string
-  ): Promise<{ key: AgentProviderKey | null } | undefined>
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined>
   idsOfProviderSession(
     path: string,
     providerSessionId: string
-  ): Promise<OrcaSessionId[] | undefined>
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined>
   /** Terminated but not yet exited: a replacement must wait for `retired()`. */
   readonly isRetiring: boolean
   retired(): Promise<void>
@@ -89,10 +92,13 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
   async providerKeyOf(
     path: string,
     orcaSessionId: string
-  ): Promise<{ key: AgentProviderKey | null } | undefined> {
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined> {
     const value = await this.request((id) => ({ id, kind: 'providerKeyOf', path, orcaSessionId }))
     if (value === null) {
       return { key: null }
+    }
+    if (isReverseLookupUnavailable(value)) {
+      return REVERSE_LOOKUP_UNAVAILABLE
     }
     return isProviderKey(value) ? { key: value } : undefined
   }
@@ -100,13 +106,16 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
   async idsOfProviderSession(
     path: string,
     providerSessionId: string
-  ): Promise<OrcaSessionId[] | undefined> {
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
     const value = await this.request((id) => ({
       id,
       kind: 'idsOfProviderSession',
       path,
       providerSessionId
     }))
+    if (isReverseLookupUnavailable(value)) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
     return Array.isArray(value) ? value.filter(isOrcaSessionId) : undefined
   }
 

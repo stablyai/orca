@@ -11,6 +11,8 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import { readAgentJournalPage } from '../publication/history/agent-read-journal-page'
+import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import {
   queuedSendAnswer,
   structuredSendAnswer
@@ -59,6 +61,17 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       (await context().conversation(sessionId)).journal.currentRead(inputIds),
     /** The journal's head, opened at rest: a reader skips an unchanged history. */
     journalCursor: async (sessionId: string) => (await journalOf(sessionId)).cursor(),
+    /** One `orca agent read` page, opened at rest; a pending prompt waits only while the held
+     *  session can still answer it, and every pending one does with no session held. */
+    agentReadPage: async (
+      sessionId: string,
+      request: Parameters<typeof readAgentJournalPage>[1]
+    ) => {
+      const journal = await journalOf(sessionId)
+      const { deps, sessions } = context()
+      const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
+      return readAgentJournalPage(journal, request, (itemId) => work?.isCurrentItem(itemId) ?? true)
+    },
 
     readModelCatalog,
     attentionReads: {

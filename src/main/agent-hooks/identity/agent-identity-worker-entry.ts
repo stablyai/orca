@@ -6,9 +6,11 @@ import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
-import type {
-  AgentIdentityWorkerRequest,
-  AgentIdentityWorkerResponse
+import {
+  REVERSE_LOOKUP_UNAVAILABLE,
+  type AgentIdentityWorkerRequest,
+  type AgentIdentityWorkerResponse,
+  type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
 
 /** Bump only with additive DDL below; a newer file opens read-only, never rebuilt. */
@@ -37,6 +39,10 @@ CREATE INDEX IF NOT EXISTS provider_links_by_provider_session
   ON provider_links(provider_session_id);`
 const PROVIDER_SESSION_ID_MATCH_LIMIT = 8
 
+function quoteIdentifier(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`
+}
+
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
  *  an unreadable one throws so ids stay unavailable. A linked key is never relinked. Runs only in
  *  this worker, off the hook server's thread. */
@@ -45,8 +51,9 @@ export class AgentIdentityStore {
   /** A newer build's file: existing ids resolve, nothing is minted. */
   readonly readOnly: boolean
 
-  /** Reverse lookups run only on their indexes, never as a scan of every link. */
-  private lookupIndexed = false
+  /** Reverse lookups run only on an index, never as a scan of every link: the columns an index
+   *  leads with, checked once per schema version. */
+  private reverseIndexes: { schema: number; leading: Set<string> } | null = null
 
   constructor(path: string, busyTimeoutMs = 25) {
     const opened = openIdentityDatabase(path, busyTimeoutMs)
@@ -55,15 +62,31 @@ export class AgentIdentityStore {
     hardenSqliteDatabaseFiles(path)
   }
 
-  /** Adds the lookup indexes on first use; a busy file throws, so the caller's failure backoff
-   *  retries it rather than scanning. A newer build's read-only file is left as it is: it can't
-   *  be indexed here and that never clears, so its rare lookups scan. */
-  private requireLookupIndexes(): void {
-    if (this.lookupIndexed || this.readOnly) {
-      return
+  /** Whether a reverse query on `column` can use an index. A writable file gets this build's
+   *  indexes, and a busy one throws so the caller's failure backoff retries it. A newer build's
+   *  read-only file is used as it is: any index leading with the column serves, and without
+   *  one that lookup is unavailable while every other lookup keeps working. */
+  private reverseIndexed(column: 'orca_session_id' | 'provider_session_id'): boolean {
+    const schema = Number(this.db.pragma('schema_version', { simple: true }))
+    if (this.reverseIndexes?.schema !== schema) {
+      if (!this.readOnly) {
+        this.db.exec(LOOKUP_INDEX_SQL)
+      }
+      const leading = new Set<string>()
+      for (const index of this.db.prepare(`PRAGMA index_list(provider_links)`).all()) {
+        const [first] = this.db
+          .prepare(`PRAGMA index_info(${quoteIdentifier(String(index.name))})`)
+          .all()
+        if (first) {
+          leading.add(String(first.name))
+        }
+      }
+      this.reverseIndexes = {
+        schema: Number(this.db.pragma('schema_version', { simple: true })),
+        leading
+      }
     }
-    this.db.exec(LOOKUP_INDEX_SQL)
-    this.lookupIndexed = true
+    return this.reverseIndexes.leading.has(column)
   }
 
   lookup(key: AgentProviderKey): OrcaSessionId | null {
@@ -118,8 +141,10 @@ export class AgentIdentityStore {
   }
 
   /** The provider conversation `id` names: each mint links exactly one key. */
-  providerKeyOf(id: string): AgentProviderKey | null {
-    this.requireLookupIndexes()
+  providerKeyOf(id: string): AgentProviderKey | null | ReverseLookupUnavailable {
+    if (!this.reverseIndexed('orca_session_id')) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
     const row = this.db
       .prepare(
         `SELECT execution_host, wsl_distro, agent, provider_session_id, locator
@@ -138,8 +163,10 @@ export class AgentIdentityStore {
   }
 
   /** Orca ids linked to a provider's own session id, so a caller can be told which to use. */
-  idsOfProviderSession(providerSessionId: string): OrcaSessionId[] {
-    this.requireLookupIndexes()
+  idsOfProviderSession(providerSessionId: string): OrcaSessionId[] | ReverseLookupUnavailable {
+    if (!this.reverseIndexed('provider_session_id')) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
     return this.db
       .prepare(
         `SELECT DISTINCT orca_session_id FROM provider_links WHERE provider_session_id = ? LIMIT ${PROVIDER_SESSION_ID_MATCH_LIMIT}`

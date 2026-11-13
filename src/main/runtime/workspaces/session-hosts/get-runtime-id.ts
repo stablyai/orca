@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
 
 export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope {
@@ -59,10 +60,14 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     )
   }
 
-  /** One workspace's display name by its keyed metadata, never a scan of every workspace; a
-   *  folder workspace has none, so its caller shows its id. */
+  /** One workspace's display name by its keyed record, never a scan of every workspace. */
   getWorkspaceDisplayName(worktreeId: string): string | null {
-    return this.store?.getWorktreeMeta(worktreeId)?.displayName || null
+    const folder = parseWorkspaceKey(worktreeId)
+    return (
+      (folder?.type === 'folder'
+        ? this.store?.getFolderWorkspace?.(folder.folderWorkspaceId)?.name
+        : this.store?.getWorktreeMeta(worktreeId)?.displayName) || null
+    )
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

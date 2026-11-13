@@ -9,8 +9,8 @@ import type {
 import type { AgentSessionJournalBatch } from '../../../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from '../../operations/structured-agent-session-command-turn'
 import { findSequenceGap } from '../../../agent-session-journal/replay/journal-cursor'
+import { journalRowItemIds } from '../../../agent-session-journal/replay/journal-row-item-ids'
 import type { JournalReadRow } from '../../../agent-session-journal/replay/journal-read-row'
-import { isJournalStopOrResumeRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 // Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
 
 export type JournalBatchProjection =
@@ -38,59 +38,18 @@ export function projectJournalBatch(input: {
   }
   const aliases = input.canonicalItemId ? undefined : submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
+  const canonical = (itemId: string) =>
+    input.canonicalItemId?.(itemId) ?? aliases?.get(itemId) ?? itemId
+  const hasSubmission = (id: string) =>
+    input.hasSubmission?.(id) ??
+    input.snapshot.submissions.some((submission) => submission.clientMessageId === id)
   for (const row of input.rows) {
-    if (row.kind === 'outcome') {
-      for (const itemId of row.itemIds) {
-        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases?.get(itemId) ?? itemId)
-      }
-      for (const clientMessageId of row.submissionIds) {
-        touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
-      }
-      continue
-    }
-    if (row.kind === 'lifecycle-batch') {
-      for (const mutation of row.mutations) {
-        touchedItemIds.add(
-          input.canonicalItemId?.(mutation.itemId) ??
-            aliases?.get(mutation.itemId) ??
-            mutation.itemId
-        )
-      }
-      continue
-    }
-    if (isJournalStopOrResumeRow(row)) {
-      // Stop/Resume markers are host-only; publish derived queue pauses separately.
-      continue
-    }
-    if (row.kind === 'item' || row.kind === 'tombstone') {
-      touchedItemIds.add(
-        input.canonicalItemId?.(row.itemId) ?? aliases?.get(row.itemId) ?? row.itemId
-      )
-      continue
-    }
-    if (row.kind === 'queue') {
-      for (const id of input.queueSourceIds?.(row.messageId) ?? []) {
-        touchedItemIds.add(agentJournalSubmissionKey(id))
-      }
-    }
-    // A card's row naming its hand-off can change how that send reads (`foldQueuedHandOffInDoubt`).
-    const attempt =
-      row.kind === 'queue' && row.change.op === 'queued'
-        ? (row.change.attempt ?? row.change.recovers)
-        : undefined
-    const clientMessageId =
-      row.kind === 'submission' || row.kind === 'dispatch'
-        ? row.clientMessageId
-        : attempt === undefined
-          ? undefined
-          : (input.hasSubmission?.(attempt) ??
-              input.snapshot.submissions.some(
-                (submission) => submission.clientMessageId === attempt
-              ))
-            ? attempt
-            : undefined
-    if (clientMessageId !== undefined) {
-      touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
+    for (const itemId of journalRowItemIds(row, {
+      canonical,
+      hasSubmission,
+      queueSourceIds: input.queueSourceIds
+    })) {
+      touchedItemIds.add(itemId)
     }
   }
 

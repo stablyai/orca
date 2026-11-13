@@ -17,6 +17,7 @@ import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-ope
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { findFolderWorkspace } from './folder-workspace-index'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -55,8 +56,9 @@ export class FolderWorkspacePersistenceOperations {
     )
   }
 
+  /** Keyed, not a scan (`findFolderWorkspace`). */
   getFolderWorkspace(id: string): FolderWorkspace | undefined {
-    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+    return findFolderWorkspace(this.state.folderWorkspaces ?? [], id)
   }
 
   createFolderWorkspace(input: {

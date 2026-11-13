@@ -8,6 +8,7 @@ it.each([750, 7_500])(
       getWorktreeMeta: vi.fn((id: string) =>
         id === 'repo::/workspace' ? { displayName: 'feature-x' } : undefined
       ),
+      getFolderWorkspace: vi.fn((id: string) => (id === 'folder-1' ? { name: 'Docs' } : undefined)),
       getFolderWorkspaces: vi.fn(() =>
         Array.from({ length: folders }, (_, index) => ({ id: `folder-${index}`, name: 'f' }))
       )
@@ -17,7 +18,7 @@ it.each([750, 7_500])(
     const runtime = { store } as unknown as OrcaRuntimeWithGetRuntimeId
 
     expect(name.call(runtime, 'repo::/workspace')).toBe('feature-x')
-    expect(name.call(runtime, 'folder:folder-1')).toBeNull()
+    expect(name.call(runtime, 'folder:folder-1')).toBe('Docs')
     expect(store.getFolderWorkspaces).not.toHaveBeenCalled()
   }
 )

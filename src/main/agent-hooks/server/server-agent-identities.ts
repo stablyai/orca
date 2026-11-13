@@ -15,6 +15,10 @@ import type {
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderKey } from '../identity/agent-provider-key'
 import { sleepingRecordOfKey } from '../identity/sleeping-agent-records'
+import {
+  isReverseLookupUnavailable,
+  type ReverseLookupUnavailable
+} from '../identity/agent-identity-worker-protocol'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -191,8 +195,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     return this.agentIdentities.isTerminalIdentity(id)
   }
 
-  /** Orca ids this host linked to a provider's own session id. */
-  async terminalAgentIdsOfProviderSession(providerSessionId: string): Promise<OrcaSessionId[]> {
+  /** Orca ids this host linked to a provider's own session id; unavailable when this identity
+   *  file can't answer that by index. */
+  async terminalAgentIdsOfProviderSession(
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable> {
     return (await this.agentIdentities.idsOfProviderSession(providerSessionId)) ?? []
   }
 
@@ -206,7 +213,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     id: string,
     readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
     known?: TerminalAgentTranscriptSource
-  ): Promise<TerminalAgentTranscriptSource | null | undefined> {
+  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> {
     const authority = this.agentIdentities.authority()
     const live = this.liveTranscriptSource(id, authority)
     if (live) {
@@ -218,6 +225,9 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
         : await this.agentIdentities.providerKeyOf(id)
     if (!linked || authority !== this.agentIdentities.generation) {
       return undefined
+    }
+    if (isReverseLookupUnavailable(linked)) {
+      return linked
     }
     const { key } = linked
     const windows = process.platform === 'win32'

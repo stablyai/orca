@@ -8,6 +8,7 @@ import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { AgentIdentityWorkerClient, type AgentIdentityClient } from './agent-identity-worker-client'
 import { AgentIdentityDemand, type KeyDemand } from './agent-identity-demand'
+import type { ReverseLookupUnavailable } from './agent-identity-worker-protocol'
 
 /** Ids live on the hook server's own host, so the host column names "this host". */
 const THIS_HOST = 'local'
@@ -167,13 +168,17 @@ export class PaneAgentIdentities {
 
   /** The provider conversation this host linked `id` to: `{ key: null }` for none, undefined
    *  when the store cannot answer now. An explicit lookup, never per hook. */
-  async providerKeyOf(id: string): Promise<{ key: AgentProviderKey | null } | undefined> {
+  async providerKeyOf(
+    id: string
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined> {
     return this.demand.lookup(`providerKeyOf\0${id}`, (client, path) =>
       client.providerKeyOf(path, id)
     )
   }
 
-  async idsOfProviderSession(providerSessionId: string): Promise<OrcaSessionId[] | undefined> {
+  async idsOfProviderSession(
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
     return this.demand.lookup(`idsOfProviderSession\0${providerSessionId}`, (client, path) =>
       client.idsOfProviderSession(path, providerSessionId)
     )

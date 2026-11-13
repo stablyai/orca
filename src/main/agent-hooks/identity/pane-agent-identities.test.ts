@@ -10,6 +10,7 @@ import SyncDatabase from '../../sqlite/sync-database'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { AgentIdentityWorkerClient } from './agent-identity-worker-client'
 import { AgentIdentityStore } from './agent-identity-worker-entry'
+import { REVERSE_LOOKUP_UNAVAILABLE } from './agent-identity-worker-protocol'
 import {
   InProcessAgentIdentityClient,
   ScriptedIdentityWorkers
@@ -467,4 +468,65 @@ describe('PaneAgentIdentities explicit lookups', () => {
     expect(plans[0]).toContain('USING INDEX provider_links_by_orca_session')
     expect(plans[1]).toContain('USING INDEX provider_links_by_provider_session')
   })
+})
+
+describe('AgentIdentityStore on a newer build read-only file', () => {
+  it.each([2_000, 20_000])(
+    'answers reverse lookups only through an index, among %i links, and keeps every other lookup',
+    (links) => {
+      const path = databasePath()
+      const writable = new AgentIdentityStore(path)
+      const key = (index: number) => ({
+        executionHost: 'local',
+        wslDistro: '',
+        agent: 'claude',
+        providerSessionId: `session-${index}`,
+        locator: ''
+      })
+      const first = writable.identify(key(0))
+      writable.close()
+      const db = new SyncDatabase(path)
+      db.exec('BEGIN')
+      for (let index = 1; index < links; index++) {
+        const id = `claude_00000000_0000_4000_8000_${String(index).padStart(12, '0')}`
+        db.prepare(
+          'INSERT INTO identities(orca_session_id, agent, created_at) VALUES (?, ?, 0)'
+        ).run(id, 'claude')
+        db.prepare(
+          `INSERT INTO provider_links(execution_host, wsl_distro, agent, provider_session_id, locator, orca_session_id)
+           VALUES ('local', '', 'claude', ?, '', ?)`
+        ).run(`session-${index}`, id)
+      }
+      db.exec('COMMIT')
+      db.exec('PRAGMA user_version = 2')
+      db.close()
+
+      const readOnly = new AgentIdentityStore(path)
+      opened.push(readOnly)
+      expect(readOnly.readOnly).toBe(true)
+      expect(readOnly.providerKeyOf(first!)).toEqual(REVERSE_LOOKUP_UNAVAILABLE)
+      expect(readOnly.idsOfProviderSession('session-0')).toEqual(REVERSE_LOOKUP_UNAVAILABLE)
+      expect(readOnly.has(first!)).toBe(true)
+      expect(readOnly.lookup(key(0))).toBe(first)
+      expect(readOnly.identify(key(links + 1))).toBeNull()
+
+      // The newer build indexed the column under its own name: that index serves.
+      const newer = new SyncDatabase(path)
+      newer.exec('CREATE INDEX newer_links_by_id ON provider_links(orca_session_id, agent)')
+      expect(
+        newer
+          .prepare(
+            'EXPLAIN QUERY PLAN SELECT locator FROM provider_links WHERE orca_session_id = ?'
+          )
+          .all('x')
+          .map((row) => String(row.detail))
+          .join('; ')
+      ).toContain('USING INDEX newer_links_by_id')
+      newer.close()
+      const indexed = new AgentIdentityStore(path)
+      opened.push(indexed)
+      expect(indexed.providerKeyOf(first!)).toMatchObject({ providerSessionId: 'session-0' })
+      expect(indexed.idsOfProviderSession('session-0')).toEqual(REVERSE_LOOKUP_UNAVAILABLE)
+    }
+  )
 })

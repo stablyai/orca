@@ -8,6 +8,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { InProcessAgentIdentityClient } from '../../../identity/agent-identity-client.test-fixtures'
 import type { AgentIdentityClient } from '../../../identity/agent-identity-worker-client'
 import { AgentHookServer } from '../../agent-hook-server'
+import type { TerminalAgentTranscriptSource } from '../../server-agent-identities'
 import { buildBody } from '../server.test-fixtures'
 
 const WSL = 'wsl:Ubuntu'
@@ -59,6 +60,15 @@ async function started(): Promise<IdentityTestServer> {
   cleanups.unshift(() => server.stop())
   await server.start({ env: 'production', userDataPath: dir })
   return server
+}
+
+/** The located source, for passing back as a recheck's earlier answer. */
+function sourceOf(found: unknown): TerminalAgentTranscriptSource {
+  if (!found || typeof found !== 'object' || !('key' in found)) {
+    throw new Error('expected a transcript source')
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only a located source carries `key`.
+  return found as TerminalAgentTranscriptSource
 }
 
 const answered = () => new Promise((resolve) => setImmediate(resolve))
@@ -118,7 +128,7 @@ it.skipIf(process.platform === 'win32')(
       providerSession: { transcriptPath: '/home/u/.claude/projects/p/session-a.jsonl' }
     })
     // The post-read recheck reuses the answer it was given: one partition read, no store question.
-    expect(await server.terminalAgentTranscriptSource(id!, records, found!)).toEqual(found)
+    expect(await server.terminalAgentTranscriptSource(id!, records, sourceOf(found))).toEqual(found)
     expect(server.identityClient.providerKeyRequests).toBe(1)
     expect(partitionReads).toBe(2)
   }
@@ -195,9 +205,9 @@ it.skipIf(process.platform === 'win32')(
       const found = await server.terminalAgentTranscriptSource(id!, () => records)
       visits = 0
       for (let read = 0; read < 10; read++) {
-        expect(await server.terminalAgentTranscriptSource(id!, () => records, found!)).toEqual(
-          found
-        )
+        expect(
+          await server.terminalAgentTranscriptSource(id!, () => records, sourceOf(found))
+        ).toEqual(found)
       }
       // Ten rechecks touch only the asked conversation's records, however many others sleep.
       expect(visits).toBe(0)
@@ -211,7 +221,11 @@ it.skipIf(process.platform === 'win32')(
     cleanups.push(() => rmSync(other, { recursive: true, force: true }))
     server.moveStatusFile(join(other, 'status.json'))
     expect(
-      await server.terminalAgentTranscriptSource(id!, () => ({ a: sleeping('session-a') }), found!)
+      await server.terminalAgentTranscriptSource(
+        id!,
+        () => ({ a: sleeping('session-a') }),
+        sourceOf(found)
+      )
     ).toBeNull()
   }
 )

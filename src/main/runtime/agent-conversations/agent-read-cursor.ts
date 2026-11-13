@@ -7,7 +7,8 @@ const CURSOR_PREFIX = 'oar1_'
 
 /** Where the next `orca agent read` continues, pinned to one agent and one source. */
 export type ReadCursor =
-  | { v: 1; id: string; s: 'chat'; session: string; journal: AgentJournalCursor }
+  /** `w`: items of the next journal row already read (one row can name several). */
+  | { v: 1; id: string; s: 'chat'; session: string; journal: AgentJournalCursor; w?: number }
   | { v: 1; id: string; s: 'transcript'; i: string; p: number; c?: string }
 
 export function encodeReadCursor(cursor: ReadCursor): string {
@@ -44,7 +45,9 @@ function isReadCursor(cursor: unknown): cursor is ReadCursor {
       typeof cursor.session === 'string' &&
       isRecord(cursor.journal) &&
       typeof cursor.journal.epoch === 'string' &&
-      Number.isSafeInteger(cursor.journal.sequence)
+      Number.isSafeInteger(cursor.journal.sequence) &&
+      (cursor.w === undefined ||
+        (typeof cursor.w === 'number' && Number.isSafeInteger(cursor.w) && cursor.w > 0))
     )
   }
   return (

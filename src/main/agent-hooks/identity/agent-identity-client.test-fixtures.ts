@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events'
 import type { AgentProviderKey } from './agent-provider-key'
-import type {
-  AgentIdentityWorkerRequest,
-  AgentIdentityWorkerResponse
+import {
+  isReverseLookupUnavailable,
+  type AgentIdentityWorkerRequest,
+  type AgentIdentityWorkerResponse,
+  type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
 import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import type { AgentIdentityClient, AgentIdentityLookup } from './agent-identity-worker-client'
@@ -47,7 +49,7 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
   async providerKeyOf(
     path: string,
     orcaSessionId: string
-  ): Promise<{ key: AgentProviderKey | null } | undefined> {
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined> {
     this.providerKeyRequests++
     const response = handleAgentIdentityRequest({
       id: 0,
@@ -55,21 +57,25 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
       path,
       orcaSessionId
     })
-    return response.ok && typeof response.value === 'object' && !Array.isArray(response.value)
-      ? { key: response.value }
-      : undefined
+    if (!response.ok || typeof response.value !== 'object' || Array.isArray(response.value)) {
+      return undefined
+    }
+    return isReverseLookupUnavailable(response.value) ? response.value : { key: response.value }
   }
 
   async idsOfProviderSession(
     path: string,
     providerSessionId: string
-  ): Promise<OrcaSessionId[] | undefined> {
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
     const response = handleAgentIdentityRequest({
       id: 0,
       kind: 'idsOfProviderSession',
       path,
       providerSessionId
     })
+    if (response.ok && isReverseLookupUnavailable(response.value)) {
+      return response.value
+    }
     return response.ok && Array.isArray(response.value)
       ? response.value.filter(isOrcaSessionId)
       : undefined

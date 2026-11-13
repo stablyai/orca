@@ -4,12 +4,7 @@ import {
   type AgentReadEntry,
   type AgentReadResult
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { agentSessionPromptQuestions } from '../../../shared/agent-session/agent-session-question-answer'
-import { isActionableStructuredAgentSessionPrompt } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import type { AgentReadJournalPosition } from '../../native-chat/agent-session-wire/publication/history/agent-read-journal-page'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type { RpcContext } from '../rpc/core'
 import {
@@ -25,6 +20,10 @@ import { createWorkerOutputSourceIdentity } from '../orchestration/workers/trans
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
 import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
+import {
+  isReverseLookupUnavailable,
+  type ReverseLookupUnavailable
+} from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
 import {
@@ -79,16 +78,24 @@ async function readChat(
     throw sourceChanged(orcaSessionId)
   }
   const host = await requireInstalledStructuredHost(ctx, sessionId)
-  const encode = (journal: AgentJournalCursor): string =>
-    encodeReadCursor({ v: 1, id: orcaSessionId, s: 'chat', session: sessionId, journal })
-  // A follower re-reading with its cursor costs no history work until the journal moves.
-  const head = cursor ? await host.reads.journalCursor(sessionId) : null
+  const encode = (next: AgentReadJournalPosition): string =>
+    encodeReadCursor({
+      v: 1,
+      id: orcaSessionId,
+      s: 'chat',
+      session: sessionId,
+      journal: next.cursor,
+      ...(next.within > 0 ? { w: next.within } : {})
+    })
+  const after = cursor ? { cursor: cursor.journal, within: cursor.w ?? 0 } : undefined
+  // A follower re-reading with its cursor does no journal work until the journal moves.
+  const head = after?.within === 0 ? await host.reads.journalCursor(sessionId) : null
   if (
-    cursor &&
+    after &&
     head &&
-    head.epoch === cursor.journal.epoch &&
-    // Only exact equality: a cursor ahead of the journal takes history's own reset path.
-    head.sequence === cursor.journal.sequence
+    head.epoch === after.cursor.epoch &&
+    // Only exact equality: a cursor ahead of the journal takes the reader's own reset path.
+    head.sequence === after.cursor.sequence
   ) {
     return {
       orcaSessionId,
@@ -96,33 +103,22 @@ async function readChat(
       agent: record.provider,
       source: 'chat',
       entries: [],
-      cursor: encode(cursor.journal),
+      cursor: encode(after),
       limited: false
     }
   }
-  // A cursor read takes at most `limit` journal rows, each at most one entry, and continues
-  // from the last row it took, so none are skipped or repeated.
-  const history = await host.history({
-    sessionId,
-    direction: cursor ? 'after' : 'tail',
-    ...(cursor ? { cursor: cursor.journal } : {}),
-    limit: cursor ? limit : AGENT_SESSION_HISTORY_MAX_LIMIT
-  })
-  if (!history.ok && cursor) {
+  const page = await host.reads.agentReadPage(sessionId, { limit, ...(after ? { after } : {}) })
+  if (!page.ok) {
     throw sourceChanged(orcaSessionId)
   }
-  const { page } = history
-  const all = chatEntries(page.items, page.actionablePromptIds)
-  const entries = cursor ? all : all.slice(-limit)
-  const next = cursor ? page.window.nextCursor : (page.liveCursor ?? page.window.newest)
   return {
     orcaSessionId,
     kind: 'chat',
     agent: record.provider,
     source: 'chat',
-    entries,
-    cursor: next ? encode(next) : null,
-    limited: cursor ? page.hasNewer : page.hasOlder || all.length > limit
+    entries: page.entries,
+    cursor: encode(page.next),
+    limited: page.limited
   }
 }
 
@@ -137,7 +133,7 @@ async function readTerminalTranscript(
   }
   const locate = (
     known?: TerminalAgentTranscriptSource
-  ): Promise<TerminalAgentTranscriptSource | null | undefined> =>
+  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> =>
     agentHookServer.terminalAgentTranscriptSource(
       orcaSessionId,
       () => ctx.runtime.readLocalSleepingAgentSessions(),
@@ -148,6 +144,12 @@ async function readTerminalTranscript(
     throw new AgentConversationRefusal(
       CODES.unavailable,
       `Orca can't look up where agent ${orcaSessionId}'s transcript is right now. Try again in a moment.`
+    )
+  }
+  if (isReverseLookupUnavailable(source)) {
+    throw new AgentConversationRefusal(
+      CODES.unavailable,
+      `Orca can't look up agent ${orcaSessionId}'s saved transcript with this identity file in the current version. Open it with the newer Orca version that wrote the file, or read an agent that's open now from \`orca agent list\`.`
     )
   }
   if (source === null || !canReadWorkerTranscript(source.key.agent)) {
@@ -192,6 +194,7 @@ async function readTerminalTranscript(
   // The conversation must still name the file just read: its row may have moved on meanwhile.
   const after = await locate(source)
   if (
+    isReverseLookupUnavailable(after) ||
     (cursor?.s === 'transcript' && cursor.i !== sourceIdentity) ||
     !after ||
     !sameProviderKey(after.key, key) ||
@@ -216,58 +219,6 @@ async function readTerminalTranscript(
     }),
     limited: transcript.limited
   }
-}
-
-/** The conversation as a reader follows it: messages, the tools the agent ran, and the approvals
- *  and questions it raised. Status frames, turn markers and subagent rows are left out. */
-function chatEntries(
-  items: readonly AgentJournalRenderItem[],
-  actionablePromptIds?: readonly string[]
-): AgentReadEntry[] {
-  // An ended agent's unanswered prompts stay pending in the journal but can no longer be answered.
-  const waiting = (item: AgentJournalRenderItem, state: string): boolean =>
-    state === 'pending' &&
-    isActionableStructuredAgentSessionPrompt(item.itemId, actionablePromptIds)
-  const entries: AgentReadEntry[] = []
-  for (const item of items) {
-    if (!isRootAgentJournalItem(item)) {
-      continue
-    }
-    const body = item.body
-    if (body.kind === 'message') {
-      const text = body.blocks
-        .map((block) =>
-          block.type === 'text' ? block.text : block.type === 'image-ref' ? '[image]' : ''
-        )
-        .filter((part) => part.length > 0)
-        .join('\n')
-        .trim()
-      // Reasoning is the model's scratch work, folded away in the app too.
-      if (text.length > 0 && body.role !== 'reasoning') {
-        entries.push({ kind: 'message', role: body.role, text })
-      }
-    } else if (body.kind === 'status' && body.tone === 'error') {
-      entries.push({ kind: 'error', text: String(body.text) })
-    } else if (body.kind === 'tool-call') {
-      entries.push({ kind: 'tool', name: body.name, state: body.state })
-    } else if (body.kind === 'approval') {
-      entries.push({
-        kind: 'approval',
-        text: body.title,
-        pending: waiting(item, body.resolution.state)
-      })
-    } else if (body.kind === 'question') {
-      entries.push({
-        kind: 'question',
-        // Grouped prompts keep their real questions in `questions`; `question` is then a heading.
-        text: agentSessionPromptQuestions(body)
-          .map((question) => question.question)
-          .join('\n'),
-        pending: waiting(item, body.resolution.state)
-      })
-    }
-  }
-  return entries
 }
 
 /** One entry per transcript message, its tool calls folded in, so `limit` messages are at most
