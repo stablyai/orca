@@ -1605,7 +1605,9 @@ html.native-shell .app-layout {
 }
 
 [data-worktree-sidebar='workspace-status']
-  [data-worktree-card-surface]:not([data-worktree-card-active]):not([data-worktree-card-selected]) {
+  [data-worktree-card-surface]:not([data-worktree-card-active]):not(
+    [data-worktree-card-selected]
+  ):not([data-worktree-lineage-drop-target]) {
   border-color: color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent);
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 5%, transparent);
 }
