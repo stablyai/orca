@@ -36,6 +36,8 @@ export type MockEditorHostOptions = {
   locale?: string
   /** Bytes documents: the manifest suffix that matched. */
   fileType?: string
+  /** A diff tab's original side; the document is then read-only and carries `diff`. */
+  original?: string
 }
 export type MockEditorEdit = {
   baseVersion: number
@@ -103,6 +105,7 @@ export function mockEditorHost(
     throw new Error('orca/testing: the frame shell script is missing')
   }
   let content = toContent('text' in file ? file.text : file.bytes)
+  const readOnly = options.original !== undefined || (options.readOnly ?? false)
   const kind = content.kind
   let version = 0
   let colorScheme = options.colorScheme ?? 'dark'
@@ -127,8 +130,11 @@ export function mockEditorHost(
     version += 1
     const document: CustomEditorDocument = {
       version,
-      readOnly: options.readOnly ?? false,
+      readOnly,
       content: copy(content),
+      ...(options.original === undefined
+        ? {}
+        : { diff: { original: { kind: 'text' as const, text: options.original } } }),
       ...(kind === 'bytes' && options.fileType ? { fileType: options.fileType } : {})
     }
     deliver({ kind: 'evt', event: FRAME_EVENTS.editorDocument, payload: document })
@@ -163,7 +169,7 @@ export function mockEditorHost(
       }
       return refuse(CUSTOM_EDITOR_CONFLICT)
     }
-    if (options.readOnly) {
+    if (readOnly) {
       return refuse(pluginError('not_permitted', 'This document is read-only.'))
     }
     if (edit.content.kind !== kind) {

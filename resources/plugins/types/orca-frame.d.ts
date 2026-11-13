@@ -26,6 +26,10 @@ declare module 'orca/frame' {
     /** Only for a session with `merge`: the file changed on disk while the tab had unsaved edits;
      *  this is the disk content those edits started from. */
     readonly ancestor?: EditorContent
+    /** Only in a diff tab, for editors whose manifest sets `"diff": true`; the document is then
+     *  read-only. `content` is the changed side and `original` the side it started from.
+     *  `session()` ignores it: read both sides with `get()` and `onDidChange`. */
+    readonly diff?: { readonly original: { readonly kind: 'text'; readonly text: string } }
   }
   /** The whole new content, made against document `baseVersion`. */
   export type EditorEdit = { baseVersion: number; content: EditorContent }

@@ -59,6 +59,10 @@ export type FileContent = {
 export type DiffContent = GitDiffResult & {
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
+  /** The read failed; the text sides only carry the error message. */
+  loadFailed?: true
+  /** The tab's `branchOldPath` when this diff was read, so a rename that went away since is seen. */
+  readWithOldPath?: string
 }
 
 export type InFlightContentRead<T> = {

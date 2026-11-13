@@ -14,10 +14,13 @@ export type CustomEditorUnappliedEdit = 'held' | 'lost' | null
 /** A binary editor's document; a new object means new bytes to send. */
 export type CustomEditorBinaryDocument = { bytes: Uint8Array<ArrayBuffer>; fileType: string }
 
+/** A text editor's document; `original` only in a diff tab. */
+export type CustomEditorTextDocument = { text: string; readOnly: boolean; original?: string }
+
 export type CustomEditorHostOptions = {
   getFrameWindow: () => PluginFrameWindow | null
   /** The buffer as Orca holds it now. */
-  getDocument: () => { text: string; readOnly: boolean }
+  getDocument: () => CustomEditorTextDocument
   /** Binary editors only: the document's bytes, or null while they load. */
   getBinaryDocument?: () => CustomEditorBinaryDocument | null
   onEdit: (text: string) => void
