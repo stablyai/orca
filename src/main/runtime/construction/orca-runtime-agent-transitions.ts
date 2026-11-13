@@ -176,6 +176,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.externalConversations.current()
     const stopQuietSweep = startWorkerQuietSweep({
       store,
+      changes: this.crewChanges,
       getDb: () => this._orchestrationDb,
       resolveTerminal: (paneKey) =>
         resolveTerminalWorkerDispatch(this.terminalWorkerResolution, paneKey),
