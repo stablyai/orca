@@ -8,15 +8,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 
 import {
+  cloudPairedAccountId,
   cloudPairedEnvironmentIds,
   cloudPairedSandboxesByEnvironment,
-  noteCloudPairingBindings
+  noteCloudPairingBindings,
+  setCloudPairingActiveAccountReader
 } from './cloud-paired-environment-ids'
 import { isOrcaCloudRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/hosted-remote-desktop'
+import { bumpOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 
 afterEach(() => {
   noteCloudPairingBindings({})
+  setCloudPairingActiveAccountReader(() => null)
 })
 
 describe('paired Orca Cloud servers', () => {
@@ -45,5 +49,60 @@ describe('paired Orca Cloud servers', () => {
     const userData = mkdtempSync(join(tmpdir(), 'orca-paired-'))
     expect(cloudSandboxIdForEnvironment(userData, 'env-paired')).toBe('sbx_paired')
     expect(cloudSandboxIdForEnvironment(userData, 'env-other')).toBeNull()
+  })
+})
+
+describe('paired servers by account (PAIRED-ACCOUNT-FILTER)', () => {
+  const bindings = {
+    sbx_mine: { environmentId: 'env-mine', accountId: 'org:team-one' },
+    sbx_theirs: { environmentId: 'env-theirs', accountId: 'org:team-two' },
+    sbx_old: { environmentId: 'env-old' }
+  }
+
+  it("only the active account's pairings (and unstamped ones) resolve to a sandbox", () => {
+    let active = 'org:team-one'
+    setCloudPairingActiveAccountReader(() => active)
+    noteCloudPairingBindings(bindings)
+    expect([...cloudPairedSandboxesByEnvironment()].sort()).toEqual([
+      ['env-mine', 'sbx_mine'],
+      ['env-old', 'sbx_old']
+    ])
+    // A team switch (a profile-index write) flips it at once: no stale binding resolves.
+    active = 'org:team-two'
+    bumpOrcaProfileIndexGeneration()
+    expect([...cloudPairedSandboxesByEnvironment()].sort()).toEqual([
+      ['env-old', 'sbx_old'],
+      ['env-theirs', 'sbx_theirs']
+    ])
+    const userData = mkdtempSync(join(tmpdir(), 'orca-paired-'))
+    expect(cloudSandboxIdForEnvironment(userData, 'env-mine')).toBeNull()
+  })
+
+  it('the catalog still marks every paired server, with the account it was made under', () => {
+    setCloudPairingActiveAccountReader(() => 'org:team-one')
+    noteCloudPairingBindings(bindings)
+    expect([...cloudPairedEnvironmentIds()].sort()).toEqual(['env-mine', 'env-old', 'env-theirs'])
+    expect(cloudPairedAccountId('env-theirs')).toBe('org:team-two')
+    expect(cloudPairedAccountId('env-old')).toBeNull()
+  })
+
+  it('reads the account once per profile-index write, never on every lookup (no disk per poll)', () => {
+    const read = vi.fn(() => 'org:team-one')
+    setCloudPairingActiveAccountReader(read)
+    noteCloudPairingBindings(bindings)
+    for (let i = 0; i < 5; i += 1) {
+      cloudPairedSandboxesByEnvironment()
+    }
+    expect(read).toHaveBeenCalledTimes(1)
+    bumpOrcaProfileIndexGeneration()
+    cloudPairedSandboxesByEnvironment()
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('a re-stamped binding counts as a change (the catalog republishes)', () => {
+    noteCloudPairingBindings({ sbx_old: { environmentId: 'env-old' } })
+    expect(
+      noteCloudPairingBindings({ sbx_old: { environmentId: 'env-old', accountId: 'org:team-one' } })
+    ).toBe(true)
   })
 })
