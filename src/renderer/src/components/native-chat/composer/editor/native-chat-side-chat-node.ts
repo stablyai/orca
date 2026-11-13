@@ -21,7 +21,7 @@ type SideChatStorage = { enabled: boolean }
 declare module '@tiptap/core' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Tiptap Storage requires declaration merging.
   interface Storage {
-    nativeChatSideChat: SideChatStorage
+    nativeChatSideChat?: SideChatStorage
   }
 }
 
@@ -57,13 +57,22 @@ function pillsToText(state: EditorState, keep: (pos: number) => boolean): Transa
 
 /** A picked `/btw` or `/side` row: its completed text becomes the pill. */
 export function pillLeadingSideChatCommand(editor: Editor): Transaction | null {
-  return editor.storage.nativeChatSideChat.enabled ? leadingCommandPill(editor.state) : null
+  return sideChatEnabled(editor) ? leadingCommandPill(editor.state) : null
+}
+
+// A destroyed editor (a hidden pane React shows again) has no extension storage left.
+export function sideChatEnabled(editor: Editor): boolean {
+  return editor.storage.nativeChatSideChat?.enabled === true
 }
 
 /** After availability changes or a whole draft loads: a leading command shows as the pill exactly
  *  where Send opens it as a side chat. Also redraws the empty-question placeholder. */
 export function syncSideChatPill(editor: Editor, enabled: boolean): void {
-  editor.storage.nativeChatSideChat.enabled = enabled
+  const storage = editor.storage.nativeChatSideChat
+  if (editor.isDestroyed || !storage) {
+    return
+  }
+  storage.enabled = enabled
   const { state } = editor
   const tr = (enabled ? leadingCommandPill(state) : pillsToText(state, () => false)) ?? state.tr
   editor.view.dispatch(tr.setMeta('preventUpdate', true).setMeta('addToHistory', false))

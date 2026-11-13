@@ -36,6 +36,7 @@ import type {
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import {
   pillLeadingSideChatCommand,
+  sideChatEnabled,
   syncSideChatPill,
   withSideChatPillsAsText
 } from './native-chat-side-chat-node'
@@ -256,7 +257,7 @@ function NativePromptEditor({
               const stored = adopted.current?.document
               if (stored) {
                 editor.commands.setContent(stored, { emitUpdate: false })
-                syncSideChatPill(editor, editor.storage.nativeChatSideChat.enabled)
+                syncSideChatPill(editor, sideChatEnabled(editor))
                 applyPosition(previousRange)
                 return
               }
