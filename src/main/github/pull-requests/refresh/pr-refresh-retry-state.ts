@@ -70,15 +70,18 @@ export class PRRefreshRetryState {
     key: string,
     candidate: GitHubPRRefreshCandidate,
     prepared: PreparedPRBranchRead,
-    queue: PRRefreshQueue
+    queue: PRRefreshQueue,
+    ownsRequest: boolean
   ): PRRefreshOutcome {
     const retryAt = this.nextVisibleErrorRetryAt(key, candidate)
     const result = this.withErrorSchedule(outcome, retryAt)
     prepared.scheduleError(outcome, result)
-    queue.protectBackgroundUntil(
-      key,
-      Math.max(retryAt, outcome.kind === 'upstream-error' ? (outcome.retryDisabledUntil ?? 0) : 0)
-    )
+    if (ownsRequest) {
+      queue.protectBackgroundUntil(
+        key,
+        Math.max(retryAt, outcome.kind === 'upstream-error' ? (outcome.retryDisabledUntil ?? 0) : 0)
+      )
+    }
     return result
   }
 }

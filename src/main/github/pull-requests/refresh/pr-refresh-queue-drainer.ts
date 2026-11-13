@@ -5,6 +5,7 @@ import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
   hostedReviewOptionArgs,
   freshQueuedPROutcome,
+  bypassesFreshnessDelay,
   isBackground,
   isBudgetedBackground,
   validateCandidate
@@ -222,7 +223,7 @@ export class PRRefreshQueueDrainer {
               watchPRKey: next.watch?.prKey
             })
           ))
-        joinedRead ??= prepared.pending()
+        joinedRead ??= bypassesFreshnessDelay(next.reason) ? undefined : prepared.pending()
         const admitted = admitPreparedPRRead(
           { queue, pacing, events, scheduler, watchJobs },
           next,

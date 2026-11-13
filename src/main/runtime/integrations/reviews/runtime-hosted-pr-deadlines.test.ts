@@ -3,6 +3,35 @@ import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/r
 import { makeCandidate } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 import { fixture, found, mocks, read, rpcRead } from './runtime-hosted-pr-snapshot-test-harness'
 
+it('delivers post-push data from its fresh producer while an older timed producer is pending', async () => {
+  const coordinator = await import('../../../github/pull-requests/refresh/pr-refresh-coordinator')
+  const old = Promise.withResolvers<PRRefreshOutcome>()
+  mocks.resolve.mockReturnValueOnce(old.promise)
+  const producer = read('pushed', 'swr')
+  await vi.advanceTimersByTimeAsync(0)
+  const delivered: PRRefreshOutcome[] = []
+  const remove = coordinator.addPRRefreshOutcomeObserver((_candidate, outcome) =>
+    delivered.push(outcome)
+  )
+  try {
+    fixture.title = 'after push'
+    coordinator.enqueuePRRefresh(
+      makeCandidate({ branch: 'pushed', cacheKey: '/repo::pushed', currentHeadOid: 'head-a' }),
+      'post-push'
+    )
+    await vi.advanceTimersByTimeAsync(2_500)
+    expect(delivered).toContainEqual({
+      kind: 'found',
+      fetchedAt: 3_500,
+      pr: expect.objectContaining({ title: 'after push' })
+    })
+    old.resolve(found())
+    await producer
+  } finally {
+    remove()
+  }
+})
+
 it('delivers an unrelated row without a spacing delay after joining an existing producer', async () => {
   const coordinator = await import('../../../github/pull-requests/refresh/pr-refresh-coordinator')
   const result = Promise.withResolvers<PRRefreshOutcome>()

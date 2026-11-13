@@ -67,7 +67,6 @@ export class PRRefreshQueueScheduler {
       }
       const settled =
         producer.retained &&
-        this.queue.ownsRequest(key, requestSequence) &&
         outcome.kind === 'upstream-error' &&
         (hosted || this.visibility.has(key))
           ? this.retry.settleProducerError(
@@ -77,7 +76,8 @@ export class PRRefreshQueueScheduler {
                 ? { ...candidate, isSelected: false }
                 : this.visibility.candidate(key, candidate),
               prepared,
-              this.queue
+              this.queue,
+              this.queue.ownsRequest(key, requestSequence)
             )
           : outcome
       this.events.observe(candidate, settled, aliases)
