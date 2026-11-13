@@ -34,36 +34,43 @@ const UNREACHABLE_PROBE_RETRY_MS = 30_000
 function useVoiceRelayAvailability(
   environmentId: string | null
 ): NativeChatCodexVoice['availability'] {
-  const [remote, setRemote] = useState<{ id: string; supported: boolean } | null>(null)
+  const [remote, setRemote] = useState<{
+    id: string
+    supported: boolean
+    unreachable: boolean
+  } | null>(null)
   const [probe, setProbe] = useState(0)
   useEffect(() => {
     if (environmentId === null) {
       return
     }
     let current = true
-    let retry: ReturnType<typeof setTimeout> | null = null
     void runtimeEnvironmentSupportsCapabilities(environmentId, [
       AGENT_SESSION_CODEX_VOICE_RUNTIME_CAPABILITY
     ]).then(
       ([supported]) => {
         if (current) {
-          setRemote({ id: environmentId, supported: supported === true })
+          setRemote({ id: environmentId, supported: supported === true, unreachable: false })
         }
       },
       () => {
         if (current) {
-          setRemote({ id: environmentId, supported: false })
-          retry = setTimeout(() => setProbe((count) => count + 1), UNREACHABLE_PROBE_RETRY_MS)
+          setRemote({ id: environmentId, supported: false, unreachable: true })
         }
       }
     )
     return () => {
       current = false
-      if (retry !== null) {
-        clearTimeout(retry)
-      }
     }
   }, [environmentId, probe])
+  const unreachable = remote?.id === environmentId && remote.unreachable
+  useEffect(() => {
+    if (!unreachable) {
+      return
+    }
+    const retry = setTimeout(() => setProbe((count) => count + 1), UNREACHABLE_PROBE_RETRY_MS)
+    return () => clearTimeout(retry)
+  }, [unreachable, probe])
   if (environmentId === null) {
     return 'available'
   }
