@@ -29,6 +29,8 @@ const GIVE_UP_MS = 30 * 60_000
 
 export type CloudSetupNoticeLine = {
   text: string
+  /** A muted second line: what it means for the person. */
+  description?: string
   action: { label: string; icon: React.ReactNode; run: () => void; pending?: boolean } | null
 }
 
@@ -85,6 +87,10 @@ export function cloudSetupNoticeLine(
               'orcaCloud.setupNotices.fetchFailedNoRepo',
               'This workspace can’t reach its Git remote right now.'
             ),
+        description: t(
+          'orcaCloud.setupNotices.fetchFailedMeaning',
+          'Pulls and pushes won’t work until it can.'
+        ),
         action: handlers.recheckFetch
           ? {
               label: handlers.checkingFetch
@@ -234,6 +240,7 @@ export function cloudSetupNoticesView(
       return {
         key: notice.id,
         text: line.text,
+        ...(line.description ? { description: line.description } : {}),
         ...(line.action
           ? {
               action: {

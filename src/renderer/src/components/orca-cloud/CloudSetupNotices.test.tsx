@@ -87,6 +87,7 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     expect(shown.lines[0].text).toBe(
       'This workspace can’t reach stablyai/orca on GitHub right now.'
     )
+    expect(shown.lines[0].description).toBe('Pulls and pushes won’t work until it can.')
     expect(shown.lines[0].action).toMatchObject({ label: 'Check again' })
     shown.lines[0].action.onClick()
     expect(recheck).toHaveBeenCalledWith('env-1', expect.any(Function))

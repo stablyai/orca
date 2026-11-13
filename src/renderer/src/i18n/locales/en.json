@@ -28299,7 +28299,8 @@
       "fetchFailed": "This workspace can’t reach {{repo}} on GitHub right now.",
       "fetchFailedNoRepo": "This workspace can’t reach its Git remote right now.",
       "checking": "Checking…",
-      "checkAgain": "Check again"
+      "checkAgain": "Check again",
+      "fetchFailedMeaning": "Pulls and pushes won’t work until it can."
     },
     "toast": {
       "dismiss": "Dismiss"
