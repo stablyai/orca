@@ -37,7 +37,11 @@ function failed(
 function statusLine(entry: PendingWorktreeCreation): HTMLElement {
   useAppStore.setState({ pendingWorktreeCreations: { c: entry }, repos: [] })
   render(<PendingWorktreeRow creationId="c" repoName={null} />)
-  return screen.getByText('Fix login').nextElementSibling as HTMLElement
+  const line = screen.getByText('Fix login').nextElementSibling
+  if (!(line instanceof HTMLElement)) {
+    throw new Error('no status line')
+  }
+  return line
 }
 
 describe('pending row status colour', () => {
