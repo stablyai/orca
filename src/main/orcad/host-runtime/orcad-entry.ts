@@ -352,7 +352,7 @@ async function activateOrcadRuntime(
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   // Background chat-journal maintenance and CI-line watches start once this host is serving.
   chatJournal.serving()
-  runtime.startPullRequestWatches()
+  runtime.startPullRequestWatches({ admit: true })
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 

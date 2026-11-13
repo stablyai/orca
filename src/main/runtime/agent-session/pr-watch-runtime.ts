@@ -9,6 +9,7 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
+import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 
 export type PRWatchRuntimeDeps = {
   stateDirectory: string
@@ -19,6 +20,7 @@ export type PRWatchRuntimeDeps = {
 }
 
 let generation = 0
+let admitted = false
 let starting: Promise<void> | null = null
 let running: PRWatchService | null = null
 
@@ -32,8 +34,16 @@ function openChatJournal(chatId: string): AgentSessionJournal | null {
   return journal
 }
 
-/** Idempotent; reuses the record store slot the chat host opens, so nothing opens twice. */
-export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
+/** Idempotent; reuses the record store slot the chat host opens, so nothing opens twice.
+ *  `admit` is the host's serving milestone; before it, other callers wait for that first start. */
+export function startPRWatchRuntime(
+  deps: PRWatchRuntimeDeps,
+  options: { admit?: boolean } = {}
+): Promise<void> {
+  admitted ||= options.admit === true
+  if (!admitted || isHostShuttingDown()) {
+    return Promise.resolve()
+  }
   const startedIn = generation
   starting ??= (async () => {
     const { store, journalDatabase } = await openAgentSessionRecordStoreOnce({
@@ -72,11 +82,6 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
   })
   return starting
-}
-
-/** Whether a chat-runtime teardown has stopped watches; hosts start the first run themselves. */
-export function prWatchRuntimeWasStopped(): boolean {
-  return generation > 0
 }
 
 /** Before the journal database closes; the next start rebuilds from the saved tables. */

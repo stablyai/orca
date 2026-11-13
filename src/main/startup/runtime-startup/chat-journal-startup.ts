@@ -25,6 +25,8 @@ export function beginChatJournalStartup(
   )
 }
 
+/** Serving milestone: background maintenance and CI-line watches start, with no renderer dependency. */
 export function chatJournalHostServing(): void {
   serving.resolve()
+  state.runtime?.startPullRequestWatches({ admit: true })
 }

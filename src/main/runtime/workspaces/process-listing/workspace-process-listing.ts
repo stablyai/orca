@@ -60,7 +60,7 @@ import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
-import { prWatchRuntimeWasStopped, startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
+import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
@@ -220,18 +220,21 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     return store
   }
 
-  /** CI-line watches run on every host from startup, whether or not a chat was ever opened. */
-  startPullRequestWatches(): void {
-    void startPRWatchRuntime({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
-      ...prWatchWorkspaceSources({
-        resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-        store: () => this.requireStore()
-      })
-    })
+  /** CI-line watches run on every host once it serves (`admit`), whether or not a chat was ever opened. */
+  startPullRequestWatches(options: { admit?: boolean } = {}): void {
+    void startPRWatchRuntime(
+      {
+        stateDirectory: getProfileUserDataPath(),
+        legacySessionTabIds: this.legacyStructuredSessionTabIds,
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
+        ...prWatchWorkspaceSources({
+          resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+          store: () => this.requireStore()
+        })
+      },
+      options
+    )
   }
 
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
@@ -315,9 +318,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
-    // Re-arms watches a chat-runtime teardown stopped; the first run starts after the host serves.
-    if (prWatchRuntimeWasStopped()) {
-      this.startPullRequestWatches()
-    }
+    // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
+    this.startPullRequestWatches()
   }
 }
