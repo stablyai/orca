@@ -13,7 +13,7 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, KEYS_WITHHELD_BODY, compileNetworkPolicy, egressProxyMissing, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
 import { ensureEntryPoints } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
@@ -287,13 +287,12 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
  */
 export function effectiveEgressPreset(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): EgressPreset {
   const preset = deps.config.egressPreset ?? DEFAULT_EGRESS_PRESET
-  if (preset === 'open' && !deps.config.egressProxyUrl && !LOCAL_ENVIRONMENTS.has(deps.config.environment)) {
+  if (preset === 'open' && egressProxyMissing(deps.config)) {
     console.error(JSON.stringify({ event: 'egress_open_without_proxy', sandboxId: row.id, environment: deps.config.environment, applied: 'limited' }))
     return 'limited'
   }
   return preset
 }
-const LOCAL_ENVIRONMENTS = new Set(['local', 'test'])
 
 /** Refuses up front (503 platform_hosts_misconfigured) when this create or boot would compile a limited policy. */
 export function assertEgressAllowlistUsable(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): void {
@@ -363,7 +362,28 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
           )
         )
       ]
-    : []
+    : // No proxy (EGRESS-SWAP-FAIL-CLOSED): keys were withheld and only placeholders reached the VM. The firewall
+      // answers them itself with a plain error, so agents say what happened instead of a provider auth failure.
+      [
+        ...egressAccountRoutes(row).flatMap(({ agent, host }): CredentialRoute[] => {
+          const provider = accountProvider(agent)
+          return provider
+            ? [{ host, header: provider.header, placeholders: [provider.format(provider.placeholder(row))], via: 'respond', statusCode: 403, body: KEYS_WITHHELD_BODY }]
+            : []
+        }),
+        ...egressSecretHosts(row).flatMap((entry) =>
+          Object.keys(entry.headers).map(
+            (header): CredentialRoute => ({
+              host: entry.host,
+              header,
+              placeholders: placeholderValues(entry, header, secretPlaceholder(row, entry.secret)),
+              via: 'respond',
+              statusCode: 403,
+              body: KEYS_WITHHELD_BODY
+            })
+          )
+        )
+      ]
   const all = [...git, ...credentials]
   if (effectiveEgressPreset(deps, row) === 'open') {
     // Every host is reachable; the credential claims (and their trailing 403s) still apply.
