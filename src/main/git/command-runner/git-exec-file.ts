@@ -190,10 +190,7 @@ function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unkn
   return error
 }
 
-export function gitExecFileAsync(
-  args: string[],
-  callerOptions: GitExecOptions
-): Promise<{ stdout: string; stderr: string }> {
+export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) {
   const options = routeLocalGitOptions(callerOptions)
   const releaseMutation = trackGitWorktreeMutation(args, options)
   const releaseRefMutation = trackGitRefMutation(args)
