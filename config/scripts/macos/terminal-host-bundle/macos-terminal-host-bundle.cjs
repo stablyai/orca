@@ -15,8 +15,8 @@ const { builtinModules } = require('node:module')
 const { basename, dirname, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
 
-const MAC_TERMINAL_HOST_NAME = 'Orca Terminal Host'
-const MAC_TERMINAL_HOST_EXECUTABLE = 'orca-terminal-host'
+const MAC_TERMINAL_HOST_NAME = 'Orca Agents'
+const MAC_TERMINAL_HOST_EXECUTABLE = 'Orca Agents'
 const macTerminalHostSignIgnore = [`/Contents/Helpers/${MAC_TERMINAL_HOST_NAME}\\.app(/|$)`]
 const NODE_PTY_FILES = [
   'package.json',
@@ -194,8 +194,8 @@ function buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs }) {
   return {
     ...usageDescriptions,
     CFBundleIdentifier: appInfo.CFBundleIdentifier,
-    CFBundleName: 'Orca',
-    CFBundleDisplayName: 'Orca',
+    CFBundleName: MAC_TERMINAL_HOST_NAME,
+    CFBundleDisplayName: MAC_TERMINAL_HOST_NAME,
     CFBundleExecutable: MAC_TERMINAL_HOST_EXECUTABLE,
     CFBundlePackageType: 'APPL',
     CFBundleInfoDictionaryVersion: '6.0',
@@ -210,6 +210,15 @@ function buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs }) {
 
 function findMacTerminalHostInfoProblems(info, { appId, usageDescriptions, minimumOs }) {
   const problems = []
+  for (const [key, expected] of Object.entries({
+    CFBundleName: MAC_TERMINAL_HOST_NAME,
+    CFBundleDisplayName: MAC_TERMINAL_HOST_NAME,
+    CFBundleExecutable: MAC_TERMINAL_HOST_EXECUTABLE
+  })) {
+    if (info[key] !== expected) {
+      problems.push(`${key} is ${info[key]}, expected ${expected}`)
+    }
+  }
   if (info.CFBundleIdentifier !== appId) {
     problems.push(`CFBundleIdentifier is ${info.CFBundleIdentifier}, expected ${appId}`)
   }

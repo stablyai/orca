@@ -46,7 +46,18 @@ export const RepoSetHidden = RepoShow.extend({
 /** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
 export const RepoHooksCheck = RepoSelector.extend({
   background: z.boolean().optional(),
-  wakeWslDistro: OptionalBoolean
+  wakeWslDistro: OptionalBoolean,
+  // Older hosts strip this and read the project checkout, as before.
+  createSource: z
+    .union([
+      z.object({ kind: z.literal('base'), baseBranch: z.string().optional() }),
+      z.object({
+        kind: z.literal('branch'),
+        ref: z.string().min(1),
+        baseBranch: z.string().optional()
+      })
+    ])
+    .optional()
 })
 
 export const RepoSearchRefs = z.object({
