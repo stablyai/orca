@@ -106,3 +106,8 @@ export function formatAccountTimestamp(
     minute: '2-digit'
   })
 }
+
+/** One secondary line from whichever account details are known. */
+export function joinAccountDetails(parts: readonly (string | null | undefined)[]): string {
+  return parts.filter(Boolean).join(' · ')
+}

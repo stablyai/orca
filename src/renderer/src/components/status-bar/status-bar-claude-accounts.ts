@@ -1,3 +1,7 @@
+import {
+  getManagedAccountDisplayName,
+  getManagedAccountInlineLabel
+} from '../../../../shared/managed-account-display-names'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
@@ -92,7 +96,7 @@ export function buildClaudeStatusSwitchGroups(
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
-          label: account.email,
+          label: getManagedAccountInlineLabel(account),
           active: account.id === activeId,
           runtimeTarget: target,
           ...(account.needsSignIn
@@ -151,6 +155,7 @@ export type ClaudeAccountSettings = Pick<
   | 'claudeManagedAccounts'
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'activeClaudeManagedAccountId'
+  | 'managedAccountDisplayNames'
 >
 
 function getClaudeStatusAccountsFromSettings(
@@ -164,21 +169,32 @@ function getClaudeStatusAccountsFromSettings(
   const hostRows = new Map(runtimeState.accounts.map((account) => [account.id, account]))
   return {
     accounts: settings.claudeManagedAccounts
-      .map(
-        (account): ClaudeStatusAccount =>
-          hostRows.get(account.id) ?? {
-            id: account.id,
-            email: account.email,
-            managedAuthRuntime: account.managedAuthRuntime ?? 'host',
-            wslDistro: account.wslDistro ?? null,
-            authMethod: account.authMethod ?? 'unknown',
-            organizationUuid: account.organizationUuid ?? null,
-            organizationName: account.organizationName ?? null,
-            createdAt: account.createdAt,
-            updatedAt: account.updatedAt,
-            lastAuthenticatedAt: account.lastAuthenticatedAt
-          }
-      )
+      .map((account): ClaudeStatusAccount => {
+        // Settings carry the fresh name too; a retained host row may predate a rename.
+        const displayName = getManagedAccountDisplayName(
+          settings.managedAccountDisplayNames,
+          'claude',
+          account.id
+        )
+        const hostRow = hostRows.get(account.id)
+        if (hostRow) {
+          const { displayName: _hostName, ...rest } = hostRow
+          return displayName ? { ...rest, displayName } : rest
+        }
+        return {
+          id: account.id,
+          email: account.email,
+          ...(displayName ? { displayName } : {}),
+          managedAuthRuntime: account.managedAuthRuntime ?? 'host',
+          wslDistro: account.wslDistro ?? null,
+          authMethod: account.authMethod ?? 'unknown',
+          organizationUuid: account.organizationUuid ?? null,
+          organizationName: account.organizationName ?? null,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+          lastAuthenticatedAt: account.lastAuthenticatedAt
+        }
+      })
       .sort((a, b) => b.updatedAt - a.updatedAt),
     activeAccountId:
       settings.activeClaudeManagedAccountIdsByRuntime?.host ??

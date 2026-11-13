@@ -385,7 +385,7 @@
 3 src/renderer/src/components/right-sidebar/use-right-sidebar-tab-routing.ts
 1 src/renderer/src/components/runtime-access/RuntimeRepairDialog.tsx
 1 src/renderer/src/components/session-search/use-session-search-status.ts
-8 src/renderer/src/components/settings/accounts/AccountsPane.tsx
+7 src/renderer/src/components/settings/accounts/AccountsPane.tsx
 3 src/renderer/src/components/settings/accounts/providers/AntigravityAccountsSection.tsx
 1 src/renderer/src/components/settings/accounts/providers/CursorAccountsSection.tsx
 2 src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.tsx

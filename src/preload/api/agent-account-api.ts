@@ -23,6 +23,10 @@ export type CodexAccountsApi = {
     activateIfSelectionWasEmpty?: boolean
   }) => Promise<CodexRateLimitAccountsState>
   remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+  rename: (args: {
+    accountId: string
+    displayName: string | null
+  }) => Promise<CodexRateLimitAccountsState>
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'
@@ -58,6 +62,10 @@ export type ClaudeAccountsApi = {
   /** The pending sign-in's link once Claude hands it over; null if it ends without one. */
   waitForSignInLink: () => Promise<string | null>
   remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+  rename: (args: {
+    accountId: string
+    displayName: string | null
+  }) => Promise<ClaudeRateLimitAccountsState>
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

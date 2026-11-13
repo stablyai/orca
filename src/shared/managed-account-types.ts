@@ -32,6 +32,8 @@ export type CodexManagedAccount = {
 export type CodexManagedAccountSummary = {
   id: string
   email: string
+  /** The name the user gave this account; the email stays its sign-in identity. */
+  displayName?: string
   managedHomeRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   providerAccountId?: string | null
@@ -86,6 +88,8 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
+  /** The name the user gave this account; the email stays its sign-in identity. */
+  displayName?: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   authMethod: 'subscription-oauth' | 'unknown'

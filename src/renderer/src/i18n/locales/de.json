@@ -908,9 +908,6 @@
     },
     "followSymlinkedDirectories": "Symbolischen Verzeichnislinks folgen",
     "followSymlinkedDirectoriesDescription": "Verknüpfte Ordner beim Schnellöffnen durchsuchen und lokale verknüpfte Ordner im Datei-Explorer aufklappen.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca löscht den Claude-Ordner dieses Kontos und dessen Anmeldung von diesem Computer. Der mit „Systemstandard“ geteilte Chat-Verlauf bleibt erhalten. Falls dieses Konto ausgewählt ist, verwendet der nächste Claude-Start „Systemstandard“."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
       "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang, etwa Push, Pull oder erzwungener Push. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
@@ -7471,7 +7468,6 @@
           "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "dbb9626ed1": "Abbrechen",
           "63843e37e2": "Claude-Konto entfernen?",
-          "380a7736cc": "Beim Entfernen dieses Kontos wird sein verwaltetes Codex-Home-Verzeichnis dauerhaft gelöscht, einschließlich des gesamten Codex-Sitzungsverlaufs und aller darin gespeicherten MCP-Anmeldungen. Dies kann nicht rückgängig gemacht werden. Falls das Konto gerade aktiv ist, greift Orca auf die systemweite Standardanmeldung für Codex zurück.",
           "0d47394635": "Codex-Konto entfernen?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Nach der Anmeldung bei opencode.ai in der URL zu finden (z. B.",

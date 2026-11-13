@@ -1817,9 +1817,6 @@
     },
     "followSymlinkedDirectories": "Seguir diretórios com links simbólicos",
     "followSymlinkedDirectoriesDescription": "Busque em pastas vinculadas na Abertura rápida e expanda pastas vinculadas locais no Explorador de arquivos.",
-    "accounts": {
-      "claudeRemoveFolder": "O Orca exclui deste computador a pasta do Claude desta conta e seu login. O histórico de chat compartilhado com Padrão do sistema é mantido. Se esta conta estiver selecionada, o próximo Claude que você iniciar usará Padrão do sistema."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
       "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git, como push, pull ou force push. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
@@ -4354,7 +4351,6 @@
           "locationSaveFailed": "Não foi possível salvar o local das contas. Tente novamente.",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "Remover Conta do Claude?",
-          "380a7736cc": "Remover esta conta exclui permanentemente seu diretório gerenciado do Codex, incluindo todo o histórico de sessões do Codex e logins MCP armazenados nele. Isso não pode ser desfeito. Se a conta estiver ativa no momento, o Orca volta a usar o login padrão do sistema para o Codex.",
           "0d47394635": "Remover Conta do Codex?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Encontre isso na URL depois de fazer login em opencode.ai (ex.:",

@@ -14,6 +14,7 @@ import type {
 } from '../../shared/managed-account-types'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import { getWslAccountTarget } from './account-wsl-location'
+import { getManagedAccountLookupNames } from '../../shared/managed-account-display-names'
 import {
   formatAccountsBlock,
   formatAntigravityAccounts,
@@ -50,10 +51,6 @@ type ClaudeCodexSnapshot = {
   codex: CodexRateLimitAccountsState
 }
 
-function emailChoices(state: { accounts: readonly { id: string; email: string }[] }) {
-  return state.accounts.map((account) => ({ id: account.id, names: [account.email] }))
-}
-
 function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
   const read = () => client.call<ClaudeCodexSnapshot>('accounts.list', { refreshUsage: false })
   const print = async (method: string, accountId: string | null) =>
@@ -65,7 +62,7 @@ function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
   return {
     label: 'Claude',
     hasSystemDefault: true,
-    choices: async () => emailChoices((await read()).result.claude),
+    choices: async () => getManagedAccountLookupNames((await read()).result.claude.accounts),
     list: async () => {
       const response = await read()
       printResult({ ...response, result: response.result.claude }, json, (state) =>
@@ -84,7 +81,7 @@ function codexAccounts({ client, cwd, json }: HandlerContext): ProviderAccounts 
   return {
     label: 'Codex',
     hasSystemDefault: true,
-    choices: async () => emailChoices((await read()).result.codex),
+    choices: async () => getManagedAccountLookupNames((await read()).result.codex.accounts),
     list: async () => {
       const response = await read()
       printResult({ ...response, result: response.result.codex }, json, format)

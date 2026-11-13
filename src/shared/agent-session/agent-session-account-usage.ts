@@ -5,7 +5,8 @@ import type { CodexResetCreditExpectedScope } from '../codex-reset-credit-scope'
 
 /** Which account the chat's pinned home holds; the client owns the copy. */
 export type AgentSessionUsageAccount =
-  | { kind: 'managed'; email: string }
+  // displayName is absent from hosts older than account names.
+  | { kind: 'managed'; email: string; displayName?: string }
   | { kind: 'system' }
   // An Orca-shared home may hold a different account now; only a live chat knows its email.
   | { kind: 'shared'; email?: string }

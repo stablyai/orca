@@ -434,9 +434,6 @@
     },
     "followSymlinkedDirectories": "심볼릭 링크 디렉터리 따라가기",
     "followSymlinkedDirectoriesDescription": "Quick Open에서 연결된 폴더를 검색하고 파일 탐색기에서 로컬 연결 폴더를 펼칩니다.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "다른 곳에서 Git 작업 실행 중",
       "remoteOperationInAnotherWorkspace": "다른 워크스페이스에서 Git 작업(푸시, 풀, 강제 푸시 등)을 실행 중입니다. 작업이 겹치지 않도록 완료된 후 이 작업을 사용하세요.",
@@ -6792,7 +6789,6 @@
           "locationSaveFailed": "계정 위치를 저장할 수 없습니다. 다시 시도하세요.",
           "dbb9626ed1": "취소",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
-          "380a7736cc": "이 계정을 제거하면 관리되는 Codex 홈과 그 안에 저장된 모든 Codex 세션 기록 및 MCP 로그인이 영구적으로 삭제됩니다. 이 작업은 실행 취소할 수 없습니다. 계정이 현재 활성 상태인 경우 Orca는 시스템 기본 Codex 로그인으로 전환됩니다.",
           "0d47394635": "Codex 계정을 제거하시겠습니까?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai에 로그인한 후 URL에서 이를 찾으세요(예:",

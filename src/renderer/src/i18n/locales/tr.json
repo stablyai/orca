@@ -900,9 +900,6 @@
     },
     "followSymlinkedDirectories": "Sembolik bağlantılı dizinleri takip et",
     "followSymlinkedDirectoriesDescription": "Hızlı Aç'ta bağlantılı klasörlerde arama yapın ve Dosya Gezgini'nde yerel bağlantılı klasörleri genişletin.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca, bu hesabın Claude klasörünü ve oturum açma bilgilerini bu bilgisayardan siler. Sistem varsayılanı ile paylaşılan sohbet geçmişi korunur. Bu hesap seçiliyse bir sonraki Claude başlatılışında Sistem varsayılanı kullanılır."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git işlemi başka yerde çalışıyor",
       "remoteOperationInAnotherWorkspace": "Başka bir çalışma alanında Git işlemi (push, pull veya force push gibi) çalışıyor. İşlemlerin çakışmaması için bitmesini bekleyip bu eylemi kullanın.",
@@ -7448,7 +7445,6 @@
           "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
-          "380a7736cc": "Bu hesabı kaldırmak, içinde depolanan tüm Codex oturum geçmişi ve MCP girişleri dahil olmak üzere yönetilen Codex ana dizinini kalıcı olarak siler. Bu işlem geri alınamaz. Hesap şu anda etkinse Orca, sistem varsayılan Codex girişine geri döner.",
           "0d47394635": "Codex Hesabı Kaldırılsın mı?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai'ye giriş yaptıktan sonra bunu URL'de bulun (örn.",

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { withManagedAccountDisplayNames } from '../../../../../shared/managed-account-display-names'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -48,15 +49,14 @@ import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
   ProviderAccountAction,
-  RemoveAccountTarget
+  RemoveAccountTarget,
+  RenameAccountTarget
 } from './accounts-pane-types'
+import { AccountRenameDialog } from './account-rename-dialog'
 import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './scope/accounts-pane-runtime'
 import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-runtime-label'
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
-import {
-  createClaudeAccountActionRunner,
-  createCodexAccountActionRunner
-} from './accounts-pane-account-actions'
+import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
@@ -139,16 +139,30 @@ export function AccountsPane({
       />
     ) : null
 
-  const [codexAccounts, setCodexAccounts] =
+  const [ownerCodexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
-  const [claudeAccounts, setClaudeAccounts] =
+  const [ownerClaudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
+  // This desktop's names change with its settings, e.g. a rename in another window.
+  const localNames = isRemoteAccountScope ? undefined : settings.managedAccountDisplayNames
+  const codexAccounts = useMemo(
+    () => withManagedAccountDisplayNames(ownerCodexAccounts, localNames, 'codex'),
+    [ownerCodexAccounts, localNames]
+  )
+  const claudeAccounts = useMemo(
+    () => withManagedAccountDisplayNames(ownerClaudeAccounts, localNames, 'claude'),
+    [ownerClaudeAccounts, localNames]
+  )
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+  const [renameTarget, setRenameTarget] = useState<RenameAccountTarget | null>(null)
+  const [renamingAccountKeys, setRenamingAccountKeys] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -251,30 +265,26 @@ export function AccountsPane({
     }
   }, [scopeEnvironmentId])
 
-  const runCodexAccountAction = createCodexAccountActionRunner({
-    settings,
-    accountOwner,
-    isCurrentAccountOwner,
-    accountRuntime,
-    isRemoteAccountScope,
-    codexAccounts,
-    setCodexAccounts,
-    setCodexAccountsLoaded,
-    setCodexAction,
-    fetchSettings,
-    recordFeatureInteraction
-  })
-  const runClaudeAccountAction = createClaudeAccountActionRunner({
-    accountOwner,
-    isCurrentAccountOwner,
-    accountRuntime,
-    isRemoteAccountScope,
-    claudeAccounts,
-    setClaudeAccounts,
-    setClaudeAction,
-    fetchSettings,
-    recordFeatureInteraction
-  })
+  // One construction site: each runner reads the owner ref only when its action settles.
+  const { runCodexAccountAction, runClaudeAccountAction, renameAccount } =
+    createAccountsPaneRunners({
+      settings,
+      accountOwner,
+      hostLabel: accountRuntimeSentenceLabel,
+      isCurrentAccountOwner,
+      accountRuntime,
+      isRemoteAccountScope,
+      codexAccounts,
+      setCodexAccounts,
+      setCodexAccountsLoaded,
+      setCodexAction,
+      claudeAccounts,
+      setClaudeAccounts,
+      setClaudeAction,
+      setRenamingAccountKeys,
+      fetchSettings,
+      recordFeatureInteraction
+    })
   const model: AccountsPaneSectionModel = {
     settings,
     accountOwner,
@@ -301,6 +311,9 @@ export function AccountsPane({
     visibleClaudeAccounts,
     systemClaudeActive,
     setRemoveClaudeTarget,
+    setRenameTarget,
+    renameAccount,
+    renamingAccountKeys,
     runClaudeAccountAction,
     codexAccounts,
     codexAction,
@@ -380,6 +393,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget, t)}
+      <AccountRenameDialog model={model} target={renameTarget} />
       <SettingsSectionStack sections={visibleSections} />
     </div>
   )

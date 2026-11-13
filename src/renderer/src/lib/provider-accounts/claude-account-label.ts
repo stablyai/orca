@@ -1,3 +1,4 @@
+import { getManagedAccountInlineLabel } from '../../../../shared/managed-account-display-names'
 import { translate } from '@/i18n/i18n'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 
@@ -9,8 +10,8 @@ export function getClaudeAccountLabel(
   if (accountId == null) {
     return translate('accounts.claude.systemDefault', 'System default')
   }
-  return (
-    state.accounts.find((account) => account.id === accountId)?.email ??
-    translate('accounts.claude.unnamedAccount', 'Claude account')
-  )
+  const account = state.accounts.find((entry) => entry.id === accountId)
+  return account
+    ? getManagedAccountInlineLabel(account)
+    : translate('accounts.claude.unnamedAccount', 'Claude account')
 }

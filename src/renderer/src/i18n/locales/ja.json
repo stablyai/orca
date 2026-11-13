@@ -434,9 +434,6 @@
     },
     "followSymlinkedDirectories": "シンボリックリンクされたディレクトリをたどる",
     "followSymlinkedDirectoriesDescription": "クイックオープンでリンクされたフォルダーを検索し、ファイルエクスプローラーでローカルのリンクされたフォルダーを展開します。",
-    "accounts": {
-      "claudeRemoveFolder": "Orca はこのアカウントの Claude フォルダーとサインイン情報をこのコンピュータから削除します。システムのデフォルトと共有しているチャット履歴は残ります。このアカウントが選択されている場合、次に起動する Claude はシステムのデフォルトを使用します。"
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "他の場所で Git 操作を実行中",
       "remoteOperationInAnotherWorkspace": "別のワークスペースで Git 操作（プッシュ、プル、フォースプッシュなど）を実行中です。操作が重複しないよう、完了してからこのアクションを使用してください。",
@@ -6795,7 +6792,6 @@
           "locationSaveFailed": "アカウントの場所を保存できませんでした。もう一度お試しください。",
           "dbb9626ed1": "キャンセル",
           "63843e37e2": "Claude アカウントを削除しますか?",
-          "380a7736cc": "このアカウントを削除すると、管理対象の Codex ホームと、その中に保存されているすべての Codex セッション履歴および MCP ログインが完全に削除されます。この操作は元に戻せません。アカウントが現在アクティブな場合、Orca はシステムのデフォルトの Codex ログインに戻ります。",
           "0d47394635": "Codex アカウントを削除しますか?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai にログインした後、URL でこれを見つけます (例:",

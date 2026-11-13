@@ -11,6 +11,7 @@ import {
   requestCodexResetCredit
 } from './codex-reset-credit'
 import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
+import { getManagedAccountInlineLabel } from '../../../../src/shared/managed-account-display-names'
 
 type CodexResetDialog = { title: string; message: string }
 
@@ -20,7 +21,7 @@ function describeScope(
   t: Translate
 ): { label: string; message: string } {
   const account = snapshot.codex.accounts.find((candidate) => candidate.id === scope.accountId)
-  const identity = account?.email
+  const identity = account ? getManagedAccountInlineLabel(account) : undefined
   if (scope.target.runtime === 'host') {
     return identity != null
       ? {

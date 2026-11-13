@@ -13,6 +13,10 @@ import { codexAuthIdentityContradictsAccount } from '../credentials/codex-auth-i
 import type { CodexAccountServiceLifecycle } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
 import {
+  normalizeManagedAccountDisplayName,
+  withManagedAccountDisplayName
+} from '../../../shared/managed-account-display-names'
+import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
   normalizeCodexRuntimeSelection,
@@ -54,7 +58,9 @@ export class CodexAccountSelection {
     const settings = this.dependencies.store.getSettings()
     return {
       accounts: settings.codexManagedAccounts
-        .map(toCodexManagedAccountSummary)
+        .map((account) =>
+          toCodexManagedAccountSummary(account, settings.managedAccountDisplayNames)
+        )
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
@@ -82,11 +88,18 @@ export class CodexAccountSelection {
     )
     const nextActiveId =
       settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
+    const names = withManagedAccountDisplayName(
+      settings.managedAccountDisplayNames,
+      'codex',
+      accountId,
+      null
+    )
 
     this.dependencies.store.updateSettings({
       codexManagedAccounts: nextAccounts,
       activeCodexManagedAccountId: nextActiveId,
-      activeCodexManagedAccountIdsByRuntime: nextSelection
+      activeCodexManagedAccountIdsByRuntime: nextSelection,
+      ...(names ? { managedAccountDisplayNames: names } : {})
     })
     this.dependencies.runtimeHome.syncForCurrentSelection()
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
@@ -108,6 +121,25 @@ export class CodexAccountSelection {
         : undefined,
       accountTarget
     )
+    return this.snapshot()
+  }
+
+  /** Names only; the account's record, home and selection stay untouched. */
+  rename(accountId: string, displayName: string | null): CodexRateLimitAccountsState {
+    this.requireAccount(accountId)
+    const names = withManagedAccountDisplayName(
+      this.dependencies.store.getSettings().managedAccountDisplayNames,
+      'codex',
+      accountId,
+      normalizeManagedAccountDisplayName(displayName)
+    )
+    if (names) {
+      // Notify windows: their status-bar rows read names from settings.
+      this.dependencies.store.updateSettings(
+        { managedAccountDisplayNames: names },
+        { notifyListeners: true }
+      )
+    }
     return this.snapshot()
   }
 
