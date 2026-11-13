@@ -227,6 +227,8 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     await expect(second).resolves.toBe('applied')
+    expect(latest?.readPhase).toBe('ready')
+    expect(latest?.sourceObservation?.context?.sessionId).toBe('sess-1')
     expect(transport.readSession.mock.calls.length).toBe(readsBefore + 1)
     expect(latest?.loadingEarlier).toBe(false)
   })

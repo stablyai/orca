@@ -8,12 +8,13 @@ import type {
 import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
 import type { IncrementalChatAssembler } from '../assembly/native-chat-incremental-assembler'
 
-export type ReadState =
+export type ReadState = (
   | { phase: 'loading' }
   /** Awaiting an unpublished transcript is unsettled; the empty list is not real history yet. */
   | { phase: 'awaiting' }
   | { phase: 'ready'; messages: NativeChatMessage[] }
   | { phase: 'error'; error: string }
+) & { sourceKey: string | null }
 
 /** loading/awaiting have no settled history; errors remain distinct so their surface stays visible. */
 export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): boolean {
