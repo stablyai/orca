@@ -46,7 +46,7 @@ export async function openGitHubPullRequestUrlInOrca(url: string): Promise<void>
     ...(link.slug.host ? { host: link.slug.host } : {}),
     number: link.number,
     type: 'pr'
-  })
+  }).catch(() => null)
   if (!item) {
     toast.error(
       translate(
