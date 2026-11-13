@@ -45,3 +45,30 @@ export function journalRowItemIds(
   }
   return ids
 }
+
+/** The ids one row records, as written: before canonicalization, existence checks or
+ *  visibility, repeats kept. Stable while the row exists, so a reader can address its slots.
+ *  A queued card's row records the send it recovers, then its own hand-off. */
+export function journalRowRawSlots(row: JournalReadRow): string[] {
+  if (row.kind === 'outcome') {
+    return [...row.itemIds, ...row.submissionIds.map((id) => agentJournalSubmissionKey(id))]
+  }
+  if (row.kind === 'lifecycle-batch') {
+    return row.mutations.map((mutation) => mutation.itemId)
+  }
+  if (isJournalStopOrResumeRow(row)) {
+    return []
+  }
+  if (row.kind === 'item' || row.kind === 'tombstone') {
+    return [row.itemId]
+  }
+  if (row.kind === 'submission' || row.kind === 'dispatch') {
+    return [agentJournalSubmissionKey(row.clientMessageId)]
+  }
+  if (row.kind === 'queue' && row.change.op === 'queued') {
+    return [row.change.recovers, row.change.attempt]
+      .filter((id) => typeof id === 'string')
+      .map((id) => agentJournalSubmissionKey(id))
+  }
+  return []
+}

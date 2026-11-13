@@ -1,28 +1,51 @@
 import { AGENT_CONVERSATION_REFUSAL_CODES as CODES } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import {
+  isAgentReadPartialRow,
+  type AgentReadPartialRow
+} from '../../native-chat/agent-session-wire/publication/history/agent-read-row-progress'
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
-const CURSOR_PREFIX = 'oar1_'
+/** Chat cursors are version 2; transcript cursors stay version 1. */
+const PREFIXES = { 1: 'oar1_', 2: 'oar2_' } as const
 
 /** Where the next `orca agent read` continues, pinned to one agent and one source. */
 export type ReadCursor =
-  /** `w`: items of the next journal row already read (one row can name several). */
-  | { v: 1; id: string; s: 'chat'; session: string; journal: AgentJournalCursor; w?: number }
+  /** `partial`: the next journal row, when part of it was read. */
+  | {
+      v: 2
+      id: string
+      s: 'chat'
+      session: string
+      journal: AgentJournalCursor
+      partial?: AgentReadPartialRow
+    }
   | { v: 1; id: string; s: 'transcript'; i: string; p: number; c?: string }
 
 export function encodeReadCursor(cursor: ReadCursor): string {
-  return `${CURSOR_PREFIX}${Buffer.from(JSON.stringify(cursor)).toString('base64url')}`
+  return `${PREFIXES[cursor.v]}${Buffer.from(JSON.stringify(cursor)).toString('base64url')}`
 }
 
 export function decodeReadCursor(value: string, orcaSessionId: string): ReadCursor {
+  const version = value.startsWith(PREFIXES[2]) ? 2 : value.startsWith(PREFIXES[1]) ? 1 : null
   let parsed: unknown
   try {
-    parsed = value.startsWith(CURSOR_PREFIX)
-      ? JSON.parse(Buffer.from(value.slice(CURSOR_PREFIX.length), 'base64url').toString('utf8'))
-      : null
+    parsed =
+      version === null
+        ? null
+        : JSON.parse(
+            Buffer.from(value.slice(PREFIXES[version].length), 'base64url').toString('utf8')
+          )
   } catch {
     throw invalidCursor()
+  }
+  if (isRecord(parsed) && parsed.v === 1 && version === 1 && parsed.s === 'chat') {
+    // A version 1 chat cursor at a row boundary still reads; one inside a row (`w`) counted
+    // positions no current reader can map back.
+    parsed = parsed.w === undefined ? { ...parsed, v: 2 } : null
+  } else if (!isRecord(parsed) || parsed.v !== version) {
+    parsed = null
   }
   if (!isReadCursor(parsed)) {
     throw invalidCursor()
@@ -37,20 +60,23 @@ export function decodeReadCursor(value: string, orcaSessionId: string): ReadCurs
 }
 
 function isReadCursor(cursor: unknown): cursor is ReadCursor {
-  if (!isRecord(cursor) || cursor.v !== 1 || typeof cursor.id !== 'string') {
+  if (!isRecord(cursor) || typeof cursor.id !== 'string') {
     return false
   }
-  if (cursor.s === 'chat') {
+  if (cursor.v === 2 && cursor.s === 'chat') {
     return (
       typeof cursor.session === 'string' &&
       isRecord(cursor.journal) &&
       typeof cursor.journal.epoch === 'string' &&
+      typeof cursor.journal.sequence === 'number' &&
       Number.isSafeInteger(cursor.journal.sequence) &&
-      (cursor.w === undefined ||
-        (typeof cursor.w === 'number' && Number.isSafeInteger(cursor.w) && cursor.w > 0))
+      cursor.journal.sequence >= 0 &&
+      (cursor.partial === undefined ||
+        isAgentReadPartialRow(cursor.partial, cursor.journal.sequence))
     )
   }
   return (
+    cursor.v === 1 &&
     cursor.s === 'transcript' &&
     typeof cursor.i === 'string' &&
     typeof cursor.p === 'number' &&

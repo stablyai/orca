@@ -80,16 +80,19 @@ async function readChat(
   const host = await requireInstalledStructuredHost(ctx, sessionId)
   const encode = (next: AgentReadJournalPosition): string =>
     encodeReadCursor({
-      v: 1,
+      v: 2,
       id: orcaSessionId,
       s: 'chat',
       session: sessionId,
       journal: next.cursor,
-      ...(next.within > 0 ? { w: next.within } : {})
+      ...(next.partial ? { partial: next.partial } : {})
     })
-  const after = cursor ? { cursor: cursor.journal, within: cursor.w ?? 0 } : undefined
-  // A follower re-reading with its cursor does no journal work until the journal moves.
-  const head = after?.within === 0 ? await host.reads.journalCursor(sessionId) : null
+  const after = cursor
+    ? { cursor: cursor.journal, ...(cursor.partial ? { partial: cursor.partial } : {}) }
+    : undefined
+  // A follower re-reading with its cursor does no journal work until the journal moves; a cursor
+  // inside a row always reads it.
+  const head = after && !after.partial ? await host.reads.journalCursor(sessionId) : null
   if (
     after &&
     head &&

@@ -1,33 +1,14 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalItemBody,
   type AgentJournalMessageItem
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  createTrackedJournalOpener,
-  insertTestJournalRow,
-  openTestJournalHostDatabase,
-  publishTestJournalEpoch
-} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import {
-  agentSessionJournalProviderHandle,
-  codexProviderHandle
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
-import type { JournalRow } from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import { journalAgentReadIndex } from '../../../../agent-session-journal/projection/journal-agent-read-index'
 import { agentChatEntryOf } from '../../../../../../shared/agent-conversations/agent-chat-entries'
 import type { AgentReadEntry } from '../../../../../../shared/agent-conversations/agent-conversation-contracts'
@@ -38,114 +19,30 @@ import {
   type AgentReadJournalPage,
   type AgentReadJournalPosition
 } from '../agent-read-journal-page'
-import { agentJournalItemForWire } from '../agent-session-item-wire-form'
 import { readAgentSessionHistory } from '../agent-session-history-page'
 import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { buildJournalQueueRow } from '../../../../agent-session-journal/queued-messages/journal-queue-events'
+import {
+  append,
+  at,
+  base,
+  closeAgentReadJournals,
+  HISTORY_CONTENT_BYTES,
+  identity,
+  key,
+  message,
+  publicEntries,
+  readForward,
+  resetWork,
+  seed,
+  status,
+  tail,
+  textOf,
+  texts,
+  waiting
+} from './agent-read-journal-fixture'
 
-const identity: AgentSessionJournalIdentity = {
-  sessionId: 'agent-read-page',
-  workspaceId: 'folder-workspace',
-  hostId: 'local',
-  agent: 'codex',
-  providerHandle: codexProviderHandle('thread-1')
-}
-const journals = createTrackedJournalOpener()
-const roots: string[] = []
-const waiting = () => true
-
-afterEach(async () => {
-  vi.restoreAllMocks()
-  await journals.closeAll()
-  for (const root of roots.splice(0)) {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-const message = (text: string): AgentJournalItemBody => ({
-  kind: 'message',
-  role: 'assistant',
-  blocks: [{ type: 'text', text }]
-})
-const status = (text: string, tone?: 'error'): AgentJournalItemBody => ({
-  kind: 'status',
-  text,
-  ...(tone ? { tone } : {})
-})
-const at = (index: number): AgentJournalItemIdentity => ({
-  provider: 'codex',
-  threadId: 'thread-1',
-  turnId: `turn-${index}`,
-  ordinal: 0
-})
-const key = (index: number) => agentJournalItemKey(at(index))
-const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: 'epoch-1', fence: 1, ts: 1_000 }
-
-/** A journal saved before opening: one row per `bodies` entry (null leaves no item), then
- *  `extra` rows. Imported-style: no turn markers. */
-async function seed(
-  count: number,
-  body: (index: number) => AgentJournalItemBody | null,
-  extra: (seq: number) => JournalRow[] = () => []
-): Promise<AgentSessionJournal> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-agent-read-page-'))
-  roots.push(root)
-  const { db } = openTestJournalHostDatabase(root)
-  db.exec('BEGIN IMMEDIATE')
-  publishTestJournalEpoch(db, identity.sessionId, base.epoch)
-  insertTestJournalRow(db, identity.sessionId, {
-    ...base,
-    kind: 'epoch',
-    seq: 1,
-    reason: 'session_created',
-    providerHandle: agentSessionJournalProviderHandle(identity)
-  })
-  let seq = 1
-  for (let index = 0; index < count; index++) {
-    const item = body(index)
-    if (item) {
-      seq += 1
-      insertTestJournalRow(db, identity.sessionId, {
-        ...base,
-        kind: 'item',
-        seq,
-        itemId: key(index),
-        revision: 1,
-        body: item
-      })
-    }
-  }
-  for (const row of extra(seq + 1)) {
-    insertTestJournalRow(db, identity.sessionId, row)
-  }
-  db.exec('COMMIT')
-  return journals.open({ identity, stateDirectory: root })
-}
-
-const append = (journal: AgentSessionJournal, index: number, body: AgentJournalItemBody) =>
-  journal.appendItem(at(index), body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-
-const tail = (journal: AgentSessionJournal, limit: number) => {
-  const page = readAgentJournalPage(journal, { limit }, waiting)
-  if (!page.ok) {
-    throw new Error('expected a page')
-  }
-  return page
-}
-const textOf = (entry: AgentReadEntry) => ('text' in entry ? String(entry.text) : '')
-const texts = (page: { entries: AgentReadEntry[] }) => page.entries.map(textOf)
-
-/** What the existing public timeline presents as agent-read entries, oldest first. */
-const publicEntries = (journal: AgentSessionJournal) =>
-  journal
-    .statusRead()
-    .items.flatMap((item) => agentChatEntryOf(agentJournalItemForWire(item).item, waiting) ?? [])
-
-function resetWork(journal: AgentSessionJournal) {
-  const work = journalAgentReadIndex(journal).work
-  Object.assign(work, { builds: 0, builtItems: 0, upkeep: 0, nodes: 0, reads: 0 })
-  return work
-}
+afterEach(closeAgentReadJournals)
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a saved Stop note's status carries only the failure kind the projection reads.
 const STOP_NOTE = {
@@ -380,8 +277,7 @@ it.each([1, 2])(
       ]
     )
     let after: AgentReadJournalPosition = {
-      cursor: { epoch: journal.cursor().epoch, sequence: 2 },
-      within: 0
+      cursor: { epoch: journal.cursor().epoch, sequence: 2 }
     }
     const read: string[] = []
     for (let page = 0; page < 5; page++) {
@@ -396,7 +292,7 @@ it.each([1, 2])(
       }
     }
     expect(read).toEqual(['a revised', 'b', 'c'])
-    expect(after).toEqual({ cursor: { epoch: journal.cursor().epoch, sequence: 3 }, within: 0 })
+    expect(after).toEqual({ cursor: { epoch: journal.cursor().epoch, sequence: 3 } })
   }
 )
 
@@ -441,8 +337,7 @@ it.each([10_000, 100_000])(
     )
 
     let after: AgentReadJournalPosition = {
-      cursor: { epoch: journal.cursor().epoch, sequence: 1 },
-      within: 0
+      cursor: { epoch: journal.cursor().epoch, sequence: 1 }
     }
     const seen: string[] = []
     for (let page = 0; page < 200; page++) {
@@ -466,24 +361,6 @@ it.each([10_000, 100_000])(
     ])
   }
 )
-
-/** Pages forward from `after` until a page isn't limited. */
-function readForward(journal: AgentSessionJournal, limit: number, from: AgentReadJournalPosition) {
-  let after = from
-  const pages: Extract<AgentReadJournalPage, { ok: true }>[] = []
-  for (let page = 0; page < 20; page++) {
-    const next = readAgentJournalPage(journal, { limit, after }, waiting)
-    if (!next.ok) {
-      throw new Error('expected a page')
-    }
-    pages.push(next)
-    after = next.next
-    if (!next.limited) {
-      break
-    }
-  }
-  return { entries: pages.flatMap((page) => page.entries), pages, after }
-}
 
 it.each([1, 2])(
   'continues a row naming two ids for one send at limit %i: once, in place',
@@ -537,17 +414,14 @@ it.each([1, 2])(
     ])
 
     const read = readForward(journal, limit, {
-      cursor: { epoch: 'epoch-1', sequence: 3 },
-      within: 0
+      cursor: { epoch: 'epoch-1', sequence: 3 }
     })
 
     expect(texts(read)).toEqual(['hi', 'b', 'c'])
-    expect(read.after).toEqual({ cursor: { epoch: 'epoch-1', sequence: 4 }, within: 0 })
+    expect(read.after).toEqual({ cursor: { epoch: 'epoch-1', sequence: 4 } })
   }
 )
 
-// The history page content budget: half the 4 MiB remote reply, less a 64 KiB envelope reserve.
-const HISTORY_CONTENT_BYTES = 2 * 1024 * 1024 - 64 * 1024
 const TOO_LARGE: AgentReadEntry = {
   kind: 'message',
   role: 'system',
@@ -558,7 +432,7 @@ it.each([1, 2, 50])(
   'reads a reply no page can carry as the history too-large marker, at limit %i',
   async (limit) => {
     const journal = await seed(1, () => message('before'))
-    const start = { cursor: journal.cursor(), within: 0 }
+    const start = { cursor: journal.cursor() }
     // 70,000 blocks of 64 characters: past any page, and no block can be shortened further.
     const blocks: AgentJournalItemBody = {
       kind: 'message',
@@ -613,7 +487,7 @@ it.each([1, 2, 50])(
     forward.pages.forEach(carried)
     expect(forward.entries.map(label)).toEqual(['long 1', 'long 2', 'marker', 'after'])
     expect(forward.entries.filter((entry) => 'shortened' in entry)).toHaveLength(2)
-    expect(forward.after).toEqual({ cursor: journal.cursor(), within: 0 })
+    expect(forward.after).toEqual({ cursor: journal.cursor() })
   }
 )
 
@@ -723,7 +597,7 @@ it.each([1, 2])(
   'reads one write forward in presented order, not stored-id order, at limit %i',
   async (limit) => {
     const journal = await seed(1, () => message('before'))
-    const start = { cursor: journal.cursor(), within: 0 }
+    const start = { cursor: journal.cursor() }
     await journal.appendLifecycleBatch({
       settlementId: 'exchange',
       fence: 1,
@@ -757,6 +631,6 @@ it.each([1, 2])(
       history.ok &&
         history.page.items.flatMap((item) => agentChatEntryOf(item, waiting) ?? []).map(textOf)
     ).toEqual(['question', 'answer'])
-    expect(forward.after).toEqual({ cursor: journal.cursor(), within: 0 })
+    expect(forward.after).toEqual({ cursor: journal.cursor() })
   }
 )
