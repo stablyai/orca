@@ -1,24 +1,20 @@
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import { createTerminalKeyChordInput } from './terminal-key-chord-input'
 import { getTerminalLiveSpecialKeyId } from './terminal-live-input'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 
-/**
- * Claim the page's own submit signal for the live input, because react-native-web withholds
- * `onSubmitEditing` whenever the Enter keydown reports an open composition (`isComposing`, or the
- * Android `keyCode` 229 that stands for it) — the normal state of a soft keyboard mid-word.
- *
- * `beforeinput`/`insertLineBreak` is the browser saying the user asked to end the line, and it is
- * dispatched only when nothing cancelled the keydown. react-native-web calls `preventDefault` on
- * every keydown it does submit on, so this fires in exactly the cases it dropped, never twice. A
- * composing IME that is still choosing a candidate produces `insertCompositionText` instead and is
- * left alone, which is how an interrupted composition survives here as it does natively.
- */
+// Plain caret keys reach onKeyPress, which keeps them in the field while it holds text.
+const FIELD_CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+// RN Web skips composing Enter keydowns; beforeinput line breaks recover those submits.
+// Submitted keydowns are cancelled, preventing duplicates; candidate acceptance emits insertCompositionText and remains untouched.
+// A commit's last input event still reports composing and none follows compositionend, so report the commit here.
 export function bindTerminalTextFieldSubmit(
-  node: TextInput | null,
+  node: TextInputInstance | null,
   onSubmit: () => void,
-  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
+  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean,
+  onCompositionEnd?: (text: string) => void
 ): () => void {
   if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLTextAreaElement)) {
     return () => {}
@@ -34,20 +30,22 @@ export function bindTerminalTextFieldSubmit(
     event.preventDefault()
     onSubmit()
   }
-  const captureAndroidChords = hostOs() === 'android'
+  const os = hostOs()
+  const captureHardwareChords = os === 'android' || os === 'ios'
   let composing = false
   const startComposition = (): void => {
     composing = true
   }
   const endComposition = (): void => {
     composing = false
+    onCompositionEnd?.(field.value)
   }
   const captureKeyChord = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) {
       return
     }
     if (
-      !captureAndroidChords ||
+      !captureHardwareChords ||
       !onKeyChord ||
       event.defaultPrevented ||
       composing ||
@@ -56,15 +54,17 @@ export function bindTerminalTextFieldSubmit(
       event.metaKey ||
       event.getModifierState('AltGraph') ||
       (event.ctrlKey && event.altKey) ||
+      (os === 'ios' && event.altKey && event.key.length === 1) ||
       (event.ctrlKey && event.key === ' ')
     ) {
       return
     }
-    const specialKey = getTerminalLiveSpecialKeyId(event.key)
+    const specialKey = event.key === 'Enter' ? 'enter' : getTerminalLiveSpecialKeyId(event.key)
     if (
-      event.key === 'Enter' ||
+      (event.key === 'Enter' && (!event.shiftKey || event.ctrlKey || event.altKey)) ||
       event.key === 'Backspace' ||
       event.key === 'Delete' ||
+      (FIELD_CARET_KEYS.has(event.key) && !event.ctrlKey && !event.altKey && !event.shiftKey) ||
       (!specialKey && !(event.key.length === 1 && (event.ctrlKey || event.altKey)))
     ) {
       return

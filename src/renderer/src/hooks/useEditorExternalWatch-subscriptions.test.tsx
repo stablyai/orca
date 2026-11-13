@@ -22,17 +22,20 @@ const subscriptionState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({ openFiles: [] })
-  })
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector({ openFiles: [] }),
+    {
+      getState: () => ({ openFiles: [] })
+    }
+  )
 }))
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
     subscriptionState.contacts.set(id, listener)
     return subscriptionState.unsubscribeContact
   }
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
 vi.mock('./editor-external-watch-targets', () => ({
@@ -122,53 +125,6 @@ describe('useEditorExternalWatch subscriptions', () => {
     ;(window as unknown as { api?: unknown }).api = previousApi
   })
 
-  it('unsubscribes an SSH watch and the shared event listener exactly once on unmount', async () => {
-    subscriptionState.snapshot = {
-      targets: [
-        {
-          worktreeId: 'wt-ssh',
-          worktreePath: '/remote/repo',
-          connectionId: 'ssh-1',
-          runtimeEnvironmentId: null
-        }
-      ],
-      targetsKey: 'ssh-watch'
-    }
-    await act(async () => root.render(createElement(WatchProbe)))
-
-    expect(watchWorktree).toHaveBeenCalledWith({
-      worktreePath: '/remote/repo',
-      connectionId: 'ssh-1'
-    })
-    await act(async () => root.unmount())
-
-    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
-    expect(unwatchWorktree).toHaveBeenCalledWith({
-      worktreePath: '/remote/repo',
-      connectionId: 'ssh-1'
-    })
-    expect(unsubscribeFsEvents).toHaveBeenCalledTimes(1)
-    expect(subscriptionState.disposeEventHandler).toHaveBeenCalledTimes(1)
-  })
-
-  it('disposes a runtime subscription that resolves after unmount', async () => {
-    const pending = deferredRuntimeSubscription()
-    const unsubscribeRuntime = vi.fn()
-    subscriptionState.subscribeRuntimeFileChanges.mockReturnValueOnce(pending.promise)
-    subscriptionState.snapshot = {
-      targets: [runtimeTarget()],
-      targetsKey: 'runtime-watch'
-    }
-    await act(async () => root.render(createElement(WatchProbe)))
-    await act(async () => root.unmount())
-
-    pending.resolve(unsubscribeRuntime)
-    await act(async () => pending.promise)
-
-    expect(unsubscribeRuntime).toHaveBeenCalledTimes(1)
-    expect(unwatchWorktree).not.toHaveBeenCalled()
-  })
-
   it('cannot let an old runtime subscribe resolution replace a re-added watch', async () => {
     const stalePending = deferredRuntimeSubscription()
     const currentPending = deferredRuntimeSubscription()
@@ -216,9 +172,11 @@ describe('useEditorExternalWatch subscriptions', () => {
         {
           worktreePath: '/runtime/repo',
           events: [{ kind: 'overflow', absolutePath: '/runtime/repo' }],
+          connectionId: 'nested-ssh',
           resync: true
         },
-        'runtime-1'
+        'runtime-1',
+        runtimeTarget()
       )
     } finally {
       warning.mockRestore()

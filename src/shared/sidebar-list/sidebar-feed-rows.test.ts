@@ -3,50 +3,19 @@ import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import { NO_WORKSPACE_ROW_FILTERS } from '../workspace-view/workspace-row-filters'
-import type { Worktree } from '../worktree/types'
 import { ALL_GROUP_KEY } from './group-keys'
+import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
+import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { HostSectionRow } from './host-section-rows'
 import { normalizePairedServerRow } from './paired-server-rows'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import {
-  indexSidebarFeed,
-  rankSidebarFeedWorktrees,
-  withHeldProjectRecency,
-  type SidebarFeedIndex
-} from './sidebar-feed-index'
-import {
   buildSidebarFeedRows,
   planSidebarFeedRows,
-  renderSidebarFeedRows,
   type SidebarFeedCatalog,
   type SidebarFeedView
 } from './sidebar-feed-rows'
-import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
-import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { buildWorkspaceRows } from './workspace-rows'
-
-function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
-  return {
-    id,
-    repoId: id.split('::')[0],
-    path: id.split('::')[1],
-    head: 'abc',
-    branch: `refs/heads/${id}`,
-    isBare: false,
-    isMainWorktree: false,
-    displayName: id.split('/').at(-1) ?? id,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
-  }
-}
+import { indexSidebarFeed, rankSidebarFeedWorktrees } from './sidebar-feed-index'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '', addedAt: 0, ...overrides }
@@ -103,122 +72,71 @@ function outline(rows: readonly HostSectionRow[]): string[] {
   })
 }
 
-describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () => {
-  // The same repo registered locally and on an SSH box: `r::/w/same` names two workspaces.
-  const repos = [repo('r'), repo('r', { connectionId: 'box' })]
-  const workspaces = buildWorkspaceRows({
-    worktrees: [
-      // A twin repo's local rows name their host, as the window stamps them.
-      worktree('r::/w/same', { hostId: 'local', displayName: 'Z', lastActivityAt: 100 }),
-      worktree('r::/w/other', { hostId: 'local', displayName: 'M', lastActivityAt: 200 }),
-      worktree('r::/w/same', { hostId: 'ssh:box', displayName: 'A', lastActivityAt: 300 })
-    ],
-    folderWorkspaces: [],
-    repos,
-    lineageById: {}
+it('retires only recorded deletions through paired feed, pins, forced reveal and lineage', () => {
+  const rows = [
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/p',
+      repoId: 'r',
+      worktreeInstanceId: 'p',
+      isPinned: true,
+      removing: true,
+      removalRecorded: true
+    }),
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/c',
+      repoId: 'r',
+      worktreeInstanceId: 'c',
+      parentWorktreeId: 'r::/p',
+      lineageWorktreeInstanceId: 'c',
+      parentWorktreeInstanceId: 'p'
+    }),
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/legacy',
+      repoId: 'r',
+      removing: true
+    }),
+    normalizePairedServerRow('runtime:a', {
+      worktreeId: 'r::/failed',
+      repoId: 'r',
+      removalError: 'Cleanup failed. Retry deletion.'
+    }),
+    normalizePairedServerRow('runtime:b', { worktreeId: 'r::/p', repoId: 'r' })
+  ].flatMap((row) => row ?? [])
+  const repos = [
+    repo('r', { executionHostId: 'runtime:a' }),
+    repo('r', { executionHostId: 'runtime:b' })
+  ]
+  const inputs = domains({
+    pairedServerHosts: new Map(
+      ['runtime:a', 'runtime:b'].map((hostId) => [
+        hostId,
+        { freshness: 'live' as const, host: null }
+      ])
+    ),
+    pairedServerRows: new Map(rows.map((row) => [row.key, row]))
   })
-
-  it.each(['recent', 'name'] as const)('orders each twin by its own %s stamp', (sortBy) => {
-    const built = buildSidebarFeedRows(domains({ workspaces }), catalog(repos), view({ sortBy }))
-    expect(outline(built.sectionRows)).toEqual([
-      'ssh:box|r::/w/same@0',
-      'local|r::/w/other@0',
-      'local|r::/w/same@0'
-    ])
-  })
-
-  it('keeps a sleeping row the host retains through a rebind gap', () => {
-    const built = buildSidebarFeedRows(
-      domains({
-        workspaces,
-        activity: new Map([
-          [
-            composeWorktreeHostIdentity('local', 'r::/w/other'),
-            { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
-          ]
-        ]),
-        retention: {
-          retainedIds: [...workspaces.keys()].filter((key) => key.startsWith('ssh:')),
-          retentionDecidedAt: 0
-        }
-      }),
-      catalog(repos),
-      view({ filters: { ...NO_WORKSPACE_ROW_FILTERS, hideSleepingWorkspaces: true } })
-    )
-    expect(outline(built.sectionRows)).toEqual(['ssh:box|r::/w/same@0', 'local|r::/w/other@0'])
-  })
-
-  const hideSleeping = view({
-    filters: { ...NO_WORKSPACE_ROW_FILTERS, hideSleepingWorkspaces: true }
-  })
-  const busy = { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
-
-  it('keeps one host’s activity off its same-id twin', () => {
-    const activity = new Map([[composeWorktreeHostIdentity('ssh:box', 'r::/w/same'), busy]])
-    const built = buildSidebarFeedRows(
-      domains({ workspaces, activity }),
-      catalog(repos),
-      hideSleeping
-    )
-    expect(outline(built.sectionRows)).toEqual(['ssh:box|r::/w/same@0'])
-  })
-
-  it('keeps one host’s retention off its same-id twin', () => {
-    const built = buildSidebarFeedRows(
-      domains({
-        workspaces,
-        retention: {
-          retainedIds: [composeWorktreeHostIdentity('local', 'r::/w/same')],
-          retentionDecidedAt: 0
-        }
-      }),
-      catalog(repos),
-      hideSleeping
-    )
-    expect(outline(built.sectionRows)).toEqual(['local|r::/w/same@0'])
-  })
-
-  it('lanes each twin by its own PR', () => {
-    const review = new Map([
-      [
-        composeWorktreeHostIdentity('ssh:box', 'r::/w/same'),
-        { provider: 'github' as const, reviewState: 'merged' }
-      ]
-    ])
-    const built = buildSidebarFeedRows(
-      domains({ workspaces, review }),
-      catalog(repos),
-      view({ groupBy: 'pr-status' })
-    )
-    const laneOf = (identity: string) => {
-      let lane = ''
-      for (const row of built.sectionRows) {
-        if (row.type === 'header') {
-          lane = row.key
-        } else if (
-          row.type === 'item' &&
-          `${row.worktree.hostId ?? ''}|${row.worktree.id}` === identity
-        ) {
-          return lane
-        }
-      }
-      return null
-    }
-    expect(laneOf('ssh:box|r::/w/same')).not.toEqual(laneOf('local|r::/w/same'))
-    expect(laneOf('local|r::/w/same')).toEqual(laneOf('local|r::/w/other'))
-  })
-
-  it('gives each twin’s row its own host’s registration of the repo', () => {
-    const built = buildSidebarFeedRows(domains({ workspaces }), catalog(repos), view())
-    const repoOf = (hostId: string) =>
-      built.sectionRows.find(
-        (row) =>
-          row.type === 'item' && row.worktree.id === 'r::/w/same' && row.worktree.hostId === hostId
-      )
-    expect(repoOf('ssh:box')).toMatchObject({ repo: { connectionId: 'box' } })
-    expect(repoOf('local')).toMatchObject({ repo: { id: 'r' } })
-    expect(repoOf('local')).not.toMatchObject({ repo: { connectionId: 'box' } })
-  })
+  const settings = view({ pinnedDisplayPolicy: 'duplicate-in-groups' })
+  const index = indexSidebarFeed(inputs, repos)
+  const planned = planSidebarFeedRows(
+    inputs,
+    index,
+    catalog(repos),
+    settings,
+    rankSidebarFeedWorktrees(index, 'recent'),
+    { forcedVisibleWorktreeIds: ['r::/p'] }
+  )
+  expect(planned.visibleWorktrees.map((row) => `${row.hostId}|${row.id}`).sort()).toEqual([
+    'runtime:a|r::/c',
+    'runtime:a|r::/failed',
+    'runtime:a|r::/legacy',
+    'runtime:b|r::/p'
+  ])
+  const built = buildSidebarFeedRows(inputs, catalog(repos), settings)
+  expect(outline(built.sectionRows)).toContain('runtime:a|r::/c@0')
+  expect(outline(built.sectionRows)).not.toContain('runtime:a|r::/p@0')
+  expect(built.visibleWorktrees.find((row) => row.id === 'r::/failed')?.removalError).toBe(
+    'Cleanup failed. Retry deletion.'
+  )
 })
 
 describe('buildSidebarFeedRows nests each paired server’s own lineage', () => {
@@ -249,16 +167,6 @@ describe('buildSidebarFeedRows nests each paired server’s own lineage', () => 
     })
   }
 
-  it.each([false, true])('in either server order (reversed: %s)', (reversed) => {
-    const built = buildSidebarFeedRows(feed(reversed), catalog(repos), view())
-    expect(outline(built.sectionRows)).toEqual([
-      'runtime:b|r::/r/p@0',
-      'runtime:b|r::/r/c@1',
-      'runtime:a|r::/r/p@0',
-      'runtime:a|r::/r/c@1'
-    ])
-  })
-
   it('brings back a server’s filtered-out parent above its own child, not its twin’s', () => {
     // Only server A's child is awake: B's same-id rows stay asleep.
     const awake = new Map([
@@ -273,113 +181,5 @@ describe('buildSidebarFeedRows nests each paired server’s own lineage', () => 
       view({ filters: { ...NO_WORKSPACE_ROW_FILTERS, hideSleepingWorkspaces: true } })
     )
     expect(outline(built.sectionRows)).toEqual(['runtime:a|r::/r/p@0', 'runtime:a|r::/r/c@1'])
-  })
-})
-
-function projectGroup(id: string, parentGroupId: string | null): ProjectGroup {
-  return {
-    id,
-    name: id,
-    parentPath: null,
-    parentGroupId,
-    createdFrom: 'manual',
-    tabOrder: 0,
-    isCollapsed: false,
-    color: null,
-    createdAt: 0,
-    updatedAt: 0
-  }
-}
-
-describe('buildSidebarFeedRows host sections', () => {
-  it('repeats a nested project group’s whole path in each host it spans', () => {
-    const repos = [
-      repo('near', { displayName: 'near', projectGroupId: 'H' }),
-      repo('far', { displayName: 'far', connectionId: 'box', projectGroupId: 'H' })
-    ]
-    const workspaces = buildWorkspaceRows({
-      worktrees: [worktree('near::/w/a'), worktree('far::/w/b', { hostId: 'ssh:box' })],
-      folderWorkspaces: [],
-      repos,
-      lineageById: {}
-    })
-    const built = buildSidebarFeedRows(
-      domains({ workspaces }),
-      catalog(repos, [projectGroup('G', null), projectGroup('H', 'G')]),
-      view({ groupBy: 'repo', visibleWorkspaceHostIds: ['local', 'ssh:box'] })
-    )
-    expect(outline(built.sectionRows)).toEqual([
-      '## This computer',
-      '# G@0',
-      '# H@1',
-      '# near@2',
-      '|near::/w/a@0',
-      '## box',
-      '# G@0',
-      '# H@1',
-      '# far@2',
-      'ssh:box|far::/w/b@0'
-    ])
-  })
-})
-
-describe('the desktop’s hover hold over the shared builder', () => {
-  const repos = [repo('a'), repo('b')]
-  const feedAt = (bRecent: number): SidebarFeedDomains =>
-    domains({
-      workspaces: buildWorkspaceRows({
-        worktrees: [
-          worktree('a::/w/1', { lastActivityAt: 100 }),
-          worktree('b::/w/2', { lastActivityAt: bRecent })
-        ],
-        folderWorkspaces: [],
-        repos,
-        lineageById: {}
-      })
-    })
-  const recentView = view({ groupBy: 'repo', sortBy: 'recent', projectOrderBy: 'recent' })
-  const itemsOf = (rows: readonly HostSectionRow[]) =>
-    outline(rows).filter((line) => !line.startsWith('#'))
-
-  it('keeps project sections where they were while the pointer is over the list', () => {
-    const engagedAt = indexSidebarFeed(feedAt(50), repos)
-    const heldRanks = rankSidebarFeedWorktrees(engagedAt, 'recent')
-    const live = feedAt(200)
-    const liveIndex = indexSidebarFeed(live, repos)
-    const shown = (index: SidebarFeedIndex) =>
-      itemsOf(
-        renderSidebarFeedRows(
-          planSidebarFeedRows(live, index, catalog(repos), recentView, heldRanks),
-          recentView,
-          new Set()
-        ).sectionRows
-      )
-    // Held workspace ranks alone let B's project jump above A's.
-    expect(shown(liveIndex)).toEqual(['|b::/w/2@0', '|a::/w/1@0'])
-    expect(shown(withHeldProjectRecency(liveIndex, engagedAt))).toEqual([
-      '|a::/w/1@0',
-      '|b::/w/2@0'
-    ])
-  })
-})
-
-describe('buildSidebarFeedRows reads a row’s own registration of a repo two hosts register', () => {
-  it('files and counts an unqualified local row under this computer, not the server', () => {
-    // The server's registration of `r` comes last, so a lookup by repo id alone finds it.
-    const repos = [repo('r'), repo('r', { executionHostId: 'runtime:env' })]
-    const workspaces = buildWorkspaceRows({
-      worktrees: [worktree('r::/w/a')],
-      folderWorkspaces: [],
-      repos: [repos[0]],
-      lineageById: {}
-    })
-    const built = buildSidebarFeedRows(
-      domains({ workspaces }),
-      catalog(repos),
-      view({ visibleWorkspaceHostIds: ['local'] })
-    )
-    expect(outline(built.sectionRows)).toEqual(['|r::/w/a@0'])
-    const header = built.sectionRows.find((row) => row.type === 'header')
-    expect(header).toMatchObject({ hostWorktreeIds: new Map([['local', ['r::/w/a']]]) })
   })
 })

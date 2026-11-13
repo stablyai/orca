@@ -1,10 +1,9 @@
 import type { RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 
-/** Native half of the seam: a multiline TextInput grows with its content between its own min and
- *  max heights, so there is nothing to measure. The web sibling measures, as a textarea does not. */
+// Native multiline inputs size themselves; the web sibling must measure textareas.
 export function useTextInputContentHeight(
-  _input: RefObject<TextInput | null>,
+  _input: RefObject<TextInputInstance | null>,
   _value: string
 ): number | undefined {
   return undefined

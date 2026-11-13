@@ -1,12 +1,12 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { JiraIssue } from '../../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 export type ComposerSourceModel = {
   addComposerAttachments: (paths: string[]) => void
   applyLinkedGitLabWorkItem: (item: GitLabWorkItem) => void
@@ -62,6 +62,7 @@ export type ComposerSourceModel = {
   onConnectSelectedRepo: () => Promise<void>
   prefetchSshConnectedGeneration: number
   resolvePendingSmartGitHubSubmit: () => Promise<PendingSmartGitHubSubmitResolution>
+  selectAddedProjectGroup: (groupId: string) => boolean
   selectAddedProjectRepo: (nextRepoId: string) => void
   showProjectRequiredError: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null

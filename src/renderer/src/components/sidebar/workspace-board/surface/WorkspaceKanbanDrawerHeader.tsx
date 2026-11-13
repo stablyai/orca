@@ -1,0 +1,131 @@
+import React from 'react'
+import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
+import SidebarFilter from '../../worktree-list/controls/SidebarFilter'
+import WorkspaceKanbanSearchField from '../search/WorkspaceKanbanSearchField'
+import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
+import { useTranslate } from '@/i18n/use-translate'
+
+type WorkspaceKanbanDrawerHeaderProps = {
+  selectedCount: number
+  query: string
+  isFiltering: boolean
+  isTooLarge: boolean
+  matchCount: number
+  totalCount: number
+  onQueryChange: (query: string) => void
+  onClearQuery: () => void
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  syncTaskStatusFromWorkspaceBoard: boolean
+  onSyncTaskStatusFromWorkspaceBoardChange: (enabled: boolean) => void
+  syncWorkspaceStatusFromAgentTurns: boolean
+  onSyncWorkspaceStatusFromAgentTurnsChange: (enabled: boolean) => void
+  onRenameStatus: (statusId: string, label: string) => void
+  onChangeStatusColor: (statusId: string, color: string) => void
+  onChangeStatusIcon: (statusId: string, icon: string) => void
+  onMoveStatus: (statusId: string, direction: -1 | 1) => void
+  onRemoveStatus: (statusId: string) => void
+  onAddStatus: () => void
+  onFilterMenuOpenChange: (open: boolean) => void
+  onClose: () => void
+}
+
+export default function WorkspaceKanbanDrawerHeader({
+  selectedCount,
+  query,
+  isFiltering,
+  isTooLarge,
+  matchCount,
+  totalCount,
+  onQueryChange,
+  onClearQuery,
+  workspaceStatuses,
+  syncTaskStatusFromWorkspaceBoard,
+  onSyncTaskStatusFromWorkspaceBoardChange,
+  syncWorkspaceStatusFromAgentTurns,
+  onSyncWorkspaceStatusFromAgentTurnsChange,
+  onRenameStatus,
+  onChangeStatusColor,
+  onChangeStatusIcon,
+  onMoveStatus,
+  onRemoveStatus,
+  onAddStatus,
+  onFilterMenuOpenChange,
+  onClose
+}: WorkspaceKanbanDrawerHeaderProps): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
+      <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3 pr-32">
+        {/* SheetTitle renders the aria-labelledby h2; the input must be its sibling for valid markup. */}
+        <div className="flex items-center gap-2">
+          <SheetTitle className="flex shrink-0 items-center gap-2 text-sm">
+            <span>
+              {t(
+                'auto.components.sidebar.WorkspaceKanbanDrawerHeader.c6a77ab0f4',
+                'Workspace board'
+              )}
+            </span>
+            {selectedCount > 1 ? (
+              <span className="rounded-full bg-worktree-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {t(
+                  'auto.components.sidebar.WorkspaceKanbanDrawerHeader.selectedCount',
+                  '{{count}} selected',
+                  { count: selectedCount, defaultValue_one: '{{count}} selected' }
+                )}
+              </span>
+            ) : null}
+          </SheetTitle>
+          <WorkspaceKanbanSearchField
+            query={query}
+            isFiltering={isFiltering}
+            isTooLarge={isTooLarge}
+            matchCount={matchCount}
+            totalCount={totalCount}
+            onQueryChange={onQueryChange}
+            onClear={onClearQuery}
+            onClose={onClose}
+          />
+        </div>
+        <SheetDescription className="sr-only">
+          {t(
+            'auto.components.sidebar.WorkspaceKanbanDrawerHeader.e1a34450fc',
+            'Organize workspaces by status and open workspace cards.'
+          )}
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="absolute right-3 top-2.5 flex items-center gap-1">
+        <SidebarFilter
+          preserveWorkspaceBoardOpen
+          tooltipSide="top"
+          contentSide="bottom"
+          onMenuOpenChange={onFilterMenuOpenChange}
+        />
+        <WorkspaceKanbanSettingsMenu
+          workspaceStatuses={workspaceStatuses}
+          syncTaskStatusFromWorkspaceBoard={syncTaskStatusFromWorkspaceBoard}
+          onSyncTaskStatusFromWorkspaceBoardChange={onSyncTaskStatusFromWorkspaceBoardChange}
+          syncWorkspaceStatusFromAgentTurns={syncWorkspaceStatusFromAgentTurns}
+          onSyncWorkspaceStatusFromAgentTurnsChange={onSyncWorkspaceStatusFromAgentTurnsChange}
+          onRenameStatus={onRenameStatus}
+          onChangeStatusColor={onChangeStatusColor}
+          onChangeStatusIcon={onChangeStatusIcon}
+          onMoveStatus={onMoveStatus}
+          onRemoveStatus={onRemoveStatus}
+          onAddStatus={onAddStatus}
+        />
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('auto.components.sidebar.WorkspaceKanbanDrawerHeader.f369f5c5a3', 'Close')}
+          onClick={onClose}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+    </>
+  )
+}

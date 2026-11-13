@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, type MutableRefObject } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import {
   type BrowserReloadTrigger,
@@ -31,6 +32,7 @@ export function useBrowserPageReloadActions({
   reloadShortcut: string
   hardReloadShortcut: string
 } {
+  const t = useTranslate()
   const reloadShortcut = useShortcutLabel('browser.reload')
   const hardReloadShortcut = useShortcutLabel('browser.hardReload')
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
@@ -38,24 +40,26 @@ export function useBrowserPageReloadActions({
     () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
     [browserTab.loading, browserTab.loadError]
   )
-  const reloadWebviewOrRecoverGuest = useCallback(
-    (ignoreCache: boolean) => {
-      const webview = webviewRef.current
-      if (!webview) {
-        return
-      }
-      const result = reloadBrowserPageWebview(webview, { ignoreCache })
-      if (result === 'not-ready') {
-        return
-      }
-      onUpdatePageStateRef.current(browserTab.id, { loading: true })
-      if (result === 'guest-missing') {
-        // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
-        retryGuestRecoveryRef.current()
-      }
-    },
-    [browserTab.id, onUpdatePageStateRef, retryGuestRecoveryRef, webviewRef]
-  )
+  // Stable so shortcut listeners don't re-register on every page-state update.
+  const reloadWebviewOrRecoverGuest = useLatestHandler((ignoreCache: boolean) => {
+    const webview = webviewRef.current
+    if (!webview) {
+      return
+    }
+    const result = reloadBrowserPageWebview(webview, { ignoreCache })
+    if (result === 'not-ready') {
+      return
+    }
+    if (result === 'nothing-to-reload') {
+      retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+      return
+    }
+    onUpdatePageStateRef.current(browserTab.id, { loading: true })
+    if (result === 'guest-missing') {
+      // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
+      retryGuestRecoveryRef.current()
+    }
+  })
   const runReloadTrigger = useCallback(
     (trigger: BrowserReloadTrigger) => {
       const webview = webviewRef.current
@@ -91,14 +95,13 @@ export function useBrowserPageReloadActions({
     ]
   )
 
-  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
   const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
   const reloadButtonLabel =
     reloadButtonLabelKind === 'stop'
-      ? translate('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
+      ? t('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
       : reloadButtonLabelKind === 'retry'
-        ? translate('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
-        : translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
+        ? t('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
+        : t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
 
   return {
     reloadWebviewOrRecoverGuest,

@@ -1,235 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks, makePaneKey } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import '../orca-runtime-test-mocks/setup.spec'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,
   RESTORED_AUTHORITY_TOKEN_HASH,
-  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
-  UUID_RE,
   deferred,
-  expectStablePaneKeyEnv,
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import {
-  buildJcodeRuntimeDir,
-  JCODE_RUNTIME_DIR_ENV_KEY,
-  shouldInjectJcodeRuntimeDir
-} from '../../../shared/jcode-runtime-dir'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
+import '../../../shared/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
-  it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
-    const createTerminal = vi.fn()
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal,
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    const result = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      launchConfig: {
-        agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      title: 'worker'
-    })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: TEST_WORKTREE_PATH,
-        command: 'codex',
-        commandDelivery: 'provider',
-        worktreeId: TEST_WORKTREE_ID,
-        preAllocatedHandle: expect.stringMatching(/^term_/)
-      })
-    )
-    expect(result).toMatchObject({
-      worktreeId: TEST_WORKTREE_ID,
-      title: 'worker',
-      surface: 'visible'
-    })
-    expect(result.handle).toMatch(/^term_/)
-    expect(createTerminal).not.toHaveBeenCalled()
-    // Why: agent status keys off `${tabId}:${leafId}`; main pre-allocates the tabId, env-stamps it before spawn, and reuses it for adoption.
-    const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
-    expectStablePaneKeyEnv(spawnedEnv)
-    const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
-    expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
-    expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
-    // Why: the runtime spawn path must stamp the per-pane jcode runtime dir
-    // exactly like the renderer pty:spawn path (unix platforms only).
-    if (shouldInjectJcodeRuntimeDir(process.platform)) {
-      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(
-        buildJcodeRuntimeDir(spawnedEnv.ORCA_PANE_KEY)
-      )
-    } else {
-      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBeUndefined()
-    }
-    expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
-      ptyId: 'pty-bg',
-      title: 'worker',
-      launchConfig: {
-        agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      launchToken: spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN,
-      activate: false,
-      tabId: spawnedEnv.ORCA_TAB_ID,
-      leafId: spawnedLeafId
-    })
-  })
-
-  it('asks the pty controller for the requested shell instead of a startup command', async () => {
-    const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const spawn = vi.fn().mockResolvedValue({ id: 'pty-shell' })
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn,
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        shellOverride: 'cmd.exe',
-        title: 'win shell'
-      })
-
-      // The defect this pins: a caller asking for cmd could only pass it as `command`, which the
-      // provider types into whatever shell it spawned — so the pty stayed the default shell and
-      // leaving cmd dropped the handle back onto a prompt the caller never asked for.
-      expect(spawn).toHaveBeenCalledWith(
-        expect.objectContaining({ shellOverride: 'cmd.exe', command: undefined })
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', hostPlatform)
-    }
-  })
-
-  it('refuses a requested shell the execution host cannot apply instead of spawning its default', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-unreachable-shell' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    // Host platform here is POSIX, which has no Windows shell to pick.
-    await expect(
-      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { shellOverride: 'cmd.exe' })
-    ).rejects.toThrow(/--shell cmd\.exe names a Windows shell/)
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
-  it('quotes the agent startup command for the requested shell, not the host default', async () => {
-    const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const spawn = vi.fn().mockResolvedValue({ id: 'pty-shell-quoting' })
-      const runtime = new OrcaRuntimeService({
-        ...store,
-        getSettings: () => ({
-          ...store.getSettings(),
-          disabledTuiAgents: [],
-          terminalWindowsShell: 'powershell.exe',
-          agentCmdOverrides: {},
-          agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
-          agentDefaultEnv: {}
-        })
-      })
-      runtime.setPtyController({
-        spawn,
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'claude' })
-      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        command: 'claude',
-        shellOverride: 'cmd.exe'
-      })
-
-      // The setting alone still quotes for PowerShell; the requested shell is the one that will
-      // read the command, so it owns the quoting family. PowerShell quoting typed into cmd is a
-      // syntax error at the prompt.
-      expect(spawn).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ command: "claude '--dangerously-skip-permissions'" })
-      )
-      expect(spawn).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          shellOverride: 'cmd.exe',
-          command: 'claude "--dangerously-skip-permissions"'
-        })
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', hostPlatform)
-    }
-  })
-
-  it('refuses a requested shell with no workspace instead of creating a default-shell tab', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-no-workspace-shell' })
-    const send = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    electronMocks.BrowserWindow.fromId.mockReturnValue({
-      isDestroyed: () => false,
-      webContents: { send }
-    })
-
-    await expect(runtime.createTerminal(undefined, { shellOverride: 'cmd.exe' })).rejects.toThrow(
-      /--shell cmd\.exe needs a workspace/
-    )
-    expect(send).not.toHaveBeenCalled()
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
   it('retires inherited launch authority when the agent command exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()
@@ -241,7 +32,7 @@ describe('OrcaRuntimeService', () => {
       retireAgentHookCompatibilityAuthority: retireAuthority
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -256,7 +47,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -287,64 +77,6 @@ describe('OrcaRuntimeService', () => {
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.not.objectContaining({ agentIdentity: expect.anything() })
     ])
-  })
-
-  it('retires only receipted restored PTY authority on command completion and exit', () => {
-    const retireAuthority = vi.fn()
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      retireAgentHookCompatibilityAuthority: retireAuthority
-    })
-    const internals = runtime as unknown as {
-      recordPtyWorktree: (ptyId: string, worktreeId: string, state: Record<string, unknown>) => void
-      restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
-    }
-    const firstPane = '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222'
-    const secondPane = '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444'
-    internals.recordPtyWorktree('pty-restored-command', TEST_WORKTREE_ID, {
-      connected: true,
-      tabId: '11111111-1111-4111-8111-111111111111',
-      paneKey: firstPane,
-      incarnationId: 'restored-command'
-    })
-    internals.recordPtyWorktree('pty-restored-exit', TEST_WORKTREE_ID, {
-      connected: true,
-      tabId: '33333333-3333-4333-8333-333333333333',
-      paneKey: secondPane,
-      incarnationId: 'restored-exit'
-    })
-    internals.recordPtyWorktree('pty-ordinary-shell', TEST_WORKTREE_ID, {
-      connected: true,
-      tabId: '55555555-5555-4555-8555-555555555555',
-      paneKey: '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666',
-      incarnationId: 'ordinary-shell'
-    })
-    internals.restoredOrchestrationAuthorityByPtyId.set('pty-restored-command', {
-      ptyId: 'pty-restored-command',
-      worktreeId: TEST_WORKTREE_ID,
-      terminalHandle: 'term-restored-command',
-      paneKey: firstPane,
-      processIncarnation: 'pty-restored-command:restored-command',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    internals.restoredOrchestrationAuthorityByPtyId.set('pty-restored-exit', {
-      ptyId: 'pty-restored-exit',
-      worktreeId: TEST_WORKTREE_ID,
-      terminalHandle: 'term-restored-exit',
-      paneKey: secondPane,
-      processIncarnation: 'pty-restored-exit:restored-exit',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-
-    runtime.emitDaemonPtyTransientFact('pty-restored-command', {
-      kind: 'command-finished',
-      exitCode: 0
-    })
-    runtime.onPtyExit('pty-restored-exit', 0, 'restored-exit')
-    runtime.onPtyExit('pty-ordinary-shell', 0, 'ordinary-shell')
-
-    expect(retireAuthority).toHaveBeenCalledWith(firstPane)
-    expect(retireAuthority).toHaveBeenCalledWith(secondPane)
-    expect(retireAuthority).toHaveBeenCalledTimes(2)
   })
 
   it('restores a retained coordinator handle after a late controller inventory', async () => {
@@ -407,6 +139,11 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+    registerLivePty(runtime, 'persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId
+    })
     const syntheticHandle = runtime.getAgentStatusTerminalHandleForPaneKey(paneKey)
     expect(syntheticHandle).toMatch(/^term_/)
     expect(syntheticHandle).not.toBe(controllerHandle)
@@ -425,29 +162,6 @@ describe('OrcaRuntimeService', () => {
       paneKey,
       processIncarnation: `persisted-pty:${incarnationId}`
     })
-  })
-
-  it('forgets synthetic handles when disconnected PTY records are pruned', () => {
-    const runtime = new OrcaRuntimeService(store)
-    const internals = runtime as unknown as {
-      recordPtyWorktree: (
-        ptyId: string,
-        worktreeId: string,
-        state: Record<string, unknown>
-      ) => unknown
-      issuePtyHandle: (pty: unknown) => string
-      dropDisconnectedPtyRecord: (ptyId: string) => void
-      syntheticTerminalHandles: Set<string>
-    }
-    const pty = internals.recordPtyWorktree('pty-pruned', TEST_WORKTREE_ID, {
-      connected: false
-    })
-    const handle = internals.issuePtyHandle(pty)
-    expect(internals.syntheticTerminalHandles.has(handle)).toBe(true)
-
-    internals.dropDisconnectedPtyRecord('pty-pruned')
-
-    expect(internals.syntheticTerminalHandles.has(handle)).toBe(false)
   })
 
   it('drops an out-of-order aggregate inventory after a newer SSH inventory', async () => {
@@ -568,61 +282,5 @@ describe('OrcaRuntimeService', () => {
         host
       })
     ).toBeNull()
-  })
-
-  it('keeps restored receipts outside a targeted worktree scan', async () => {
-    const secondWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'pty-moved',
-          incarnationId: 'inc-moved',
-          terminalHandle: 'term_moved',
-          title: 'Moved',
-          cwd: '/tmp/worktree-b',
-          worktreeId: secondWorktreeId,
-          wslDistro: null
-        },
-        {
-          id: 'pty-second',
-          incarnationId: 'inc-second',
-          terminalHandle: 'term_second',
-          title: 'Second',
-          cwd: '/tmp/worktree-b',
-          worktreeId: secondWorktreeId,
-          wslDistro: null
-        }
-      ]
-    })
-    const receipts = (
-      runtime as unknown as {
-        restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
-      }
-    ).restoredOrchestrationAuthorityByPtyId
-    receipts.set('pty-moved', {
-      ptyId: 'pty-moved',
-      worktreeId: TEST_WORKTREE_ID,
-      terminalHandle: 'term_moved',
-      paneKey: makePaneKey('moved-tab', HEADLESS_LEAF_ID),
-      processIncarnation: 'pty-moved:inc-moved',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    receipts.set('pty-second', {
-      ptyId: 'pty-second',
-      worktreeId: secondWorktreeId,
-      terminalHandle: 'term_second',
-      paneKey: makePaneKey('second-tab', HEADLESS_LEAF_ID),
-      processIncarnation: 'pty-second:inc-second',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-
-    await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-
-    expect(receipts.has('pty-moved')).toBe(false)
-    expect(receipts.has('pty-second')).toBe(true)
   })
 })

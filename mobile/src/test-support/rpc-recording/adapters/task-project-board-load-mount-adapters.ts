@@ -1,3 +1,5 @@
+import type * as UseMobileTasksProjectLoadingActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-loading-actions'
+import type * as UseMobileTasksProjectRepositoryResolutionModule from '../../../tasks/project-board/use-mobile-tasks-project-repository-resolution'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -6,7 +8,6 @@ import { mountFixture } from '../recorder-fixture-shape'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -18,7 +19,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -101,10 +101,6 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -152,16 +148,10 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * Getting a GitHub Projects board on screen: which projects and views the account can see, one
- * view's table, and resolving a pasted project reference to a repository. Every `github.project.*`
- * reply carries its own `{ok, error}` envelope inside an accepted result, which the board reads
- * itself — acceptance only decides whether there is a payload at all.
- */
+// Project replies carry an inner {ok, error} envelope; transport acceptance alone does not establish board success.
 export function taskProjectBoardLoadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -173,9 +163,9 @@ export function taskProjectBoardLoadMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const boardLoad: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-loading-actions')
-    >('use-mobile-tasks-project-loading-actions.tsx').useMobileTasksProjectLoadingActions
+    const useActions = modules.load<typeof UseMobileTasksProjectLoadingActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-loading-actions.tsx'
+    ).useMobileTasksProjectLoadingActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
@@ -234,10 +224,8 @@ export function taskProjectBoardLoadMountAdapters(
     })
   }
   const repoSlugs: MountAdapter = (context) => {
-    const useResolution = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-repository-resolution')
-    >(
-      'use-mobile-tasks-project-repository-resolution.tsx'
+    const useResolution = modules.load<typeof UseMobileTasksProjectRepositoryResolutionModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-repository-resolution.tsx'
     ).useMobileTasksProjectRepositoryResolution
     return mountModelHook(context, {
       useHook: (model) => useResolution(model),

@@ -1,12 +1,13 @@
-/** Opening, saving and retrying the Node.js mirror recovery for an SSH host's failed setup. */
+// Recover SSH setup blocked on Node download through the mirror setting.
 import {
   normalizeNodeDistMirrorUrl,
   type NodeDistMirrorRefusal
 } from '../../../shared/node-dist-mirror'
 import type { SshManagedServerStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { useAppStore } from '@/store'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { useAppStore } from '@/store/index'
+import { NODE_DIST_MIRROR_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import {
   isSshConnectInFlight,
   subscribeSshConnectInFlight,
@@ -20,10 +21,7 @@ import {
 
 export const NODE_DIST_MIRROR_SUGGESTION = 'https://npmmirror.com/mirrors/node/'
 
-/**
- * The recovery this window can carry out. Only this desktop's own SSH targets qualify: the mirror
- * setting lives in its main process, not on another server or in a paired browser.
- */
+/** Only desktop-owned SSH targets can change this main process’s mirror; remote servers/paired browsers cannot. */
 export function thisComputerNodeMirrorRecovery(
   status: SshManagedServerStatus | undefined,
   ownerEnvironmentId: string | null,
@@ -59,15 +57,15 @@ export function readNodeDistMirrorDialogTarget(data: Record<string, unknown>): s
   return typeof data.targetId === 'string' && data.targetId ? data.targetId : null
 }
 
-// Why a search, not a scroll target: it also opens the collapsed fields when only the environment
-// variable set the mirror.
+// The jump reveals the collapsed proxy fields even when only the environment supplied a mirror.
 function openNodeDistMirrorSettings(): void {
-  const { openSettingsPage, openSettingsTarget, setSettingsSearchQuery } = useAppStore.getState()
+  const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
   openSettingsPage()
-  openSettingsTarget({ pane: 'advanced', repoId: null })
-  setSettingsSearchQuery(
-    translate('auto.components.settings.general.search.nodeDistMirror', 'mirror')
-  )
+  openSettingsTarget({
+    pane: 'advanced',
+    repoId: null,
+    sectionId: NODE_DIST_MIRROR_SETTINGS_TARGET_ID
+  })
 }
 
 export type SaveNodeDistMirrorResult =
@@ -81,10 +79,7 @@ const defaultDeps = {
   connect: (targetId: string) => window.api.ssh.connect({ targetId })
 }
 
-/**
- * Saves through the same setting and IPC as Settings > Advanced > Network, then connects again.
- * Why save first: main reads the setting when the connect downloads Node.
- */
+/** Save via Settings’ IPC before reconnect: main reads the mirror during Node download. */
 export async function saveNodeDistMirrorAndRetry(
   targetId: string,
   text: string,
@@ -118,8 +113,7 @@ export async function saveNodeDistMirrorAndRetry(
   if (!isSshConnectInFlight(targetId)) {
     return { outcome: 'retrying', retry: trackSshConnect(targetId, deps.connect(targetId)) }
   }
-  // Why wait: a second connect would race the one dialing, which may be past the download already.
-  // The status is current once the lock clears: main publishes a failed setup before it rejects.
+  // Wait for current dialing to finish or reconnect races it; main publishes failed setup before rejecting.
   const retry = sshConnectSettled(targetId).then(() =>
     blockedNodeDownload(useAppStore.getState().sshConnectionStates.get(targetId)?.managedServer)
       ? trackSshConnect(targetId, deps.connect(targetId))

@@ -1,15 +1,49 @@
+import { homedir } from 'node:os'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows
-} from '../../../shared/terminal-scrollback-policy'
+} from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
-} from '../../../shared/tui-agent-launch-defaults'
+} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
+import { normalizeWorkspaceDirInput } from '../../../shared/worktree/workspace-dir-input'
+
+/** A raw ~ or padded absolute path resolves inside each repo (#34944, STA-14308); normalize at the store boundary. */
+export function normalizeWorkspaceDirSetting(
+  settings: Partial<GlobalSettings>
+): Partial<GlobalSettings> {
+  return typeof settings.workspaceDir === 'string'
+    ? {
+        ...settings,
+        workspaceDir: expandLeadingHomePath(
+          normalizeWorkspaceDirInput(settings.workspaceDir, process.platform === 'win32'),
+          homedir()
+        )
+      }
+    : settings
+}
+
+/** Keep a repaired saved spelling in history so checkouts under its old root keep their visibility. */
+export function normalizeLoadedWorkspaceDirSetting(
+  settings: Partial<GlobalSettings>,
+  defaults: GlobalSettings
+): Partial<GlobalSettings> {
+  const normalized = normalizeWorkspaceDirSetting(settings)
+  if (normalized.workspaceDir === settings.workspaceDir) {
+    return normalized
+  }
+  const history = buildWorkspaceDirHistoryForUpdate(
+    { ...defaults, ...settings },
+    { workspaceDir: normalized.workspaceDir }
+  )
+  return history ? { ...normalized, workspaceDirHistory: history } : normalized
+}
 
 export function buildWorkspaceDirHistoryForUpdate(
   current: GlobalSettings,
@@ -57,22 +91,32 @@ export function readLegacyTerminalScrollbackSettings(
 }
 
 type RetiredGlobalSettings = {
+  agentNativeChatPermissionModes?: unknown
   setupScriptLaunchMode?: unknown
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
   showAgentsSidebar?: unknown
-  // Managed servers are the default SSH path now; an older build reads a missing key as off.
+  // Older builds interpret an absent managed-server switch as off.
   experimentalManagedServers?: unknown
-  // Why: #22551 kept this key in settings; it now lives in a main-owned store and must never ride along.
+  // Remove legacy settings secrets now owned by the main-process credential store.
   opencodeGoApiKey?: unknown
   experimentalStructuredNativeChat?: unknown
   openAgentTabsInChatByDefault?: unknown
+  // Chat UI left Experimental; the per-agent Chat | CLI choice decides what opens.
+  experimentalNativeChat?: unknown
+  orchestrationHeartbeatsEnabled?: unknown
+  orchestrationHeartbeatIntervalMinutes?: unknown
+  // Full-access plugins now need only their own approval.
+  pluginFullAccessEnabled?: unknown
+  // Extensions left Experimental and default on; browserExtensionsEnabled replaces this.
+  experimentalBrowserExtensions?: unknown
 }
 
 export function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
   const {
+    agentNativeChatPermissionModes: _retiredChatPermissionCopies,
     setupScriptLaunchMode: _legacySetupScriptLaunchMode,
     terminalScrollbackBytes: _legacyScrollbackBytes,
     enableGitHubAttribution: _legacyGitHubAttribution,
@@ -81,8 +125,14 @@ export function stripRetiredGlobalSettings(
     opencodeGoApiKey: _legacyOpenCodeGoApiKey,
     experimentalStructuredNativeChat: _legacyStructuredNativeChat,
     openAgentTabsInChatByDefault: _legacyChatDefaultView,
+    experimentalNativeChat: _retiredChatUiExperiment,
+    orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
+    orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
+    pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
+    experimentalBrowserExtensions: _retiredBrowserExtensionsExperiment,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
+  void _retiredChatPermissionCopies
   void _legacySetupScriptLaunchMode
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution
@@ -91,13 +141,15 @@ export function stripRetiredGlobalSettings(
   void _legacyOpenCodeGoApiKey
   void _legacyStructuredNativeChat
   void _legacyChatDefaultView
+  void _retiredChatUiExperiment
+  void _retiredHeartbeatsEnabled
+  void _retiredHeartbeatInterval
+  void _retiredPluginFullAccessSwitch
+  void _retiredBrowserExtensionsExperiment
   return rest
 }
 
-/**
- * Chat UI was on but the retired Default view left new agent tabs in the terminal. Every build
- * before the retirement saved that key, so a profile without it was already upgraded.
- */
+/** A profile saved before the default-view switch retired, with Chat UI on and new tabs opening in the terminal. */
 export function savedChatUiWithTerminalDefaultView(settings: unknown): boolean {
   return (
     typeof settings === 'object' &&
@@ -162,8 +214,7 @@ export function migrateAgentYoloDefaults(
     existingArgs.devin = DEFAULT_TUI_AGENT_ARGS.devin
   }
   if (settings?.agentYoloDefaultsMigrated === true) {
-    // Keep newly added agents manual for profiles migrated by an older build.
-    // Missing keys otherwise fall through to the current (possibly yolo) defaults.
+    // Pin newly added agents to manual; missing keys otherwise inherit current yolo defaults.
     for (const agent of Object.keys(DEFAULT_TUI_AGENT_ARGS)) {
       if (!(agent in existingArgs)) {
         existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
@@ -207,7 +258,7 @@ export function migrateAgentYoloDefaults(
   }
 
   return {
-    // Why: legacy users could only customize launch defaults via command overrides, so those agents count as already user-owned.
+    // Legacy command overrides establish user ownership of launch defaults.
     agentDefaultArgs: migratedArgs,
     agentDefaultEnv: migratedEnv,
     agentYoloDefaultsMigrated: true

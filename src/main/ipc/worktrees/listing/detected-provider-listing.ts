@@ -2,13 +2,13 @@ import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
-} from '../../../worktree-removal-listing'
+} from '../../../workspaces/removal/worktree-removal-listing'
 import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
 import {
@@ -29,7 +29,7 @@ import {
 import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
-} from '../../../local-worktree-scan-generation'
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
 import {
   describeWorktreeScanFailure,
   loggedWorktreeListFailures,
@@ -38,7 +38,20 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
-import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
+import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
+import { releaseWslStoppedWorktreeRescan } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
+import {
+  listWslStoppedWorktrees,
+  rescanWorktreesWhenWslDistroRuns,
+  wslDistroNotRunningForScanFailure
+} from './wsl-stopped-worktree-listing'
+
+// Partial stores (tests, embedders) may not publish workspace metadata; their listings carry no stamp.
+function readWorkspaceMetadataCursor(store: {
+  getWorkspaceMetadataCursor?: () => { epoch: string; seq: number }
+}): { epoch: string; seq: number } | undefined {
+  return store.getWorkspaceMetadataCursor?.()
+}
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -46,17 +59,18 @@ export async function listDetectedWorktreesForCapturedRepo(
   isCurrent: () => boolean,
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<DetectedWorktreeListResult | { providerAbortStatus: 'canceled' | 'timed-out' } | null> {
-  // An `ssh:` repo is not served here, so it lists from metadata, never from this machine's git.
+  // Unserved SSH ownership permits metadata listing only, never local Git.
   const connectionId = getRepoDialableSshTargetId(repo)
   const abortedResult = () =>
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
   const allMeta = isFolderRepo(repo) ? undefined : readAllWorktreeMetaForRepo(store, repo)
+  // Read with the metadata, so clients can tell which published metadata records this listing includes.
+  const workspaceMetadata = readWorkspaceMetadataCursor(store)
 
   try {
-    // Why no re-scan for folder repos: their rows come from the store synchronously below, so no
-    // mutation can land under the read.
+    // Folder rows are read synchronously, leaving no mutation window that needs a re-scan.
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
@@ -70,7 +84,8 @@ export async function listDetectedWorktreesForCapturedRepo(
           authoritative: false,
           source: 'metadata-fallback',
           worktrees: [],
-          catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+          catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+          ...(workspaceMetadata ? { workspaceMetadata } : {})
         }
       }
       return {
@@ -78,6 +93,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {}),
         worktrees: projectWorktreeLineageWithHostPeers(
           store,
           repo,
@@ -103,7 +119,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: false,
         source: 'metadata-fallback',
         worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees),
-        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     const pendingAtScan = snapshotPendingWorktreeRemovals()
@@ -112,11 +129,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       () => listDetectedGitWorktrees(store, repo),
       () => isCurrent() && !providerAbort?.signal.aborted
     )
-    // Why stale past the bound rather than a non-authoritative answer: non-authoritative rows still
-    // replace the client's rows for this host, so a worktree the last overtaking mutation created
-    // would vanish from the sidebar until the next listing. A stale rejection leaves client state
-    // untouched; the overtaking mutation's own change event, sent after its generation bump and
-    // therefore ahead of this reply, is what brings the listing that reflects it.
+    // Stale rejection preserves client rows; non-authoritative replacement could hide newly created worktrees.
     if (scan.superseded) {
       return abortedResult() ?? null
     }
@@ -139,7 +152,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: false,
         source: 'metadata-fallback',
         worktrees: [],
-        catalogVersion: localWorktreeCatalogVersionAt(scan.generation)
+        catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     if (freshScan) {
@@ -157,15 +171,19 @@ export async function listDetectedWorktreesForCapturedRepo(
         return null
       }
     }
+    // The owner may have retired these rows' route during the overlay and hygiene awaits.
+    if (scan.authorityCurrent && !scan.authorityCurrent()) {
+      return abortedResult() ?? null
+    }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
-    // Why the scan's generation, not the current one: the rows describe the catalog as of when the
-    // scan began. A client orders this against the create and remove replies it has applied.
+    releaseWslStoppedWorktreeRescan(repo.id)
+    // Rows describe scan-start generation, which clients order against applied create/remove replies.
     return {
       repoId: repo.id,
       authoritative: true,
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
-      // Why always marked: the desktop renderer ships with this main process.
+      ...(workspaceMetadata ? { workspaceMetadata } : {}),
       worktrees: projectPendingWorktreeRemovals(
         buildDetectedGitWorktrees(store, repo, localRows, allMeta),
         (worktree) => worktree.id,
@@ -181,15 +199,31 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (!isCurrent()) {
       return null
     }
+    // Retained rows need their scan-failure cause to explain why they are unavailable.
+    const unavailableReason = describeWorktreeScanFailure(err)
+    const failureKind = classifyWorktreeScanFailure(unavailableReason)
+    // A distro the gate would not start (E9) is expected: keep stored rows and re-list once it runs.
+    const wslDistroStopped = wslDistroNotRunningForScanFailure(err)
+    if (wslDistroStopped) {
+      rescanWorktreesWhenWslDistroRuns(repo.id, wslDistroStopped.distro)
+      return {
+        repoId: repo.id,
+        authoritative: false,
+        source: 'metadata-fallback',
+        worktrees: listWslStoppedWorktrees(store, repo, allMeta),
+        unavailableReason,
+        failureKind,
+        wslDistroStopped,
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
+      }
+    }
     warnOnce(
       loggedWorktreeListFailures,
       `${repo.id}:${repo.path}`,
       `[worktrees] failed to list detected worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
       err
     )
-    // Why: retention alone leaves inert rows with no explanation; the cause rides with the listing.
-    const unavailableReason = describeWorktreeScanFailure(err)
-    const failureKind = classifyWorktreeScanFailure(unavailableReason)
     return {
       repoId: repo.id,
       authoritative: false,
@@ -197,7 +231,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       worktrees: [],
       unavailableReason,
       failureKind,
-      catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+      catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+      ...(workspaceMetadata ? { workspaceMetadata } : {})
     }
   }
 }

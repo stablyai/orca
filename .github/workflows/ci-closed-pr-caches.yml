@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   clean:
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
       - name: Cancel obsolete PR checks
@@ -28,6 +28,8 @@ jobs:
               ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],
               ['mobile', 'mobile.yml'],
               ['computer-e2e', 'computer-e2e.yml'],
+              ['computer-task-benchmark', 'computer-task-benchmark.yml'],
+              ['computer-macos-native', 'computer-macos-native.yml'],
               ['wsl-orcad-e2e', 'wsl-orcad-e2e.yml'],
               ['performance-contracts', 'performance-contracts.yml'],
               ['pr-test-loc', 'pr-test-loc.yml'],
@@ -47,7 +49,6 @@ jobs:
               ['ci-cache-warmup-platforms', 'ci-cache-warmup-platforms.yml'],
               ['pi-owner-runtime', 'pi-owner-runtime.yml'],
               ['git-command-termination', 'git-command-termination-runtime.yml'],
-              ['skill-roundtrip-pull_request', 'skill-update-roundtrip.yml'],
               ['ci-cache-warmup', 'ci-cache-warmup.yml']
             ]
             const stillCurrent = async () => {
@@ -61,11 +62,24 @@ jobs:
                 current.closed_at === pr.closed_at
             }
             if (!Number.isSafeInteger(pr.number) || pr.number <= 0 ||
-                (superseded ? !/^[a-f0-9]{40}$/.test(pr.head?.sha ?? '') :
-                  !Number.isFinite(Date.parse(pr.closed_at)))) {
+                (superseded && !/^[a-f0-9]{40}$/.test(pr.head?.sha ?? ''))) {
               throw new Error('Missing PR identity')
             }
-            if (!await stillCurrent()) return
+            if (!superseded && !Number.isFinite(Date.parse(pr.closed_at))) {
+              // A close quickly followed by a reopen can deliver a payload rendered after the reopen.
+              const { data: current } = await github.rest.pulls.get({
+                ...context.repo, pull_number: pr.number
+              })
+              if (current.state !== 'closed' || current.merged_at !== null) {
+                core.info(`PR #${pr.number} changed after this close event; skipping cancellation`)
+                return
+              }
+              throw new Error('Missing PR identity')
+            }
+            if (!await stillCurrent()) {
+              core.info(`PR #${pr.number} changed after this event; skipping cancellation`)
+              return
+            }
             for (const [prefix, workflow, suffix = ''] of targets) {
               const group = prefix === 'cloud-verify-refs/pull'
                 ? `${prefix}/${pr.number}${suffix}` : `${prefix}-${pr.number}${suffix}`

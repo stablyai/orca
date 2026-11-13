@@ -1,8 +1,8 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { OrcadManagedServing } from './orcad-managed-serving'
 import { verifyManagedTunnelServing } from './orcad-managed-tunnel'
 
-/** After the tunnel: the server answers, or was proven stopped and started; never throws. */
+/** Return unverifiable on failures rather than throwing. */
 export function verifyOrcadManagedServing(
   userDataPath: string,
   selector: string

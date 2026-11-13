@@ -1,9 +1,7 @@
-// Layout-owner builds: an explicit close of a pane main owns is one layout command, closeTabs for a
-// tab or its last pane and closePane otherwise; the CLI's and a phone's close share it. Main's
-// close stops nothing itself, so the terminals it ends stop here.
+// CLI/phone closes share main's closePane or closeTabs command; stop ended terminals here because layout close itself stops none.
 
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 // Type-only: the stops module sits late in the runtime's class chain, and this runs early in it.
 import type { ExplicitCloseStop } from './explicit-terminal-close-pty-stops'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'

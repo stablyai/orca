@@ -2,20 +2,25 @@ import {
   getRegisteredSshState,
   listRegisteredSshTargets
 } from '../../ssh/targets/ssh-target-registry'
-import { getWslHostService } from '../../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import {
+  savedWorkspaceCatalog,
+  WORKTREE_METADATA_DOMAINS
+} from '../../persistence/profile-save-domains'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
-import type { PairedServerRowsProducer } from './paired-server-rows-producer'
-import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
-import type { WorkspaceRowsProducer } from './workspace-rows-producer'
-import type { RepoIconDataUrls } from './repo-icon-data-urls'
-import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
-import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
-import { readSidebarProjectCatalog } from './sidebar-project-catalog'
+import type { PairedServerRowsProducer } from './workspace-rows/paired-server-rows-producer'
+import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
+import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
+import type { RepoIconDataUrls } from './repo-icons/repo-icon-data-urls'
+import type { SidebarInputsFeedDomain } from './feed/sidebar-inputs-feed'
+import { readDesktopSidebarFacts } from './catalog/desktop-sidebar-facts'
+import { readStoreInstallationId } from '../hosts/platform-probe/host-descriptor'
+import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
+import { readSidebarProjectCatalog } from './catalog/sidebar-project-catalog'
 import {
   buildPairedServerReviewFacts,
   buildWorkspaceReviewFacts
@@ -25,12 +30,16 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
-export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSidebarFacts {
+export function readRuntimeDesktopSidebarFacts(
+  store: RuntimeStore,
+  installationId: string | undefined
+): DesktopSidebarFacts {
   return readDesktopSidebarFacts({
     store,
     sshTargets: listRegisteredSshTargets(),
     sshStateOf: getRegisteredSshState,
-    wslStatuses: getWslHostService()?.getStatuses() ?? []
+    wslStatuses: getWslHostService()?.getStatuses() ?? [],
+    installationId
   })
 }
 
@@ -93,6 +102,13 @@ export function sidebarInputsFeedDomains(
       },
       { consumesTerminalSideEffects: false }
     )
+  // Why: until the id loads, cross-store children stay standalone; its arrival is a desktop change.
+  let installationId: string | undefined
+  const installationLoaded = readStoreInstallationId(null, getCanonicalUserDataPath()).then(
+    (id) => {
+      installationId = id
+    }
+  )
   const requireStore = (): RuntimeStore => {
     const store = sources.store()
     if (!store) {
@@ -208,24 +224,33 @@ export function sidebarInputsFeedDomains(
     {
       name: 'desktop',
       // Each field its own entity.
-      read: () => readRuntimeDesktopSidebarFacts(requireStore()),
+      read: () => readRuntimeDesktopSidebarFacts(requireStore(), installationId),
       watch: (changed) => {
         const store = sources.store()
         const detaches = [
           watchCatalog(changed),
           store?.onWorkspaceSessionWritten?.(() => changed()),
-          // Pins, settings (saved with or without notifying), UI, and full saves (repos, folders, SSH).
+          // Pins, settings (saved with or without notifying), UI, and catalog saves (repos, folders, SSH).
           store?.onStateWritten?.((domains) => {
             if (
-              domains === undefined ||
-              DESKTOP_WRITE_DOMAINS.some((domain) => domains.includes(domain))
+              savedWorkspaceCatalog(domains) ||
+              DESKTOP_WRITE_DOMAINS.some((domain) => domains?.includes(domain))
             ) {
               changed(urgent)
             }
           }),
           getWslHostService()?.onStatusesChanged(changed)
         ]
-        return () => detaches.forEach((detach) => detach?.())
+        let watching = true
+        void installationLoaded.then(() => {
+          if (watching && installationId !== undefined) {
+            changed()
+          }
+        })
+        return () => {
+          watching = false
+          detaches.forEach((detach) => detach?.())
+        }
       }
     },
     {
@@ -238,9 +263,9 @@ export function sidebarInputsFeedDomains(
           pairedServerRows.revision.onChange(changed),
           // Manual repo order and project order live in the UI state.
           sources.store()?.onUIChanged?.(() => changed()),
-          // Catalog writes are full saves, and some (a project rename) announce no event.
+          // Some catalog writes (a project rename) announce no event.
           sources.store()?.onStateWritten?.((domains) => {
-            if (domains === undefined) {
+            if (savedWorkspaceCatalog(domains)) {
               changed()
             }
           })

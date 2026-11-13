@@ -1,7 +1,7 @@
 import React from 'react'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ExpandableMarkdownImageProps = {
   src: string | undefined
@@ -24,10 +24,7 @@ type ExpandableMarkdownImageProps = {
   >
 }
 
-/**
- * Inline markdown image that opens a viewport-centered lightbox on click.
- * The shared pan and zoom dialog owns modal focus, Escape, and focus restoration.
- */
+/** Delegate lightbox focus, Escape and focus restoration to the shared pan/zoom dialog. */
 export function ExpandableMarkdownImage({
   src,
   alt,
@@ -45,6 +42,7 @@ export function ExpandableMarkdownImage({
   triggerStyle,
   dialogProps
 }: ExpandableMarkdownImageProps): React.JSX.Element {
+  const t = useTranslate()
   const [internalOpen, setInternalOpen] = React.useState(false)
   const open = controlledOpen ?? internalOpen
   const setOpen = (nextOpen: boolean): void => {
@@ -53,8 +51,7 @@ export function ExpandableMarkdownImage({
     }
     onOpenChange?.(nextOpen)
   }
-  const label =
-    alt?.trim() || translate('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
+  const label = alt?.trim() || t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
 
   return (
     <>
@@ -77,8 +74,7 @@ export function ExpandableMarkdownImage({
         }}
         onAuxClick={onAuxClick}
         aria-label={
-          triggerLabel ??
-          translate('auto.components.sidebar.MarkdownImageLightbox.expand', 'Expand image')
+          triggerLabel ?? t('auto.components.sidebar.MarkdownImageLightbox.expand', 'Expand image')
         }
       >
         {src ? (

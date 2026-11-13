@@ -1,6 +1,10 @@
+import {
+  cachedBrowserGuestMetadata,
+  issueBrowserGuestNavigation
+} from '../host-guest/browser-guest-metadata-cache'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import { browserGuestHasNothingToReload } from '../../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 
-/** Where the reload request came from: the toolbar button, or an explicit menu entry. */
 export type BrowserReloadTrigger = 'button' | 'reload' | 'hard-reload'
 
 export type BrowserReloadIntent =
@@ -15,10 +19,7 @@ export type BrowserReloadState = {
   loadErrorCode: number | null
 }
 
-/**
- * Why: webview.reload() only refreshes a chrome-error:// page, so a failed load has to go through the
- * recovery paths no matter which entry point asked for it. Only the toolbar button doubles as Stop.
- */
+/** reload() only refreshes chrome-error://; retry failed loads through recovery. Only the toolbar button doubles as Stop. */
 export function resolveBrowserReloadIntent(
   trigger: BrowserReloadTrigger,
   state: BrowserReloadState
@@ -34,13 +35,13 @@ export function resolveBrowserReloadIntent(
   return trigger === 'hard-reload' ? 'hard-reload' : 'reload'
 }
 
-export type BrowserPageWebviewReloadResult = 'reloaded' | 'guest-missing' | 'not-ready'
+export type BrowserPageWebviewReloadResult =
+  | 'reloaded'
+  | 'guest-missing'
+  | 'not-ready'
+  | 'nothing-to-reload'
 
-/**
- * Why: reload on a guestless webview throws uncaught ("The WebView must be attached to the
- * DOM…", STA-3448). getWebContentsId() only needs an attached guest, so it separates a dead
- * guest (route to guest recovery) from a live pre-dom-ready one (a load is already in flight).
- */
+/** getWebContentsId separates destroyed guests needing recovery from live pre-dom-ready guests already loading; reload throws for both. */
 export function reloadBrowserPageWebview(
   webview: Electron.WebviewTag,
   { ignoreCache }: { ignoreCache: boolean }
@@ -51,10 +52,15 @@ export function reloadBrowserPageWebview(
     return 'guest-missing'
   }
   try {
+    // A restored page stopped before its first commit holds only the initial empty entry.
+    const metadata = cachedBrowserGuestMetadata(webview)
+    if (metadata && !metadata.errorPage && browserGuestHasNothingToReload(metadata)) {
+      return 'nothing-to-reload'
+    }
     if (ignoreCache) {
-      webview.reloadIgnoringCache()
+      issueBrowserGuestNavigation(webview, () => webview.reloadIgnoringCache())
     } else {
-      webview.reload()
+      issueBrowserGuestNavigation(webview, () => webview.reload())
     }
   } catch {
     try {
@@ -68,7 +74,6 @@ export function reloadBrowserPageWebview(
   return 'reloaded'
 }
 
-/** Accessible name for the toolbar button, which is Stop mid-load and Retry after a failure. */
 export type BrowserReloadButtonLabelKind = 'stop' | 'retry' | 'reload'
 
 export function resolveBrowserReloadButtonLabelKind(

@@ -1,0 +1,197 @@
+import { getCommitMessageAgentSpec } from '../generation/commit-message-agent-spec'
+import { isGlobalAiTextAction } from '../recipes/source-control-ai-actions'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../generation/commit-message-host-key'
+import { removeSourceControlAiArgumentFlag } from '../recipes/source-control-ai-argument-flags'
+import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
+import type {
+  SourceControlAiWriteTarget,
+  SourceControlActionRecipeSaveResult
+} from './source-control-ai-recipe-save'
+import { toSourceControlAiRepoUpdate } from './source-control-ai-recipe-save'
+import type { GlobalSettings } from '../../../global-settings-types'
+import type { Repo } from '../../../repo-types'
+import type {
+  AiTextOperation,
+  SourceControlAiModelChoice
+} from './source-control-ai-settings-types'
+import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
+import type { CommandTemplateBackslash } from '../generation/commit-message-prompt'
+
+type ActionModelChoiceInput = {
+  target: SourceControlAiWriteTarget
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+  actionId: AiTextOperation
+  agentId: TuiAgent
+  change:
+    | { field: 'model'; value: string | undefined }
+    | { field: 'effort'; modelId: string; value: string | undefined }
+  /** Execution hosts this save covers, beyond hosts the saved settings already name. */
+  hostKeys?: readonly string[]
+  backslash?: CommandTemplateBackslash
+}
+
+/** A user pick applies to every host known at save time, including hosts reading the host map. */
+function writeChoice(
+  choice: SourceControlAiModelChoice | undefined,
+  input: ActionModelChoiceInput,
+  remoteHostKeys: Iterable<string>
+): SourceControlAiModelChoice | undefined {
+  const next = structuredClone(choice ?? {})
+  const { agentId, change } = input
+  if (change.field === 'model') {
+    const value = change.value
+    next.selectedModelByAgent = { ...next.selectedModelByAgent }
+    const byHost = { ...next.selectedModelByAgentByHost }
+    next.selectedModelByAgentByHost = byHost
+    // The local host reads the host-agnostic value; a local copy would hide the other editor's later picks.
+    if (byHost[LOCAL_COMMIT_MESSAGE_HOST_KEY]) {
+      const localModels = { ...byHost[LOCAL_COMMIT_MESSAGE_HOST_KEY] }
+      delete localModels[agentId]
+      byHost[LOCAL_COMMIT_MESSAGE_HOST_KEY] = localModels
+    }
+    const models = [
+      next.selectedModelByAgent,
+      ...[...remoteHostKeys].map((hostKey) => {
+        const hostModels = { ...byHost[hostKey] }
+        byHost[hostKey] = hostModels
+        return hostModels
+      })
+    ]
+    for (const modelsByAgent of models) {
+      if (value === undefined) {
+        delete modelsByAgent[agentId]
+      } else {
+        modelsByAgent[agentId] = value
+      }
+    }
+  }
+  if (change.field === 'effort') {
+    next.selectedThinkingByModel = { ...next.selectedThinkingByModel }
+    if (change.value === undefined) {
+      delete next.selectedThinkingByModel[change.modelId]
+    } else {
+      next.selectedThinkingByModel[change.modelId] = change.value
+    }
+  }
+  if (next.selectedModelByAgent && !Object.keys(next.selectedModelByAgent).length) {
+    delete next.selectedModelByAgent
+  }
+  for (const [key, models] of Object.entries(next.selectedModelByAgentByHost ?? {})) {
+    if (!Object.keys(models ?? {}).length) {
+      delete next.selectedModelByAgentByHost?.[key]
+    }
+  }
+  if (!Object.keys(next.selectedModelByAgentByHost ?? {}).length) {
+    delete next.selectedModelByAgentByHost
+  }
+  if (!Object.keys(next.selectedThinkingByModel ?? {}).length) {
+    delete next.selectedThinkingByModel
+  }
+  return Object.keys(next).length ? next : undefined
+}
+
+/** Remote hosts a model pick covers: the given hosts plus every host the saved settings name. */
+export function sourceControlAiModelChoiceHostKeys(
+  input: Pick<ActionModelChoiceInput, 'target' | 'settings' | 'repo' | 'actionId' | 'hostKeys'>
+): Set<string> {
+  const source = normalizeSourceControlAiSettings(
+    input.settings.sourceControlAi,
+    input.settings.commitMessageAi
+  )
+  const choice =
+    input.target.type === 'global'
+      ? source.modelOverridesByOperation?.[input.actionId]
+      : isGlobalAiTextAction(input.actionId)
+        ? undefined
+        : input.repo?.sourceControlAi?.modelOverridesByOperation?.[input.actionId]
+  const hostKeys = new Set([
+    ...Object.keys(choice?.selectedModelByAgentByHost ?? {}),
+    ...Object.keys(source.selectedModelByAgentByHost ?? {}),
+    ...Object.keys(source.discoveredModelsByAgentByHost ?? {}),
+    ...Object.keys(input.settings.commitMessageAi?.discoveredModelsByAgentByHost ?? {}),
+    ...(input.hostKeys ?? [])
+  ])
+  hostKeys.delete(LOCAL_COMMIT_MESSAGE_HOST_KEY)
+  return hostKeys
+}
+
+export function saveSourceControlAiActionModelChoice(
+  input: ActionModelChoiceInput
+): SourceControlActionRecipeSaveResult & { unrecognizedArguments: boolean } {
+  const source = normalizeSourceControlAiSettings(
+    input.settings.sourceControlAi,
+    input.settings.commitMessageAi
+  )
+  const repo = input.repo?.sourceControlAi
+  const scope = input.target.type === 'global' ? source : repo
+  const choice =
+    input.target.type === 'global'
+      ? source.modelOverridesByOperation?.[input.actionId]
+      : isGlobalAiTextAction(input.actionId)
+        ? undefined
+        : repo?.modelOverridesByOperation?.[input.actionId]
+  const remoteHostKeys = sourceControlAiModelChoiceHostKeys(input)
+  const recipe =
+    input.target.type === 'global'
+      ? source.actions?.[input.actionId]
+      : isGlobalAiTextAction(input.actionId)
+        ? undefined
+        : repo?.actionOverrides?.[input.actionId]
+  const spec = getCommitMessageAgentSpec(input.agentId)
+  // A composed `model#variant` operand stays with Arguments on an effort edit; only a Model pick removes it.
+  const composedEffort =
+    input.change.field === 'effort' && Boolean(spec?.effortFlag.some((flag) => flag.modelVariant))
+  const stripped =
+    spec && !composedEffort
+      ? removeSourceControlAiArgumentFlag(
+          recipe?.agentArgs ?? '',
+          spec,
+          input.change.field,
+          input.backslash
+        )
+      : { agentArgs: recipe?.agentArgs ?? '', unrecognized: false }
+  const nextChoice = writeChoice(choice, input, remoteHostKeys)
+  const modelOverridesByOperation = { ...scope?.modelOverridesByOperation }
+  if (nextChoice) {
+    modelOverridesByOperation[input.actionId] = nextChoice
+  } else {
+    delete modelOverridesByOperation[input.actionId]
+  }
+  if (input.target.type === 'global') {
+    return {
+      target: { type: 'global' },
+      unrecognizedArguments: stripped.unrecognized,
+      sourceControlAi: {
+        ...source,
+        modelOverridesByOperation,
+        actions: {
+          ...source.actions,
+          [input.actionId]: {
+            ...recipe,
+            ...(typeof recipe?.agentArgs === 'string' ? { agentArgs: stripped.agentArgs } : {})
+          }
+        }
+      }
+    }
+  }
+  const actionId = input.actionId
+  if (isGlobalAiTextAction(actionId)) {
+    throw new Error('Chat name and dictation cleanup model choices are global only')
+  }
+  return {
+    target: input.target,
+    unrecognizedArguments: stripped.unrecognized,
+    update: toSourceControlAiRepoUpdate({
+      ...repo,
+      modelOverridesByOperation,
+      actionOverrides: {
+        ...repo?.actionOverrides,
+        [actionId]: {
+          ...recipe,
+          ...(typeof recipe?.agentArgs === 'string' ? { agentArgs: stripped.agentArgs } : {})
+        }
+      }
+    })
+  }
+}

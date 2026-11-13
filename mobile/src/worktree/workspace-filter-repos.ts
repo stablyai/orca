@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
-import { repoColor } from './repo-color'
+import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 import { buildSectionRepoMap, type SectionRepo, type Worktree } from './workspace-list-sections'
+import { isRepoHidden } from '../../../src/shared/hidden-projects'
 
 export type WorkspaceSectionRepo = {
   /** Unique per host: two hosts can each hold a repo of the same name. */
@@ -10,15 +11,11 @@ export type WorkspaceSectionRepo = {
   color: string
 }
 
-/** A repo's badge colour, else the colour its name hashes to. */
-export function sectionRepoColor(repo: Pick<SectionRepo, 'badgeColor' | 'displayName'>): string {
-  return (typeof repo.badgeColor === 'string' && repo.badgeColor) || repoColor(repo.displayName)
+export function sectionRepoColor(repo: Pick<SectionRepo, 'badgeColor'>): string {
+  return resolveRepoBadgeColor(repo.badgeColor)
 }
 
-/**
- * The repos the filter lists, as the desktop's project filter lists them: every catalog repo by
- * id, each host's separately. Before any catalog answers, the repos the rows name.
- */
+// List catalog repos per host; before catalogs arrive, derive candidates from workspace rows.
 export function buildFilterRepos(
   filterCatalogRepos: readonly SectionRepo[],
   worktrees: readonly Worktree[]
@@ -30,7 +27,7 @@ export function buildFilterRepos(
   const seen = new Set<string>()
   return repos.flatMap((repo) => {
     const key = `${getRepoExecutionHostId(repo)}|${repo.id}`
-    if (seen.has(key)) {
+    if (seen.has(key) || isRepoHidden(repo)) {
       return []
     }
     seen.add(key)

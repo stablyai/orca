@@ -1,28 +1,35 @@
-import { useCallback, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { getRenderedWorktreesInSidebarOrder } from '../../worktree-sidebar-row-preference'
-import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  setVisibleWorktreeIds,
+  setVisibleWorktreeShortcutTargets
+} from '../listing/visible-worktrees'
 import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 
 const getSidebarContainer = (): Element | null =>
   document.querySelector('[data-worktree-sidebar-container]')
 
-// Multi-select over the rows the sidebar actually rendered, so gestures, context menus, and
-// the Cmd+1–9 shortcut cache all agree on one order.
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 }) {
   const { sectionRows, pinnedDisplayPolicy } = args
-  // Why: derive order from the built rows, not the flat worktrees array, so Cmd+1–9 match visual positions when grouping reorders cards.
-  const renderedWorktrees = useMemo(
-    () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
+  // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
+  const renderedRows = useMemo(
+    () => getRenderedWorkspaceRowsInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]
+  )
+  const renderedWorktrees = useMemo(() => renderedRows.map((row) => row.worktree), [renderedRows])
+  const repoByWorktree = useMemo(
+    () => new Map(renderedRows.map((row) => [row.worktree, row.repo])),
+    [renderedRows]
   )
   const renderedWorktreeIds = useReusedArrayIdentity(
     useMemo(
@@ -35,11 +42,42 @@ export function useSidebarWorktreeSelection(args: {
     getKey: getWorktreeHostIdentity,
     getScope: getSidebarContainer
   })
+  const { updateSelectionForGesture: updateSelection } = selection
+  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const focusedWorktree =
+    focusedKey !== null && selection.selectedKeys.has(focusedKey)
+      ? (selection.getItemForKey(focusedKey) ?? null)
+      : null
+  const focusedWorkspaceExecutionHostId = focusedWorktree
+    ? getWorktreeExecutionHostId(focusedWorktree, repoByWorktree.get(focusedWorktree))
+    : null
+  if (focusedKey !== null && focusedWorktree === null) {
+    setFocusedKey(null)
+  }
+  const selectWorktree = useCallback(
+    (worktree: Worktree) => {
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      updateSelection({ metaKey: false, ctrlKey: false, shiftKey: false }, worktree)
+    },
+    [updateSelection]
+  )
+  const updateSelectionForGesture = useCallback(
+    (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
+      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
+      list?.focus({ preventScroll: true })
+      list?.setAttribute('data-keyboard-navigation', '')
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      return updateSelection(event, worktree)
+    },
+    [updateSelection]
+  )
   const { selectForContextMenu: selectItemForContextMenu } = selection
   // Why keep the event arg: kanban and list cards share the onContextMenuSelect prop shape.
   const selectForContextMenu = useCallback(
-    (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] =>
-      selectItemForContextMenu(worktree),
+    (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      return selectItemForContextMenu(worktree)
+    },
     [selectItemForContextMenu]
   )
 
@@ -74,7 +112,10 @@ export function useSidebarWorktreeSelection(args: {
     renderedWorktreeIdentities: selection.visibleKeys,
     selectedWorktreeIds: selection.selectedKeys,
     selectedWorktrees: selection.selectedItems,
-    updateSelectionForGesture: selection.updateSelectionForGesture,
+    focusedWorktree,
+    focusedWorkspaceExecutionHostId,
+    selectWorktree,
+    updateSelectionForGesture,
     selectForContextMenu
   }
 }

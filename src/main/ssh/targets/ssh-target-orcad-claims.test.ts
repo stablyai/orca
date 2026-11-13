@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+
 import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
 import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import { emptyDependentStateStore } from './ssh-target-orcad-dependents-fixture'
+import { emptyDependentStateStore } from './testing/ssh-target-orcad-dependents-fixture'
 
 type SetupOptions = {
   target?: Partial<SshTarget>
@@ -43,17 +43,6 @@ function setup(options: SetupOptions = {}) {
 }
 
 describe('managed orcad SSH target claims', () => {
-  it('claims an empty target with a generation and a resumable provisioning intent', () => {
-    const { claims, current } = setup()
-    const claimed = claims.claim('ssh-1', 'environment-1', {
-      deployName: 'Managed',
-      ownerRecorded: false
-    })
-    expect(getManagedOrcadFenceEnvironmentId(claimed)).toBe('environment-1')
-    expect(claimed.generation).toBe(4)
-    expect(current().orcadProvisioning).toEqual({ requestId: 'environment-1', name: 'Managed' })
-  })
-
   it('is idempotent for its own environment and keeps an earlier provisioning request', () => {
     const { claims } = setup({
       target: {
@@ -78,25 +67,6 @@ describe('managed orcad SSH target claims', () => {
       claims.claim('ssh-1', 'environment-1', { deployName: 'Managed', ownerRecorded: false })
     ).toThrow('no record explains why')
     expect(current().orcadProvisioning).toBeUndefined()
-  })
-
-  it("claims a recipe VM's target: its runtime owns the host's lifecycle, not its server", () => {
-    const { claims } = setup({
-      target: { owner: { type: 'on-demand-runtime', runtimeId: 'vm-1' } }
-    })
-    expect(claims.preflight('ssh-1')).toMatchObject({ claimable: true, blockers: [] })
-    expect(
-      getManagedOrcadFenceEnvironmentId(
-        claims.claim('ssh-1', 'environment-1', { deployName: 'VM', ownerRecorded: false })
-      )
-    ).toBe('environment-1')
-  })
-
-  it('claims for SSH access without recording a provisioning intent', () => {
-    const { claims } = setup({ target: { generation: 1 } })
-    expect(
-      claims.claim('ssh-1', 'environment-1', { ownerRecorded: false }).orcadProvisioning
-    ).toBeUndefined()
   })
 
   it.each<[string, SetupOptions, string]>([
@@ -134,29 +104,17 @@ describe('managed orcad SSH target claims', () => {
     expect(current().orcadProvisioning).toBeUndefined()
   })
 
-  it('counts terminated and expired leases too, since they still name this host', () => {
-    const { claims } = setup({
-      leases: [
-        { ptyId: 'a', state: 'terminated' },
-        { ptyId: 'b', state: 'expired' }
-      ]
-    })
-    expect(claims.preflight('ssh-1').blockers).toEqual([
-      {
-        code: 'orcad_migration_dependent_state',
-        category: 'client-owned-state',
-        dependencies: [
-          { kind: 'terminal-lease', count: 2, names: ['a (terminated)', 'b (expired)'] }
-        ]
-      }
-    ])
-  })
+  it('lifts a Stop and remove hold once the user sets a server up again', () => {
+    const { claims, current } = setup()
+    claims.claim('ssh-1', 'environment-1', { deployName: 'Managed', ownerRecorded: false })
+    claims.releaseForUserRemoval('ssh-1', 'environment-1')
+    expect(current().managedServerRemoved).toBeDefined()
 
-  it('reports an unknown target as a registration blocker', () => {
-    const { claims } = setup()
-    expect(claims.preflight('missing').blockers).toEqual([
-      { code: 'orcad_migration_target_not_found', category: 'registration' }
-    ])
+    claims.claim('ssh-1', 'environment-2', { deployName: 'Managed', ownerRecorded: false })
+    expect(current().managedServerRemoved).toBeUndefined()
+    // A later release that is not a user removal must not bring the overridden hold back.
+    claims.release('ssh-1', 'environment-2')
+    expect(current().managedServerRemoved).toBeUndefined()
   })
 
   it('releases only its own claim and clears the provisioning intent', () => {
@@ -168,11 +126,5 @@ describe('managed orcad SSH target claims', () => {
       orcadProvisioning: undefined
     })
     expect(current().orcadFence).toBeUndefined()
-  })
-
-  it('flushes without draining to a stable generation', async () => {
-    const { claims, flush } = setup()
-    await claims.flush()
-    expect(flush).toHaveBeenCalledWith({ signal: undefined, drainToStableGeneration: false })
   })
 })

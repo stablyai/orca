@@ -2,12 +2,13 @@ import React from 'react'
 import { Copy, RefreshCw, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { findLocalToolchainBlock, type LocalToolchainFailureKind } from './repo-scan-failure'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 const FIXES: Record<
   LocalToolchainFailureKind,
@@ -41,14 +42,14 @@ const FIXES: Record<
   }
 }
 
-/** One sidebar-level notice for local Git toolchain failures that block every local repo at once. */
 export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
+  const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const detectedByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const block = findLocalToolchainBlock(repos, detectedByRepo)
   const [pending, setPending] = React.useState(false)
 
-  // Why: reads the store at call time so the focus listener below never needs re-subscribing.
+  // Read store state at call time so the focus listener can remain subscribed once.
   const rescan = React.useCallback(async () => {
     const state = useAppStore.getState()
     const blocked =
@@ -82,7 +83,7 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
     if (!isBlocked) {
       return
     }
-    // Why: the fix happens in Terminal, so returning to Orca is the moment to check again.
+    // Users fix Git in Terminal; recheck when they return to Orca.
     const onFocus = (): void => void rescan()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
@@ -94,15 +95,18 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
   const fix = FIXES[block.kind]
   const affected =
     block.repos.length === 1
-      ? translate(
+      ? t(
           'auto.components.sidebar.LocalGitToolchainScanBanner.affectedOne',
           'Worktree scan paused for {{value0}}',
           { value0: block.repos[0].displayName }
         )
-      : translate(
-          'auto.components.sidebar.LocalGitToolchainScanBanner.affectedMany',
-          'Worktree scan paused for {{value0}} projects',
-          { value0: block.repos.length }
+      : t(
+          'auto.components.sidebar.LocalGitToolchainScanBanner.affectedProjects',
+          'Worktree scan paused for {{count}} projects',
+          {
+            count: block.repos.length,
+            defaultValue_one: 'Worktree scan paused for {{count}} project'
+          }
         )
 
   return (
@@ -130,7 +134,7 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
                   .writeClipboardText(fix.command)
                   .then(() =>
                     toast.success(
-                      translate(
+                      t(
                         'auto.components.sidebar.LocalGitToolchainScanBanner.copied',
                         'Command copied'
                       )
@@ -139,10 +143,7 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
               }
             >
               <Copy aria-hidden="true" />
-              {translate(
-                'auto.components.sidebar.LocalGitToolchainScanBanner.copyCommand',
-                'Copy command'
-              )}
+              {t('auto.components.sidebar.LocalGitToolchainScanBanner.copyCommand', 'Copy command')}
             </Button>
             <Button
               type="button"
@@ -152,7 +153,7 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
               onClick={() => void rescan()}
             >
               <RefreshCw className={cn(pending && 'animate-spin')} aria-hidden="true" />
-              {translate('auto.components.sidebar.LocalGitToolchainScanBanner.retry', 'Retry now')}
+              {t('auto.components.sidebar.LocalGitToolchainScanBanner.retry', 'Retry now')}
             </Button>
           </div>
         </div>

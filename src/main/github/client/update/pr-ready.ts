@@ -1,16 +1,37 @@
-import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
-import {
-  acquire,
-  classifyPullRequestUpdateError,
-  ghExecFileAsync,
-  release,
-  type LocalGitExecOptions
-} from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { classifyPullRequestUpdateError } from '../../api/gh-error-classification'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 
-export async function markPRReadyForReview(
+export function markPRReadyForReview(
   repoPath: string,
   prNumber: number,
+  connectionId?: string | null,
+  prRepo?: GitHubApiRepository | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return setPRReadyState(repoPath, prNumber, true, connectionId, prRepo, localGitOptions)
+}
+
+// `gh pr ready --undo` turns an open pull request back into a draft.
+export function markPRDraft(
+  repoPath: string,
+  prNumber: number,
+  connectionId?: string | null,
+  prRepo?: GitHubApiRepository | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return setPRReadyState(repoPath, prNumber, false, connectionId, prRepo, localGitOptions)
+}
+
+async function setPRReadyState(
+  repoPath: string,
+  prNumber: number,
+  ready: boolean,
   connectionId?: string | null,
   prRepo?: GitHubApiRepository | null,
   localGitOptions: LocalGitExecOptions = {}
@@ -22,22 +43,29 @@ export async function markPRReadyForReview(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   await acquire()
   try {
     await ghExecFileAsync(
-      ['pr', 'ready', String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
+      [
+        'pr',
+        'ready',
+        String(prNumber),
+        '--repo',
+        `${ownerRepo.owner}/${ownerRepo.repo}`,
+        ...(ready ? [] : ['--undo'])
+      ],
       ghOptions
     )
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifyPullRequestUpdateError(message).message }
+    return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

@@ -1,13 +1,12 @@
 import type { PushConfig } from './config.js'
-import type { PushPruneSweep } from './durable-push-store.js'
+import type { PushPruneSweep } from './delivery/durable-push-store.js'
 import type { createPushServer } from './push-server.js'
 
 const CHALLENGE_PRUNE_INTERVAL_MS = 60_000
 const SESSION_PRUNE_INTERVAL_MS = 10 * 60_000
 const DELIVERY_PRUNE_INTERVAL_MS = 60_000
 
-// Chained rather than periodic, so a sweep spanning many bounded statements never overlaps itself and
-// one that exhausted its batch budget resumes at once instead of idling out the rest of the interval.
+// Chain sweeps to prevent overlap; budget exhaustion resumes immediately instead of waiting another interval.
 function prune(label: string, run: () => Promise<PushPruneSweep>, intervalMs: number): () => void {
   let timer: NodeJS.Timeout | undefined
   let overdue: NodeJS.Timeout | undefined
@@ -46,9 +45,10 @@ function prune(label: string, run: () => Promise<PushPruneSweep>, intervalMs: nu
 }
 
 // One DELETE under a statement timeout: there is no batch budget for it to exhaust.
-const unbatchedSweep =
-  (run: () => Promise<number>) =>
-  async (): Promise<PushPruneSweep> => ({ deleted: await run(), saturated: false })
+const unbatchedSweep = (run: () => Promise<number>) => async (): Promise<PushPruneSweep> => ({
+  deleted: await run(),
+  saturated: false
+})
 
 export function startPushBackground(
   config: Pick<PushConfig, 'mode'>,

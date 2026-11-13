@@ -5,8 +5,11 @@ import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-conn
 import {
   createSshCredentialDeclinedError,
   isSshCredentialDeclined
-} from '../ssh-credential-decline'
-import { createSshUserDisconnectedError, isSshUserDisconnected } from '../ssh-user-disconnect'
+} from '../authentication/ssh-credential-decline'
+import { createSshUserDisconnectedError, isSshUserDisconnected } from './ssh-user-disconnect'
+import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/ssh-sign-in-required-copy'
+import { markSshSessionStartFailure } from './ssh-session-start-failure'
+import { createSshHostAsleepError, isSshHostHeldAsleep } from './ssh-host-sleep-hold'
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
 function signInEndpoint(target: SshTarget): string {
@@ -16,15 +19,13 @@ function signInEndpoint(target: SshTarget): string {
 
 export class SshConnectionManager {
   private connections = new Map<string, SshConnection>()
-  // Why: a connection the pool replaces or closes wipes its sign-in on disconnect; without this
-  // every background redial after a drop prompts a password host again. Explicit disconnects forget.
+  // Retain sign-in across automatic replacement closes; explicit disconnect still forgets credentials.
   private retainedSignIns = new Map<
     string,
     { endpoint: string; credentials: SshCachedCredentials }
   >()
   private callbacks: SshConnectionCallbacks
-  // Why: attempt identity lets disconnect unblock a replacement without the
-  // cancelled attempt later clearing the replacement's state.
+  // Attempt tokens let replacement connect proceed without stale cancellation clearing its state.
   private connectingTargets = new Map<string, symbol>()
 
   constructor(callbacks: SshConnectionCallbacks) {
@@ -40,10 +41,24 @@ export class SshConnectionManager {
 
   /** `probe`: a user's connection test, which a Disconnect does not refuse. */
   async connect(target: SshTarget, options?: { probe?: boolean }): Promise<SshConnection> {
-    // Why: background dials would revive a host the user disconnected (#30086); before reuse, so
-    // none borrows the transport a connection test opened.
+    try {
+      return await this.openSession(target, options)
+    } catch (error) {
+      throw markSshSessionStartFailure(error)
+    }
+  }
+
+  private async openSession(
+    target: SshTarget,
+    options?: { probe?: boolean }
+  ): Promise<SshConnection> {
+    // Refuse user-disconnected hosts before pool reuse, including transports opened by connection tests (#30086).
     if (!options?.probe && isSshUserDisconnected(target.id)) {
       throw createSshUserDisconnectedError(target.label)
+    }
+    // A sleeping VM's host takes no login until its workspace wakes; that wake marks it waking first.
+    if (!options?.probe && isSshHostHeldAsleep(target.id)) {
+      throw createSshHostAsleepError(target.label)
     }
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {
@@ -51,16 +66,14 @@ export class SshConnectionManager {
       return existing
     }
 
-    // Why: background dials (managed tunnel, host status, census) would retry a cancelled sign-in
-    // every few seconds; refuse them as an auth failure, without touching the network.
+    // Do not repeatedly redial or reprompt after the user declines a background sign-in.
     if (isSshCredentialDeclined(target.id)) {
       throw createSshCredentialDeclinedError(target.id, target.label)
     }
 
-    // Why: replacing a connection whose own reconnect is asking the user would close that dialog
-    // and open another one.
+    // Reusing/replacing an active credential request would close the dialog the user is answering.
     if (this.connectingTargets.has(target.id) || existing?.isAwaitingCredential()) {
-      throw new Error(`Connection to ${target.label} is already in progress`)
+      throw new Error(`Connection to ${target.label} ${SSH_CONNECT_IN_PROGRESS_SUFFIX}`)
     }
 
     const attempt = Symbol(target.id)
@@ -70,8 +83,7 @@ export class SshConnectionManager {
       if (existing) {
         this.retainSignIn(target.id, existing)
         await existing.disconnect()
-        // Why: a Disconnect or Remove while the old transport closed cancels this attempt;
-        // registering now would revive the host the user just let go.
+        // A Disconnect/Remove during old close must not let this attempt revive the host.
         if (this.connectingTargets.get(target.id) !== attempt) {
           throw new Error(`Connection to ${target.label} was cancelled`)
         }
@@ -84,8 +96,7 @@ export class SshConnectionManager {
       try {
         await conn.connect()
       } catch (err) {
-        // Why: a failed startup can still hold sockets, so it is disconnected, not just forgotten;
-        // quietly, so its published error is not replaced by a plain disconnect.
+        // Failed startup may retain sockets; close quietly so cleanup cannot overwrite its published error.
         try {
           await this.disconnectConnection(target.id, conn, { quiet: true })
         } catch (cleanupError) {
@@ -103,8 +114,7 @@ export class SshConnectionManager {
   }
 
   async disconnect(targetId: string): Promise<void> {
-    // Why: disconnect invalidates the old attempt immediately so a reconnect
-    // need not wait for the cancelled socket's late completion.
+    // Invalidate immediately so replacement connect need not wait for late socket completion.
     this.connectingTargets.delete(targetId)
     this.retainedSignIns.delete(targetId)
     const conn = this.connections.get(targetId)
@@ -113,11 +123,7 @@ export class SshConnectionManager {
     }
   }
 
-  /**
-   * Close one specific connection, clearing the pool entry only when it is still the registered one.
-   * Why: a cancelled connect whose transport opened late owns that exact connection — disconnecting
-   * by target id would tear down the replacement's live transport instead.
-   */
+  /** Close the captured connection and clear only its own pool entry; target-id teardown could kill a newer replacement. */
   async disconnectConnection(
     targetId: string,
     conn: SshConnection,
@@ -160,7 +166,6 @@ export class SshConnectionManager {
     return retained?.endpoint === signInEndpoint(target) ? retained.credentials : undefined
   }
 
-  /** Whether connecting this target can sign in without asking the user. */
   hasCachedCredential(target: SshTarget): boolean {
     const retained = this.retainedSignIns.get(target.id)
     return (

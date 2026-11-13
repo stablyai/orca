@@ -1,28 +1,26 @@
-import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
-import { rename, rm } from 'node:fs/promises'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
-import type {
-  SpeechModelManifest,
-  SpeechModelState,
-  SpeechModelStatus
-} from '../../shared/speech-types'
+import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
-import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import type { SpeechModelDownload } from './model-download-catalog'
+import { downloadSileroVadInBackground, speechModelDownload } from './speech-vad-model'
+import { hasCloudSpeechCredentials } from './cloud-transcription-target'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
   type SpeechModelCacheDir
 } from './model-cache-path'
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
+import { hasSpeechModelFiles } from './speech-model-files'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
-import {
-  removeModelDownloadFiles,
-  removeModelDownloadStaging
-} from './speech-model-download-cleanup'
+import { removeModelDownloadStaging } from './speech-model-download-cleanup'
+import { previousSpeechModelDir, swapInSpeechModelDir } from './speech-model-dir-swap'
 
 type DownloadHandle = {
   abort: () => void
+  settled: Promise<void>
 }
 
 type ProgressCallback = (modelId: string, progress: number) => void
@@ -38,7 +36,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   constructor(
     customModelsDir: string | undefined,
     openRequest: OpenSpeechDownloadRequest,
-    private readonly hasOpenAiKey: () => boolean = hasOpenAiSpeechApiKey
+    private readonly hasCloudCredentials = hasCloudSpeechCredentials
   ) {
     super(openRequest)
     const requestedModelsDir =
@@ -46,7 +44,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     const prepared = this.prepareModelsDir(requestedModelsDir)
     this.modelsDir = prepared.modelsDir
     this.migrationSourceDir = prepared.migrationSourceDir
-    // Why: migration copies large model files, so run it async and gate state reads on it to keep the UI responsive.
+    // Gate reads on asynchronous migration so large copies do not block the UI.
     this.migrationReady = migrateSpeechModelCacheIfNeeded(
       prepared.migrationSourceDir,
       prepared.modelsDir
@@ -54,7 +52,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   setProgressCallback(cb: ProgressCallback): () => void {
-    // Why: return an unsubscribe so concurrent settings windows don't replace each other's callback.
+    // Subscriptions let concurrent settings windows receive progress.
     this.progressCallbacks.add(cb)
     return () => {
       this.progressCallbacks.delete(cb)
@@ -98,20 +96,24 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return cached
     }
 
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
-      return { id: modelId, status: this.hasOpenAiKey() ? 'ready' : 'not-downloaded' }
+    if (manifest.provider !== 'local') {
+      const ready = this.hasCloudCredentials(manifest.provider)
+      return { id: modelId, status: ready ? 'ready' : 'not-downloaded' }
     }
 
     const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.downloadFiles, modelDir)) {
       const state: SpeechModelState = { id: modelId, status: 'ready' }
       this.modelStates.set(modelId, state)
       return state
+    }
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.legacyDownloadFiles, modelDir)) {
+      return { id: modelId, status: 'not-downloaded', needsUpdate: true }
     }
 
     return { id: modelId, status: 'not-downloaded' }
@@ -122,7 +124,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   private getSafeModelDir(modelId: string, root: string = this.modelsDir): string {
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
@@ -135,30 +137,17 @@ export class ModelManager extends SpeechModelDownloadTransport {
     return modelDir
   }
 
-  private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
-    if (!manifest.downloadFiles) {
-      return false
-    }
-    return manifest.downloadFiles.every(({ name, sizeBytes }) => {
-      try {
-        return statSync(join(modelDir, name)).size === sizeBytes
-      } catch {
-        return false
-      }
-    })
-  }
-
   async downloadModel(modelId: string): Promise<void> {
-    // Why: no migration await — it never races a download, and awaiting would defer setup cancelDownload relies on.
+    // Do not await migration: downloads cannot race it, and cancellation needs synchronous setup.
     if (this.activeDownloads.has(modelId)) {
       return
     }
 
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
-    if (!isLocalSpeechModel(manifest)) {
+    if (manifest.provider !== 'local') {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
@@ -166,7 +155,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.downloadFiles, modelDir)) {
       this.updateState(modelId, 'ready')
       return
     }
@@ -175,7 +164,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
     const stagingDir = `${modelDir}.partial`
     const legacyArchivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
-    // Why: resuming an unverified file left by a crashed process could preserve corrupt bytes.
+    // Crash leftovers are unverified; resuming could retain corrupt bytes.
     rmSync(stagingDir, { recursive: true, force: true })
     try {
       rmSync(legacyArchivePath, { force: true })
@@ -185,13 +174,15 @@ export class ModelManager extends SpeechModelDownloadTransport {
     mkdirSync(stagingDir, { recursive: true })
     let aborted = false
     const abortController = new AbortController()
+    const settled = Promise.withResolvers<void>()
 
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
-        // Why: a stalled HTTPS request may never deliver another chunk, so tear it down immediately.
+        // Abort immediately: stalled HTTPS may never deliver another chunk.
         abortController.abort()
-      }
+      },
+      settled: settled.promise
     }
     this.activeDownloads.set(modelId, handle)
 
@@ -208,22 +199,22 @@ export class ModelManager extends SpeechModelDownloadTransport {
         return
       }
 
-      await rm(modelDir, { recursive: true, force: true })
-      await rename(stagingDir, modelDir)
+      await swapInSpeechModelDir(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
+      if (getCatalogModel(modelId)?.files?.some((file) => file.endsWith('.gguf'))) {
+        downloadSileroVadInBackground(this)
+      }
     } catch (err) {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
-      }
-      removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
-      if (!aborted) {
-        // Why: the settings UI awaits this to surface failures; stay quiet on cancellation, rethrow real errors.
+        // Settings awaits real failures; cancellation stays quiet.
         throw err
       }
     } finally {
       this.activeDownloads.delete(modelId)
       removeModelDownloadStaging(stagingDir, legacyArchivePath)
+      settled.resolve()
     }
   }
 
@@ -244,20 +235,21 @@ export class ModelManager extends SpeechModelDownloadTransport {
     if (!manifest || !isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support deletion: ${modelId}`)
     }
+    const download = this.activeDownloads.get(modelId)
     this.cancelDownload(modelId)
-    const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir)) {
-      await rm(modelDir, { recursive: true, force: true })
-    }
-    await rm(`${modelDir}.partial`, { recursive: true, force: true })
-    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
-    // Why: also delete the pre-migration copy, or the next launch re-migrates it and resurrects the model.
+    // A swap already under way ignores cancel; deleting mid-swap could race its restore.
+    await download?.settled
+    // Remove the migration source too or next launch resurrects the model.
+    const modelDirs = [this.getModelDir(modelId)]
     if (this.migrationSourceDir) {
-      const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
-      if (existsSync(sourceModelDir)) {
-        await rm(sourceModelDir, { recursive: true, force: true })
+      modelDirs.push(this.getSafeModelDir(modelId, this.migrationSourceDir))
+    }
+    for (const modelDir of modelDirs) {
+      for (const path of [modelDir, `${modelDir}.partial`, previousSpeechModelDir(modelDir)]) {
+        await rm(path, { recursive: true, force: true })
       }
     }
+    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     this.modelStates.delete(modelId)
   }
 
@@ -283,7 +275,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
     const state: SpeechModelState = { id: modelId, status, progress: reportedProgress, error }
     this.modelStates.set(modelId, state)
-    // Repeated non-download states can be the requesting window's only resync signal.
+    // Repeated non-download states may be a window's only resync signal.
     const progressValue = reportedProgress ?? (status === 'extracting' ? 0.95 : -1)
     for (const callback of this.progressCallbacks) {
       callback(modelId, progressValue)
@@ -291,7 +283,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   private async downloadModelFiles(
-    manifest: SpeechModelManifest,
+    manifest: SpeechModelDownload,
     stagingDir: string,
     modelId: string,
     isAborted: () => boolean,
@@ -330,7 +322,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       completedBytes += file.sizeBytes
     }
 
-    if (!this.validateModelFiles(manifest, stagingDir)) {
+    if (!hasSpeechModelFiles(manifest.downloadFiles, stagingDir)) {
       throw new Error('Model files missing after download')
     }
   }

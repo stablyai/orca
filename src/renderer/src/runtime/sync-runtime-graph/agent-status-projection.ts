@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
+import type { AgentMainAgentStatus } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import { programStatusFacetContent } from '../../../../shared/program-status/facet'
 
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
@@ -53,7 +53,9 @@ function serializeAgentStatusEntry(
     interrupted: entry.interrupted ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
     mainAgent: mainAgentKey(entry.mainAgent),
-    programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null
+    programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null,
+    // Undefined drops out of the JSON; null (host can name it, has not yet) stays distinct.
+    orcaSessionId: entry.orcaSessionId
   })
 }
 
@@ -66,10 +68,7 @@ export function buildRuntimeMobileAgentStatusProjection(
   }
 
   const nextEntries = Object.entries(agentStatusByPaneKey)
-  // Same key set, same entry objects: the sorted join would be character-identical to the cached
-  // string, so skip the O(N log N) sort and the O(bytes) join. Equal sizes plus every next key
-  // present in the cache proves the key sets match; a removal fails the size check and an addition
-  // fails the lookup. The cached Map is exactly what a rebuild would produce, so reuse it too.
+  // Equal size plus identical keyed entry references proves the same cached serialization; skip O(N log N) sort/O(bytes) join and reuse its Map.
   if (
     cached != null &&
     nextEntries.length === cached.entries.size &&
@@ -86,9 +85,7 @@ export function buildRuntimeMobileAgentStatusProjection(
   const entries = new Map<string, AgentStatusProjectionCacheEntry>()
   const parts: string[] = []
   let projectionUnchanged = cached != null && nextEntries.length === cached.entries.size
-  // Code-unit order, not `localeCompare`: this projection is only ever compared with `===`, so it
-  // must be deterministic, not locale-correct — and an ICU collator per comparison is ~4.5k calls
-  // per ping at the 500-entry cap.
+  // Use deterministic code-unit ordering for equality-only projections, avoiding ~4.5k ICU comparisons per ping at 500 entries.
   for (const [paneKey, entry] of nextEntries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const previous = cached?.entries.get(paneKey)
     const entryCache =
@@ -107,17 +104,4 @@ export function buildRuntimeMobileAgentStatusProjection(
     projection
   }
   return projection
-}
-
-export function buildRuntimeMobileAgentStatusProjectionForTests(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
-): string {
-  return buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey)
-}
-
-export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
-
-export function resetRuntimeMobileAgentStatusProjectionCacheForTests(): void {
-  cachedAgentStatusProjection = null
 }

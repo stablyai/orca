@@ -1,5 +1,7 @@
-import { clearBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-runtime'
-import { retireBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-retirement'
+import { desktopChatCreationHistory } from '../../runtime/client/navigation/desktop-chat-creation-history'
+import { revokeRemoteFilePreviewGrants } from '../../media/media-preview-protocol'
+import { clearBrowserRoutePartitionStorageForEnvironment } from '../../browser/routing/partitions/browser-route-partition-storage-runtime'
+import { retireBrowserRoutePartitionStorageForEnvironment } from '../../browser/routing/partitions/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
 import { clearRuntimeEnvironmentManualDisconnect } from './runtime-environment-manual-disconnect'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -7,27 +9,32 @@ import {
   forgetRemoteLayoutSnapshot,
   type RemoteLayoutSnapshotStore
 } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
+import type { HostRepoCatalogSnapshotStore } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 
-/** What a removed server leaves in the profile. */
-export type RemovedServerStore = RemoteLayoutSnapshotStore & {
-  /** Drops the unlinked server's workspace session partition. */
-  removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
-}
+export type RemovedServerStore = RemoteLayoutSnapshotStore &
+  Pick<HostRepoCatalogSnapshotStore, 'setHostRepoCatalogSnapshot'> & {
+    removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
+  }
 
 /** Retires a removed server's client-side state; resolves once its transport is invalidated. */
 export function retireRemovedRuntimeEnvironment(
   environmentId: string,
   invalidateTransport: (environmentId: string) => Promise<void> | void,
-  store: RemovedServerStore
+  store: RemovedServerStore,
+  userDataPath?: string
 ): Promise<void> {
+  if (userDataPath) {
+    void desktopChatCreationHistory(userDataPath).removeEnvironment(environmentId)
+  }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)
-  // Why: listings enumerate session partitions as known hosts, so a kept one names a dead server.
+  revokeRemoteFilePreviewGrants(environmentId)
+  // Retained session partitions make listings advertise the removed server as a known host.
   store.removeWorkspaceSessionHost(toRuntimeExecutionHostId(environmentId))
   forgetRemoteLayoutSnapshot(store, environmentId)
+  store.setHostRepoCatalogSnapshot(environmentId, null)
   clearRuntimeEnvironmentManualDisconnect(environmentId)
   const retiring = Promise.resolve(invalidateTransport(environmentId))
-  // Why: removal is an explicit lifecycle decision, so its client-hosted browser storage goes
-  // too -- but only once the client host releases its partitions, or every one refuses as live.
+  // Explicit removal retires browser storage after client hosts release their live partitions.
   void retireBrowserRoutePartitionStorageForEnvironment({
     environmentId,
     whenClientHostClosed: retiring,

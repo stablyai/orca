@@ -1,10 +1,10 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 
 export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['emulator', 'list'],
-    summary: 'List available/running emulators (Orca-managed + raw serve-sim)',
+    summary: "List the worktree's attached emulator sessions (iOS and Android)",
     usage: 'orca emulator list [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },

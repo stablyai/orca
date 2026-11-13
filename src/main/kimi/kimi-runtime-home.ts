@@ -1,45 +1,21 @@
 import { homedir } from 'node:os'
 import { join, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import {
-  resolveLocalAccountRuntimeTarget,
-  type LocalAccountRuntimeTarget
-} from '../../shared/local-account-runtime'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
+import { getWslHomeAsync, listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
+import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 
 export type KimiHomeResolution = LocalAccountRuntimeTarget & {
   /** null when the distro is missing or stopped, or its home could not be probed. */
   path: string | null
 }
 
-// Why: match the CLI's `KIMI_CODE_HOME ?? ~/.kimi-code` resolution so we read the
-// same files the running Kimi CLI writes.
+// Match CLI KIMI_CODE_HOME resolution.
 export function getHostKimiHome(): string {
   return process.env.KIMI_CODE_HOME?.trim() || join(homedir(), '.kimi-code')
 }
 
-/**
- * Kimi has no per-account runtime switcher, so it follows the local-account
- * runtime policy. WSL is Windows-only — pin everywhere else so no `wsl.exe`
- * probe is attempted on a stale `wsl` setting synced from a Windows machine.
- */
-export function getKimiRuntimeTarget(
-  settings: GlobalSettings,
-  platform: NodeJS.Platform = process.platform
-): LocalAccountRuntimeTarget {
-  if (platform !== 'win32') {
-    return { runtime: 'host', wslDistro: null }
-  }
-  return resolveLocalAccountRuntimeTarget(settings, platform)
-}
-
-/**
- * Resolve a runtime target to the Kimi home Orca should read (UNC path for WSL).
- * Async because it runs on every quota poll: the sync `wsl.exe` probes park
- * Electron's main process for up to 5s each cycle while a distro is stopped.
- */
+/** Use async WSL probes on quota polls to avoid blocking Electron; WSL paths are UNC. */
 export async function resolveKimiHome(
   target: LocalAccountRuntimeTarget,
   platform: NodeJS.Platform = process.platform
@@ -51,7 +27,7 @@ export async function resolveKimiHome(
   if (!distro) {
     return { runtime: 'wsl', wslDistro: null, path: null }
   }
-  // Why: a quota poll is background work and must not boot a stopped distro.
+  // Background quota polling must not start stopped distros.
   if (!(await isWslDistroRunning(distro))) {
     return { runtime: 'wsl', wslDistro: distro, path: null }
   }
@@ -60,7 +36,6 @@ export async function resolveKimiHome(
   return { runtime: 'wsl', wslDistro: distro, path: home ? joinKimiHome(home) : null }
 }
 
-/** Async twin of `getDefaultWslDistro`, which shells out to wsl.exe synchronously. */
 async function defaultWslDistro(): Promise<string | null> {
   return (await listWslDistrosAsync())[0] ?? null
 }

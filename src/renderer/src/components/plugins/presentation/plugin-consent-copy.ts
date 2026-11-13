@@ -1,0 +1,61 @@
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import type { PluginTrust } from './plugin-access-profile'
+
+/** Plain words for the chip: the broadest thing it may do. */
+export function pluginTrustLabel(trust: PluginTrust, t: Translate = translate): string {
+  if (trust.worker) {
+    return t('auto.components.settings.pluginConsentCopy.fullAccess', 'Full access')
+  }
+  if (trust.declarative) {
+    return trust.recipesOnly
+      ? t('auto.components.settings.pluginConsentCopy.addsVmRecipes', 'Adds VM recipes')
+      : t('auto.components.settings.pluginConsentCopy.addsCommands', 'Adds commands')
+  }
+  if (trust.panel) {
+    return trust.editor
+      ? t('auto.components.settings.pluginConsentCopy.opensAndEditsFiles', 'Opens and edits files')
+      : trust.sidebarPanel
+        ? t('auto.components.settings.pluginConsentCopy.addsPanel', 'Adds a panel')
+        : t('auto.components.settings.pluginConsentCopy.runsPluginCode', 'Runs plugin code')
+  }
+  return t('auto.components.settings.pluginConsentCopy.contentOnly', 'Content only')
+}
+
+/** Every warning that applies. Panels and editors are the publisher's code, not a sandbox. */
+export function pluginTrustWarnings(trust: PluginTrust, t: Translate = translate): string[] {
+  const warnings: string[] = []
+  if (trust.worker) {
+    warnings.push(
+      t(
+        'auto.components.settings.PluginConsentDialog.fullAccessWarning',
+        'Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.'
+      )
+    )
+  }
+  if (trust.declarative) {
+    warnings.push(
+      t(
+        'auto.components.settings.PluginConsentDialog.instructionalWarning',
+        'Its commands can act for you or your agents'
+      )
+    )
+  }
+  if (trust.panel && !trust.worker) {
+    warnings.push(
+      t(
+        'auto.components.settings.PluginConsentDialog.uiWarning',
+        "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
+      )
+    )
+  }
+  if (warnings.length === 0) {
+    warnings.push(
+      t(
+        'auto.components.settings.PluginConsentDialog.declarativeWarning',
+        'Content only. No code runs.'
+      )
+    )
+  }
+  return warnings
+}

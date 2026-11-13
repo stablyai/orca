@@ -17,11 +17,11 @@ on:
       - '.github/actions/prepare-windows-cli-launcher/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - 'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - '.github/actions/prepare-wayland-clipboard/**'
       - 'native/wayland-clipboard/**'
-      - 'config/scripts/build-wayland-clipboard.mjs'
+      - 'config/scripts/native-build/linux/build-wayland-clipboard.mjs'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
       - 'config/docker/daemon-shutdown-descendants/**'
@@ -30,20 +30,20 @@ on:
       - 'pnpm-workspace.yaml'
       - '.npmrc'
       - 'config/pnpmfile.cjs'
-      - 'config/scripts/ensure-native-runtime.mjs'
-      - 'config/scripts/initialize-windows-native-toolchain.mjs'
-      - 'config/scripts/capture-windows-native-environment.cmd'
-      - 'config/scripts/rebuild-native-deps.mjs'
-      - 'config/scripts/node-pty-job-ownership.cjs'
-      - 'config/scripts/windows-pe-machine.cjs'
-      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
-      - 'config/scripts/windows-process-tree-creation-time.cjs'
-      - 'config/scripts/install-electron-package-binary.mjs'
-      - 'config/scripts/electron-platform-path.mjs'
+      - 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs'
+      - 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs'
+      - 'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
+      - 'config/scripts/native-build/node-addons/rebuild-native-deps.mjs'
+      - 'config/scripts/native-build/node-addons/node-pty-job-ownership.cjs'
+      - 'config/scripts/native-build/windows/windows-pe-machine.cjs'
+      - 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/native-build/windows/windows-process-tree-creation-time.cjs'
+      - 'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs'
+      - 'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs'
       - 'config/scripts/zip-extractor-command.mjs'
       - 'src/shared/zip-extractor-command.ts'
-      - 'config/scripts/shared-electron-dist-cache.mjs'
-      - 'config/scripts/space-sharing-copy.mjs'
+      - 'config/scripts/electron-installation/shared-dist-cache/shared-electron-dist-cache.mjs'
+      - 'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs'
       - 'config/patches/**'
       - 'native/windows-registry/**'
       - 'native/windows-security/**'
@@ -52,7 +52,7 @@ on:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - 'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-wayland-clipboard/**'
 
 permissions:
@@ -66,9 +66,14 @@ jobs:
   warm:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     concurrency:
-      group: ci-cache-warmup-linux-x64-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-x64-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    # Blacksmith and GitHub-hosted jobs restore from separate cache stores; warm both.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -83,6 +88,8 @@ jobs:
           native-runtime: node
           node-version: '24'
           cache-electron-package: 'true'
+          # No hosted job restores the root store, so keep it out of GitHub's cache quota.
+          cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
           cache-pnpm-store-lookup-only: 'true'
 
       - uses: ./.github/actions/prepare-headless-compiler
@@ -90,7 +97,7 @@ jobs:
           seed: 'true'
 
       - name: Populate shared Electron archive
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
 
       - uses: ./.github/actions/prepare-git-compatibility
 

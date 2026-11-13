@@ -1,25 +1,27 @@
 import React from 'react'
 import { Minus, Plus, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import {
   getDiscardAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
   type DiscardAllArea
-} from '../commit/discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
 import { SourceControlSectionFileList } from './section-file-list'
+import { useSourceControlScope } from '../panel/worktree-scope'
 import {
   getSourceControlSectionViewAction,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
   type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
-} from './section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import type {
   RenderableSourceControlNode,
   RenderableSubmoduleListItem
@@ -81,19 +83,21 @@ export function SourceControlUncommittedSections(props: {
   handleContextMenu: (key: string) => void
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openUncommittedFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
+  handleResolveConflict: (entry: GitStatusEntry, resolution: ConflictResolution) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
+  const embedded = useSourceControlScope() !== null
+  const t = useTranslate()
   return (
     <>
       {props.displaySections.map((section) => {
         const { area, id, items } = section
         const isCollapsed = props.collapsedSections.has(id)
-        // Why: bulk stage/unstage act on the *unfiltered* group; the +/- hides while filtering to avoid acting on more than what's shown.
-        // Why: visibility and execution resolve paths via the same eligibility rules, so the button never shows for a set the handler would filter to empty.
+        // Bulk actions use unfiltered groups; hide them while filtering and share execution eligibility to avoid empty actions.
         const actionSection = props.unfilteredDisplaySectionsById.get(id) ?? section
         const actionItems = actionSection.items
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
@@ -107,7 +111,7 @@ export function SourceControlUncommittedSections(props: {
         return (
           <div key={id}>
             <SectionHeader
-              label={translate(sectionLabel.key, sectionLabel.fallback)}
+              label={t(sectionLabel.key, sectionLabel.fallback)}
               count={items.length}
               conflictCount={items.filter((entry) => entry.conflictStatus === 'unresolved').length}
               isCollapsed={isCollapsed}
@@ -117,7 +121,7 @@ export function SourceControlUncommittedSections(props: {
                   {canRevertAll && (
                     <ActionButton
                       icon={Undo2}
-                      title={translate(
+                      title={t(
                         'auto.components.right.sidebar.SourceControl.ce41708855',
                         'Discard all'
                       )}
@@ -131,7 +135,7 @@ export function SourceControlUncommittedSections(props: {
                   {canStageAll && (
                     <ActionButton
                       icon={Plus}
-                      title={translate(
+                      title={t(
                         'auto.components.right.sidebar.SourceControl.24d2598eff',
                         'Stage all'
                       )}
@@ -145,7 +149,7 @@ export function SourceControlUncommittedSections(props: {
                   {canUnstageAll && (
                     <ActionButton
                       icon={Minus}
-                      title={translate(
+                      title={t(
                         'auto.components.right.sidebar.SourceControl.9339382454',
                         'Unstage all'
                       )}
@@ -167,44 +171,44 @@ export function SourceControlUncommittedSections(props: {
                         props.onViewSection(sectionViewAction)
                       }}
                     >
-                      {translate(
-                        'auto.components.right.sidebar.SourceControl.48db37cca9',
-                        'View all'
-                      )}
+                      {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
                     </Button>
                   ) : null}
                 </div>
               }
             />
             {!isCollapsed && (
-              <SourceControlSectionFileList
-                treeRows={props.visibleTreeRowsBySection[id] ?? []}
-                listRows={props.visibleListRowsBySection[id] ?? []}
-                sourceControlViewMode={props.sourceControlViewMode}
-                fileListScrollElement={props.fileListScrollElement}
-                normalizedFilter={props.normalizedFilter}
-                isExecutingBulk={props.isExecutingBulk}
-                collapsedTreeDirs={props.collapsedTreeDirs}
-                toggleTreeDir={props.toggleTreeDir}
-                requestDiscardPaths={props.requestDiscardPaths}
-                handleStageAllPaths={props.handleStageAllPaths}
-                handleUnstagePaths={props.handleUnstagePaths}
-                expandedSubmoduleKeys={props.expandedSubmoduleKeys}
-                toggleSubmodule={props.toggleSubmodule}
-                currentWorktreeId={props.currentWorktreeId}
-                worktreePath={props.worktreePath}
-                selectedKeySet={props.selectedKeySet}
-                activeOpenRowKeys={props.activeOpenRowKeys}
-                handleSelect={props.handleSelect}
-                handleContextMenu={props.handleContextMenu}
-                revealInExplorer={props.revealInExplorer}
-                activeConnectionId={props.activeConnectionId}
-                openUncommittedFile={props.openUncommittedFile}
-                handleStage={props.handleStage}
-                handleUnstage={props.handleUnstage}
-                requestDiscardEntry={props.requestDiscardEntry}
-                diffCommentCountByPath={props.diffCommentCountByPath}
-              />
+              <div className={embedded ? 'py-px' : undefined}>
+                <SourceControlSectionFileList
+                  treeRows={props.visibleTreeRowsBySection[id] ?? []}
+                  listRows={props.visibleListRowsBySection[id] ?? []}
+                  sourceControlViewMode={props.sourceControlViewMode}
+                  fileListScrollElement={props.fileListScrollElement}
+                  normalizedFilter={props.normalizedFilter}
+                  isExecutingBulk={props.isExecutingBulk}
+                  collapsedTreeDirs={props.collapsedTreeDirs}
+                  toggleTreeDir={props.toggleTreeDir}
+                  requestDiscardPaths={props.requestDiscardPaths}
+                  handleStageAllPaths={props.handleStageAllPaths}
+                  handleUnstagePaths={props.handleUnstagePaths}
+                  expandedSubmoduleKeys={props.expandedSubmoduleKeys}
+                  toggleSubmodule={props.toggleSubmodule}
+                  currentWorktreeId={props.currentWorktreeId}
+                  worktreePath={props.worktreePath}
+                  selectedKeySet={props.selectedKeySet}
+                  activeOpenRowKeys={props.activeOpenRowKeys}
+                  handleSelect={props.handleSelect}
+                  handleContextMenu={props.handleContextMenu}
+                  revealInExplorer={props.revealInExplorer}
+                  activeConnectionId={props.activeConnectionId}
+                  handleOpenDiff={props.handleOpenDiff}
+                  handleStage={props.handleStage}
+                  handleResolveConflict={props.handleResolveConflict}
+                  handleUnstage={props.handleUnstage}
+                  requestDiscardEntry={props.requestDiscardEntry}
+                  diffCommentCountByPath={props.diffCommentCountByPath}
+                />
+              </div>
             )}
           </div>
         )

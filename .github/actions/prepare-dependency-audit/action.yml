@@ -18,7 +18,7 @@ runs:
           pnpm-lock.yaml pnpm-workspace.yaml mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml \
           native config/patches mobile/patches | \
           awk '$1 ~ /^100(644|755)$/ {sub(/^[^\t]*\t/, ""); print}' | \
-          rg '(^|/)(pnpm-lock.yaml|pnpm-workspace.yaml)$|^native/[^/]+/Cargo\.(toml|lock)$|^(config|mobile)/patches/.*\.patch$')
+          grep -E '(^|/)(pnpm-lock.yaml|pnpm-workspace.yaml)$|^native/[^/]+/Cargo\.(toml|lock)$|^(config|mobile)/patches/.*\.patch$')
         test "${#files[@]}" -gt 0
         mkdir candidate
         git archive --worktree-attributes FETCH_HEAD -- "${files[@]}" | tar -x -C candidate

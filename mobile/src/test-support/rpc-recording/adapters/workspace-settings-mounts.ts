@@ -1,3 +1,5 @@
+import type * as UseMobileTasksWorkspaceCreateActionsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-create-actions'
+import type * as UseNewWorkspaceCreateSubmitModule from '../../../components/use-new-workspace-create-submit'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -6,9 +8,7 @@ import { operationModuleLoader } from '../operation-module-loader'
 export function workspaceSettingsMounts(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  // `settings.task-workspace` stops at the setup prompt, which is the branch that scenario set
-  // exercises. A second registration resolves setup instead, so createWorkspace runs to
-  // worktree.create and the reply matrix reaches that call's acceptance policy.
+  // Resolve setup in a second registration so the matrix reaches worktree.create instead of stopping at the prompt.
   function taskWorkspaceAdapter(setupResolution: {
     kind: string
     command?: string
@@ -16,14 +16,13 @@ export function workspaceSettingsMounts(
     decision?: string
   }): MountAdapter {
     return (context) => {
-      const useCreate = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-workspace-create-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx'
+      const useCreate = modules.load<typeof UseMobileTasksWorkspaceCreateActionsModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-create-actions.tsx'
       ).useMobileTasksWorkspaceCreateActions
       const model = observableModel(context, {
         client: context.client,
         hostId: 'host-1',
+        repos: [],
         tasksSupported: true,
         taskStateHydrated: true,
         runtimeTaskSettings: { disabledTuiAgents: ['claude'] },
@@ -77,11 +76,12 @@ export function workspaceSettingsMounts(
 
   return {
     'settings.workspace-submit': (context) => {
-      const useSubmit = modules.load<
-        typeof import('../../../components/use-new-workspace-create-submit')
-      >('mobile/src/components/use-new-workspace-create-submit.ts').useNewWorkspaceCreateSubmit
+      const useSubmit = modules.load<typeof UseNewWorkspaceCreateSubmitModule>(
+        'mobile/src/components/use-new-workspace-create-submit.ts'
+      ).useNewWorkspaceCreateSubmit
       const model = observableModel(context, {
         client: context.client,
+        repos: [],
         selectedRepo: { id: 'repo-1', displayName: 'Repo' },
         selectedAgent: { id: 'claude', label: 'Claude' },
         runtimeSettings: { disabledTuiAgents: ['claude'] },
@@ -97,12 +97,14 @@ export function workspaceSettingsMounts(
         runSetup: false,
         trustedOrcaHooks: {},
         getWorktreeCreateCutoverSupport: async () => false,
-        // False for the same reason as the cutover probe: an old host is the baseline the
-        // recordings pin, so the create stays on worktree.create rather than agent.launch.
+        getBranchIntentSupport: async () => false,
+        // Pin an older host so create remains worktree.create rather than agent.launch.
         getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),
-        onClose: () => context.effect('close', null)
+        onClose: () => context.effect('close', null),
+        // Not opened from a folder.
+        folderLaunch: undefined
       })
       let state: ReturnType<typeof useSubmit>
       const hook = hookMount(() => {

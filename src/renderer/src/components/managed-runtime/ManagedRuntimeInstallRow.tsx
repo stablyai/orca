@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   cancelManagedRuntimeInstall,
   installManagedRuntime,
   removeManagedRuntime
-} from '@/runtime/managed-runtime-install-status'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/managed-runtime-install-status'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
@@ -19,21 +19,22 @@ import { ManagedRuntimeLinkButton } from './ManagedRuntimeLinkButton'
 // Parts are joined by ' · ', so a sentence followed by another part drops its full stop.
 const said = (text: string, last: boolean): string => (last ? text : text.replace(/[.。]$/u, ''))
 
-/** Settings' one-line install state for the runtime Orca provides an agent, on the host it runs
- *  on, with Cancel and retries as links. A first Install button, and the ⋯ menu with Update,
- *  Reinstall and Remove, are what the caller places at its row's end. A chat's install card shows
- *  the same host answer, so either one's action moves both. */
+/** Use the host’s shared install snapshot so Settings and chat agree; the caller owns first-install and menu actions. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
   children: (line: React.ReactNode, actions: React.ReactNode) => React.ReactNode
   /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
   signInRunning?: boolean
+  buttonSize?: 'xs' | 'default'
+  /** False leaves out the ⋯ Reinstall/Remove menu, for rows that only prompt an install. */
+  menu?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
   const [pending, setPending] = useState<'install' | 'cancel' | 'remove' | null>(null)
-  const view = managedRuntimeInstallView(observation.snapshot, agentLabel, pending === 'cancel')
+  const view = managedRuntimeInstallView(observation.snapshot, agentLabel, pending === 'cancel', t)
   const [refusal, setRefusal] = useState<string | null>(null)
   const { subject } = observation
   const act = (kind: 'install' | 'cancel' | 'remove', request: () => Promise<void>): void => {
@@ -45,11 +46,11 @@ export function ManagedRuntimeInstallRow(props: {
           cause instanceof Error
             ? cause.message
             : kind === 'cancel'
-              ? translate(
+              ? t(
                   'components.managed-runtime.cancelFailed',
                   "Couldn't cancel the installation. Try again."
                 )
-              : translate('components.managed-runtime.failed', 'Installation failed. Try again.')
+              : t('components.managed-runtime.failed', 'Installation failed. Try again.')
         )
       )
       .finally(() => setPending(null))
@@ -74,7 +75,7 @@ export function ManagedRuntimeInstallRow(props: {
           <Progress
             value={view.progress}
             className="h-1 w-44"
-            aria-label={translate('components.managed-runtime.progress', '{{agent}} download', {
+            aria-label={t('components.managed-runtime.progress', '{{agent}} download', {
               agent: agentLabel
             })}
           />
@@ -103,7 +104,6 @@ export function ManagedRuntimeInstallRow(props: {
   if (view.note) {
     parts.push(<span key="note">{view.note}</span>)
   }
-  // The line keeps its height while the first read is out, so nothing shifts when it lands.
   const line = (
     <div
       role="status"
@@ -125,14 +125,14 @@ export function ManagedRuntimeInstallRow(props: {
         <>
           {button ? (
             <Button
-              size="xs"
+              size={props.buttonSize ?? 'xs'}
               disabled={button.kind === 'cancel' ? pending !== null : held}
               onClick={() => act(button.kind, primary(button))}
             >
               {button.label}
             </Button>
           ) : null}
-          {install || remove ? (
+          {props.menu !== false && (install || remove) ? (
             <ManagedRuntimeActionsMenu
               agentLabel={agentLabel}
               host={subject.target}

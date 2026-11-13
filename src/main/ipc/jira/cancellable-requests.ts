@@ -4,13 +4,7 @@ function normalizeRequestId(value: unknown): string | undefined {
 
 const CANCEL_TOMBSTONE_TTL_MS = 30_000
 
-/**
- * Tracks one live AbortController per renderer-supplied request id so a superseded Jira call
- * releases its slot in the shared request pool instead of draining it.
- *
- * Cancel can race ahead of run() (renderer abort before IPC registers). Tombstones keep that
- * cancel sticky until run starts, so a late registration aborts immediately.
- */
+/** Cancel superseded work to release queue slots; tombstones preserve cancellation arriving before IPC registration. */
 export class JiraCancellableRequests {
   private readonly controllers = new Map<string, AbortController>()
   private readonly cancelTombstones = new Map<string, number>()
@@ -46,14 +40,12 @@ export class JiraCancellableRequests {
       live.abort()
       return
     }
-    // Re-delete first: Map.set keeps an existing key's original position, which would
-    // strand a stale expiry ahead of newer ones and stall the front-to-back sweep.
+    // Refresh insertion order so expiry sweeping cannot stop at an older renewed tombstone.
     this.cancelTombstones.delete(id)
     this.cancelTombstones.set(id, Date.now() + CANCEL_TOMBSTONE_TTL_MS)
   }
 
-  // Why: a cancel whose run() never arrives would otherwise leak its tombstone forever.
-  // Expiries only increase and Map keeps insertion order, so stop at the first live entry.
+  // Bound cancels whose runs never arrive; insertion order matches increasing expiry times.
   private pruneExpiredTombstones(): void {
     const now = Date.now()
     for (const [id, expiresAt] of this.cancelTombstones) {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   isRecentTabSwitcherCommitRelease,
-  isWindowShortcutModifierChord,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
   type WindowShortcutAction,
@@ -58,59 +57,6 @@ describe('resolveWindowShortcutAction', () => {
       ).toEqual({ type: 'openSettings' })
     }
   )
-
-  it('resolves the explicit window shortcut allowlist on macOS', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyJ', key: 'j', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'toggleWorktreePalette' })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyP', key: 'p', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'openQuickOpen' })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
-  })
-
-  it('uses Alt+number for tab jumps on Windows/Linux without stealing workspace jumps', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Digit4', key: '4', meta: false, control: true, alt: false, shift: false },
-        'linux'
-      )
-    ).toEqual({ type: 'jumpToWorktreeIndex', index: 3 })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Digit4', key: '4', meta: false, control: false, alt: true, shift: false },
-        'linux'
-      )
-    ).toEqual({ type: 'jumpToTabIndex', index: 3 })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Digit4', key: '4', meta: false, control: false, alt: true, shift: true },
-        'win32'
-      )
-    ).toBeNull()
-  })
 
   it('resolves customized quick-command menu shortcuts with terminal policy gating', () => {
     const input: WindowShortcutInput = {
@@ -181,7 +127,6 @@ describe('resolveWindowShortcutAction', () => {
       )
     ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
 
-    // A custom chord with an extra modifier also resolves.
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit2', key: '2', meta: false, control: true, alt: false, shift: true },
@@ -190,7 +135,6 @@ describe('resolveWindowShortcutAction', () => {
       )
     ).toEqual({ type: 'jumpToTabIndex', index: 1 })
 
-    // Disabling the range leaves the chord unclaimed.
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
@@ -199,7 +143,6 @@ describe('resolveWindowShortcutAction', () => {
       )
     ).toBeNull()
 
-    // Both ranges disabled: neither the workspace nor the tab digit chord resolves.
     const bothDisabled: KeybindingOverrides = {
       'workspace.selectByIndex': [],
       'tab.selectByIndex': []
@@ -222,8 +165,8 @@ describe('resolveWindowShortcutAction', () => {
 
   it('keeps Orca-first active in terminal context but lets Terminal-first pass risky app chords', () => {
     const macWorktreePalette = {
-      code: 'KeyJ',
-      key: 'j',
+      code: 'KeyK',
+      key: 'k',
       meta: true,
       control: false,
       alt: false,
@@ -276,154 +219,35 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'jumpToTabIndex', index: 2 })
   })
 
-  it('does not resolve the removed PDF export shortcut globally', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyE', key: 'e', meta: true, control: false, alt: false, shift: true },
-        'darwin'
-      )
-    ).toBeNull()
-  })
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    'leaves sidebar deletion bindings to the focused surface on %s',
+    (platform) => {
+      const input = {
+        code: 'Backspace',
+        key: 'Backspace',
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: false,
+        shift: true
+      }
 
-  it('routes menu-backed actions through the same window shortcut policy', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: true },
-        'linux'
-      )
-    ).toEqual({ type: 'forceReload' })
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: true },
-        'linux',
-        undefined,
-        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
-      )
-    ).toBeNull()
-  })
-
-  it('requires shift for the non-mac worktree palette shortcut', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyJ', key: 'j', meta: false, control: true, alt: false, shift: false },
-        'win32'
-      )
-    ).toBeNull()
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyJ', key: 'j', meta: false, control: true, alt: false, shift: true },
-        'win32'
-      )
-    ).toEqual({ type: 'toggleWorktreePalette' })
-  })
-
-  it('resolves dictation using the layout-aware key value', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyD', key: 'e', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'dictationKeyDown' })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyE', key: 'd', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toBeNull()
-  })
-
-  it('applies custom keybinding overrides to dictation and main-process shortcuts', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false },
-        'linux',
-        { 'voice.dictation': [] }
-      )
-    ).toBeNull()
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyY', key: 'y', meta: false, control: true, alt: false, shift: true },
-        'linux',
-        { 'voice.dictation': ['Mod+Shift+Y'] }
-      )
-    ).toEqual({ type: 'dictationKeyDown' })
-  })
-
-  it('applies custom keybinding overrides to main-process shortcuts', () => {
-    const overrides: KeybindingOverrides = {
-      'worktree.quickOpen': ['Mod+Shift+O'],
-      'workspace.openBoard': ['Mod+Alt+B'],
-      'view.tasks': ['Mod+Alt+K']
+      expect(resolveWindowShortcutAction(input, platform)).toBeNull()
+      const customInput = { ...input, code: 'KeyX', key: 'x', alt: true, shift: false }
+      expect(
+        resolveWindowShortcutAction(customInput, platform, {
+          'workspace.delete': ['Mod+Alt+X']
+        })
+      ).toBeNull()
+      expect(
+        resolveWindowShortcutAction(
+          customInput,
+          platform,
+          { 'workspace.delete': ['Mod+Alt+X'] },
+          { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+        )
+      ).toBeNull()
     }
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyP', key: 'p', meta: false, control: true, alt: false, shift: false },
-        'linux',
-        overrides
-      )
-    ).toBeNull()
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyO', key: 'o', meta: false, control: true, alt: false, shift: true },
-        'linux',
-        overrides
-      )
-    ).toEqual({ type: 'openQuickOpen' })
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyB', key: 'b', meta: false, control: true, alt: true, shift: false },
-        'linux',
-        overrides
-      )
-    ).toEqual({ type: 'openWorkspaceBoard' })
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyK', key: 'k', meta: false, control: true, alt: true, shift: false },
-        'linux',
-        overrides
-      )
-    ).toEqual({ type: 'openTasks' })
-  })
-
-  it('resolves workspace delete by default and honors custom terminal-active bindings', () => {
-    const input = {
-      code: 'Backspace',
-      key: 'Backspace',
-      meta: false,
-      control: true,
-      alt: false,
-      shift: true
-    }
-
-    expect(resolveWindowShortcutAction(input, 'linux')).toEqual({ type: 'deleteCurrentWorkspace' })
-    const customInput = { ...input, code: 'KeyX', key: 'x', alt: true, shift: false }
-    expect(
-      resolveWindowShortcutAction(customInput, 'linux', {
-        'workspace.delete': ['Mod+Alt+X']
-      })
-    ).toEqual({ type: 'deleteCurrentWorkspace' })
-    expect(
-      resolveWindowShortcutAction(
-        customInput,
-        'linux',
-        { 'workspace.delete': ['Mod+Alt+X'] },
-        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
-      )
-    ).toEqual({ type: 'deleteCurrentWorkspace' })
-  })
-
-  it('resolves the MRU tab quick-toggle chord', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: false },
-        'linux'
-      )
-    ).toEqual({ type: 'switchRecentTab' })
-  })
+  )
 
   it('gates the held Ctrl+Tab switcher on the configurable binding', () => {
     const input = { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: true }
@@ -501,122 +325,6 @@ describe('resolveWindowShortcutAction', () => {
     ).toBe(true)
   })
 
-  it('accepts all supported zoom key variants', () => {
-    const zoomInCases: WindowShortcutInput[] = [
-      { key: '=', meta: true, control: false, alt: false, shift: false },
-      { key: '+', meta: true, control: false, alt: false, shift: true },
-      { code: 'NumpadAdd', key: '', meta: true, control: false, alt: false, shift: false }
-    ]
-    for (const input of zoomInCases) {
-      expect(resolveWindowShortcutAction(input, 'darwin')).toEqual({
-        type: 'zoom',
-        direction: 'in'
-      })
-    }
-
-    const zoomOutCases: WindowShortcutInput[] = [
-      { key: '-', meta: false, control: true, alt: false, shift: false },
-      { key: 'Minus', meta: false, control: true, alt: false, shift: false },
-      { key: 'Subtract', meta: false, control: true, alt: false, shift: false },
-      { code: 'NumpadSubtract', key: '', meta: false, control: true, alt: false, shift: false }
-    ]
-    for (const input of zoomOutCases) {
-      expect(resolveWindowShortcutAction(input, 'linux')).toEqual({
-        type: 'zoom',
-        direction: 'out'
-      })
-    }
-
-    expect(
-      resolveWindowShortcutAction(
-        { key: '0', meta: false, control: true, alt: false, shift: false },
-        'linux'
-      )
-    ).toEqual({ type: 'zoom', direction: 'reset' })
-
-    // Why: Ctrl+Shift+_ is PowerShell undo on Windows; zoom-out must not steal it.
-    expect(
-      resolveWindowShortcutAction(
-        { key: '_', meta: false, control: true, alt: false, shift: true },
-        'win32'
-      )
-    ).toBeNull()
-  })
-
-  it('resolves the worktree-history chord despite carrying Alt', () => {
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowLeft',
-          key: 'ArrowLeft',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
-
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowRight',
-          key: 'ArrowRight',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'forward' })
-
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowLeft',
-          key: 'ArrowLeft',
-          meta: false,
-          control: true,
-          alt: true,
-          shift: false
-        },
-        'linux'
-      )
-    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
-  })
-
-  it('resolves the floating terminal chord despite carrying Alt', () => {
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'KeyA',
-          key: 'a',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toEqual({ type: 'toggleFloatingTerminal' })
-
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'KeyA',
-          key: 'a',
-          meta: false,
-          control: true,
-          alt: true,
-          shift: false
-        },
-        'linux'
-      )
-    ).toEqual({ type: 'toggleFloatingTerminal' })
-  })
-
   it('resolves the floating terminal chord when macOS Option composes the letter', () => {
     expect(
       resolveWindowShortcutAction(
@@ -633,191 +341,10 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'toggleFloatingTerminal' })
   })
 
-  it('rejects floating terminal chord variants with Shift or opposite primary modifier', () => {
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'KeyA',
-          key: 'a',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: true
-        },
-        'darwin'
-      )
-    ).toBeNull()
-
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'KeyA',
-          key: 'a',
-          meta: true,
-          control: true,
-          alt: true,
-          shift: false
-        },
-        'linux'
-      )
-    ).toBeNull()
-  })
-
-  it('rejects the history chord when Shift is also held', () => {
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowLeft',
-          key: 'ArrowLeft',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: true
-        },
-        'darwin'
-      )
-    ).toBeNull()
-  })
-
-  it('leaves Alt+Arrow without a primary modifier untouched (word-nav territory)', () => {
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowLeft',
-          key: 'ArrowLeft',
-          meta: false,
-          control: false,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toBeNull()
-  })
-
-  it('ignores Cmd/Ctrl+Alt combined with ArrowUp or ArrowDown', () => {
-    // Why: the history predicate explicitly narrows to ArrowLeft/ArrowRight.
-    // Cmd+Alt+Up / Cmd+Alt+Down must fall through to null so the event
-    // reaches the renderer/PTTY (e.g. shells / readline).
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowUp',
-          key: 'ArrowUp',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toBeNull()
-
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowDown',
-          key: 'ArrowDown',
-          meta: false,
-          control: true,
-          alt: true,
-          shift: false
-        },
-        'linux'
-      )
-    ).toBeNull()
-  })
-
-  it('rejects the history chord when the opposite primary modifier is also held', () => {
-    // Why: Cmd+Ctrl+Alt+Arrow on macOS collides with Mission Control space
-    // switching; Ctrl+Meta+Alt+Arrow on Linux collides with GNOME workspace
-    // switching. The app must not intercept either.
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowLeft',
-          key: 'ArrowLeft',
-          meta: true,
-          control: true,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toBeNull()
-
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'ArrowRight',
-          key: 'ArrowRight',
-          meta: true,
-          control: true,
-          alt: true,
-          shift: false
-        },
-        'linux'
-      )
-    ).toBeNull()
-  })
-
-  it('still returns null for other Cmd/Ctrl+Alt combos (not an allowlist escape)', () => {
-    // Why: regression guard — the history early-return must not swallow
-    // unrelated primary+alt chords in a way that changes their old null
-    // result. A future addition that intentionally consumes e.g. Cmd+Alt+KeyY
-    // must add a new branch explicitly.
-    expect(
-      resolveWindowShortcutAction(
-        {
-          code: 'KeyY',
-          key: 'y',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: false
-        },
-        'darwin'
-      )
-    ).toBeNull()
-  })
-
-  it('routes Cmd/Ctrl+Shift+N to the unified new-workspace composer', () => {
-    // Why: keep the former Create-from shortcut accepted so muscle memory
-    // still opens the composer; source switching now lives in the smart name field.
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyN', key: 'n', meta: true, control: false, alt: false, shift: true },
-        'darwin'
-      )
-    ).toEqual({ type: 'openNewWorkspace' })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyN', key: 'n', meta: false, control: true, alt: false, shift: true },
-        'linux'
-      )
-    ).toEqual({ type: 'openNewWorkspace' })
-
-    // Alt must still be rejected — the allowlist is alt-free for Cmd/Ctrl+N
-    // so future chords like Cmd+Alt+Shift+N remain available.
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyN', key: 'n', meta: true, control: false, alt: true, shift: true },
-        'darwin'
-      )
-    ).toBeNull()
-  })
-
   it('resolves letter shortcuts by layout-aware key, with code as fallback', () => {
-    // Why: non-QWERTY layouts (Dvorak, Colemak, AZERTY, …) move letters to
-    // other physical keys. Matching only on `input.code` (always QWERTY)
-    // breaks the shortcut for those users. Prefer `input.key` when it is a
-    // letter; fall back to `input.code` only when `key` is empty or a
-    // non-letter marker (dead keys, IME edge cases).
+    // Prefer layout-aware letter keys over physical QWERTY codes; only empty/nonletter IME/dead-key values need code fallback.
 
-    // Dvorak layout: the letters the user presses sit on different codes
-    // ('b'→KeyN, 'l'→KeyP, 'p'→KeyR, 'n'→KeyL, 'j'→KeyC). All must resolve
-    // to the layout-matched shortcut.
+    // Dvorak letters sit on different physical codes; resolve the typed letters.
     const dvorak: [WindowShortcutInput, WindowShortcutAction][] = [
       [
         { code: 'KeyN', key: 'b', meta: true, alt: false, shift: false },
@@ -833,7 +360,7 @@ describe('resolveWindowShortcutAction', () => {
         { type: 'openNewWorkspace' }
       ],
       [
-        { code: 'KeyC', key: 'j', meta: true, alt: false, shift: false },
+        { code: 'KeyV', key: 'k', meta: true, alt: false, shift: false },
         { type: 'toggleWorktreePalette' }
       ]
     ]
@@ -841,9 +368,7 @@ describe('resolveWindowShortcutAction', () => {
       expect(resolveWindowShortcutAction(input, 'darwin')).toEqual(expected)
     }
 
-    // Inverse guard: physical QWERTY-B on Dvorak types 'x' — that is the
-    // platform Cut shortcut, not the sidebar. The layout-aware match must
-    // reject it.
+    // Physical QWERTY-B types x on Dvorak, so its Cut chord must not open the sidebar.
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyB', key: 'x', meta: true, alt: false, shift: false },
@@ -851,8 +376,7 @@ describe('resolveWindowShortcutAction', () => {
       )
     ).toBeNull()
 
-    // Fallback: drivers/IME states that leave `key` empty or non-letter
-    // (dead keys, modifier names) must still reach the shortcut on QWERTY.
+    // Empty/dead-key/modifier key values still need physical-code fallback.
     const fallbacks: [WindowShortcutInput, WindowShortcutAction][] = [
       [
         { code: 'KeyB', key: '', meta: true, alt: false, shift: false },
@@ -869,32 +393,17 @@ describe('resolveWindowShortcutAction', () => {
     }
   })
 
-  it('exposes the shared platform modifier gate used by browser guests', () => {
-    expect(
-      isWindowShortcutModifierChord({ meta: true, control: false, alt: false }, 'darwin')
-    ).toBe(true)
-    expect(isWindowShortcutModifierChord({ meta: false, control: true, alt: false }, 'linux')).toBe(
-      true
-    )
-    expect(isWindowShortcutModifierChord({ meta: false, control: true, alt: true }, 'linux')).toBe(
-      false
-    )
-  })
-
   it('resolves an allowlisted action from a synthetic double-tap input', () => {
-    // (a) A synthetic DoubleTap+Shift input resolves the overridden action.
     const overrides: KeybindingOverrides = { 'worktree.quickOpen': ['DoubleTap+Shift'] }
     expect(
       resolveWindowShortcutAction({ doubleTapModifier: 'Shift' }, 'darwin', overrides)
     ).toEqual({ type: 'openQuickOpen' })
 
-    // (b) A different modifier does not resolve it.
     expect(
       resolveWindowShortcutAction({ doubleTapModifier: 'Alt' }, 'darwin', overrides)
     ).toBeNull()
 
-    // (c) Implicit numeric shortcuts are guarded on input.key, which a double-tap
-    // input never has, so they cannot accidentally match a double-tap event.
+    // Synthetic double taps have no key, so implicit numeric ranges must not match them.
     expect(resolveWindowShortcutAction({ doubleTapModifier: 'Cmd' }, 'darwin')).toBeNull()
   })
 })

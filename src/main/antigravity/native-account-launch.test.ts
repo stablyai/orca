@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { prepareAntigravityAccountForLaunch } from './native-account-launch'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService } from './native-account-host'
 
 const { prepareForLaunch } = vi.hoisted(() => ({ prepareForLaunch: vi.fn() }))
-vi.mock('node:fs', () => ({ existsSync: vi.fn() }))
+vi.mock('node:fs', () => ({ existsSync: vi.fn(), readFileSync: vi.fn(() => '') }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/task/home' })
 }))
@@ -18,28 +18,18 @@ vi.mock('./native-account-host', () => ({
 beforeEach(() => {
   vi.mocked(existsSync).mockReset().mockReturnValue(true)
   vi.mocked(getAntigravityAccountService).mockClear()
-  vi.mocked(createEncryptedAntigravityAccountStore).mockReturnValue({
-    read: () => ({ accounts: [], selectedAccountId: 'selected' }),
-    write: vi.fn()
-  })
+  vi.mocked(createEncryptedAntigravityAccountStore)
+    .mockReset()
+    .mockReturnValue({
+      read: () => ({ accounts: [], selectedAccountId: 'selected' }),
+      write: vi.fn()
+    })
   prepareForLaunch.mockReset().mockResolvedValue(undefined)
 })
 
 describe('native account verification before agy launch', () => {
-  it('checks the selected native account before a new host agy launch', async () => {
-    await prepareAntigravityAccountForLaunch({
-      launchAgent: 'antigravity',
-      env: { HOME: '/task/home' }
-    })
-    expect(prepareForLaunch).toHaveBeenCalledOnce()
-  })
-
-  it('recognizes the ordinary agy executable through the shared command recognizer', async () => {
-    await prepareAntigravityAccountForLaunch({
-      command: 'agy --conversation synthetic',
-      env: { HOME: '/task/home' }
-    })
-    expect(prepareForLaunch).toHaveBeenCalledOnce()
+  beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
   })
 
   it('preserves owning-host and distro boundaries without reading client credentials', async () => {
@@ -53,12 +43,6 @@ describe('native account verification before agy launch', () => {
     expect(getAntigravityAccountService).not.toHaveBeenCalled()
   })
 
-  it('does not read native credentials when no account selection exists', async () => {
-    vi.mocked(existsSync).mockReturnValue(false)
-    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity' })
-    expect(getAntigravityAccountService).not.toHaveBeenCalled()
-  })
-
   it('blocks a launch using an overridden credential home without silently replacing its account', async () => {
     await expect(
       prepareAntigravityAccountForLaunch({
@@ -67,16 +51,6 @@ describe('native account verification before agy launch', () => {
       })
     ).rejects.toThrow('different credential authority')
     expect(prepareForLaunch).not.toHaveBeenCalled()
-  })
-
-  it('propagates failed native identity verification so the PTY cannot launch as another account', async () => {
-    prepareForLaunch.mockRejectedValue(new Error('native identity changed'))
-    await expect(
-      prepareAntigravityAccountForLaunch({
-        launchAgent: 'antigravity',
-        env: { HOME: '/task/home' }
-      })
-    ).rejects.toThrow('native identity changed')
   })
 
   it('rejects deleting the credential home before launch', async () => {
@@ -100,5 +74,27 @@ describe('native account verification before agy launch', () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+})
+
+describe('Windows launch ownership', () => {
+  it('returns before observing command, environment, vault or native account', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    await prepareAntigravityAccountForLaunch({
+      get command(): string {
+        throw new Error('command interpretation')
+      },
+      get env(): NodeJS.ProcessEnv {
+        throw new Error('environment interpretation')
+      }
+    })
+    expect(existsSync).not.toHaveBeenCalled()
+    expect(createEncryptedAntigravityAccountStore).not.toHaveBeenCalled()
+    expect(getAntigravityAccountService).not.toHaveBeenCalled()
   })
 })

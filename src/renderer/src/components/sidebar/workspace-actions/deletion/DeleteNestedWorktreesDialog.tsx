@@ -1,0 +1,253 @@
+import { useMemo, useRef, useState } from 'react'
+import { LoaderCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
+import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-path'
+import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { useAppStore } from '@/store'
+import { previewNestedWorktreeRemoval } from '@/store/slices/worktrees/teardown/preview-nested-worktree-removal'
+import { useTranslate } from '@/i18n/use-translate'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+
+export function DeleteNestedWorktreesDialog({
+  target,
+  worktreeName,
+  onDeleted,
+  dismissToast
+}: {
+  target: WorktreeRemovalTarget
+  worktreeName: string
+  onDeleted?: () => void
+  dismissToast: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const [plan, setPlan] = useState<GitWorktreeInfo[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const request = useRef(0)
+  const worktreesByRepo = useAppStore((s) => (open ? selectWorktreesByRepo(s) : null))
+  // Nested worktrees must share the parent’s host and lie inside its folder.
+  const unsavedTargets = useMemo(() => {
+    const hostId = target.executionHostId ?? undefined
+    const rows = worktreesByRepo ? getIndexedAllWorktrees(worktreesByRepo) : []
+    const parent = rows.find((row) => row.id === target.id && (!hostId || row.hostId === hostId))
+    return parent
+      ? rows
+          .filter(
+            (row) =>
+              (!hostId || row.hostId === hostId) && isPathInsideOrEqual(parent.path, row.path)
+          )
+          .map((row) => ({ id: row.id, hostId: row.hostId }))
+      : [{ id: target.id, hostId }]
+  }, [target, worktreesByRepo])
+
+  const review = async (): Promise<void> => {
+    const generation = ++request.current
+    setOpen(true)
+    setPlan(null)
+    setError(null)
+    try {
+      const result = await previewNestedWorktreeRemoval(
+        target,
+        t(
+          'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
+          'This host does not support nested worktree deletion.'
+        )
+      )
+      if (generation === request.current) {
+        setPlan(result)
+      }
+    } catch (failure) {
+      if (generation === request.current) {
+        setError(failure instanceof Error ? failure.message : String(failure))
+      }
+    }
+  }
+
+  const remove = async (): Promise<void> => {
+    if (!plan || deleting) {
+      return
+    }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
+    setDeleting(true)
+    setOpen(false)
+    setError(null)
+    const state = useAppStore.getState()
+    const repoId = getRepoIdFromWorktreeId(target.id)
+    const nestedRows = plan.slice(0, -1).flatMap((item) => {
+      const row = getWorktreeOnHostFromState(
+        state,
+        `${repoId}::${item.path}`,
+        target.executionHostId ?? undefined
+      )
+      return row ? [row] : []
+    })
+    state.markWorktreesDeleting(nestedRows)
+    try {
+      const result = await state.removeWorktree(target, true, {
+        approvedNestedWorktrees: plan,
+        confirmedDiscards
+      })
+      if (!result.ok) {
+        setPlan(null)
+        toast.error(
+          t(
+            'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+            'Failed to delete workspace'
+          ),
+          {
+            description: result.error
+          }
+        )
+        return
+      }
+      dismissToast()
+      onDeleted?.()
+    } catch (failure) {
+      setPlan(null)
+      toast.error(
+        t('auto.components.sidebar.delete.worktree.flow.ae57cbf6e4', 'Failed to delete workspace'),
+        {
+          description: failure instanceof Error ? failure.message : String(failure)
+        }
+      )
+    } finally {
+      try {
+        await useAppStore.getState().fetchAllWorktrees()
+      } catch (failure) {
+        toast.error(
+          t('worktree.nestedRemoval.refreshFailed', 'Could not refresh the workspace list'),
+          {
+            description: failure instanceof Error ? failure.message : String(failure)
+          }
+        )
+      }
+      for (const row of nestedRows) {
+        useAppStore.getState().clearWorktreeDeleteState(row.id, row.hostId)
+      }
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        disabled={deleting}
+        onClick={() => void review()}
+      >
+        {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
+        {deleting
+          ? t('worktree.nestedRemoval.deleting', 'Deleting…')
+          : t('worktree.nestedRemoval.review', 'Delete with nested worktrees…')}
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (deleting) {
+            return
+          }
+          ++request.current
+          setOpen(next)
+        }}
+      >
+        <DialogContent surface="security" showCloseButton={!deleting}>
+          <DialogHeader>
+            <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
+            <DialogDescription>
+              {t(
+                'worktree.nestedRemoval.description',
+                'This permanently deletes "{{name}}", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.',
+                { name: worktreeName }
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {plan ? (
+            <div className="rounded-md border border-border/70 bg-muted/35 text-xs">
+              <ScrollArea className="h-48">
+                <div className="space-y-1 px-3 py-2" role="list">
+                  {plan.map((item) => (
+                    <div
+                      key={item.path}
+                      role="listitem"
+                      className="min-w-0 border-b border-border/50 py-1 last:border-0"
+                    >
+                      <div className="break-all font-medium text-foreground">
+                        {item.branch.replace(/^refs\/heads\//, '') ||
+                          t('worktree.nestedRemoval.detached', 'Detached HEAD')}
+                      </div>
+                      <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          ) : !error ? (
+            <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              {t('worktree.nestedRemoval.loading', 'Checking nested worktrees…')}
+            </p>
+          ) : null}
+          <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={open} />
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'worktree.nestedRemoval.order',
+              'Nested worktrees are deleted first. If one fails, deletion stops and the parent is kept. Branches follow your existing deletion settings.'
+            )}
+          </p>
+          {error ? (
+            <p role="alert" className="break-all text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => {
+                ++request.current
+                setOpen(false)
+              }}
+            >
+              {t('worktree.nestedRemoval.cancel', 'Cancel')}
+            </Button>
+            {error && !plan ? (
+              <Button variant="outline" onClick={() => void review()}>
+                {t('worktree.nestedRemoval.retry', 'Review again')}
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                disabled={!plan || deleting}
+                onClick={() => void remove()}
+              >
+                {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                {deleting
+                  ? t('worktree.nestedRemoval.deleting', 'Deleting…')
+                  : t('common.delete', 'Delete')}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

@@ -1,22 +1,25 @@
+import {
+  getProviderChecksOutcome,
+  type CheckPresentationOutcome
+} from '../../../../../shared/source-control/checks/provider-check-summary'
 import { useState } from 'react'
 import { ChevronRight, CircleDot, GitMerge, GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getReviewStateTone } from '@/components/github/review-state-presentation'
-import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments'
+import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { HostedReviewState } from '../../../../../shared/hosted-review'
-import type { CheckStatus } from '../../../../../shared/github/pull-request-types'
-import { ReviewIcon } from '../../sidebar/worktree-review-helpers'
-import { workspaceAttachmentLabel } from '../../sidebar/worktree-attachment-editing'
-import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-hover-attachments'
+import type { HostedReviewState } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { ReviewIcon } from '../../sidebar/workspace-card/review/worktree-review-presentation'
+import { workspaceAttachmentLabel } from '../../sidebar/workspace-card/metadata/worktree-attachment-editing'
+import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-card/review/workspace-hover-attachments'
 import { BrowserNewTabRow } from './browser-new-tab-row'
 import { BrowserNewTabServerRow } from './browser-new-tab-server-row'
 import type { BrowserNewTabServers } from './use-browser-new-tab-servers'
 
-/** This workspace's running servers and linked reviews and tasks, then servers elsewhere on its host. */
 export function BrowserNewTabWorkspaceCard({
   servers,
   linkedItems,
@@ -30,6 +33,7 @@ export function BrowserNewTabWorkspaceCard({
   openServersInPlace: boolean
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [othersOpen, setOthersOpen] = useState(false)
   const own = runtimeTarget ? servers.own : []
   const others = runtimeTarget ? servers.others : []
@@ -48,10 +52,10 @@ export function BrowserNewTabWorkspaceCard({
   return (
     <div className="flex flex-col gap-1.5">
       {own.length > 0 || linkedItems.length > 0 ? (
-        <div className="flex flex-col gap-px rounded-xl border border-border bg-card p-1">
+        <div className="flex flex-col gap-0.5 rounded-2xl border border-border bg-card p-1.5">
           {own.map((server) => serverRow(server, false))}
           {own.length > 0 && linkedItems.length > 0 ? (
-            <div className="mx-2 my-1 h-px bg-border" />
+            <div className="mx-3 my-1 h-px bg-border" />
           ) : null}
           {linkedItems.map((row) => (
             <LinkedItemRow key={row.key} row={row} onOpenUrl={onOpenUrl} />
@@ -71,7 +75,7 @@ export function BrowserNewTabWorkspaceCard({
                 'rotate-90': othersOpen
               })}
             />
-            {translate('browser.newTab.runningElsewhere', '{{count}} running in other workspaces', {
+            {t('browser.newTab.runningElsewhere', '{{count}} running in other workspaces', {
               count: others.length
             })}
           </button>
@@ -93,14 +97,20 @@ function LinkedItemRow({
   row: WorkspaceLinkedItemRow
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { item, detail, live, url } = row
   const reference = workspaceAttachmentReferenceLabel(item, {
     pr: (number) => `#${number}`,
     issue: (number) => `#${number}`,
     mr: (number) => `!${number}`
   })
-  const status = live ? reviewChecksLabel(live.status) : linkedTaskState(row)
-  const reviewState = live?.state ? reviewStateLabel(live.state) : undefined
+  const status = live
+    ? reviewChecksLabel(
+        live.status ? getProviderChecksOutcome(live.checksSummary, live.status) : undefined,
+        t
+      )
+    : linkedTaskState(row, t)
+  const reviewState = live?.state ? reviewStateLabel(live.state, t) : undefined
   return (
     <BrowserNewTabRow
       icon={<LinkedItemIcon row={row} />}
@@ -135,58 +145,67 @@ function LinkedItemRow({
 function LinkedItemIcon({ row }: { row: WorkspaceLinkedItemRow }): React.JSX.Element {
   const { item, live } = row
   if (live) {
-    return <ReviewIcon review={live} className="size-4" />
+    return <ReviewIcon review={live} className="size-5" />
   }
   if (item.provider === 'linear') {
-    return <LinearIcon className="size-4 text-muted-foreground" />
+    return <LinearIcon className="size-5 text-muted-foreground" />
   }
   if (item.provider === 'jira') {
-    return <JiraIcon className="size-4 text-muted-foreground" />
+    return <JiraIcon className="size-5 text-muted-foreground" />
   }
   if (item.type === 'mr') {
-    return <GitMerge className="size-4 text-muted-foreground" />
+    return <GitMerge className="size-5 text-muted-foreground" />
   }
   if (item.type === 'pr') {
-    return <GitPullRequest className="size-4 text-muted-foreground" />
+    return <GitPullRequest className="size-5 text-muted-foreground" />
   }
   return (
     <CircleDot
       className={
         linkedIssueState(row) === 'open'
-          ? 'size-4 text-workspace-status-review/80'
-          : 'size-4 text-muted-foreground'
+          ? 'size-5 text-workspace-status-review/80'
+          : 'size-5 text-muted-foreground'
       }
     />
   )
 }
 
-function reviewStateLabel(state: HostedReviewState): string {
+function reviewStateLabel(state: HostedReviewState, t: Translate = translate): string {
   if (state === 'draft') {
-    return translate('browser.newTab.state.draft', 'Draft')
+    return t('browser.newTab.state.draft', 'Draft')
   }
   if (state === 'merged') {
-    return translate('browser.newTab.state.merged', 'Merged')
+    return t('browser.newTab.state.merged', 'Merged')
   }
   if (state === 'closed') {
-    return translate('browser.newTab.state.closed', 'Closed')
+    return t('browser.newTab.state.closed', 'Closed')
   }
-  return translate('browser.newTab.state.open', 'Open')
+  return t('browser.newTab.state.open', 'Open')
 }
 
-function reviewChecksLabel(status: CheckStatus | undefined): string | undefined {
+function reviewChecksLabel(
+  status: CheckPresentationOutcome | undefined,
+  t: Translate = translate
+): string | undefined {
+  if (status === 'cancelled') {
+    return t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+  }
   if (status === 'success') {
-    return translate('browser.newTab.checks.passing', 'Checks passing')
+    return t('browser.newTab.checks.passing', 'Checks passing')
   }
   if (status === 'failure') {
-    return translate('browser.newTab.checks.failing', 'Checks failing')
+    return t('browser.newTab.checks.failing', 'Checks failing')
   }
   if (status === 'pending') {
-    return translate('browser.newTab.checks.pending', 'Checks pending')
+    return t('browser.newTab.checks.pending', 'Checks pending')
   }
   return undefined
 }
 
-function linkedTaskState(row: WorkspaceLinkedItemRow): string | undefined {
+function linkedTaskState(
+  row: WorkspaceLinkedItemRow,
+  t: Translate = translate
+): string | undefined {
   const { detail, liveTask } = row
   const stateName =
     detail?.stateName ?? (liveTask && 'stateName' in liveTask ? liveTask.stateName : undefined)
@@ -195,10 +214,10 @@ function linkedTaskState(row: WorkspaceLinkedItemRow): string | undefined {
   }
   const issueState = linkedIssueState(row)
   if (issueState === 'open') {
-    return translate('browser.newTab.state.open', 'Open')
+    return t('browser.newTab.state.open', 'Open')
   }
   if (issueState === 'closed') {
-    return translate('browser.newTab.state.closed', 'Closed')
+    return t('browser.newTab.state.closed', 'Closed')
   }
   return undefined
 }

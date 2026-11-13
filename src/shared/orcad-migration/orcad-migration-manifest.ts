@@ -1,5 +1,6 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
-import type { Automation, AutomationRun } from '../automations-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import type { Automation } from '../automations/automation-definition'
+import type { AutomationRun } from '../automations/history/automation-run'
 import type { OrcadMigrationManifestVersion } from './orcad-migration-manifest-validation'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
@@ -7,7 +8,7 @@ import type { SparsePreset } from '../worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
 import type { WorktreeMeta } from '../worktree/meta-types'
 import type { RetiredNameRegistry } from '../worktree/retired-name-registry'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import type { OrcadMigrationClientStatePayload } from './orcad-migration-client-state'
 import type {
   OrcadMigrationSnapshotUploadState,
@@ -24,10 +25,7 @@ export type OrcadMigrationSshManifestSource = {
   targetLabel: string
 }
 
-/**
- * Local WSL projects on this desktop, moving to the orcad that runs inside their distro. Scope is
- * explicit so a destination never infers it from paths, and `generation` orders delta moves.
- */
+/** Explicit desktop WSL project scope prevents destination path inference; generation orders delta moves. */
 export type OrcadMigrationLocalWslManifestSource = {
   kind: 'local-wsl'
   distro: string
@@ -78,6 +76,11 @@ export type OrcadMigrationDormantRetirementNamespace = {
   registry: RetiredNameRegistry
 }
 
+export type OrcadMigrationAutomationRunHistoryRef = {
+  sha256: string
+  byteLength: number
+}
+
 export type OrcadMigrationDormantStatePayload = {
   version: 1
   worktreeMeta: OrcadMigrationDormantWorktreeMeta[]
@@ -89,7 +92,10 @@ export type OrcadMigrationDormantStatePayload = {
   workspaceSession?: WorkspaceSessionState
   terminalScrollbackSnapshots?: OrcadMigrationTerminalScrollbackSnapshot[]
   automations?: Automation[]
+  /** Inline runs, as older desktops send them; never alongside `automationRunHistory`. */
   automationRuns?: AutomationRun[]
+  /** Digest of the runs sent as an `automation-run-history` blob, so history never bounds the manifest. */
+  automationRunHistory?: OrcadMigrationAutomationRunHistoryRef
   /** Client-owned durable intent projected to the destination authority. */
   clientState?: OrcadMigrationClientStatePayload
 }
@@ -159,6 +165,8 @@ export type OrcadMigrationCatalogReferenceAbortResult = OrcadMigrationCatalogRef
   state: 'absent' | 'committed'
   aborted: boolean
   durableAbsent?: true
+  /** The receipt was flushed before this answer; older hosts never send it. */
+  durableCommitted?: true
 }
 
 export function orcadMigrationManifestHashInput(

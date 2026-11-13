@@ -4,12 +4,14 @@ import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-f
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
 import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
 import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
+import { NO_WORKTREE_HOST_CONTEXT } from '../../../mobile/src/worktree/worktree-host-context-labels'
 import {
   readHostSidebarFeed,
   type HostSidebarFeedRead
 } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
 import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
+import type { SharedClientEventsClient } from '../../../mobile/src/transport/connection/shared-client-events'
 import {
   hostPlatformRead,
   hostViewSettingsRead
@@ -20,8 +22,8 @@ import {
   applyDesktopViewSettings,
   type WorkspaceViewSettings
 } from '../../../mobile/src/worktree/workspace-view-settings'
-import type { RpcResponse } from '../../../mobile/src/transport/types'
-import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/mobile-runtime-host-platform'
+import type { RpcResponse } from '../../../mobile/src/transport/rpc/rpc-wire-types'
+import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/connection/mobile-runtime-host-platform'
 import type { LastVisitedWorktreeOnHost } from '../../../mobile/src/worktree/host-list-highlight'
 import type { Section } from '../../../mobile/src/worktree/workspace-list-types'
 import type { PairedMobileClient, PairedMobileSocket } from './paired-mobile-client'
@@ -68,8 +70,12 @@ function socketPort(socket: PairedMobileSocket) {
 }
 
 /** The socket's client-event stream as the page's client subscribes to it, frames in order. */
-function socketEventClient(socket: PairedMobileSocket) {
+function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient {
   return {
+    // One socket for the helper's life: always connected, no reconnects to tell apart.
+    getState: () => 'connected',
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)
@@ -87,11 +93,7 @@ function socketEventClient(socket: PairedMobileSocket) {
   }
 }
 
-/**
- * The phone page's workspace list over a real paired socket, built by the page's own modules: its
- * refresh lifecycle, feed reader, the shared builder and its section mapping. Reads happen only
- * when that lifecycle makes them; an assertion reads what the page last installed.
- */
+// Use the page’s real refresh/feed/section modules over a paired socket; assertions read the last installed feed, not a forced refresh.
 export async function openPhoneFeedList(
   phone: PairedMobileClient,
   /** The workspace this phone last opened on the host: its list's only highlight. */
@@ -125,15 +127,13 @@ export async function openPhoneFeedList(
     hostPlatformRead.interpret
   )
   const answered = platformRead.kind === 'answered' ? platformRead.value : null
-  // Why matched, not read: this helper and the page may resolve different zod copies, so the
-  // reply's inferred type does not carry across.
+  // Match platform literals because separately resolved zod copies do not share inferred reply types.
   const hostPlatform = NODE_PLATFORM_NAMES.find((name) => name === answered) ?? null
   await syncViewSettings()
   const stop = startHostWorktreeRefresh({
     client: socketEventClient(socket),
     // The list reads rows and catalog from the feed alone; worktree.ps adds only card content.
-    fetchWorktrees: async () => {},
-    fetchRepoMetadata: async () => {},
+    refreshWorktrees: () => {},
     syncViewSettings,
     sidebarFeed: {
       refresh: () => reader.refresh(),
@@ -167,6 +167,7 @@ export async function openPhoneFeedList(
       rows: built.sectionRows,
       lastVisited,
       liveRows: [],
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       repoHostIdByRepoId: new Map(),
       search: ''
     })
@@ -176,7 +177,9 @@ export async function openPhoneFeedList(
     (await sections())?.flatMap((section) => [
       // Titles only: the desktop draws a header's count on hover, not in its text.
       `HEADER ${section.title}`,
-      ...section.data.map((row) => `ITEM ${row.sectionListKey}${row.isActive ? ' ACTIVE' : ''}`)
+      ...section.data.map(
+        ({ row, view }) => `ITEM ${view.sectionListKey}${row.isActive ? ' ACTIVE' : ''}`
+      )
     ]) ?? [readHostSidebarFeed(read).kind]
 
   return {

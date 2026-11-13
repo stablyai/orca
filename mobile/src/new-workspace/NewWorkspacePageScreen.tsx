@@ -8,13 +8,10 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { firstParam } from '../navigation/route-param-reader'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { openExternalLink } from '../platform/external-link'
-import { useHostClient } from '../transport/host-client-hooks'
+import { useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 
-/**
- * The host screen's Create Workspace drawer, alone on a transparent page. Closing it leaves the
- * screen that opened it; creating opens the new workspace's session in its place.
- */
+// Use a transparent drawer page; close returns to its opener and creation replaces it with the new workspace session.
 export function NewWorkspacePageScreen() {
   const params = useLocalSearchParams<{ hostId?: string | string[] }>()
   const hostId = firstParam(params.hostId)
@@ -23,7 +20,7 @@ export function NewWorkspacePageScreen() {
   const { hostCapabilities } = useHostProtocolGates()
   const connected = connState === 'connected'
   const worktrees = useHostWorktreeRows(client, connected, hostId)
-  const hostLabelById = useHostLabelById(client, connected)
+  const hostLabelById = useHostLabelById(client, connected, hostId)
   const worktreePaths = useMemo(() => worktrees.map((worktree) => worktree.path), [worktrees])
 
   return (

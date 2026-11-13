@@ -5,20 +5,18 @@ import {
   type ExecutionHostScope
 } from './execution-host'
 import { isGitRepoKind } from './repo-kind'
+import { isRepoHidden } from './hidden-projects'
 import type { Repo } from './repo-types'
 
 type NewWorkspaceDialogRepo = Pick<
   Repo,
-  'id' | 'path' | 'kind' | 'connectionId' | 'executionHostId'
+  'id' | 'path' | 'kind' | 'connectionId' | 'executionHostId' | 'hiddenAt'
 >
 
 export function getNewWorkspaceDialogEligibleRepos<T extends Pick<Repo, 'path' | 'connectionId'>>(
   repos: readonly T[]
 ): T[] {
-  // Why: a runtime-owned (per-workspace-env) SSH repo is hidden plumbing, not a real project. If it
-  // were selectable here, creating an ephemeral VM would seed the composer to that repo — which has
-  // no recipes — hiding the "Run on" picker entirely on the next create. Exclude it like every other
-  // user-facing surface does.
+  // Runtime-owned SSH repos are hidden plumbing. Selecting them after VM creation seeds a recipe-less repo and hides Run on in the next create.
   return repos.filter((repo) => Boolean(repo.path) && !isRuntimeOwnedSshTargetId(repo.connectionId))
 }
 
@@ -35,19 +33,20 @@ export function resolveNewWorkspaceDialogRepoId({
   activeRepoId?: string | null
   focusedHostScope?: ExecutionHostScope | null
 }): string {
-  // Why: every new-workspace dialog should seed the repo the same way. Mobile
-  // mirrors this locally because Metro cannot bundle root shared runtime modules.
+  // Share repo seeding across the desktop dialogs and mobile.
+  // Explicit draft/initial targets may name a hidden project; implicit defaults never pick one.
+  const listedRepos = eligibleRepos.filter((repo) => !isRepoHidden(repo))
   const focusedHostRepo =
     focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
-      ? eligibleRepos.find((repo) => getRepoExecutionHostId(repo) === focusedHostScope)
+      ? listedRepos.find((repo) => getRepoExecutionHostId(repo) === focusedHostScope)
       : undefined
 
   const resolvedRepo =
     (draftRepoId && eligibleRepos.find((repo) => repo.id === draftRepoId)) ||
     (initialRepoId && eligibleRepos.find((repo) => repo.id === initialRepoId)) ||
-    (activeRepoId && eligibleRepos.find((repo) => repo.id === activeRepoId)) ||
+    (activeRepoId && listedRepos.find((repo) => repo.id === activeRepoId)) ||
     focusedHostRepo ||
-    eligibleRepos[0]
+    listedRepos[0]
 
   return resolvedRepo?.id ?? ''
 }

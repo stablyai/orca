@@ -3,6 +3,7 @@ src/terminal/terminal-webview-engine.generated.ts
 src/terminal/terminal-webview-engine-css.generated.ts
 src/terminal/terminal-webview-document-script.generated.ts
 src/components/pr-sidebar/mermaid-page-engine.generated.ts
+src/components/katex-page-style.generated.ts
 .expo/
 dist/
 /android/
@@ -14,5 +15,3 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
-
-.cache/typechecks/

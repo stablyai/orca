@@ -2,9 +2,9 @@ import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/migration-unsupported-pty-state'
-import { agentHookServer } from '../../agent-hooks/server'
-import { ActiveViewPreference } from '../../active-view-preference'
+} from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
@@ -23,33 +23,37 @@ import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './profile-writing/write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
-} from './legacy-opencode-go-api-key-migration'
-import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
-import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+} from './profile-loading/legacy-opencode-go-api-key-migration'
+import {
+  enqueuePrimaryStateOperation,
+  writeToDiskAsync
+} from './profile-writing/primary-state-writes'
+import type { ProfileStateDatabaseQuarantine } from '../profile-state/recovery/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
+import { createInitialHomeWorkspaceState } from './profile-loading/initial-home-workspace'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
   freezeProfileStateWritesAsync,
   type ProfileStateMaintenanceOptions
-} from './profile-state-maintenance'
+} from './profile-writing/profile-state-maintenance'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateStartupPaneAlias,
   ProfileStatePersistenceAuthority,
   ProfileStateMaintenance
-} from './profile-state-authority'
+} from './profile-writing/profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
-  /** Storage-form JSON supplied by a read-only profile migration/import boundary. */
+  initializeHomeWorkspace?: boolean
   serializedState?: string
   collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
-  /** Reuse the authority's validated startup read without retaining a cached copy. */
+  /** Consume the validated startup read without caching a second copy. */
   initialAuthorityState?: ProfileStateAuthorityInitialState<ProfileStatePersistenceAuthority>
 }
 
@@ -65,7 +69,6 @@ export type PtyBindingSourceExpectation = {
   incarnationId?: string
 }
 
-/** Concrete composition root for profile persistence. */
 // oxlint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- Store installs the exact concrete domain class descriptors and contexts below
 export class Store {
   private readonly runtime: StoreRuntimeState
@@ -96,16 +99,21 @@ export class Store {
     this.runtime.flushOrThrow = () => this.flushOrThrow()
     this.runtime.runDurableMutation = (mutate) => this.runDurableMutation(mutate)
     let loaded: PersistedState
+    let profileDocumentExisted = true
     if (options.profileStateAuthority !== undefined) {
       if (initial !== undefined) {
+        profileDocumentExisted =
+          initial.takeParsedState !== undefined
+            ? parsedState !== undefined
+            : initial.serializedState !== undefined
         loaded =
           initial.takeParsedState !== undefined
             ? this.domains.loader.loadParsedFromAuthority(parsedState)
             : this.domains.loader.loadFromAuthority(initial.serializedState)
       } else {
-        loaded = this.domains.loader.loadFromAuthority(
-          options.profileStateAuthority.readSerializedState()
-        )
+        const serializedState = options.profileStateAuthority.readSerializedState()
+        profileDocumentExisted = serializedState !== undefined
+        loaded = this.domains.loader.loadFromAuthority(serializedState)
       }
     } else if (options.serializedState !== undefined) {
       loaded = this.domains.loader.loadSerialized(options.serializedState)
@@ -119,7 +127,13 @@ export class Store {
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
       }
     )
-    this.state = normalized.state
+    let initialState = normalized.state
+    // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
+    if (options.initializeHomeWorkspace && !profileDocumentExisted) {
+      initialState = createInitialHomeWorkspaceState(initialState)
+      this.runtime.loadNeedsSave = true
+    }
+    this.state = initialState
     this.runtime.state = this.state
     this.runtime.activeViewPreference = new ActiveViewPreference(
       this.runtime.dataFile,
@@ -127,8 +141,7 @@ export class Store {
     )
     const adaptedProjectGroups = this.domains.adaptation.adaptFlatFolderScanProjectGroups()
     this.domains.adaptation.hydrateFolderWorkspaceDiffComments()
-    // Load is the only place an orphaned repo id can be swept: every removal path needs the repo to
-    // still be registered, so rows outlive their owner without one (#17776).
+    // Removal paths require registration; load must sweep residue whose owning repo is already gone.
     const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       dropInvalidWorkspaceLayoutsAtLoad(this, this.state)
@@ -137,8 +150,7 @@ export class Store {
     }
     // Imported snapshots cannot own the live hook server or write their source file.
     if (!imported) {
-      // A committed migration whose blob install failed or was cut short is finished here; shell
-      // history waits for the runtime's post-attach pass, which can see live shells.
+      // Finish interrupted blob installs; shell history waits for post-attach live-process evidence.
       this.domains.orcadMigrationBlobInstalls.installPendingOrcadMigrationReceivedBlobs()
       for (const entry of initial?.unboundPaneAliases ?? []) {
         agentHookServer.registerPaneKeyAlias(
@@ -168,15 +180,15 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling)
+        scheduleFullProfileSave(this.domains.scheduling)
       }
     }
   }
 
-  /** Moves the #22551 settings-slot OpenCode Go key into `target`; it stays on disk until that succeeds. */
+  /** Retain the legacy settings key until migration to the main-owned store succeeds. */
   migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
     if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
-      scheduleSave(this.domains.scheduling)
+      scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
 
@@ -184,13 +196,7 @@ export class Store {
     return dirname(this.runtime.dataFile)
   }
 
-  /**
-   * Prepare a storage-form export for a database importer.
-   *
-   * Secret retention is committed only after the caller durably accepts the
-   * export. This keeps a failed migration from discarding the prior sealed
-   * value from the in-memory fallback store.
-   */
+  /** Accept secret retention only after the export commits, preserving sealed fallback on failed migration. */
   prepareProfileStateExport(): PreparedProfileStateExport {
     const built = this.domains.serialization.buildStateToSave()
     let committed = false
@@ -206,7 +212,6 @@ export class Store {
     }
   }
 
-  /** Publish an explicit rollback/compatibility export after flushing current state. */
   writeProfileStateJsonExport(targetPath: string): number {
     this.runtime.dirtyProfileStateDomains = null
     this.flushOrThrow()
@@ -221,7 +226,6 @@ export class Store {
     throw new Error('Profile state exports require a SQLite profile-state authority')
   }
 
-  /** Publish the latest SQLite revision as a durable, versioned rollback export. */
   writeLatestProfileStateJsonExport(): number | undefined {
     const authority = this.runtime.profileStateAuthority
     if (authority?.asynchronous) {
@@ -269,7 +273,6 @@ export class Store {
     })
   }
 
-  /** Freeze writes, then preserve the SQLite family for an explicit recovery decision. */
   quarantineProfileStateDatabase(
     quarantineRoot?: string,
     reason?: string

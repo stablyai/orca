@@ -3,26 +3,29 @@ import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef
-} from '@/lib/workspace-port-host-availability'
+} from '@/lib/workspace-ports/workspace-port-host-availability'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
+import {
+  getExternalWorkspacePorts,
+  getWorkspacePortGroups
+} from '@/lib/workspace-ports/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type PortsStatusSegmentProps = {
   compact?: boolean
   iconOnly: boolean
 }
 
-/** Status-bar plug icon with the workspace port count and a per-host ports popover. */
 export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React.JSX.Element {
+  const t = useTranslate()
   const scan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -40,8 +43,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const hostLabel = useCallback(
     (host: WorkspacePortHostRef, hostScanKey: string, platform: NodeJS.Platform | null) => {
       if (host.kind === 'local') {
-        // Why: a paired web client's own userAgent is not the Orca host's
-        // platform, so name the machine the scan actually ran on.
+        // Name the scanned host’s OS, not the paired web client’s userAgent.
         return getLocalExecutionHostLabel(platform)
       }
       if (host.kind === 'unknown') {
@@ -69,10 +71,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       ? [{ id: 'projection', host: scan.platform, reason: scan.unavailableReason }]
       : []
   }, [hostLabel, scan?.platform, scan?.unavailableReason, unavailableHosts])
-  // Why: a failed scan keeps the host's last-good ports, and those ports are
-  // counted in the badge and header — replacing the list with the notice would
-  // leave the popover claiming N ports over an empty body. Only take over the
-  // body when there is genuinely nothing left to list.
+  // Only replace an empty list with failure copy; retained last-good ports must remain visible beside their counts.
   const noticeReplacesList = Boolean(scan?.unavailableReason) && totalCount === 0
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -84,8 +83,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       if (!runtimeTarget) {
         return
       }
-      // Why: the 30s background poll is intentionally quiet; opening the
-      // popover should still collapse that stale window without flashing icons.
+      // Refresh on open to close the quiet 30-second poll window without flashing icons.
       void refreshWorkspacePortScanForTarget({
         runtimeTarget,
         replaceWorkspacePortScans,
@@ -97,17 +95,17 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <Tooltip delayDuration={150}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <button
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={translate(
-                'auto.components.status.bar.PortsStatusSegment.b8bc3e420a',
-                'Ports, {{value0}} workspace {{value1}}',
-                { value0: workspacePortCount, value1: workspacePortCount === 1 ? 'port' : 'ports' }
+              aria-label={t(
+                'auto.components.status.bar.PortsStatusSegment.portsAria',
+                'Ports, {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports, {{count}} workspace port' }
               )}
             >
               {refreshing ? (
@@ -129,25 +127,21 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {translate(
-            'auto.components.status.bar.PortsStatusSegment.ca41be2802',
-            'Ports — {{value0}} workspace {{value1}}{{value2}}',
-            {
-              value0: workspacePortCount,
-              value1:
-                workspacePortCount === 1
-                  ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
-                  : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports'),
-              value2:
-                externalPorts.length > 0
-                  ? translate(
-                      'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
-                      ' · {{value0}} external',
-                      { value0: externalPorts.length }
-                    )
-                  : ''
-            }
-          )}
+          {externalPorts.length > 0
+            ? t(
+                'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal',
+                'Ports — {{count}} workspace ports · {{externalCount}} external',
+                {
+                  count: workspacePortCount,
+                  externalCount: externalPorts.length,
+                  defaultValue_one: 'Ports — {{count}} workspace port · {{externalCount}} external'
+                }
+              )
+            : t(
+                'auto.components.status.bar.PortsStatusSegment.portsTooltip',
+                'Ports — {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports — {{count}} workspace port' }
+              )}
         </TooltipContent>
       </Tooltip>
 
@@ -164,11 +158,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
             <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
               <Plug className="size-3 shrink-0 text-muted-foreground" />
               <span className="truncate">
-                {translate('auto.components.status.bar.PortsStatusSegment.c22ea609fd', 'Ports')}
+                {t('auto.components.status.bar.PortsStatusSegment.c22ea609fd', 'Ports')}
               </span>
             </div>
             <span className="text-[11px] tabular-nums text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.status.bar.PortsStatusSegment.2b84c4d11f',
                 '{{value0}} workspace · {{value1}} external',
                 { value0: workspacePortCount, value1: externalPorts.length }
@@ -201,11 +195,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               ) : (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">
                   {refreshing
-                    ? translate(
+                    ? t(
                         'auto.components.status.bar.PortsStatusSegment.c174bbbfed',
                         'Scanning for workspace ports...'
                       )
-                    : translate(
+                    : t(
                         'auto.components.status.bar.PortsStatusSegment.3a87d54dfb',
                         'No workspace ports detected'
                       )}
@@ -215,7 +209,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               <section className="border-t border-border/60">
                 <button
                   type="button"
-                  className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border/40 bg-popover px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border/40 bg-popover px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-[color-mix(in_srgb,var(--accent)_50%,var(--popover))] hover:text-foreground"
                   aria-expanded={externalOpen}
                   onClick={() => {
                     recordFeatureInteraction('ports')
@@ -228,7 +222,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                     <ChevronRight className="size-3" />
                   )}
                   <span>
-                    {translate(
+                    {t(
                       'auto.components.status.bar.PortsStatusSegment.7dac3ecc9d',
                       'External Ports'
                     )}
@@ -248,7 +242,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                       ))
                     ) : (
                       <div className="px-2 py-2 text-xs text-muted-foreground">
-                        {translate(
+                        {t(
                           'auto.components.status.bar.PortsStatusSegment.4ebf90c12e',
                           'No external ports detected'
                         )}
@@ -274,11 +268,12 @@ function PortScanUnavailableNotices({
   notices: PortScanUnavailableNotice[]
   className: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className={className}>
       {notices.map((notice) => (
         <div key={notice.id} className="truncate">
-          {translate(
+          {t(
             'auto.components.status.bar.PortsStatusSegment.95495019ed',
             'Port scan unavailable on {{value0}}: {{value1}}',
             { value0: notice.host, value1: notice.reason }

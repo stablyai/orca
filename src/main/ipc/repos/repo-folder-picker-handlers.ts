@@ -1,11 +1,15 @@
 import type { BrowserWindow } from 'electron'
-import { dialog, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
+import { showSingleFlightOpenDialog } from '../single-flight-open-dialog'
 
 export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('repos:pickFolder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory']
-    })
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openDirectory']
+      },
+      mainWindow
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
@@ -13,21 +17,27 @@ export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): voi
   })
 
   ipcMain.handle('repos:pickFolders', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'multiSelections']
-    })
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openDirectory', 'multiSelections']
+      },
+      mainWindow
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return []
     }
     return result.filePaths
   })
 
-  // Why: generic folder picker, separate from pickFolder's add-project flow; a clone destination may not be a git repo yet.
+  // Clone destinations need a generic picker because they may not contain a Git repo.
   ipcMain.handle('repos:pickDirectory', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      // Why: macOS materializes typed partial paths with directory creation on; clone/create make the final path on submit.
-      properties: ['openDirectory']
-    })
+    const result = await showSingleFlightOpenDialog(
+      {
+        // macOS creates typed partial paths when directory creation is enabled; defer creation to submit.
+        properties: ['openDirectory']
+      },
+      mainWindow
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }

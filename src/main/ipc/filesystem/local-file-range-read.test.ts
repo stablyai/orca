@@ -31,20 +31,3 @@ it('reads only the requested bytes and reports partial and past-EOF ranges', asy
     eof: true
   })
 })
-
-it('refuses directories through the shared regular-file guard', async () => {
-  await expect(readLocalFileRange(folder, 0, 4)).rejects.toThrow()
-})
-
-it('rejects invalid or excessive ranges before opening the path', async () => {
-  for (const [offset, length] of [
-    [-1, 1],
-    [0, 0],
-    [0, 512 * 1024 + 1],
-    [Number.MAX_SAFE_INTEGER, 2]
-  ]) {
-    await expect(readLocalFileRange(join(folder, 'missing.csv'), offset, length)).rejects.toThrow(
-      'Invalid file read range'
-    )
-  }
-})

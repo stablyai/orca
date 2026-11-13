@@ -1,27 +1,91 @@
-import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
+import { consumeCodexRateLimitResetCredit } from '../providers/codex/codex-fetcher'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
+import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
+  type CodexAccountSelectionTarget
+} from '../../../shared/codex-selection-lane'
+import {
   normalizeClaudeAccountSelectionTarget,
-  type CodexAccountSelectionTarget,
-  type ClaudeAccountSelectionTarget,
-  type RateLimitRuntimeTarget,
-  type RateLimitState,
-  type CodexRateLimitResetResult
-} from './service-types'
+  type ClaudeAccountSelectionTarget
+} from '../../claude-accounts/selection/runtime-selection'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget,
+  RateLimitState,
+  CodexRateLimitResetResult
+} from '../../../shared/rate-limit-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
   async refresh(): Promise<RateLimitState> {
-    // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
+    // User refresh must bypass recent poll/focus throttles.
     await this.fetchAll({ force: true })
     return this.getState()
   }
 
   async refreshIfStale(): Promise<RateLimitState> {
-    // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data, but replaying a subscription must not queue another forced fetch.
+    // Reconnecting mobile needs fresh data, but subscription replay must not force redundant fetches.
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
     return this.getState()
+  }
+
+  /** The home and auth provenance the selected host-runtime reading was taken under. */
+  usageReadingAccount(provider: 'claude' | 'codex'): { home: string; provenance: string } | null {
+    return this.usageReadingAccounts[provider] ?? null
+  }
+
+  /** One provider's applied reading, without the snapshot work `getState` does. */
+  usageReading(provider: 'claude' | 'codex'): ProviderRateLimits | null {
+    return this.state[provider]
+  }
+
+  /** When an automatic read of each provider was last admitted, and which account's reading
+   *  source the service held then; it counts only for that account. */
+  private readonly automaticReadingAt: Partial<
+    Record<
+      'claude' | 'codex',
+      { at: number; source: { home: string; provenance: string } | undefined }
+    >
+  > = {}
+
+  /** An automatic, non-forced read of one provider's selected account. It waits out Retry-After
+   *  and the failure backoff the poller keeps; with `notWithinMs` it also waits while a reading
+   *  or an admitted automatic read of that account is that recent, however many callers ask.
+   *  Returns whether it started a read. */
+  requestUsageReading(
+    provider: 'claude' | 'codex',
+    options: { notWithinMs?: number } = {}
+  ): boolean {
+    if (provider === 'claude' && !this.isClaudeOAuthUsageEnabled()) {
+      return false
+    }
+    const limits = this.state[provider]
+    const now = Date.now()
+    if (this.isFetching || this.isRetryAfterActive(limits)) {
+      return false
+    }
+    if (limits?.status === 'error' && !this.failureRetryDue(provider, now)) {
+      return false
+    }
+    if (options.notWithinMs !== undefined) {
+      const checkedAt = limits?.status === 'ok' ? this.providerCheckedAt(provider, limits) : null
+      const admitted = this.automaticReadingAt[provider]
+      // After a switch, another account's read says nothing about this one.
+      const sameAccount = admitted?.source === this.usageReadingAccounts[provider]
+      const last = Math.max(
+        (sameAccount && admitted?.at) || Number.NEGATIVE_INFINITY,
+        checkedAt ?? Number.NEGATIVE_INFINITY
+      )
+      if (now - last < options.notWithinMs) {
+        return false
+      }
+    }
+    this.automaticReadingAt[provider] = { at: now, source: this.usageReadingAccounts[provider] }
+    // Starts the failure clock as the poller's own retries do.
+    this.lastActiveFailureRetryAtByProvider[provider] = now
+    void (provider === 'claude' ? this.fetchClaudeOnly() : this.fetchCodexOnly()).catch(() => {})
+    return true
   }
 
   async refreshGrok(): Promise<RateLimitState> {
@@ -31,20 +95,28 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
 
   invalidateOpenCodeGoCredentialState(options: { apiKeyCleared?: boolean } = {}): void {
     this.opencodeFetchGeneration += 1
-    // Why: a key from env, OpenCode's DB or auth.json survives a cookie change; only clearing the saved key hides the chip.
+    // Store/env keys survive cookie changes; only clearing the saved override hides its presence.
     if (options.apiKeyCleared) {
       this.openCodeGoApiKeyConfigured = false
     }
-    // Why: a credential change must discard the snapshot and any result still in flight.
+    // Invalidate visible and in-flight usage when credentials change.
     this.updateState({
       ...this.state,
       opencodeGo: this.withFetchingStatus(null, 'opencode-go')
     })
   }
 
+  invalidateAntigravityCredentialState(): void {
+    this.antigravityFetchGeneration += 1
+    this.updateState({
+      ...this.state,
+      antigravity: null
+    })
+  }
+
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
-    // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.
+    // Clear before an old-cookie fetch can return.
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
@@ -53,7 +125,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
 
   invalidateZcodeCredentialState(): void {
     this.zcodeFetchGeneration += 1
-    // Why: saving/forgetting the plan key can race an in-flight fetch; clear the visible snapshot before any old-key result returns.
+    // Clear before an old-key fetch can return.
     this.updateState({
       ...this.state,
       zcode: this.withFetchingStatus(null, 'zcode')
@@ -65,8 +137,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Why: weekly-only plans report no session window, so gating on session alone
-    // dropped their snapshot and left the switcher's inline bars empty.
+    // Weekly-only plans still need outgoing switcher snapshots.
     if (
       outgoingAccountId &&
       (this.state.codex?.session || this.state.codex?.weekly) &&
@@ -76,15 +147,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     }
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
-    // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
-    // Why: the switch must NOT reset the inactive-fetch debounce — re-probing
-    // every inactive account per switch spawns codex in each credential home
-    // and endangers rotating refresh tokens; the switcher shows the cached
-    // snapshot (seeded above for the outgoing account) until the debounce ends.
-    // Why: clear the old Codex view immediately, else the previous account's limits show under the newly selected identity until the next poll.
+    // Preserve inactive debounce: probing every live credential home on each switch risks rotating tokens.
+    // Clear active usage immediately so outgoing figures cannot appear under the new account.
     this.updateState({
       ...this.state,
       codex: this.withFetchingStatus(null, 'codex')
@@ -149,10 +216,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: ClaudeAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeClaudeAccountSelectionTarget(target)
-    // Why: snapshot the outgoing account's usage before clearing so the switcher's inline bars can show last-known data immediately.
+    // Seed outgoing switcher data before clearing; a weekly-only kept snapshot still counts.
     if (
       outgoingAccountId &&
-      this.state.claude?.session &&
+      this.state.claude &&
+      hasUsageWindows(this.state.claude) &&
       this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     ) {
       this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)
@@ -161,10 +229,12 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
-    // Why: a new account/target starts with a clean retry schedule.
+    this.lastClaudeCheckCompletedAt = null
     this.activeFailureStreakByProvider.claude = 0
-    // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
+    // Outgoing statusline posts must not land on the incoming account during the switch.
     this.lastClaudeAuthSnapshot = null
+    this.liveClaudeUsage = null
+    this.usageReadingAccounts.claude = undefined
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -179,10 +249,13 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     const targetChanged = !this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
+    this.lastClaudeCheckCompletedAt = null
     this.activeFailureStreakByProvider.claude = 0
     if (targetChanged) {
-      // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
+      // Outgoing target posts must not land on the incoming target during the switch.
       this.lastClaudeAuthSnapshot = null
+      this.liveClaudeUsage = null
+      this.usageReadingAccounts.claude = undefined
     }
     this.updateState({
       ...this.state,

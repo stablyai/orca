@@ -2,11 +2,15 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import type {
+  AiVaultSessionHandoffArgs,
+  AiVaultSessionHandoffResult
+} from '../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import type {
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
@@ -14,20 +18,20 @@ import type {
   AiVaultListResult,
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../shared/ai-vault-session-title'
+} from '../../shared/ai-vault/contracts/ai-vault-session-title'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import type {
   AiVaultScanProgress,
   AiVaultScanProgressUpdate
-} from '../../shared/ai-vault-scan-progress'
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 
 export type AiVaultApi = {
   /** Omitted host means this host; `all` is merged by this desktop across every enumerated host. */
@@ -37,16 +41,12 @@ export type AiVaultApi = {
   ) => Promise<AiVaultSearchResponse>
   /** Status describes one index, so it never accepts the `all` scope. */
   searchStatus: (executionHostScope?: ExecutionHostId) => Promise<AiVaultSearchStatus>
-  /**
-   * Turns indexing on or off on a paired Orca server and answers its status after the change.
-   * Runtime hosts only: the local index follows this desktop's own settings write, SSH hosts
-   * reject with `unsupported`, and a server predating the method rejects with `host-too-old`.
-   */
+  /** Paired servers only; SSH rejects as unsupported, older servers as host-too-old. */
   setSearchEnabled: (
     executionHostId: ExecutionHostId,
     enabled: boolean
   ) => Promise<AiVaultSearchStatus>
-  /** Deletes and rebuilds this desktop's local search index. */
+  /** Rebuilds the local index after deletion. */
   clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
@@ -54,13 +54,13 @@ export type AiVaultApi = {
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeRequest
   ) => Promise<AiVaultPrepareSessionResumeResult>
-  /** Lists the Task subagent transcripts of one session, on demand. */
+  /** Saves a database-backed session's full conversation on its own host for a hand-off. */
+  prepareSessionHandoff: (args: AiVaultSessionHandoffArgs) => Promise<AiVaultSessionHandoffResult>
   listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
-  /** Full first user prompt for copy/reuse (re-parses one transcript). */
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) => Promise<AiVaultFirstUserPromptResult>
   /** Moves a deletable session's transcript to the OS trash; local sessions only. */
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
-  /** Fires when any app window regains OS focus; returns an unsubscribe. */
+  /** Fires when any app window regains OS focus. */
   onWindowFocused: (callback: () => void) => () => void
   /** The local scan entry for a request key, if it is still retained. */
   getScanProgress: (scanKey: string) => Promise<AiVaultScanProgress | null>

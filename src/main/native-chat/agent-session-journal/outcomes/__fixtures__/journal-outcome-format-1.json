@@ -1,0 +1,894 @@
+{
+  "sessionId": "session-1",
+  "epoch": "epoch-1",
+  "through": 21,
+  "marker": "{\"v\":5,\"kind\":\"outcomes\",\"epoch\":\"epoch-1\",\"seq\":1,\"ts\":1001}",
+  "outcomes": [
+    [1, "$", "\"derivedTurnScope\"", 1, "s0000000000000001:0000000000000006", "null", 0],
+    [1, "$", "\"epoch\"", 1, "s0000000000000001:0000000000000001", "\"epoch-1\"", 0],
+    [1, "$", "\"highestFence\"", 1, "s0000000000000001:0000000000000005", "1", 0],
+    [
+      1,
+      "$",
+      "\"historyOrigin\"",
+      1,
+      "s0000000000000001:0000000000000010",
+      "{\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"},\"raw\":{\"version\":1,\"kind\":\"legacy_import\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"},\"importedAt\":1001}}",
+      0
+    ],
+    [1, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "0", 0],
+    [1, "$", "\"latestAcceptedTurnSequence\"", 1, "s0000000000000001:0000000000000007", "0", 0],
+    [1, "$", "\"oldestSequence\"", 1, "s0000000000000001:0000000000000004", "1", 0],
+    [1, "$", "\"queue\"", 1, "s0000000000000001:0000000000000009", "{\"revision\":0}", 0],
+    [
+      1,
+      "$",
+      "\"queuePauseMarks\"",
+      1,
+      "s0000000000000001:0000000000000008",
+      "{\"latestStop\":null,\"resumedSequence\":0,\"reopenedSequence\":0}",
+      0
+    ],
+    [1, "$", "\"sessionId\"", 1, "s0000000000000001:0000000000000000", "\"session-1\"", 0],
+    [2, "$", "\"queue\"", 1, "s0000000000000001:0000000000000009", "{\"revision\":1}", 0],
+    [
+      2,
+      "queue.cards",
+      "\"draft\"",
+      1,
+      "s0000000000000002:0000000000000000",
+      "[\"draft\",{\"messageId\":\"draft\",\"position\":1,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"fingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"state\":\"waiting\",\"holdReason\":null,\"returnedReason\":null,\"returnedRejection\":null,\"consumedAs\":null,\"queuedAt\":{\"epoch\":\"epoch-1\",\"sequence\":2},\"options\":{\"model\":\"model-a\"}}]",
+      0
+    ],
+    [3, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1003", 0],
+    [3, "$", "\"queue\"", 1, "s0000000000000001:0000000000000009", "{\"revision\":2}", 0],
+    [
+      3,
+      "itemFences",
+      "\"orca:send-1\"",
+      1,
+      "s0000000000000003:0000000000000003",
+      "[\"orca:send-1\",1]",
+      0
+    ],
+    [
+      3,
+      "items",
+      "\"orca:send-1\"",
+      1,
+      "s0000000000000003:0000000000000002",
+      "{\"itemId\":\"orca:send-1\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"sequence\":3,\"observedAt\":1003,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [
+      3,
+      "queue.cards",
+      "\"draft\"",
+      1,
+      "s0000000000000002:0000000000000000",
+      "[\"draft\",{\"messageId\":\"draft\",\"position\":1,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"fingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"state\":\"dispatched\",\"holdReason\":null,\"returnedReason\":null,\"returnedRejection\":null,\"consumedAs\":\"send-1\",\"queuedAt\":{\"epoch\":\"epoch-1\",\"sequence\":2},\"options\":{\"model\":\"model-a\"}}]",
+      0
+    ],
+    [
+      3,
+      "submissions",
+      "\"send-1\"",
+      1,
+      "s0000000000000003:0000000000000001",
+      "[\"send-1\",{\"clientMessageId\":\"send-1\",\"fence\":1,\"payloadFingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"dispatchState\":\"pending\",\"providerItemId\":null,\"reason\":null,\"submittedAt\":1003,\"resolvedAt\":null,\"submittedSequence\":3,\"handoverRecorded\":true,\"acceptedSequence\":3,\"queuedMessageId\":\"draft\",\"origin\":\"client\"}]",
+      0
+    ],
+    [4, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1004", 0],
+    [
+      4,
+      "items",
+      "\"orca:send-1\"",
+      1,
+      "s0000000000000003:0000000000000002",
+      "{\"itemId\":\"orca:send-1\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"sequence\":4,\"observedAt\":1004,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [
+      4,
+      "queuedHandOffPlaces",
+      "\"send-1\"",
+      1,
+      "s0000000000000004:0000000000000002",
+      "[\"send-1\",{\"sequence\":4,\"observedAt\":1004,\"turnScope\":{\"kind\":\"thread\"}}]",
+      0
+    ],
+    [
+      4,
+      "stoppedHistoryCarried",
+      "\"send-1\"",
+      1,
+      "s0000000000000004:0000000000000003",
+      "[\"send-1\",[\"stopped-2\",\"stopped-1\"]]",
+      0
+    ],
+    [
+      4,
+      "submissions",
+      "\"send-1\"",
+      1,
+      "s0000000000000003:0000000000000001",
+      "[\"send-1\",{\"clientMessageId\":\"send-1\",\"fence\":1,\"payloadFingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"dispatchState\":\"pending\",\"providerItemId\":null,\"reason\":null,\"submittedAt\":1003,\"resolvedAt\":null,\"submittedSequence\":3,\"handoverRecorded\":true,\"acceptedSequence\":3,\"queuedMessageId\":\"draft\",\"origin\":\"client\",\"handedOverAt\":1004}]",
+      0
+    ],
+    [5, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1005", 0],
+    [5, "$", "\"latestAcceptedTurnSequence\"", 1, "s0000000000000001:0000000000000007", "3", 0],
+    [
+      5,
+      "aliases",
+      "\"codex:thread-1:turn-1:1\"",
+      1,
+      "s0000000000000005:0000000000000002",
+      "[\"codex:thread-1:turn-1:1\",\"orca:send-1\"]",
+      0
+    ],
+    [
+      5,
+      "items",
+      "\"orca:send-1\"",
+      1,
+      "s0000000000000003:0000000000000002",
+      "{\"itemId\":\"orca:send-1\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"sequence\":4,\"observedAt\":1004,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [
+      5,
+      "receipts",
+      "\"send-1\"",
+      1,
+      "s0000000000000005:0000000000000003",
+      "[\"send-1\",{\"clientMessageId\":\"send-1\",\"providerItemId\":\"codex:thread-1:turn-1:1\",\"cursor\":{\"epoch\":\"epoch-1\",\"sequence\":5},\"acceptedAt\":1005}]",
+      0
+    ],
+    [
+      5,
+      "submissions",
+      "\"send-1\"",
+      1,
+      "s0000000000000003:0000000000000001",
+      "[\"send-1\",{\"clientMessageId\":\"send-1\",\"fence\":1,\"payloadFingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"dispatchState\":\"accepted\",\"providerItemId\":\"codex:thread-1:turn-1:1\",\"reason\":null,\"submittedAt\":1003,\"resolvedAt\":1005,\"submittedSequence\":3,\"handoverRecorded\":true,\"acceptedSequence\":3,\"queuedMessageId\":\"draft\",\"origin\":\"client\",\"handedOverAt\":1004}]",
+      0
+    ],
+    [6, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1006", 0],
+    [
+      6,
+      "itemEchoes",
+      "\"codex:thread-1:turn-1:2\"",
+      1,
+      "s0000000000000006:0000000000000002",
+      "[\"codex:thread-1:turn-1:2\"]",
+      0
+    ],
+    [
+      6,
+      "itemFences",
+      "\"codex:thread-1:turn-1:2\"",
+      1,
+      "s0000000000000006:0000000000000001",
+      "[\"codex:thread-1:turn-1:2\",1]",
+      0
+    ],
+    [
+      6,
+      "items",
+      "\"codex:thread-1:turn-1:2\"",
+      1,
+      "s0000000000000006:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:2\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"echo\"}]},\"sequence\":6,\"observedAt\":1006,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [6, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1006]", 0],
+    [7, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1007", 0],
+    [
+      7,
+      "itemFences",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000007:0000000000000001",
+      "[\"codex:thread-1:turn-1:3\",1]",
+      0
+    ],
+    [
+      7,
+      "items",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000007:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:3\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"removed\"}]},\"sequence\":7,\"observedAt\":1007,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [7, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1007]", 0],
+    [8, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1008", 0],
+    [
+      8,
+      "itemFences",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000007:0000000000000001",
+      "null",
+      1
+    ],
+    [8, "items", "\"codex:thread-1:turn-1:3\"", 1, "s0000000000000007:0000000000000000", "null", 1],
+    [
+      8,
+      "tombstones",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000008:0000000000000000",
+      "[\"codex:thread-1:turn-1:3\",2]",
+      0
+    ],
+    [9, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1009", 0],
+    [
+      9,
+      "$",
+      "\"queuePauseMarks\"",
+      1,
+      "s0000000000000001:0000000000000008",
+      "{\"latestStop\":{\"sequence\":9,\"event\":{\"reason\":\"user-stop\",\"at\":1009}},\"resumedSequence\":0,\"reopenedSequence\":0}",
+      0
+    ],
+    [10, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1010", 0],
+    [
+      10,
+      "$",
+      "\"queuePauseMarks\"",
+      1,
+      "s0000000000000001:0000000000000008",
+      "{\"latestStop\":{\"sequence\":9,\"event\":{\"reason\":\"user-stop\",\"at\":1009}},\"resumedSequence\":0,\"reopenedSequence\":0,\"cleared\":{\"operationId\":\"clear-1\",\"messageIds\":[\"draft\"],\"sequence\":10}}",
+      0
+    ],
+    [11, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1011", 0],
+    [
+      11,
+      "$",
+      "\"queuePauseMarks\"",
+      1,
+      "s0000000000000001:0000000000000008",
+      "{\"latestStop\":{\"sequence\":9,\"event\":{\"reason\":\"user-stop\",\"at\":1009}},\"resumedSequence\":0,\"reopenedSequence\":11,\"cleared\":{\"operationId\":\"clear-1\",\"messageIds\":[\"draft\"],\"sequence\":10}}",
+      0
+    ],
+    [12, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1012", 0],
+    [
+      12,
+      "appliedSettlementIds",
+      "\"settlement-0\"",
+      1,
+      "s0000000000000012:0000000000000003",
+      "[\"settlement-0\",\"settlement-0\"]",
+      0
+    ],
+    [
+      12,
+      "itemFences",
+      "\"codex:thread-1:turn-1:4\"",
+      1,
+      "s0000000000000012:0000000000000001",
+      "[\"codex:thread-1:turn-1:4\",1]",
+      0
+    ],
+    [
+      12,
+      "items",
+      "\"codex:thread-1:turn-1:4\"",
+      1,
+      "s0000000000000012:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:4\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"progress 0\"}]},\"sequence\":12,\"observedAt\":1012,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [12, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1012]", 0],
+    [13, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1013", 0],
+    [
+      13,
+      "appliedSettlementIds",
+      "\"settlement-1\"",
+      1,
+      "s0000000000000013:0000000000000002",
+      "[\"settlement-1\",\"settlement-1\"]",
+      0
+    ],
+    [
+      13,
+      "items",
+      "\"codex:thread-1:turn-1:4\"",
+      1,
+      "s0000000000000012:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:4\",\"revision\":2,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"progress 1\"}]},\"sequence\":12,\"observedAt\":1012,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [13, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1013]", 0],
+    [14, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1014", 0],
+    [
+      14,
+      "appliedSettlementIds",
+      "\"settlement-2\"",
+      1,
+      "s0000000000000014:0000000000000002",
+      "[\"settlement-2\",\"settlement-2\"]",
+      0
+    ],
+    [
+      14,
+      "items",
+      "\"codex:thread-1:turn-1:4\"",
+      1,
+      "s0000000000000012:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:4\",\"revision\":3,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"progress 2\"}]},\"sequence\":12,\"observedAt\":1012,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [14, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1014]", 0],
+    [
+      15,
+      "$",
+      "\"derivedTurnScope\"",
+      1,
+      "s0000000000000001:0000000000000006",
+      "\"codex:thread-1:turn-1:7\"",
+      0
+    ],
+    [15, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1015", 0],
+    [
+      15,
+      "itemFences",
+      "\"codex:thread-1:turn-1:7\"",
+      1,
+      "s0000000000000015:0000000000000001",
+      "[\"codex:thread-1:turn-1:7\",1]",
+      0
+    ],
+    [
+      15,
+      "items",
+      "\"codex:thread-1:turn-1:7\"",
+      1,
+      "s0000000000000015:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:7\",\"revision\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"removed-turn\",\"state\":\"running\"},\"sequence\":15,\"observedAt\":1015,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [15, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1015]", 0],
+    [16, "$", "\"derivedTurnScope\"", 1, "s0000000000000001:0000000000000006", "null", 0],
+    [16, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1016", 0],
+    [
+      16,
+      "itemFences",
+      "\"codex:thread-1:turn-1:7\"",
+      1,
+      "s0000000000000015:0000000000000001",
+      "null",
+      1
+    ],
+    [
+      16,
+      "items",
+      "\"codex:thread-1:turn-1:7\"",
+      1,
+      "s0000000000000015:0000000000000000",
+      "null",
+      1
+    ],
+    [
+      16,
+      "removedTurnIds",
+      "\"removed-turn\"",
+      1,
+      "s0000000000000016:0000000000000003",
+      "[\"removed-turn\",\"removed-turn\"]",
+      0
+    ],
+    [
+      16,
+      "tombstones",
+      "\"codex:thread-1:turn-1:7\"",
+      1,
+      "s0000000000000016:0000000000000000",
+      "[\"codex:thread-1:turn-1:7\",2]",
+      0
+    ],
+    [
+      17,
+      "$",
+      "\"derivedTurnScope\"",
+      1,
+      "s0000000000000001:0000000000000006",
+      "\"codex:thread-1:turn-1:5\"",
+      0
+    ],
+    [17, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1017", 0],
+    [
+      17,
+      "itemFences",
+      "\"codex:thread-1:turn-1:5\"",
+      1,
+      "s0000000000000017:0000000000000001",
+      "[\"codex:thread-1:turn-1:5\",1]",
+      0
+    ],
+    [
+      17,
+      "items",
+      "\"codex:thread-1:turn-1:5\"",
+      1,
+      "s0000000000000017:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:5\",\"revision\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"open-turn\",\"state\":\"running\"},\"sequence\":17,\"observedAt\":1017,\"turnScope\":{\"kind\":\"thread\"}}",
+      0
+    ],
+    [17, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1017]", 0],
+    [18, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1018", 0],
+    [
+      18,
+      "itemExecutionOwners",
+      "\"codex:thread-1:turn-1:6\"",
+      1,
+      "s0000000000000018:0000000000000002",
+      "[\"codex:thread-1:turn-1:6\",2]",
+      0
+    ],
+    [
+      18,
+      "itemFences",
+      "\"codex:thread-1:turn-1:6\"",
+      1,
+      "s0000000000000018:0000000000000001",
+      "[\"codex:thread-1:turn-1:6\",1]",
+      0
+    ],
+    [
+      18,
+      "items",
+      "\"codex:thread-1:turn-1:6\"",
+      1,
+      "s0000000000000018:0000000000000000",
+      "{\"itemId\":\"codex:thread-1:turn-1:6\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"Working\"}]},\"sequence\":18,\"observedAt\":1018,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:5\"}}",
+      0
+    ],
+    [18, "providerActivityAt", "2", 1, "s0000000000000018:0000000000000003", "[2,1018]", 0],
+    [19, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1019", 0],
+    [
+      19,
+      "itemFences",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000019:0000000000000002",
+      "[\"codex:thread-1:turn-1:3\",1]",
+      0
+    ],
+    [
+      19,
+      "items",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000019:0000000000000001",
+      "{\"itemId\":\"codex:thread-1:turn-1:3\",\"revision\":3,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"Recreated\"}]},\"sequence\":19,\"observedAt\":1019,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:5\"}}",
+      0
+    ],
+    [19, "providerActivityAt", "1", 1, "s0000000000000006:0000000000000003", "[1,1019]", 0],
+    [
+      19,
+      "tombstones",
+      "\"codex:thread-1:turn-1:3\"",
+      1,
+      "s0000000000000008:0000000000000000",
+      "null",
+      1
+    ],
+    [20, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1020", 0],
+    [
+      20,
+      "itemFences",
+      "\"orca:send-3\"",
+      1,
+      "s0000000000000020:0000000000000002",
+      "[\"orca:send-3\",1]",
+      0
+    ],
+    [
+      20,
+      "items",
+      "\"orca:send-3\"",
+      1,
+      "s0000000000000020:0000000000000001",
+      "{\"itemId\":\"orca:send-3\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"sequence\":20,\"observedAt\":1020,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:5\"}}",
+      0
+    ],
+    [
+      20,
+      "submissions",
+      "\"send-3\"",
+      1,
+      "s0000000000000020:0000000000000000",
+      "[\"send-3\",{\"clientMessageId\":\"send-3\",\"fence\":1,\"payloadFingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"dispatchState\":\"pending\",\"providerItemId\":null,\"reason\":null,\"submittedAt\":1020,\"resolvedAt\":null,\"submittedSequence\":20}]",
+      0
+    ],
+    [21, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000003", "1021", 0],
+    [
+      21,
+      "itemFences",
+      "\"orca:send-2\"",
+      1,
+      "s0000000000000021:0000000000000002",
+      "[\"orca:send-2\",1]",
+      0
+    ],
+    [
+      21,
+      "items",
+      "\"orca:send-2\"",
+      1,
+      "s0000000000000021:0000000000000001",
+      "{\"itemId\":\"orca:send-2\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"sequence\":21,\"observedAt\":1021,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:5\"}}",
+      0
+    ],
+    [
+      21,
+      "normalizedHandOffs",
+      "\"send-1\"",
+      1,
+      "s0000000000000021:0000000000000099",
+      "[\"send-1\",\"send-1\"]",
+      0
+    ],
+    [
+      21,
+      "submissions",
+      "\"send-2\"",
+      1,
+      "s0000000000000021:0000000000000000",
+      "[\"send-2\",{\"clientMessageId\":\"send-2\",\"fence\":1,\"payloadFingerprint\":\"56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571\",\"dispatchState\":\"pending\",\"providerItemId\":null,\"reason\":null,\"submittedAt\":1021,\"resolvedAt\":null,\"submittedSequence\":21}]",
+      0
+    ]
+  ],
+  "expected": {
+    "sessionId": "session-1",
+    "epoch": "epoch-1",
+    "lastSequence": 21,
+    "lastActivityAt": 1021,
+    "oldestSequence": 1,
+    "highestFence": 1,
+    "items": [
+      [
+        "orca:send-1",
+        {
+          "itemId": "orca:send-1",
+          "revision": 1,
+          "body": {
+            "kind": "message",
+            "role": "user",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Please investigate"
+              }
+            ]
+          },
+          "sequence": 4,
+          "observedAt": 1004,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:2",
+        {
+          "itemId": "codex:thread-1:turn-1:2",
+          "revision": 1,
+          "body": {
+            "kind": "message",
+            "role": "assistant",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "echo"
+              }
+            ]
+          },
+          "sequence": 6,
+          "observedAt": 1006,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:4",
+        {
+          "itemId": "codex:thread-1:turn-1:4",
+          "revision": 3,
+          "body": {
+            "kind": "message",
+            "role": "assistant",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "progress 2"
+              }
+            ]
+          },
+          "sequence": 12,
+          "observedAt": 1012,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:5",
+        {
+          "itemId": "codex:thread-1:turn-1:5",
+          "revision": 1,
+          "body": {
+            "kind": "turn",
+            "turnId": "open-turn",
+            "state": "running"
+          },
+          "sequence": 17,
+          "observedAt": 1017,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:6",
+        {
+          "itemId": "codex:thread-1:turn-1:6",
+          "revision": 1,
+          "body": {
+            "kind": "message",
+            "role": "assistant",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Working"
+              }
+            ]
+          },
+          "sequence": 18,
+          "observedAt": 1018,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-1:5"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:3",
+        {
+          "itemId": "codex:thread-1:turn-1:3",
+          "revision": 3,
+          "body": {
+            "kind": "message",
+            "role": "assistant",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Recreated"
+              }
+            ]
+          },
+          "sequence": 19,
+          "observedAt": 1019,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-1:5"
+          }
+        }
+      ],
+      [
+        "orca:send-3",
+        {
+          "itemId": "orca:send-3",
+          "revision": 0,
+          "body": {
+            "kind": "message",
+            "role": "user",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Please investigate"
+              }
+            ]
+          },
+          "sequence": 20,
+          "observedAt": 1020,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-1:5"
+          }
+        }
+      ],
+      [
+        "orca:send-2",
+        {
+          "itemId": "orca:send-2",
+          "revision": 0,
+          "body": {
+            "kind": "message",
+            "role": "user",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Please investigate"
+              }
+            ]
+          },
+          "sequence": 21,
+          "observedAt": 1021,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-1:5"
+          }
+        }
+      ]
+    ],
+    "itemFences": [
+      ["orca:send-1", 1],
+      ["codex:thread-1:turn-1:2", 1],
+      ["codex:thread-1:turn-1:4", 1],
+      ["codex:thread-1:turn-1:5", 1],
+      ["codex:thread-1:turn-1:6", 1],
+      ["codex:thread-1:turn-1:3", 1],
+      ["orca:send-3", 1],
+      ["orca:send-2", 1]
+    ],
+    "itemExecutionOwners": [["codex:thread-1:turn-1:6", 2]],
+    "providerActivityAt": [
+      [1, 1019],
+      [2, 1018]
+    ],
+    "tombstones": [["codex:thread-1:turn-1:7", 2]],
+    "removedTurnIds": ["removed-turn"],
+    "submissions": [
+      [
+        "send-1",
+        {
+          "clientMessageId": "send-1",
+          "fence": 1,
+          "payloadFingerprint": "56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571",
+          "dispatchState": "accepted",
+          "providerItemId": "codex:thread-1:turn-1:1",
+          "reason": null,
+          "submittedAt": 1003,
+          "resolvedAt": 1005,
+          "submittedSequence": 3,
+          "handoverRecorded": true,
+          "acceptedSequence": 3,
+          "queuedMessageId": "draft",
+          "origin": "client",
+          "handedOverAt": 1004
+        }
+      ],
+      [
+        "send-3",
+        {
+          "clientMessageId": "send-3",
+          "fence": 1,
+          "payloadFingerprint": "56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571",
+          "dispatchState": "pending",
+          "providerItemId": null,
+          "reason": null,
+          "submittedAt": 1020,
+          "resolvedAt": null,
+          "submittedSequence": 20
+        }
+      ],
+      [
+        "send-2",
+        {
+          "clientMessageId": "send-2",
+          "fence": 1,
+          "payloadFingerprint": "56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571",
+          "dispatchState": "pending",
+          "providerItemId": null,
+          "reason": null,
+          "submittedAt": 1021,
+          "resolvedAt": null,
+          "submittedSequence": 21
+        }
+      ]
+    ],
+    "receipts": [
+      [
+        "send-1",
+        {
+          "clientMessageId": "send-1",
+          "providerItemId": "codex:thread-1:turn-1:1",
+          "cursor": {
+            "epoch": "epoch-1",
+            "sequence": 5
+          },
+          "acceptedAt": 1005
+        }
+      ]
+    ],
+    "aliases": [["codex:thread-1:turn-1:1", "orca:send-1"]],
+    "itemEchoes": [["codex:thread-1:turn-1:2", null]],
+    "appliedSettlementIds": ["settlement-0", "settlement-1", "settlement-2"],
+    "derivedTurnScope": "codex:thread-1:turn-1:5",
+    "latestAcceptedTurnSequence": 3,
+    "queuePauseMarks": {
+      "latestStop": {
+        "sequence": 9,
+        "event": {
+          "reason": "user-stop",
+          "at": 1009
+        }
+      },
+      "resumedSequence": 0,
+      "reopenedSequence": 11,
+      "cleared": {
+        "operationId": "clear-1",
+        "messageIds": ["draft"],
+        "sequence": 10
+      }
+    },
+    "stoppedHistoryCarried": [["send-1", ["stopped-2", "stopped-1"]]],
+    "queuedHandOffPlaces": [
+      [
+        "send-1",
+        {
+          "sequence": 4,
+          "observedAt": 1004,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ]
+    ],
+    "normalizedHandOffs": ["send-1"],
+    "queue": {
+      "revision": 2,
+      "cards": [
+        [
+          "draft",
+          {
+            "messageId": "draft",
+            "position": 1,
+            "body": {
+              "kind": "message",
+              "role": "user",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "Please investigate"
+                }
+              ]
+            },
+            "fingerprint": "56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571",
+            "state": "dispatched",
+            "holdReason": null,
+            "returnedReason": null,
+            "returnedRejection": null,
+            "consumedAs": "send-1",
+            "queuedAt": {
+              "epoch": "epoch-1",
+              "sequence": 2
+            },
+            "options": {
+              "model": "model-a"
+            }
+          }
+        ]
+      ]
+    },
+    "historyOrigin": {
+      "providerHandle": {
+        "kind": "codex",
+        "threadId": "thread-1"
+      },
+      "raw": {
+        "version": 1,
+        "kind": "legacy_import",
+        "providerHandle": {
+          "kind": "codex",
+          "threadId": "thread-1"
+        },
+        "importedAt": 1001
+      }
+    }
+  }
+}

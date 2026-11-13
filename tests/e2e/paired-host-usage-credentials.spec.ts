@@ -1,21 +1,11 @@
-/**
- * STA-11039: a paired desktop saves a MiniMax API key on the server Settings is scoped to, and the
- * server's own usage poller then reports MiniMax for the server's workspace.
- *
- * The key is fake, so MiniMax answers with an error; the meter proves the server now reports it.
- *
- * Run (Electron `orca serve` host):
- *   ORCA_E2E_USAGE_CREDENTIALS=1 ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-host-usage-credentials.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- * Add ORCA_E2E_ORCAD_SERVE=1 (after `pnpm build:orcad`) for the headless orcad host.
- */
+// STA-11039: save a fake MiniMax key on the scoped server, then require its own usage poller’s error meter.
+// Run electron-headless with ORCA_E2E_USAGE_CREDENTIALS=1 ORCA_BACKGROUND_LAUNCH=1; add ORCA_E2E_ORCAD_SERVE=1 after pnpm build:orcad for Node hosting.
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { resolveBundledOrcadRuntime } from '../../src/main/orcad/orcad-bundled-runtime'
+import { resolveBundledOrcadRuntime } from '../../src/main/orcad/runtime-launch/orcad-bundled-runtime'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { cliServeProfile, spawnUntilReady } from './helpers/orca-serve-cli-host'

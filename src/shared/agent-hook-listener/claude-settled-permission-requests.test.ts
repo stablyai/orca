@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { AgentHookEventPayload } from './listener-event'
 import {
   isClaudePermissionSettledByReplay,
-  MAX_CLAUDE_SETTLED_REQUESTS,
-  readClaudeSettledRequests,
   retainClaudeSettledRequests
 } from './claude-settled-permission-requests'
 
@@ -32,18 +30,18 @@ describe('retained Claude request settlements', () => {
     ])
   })
 
-  it('records a failure and keeps the child owner exact', () => {
-    expect(
-      retainClaudeSettledRequests(
-        undefined,
-        base,
-        ended('tool-1', {
-          hookEventName: 'PostToolUseFailure',
-          toolAgentId: 'child-1',
-          toolAgentType: 'Explore'
-        })
-      )
-    ).toEqual([{ toolUseId: 'tool-1', toolAgentId: 'child-1', toolAgentType: 'Explore' }])
+  it('keeps every request a batch end lists, so a reconnect can release a self-denied wait', () => {
+    const batch = {
+      ...base,
+      hookEventName: 'PostToolBatch',
+      claudeSettledRequests: [{ toolUseId: 'tool-1' }, { toolUseId: 'tool-denied' }]
+    }
+    const afterBatch = retainClaudeSettledRequests(undefined, base, batch)
+    const next = { ...base, hookEventName: 'PreToolUse', toolUseId: 'tool-2' }
+    expect(retainClaudeSettledRequests(afterBatch, batch, next)).toEqual([
+      { toolUseId: 'tool-1' },
+      { toolUseId: 'tool-denied' }
+    ])
   })
 
   it.each([
@@ -57,28 +55,6 @@ describe('retained Claude request settlements', () => {
     ).toBeUndefined()
   })
 
-  it('bounds the list and keeps the newest', () => {
-    let retained = retainClaudeSettledRequests(undefined, base, ended('tool-0'))
-    for (let index = 1; index < 40; index++) {
-      retained = retainClaudeSettledRequests(retained, base, ended(`tool-${index}`))
-    }
-    expect(retained).toHaveLength(MAX_CLAUDE_SETTLED_REQUESTS)
-    expect(retained?.at(-1)).toEqual({ toolUseId: 'tool-39' })
-  })
-
-  it('rejects a malformed or oversized wire list whole', () => {
-    expect(readClaudeSettledRequests([{ toolUseId: ' tool-1 ' }])).toEqual([
-      { toolUseId: 'tool-1' }
-    ])
-    expect(readClaudeSettledRequests([{ toolUseId: 'tool-1' }, { toolUseId: '' }])).toBeUndefined()
-    expect(readClaudeSettledRequests([{ toolUseId: 'tool-1', toolAgentId: 7 }])).toBeUndefined()
-    expect(
-      readClaudeSettledRequests(
-        Array.from({ length: MAX_CLAUDE_SETTLED_REQUESTS + 1 }, (_, i) => ({ toolUseId: `t${i}` }))
-      )
-    ).toBeUndefined()
-  })
-
   it('settles only the exact request, owner, host and run', () => {
     const waiting: AgentHookEventPayload = {
       ...base,
@@ -86,13 +62,16 @@ describe('retained Claude request settlements', () => {
       hookEventName: 'PermissionRequest',
       toolUseId: 'tool-1',
       toolAgentId: 'child-1',
+      toolAgentType: 'Explore',
       payload: { ...base.payload, state: 'waiting' }
     }
     const replay: AgentHookEventPayload = {
       ...base,
       connectionId: 'conn-1',
       isReplay: true,
-      claudeSettledRequests: [{ toolUseId: 'tool-1', toolAgentId: 'child-1' }]
+      claudeSettledRequests: [
+        { toolUseId: 'tool-1', toolAgentId: 'child-1', toolAgentType: 'Explore' }
+      ]
     }
     expect(isClaudePermissionSettledByReplay(waiting, replay)).toBe(true)
     expect(isClaudePermissionSettledByReplay(waiting, { ...replay, isReplay: undefined })).toBe(
@@ -107,5 +86,17 @@ describe('retained Claude request settlements', () => {
     expect(isClaudePermissionSettledByReplay(waiting, { ...replay, launchToken: 'launch-2' })).toBe(
       false
     )
+    expect(isClaudePermissionSettledByReplay({ ...waiting, toolUseId: 'tool-2' }, replay)).toBe(
+      false
+    )
+    expect(isClaudePermissionSettledByReplay({ ...waiting, toolAgentType: 'Review' }, replay)).toBe(
+      false
+    )
+    expect(
+      isClaudePermissionSettledByReplay(waiting, {
+        ...replay,
+        providerSession: { key: 'session_id', id: 'session-2' }
+      })
+    ).toBe(false)
   })
 })

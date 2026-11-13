@@ -1,32 +1,66 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal-zero-dimensions-diagnostic'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal/viewport/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
-import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
-import { useAppStore } from '@/store'
-import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
-import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
-
-import { recordPtyConnectDiagnostic } from './pty-connect-limits'
-import { defersToMainPaneStart } from './main-pane-start-request'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import '@/lib/pane-manager/terminal-rendering/pane-webgl-renderer'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
+import { useAppStore } from '@/store/index'
+import { createCodexBackfillErrorDetector } from '../provider-notices/codex-backfill/codex-backfill-error-detector'
+import {
+  hasWorktreeSleepIntent,
+  onWorktreeSleepIntentCleared
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
+import { recordPtyConnectDiagnostic } from './instrumentation/pty-connect-diagnostics'
+import { defersToMainPaneStart } from './spawn/main-pane-start-request'
 import { findTerminalTabForPane } from './terminal-tab-id'
-
-import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
-
-import { bindForegroundOutputRefresh } from './foreground-output-refresh'
-import { bindRegisterPaneSerializer } from './pane-serializer-register'
-import { bindHandleReattachResult } from './reattach-result-handler'
+import { isDeferredSplitInputHold } from './pane-transport-options'
+import { bindBuildColdRestoreAgentResumeStartup } from './startup/cold-restore-resume-startup'
+import { bindForegroundOutputRefresh } from './output/foreground-output-refresh'
+import { bindRegisterPaneSerializer } from './serialization/pane-serializer-register'
+import { bindHandleReattachResult } from './reattach/reattach-result-handler'
 import { runDeferredSessionAttach } from './deferred-session-attach'
-
-import { bindSerializeHiddenOutputSnapshot } from './hidden-output-snapshot-serialize'
-import { bindSettlePaneSerializer } from './pane-serializer-settle'
-
+import { bindSerializeHiddenOutputSnapshot } from './output-restore/hidden-output-snapshot-serialize'
+import { bindHiddenStartupDelivery } from './spawn/hidden-startup-delivery'
+import { bindHiddenOutputFloodRepaint } from './output-restore/hidden-output-flood-repaint'
+import { bindPaneSerializerReadiness } from './serialization/pane-serializer-readiness'
+import { bindStartupDraftPaste } from './startup/startup-draft-paste'
+import { bindSessionRestoredBannerAdmission } from './notifications/session-restored-banner-admission'
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
-import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
-import { bindHiddenRestoreState } from './hidden-restore-state'
-import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
-import { bindRemoteProgramRedraw } from './remote-program-redraw'
+import {
+  bindLivePaneMode2031Observation,
+  bindPaneMode2031Reset
+} from './emulation/pane-mode-2031-state'
+import { bindLiveTerminalBuffer } from './output/live-terminal-buffer'
+import { bindWritePtyOutputToXterm } from './output/write-pty-output-to-xterm'
+import {
+  bindHiddenOutputRestoreDemand,
+  bindHiddenOutputRestoreReset,
+  bindHiddenOutputRestorePtyReset
+} from './output-restore/hidden-output-restore-state'
+import {
+  bindHiddenRendererQueryAdmission,
+  bindHiddenStartupRendererQueryWrite
+} from './output/hidden-startup-renderer-query-write'
+import { bindHiddenOutputRestoreChunk } from './output-restore/hidden-output-restore-chunk'
+import { bindSnapshotKittyKeyboardModes } from './emulation/snapshot-kitty-keyboard-modes'
+import { bindRendererOrderedSequence } from './output/renderer-ordered-sequence'
+import { bindHiddenOutputRestoreDrain } from './output-restore/hidden-output-restore-drain'
+import { bindAbandonHiddenOutputRestore } from './output-restore/hidden-output-restore-abandon'
+import { bindHiddenOutputRestoreSnapshot } from './output-restore/hidden-output-restore-snapshot'
+import { bindHiddenOutputRestoreRequest } from './output-restore/hidden-output-restore-request'
+import { bindLiveDataCallback } from './output/live-data-callback'
+import {
+  bindBeginReattachLiveDataDeferral,
+  bindReattachLiveDataDeferral
+} from './output/reattach-live-data-deferral'
+import { bindParkRevealSnapshotVerdictActions } from './output-restore/park-reveal-snapshot-verdict'
+import { bindRemoteProgramRedraw } from './geometry/remote-program-redraw'
+import type { ConnectPanePtySession } from './connect-pane-pty-session'
+
+// Preserve WebGL hook registration before deferred connection setup.
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
   const cwdPromise = session.deps.cwdPromise
@@ -41,9 +75,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     if (session.connectStarted || session.disposed) {
       return
     }
-    // Why: a deliberately slept workspace keeps its panes mounted, so connecting
-    // would reattach the retained session id and respawn the shell (#10205).
-    // Wait for the wake instead; a queued startup is an explicit launch.
+    // Slept workspaces retain IDs; wait for wake instead of respawning through reattach, unless queued startup explicitly launches (#10205).
     if (hasWorktreeSleepIntent(session.deps.worktreeId) && !session.paneStartup) {
       session.cancelScheduledConnectFrame()
       if (session.connectFallbackTimer !== null) {
@@ -52,6 +84,10 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       }
       if (!wakeWaitStarted) {
         wakeWaitStarted = true
+        // Why: keys typed into a slept shell must not run in the shell a later wake reattaches.
+        if (!isDeferredSplitInputHold(session)) {
+          session.transport.abandonPreconnectInput?.()
+        }
         recordPtyConnectDiagnostic(
           `pane=${session.pane.id} tab=${session.deps.tabId} -> WAIT FOR WAKE (deliberate sleep)`
         )
@@ -61,8 +97,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
           if (index !== -1) {
             session.waitTeardowns.splice(index, 1)
           }
-          // Why: an activation wake bumps the tab generation in the same tick and the
-          // remounted pane connects on its own; a stale generation must not connect too.
+          // Activation changes generation and remounts; stale generations must not connect alongside their successor.
           const currentTab = findTerminalTabForPane(
             useAppStore.getState(),
             session.deps.worktreeId,
@@ -152,13 +187,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     session.cols = session.pane.terminal.cols
     session.rows = session.pane.terminal.rows
 
-    // Why: if fitAddon resolved to 0×0, the container likely has no layout
-    // dimensions (display:none, unmounted, or zero-size parent). Surface a
-    // diagnostic so the user sees something instead of a blank pane.
-    // Gate on visibility: background/hidden tabs (orchestration workers, CLI
-    // `terminal create` without --focus) legitimately connect at 0×0 because
-    // safeFit skips fitting unmeasurable panes; they refit via the pane resize
-    // observer once shown, so the diagnostic must not fire while hidden.
+    // Report zero fitted geometry only when visible; hidden/unmeasurable tabs legitimately connect before later resize fitting.
     if ((session.cols === 0 || session.rows === 0) && session.deps.isVisibleRef.current) {
       session.deps.onPtyErrorRef?.current?.(
         session.pane.id,
@@ -167,18 +196,12 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     }
 
     session.reportError = (message: string): void => {
-      // Why: the transport connect can reject asynchronously after the pane has been
-      // disposed (e.g. its workspace was deleted) — dropping a late error avoids a toast
-      // racing the unmount. Mirrors the connect scheduler's disposed guard above.
+      // Drop async connect errors after disposal so teardown cannot race a user-facing toast.
       if (session.disposed) {
         return
       }
       if (isWorktreeRemovalFenceError(message)) {
-        // Why: main fences a spawn/reattach whose worktree (or an overlapping
-        // parent/child root) is being deleted. That is expected teardown, not a
-        // user-facing failure — the pane unmounts once removal completes, so never
-        // surface the raw fence error. Covers the parent-removal-fences-child case
-        // that startFreshSpawn's own-worktree teardown skip cannot see.
+        // Removal fences, including overlapping parent/child roots, are expected teardown; never flash their raw spawn/reattach errors.
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)
@@ -188,13 +211,11 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         ? createCodexBackfillErrorDetector()
         : null
 
-    // Why: shared registration so both fresh-spawn and reattach paths install
-    // the same SerializeAddon-backed serializer plus the onTitleChange wrapper
-    // that drives lastTitle parity for mobile subscribers. Wires the resulting
-    // unregister into onDataDisposable.dispose so disposal stays a single
-    // teardown point. See docs/mobile-prefer-renderer-scrollback.md.
+    // Share serializer/title registration across spawn and reattach, wiring one disposal path for mobile parity (docs/mobile-prefer-renderer-scrollback.md).
     bindRegisterPaneSerializer(session)
-    bindSettlePaneSerializer(session)
+    bindPaneSerializerReadiness(session)
+    bindStartupDraftPaste(session)
+    bindSessionRestoredBannerAdmission(session)
     bindBuildColdRestoreAgentResumeStartup(session)
     bindDeferredColdRestoreAndSnapshot(session)
     session.canUseMainBufferSnapshot = function (ptyId: string | null): ptyId is string {
@@ -216,9 +237,28 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
 
     bindRemoteProgramRedraw(session)
     bindSerializeHiddenOutputSnapshot(session)
+    bindHiddenStartupDelivery(session)
+    bindHiddenOutputFloodRepaint(session)
     bindForegroundOutputRefresh(session)
-    bindHiddenOutputSeqAndSkip(session)
-    bindHiddenRestoreState(session)
+    bindLivePaneMode2031Observation(session)
+    bindLiveTerminalBuffer(session)
+    bindWritePtyOutputToXterm(session)
+    bindHiddenOutputRestoreDemand(session)
+    bindHiddenRendererQueryAdmission(session)
+    bindHiddenStartupRendererQueryWrite(session)
+    bindHiddenOutputRestoreChunk(session)
+    bindSnapshotKittyKeyboardModes(session)
+    bindRendererOrderedSequence(session)
+    bindHiddenOutputRestoreDrain(session)
+    bindAbandonHiddenOutputRestore(session)
+    bindHiddenOutputRestoreReset(session)
+    bindPaneMode2031Reset(session)
+    bindHiddenOutputRestorePtyReset(session)
+    bindHiddenOutputRestoreSnapshot(session)
+    bindHiddenOutputRestoreRequest(session)
+    bindLiveDataCallback(session)
+    bindBeginReattachLiveDataDeferral(session)
+    bindReattachLiveDataDeferral(session)
     bindParkRevealSnapshotVerdictActions(session)
     bindHandleReattachResult(session)
     runDeferredSessionAttach(session)

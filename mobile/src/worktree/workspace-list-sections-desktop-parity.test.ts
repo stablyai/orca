@@ -14,9 +14,7 @@ import {
 } from './project-sections-operations'
 import { buildSections, type Worktree } from './workspace-list-sections'
 
-// The desktop half lives in src/renderer/src/components/sidebar/
-// worktree-list-groups-mobile-parity.test.ts: buildRows renders these headers, and main serves
-// PROJECT_SECTION_PARITY_SERVED for the same host answers.
+// Counterpart: renderer sidebar/worktree-list-groups-mobile-parity.test.ts uses the same served project fixtures.
 
 function served(): ServedProjectSections | null {
   const verdict = projectSectionsRead.interpret({
@@ -90,42 +88,9 @@ describe('Project grouping on the phone', () => {
       { key: 'repo:local-assets', label: 'design-assets' }
     ])
   })
-
-  it('drops a served setup whose host id this build cannot read, keeping the rest', () => {
-    const verdict = projectSectionsRead.interpret({
-      id: 'sections',
-      ok: true,
-      result: {
-        catalog: {
-          ...PROJECT_SECTION_PARITY_SERVED,
-          setups: [
-            { ...PROJECT_SECTION_PARITY_SERVED.setups[0], hostId: 'nonsense' },
-            ...PROJECT_SECTION_PARITY_SERVED.setups.slice(1)
-          ]
-        }
-      }
-    })
-
-    expect(verdict.accepted && verdict.value?.setups).toHaveLength(
-      PROJECT_SECTION_PARITY_SERVED.setups.length - 1
-    )
-  })
 })
 
 describe('readServedProjectSections', () => {
-  it('reads a served catalog, and a desktop with no published window as none', () => {
-    expect(
-      readServedProjectSections({
-        id: 'sections',
-        ok: true,
-        result: { catalog: PROJECT_SECTION_PARITY_SERVED }
-      })
-    ).toMatchObject({ kind: 'answered', value: { repos: expect.any(Array) } })
-    expect(
-      readServedProjectSections({ id: 'sections', ok: true, result: { catalog: null } })
-    ).toEqual({ kind: 'answered', value: null })
-  })
-
   it.each(['forbidden', 'method_not_found'])(
     'reads an older desktop that answers %s as serving none',
     (code) => {

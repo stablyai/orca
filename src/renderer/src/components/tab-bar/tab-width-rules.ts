@@ -1,5 +1,8 @@
-// Why: the strip shrink-wraps its tabs, so a content-derived width lets one live title update
-// resize every tab; a definite width pins them and flex-shrink still narrows to the floor.
-export const TAB_CONTAINER_WIDTH_CLASSES = 'w-[180px] min-w-[72px] min-[1280px]:w-[220px]'
+// Tabs share constrained space down to 144px; terminals reserve room for changing titles.
+export const TERMINAL_TAB_CONTAINER_WIDTH_CLASSES =
+  'w-[300px] max-w-[300px] min-w-[144px] flex-auto'
+// Cap intrinsic child widths too, so flex shrink starts from 300px even for very long labels.
+export const CONTENT_TAB_CONTAINER_WIDTH_CLASSES =
+  'w-max max-w-[300px] min-w-[144px] flex-initial [&>*]:max-w-[300px]'
 
-export const TAB_LABEL_WIDTH_CLASSES = 'min-w-0 flex-1 truncate'
+export const TAB_LABEL_WIDTH_CLASSES = 'tab-label min-w-0 flex-1 truncate'

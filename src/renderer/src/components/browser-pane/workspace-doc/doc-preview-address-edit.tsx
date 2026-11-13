@@ -3,18 +3,14 @@ import { toast } from 'sonner'
 import BrowserAddressBar from '@/components/browser-pane/assemble-chrome/BrowserAddressBar'
 import { resolveBrowserAddressBarSubmission } from '@/components/browser-pane/navigate/browser-address-bar-navigation'
 import { translate } from '@/i18n/i18n'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import { resolveWorkspaceDocAddressTarget } from '@/lib/workspace-doc-address-input'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { resolveWorkspaceDocAddressTarget } from '@/lib/browser/documents/workspace-doc-address-input'
 import { useAppStore } from '@/store'
 import { DocPreviewDocumentChip } from './doc-preview-document-chip'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'
 
-/**
- * The chip until the reader asks to type: clicking it swaps in the shared address bar, prefilled
- * with the document's workspace-relative path and selected. Committing a web URL converts the tab
- * in place — the preview becomes an ordinary browser tab from then on. The conversion replaces the
- * page, so a successful commit unmounts this whole pane; only a refused commit stays here.
- */
+/** Edit the workspace-relative path in place; successful web URL conversion replaces this pane, while refusal leaves it mounted. */
 export function DocPreviewAddressEdit({
   identity,
   previewId,
@@ -60,9 +56,7 @@ export function DocPreviewAddressEdit({
 
   const navigateToUrl = useCallback(
     (url: string): void => {
-      // Why refused here too: a suggestion click bypasses the typed-input resolver, and a doc tab
-      // exists because its file is not this machine's — a file: target would resolve on the wrong
-      // host exactly like the typed case.
+      // Suggestion clicks bypass typed-input validation; file: would read a remote document path on this machine.
       if (url.startsWith('file:')) {
         toast.error(
           translate(
@@ -82,8 +76,7 @@ export function DocPreviewAddressEdit({
 
   const submit = useCallback((): void => {
     const typed = inputRef.current?.value ?? ''
-    // A workspace path retargets the preview (fresh grant, same tab) — or activates the tab the
-    // document is already open in, which is what opening a document has always meant.
+    // Workspace paths retarget the preview or activate the document’s existing tab.
     const docTarget = resolveWorkspaceDocAddressTarget(useAppStore.getState(), worktreeId, typed)
     if (docTarget.status === 'workspace-doc') {
       convertBrowserPageToWorkspaceDoc(previewId, docTarget.docLocation)
@@ -111,14 +104,8 @@ export function DocPreviewAddressEdit({
   return (
     <div
       className="flex min-w-0 flex-1"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          exitEdit()
-        }
-      }}
       onBlur={(event) => {
-        // Why a grace timer and not an immediate exit: a suggestion click blurs the input before
-        // its own click lands, and unmounting the list mid-gesture would swallow the commit.
+        // Blur precedes suggestion clicks; defer exit so unmount cannot swallow the commit.
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return
         }
@@ -134,6 +121,8 @@ export function DocPreviewAddressEdit({
       <BrowserAddressBar
         pageId={previewId}
         value={value}
+        committedValue={`${identity.directoryPrefix}${identity.fileName}`}
+        onLeave={exitEdit}
         onChange={setValue}
         onSubmit={submit}
         onNavigate={navigateToUrl}

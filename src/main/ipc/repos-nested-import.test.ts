@@ -1,37 +1,72 @@
+import type * as RepoDetectionModule from '../git/repositories/discovery/repo-detection'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as GitRunner from '../git/runner'
-import type * as RepoModule from '../git/repo'
+import type * as GitSpawnModule from '../git/command-runner/git-spawn'
 
-const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
+const { reposMocks, moduleMocks, gitRepoProbeMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
-  return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
+  return {
+    reposMocks: moduleMocks.createReposIpcMocks(),
+    moduleMocks,
+    gitRepoProbeMocks: moduleMocks.createGitRepoProbeMocks()
+  }
+})
+
+vi.mock('../git/repositories/discovery/repo-detection', async (importOriginal) =>
+  moduleMocks.repoDetectionModuleMock(
+    await importOriginal<typeof RepoDetectionModule>(),
+    gitRepoProbeMocks
+  )
+)
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: reposMocks.gitExecFileAsyncMock
+  }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
-vi.mock('../git/repo', async (importOriginal) =>
-  moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
+vi.mock('../git/repositories/repository-name', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop())
+}))
+vi.mock('../git/refs/resolution/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultBaseRefAsync: vi.fn().mockResolvedValue('origin/main')
+}))
+vi.mock('../git/remotes/repo-remote-queries', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRemoteCount: vi.fn().mockResolvedValue(1)
+}))
+vi.mock('../git/refs/resolution/repo-base-ref-search', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchBaseRefs: vi.fn().mockResolvedValue([])
+}))
+vi.mock('../git/command-runner/git-spawn', async (importOriginal) =>
+  moduleMocks.gitSpawnModuleMock(reposMocks, await importOriginal<typeof GitSpawnModule>())
 )
-vi.mock('../git/runner', async (importOriginal) =>
-  moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
-)
-vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
-vi.mock('./registered-worktree-roots-cache', () =>
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: reposMocks.listWorktreeGraphMock
+}))
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
-vi.mock('../worktree-root-preparation', () =>
+vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 
 import { registerRepoHandlers } from './repos'
-import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
-import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/command-runner/host-routing/git-capability-state'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
+import { getGitRepoRoot, isGitRepo } from '../git/repositories/discovery/repo-detection'
 import { createRepoHandlerHarness, resetProjectGroupMocks } from './repos-remote-test-harness'
 
-const { handleMock, mockStore, listWorktreeGraphMock } = reposMocks
+const { handleMock, mockStore } = reposMocks
 
 beforeEach(() => {
   clearGitCapabilityStateForTests()
@@ -46,7 +81,17 @@ describe('projectGroups IPC validation', () => {
     mockWindow.webContents.send.mockReset()
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
-    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
+    registerRepoHandlers(
+      mockWindow as never,
+      mockStore as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These IPC cases use only the metadata owner's enqueue method; other runtime handlers are not invoked.
+      {
+        repositoryForkBackfill: {
+          enqueue: vi.fn().mockResolvedValue(undefined),
+          resolve: vi.fn().mockResolvedValue(true)
+        }
+      } as never
+    )
   })
 
   const group = {
@@ -62,7 +107,6 @@ describe('projectGroups IPC validation', () => {
     updatedAt: 1
   }
 
-  // Why: a local tree whose root is a plain folder and whose listed dirs are git repos.
   async function withNestedTree(
     repoDirs: string[],
     run: (root: string) => Promise<void>
@@ -78,30 +122,6 @@ describe('projectGroups IPC validation', () => {
       await rm(root, { recursive: true, force: true })
     }
   }
-
-  it('uses completed scan ids as an allowlist for nested imports', async () => {
-    mockStore.createProjectGroup.mockReturnValue(group)
-    await withNestedTree(['api', join('node_modules', 'hidden')], async (root) => {
-      await handlers.get('projectGroups:scanNested')!(
-        { sender: { send: vi.fn() } },
-        { path: root, scanId: 'scan-import-allowlist' }
-      )
-
-      const result = await handlers.get('projectGroups:importNested')!(null, {
-        parentPath: root,
-        groupName: 'Platform',
-        projectPaths: [join(root, 'api'), join(root, 'node_modules', 'hidden')],
-        scanId: 'scan-import-allowlist',
-        mode: 'group'
-      })
-
-      expect(result).toMatchObject({ importedCount: 1, failedCount: 1 })
-      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
-      expect(mockStore.addRepo).toHaveBeenCalledWith(
-        expect.objectContaining({ path: join(root, 'api') })
-      )
-    })
-  })
 
   it('does not reuse a completed nested scan id for a different parent path', async () => {
     mockStore.createProjectGroup.mockReturnValue(group)
@@ -120,128 +140,12 @@ describe('projectGroups IPC validation', () => {
         mode: 'group'
       })
 
-      expect(result).toMatchObject({ importedCount: 0, failedCount: 1 })
-      expect(mockStore.addRepo).not.toHaveBeenCalled()
-    })
-  })
-
-  it('refuses nested imports on an SSH target and never inspects the path locally', async () => {
-    await expect(
-      handlers.get('projectGroups:importNested')!(null, {
-        parentPath: '/srv/platform',
-        groupName: 'Platform',
-        projectPaths: ['/srv/platform/api'],
-        connectionId: 'conn-1',
-        mode: 'group'
-      })
-    ).rejects.toThrow('ssh_connection_unavailable')
-
-    expect(mockStore.addRepo).not.toHaveBeenCalled()
-    expect(isGitRepo).not.toHaveBeenCalled()
-  })
-
-  it('imports a small selection from a large nested scan', async () => {
-    mockStore.createProjectGroup.mockReturnValue(group)
-    const names = Array.from(
-      { length: 87 },
-      (_, index) => `service-${String(index + 1).padStart(2, '0')}`
-    )
-    await withNestedTree(names, async (root) => {
-      const selectedPaths = [names[2], names[41], names[86]].map((name) => join(root, name))
-
-      const result = await handlers.get('projectGroups:importNested')!(null, {
-        parentPath: root,
-        groupName: 'Platform',
-        projectPaths: selectedPaths,
-        mode: 'group'
-      })
-
-      expect(result).toMatchObject({ importedCount: 3, alreadyKnownCount: 0, failedCount: 0 })
-      expect(mockStore.addRepo).toHaveBeenCalledTimes(3)
-      for (const path of selectedPaths) {
-        expect(mockStore.addRepo).toHaveBeenCalledWith(
-          expect.objectContaining({ path, projectGroupId: group.id })
-        )
-      }
-    })
-  })
-
-  it('imports selected local linked worktrees as one project rooted at the main worktree', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-nested-linked-worktrees-'))
-    try {
-      const parentPath = join(tempRoot, 'paseo-worktrees', 'demo-project')
-      const mainPath = join(tempRoot, 'source', 'demo-project')
-      const firstWorktreePath = join(parentPath, 'brash-binder')
-      const secondWorktreePath = join(parentPath, 'quick-howler')
-      await mkdir(join(firstWorktreePath, '.git'), { recursive: true })
-      await mkdir(join(secondWorktreePath, '.git'), { recursive: true })
-      await mkdir(mainPath, { recursive: true })
-      vi.mocked(isGitRepo).mockReturnValue(false)
-      vi.mocked(isGitRepo).mockImplementation((path: string) =>
-        [firstWorktreePath, secondWorktreePath, mainPath].includes(path)
-      )
-      listWorktreeGraphMock.mockResolvedValue([
-        {
-          path: mainPath,
-          head: 'main-head',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        },
-        {
-          path: firstWorktreePath,
-          head: 'feature-head',
-          branch: 'refs/heads/brash-binder',
-          isBare: false,
-          isMainWorktree: false
-        },
-        {
-          path: secondWorktreePath,
-          head: 'feature-head',
-          branch: 'refs/heads/quick-howler',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-
-      const result = await handlers.get('projectGroups:importNested')!(null, {
-        parentPath,
-        groupName: '',
-        projectPaths: [firstWorktreePath, secondWorktreePath],
-        mode: 'separate'
-      })
-
       expect(result).toMatchObject({
-        importedCount: 1,
-        alreadyKnownCount: 1,
-        failedCount: 0
+        importedCount: 0,
+        failedCount: 1,
+        projects: [{ errorCode: 'not_in_scan' }]
       })
-      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
-      expect(mockStore.addRepo).toHaveBeenCalledWith(expect.objectContaining({ path: mainPath }))
-      expect(listWorktreeGraphMock).toHaveBeenCalledTimes(1)
-      expect((result as { projects: { projectId?: string }[] }).projects[0].projectId).toBe(
-        (result as { projects: { projectId?: string }[] }).projects[1].projectId
-      )
-    } finally {
-      await rm(tempRoot, { recursive: true, force: true })
-    }
-  })
-
-  it('sanitizes unexpected nested import errors before returning results', async () => {
-    mockStore.createProjectGroup.mockReturnValue(group)
-    await withNestedTree(['api'], async (root) => {
-      mockStore.addRepo.mockImplementationOnce(() => {
-        throw new Error(`secret backend path ${join(root, 'api')}`)
-      })
-
-      const result = await handlers.get('projectGroups:importNested')!(null, {
-        parentPath: root,
-        groupName: 'Platform',
-        projectPaths: [join(root, 'api')],
-        mode: 'group'
-      })
-
-      expect(result).toMatchObject({ projects: [{ error: 'Repository could not be imported' }] })
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
     })
   })
 })

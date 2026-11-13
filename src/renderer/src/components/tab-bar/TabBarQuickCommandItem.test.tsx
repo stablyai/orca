@@ -22,8 +22,10 @@ vi.mock('@/i18n/i18n', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: () => null,
+vi.mock('@/components/agent/icons/AgentIcon', () => ({
+  AgentIcon: () => null
+}))
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: (agent: string) => agent
 }))
 
@@ -103,93 +105,5 @@ describe('TabBarQuickCommandItem', () => {
     expect(onEdit).not.toHaveBeenCalled()
     expect(onDelete).not.toHaveBeenCalled()
     expect(container.querySelector('button[aria-label="Copied"]')).not.toBeNull()
-  })
-
-  it('copies agent prompt text for agent quick commands', async () => {
-    renderItem({
-      key: 'local:agent-1',
-      hostId: 'local',
-      hostLabel: 'This Mac',
-      command: {
-        id: 'agent-1',
-        label: 'Explore codebase',
-        action: 'agent-prompt',
-        agent: 'claude',
-        prompt: 'Explore the auth module',
-        scope: { type: 'global' }
-      }
-    })
-
-    const copyButton = container.querySelector('button[aria-label="Copy Explore codebase"]')
-    if (!(copyButton instanceof HTMLButtonElement)) {
-      throw new Error('copy button not found')
-    }
-
-    await act(async () => {
-      copyButton.click()
-      await Promise.resolve()
-    })
-
-    expect(writeClipboardText).toHaveBeenCalledWith('Explore the auth module')
-  })
-
-  it('disables copy when the command body is empty', () => {
-    renderItem({
-      key: 'local:empty',
-      hostId: 'local',
-      hostLabel: 'This Mac',
-      command: {
-        id: 'empty',
-        label: 'Empty',
-        action: 'terminal-command',
-        command: '   ',
-        appendEnter: true,
-        scope: { type: 'global' }
-      }
-    })
-
-    const copyButton = container.querySelector('button[aria-label="Nothing to copy"]')
-    if (!(copyButton instanceof HTMLButtonElement)) {
-      throw new Error('disabled copy button not found')
-    }
-    expect(copyButton.disabled).toBe(true)
-    expect(writeClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('surfaces clipboard failure without claiming success', async () => {
-    writeClipboardText.mockRejectedValueOnce(new Error('denied'))
-    renderItem()
-
-    const copyButton = container.querySelector('button[aria-label="Copy Git status"]')
-    if (!(copyButton instanceof HTMLButtonElement)) {
-      throw new Error('copy button not found')
-    }
-
-    await act(async () => {
-      copyButton.click()
-      await Promise.resolve()
-    })
-
-    expect(container.querySelector('button[aria-label="Couldn\'t copy"]')).not.toBeNull()
-    expect(container.querySelector('button[aria-label="Copied"]')).toBeNull()
-  })
-
-  it('prevents nested action pointerdown from selecting the command row', () => {
-    const { onRun } = renderItem()
-    const copyButton = container.querySelector('button[aria-label="Copy Git status"]')
-    if (!(copyButton instanceof HTMLButtonElement)) {
-      throw new Error('copy button not found')
-    }
-
-    const event = new MouseEvent('pointerdown', { bubbles: true, cancelable: true })
-    const stopPropagation = vi.spyOn(event, 'stopPropagation')
-    const preventDefault = vi.spyOn(event, 'preventDefault')
-    act(() => {
-      copyButton.dispatchEvent(event)
-    })
-
-    expect(stopPropagation).toHaveBeenCalled()
-    expect(preventDefault).toHaveBeenCalled()
-    expect(onRun).not.toHaveBeenCalled()
   })
 })

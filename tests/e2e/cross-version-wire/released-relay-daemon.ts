@@ -1,8 +1,5 @@
-/**
- * A released relay, built from its own tagged sources and run as the real detached daemon, so a test
- * can leave live terminals in it exactly as a quit app does and reach them the way a later build must.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Run a released relay’s own detached daemon so live terminals survive app quit for real upgrade tests.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
@@ -23,9 +20,7 @@ export const PREVIOUS_RELAY_REF = 'v1.4.224'
 
 const DROPPED_DEPENDENCY_NAMESPACE = 'dropped-release-dependency'
 
-// Why: the release bundles against this build's install, which may no longer ship a package the
-// release imported. Such imports become empty modules; the relay paths these tests drive never
-// call into them.
+// Stub dependencies absent from the current install; the tested relay paths never invoke them.
 const droppedReleaseDependencies: Plugin = {
   name: DROPPED_DEPENDENCY_NAMESPACE,
   setup(pluginBuild) {
@@ -58,10 +53,7 @@ export function runShell(command: string): Promise<string> {
   })
 }
 
-/**
- * Bundles the release's relay the way its own build did, then lays it out as a host install:
- * `<root>/relay-<version>/` holding `relay.js` and `.version`, with the socket inside it.
- */
+// Match the released host layout: relay-<version>/ holds relay.js, .version and the socket.
 export async function installReleasedRelay(
   checkout: ReleaseCheckout,
   root: string
@@ -74,12 +66,10 @@ export async function installReleasedRelay(
   return { dir, version }
 }
 
-/** The release's `relay.js` (and its `.version`), bundled once per checkout. */
 export async function buildReleasedRelayBundle(
   checkout: ReleaseCheckout
 ): Promise<{ bundleDir: string; version: string }> {
-  // Why bundled inside the checkout: `node-pty` stays external and resolves from the repo install,
-  // and node resolves modules from the bundle's real path, not the install's symlink.
+  // Bundle inside the checkout so external node-pty resolves from the repo install through the bundle’s real path.
   const bundleDir = join(checkout.root, '.relay-bundle')
   const version = `0.1.0+${checkout.label}-xv`
   if (!existsSync(join(bundleDir, 'relay.js'))) {

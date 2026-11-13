@@ -1,23 +1,25 @@
+import { markStructuredAgentSessionLaunchCancelledSilently } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { TerminalTab } from '../../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
-import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import {
   getStructuredAgentSessionLaunchOwner,
-  markStructuredAgentSessionLaunchCancelledSilently,
-  shouldRetainStructuredAgentSessionLaunchTab,
-  structuredLaunchStates
-} from '@/lib/structured-agent-session-launch-registry'
-import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
-import { readStructuredAgentLaunchRecords } from '@/lib/structured-agent-session-launch-persistence'
-import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
-import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
+  shouldRetainStructuredAgentSessionLaunchTab
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { structuredLaunchStates } from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
+import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
+import { forgetUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
+import { readStructuredAgentLaunchRecords } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
+import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 /** Settles launch waits and retires chat ownership for purged tabs of one workspace. */
 export function retirePurgedTabLaunches(
@@ -35,8 +37,15 @@ export function retirePurgedTabLaunches(
   }
   for (const tab of unifiedTabs) {
     if (tab.contentType === 'agent-session') {
+      forgetUnlistedCreatedChat(worktreeId, tab.entityId)
+      retireStructuredAgentSessionReadOwner(
+        tab.entityId,
+        structuredAgentSessionTargetForHost(tab.executionHostId),
+        tab.executionHostId ?? ''
+      )
       const target = structuredAgentSessionTargetForTab(s, tab)
       if (target) {
+        forgetStructuredSessionSelection(tab.entityId, target)
         retireStructuredAgentSessionReadOwner(tab.entityId, target)
       }
     }

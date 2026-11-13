@@ -1,13 +1,15 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
-import { translate } from '@/i18n/i18n'
-import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
+import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
+import { useTranslate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
-import { useRepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
-import { buildRenderableRows } from '../listing/renderable-rows'
+import { useDraggedSubtreeRanges, useLineageRowProjection } from '../listing/lineage-row-projection'
 import { useFolderWorkspacePathStatusRows } from '../listing/use-folder-path-statuses'
 import { useGroupToggleWithScrollAnchor } from './use-group-toggle'
 import { usePendingSidebarReveal } from '../navigation/use-pending-reveal'
@@ -20,7 +22,9 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
-import { useWorktreeListKeyboardNavigation } from '../navigation/use-keyboard'
+import { withKeyboardPreview } from '../navigation/use-keyboard'
+import { useWorktreeViewportKeyboardNavigation } from './use-keyboard-navigation'
+import { useWorktreeRowGeometry } from './use-row-geometry'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
 import { useWorktreePointerDrag } from '../drag/use-pointer-drag'
@@ -29,7 +33,11 @@ import { useWorktreeSidebarScrollSuppression } from './use-scroll-suppression'
 import { EMPTY_PROJECT_GROUPS, type VirtualizedWorktreeViewportProps } from './viewport-props'
 import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
+import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+
+const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
@@ -39,6 +47,8 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
+  const t = useTranslate()
+  useUiLanguageRevision()
   const {
     rows,
     groupBy,
@@ -59,50 +69,68 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const getRepoSshGate = useRepoSshGateResolver()
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const projectHeaderHostContexts = useMemo(
-    () =>
-      getProjectHeaderHostContexts({
-        rows,
-        visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
-        hosts: props.hostOptions ?? [],
-        runtimeEnvironments,
-        sshConnectionStates,
-        repoMap,
-        projectGrouping: props.projectGrouping
-      }),
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const projectHeaderHostContexts = useProjectHeaderHostContexts({
+    rows,
+    visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
+    hosts: props.hostOptions ?? EMPTY_HOST_OPTIONS,
+    repoMap,
+    projectGrouping: props.projectGrouping
+  })
+  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const {
+    handleOpenRepoSettings,
+    handleOpenWorktreeVisibility,
+    handleCreateGroupFromRepo,
+    handleMoveProjectToGroup,
+    handleRemoveProjectFromGroup,
+    handleRemoveProject,
+    handleCreateForRepo
+  } = props
+  // Why stable: a new object re-renders every project header's menu tree on each workspace switch.
+  const projectActions = useMemo<RepoHeaderProjectActions>(
+    () => ({
+      getWorktreeVisibilityDefaults: (repo) =>
+        getRepoOwnerWorktreeVisibilityDefaults(repo, settings, worktreeVisibilityDefaultsByHost),
+      onOpenRepoSettings: handleOpenRepoSettings,
+      onOpenWorktreeVisibility: handleOpenWorktreeVisibility,
+      onCreateGroupFromRepo: handleCreateGroupFromRepo,
+      onMoveProjectToGroup: handleMoveProjectToGroup,
+      onRemoveProjectFromGroup: handleRemoveProjectFromGroup,
+      onRemoveProject: handleRemoveProject,
+      onCreateForRepo: handleCreateForRepo
+    }),
     [
-      rows,
-      props.visibleProjectRepoIdsBySection,
-      props.hostOptions,
-      repoMap,
-      props.projectGrouping,
-      runtimeEnvironments,
-      sshConnectionStates
+      settings,
+      worktreeVisibilityDefaultsByHost,
+      handleOpenRepoSettings,
+      handleOpenWorktreeVisibility,
+      handleCreateGroupFromRepo,
+      handleMoveProjectToGroup,
+      handleRemoveProjectFromGroup,
+      handleRemoveProject,
+      handleCreateForRepo
     ]
   )
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
 
   const reveal = useSidebarRevealHighlight()
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
-  const { markDirectScrollInput, markScrollMovement } = scrollSuppression
+  const { markDirectScrollInput } = scrollSuppression
+  const programmaticScrollMarks = useMemo(() => createProgrammaticScrollMarks(), [])
 
-  const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
-  const firstHeaderIndex = useMemo(
-    () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
-    [renderRows]
+  const { handleContainerKeyDown, handleContainerKeyUp, handleContainerBlur, keyboardPreview } =
+    useWorktreeViewportKeyboardNavigation({ props, scrollRef, markDirectScrollInput })
+
+  const rowProps = useMemo(
+    () => withKeyboardPreview(props, keyboardPreview),
+    [keyboardPreview, props]
   )
-  const folderBackedProjectGroupIds = useMemo(
-    () =>
-      new Set(
-        projectGroups
-          .filter((group) => group.createdFrom === 'folder-scan')
-          .map((group) => group.id)
-      ),
-    [projectGroups]
-  )
+
+  const renderRows = rows
+  const { projection, activeFamilyRoots, firstHeaderIndex } = useLineageRowProjection({
+    ...rowProps,
+    newCardStyle
+  })
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
     rows,
@@ -116,16 +144,27 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef,
     onReorderHostSections: props.onReorderHostSections,
     onHostDragActiveChange: props.onHostDragActiveChange,
-    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef,
-    directScrollInputUntilRef: scrollSuppression.directScrollInputUntilRef
+    onScrollIntent: markDirectScrollInput
   })
 
-  const session = useWorktreeDragSession({ rows, scrollRef })
+  const virtualization = useWorktreeListVirtualizer({
+    renderRows,
+    projection,
+    firstHeaderIndex,
+    scrollRef,
+    scrollOffsetRef,
+    programmaticScrollMarks
+  })
+  const rowGeometry = useWorktreeRowGeometry({ rows, projection, virtualization, scrollRef })
+
+  const session = useWorktreeDragSession({ rows, scrollRef, geometry: rowGeometry })
   const lineageDrop = useWorktreeLineageDropCommit({
     repoMap,
     worktreeMap,
     worktreeLineageById,
-    worktreeDragGroups: session.worktreeDragGroups
+    worktreeDragGroups: session.worktreeDragGroups,
+    keepsFolderParent: rowGeometry.keepsFolderParent,
+    captureFolderRetention: rowGeometry.captureFolderRetention
   })
   const runtime = useWorktreeDragRuntime({
     worktreeDragSessionRef: session.worktreeDragSessionRef,
@@ -145,21 +184,12 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     allRepoIds: props.allRepoIds,
     repoMap,
     projectGroups,
-    folderWorkspaces: props.folderWorkspaces,
-    sshConnectionStates
+    folderWorkspaces: props.folderWorkspaces
   })
 
   const { showScrollToTop, scrollToTop } = useWorktreeListScrollToTop({
     scrollElement,
     onUserScrollIntent: markDirectScrollInput
-  })
-
-  const virtualization = useWorktreeListVirtualizer({
-    renderRows,
-    firstHeaderIndex,
-    scrollRef,
-    scrollOffsetRef,
-    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef
   })
 
   usePendingSidebarReveal({
@@ -177,6 +207,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     worktreeMap,
     worktreeLineageById,
+    lineageParentIdentities,
     collapsedGroups,
     toggleGroup,
     groupBy,
@@ -199,25 +230,12 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef,
     scrollOffsetRef,
     scrollAnchorRef,
-    hasDirectScrollInput: scrollSuppression.hasDirectScrollInput,
     shouldSkipScrollAnchorRestore: scrollSuppression.shouldSkipScrollAnchorRestore
   })
 
   const { toggleGroupWithScrollAnchor, getLineageToggleHandler } = useGroupToggleWithScrollAnchor({
     scrollRef,
     toggleGroup
-  })
-
-  const { handleContainerKeyDown } = useWorktreeListKeyboardNavigation({
-    rows,
-    renderRows,
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
-    pinnedDisplayPolicy,
-    virtualizer: virtualization.virtualizer,
-    scrollRef,
-    activeModal: props.activeModal,
-    markDirectScrollInput
   })
 
   const dropCtx = useWorktreeDropCommitContext({
@@ -237,7 +255,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     session,
     runtime,
     scrollRef,
-    markScrollMovement,
+    markScrollMovement: scrollSuppression.cancelRevealScroll,
     selectedWorktreeIds: props.selectedWorktreeIds,
     selectedWorktrees: props.selectedWorktrees,
     workspaceBoardOpen: props.workspaceBoardOpen,
@@ -251,7 +269,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     session,
     runtime,
     scrollRef,
-    markScrollMovement
+    markScrollMovement: scrollSuppression.cancelRevealScroll
   })
   useWorktreeDocumentDrop({
     ctx: dropCtx,
@@ -278,8 +296,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef
   })
 
-  // Why: a callback ref that changes identity is re-invoked with null on every render, which
-  // would run the teardown below mid-drag; depend only on the stable teardown callbacks.
+  // Keep the ref callback stable so React cannot invoke null teardown mid-drag on ordinary renders.
   const { cancelPendingRevealFrames, clearRevealHighlightFrame, clearRevealHighlightTimeout } =
     reveal
   const { clearWorktreeDrag } = runtime
@@ -315,21 +332,22 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     },
     [markDirectScrollInput]
   )
-  const handleScroll = useCallback(() => {
-    markScrollMovement()
-  }, [markScrollMovement])
 
+  const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
+  const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
-    props,
+    dragUnitsByRow: rowGeometry.ranges.byRow,
+    hiddenDragRanges,
+    props: rowProps,
+    projection,
+    activeFamilyRoots,
     renderRows,
     firstHeaderIndex,
     virtualization,
     measureVirtualRowElement,
     settings,
-    worktreeVisibilityDefaultsByHost,
-    getRepoSshGate,
+    projectActions,
     newCardStyle,
-    folderBackedProjectGroupIds,
     projectGroups,
     session,
     runtime,
@@ -357,20 +375,22 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         data-worktree-sidebar
         tabIndex={0}
         role="listbox"
-        aria-label={translate('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
+        aria-label={t('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
-          activeWorktreeId,
-          activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
+          activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
+          activeWorkspaceExecutionHostId: props.focusedWorktree
+            ? (props.focusedWorkspaceExecutionHostId ?? null)
+            : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
-        // Why: trackpad momentum fires sparse scroll events after the input stream quiets; suppress correction until the viewport stops.
-        onScroll={handleScroll}
+        onKeyUp={handleContainerKeyUp}
+        onBlur={handleContainerBlur}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}
@@ -381,6 +401,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       >
         <div
           role="presentation"
+          data-worktree-sidebar-content
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
@@ -390,7 +411,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           })}
           {virtualItems.map((vItem) => {
             const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
+            return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
           })}
         </div>
       </div>

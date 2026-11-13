@@ -1,11 +1,26 @@
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './terminal-derived-agent-facts'
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
-import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
-import { extractLastOscTitle } from '../../../../shared/osc-title-extraction'
-import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
+import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
+import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
+import { TerminalPublishedOutputRings } from './terminal-published-output-ring'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
+  private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
+  private readonly publishedOutputRings = new TerminalPublishedOutputRings()
+
+  protected getPtyLifecycleSignal(ptyId: string): AbortSignal {
+    let controller = this.ptyLifecycleCancellation.get(ptyId)
+    if (!controller) {
+      controller = new AbortController()
+      this.ptyLifecycleCancellation.set(ptyId, controller)
+    }
+    return controller.signal
+  }
+
   protected recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
     if (status === 'permission') {
       this.recordAgentPromptPermissionObservation(ptyId)
@@ -87,6 +102,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    const cancellation = this.ptyLifecycleCancellation.get(ptyId)
+    this.ptyLifecycleCancellation.delete(ptyId)
+    cancellation?.abort()
     this.clearAgentPromptCorrelationForPty(ptyId)
     // A stop intent belongs to one process incarnation; never let it label a
     // replacement process when the provider reports a generation reset.
@@ -95,13 +113,23 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
-    // Why: a respawn under the same session id needs its own subscriber-driven attach.
-    this.terminalViewSubscribers.resetGeneration(ptyId)
+    // Why: a respawn under the same session id needs its own main attach.
+    this.mainDaemonAttachments.forget(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.outputObservedSince = null
+    }
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
+    // A phone that saw the previous process gets a fresh snapshot, never a resume across the respawn.
+    this.resetPublishedTerminalOutputCoverage(ptyId)
+  }
+
+  /** Ends resume onto output published so far: the phone's next subscribe gets a snapshot. */
+  protected resetPublishedTerminalOutputCoverage(ptyId: string): void {
+    this.publishedOutputRings.get(ptyId)?.resetCoverage(this.getPtyOutputSequence(ptyId))
   }
 
   synchronizePtyOutputSequenceFromProvider(
@@ -142,7 +170,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       this.terminalFileUriHostnameByPtyId.delete(ptyId)
       const pty = this.ptysById.get(ptyId)
       if (pty) {
-        pty.wslDistro = null
+        this.terminalIdentity.setPtyWslDistro(pty, null)
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
         // The replaced process's live facet says nothing about its successor.
@@ -193,5 +221,36 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     listener: (data: string, meta?: RuntimeTerminalDataMeta) => void
   ): () => void {
     return this.terminalStreamConsumers.subscribe(ptyId, listener)
+  }
+
+  /** Keeps this PTY's published output from now on, so a phone stream can later resume from it. */
+  retainPublishedTerminalOutput(ptyId: string): ReturnType<TerminalPublishedOutputRings['retain']> {
+    return this.publishedOutputRings.retain(ptyId, {
+      seq: this.getPtyOutputSequence(ptyId),
+      size: () => this.getTerminalSize(ptyId),
+      subscribe: (listener) => this.subscribeToTerminalData(ptyId, listener)
+    })
+  }
+
+  readRecentTerminalOutput(ptyId: string): string | undefined {
+    return this.recentPtyOutputById.get(ptyId)?.read()
+  }
+
+  /** The exit frees the buffer, so keep what the PTY's last command printed for its start failure. */
+  protected releaseRecentPtyOutput(ptyId: string, pty: RuntimePtyWorktreeRecord | undefined): void {
+    const recent = this.recentPtyOutputById.get(ptyId)
+    // A repeated exit report finds the buffer already freed and keeps what the first one saved.
+    if (pty && recent) {
+      pty.lastExitOutput = {
+        incarnationId: pty.incarnationId,
+        text: readLaunchCommandOutput(recent.read(), { ptyExited: true })
+      }
+    }
+    this.recentPtyOutputById.delete(ptyId)
+  }
+
+  readExitedLaunchOutput(ptyId: string, incarnationId: string): string | undefined {
+    const saved = this.ptysById.get(ptyId)?.lastExitOutput
+    return saved?.incarnationId === incarnationId ? saved.text : undefined
   }
 }

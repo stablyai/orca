@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { useAppStore } from '../../store'
-import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
+import { useAppStore } from '../../store/index'
+import { selectFloatingWorkspaceHasUnread } from '../../store/workspaces/floating/floating-workspace-unread-selector'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
@@ -12,12 +12,14 @@ import {
   usageRowSignInOpensSettings
 } from './usage-provider-settings-target'
 import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
 import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
+  const t = useTranslate()
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
@@ -90,7 +92,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     setIsRefreshing(true)
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([(refreshRemote ?? refreshRateLimits)(), refreshDetectedAgents()])
+      await Promise.all([
+        (refreshRemote ?? refreshRateLimits)(),
+        refreshDetectedAgents(undefined, { wakeWslDistro: true })
+      ])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
@@ -104,15 +109,14 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
     rateLimits
+  const muse = rateLimits.muse
 
-  // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
+  // Antigravity has no saved credential; the checked item and detected CLI establish setup.
   const antigravityUsageConfigured =
     !remoteOwned &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
-  // A remote owner's bars come from its snapshot alone; this viewer's setup says nothing about that host.
+  // Use owner-specific durable setup flags; viewer credentials cannot establish remote configuration.
   const usageSettings = {
     ...(remoteOwned ? {} : settings),
     antigravityUsageConfigured,
@@ -132,6 +136,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
+  const visibleMuse = getVisibleUsageProvider('muse', muse, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -152,22 +157,24 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  // MiniMax supports cookie/API-key usage without an installed CLI.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
-  // Why: a Cursor session can come from the IDE alone, so PATH detection of
-  // cursor-agent would hide a real meter from IDE-only users.
+  // Cursor IDE sessions can supply usage without cursor-agent on PATH.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
-  // Why: a saved Coding Plan key is site-auth, not a CLI on PATH — a subscriber
-  // without the ZCode CLI must still earn the meter (same exemption as MiniMax/Cursor).
+  // A saved ZCode Coding Plan key establishes usage independently of CLI detection.
   const showZcode =
     visibleZcode !== null &&
     statusBarItems.includes('zcode') &&
     (rateLimits.zcodePlanApiKeyConfigured || isStatusBarItemAvailable('zcode', detectedAgentIds))
-  // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  const showMuse =
+    visibleMuse !== null &&
+    statusBarItems.includes('muse') &&
+    isStatusBarItemAvailable('muse', detectedAgentIds)
+  // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
@@ -186,11 +193,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMiniMax ||
     showGrok ||
     showCursor ||
-    showZcode
+    showZcode ||
+    showMuse
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -205,15 +213,15 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
     cursor?.status === 'fetching' ||
-    zcode?.status === 'fetching'
+    zcode?.status === 'fetching' ||
+    muse?.status === 'fetching'
 
   const floatingTerminalActionLabel = floatingTerminalOpen
-    ? 'Minimize Floating Workspace'
-    : 'Show Floating Workspace'
+    ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')
+    : t('auto.components.status.bar.floatingWorkspace.show', 'Show Floating Workspace')
   const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
-  // Why: the roster must contain only status items the user left visible;
-  // otherwise an empty trigger would bypass those visibility controls.
+  // Respect per-item visibility in the roster so its trigger cannot bypass hidden status items.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
@@ -224,7 +232,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
-    showZcode ? visibleZcode : null
+    showZcode ? visibleZcode : null,
+    showMuse ? visibleMuse : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
     // Why: the bar collapses chips from the end, so placeholders give way first.
@@ -268,6 +277,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
 
   return {
+    antigravityAccounts: rateLimits.antigravityAccounts,
     anyFetching,
     anyVisible,
     barRef,

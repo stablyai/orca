@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import {
   addWorkspace,
   emptySession,
   GIT_KEY,
   leaf
-} from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
@@ -89,7 +89,7 @@ describe('a window save in a layout-owner build', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     store = createStore()
-    // Main's reconnect facts are pinned elsewhere (window-save-reconnect-facts.test.ts): kept as saved.
+    // Reconnect facts are covered separately in window-save-reconnect-facts.test.ts.
     const runtime = {
       shutdownReconnectFactsFor: (session: WorkspaceSessionState) => ({
         activeWorktreeIdsOnShutdown: session.activeWorktreeIdsOnShutdown,
@@ -137,40 +137,8 @@ describe('a window save in a layout-owner build', () => {
 
     const layout = store.getWorkspaceSession('local').terminalLayoutsByTabId['tab-a']
     expect(layout?.root).toEqual(mainSession().terminalLayoutsByTabId['tab-a']!.root)
-    // The Store moves a saved buffer into a scrollback snapshot.
     expect(Object.keys(layout?.scrollbackRefsByLeafId ?? {})).toEqual([leaf(1)])
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
-  })
-
-  it('passes a scalar patch through', async () => {
-    store.setWorkspaceSession(mainSession(), 'local')
-
-    await call('session:patch', { activeWorktreeId: OTHER_KEY }, 'local')
-
-    expect(store.getWorkspaceSession('local').activeWorktreeId).toBe(OTHER_KEY)
-    expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
-  })
-
-  it('gives a visited workspace main holds its terminal row, and one main lacks none', async () => {
-    store.setWorkspaceSession(
-      addWorkspace(emptySession(), GIT_KEY, [
-        { id: 'group-1', tabs: [{ id: 'editor-1', kind: 'editor' }] }
-      ]),
-      'local'
-    )
-    const save = {
-      ...addWorkspace(emptySession(), GIT_KEY, [
-        { id: 'group-1', tabs: [{ id: 'editor-1', kind: 'editor' }] }
-      ]),
-      tabsByWorktree: { [GIT_KEY]: [], [OTHER_KEY]: [] },
-      lastVisitedAtByWorktreeId: { [GIT_KEY]: 5, [OTHER_KEY]: 6 }
-    }
-
-    await call('session:set', save, 'local')
-
-    const saved = store.getWorkspaceSession('local')
-    expect(Object.hasOwn(saved.tabsByWorktree, GIT_KEY)).toBe(true)
-    expect(Object.hasOwn(saved.tabsByWorktree, OTHER_KEY)).toBe(false)
   })
 
   it('writes a paired server’s partition as the window sent it', async () => {

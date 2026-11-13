@@ -9,7 +9,8 @@ import {
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
 } from '../../shared/runtime-source-env'
-import { RuntimeClient, RuntimeClientError } from '../runtime-client'
+import { RuntimeClient } from './client'
+import { RuntimeClientError } from './types'
 import { resolveFencedRuntimeSource } from './runtime-source-fence'
 
 const SOURCE_A = '11111111-1111-4111-8111-111111111111'
@@ -42,7 +43,6 @@ afterEach(async () => {
 
 type FakeRuntime = { userDataPath: string; methods: string[]; expectations: unknown[] }
 
-/** A live runtime on its own socket that answers every method and records what reached it. */
 async function startRuntime(args: {
   runtimeId: string
   installationId?: string
@@ -134,7 +134,7 @@ describe('RuntimeClient runtime-source fence', () => {
     await client.call('terminal.send', { terminal: 't1', text: 'hi' })
     await client.call('worktree.list')
     expect(runtime.methods).toEqual(['status.get', 'terminal.send', 'worktree.list'])
-    // Why: the host refuses the send itself if it is no longer the runtime the probe verified.
+    // The host must recheck identity if it changes after the probe.
     const expected = { sourceId: SOURCE_A, runtimeId: 'runtime-a2' }
     expect(runtime.expectations).toEqual([undefined, expected, expected])
   })

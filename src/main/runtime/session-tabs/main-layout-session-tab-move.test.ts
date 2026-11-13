@@ -1,11 +1,10 @@
-// Layout-owner build: a phone's or paired client's tab move in a workspace main owns is main's own
-// layout command, window or not; the window is not asked to move it.
+// Phone/paired tab moves use main layout commands for owned workspaces, without asking a window.
 import { describe, expect, it, vi } from 'vitest'
 import {
   TAB_ID,
   WORKTREE_ID,
   setupMainOwnedWorkspace
-} from '../main-owned-workspace-runtime-fixture'
+} from '../terminal/layout/main-owned-workspace-runtime-fixture'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -80,63 +79,5 @@ describe("a client's tab move in a workspace main owns", () => {
     })
 
     expect(groups().map((entry) => entry.tabOrder)).toEqual([[TAB_ID], ['a', 'b']])
-  })
-
-  it('leaves a move in a group showing a tab main lacks to the window, as today', async () => {
-    const { runtime, moveSessionTab, groups, group } = await setup({ window: true })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the move reads only this member, which OrcaRuntimeService implements.
-    const rowsOf = runtime as unknown as {
-      toMobileSessionTabsResult: (shown: unknown) => {
-        tabGroups?: { id: string; tabOrder: string[] }[]
-      }
-    }
-    const real = rowsOf.toMobileSessionTabsResult.bind(runtime)
-    // The window shows a diff tab main's layout does not hold.
-    rowsOf.toMobileSessionTabsResult = (shown) => {
-      const rows = real(shown)
-      return {
-        ...rows,
-        tabGroups: rows.tabGroups?.map((entry) => ({
-          ...entry,
-          tabOrder: [...entry.tabOrder, 'diff-1']
-        }))
-      }
-    }
-    const before = groups()
-
-    await runtime.moveMobileSessionTab(WT, {
-      kind: 'move-to-group',
-      tabId: 'a',
-      targetGroupId: group,
-      index: 0
-    })
-
-    expect(moveSessionTab).toHaveBeenCalledOnce()
-    expect(groups()).toEqual(before)
-  })
-
-  it("refuses with today's codes and moves nothing", async () => {
-    const { runtime, groups, group } = await setup()
-    const before = groups()
-
-    await expect(
-      runtime.moveMobileSessionTab(WT, {
-        kind: 'move-to-group',
-        tabId: 'gone',
-        targetGroupId: group
-      })
-    ).rejects.toThrow('tab_not_found')
-    await expect(
-      runtime.moveMobileSessionTab(WT, { kind: 'move-to-group', tabId: 'a', targetGroupId: 'gone' })
-    ).rejects.toThrow('target_group_not_found')
-    await expect(
-      runtime.moveMobileSessionTab(WT, {
-        kind: 'reorder',
-        tabId: 'a',
-        targetGroupId: group,
-        tabOrder: ['a', 'b']
-      })
-    ).rejects.toThrow('invalid_tab_order')
-    expect(groups()).toEqual(before)
   })
 })

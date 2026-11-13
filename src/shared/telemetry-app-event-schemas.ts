@@ -22,14 +22,13 @@ import {
 } from './telemetry-property-schemas'
 import { workspaceCreatedTimingProperties } from './telemetry-workspace-create-schemas'
 
-// ── Per-event schemas ───────────────────────────────────────────────────
-
 // Cohort signal (repo count at emit time); `.optional()` lets a fail-soft `undefined` validate. See docs/onboarding-funnel-cohort-addendum.md.
 export const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
 export const appOpenedSchema = z
   .object({
     nth_repo_added: nthRepoAddedSchema,
+    agent_dashboard_enabled: z.boolean().optional(),
     // Accept retired sampling fields from older callers; current builds no longer emit them.
     tab_close_sampled: z.boolean().optional(),
     tab_close_sample_rate: z.literal(0.1).optional()
@@ -58,7 +57,7 @@ export const featureInteractionUsageBucketReachedSchema = z
   })
 
 export const repoAddedSchema = z
-  // Why: `.optional()` so paths that can't detect git-ness validate cleanly; never default-guess `false` — omit instead.
+  // Unknown git-ness must omit rather than guess false; optional keeps undetectable paths valid.
   .object({
     method: repoMethodSchema,
     is_git_repo: z.boolean().optional(),
@@ -118,6 +117,8 @@ export const workspaceCreatedSchema = z
 
 export const agentStartedSchema = z
   .object({
+    semantics_version: z.literal(2).optional(),
+    backend: z.enum(['pty', 'structured']).optional(),
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
     request_kind: requestKindSchema,
@@ -129,7 +130,8 @@ export const agentPromptSentSchema = z
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
     request_kind: requestKindSchema,
-    nth_repo_added: nthRepoAddedSchema
+    nth_repo_added: nthRepoAddedSchema,
+    sample_rate: z.literal(0.01).optional()
   })
   .strict()
 

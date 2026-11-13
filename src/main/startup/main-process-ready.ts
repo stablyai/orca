@@ -1,14 +1,13 @@
-import { initializeMainProcessI18nAndMenu } from './main-process-i18n-menu'
+import { initializeMainProcessI18nAndMenu } from './main-window/main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
-import { releaseDesktopActivationAfter } from './serve-desktop-activation'
+import { releaseDesktopActivationAfter } from './serve-launch/serve-desktop-activation'
 import {
   initializeMainProcessRuntimeLaunch,
   type MainProcessRuntimeLaunchOptions
-} from './main-process-runtime-launch'
+} from './runtime-startup/main-process-runtime-launch'
 
-/** Runs the ready-phase composition in the same dependency order as the legacy entry point. */
 export async function initializeMainProcessReady(
   launchOptions: MainProcessRuntimeLaunchOptions
 ): Promise<void> {
@@ -21,6 +20,7 @@ export async function initializeMainProcessReady(
   }
   try {
     await initializeReadyFoundation()
+    await state.wslMoveStartupRewriteReady
     await initializeReadyRuntimeServices()
     // Window creation can proceed while translations and the native menu initialize.
     const i18nAndMenuReady = initializeMainProcessI18nAndMenu()

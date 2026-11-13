@@ -1,11 +1,12 @@
 import {
   getSshTargetIdForExecutionHost,
+  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { buildExecutionHostRegistry } from '../execution-host-registry'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import { buildExecutionHostRegistry } from '../execution-host/execution-host-registry'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts,
@@ -28,6 +29,11 @@ import {
 import { sortWorktreesByStamps, type SortBy } from './smart-sort'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import type { WorkspaceRow } from './workspace-rows'
+import {
+  resolveFeedLineageParentIdentities,
+  type FeedLineagePolicy
+} from './sidebar-feed-lineage-parents'
+import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 
 // By row object: a feed snapshot keeps an unchanged row's object, so only a changed row is read again.
 type FeedRow = WorkspaceRow | PairedServerWorkspaceRow
@@ -63,6 +69,20 @@ function readFeedWorkspaces(domains: SidebarFeedDomains): SidebarFeedWorkspace[]
   ]
 }
 
+/** This desktop's own device id on each paired server, by environment id. */
+export function feedPairedDeviceIdsByEnvironment(
+  domains: Pick<SidebarFeedDomains, 'pairedServerHosts'>
+): Map<string, string> {
+  return new Map(
+    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
+      const environmentId = parseExecutionHostId(hostId)
+      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
+        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
+        : []
+    })
+  )
+}
+
 /** The host sections a feed reader lists, labelled from the feed's SSH and paired-server facts. */
 export function buildFeedHostOptions(
   domains: SidebarFeedDomains,
@@ -73,9 +93,6 @@ export function buildFeedHostOptions(
     const parsed = parseExecutionHostId(hostId)
     return parsed?.kind === 'runtime' && host ? [{ parsed, host }] : []
   })
-  const serverLabelByHostId = new Map<ExecutionHostId, string>(
-    servers.map(({ parsed, host }) => [parsed.id, host.label])
-  )
   const focused = parseExecutionHostId(view.defaultHostId)
   return buildExecutionHostRegistry({
     repos,
@@ -93,10 +110,8 @@ export function buildFeedHostOptions(
       name: host.label
     })),
     hostLabelOverrides: view.hostLabelOverrides,
-    localHostLabel: view.localHostLabel
-  }).map((host) => {
-    const label = serverLabelByHostId.get(host.id)
-    return label ? { ...host, label } : host
+    localHostLabel: view.localHostLabel,
+    localHostLabelIsDefault: true
   })
 }
 
@@ -110,12 +125,11 @@ export type SidebarFeedIndex = {
   repoMap: Map<string, Repo>
   /** The registration a workspace belongs to; the same repo id may be registered on several hosts. */
   repoOf: (worktree: Pick<Worktree, 'repoId' | 'hostId'>) => Repo | undefined
+  /** Nesting parents over every store, set only while some row carries a cross-store record. */
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined
 }
 
-/**
- * Its own host's registration when the catalog has one. A host that lists a same-id copy without
- * its own registration still reads as that repo's, as the window reads it.
- */
+/** Prefer the row host’s registration; missing same-ID registrations use repoMap fallback like the window. */
 function repoOfWorktree(
   repoMap: ReadonlyMap<string, Repo>,
   reposByKey: ReadonlyMap<HostScopedRepoKey, Repo>,
@@ -129,19 +143,39 @@ function repoOfWorktree(
   )
 }
 
+/** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
+/** A registered feed workspace's host (its stamp, else its registration's, else the focused host); null when its project is not registered. */
+export function feedWorktreeHostId(
+  index: Pick<SidebarFeedIndex, 'repoOf'>,
+  worktree: Worktree,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId | null {
+  const repo = index.repoOf(worktree)
+  return repo ? getWorktreeExecutionHostId(worktree, repo, defaultHostId) : null
+}
+
+export function createHostScopedRepoOf(
+  repos: readonly Repo[],
+  repoMap: ReadonlyMap<string, Repo>
+): SidebarFeedIndex['repoOf'] {
+  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
+  return (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+}
+
 export function indexSidebarFeed(
   domains: SidebarFeedDomains,
-  repos: readonly Repo[]
+  repos: readonly Repo[],
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedIndex {
   const workspaces = readFeedWorkspaces(domains)
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
   return {
     workspaces,
     worktrees: workspaces.flatMap((entry) => (entry.folderWorkspace ? [] : [entry.worktree])),
     folderWorkspaces: workspaces.flatMap((entry) => entry.folderWorkspace ?? []),
     repoMap,
-    repoOf: (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+    repoOf: createHostScopedRepoOf(repos, repoMap),
+    lineageParentIdentities: resolveFeedLineageParentIdentities(domains, workspaces, lineagePolicy)
   }
 }
 
@@ -157,10 +191,7 @@ export function rankSidebarFeedWorktrees(
   ).map(getWorktreeHostIdentity)
 }
 
-/**
- * Presentation only: `live` with each workspace that `heldFrom` also lists keeping the Recent
- * stamp it had there, so project sections ordered by Recent hold still. New rows keep theirs.
- */
+/** Keep prior Recent stamps for existing rows during project recency hold; new rows retain live stamps. */
 export function withHeldProjectRecency(
   live: SidebarFeedIndex,
   heldFrom: SidebarFeedIndex

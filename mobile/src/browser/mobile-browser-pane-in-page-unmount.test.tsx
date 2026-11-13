@@ -1,18 +1,16 @@
-/**
- * The browser pane leaving a workspace inside the host-area page: its screencast stream must end on
- * the device's client while the bridge host, which outlives the workspace there, stays up.
- */
+// Workspace unmount must end device screencast subscription while shared host-area bridge remains alive.
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
+import { MobileBrowserPane } from './MobileBrowserPane'
+import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
 
-vi.mock('./use-browser-binary-screencast-grant', () => ({
+vi.mock('./screencast/use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
 }))
 
-vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
+vi.mock('./pane-view/MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -23,7 +21,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   StyleSheet: {
-    absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    absoluteFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     create: (styles: unknown) => styles
   },
   Text: 'Text',

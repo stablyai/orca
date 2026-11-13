@@ -1,5 +1,5 @@
-import type { HostedReviewState } from './hosted-review'
-import type { CheckStatus } from './github/pull-request-types'
+import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
+import type { CheckStatus } from './github/pull-requests/pull-request-types'
 
 export const REVIEW_REFRESH_COOLDOWN_MS = 10_000
 export const CLOSED_REVIEW_REFRESH_INTERVAL_MS = 15 * 60_000

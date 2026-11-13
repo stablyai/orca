@@ -3,31 +3,41 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
-  IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR,
+  getImportedWorktreesKeepHiddenError,
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
-} from '../../imported-worktrees-card-actions'
-import {
-  buildImportedWorktreesCardCandidates,
-  getHiddenImportedWorktrees
-} from '../../imported-worktrees-card-candidates'
+} from './imported-worktrees-card-actions'
+import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
+import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
 import {
   suppressNewExternalWorktreeInbox,
   type NewExternalWorktreesInboxActionState
-} from '../../new-external-worktrees-inbox-actions'
-import { buildNewExternalWorktreesInboxCandidates } from '../../new-external-worktrees-inbox-candidates'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+} from './new-external-worktrees-inbox-actions'
+import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  indexHiddenProjects,
+  withoutHiddenFilterRepoIds
+} from '../../../../../../shared/hidden-projects'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 
-// The two sidebar notice rows for worktrees Orca detected but does not yet show, plus the
-// pending/error state their inline actions surface.
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]
   visibleReposForRows: readonly Repo[]
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo']
   filterRepoIds: readonly string[]
 }) {
-  const { repos, visibleReposForRows, detectedWorktreesByRepo, filterRepoIds } = args
+  const { repos, visibleReposForRows, detectedWorktreesByRepo } = args
+  // A filter naming only hidden projects selects nothing listed, so notices ignore it as rows do.
+  const filterRepoIds = useMemo(
+    () =>
+      withoutHiddenFilterRepoIds(
+        args.filterRepoIds,
+        indexHiddenProjects(repos, LOCAL_EXECUTION_HOST_ID)
+      ),
+    [args.filterRepoIds, repos]
+  )
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const settings = useAppStore((s) => s.settings)
@@ -120,7 +130,7 @@ export function useSidebarExternalWorktreeCards(args: {
         if (!refreshed) {
           setImportedWorktreeCardState(projectId, {
             pending: false,
-            error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+            error: getImportedWorktreesKeepHiddenError()
           })
           return
         }
@@ -129,7 +139,7 @@ export function useSidebarExternalWorktreeCards(args: {
       if (detected?.authoritative !== true) {
         setImportedWorktreeCardState(projectId, {
           pending: false,
-          error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+          error: getImportedWorktreesKeepHiddenError()
         })
         return
       }

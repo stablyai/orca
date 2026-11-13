@@ -2,7 +2,8 @@ import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rat
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
-import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import type { Translate } from '@/i18n/use-translate'
+import { formatRateLimitWindowChipLabel } from '../../../../shared/rate-limit-window-label'
 import { getUsageHeadlineSection } from './UsageRosterPanel'
 
 export type StatusBarUsageSection = {
@@ -14,16 +15,16 @@ export type StatusBarUsageSection = {
 
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-/** The percentages actually shown in a provider chip, also used by the row's unit label. */
 export function getStatusBarUsageSections(
   p: ProviderRateLimits | null,
-  mode: StatusBarUsageMode
+  mode: StatusBarUsageMode,
+  t: Translate = translate
 ): StatusBarUsageSection[] {
   if (!p || p.status === 'idle' || p.status === 'unavailable') {
     return []
   }
   if (mode === 'compact') {
-    const headline = getUsageHeadlineSection(p)
+    const headline = getUsageHeadlineSection(p, t)
     return headline ? [{ key: 'headline', ...headline }] : []
   }
   if (p.buckets?.length) {
@@ -58,7 +59,7 @@ export function getStatusBarUsageSections(
       ? {
           key: 'fableWeekly',
           window: p.fableWeekly,
-          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+          label: t('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
         }
       : null,
     // Monthly-only providers keep their limit inline; other plans show it in the details.

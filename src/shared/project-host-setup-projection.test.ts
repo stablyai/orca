@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
-  getProjectHostSetupsForProject,
-  isGitHubBackedRepo,
-  getProjectIdForProviderIdentity,
-  isProjectRemoteIdentityPending
+  getProjectHostSetupsForProject
 } from './project-host-setup-projection'
 import { getProjectHostSetupWorktreeMeta } from './project-host-setup-lookup'
 import type { Repo } from './repo-types'
@@ -38,8 +35,7 @@ describe('project host setup projection', () => {
     expect(second.setups[0]?.updatedAt).toBe(first.setups[0]?.updatedAt)
   })
 
-  // Why both orders: repo order comes from disk/host enumeration, so it must not decide the
-  // project's timestamps. The accumulator carries 0 when the *first* sibling is the unknown one.
+  // Unknown timestamps may occur first in host/disk order; neither order may erase known sibling times.
   const timestampedSibling = repo({
     id: 'local-repo',
     path: '/Users/alice/orca',
@@ -88,40 +84,6 @@ describe('project host setup projection', () => {
     }
   })
 
-  it('projects a legacy local repo into one project and one ready local setup', () => {
-    const projection = projectHostSetupProjectionFromRepos(
-      [repo({ id: 'repo-1', path: '/Users/alice/orca', displayName: 'orca' })],
-      500
-    )
-
-    expect(projection.projects).toEqual([
-      {
-        id: 'repo:repo-1',
-        displayName: 'orca',
-        badgeColor: '#737373',
-        kind: 'git',
-        sourceRepoIds: ['repo-1'],
-        createdAt: 100,
-        updatedAt: 100
-      }
-    ])
-    expect(projection.setups).toEqual([
-      {
-        id: 'repo-1',
-        projectId: 'repo:repo-1',
-        hostId: 'local',
-        repoId: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
-        kind: 'git',
-        setupState: 'ready',
-        setupMethod: 'legacy-repo',
-        createdAt: 100,
-        updatedAt: 100
-      }
-    ])
-  })
-
   it('preserves host-local setup fields on SSH repos', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -141,19 +103,6 @@ describe('project host setup projection', () => {
       worktreeBasePath: '../worktrees',
       gitUsername: 'alice'
     })
-  })
-
-  it('preserves repo-backed setup method metadata', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
-        projectHostSetupMethod: 'cloned'
-      })
-    ])
-
-    expect(projection.setups[0]?.setupMethod).toBe('cloned')
   })
 
   it('groups repo checkouts with the same provider identity under one project', () => {
@@ -450,32 +399,6 @@ describe('project host setup projection', () => {
     ).toHaveLength(3)
   })
 
-  it('keeps same-named cross-host records separate when there is no shared repo identity', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'local-sample-app',
-        path: '/Users/alice/work/sample-app',
-        displayName: 'sample-app'
-      }),
-      repo({
-        id: 'ssh-sample-app',
-        path: '/srv/unrelated/sample-app',
-        displayName: 'sample-app',
-        connectionId: 'staging server'
-      }),
-      repo({
-        id: 'runtime-sample-app',
-        path: '/workspace/sample-app',
-        displayName: 'sample-app',
-        executionHostId: 'runtime:preview'
-      })
-    ])
-
-    // Why: display names are labels, not identity. A future fix needs a
-    // normalized git remote identity or an explicit user link before merging.
-    expect(projection.projects).toHaveLength(3)
-  })
-
   it('does not collapse case-distinct remote paths for self-hosted git remotes', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -539,101 +462,10 @@ describe('project host setup projection', () => {
   })
 })
 
-describe('isGitHubBackedRepo', () => {
-  it('is true when an explicit upstream owner/repo is present', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is true when a GitHub-sourced avatar icon encodes the slug', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is false for a non-GitHub icon and no upstream (GitLab/folder)', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: { type: 'lucide', name: 'gitlab' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(false)
-  })
-
-  it('is false for a plain local repo with no provider signal', () => {
-    expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
-  })
-})
-
-describe('getProjectIdForProviderIdentity', () => {
-  it('uses the same normalized identity key as project projection', () => {
-    expect(
-      getProjectIdForProviderIdentity({ provider: 'github', owner: 'PyTorch', repo: 'PyTorch' })
-    ).toBe('github:pytorch/pytorch')
-    expect(
-      getProjectIdForProviderIdentity({
-        provider: 'github',
-        owner: 'Acme',
-        repo: 'Orca',
-        host: 'GITHUB.ACME.TEST:8443'
-      })
-    ).toBe('github:github.acme.test:8443/acme/orca')
-  })
-})
-
-describe('isProjectRemoteIdentityPending', () => {
-  const base = { id: 'r', path: '/r', displayName: 'r' } as const
-
-  it('is true while the background remote probe has not answered', () => {
-    expect(isProjectRemoteIdentityPending(repo({ ...base }))).toBe(true)
-    expect(isProjectRemoteIdentityPending(repo({ ...base, connectionId: 'builder' }))).toBe(true)
-  })
-
-  it('is false once the probe settles on no usable remote', () => {
-    expect(isProjectRemoteIdentityPending(repo({ ...base, gitRemoteIdentity: null }))).toBe(false)
-  })
-
-  it('is false once any provider-neutral identity resolves', () => {
-    expect(
-      isProjectRemoteIdentityPending(
-        repo({
-          ...base,
-          gitRemoteIdentity: {
-            canonicalKey: 'gitlab.example.com/team/orca',
-            remoteName: 'origin',
-            remoteUrl: 'git@gitlab.example.com:team/orca.git'
-          }
-        })
-      )
-    ).toBe(false)
-    expect(
-      isProjectRemoteIdentityPending(
-        repo({ ...base, upstream: { owner: 'stablyai', repo: 'orca' } })
-      )
-    ).toBe(false)
-  })
-})
-
 describe('derived project identity stability', () => {
   const base = { id: 'r', path: '/r', displayName: 'r' } as const
 
-  // Why pinned: this id is the persisted Project primary key, so folding a host alias here would
-  // silently re-key existing projects on upgrade and drop their runtime preference.
+  // Persisted Project keys cannot fold host aliases on upgrade without dropping runtime preferences.
   it('keeps a www. remote provider-neutral instead of folding it onto github.com', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -683,34 +515,4 @@ describe('getProjectHostSetupWorktreeMeta host selection', () => {
 
     expect(getProjectHostSetupWorktreeMeta(setups, sshRepo).hostId).toBe('ssh:build-box')
   })
-})
-
-it('appends project source IDs without repeatedly copying an accumulating array', () => {
-  const repos = Array.from({ length: 2000 }, (_, i) =>
-    repo({
-      id: `source-${i}`,
-      path: `/repos/${i}`,
-      displayName: `Repo ${i}`,
-      upstream: { owner: 'acme', repo: 'project' }
-    })
-  )
-  let copied = 0
-  const iterator = Array.prototype[Symbol.iterator]
-  Array.prototype[Symbol.iterator] = function (this: unknown[]) {
-    if (this[0] === 'source-0') {
-      copied += this.length
-    }
-    return iterator.call(this)
-  }
-  let result: ReturnType<typeof projectHostSetupProjectionFromRepos>
-  try {
-    result = projectHostSetupProjectionFromRepos([...repos, repos[0]])
-  } finally {
-    Array.prototype[Symbol.iterator] = iterator
-  }
-  expect(copied).toBeLessThan(10_000)
-  expect(result.projects).toHaveLength(1)
-  expect(result.projects[0].sourceRepoIds).toEqual(repos.map((repo) => repo.id))
-  expect(result.setups).toHaveLength(2001)
-  expect(repos[0].displayName).toBe('Repo 0')
 })

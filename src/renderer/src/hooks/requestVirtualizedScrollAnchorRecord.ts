@@ -1,17 +1,32 @@
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from './useVirtualizedScrollAnchor'
 
-/**
- * Asks a mounted virtualized scroller (matched by selector) to snapshot its
- * current top-row anchor right now. Lets code outside the sidebar — e.g. the
- * store's async worktree removal — capture the live anchor in the same tick it
- * mutates the row list, so the post-mutation restore pins the same visible row
- * instead of recording a stale anchor from an earlier click.
- */
-export function requestVirtualizedScrollAnchorRecord(scrollElementSelector: string): void {
+/** Snapshot a mounted scroller’s live top-row anchor in the same tick as external row mutation, avoiding stale click-time anchors. */
+export function requestVirtualizedScrollAnchorRecord(
+  scrollElement: string | Element | null,
+  options?: { deferDomMeasurement: boolean }
+): void {
   if (typeof document === 'undefined') {
     return
   }
-  document
-    .querySelector(scrollElementSelector)
-    ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+  const element =
+    typeof scrollElement === 'string' ? document.querySelector(scrollElement) : scrollElement
+  element?.dispatchEvent(
+    options?.deferDomMeasurement
+      ? new CustomEvent(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, {
+          detail: { deferDomMeasurement: true }
+        })
+      : new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT)
+  )
+}
+
+/** Explicit navigation replaces a pending saved/structural target, even when its scroll is a no-op. */
+export function supersedeVirtualizedScrollAnchorRestore(
+  scrollElement: Element | null,
+  targetOffset?: number
+): void {
+  scrollElement?.dispatchEvent(
+    new CustomEvent(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, {
+      detail: { cancelRestore: true, targetOffset }
+    })
+  )
 }

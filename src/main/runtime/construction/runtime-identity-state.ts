@@ -1,71 +1,97 @@
+import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
+import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
 import { randomUUID } from 'node:crypto'
-import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
-import {
-  headlessMobileSnapshotContentUnchanged,
-  mobileSnapshotIdentityUnchanged
-} from '../mobile-session-snapshot-equality'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import type { RuntimeStore } from '../runtime-store-contract'
-import type { RuntimeClientSettingsController } from '../runtime-client-settings'
-import type { RuntimeAutomationController } from '../runtime-automation-controller'
-import { RuntimeArtifactController } from '../runtime-artifact-controller'
-import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
-import type { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
+import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
+import type { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
+import { RuntimeArtifactController } from '../artifacts/runtime-artifact-controller'
+import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
+import type { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
 import type {
   RuntimeGraphStatus,
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeSyncedTab,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/runtime-session-contracts'
+import type {
   RuntimeTerminalFocus,
   RuntimeTerminalResolvePane,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-terminal-contracts'
 import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
-} from '../runtime-graph-reload-lifecycle'
-import { ClientHostedPageReconciliationWindow } from '../client-hosted-page-reconciliation-window'
-import { ClientSessionTabSelectionStore } from '../client-session-tab-selection'
-import { WorktreeTerminalMutationLock } from '../worktree-terminal-mutation-lock'
-import { RemoteRuntimeTerminalCreateIdempotency } from '../remote-runtime-terminal-create-idempotency'
-import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
-import type { MobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
-import { createMobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
-import type { MobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
-import { createMobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
-import { TerminalFocusNavigationCoalescer } from '../terminal-focus-navigation-coalescer'
+} from '../session-graph/runtime-graph-reload-lifecycle'
+import { ClientHostedPageReconciliationWindow } from '../browser/client-pages/client-hosted-page-reconciliation-window'
+import { ClientSessionTabSelectionStore } from '../client/navigation/client-session-tab-selection'
+import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-terminal-mutation-lock'
+import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
+import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+
+import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
+import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
+
+import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
+import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
+import { TerminalFocusNavigationCoalescer } from '../terminal/focus/terminal-focus-navigation-coalescer'
 import type {
   PtyControllerInventory,
   RuntimePtyController
-} from '../runtime-pty-controller-contract'
-import type { RuntimeLeafRecord, PtyRegistrationClaim } from '../runtime-terminal-state-records'
-import type { TerminalHandleRecord } from '../runtime-terminal-contracts'
-import type { PtyIncarnationHandleRecord } from '../orca-runtime-core'
-import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
+} from '../terminal/lifecycle/runtime-pty-controller-contract'
+import type {
+  RuntimeLeafRecord,
+  PtyRegistrationClaim,
+  RuntimeWorktreeTerminalSleepState
+} from '../terminal/records/runtime-terminal-state-records'
+import { MailPointerRepointScheduler } from '../orchestration/mailbox/notifications/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from '../terminal/wait/terminal-waiter-registry'
-import { RuntimeTerminalWriter } from '../runtime-terminal-writer'
-import { writeRefused } from '../../../shared/pty-write-settlement'
+import { RuntimeTerminalWriter } from '../terminal/input/runtime-terminal-writer'
+import { writeRefused } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { RuntimeTerminalIdlePolls } from '../terminal/wait/terminal-idle-polls'
-import { TerminalIntentionalStops } from '../terminal-intentional-stops'
-import { TerminalRunFactsRegister, type TerminalSpawnCommit } from '../terminal-run-facts'
-import type { TuiIdleEvidenceSource } from '../tui-idle-evidence-source'
-import { hasTerminalCommandPainted } from '../terminal-command-paint'
+import { TerminalIntentionalStops } from '../terminal/stop/terminal-intentional-stops'
+import {
+  TerminalRunFactsRegister,
+  type TerminalSpawnCommit
+} from '../terminal/lifecycle/terminal-run-facts'
+import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
+import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS
-} from '../orca-runtime-postlude'
+} from '../terminal/wait/terminal-idle-policy'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
+import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
+export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
+
+export type MobileSessionTabSubscription = {
+  listener: (
+    snapshot: RuntimeMobileSessionTabsResult,
+    changeSequence: number,
+    delivery?: 'reconciliation'
+  ) => void
+  clientNavigationId?: string
+  clientKind?: 'mobile' | 'runtime'
+  observation?: 'caller'
+  acceptsWorktree?: (worktree: string) => boolean
+}
+
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+  protected getLeafKey(tabId: string, leafId: string): string {
+    return `${tabId}::${leafId}`
+  }
+
+  protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
+  protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
   protected readonly startedAt = Date.now()
@@ -82,7 +108,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected readonly orchestrationFederation!: RuntimeOrchestrationFederation
 
-  protected rendererGraphEpoch = 0
+  protected abstract readonly terminalIdentity: TerminalIdentitySource
+  protected abstract readonly rendererGraphEpoch: number
 
   protected graphStatus: RuntimeGraphStatus = 'unavailable'
 
@@ -107,44 +134,19 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     onTimeout: (_revision, windowId) => this.handleGraphReloadTimeout(windowId)
   })
 
-  protected tabs = new Map<string, RuntimeSyncedTab>()
+  protected abstract readonly tabs: TerminalIdentitySource['tabs']
+
+  protected legacyStructuredSessionTabIds: readonly string[] = []
 
   mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
-  /** Single host writer for mobile session snapshots; versions are total-order stamps. */
-  storeMobileSessionSnapshot(
+  abstract storeMobileSessionSnapshot(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsSnapshot {
-    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Every write keeps main's order and groups; its rows and their facts stay as written.
-      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
-      // A write main's order wholly overrides (a rebuild from the saved session) changes nothing,
-      // unless it names a new occupant, window publication or retirement proof.
-      if (
-        existing &&
-        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
-        headlessMobileSnapshotContentUnchanged(existing, merged) &&
-        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
-      ) {
-        return existing
-      }
-      snapshot = merged
-    }
-    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
-    const snapshotVersion = existing
-      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
-      : snapshot.snapshotVersion
-    const stamped =
-      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
-    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
-    return stamped
-  }
+  ): RuntimeMobileSessionTabsSnapshot
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 
-  // Whether the last tab restore ran with chats on disk but no host to list them.
   protected structuredAgentSessionInventoryUnverifiable = false
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
@@ -155,15 +157,14 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected sessionTabsInventoryWaiters = new Set<() => void>()
 
-  // Worktrees answered with the unpublished placeholder, owed their real answer once the graph publishes.
+  // Placeholder replies owe a real snapshot after graph publication.
   protected worktreesAwaitingSessionTabsPublication = new Set<string>()
 
   protected readonly clientHostedPageReconciliation = new ClientHostedPageReconciliationWindow(
     Date.now()
   )
 
-  // Main-local touches advance stored versions; reject unchanged renderer resends using
-  // the renderer's last accepted epoch/version instead.
+  // Main touches advance stored versions; compare renderer resends against the last accepted renderer stamp.
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
@@ -171,27 +172,24 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       rendererVersion: number
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
+      titlePublisher?: SessionTitlePublisher
     }
   >()
 
-  // Why: worktree ids are path-derived and get recreated, so a renderer frame
-  // that raced the delete must be rejected by the removed occupant's identity.
-  // Entries are cleared once a snapshot carrying the successor's instanceId
-  // is accepted; identity-less frames are fenced by renderer generation.
+  // Recreated path ids need occupant fences against pre-delete renderer frames.
+  // Clear on successor instance acceptance; identity-less frames remain renderer-generation-fenced.
   protected readonly removedMobileSessionWorktreeIds = new Map<
     string,
     {
       removedPublicationEpoch?: string
-      // Why: a rejected frame is still "published" on the renderer side, so a
-      // later unchanged-list mention must not spiral into resync requests.
+      // Rejected frames still count as renderer-published; suppress unchanged-list resync loops.
       rejectedPublication?: boolean
     }
   >()
 
   protected clientSessionTabSelections = new ClientSessionTabSelectionStore()
 
-  // Why: idempotency map for mobile terminal creation — a retried create with the
-  // same clientMutationId returns the in-flight operation instead of duplicating.
+  // Retried mobile creates share their in-flight mutation instead of spawning twice.
   protected mobileTerminalCreateByMutationId = new Map<
     string,
     Promise<RuntimeMobileSessionCreateTerminalResult>
@@ -199,8 +197,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected readonly terminalCreateIdempotency = new RemoteRuntimeTerminalCreateIdempotency()
 
-  // Why: concurrent clients sleeping one host workspace must share one physical teardown.
-  // Both sleep maps key on host + workspace (hostSleepKey), never the bare id.
+  // Concurrent clients share one teardown per host + workspace, never bare workspace id.
   protected terminalSleepByHostWorktree = new Map<
     HostScopedWorktreeKey,
     Promise<RuntimeWorktreeTerminalSleepResult>
@@ -210,30 +207,18 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected terminalSleepStateByHostWorktree = new Map<
     HostScopedWorktreeKey,
-    {
-      worktreeId: string
-      generation: number
-      phase: 'stopping' | 'partial' | 'sleeping'
-      ptyIds: string[]
-      terminalHandles: string[]
-      terminalHandlesByPtyId: Record<string, string[]>
-    }
+    RuntimeWorktreeTerminalSleepState
   >()
 
   protected terminalSleepGeneration = 0
 
   protected terminalPaneRecoveryByIdentity = new Map<string, Promise<RuntimeTerminalResolvePane>>()
 
-  // Why: idempotency map for worktree.create — a create interrupted by a mobile
-  // connection migration is retried with the same clientMutationId and returns
-  // the in-flight (or just-finished) operation instead of a duplicate worktree.
+  // Mobile connection migration retries reuse the same mutation's worktree create.
   protected worktreeCreateByMutationId = new Map<string, Promise<unknown>>()
 
-  // Why: a mobile create waits for the renderer to publish the new tab's surface
-  // via graph-sync, but a throttled/hidden renderer can park that past the surface
-  // timeout and the create would then destroy the live PTY (#7587). This lets the
-  // renderer's own PTY spawn publish the surface main-side, scoped to in-flight
-  // creates so ordinary renderer spawns never publish here.
+  // #7587: hidden renderer graph-sync can time out after a live PTY spawns.
+  // In-flight mobile creates let the spawn publish main-side; ordinary renderer spawns must not.
   protected pendingMobileTerminalCreatesByKey = new Map<
     string,
     {
@@ -241,38 +226,31 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       paired: boolean
       selectIfNoActiveTab: boolean
       viewMode?: 'terminal' | 'chat'
-      /** Resolved agent launch command, kept so a settle over a bare renderer
-       *  PTY can still deliver the launch instead of succeeding silently (STA-3214). */
+      /** Retain launch delivery over bare renderer PTYs; silent settlement would lose the command (STA-3214). */
       startupCommand?: string
     }
   >()
 
-  protected mobileSessionTabListeners = new Set<{
-    listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
-    clientNavigationId?: string
-  }>()
+  protected mobileSessionTabListeners = new Set<MobileSessionTabSubscription>()
 
   protected pendingMobileSessionTabsChangeSequenceByWorktree = new Map<string, number>()
 
-  // Why: one watermark per repo replaces per-closed-pane fences while preserving stale-write safety.
+  // Per-repo watermarks replace closed-pane fences while retaining stale-write protection.
   protected terminalTopologyRevisionByRepoId = new Map<string, number>()
 
   // The candidate receipt owns its exit evidence until publication or cancellation.
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
-  // Why public: the PTY IPC layer's stop paths write it and its exit delivery reads it.
   readonly intentionalPtyStops = new TerminalIntentionalStops()
 
   readonly terminalRunFacts = new TerminalRunFactsRegister()
 
-  /** Both spawn-commit funnels report each committed process here, once. */
   noteTerminalSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
     this.terminalRunFacts.recordSpawnCommit(commit, expectedSourceBinding)
     this.intentionalPtyStops.noteSpawnCommit(commit.id)
   }
 
-  // Coalesce title/status notifications and emit the latest session snapshot.
-  protected readonly mobileSessionTabsNotifyCoalescer: MobileSessionTabsNotifyCoalescer =
+  protected readonly mobileSessionTabsNotifyCoalescer: KeyedTrailingEdgeCoalescer =
     createMobileSessionTabsNotifyCoalescer((worktreeId) =>
       this.flushScheduledMobileSessionTabsChanged(worktreeId)
     )
@@ -290,40 +268,36 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected pendingMobileSessionPtyAggregateInventoryRefresh: Promise<PtyControllerInventory | null> | null =
     null
 
-  /** The agent Orca believes owns this pane, for tui-idle evidence ranking. Launch
-   *  authority first; the live foreground agent covers panes Orca did not launch. */
+  /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
+  getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
+    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
+    return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
+  }
+
   protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {
-    if (!ptyId) {
-      return null
-    }
-    const pty = this.ptysById.get(ptyId)
-    const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const agent = this.getPaneTerminalAgent(ptyId)
     return isTuiAgent(agent) ? agent : null
   }
 
-  /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
-  protected deliveryRecheckTimersByLeafKey = new Map<string, ReturnType<typeof setTimeout>>()
+  protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
 
-  // Why: counts authoritative graph statements so a PTY's recorded surface can be told apart
-  // from one the graph has simply not published yet (pty-recorded-surface-topology.ts).
-  protected graphSequence = 0
+  // Sequence authoritative graph statements to distinguish absent surfaces from unpublished ones.
+  protected abstract readonly graphSequence: number
 
-  protected leaves = new Map<string, RuntimeLeafRecord>()
+  protected abstract readonly leaves: TerminalIdentitySource['leaves']
 
-  // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
-  // ptyId keeps active TUI redraws independent of the total open terminal count.
-  protected leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
+  // Index per-keystroke output by PTY so redraw cost does not scale with all open terminals.
+  protected leavesByPtyId = new Map<string, readonly RuntimeLeafRecord[]>()
 
-  handles = new Map<string, TerminalHandleRecord>()
+  abstract readonly handles: TerminalIdentitySource['handles']
 
-  protected handleByLeafKey = new Map<string, string>()
+  protected abstract readonly handleByLeafKey: TerminalIdentitySource['leafHandles']
 
-  protected handleByPtyId = new Map<string, string>()
+  protected abstract readonly handleByPtyId: TerminalIdentitySource['reverse']
 
-  protected handleByPtyIncarnation = new Map<string, PtyIncarnationHandleRecord>()
+  protected abstract readonly handleByPtyIncarnation: TerminalIdentitySource['incarnations']
 
-  // A provider announces a replacement before the spawn commit can bind its
-  // pane. Keep the predecessor aliases fenced during that hand-off window.
+  // Fence predecessor aliases until the announced replacement's spawn commit binds its pane.
   protected pendingPtyHandleReplacementFences = new Map<
     string,
     {
@@ -337,7 +311,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     this.repointPendingMessagesForHandle(handle)
   )
 
-  protected syntheticTerminalHandles = new Set<string>()
+  protected abstract readonly syntheticTerminalHandles: TerminalIdentitySource['synthetic']
 
   protected detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
 
@@ -351,13 +325,13 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     (ptyId) => this.getPtyAgent(ptyId),
     (ptyId, data, inputKind) =>
       this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
-      writeRefused('provider_cannot_settle')
+      writeRefused('provider_cannot_settle'),
+    (ptyId) => this.claimIdleShellPromptForPty(ptyId)
   )
 
-  // Why one source: every tui-idle site must read the same evidence, or they rank one pane differently.
+  // Every tui-idle site must rank the same pane evidence identically.
   protected readonly tuiIdleEvidenceSource: TuiIdleEvidenceSource = {
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
-    getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
@@ -365,8 +339,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
-    getTitleObservedAtEpochMs: (ptyId) =>
-      (ptyId ? this.ptysById.get(ptyId)?.lastOscTitleEpochMs : null) ?? null
+    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
@@ -377,14 +350,13 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       const pty = this.ptysById.get(ptyId)
       return pty === undefined || hasTerminalCommandPainted(pty)
     },
-    // Why the runtime's own emulator: a provider snapshot would be a host round trip per tick.
+    // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
         ? this.readHeadlessVisibleTerminalState(ptyId).then(
             (screen) => screen?.lines.join('\n') ?? null
           )
         : null,
-    getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })
 
@@ -392,8 +364,13 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     {
       ...this.tuiIdleEvidenceSource,
       defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
-      getLivePty: (handle) => this.getLivePtyForHandle(handle),
-      getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
+      getTerminalPty: (handle, condition) =>
+        condition === 'exit'
+          ? this.getExitWaitPtyForHandle(handle)
+          : this.getTerminalPtyForHandle(handle),
+      exitUnsettled: (pty) =>
+        pty.lastExitCode === null &&
+        mainBindsUnendedTerminal(this, pty.ptyId, this.ptyLivenessVerdictByPtyId.get(pty.ptyId)),
       startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
         this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)
     },

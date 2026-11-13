@@ -1,16 +1,16 @@
-import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
+import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
 export type WorkspaceSessionApi = {
   session: {
-    // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
+    // Omitted hostId selects the local persistence partition.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
-    /** Partitions persistence holds, so boot reads them all instead of guessing from the catalog. */
+    /** Read persisted partitions at boot; the host catalog may omit some. */
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
@@ -21,7 +21,7 @@ export type WorkspaceSessionApi = {
       reason?: 'user' | 'cleanup'
     }) => Promise<void>
     flush: () => Promise<void>
-    readTerminalScrollback: (args: { ref: string }) => string | null
+    readTerminalScrollback: (args: { ref: string }) => Promise<string | null>
   }
   cache: {
     getGitHub: () => Promise<{

@@ -1,17 +1,17 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../../shared/paired-runtime-connection'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
-} from '../../../shared/runtime-host-descriptor'
-import { classifyRuntimeHostRePair } from '../../../shared/runtime-host-pairing-identity'
+} from '../../../shared/remote-runtime/host-status/runtime-host-descriptor'
+import { classifyRuntimeHostRePair } from '../../../shared/remote-runtime/host-status/runtime-host-pairing-identity'
 import type { WebPairingOffer } from './web-pairing'
 import { readWebDeviceKeySupport } from './web-device-key-support'
 import { MIGRATED_DEVICE_TOKEN_PREFIX } from './web-runtime-credential-source'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {
@@ -100,8 +100,7 @@ export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnv
   )
 }
 
-// Why: a tab holding a stale copy of this pairing must not put its code back after another tab
-// replaced it with a device key. A re-pair (new revision) stores its fresh code as usual.
+// Stale tabs must retain another tab’s migrated placeholder; only re-pair’s new revision may store a fresh code.
 function keepMigratedPlaceholders(
   next: StoredWebRuntimeEnvironment,
   stored: StoredWebRuntimeEnvironment | null

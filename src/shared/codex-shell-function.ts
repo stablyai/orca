@@ -1,21 +1,16 @@
-// Orca's `codex` shell function for every shell family: runs launch prep and adds
-// --no-daemon. Pure text, so any host that writes a shell script can embed it.
-// Why --no-daemon: Codex 0.156+ otherwise shares one server per CODEX_HOME that runs every tab's
-// hooks with the first tab's Orca env and dies with it (#22873).
-// These args need that server (or exit 2 beside the flag), and Codex counts any `-c` as leaving it.
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from './remote-viewer-clipboard-env'
+
+// Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
-// An explicit --no-daemon needs no second one.
 export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
 const argPattern = (args: readonly string[]): string => `^(${args.join('|')}|--remote=.*)$`
 const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
 const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
 
-/**
- * The caller identity `orca` reads, which a user's `shell_environment_policy` (`inherit = "core"`)
- * strips from every command Codex runs (#25775). Codex applies `set` after `inherit` and `exclude`
- * (so an `exclude = ["ORCA_*"]` is overridden) but before `include_only`, which still wins. Never a
- * token: argv is readable by every local user.
- */
+/** Restore nonsecret Orca caller identity stripped by inherit=core (#25775). set overrides inherit/exclude but include_only still wins; never send tokens through locally readable argv. */
 export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_PANE_KEY',
@@ -24,8 +19,11 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_USER_DATA_PATH'
 ] as const
 
-// Why values holding `'` are skipped: a TOML literal can't carry one, and Codex's fallback for the
-// failed parse truncates some (`/a'`, `/a' #b`) — a wrong path is worse than none.
+// Blank Orca's clipboard marker for commands Codex runs: agy reads SSH_CONNECTION as a remote host and ignores its local login (#37723).
+// Why set, not exclude: -c exclude would replace the user's own exclude list. Real SSH never reports port 0.
+const CLEAR_SSH_MARKER_ARG = "shell_environment_policy.set.SSH_CONNECTION=''"
+
+// Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
 const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
 
@@ -36,12 +34,16 @@ export function getPosixCodexShellLaunchPreflight(): string {
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+# Why typeset -f: a user's own codex function wins; command -v prints its bare name, which -x tests against the cwd.
+if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+    fi
     if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -53,6 +55,7 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
     done
     if [[ "$__orca_codex_identity" != 0 ]]; then
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\${${key}}" == *"'"* ]] || set -- -c "${identitySetArg(key, `\${${key}}`)}" "$@"`).join('\n')}
+      [[ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ]] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"
     fi
     # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
     if [[ "$__orca_codex_isolate" != 0 ]]; then
@@ -77,18 +80,25 @@ if test "$__orca_codex_type" = file
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not string match -q -- "*'*" "$${key}"; and set argv -c "${identitySetArg(key, `$${key}`)}" $argv`).join('\n')}
+      if test "$SSH_CONNECTION" = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'; or begin; test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY; end
+        set argv -c "${CLEAR_SSH_MARKER_ARG}" $argv
+      end
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
-    command codex $argv
+    if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
+      set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+      command codex $argv
+    else
+      command codex $argv
+    end
   end
 end
 set -e __orca_codex_type`
 }
 
-// Why the identity loop is one line: this wrapper rides in PowerShell's command-line budget
-// (windows-shell-args.ts), which a long startup command also needs.
+// Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
 export function getPowerShellCodexShellLaunchPreflight(): string {
   return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($orcaCodexCommand -and
@@ -116,16 +126,23 @@ if ($orcaCodexCommand -and
             } catch {
             }
         }
+        $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
         $orcaCodexIdentity = @()
         if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) {
             foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }
+            if ($orcaCodexRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" }
         }
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
+        if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
         # Why: a native command inside a function never sees the function's pipeline input on its own.
-        if ($MyInvocation.ExpectingInput) {
-            $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
-        } else {
-            & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+        try {
+            if ($MyInvocation.ExpectingInput) {
+                $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            } else {
+                & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            }
+        } finally {
+            if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
         }
         $global:LASTEXITCODE = $LASTEXITCODE
     }

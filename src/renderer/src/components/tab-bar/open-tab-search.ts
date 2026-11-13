@@ -1,35 +1,36 @@
-// Merges the three Cmd+J open-tab engines into one ranked list for the new-tab
-// omnibox. Pure: no store, no React.
+// Rank Cmd+J engine results together for the new-tab omnibox.
 
 import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { PaletteDocumentRank } from '@/lib/palette-match/palette-document'
+import type { PaletteDocumentRank } from '../../../../shared/palette-match/palette-document'
 import {
   comparePaletteEntityRanks,
   createPaletteSearchContext,
   encodePaletteIdentity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../../shared/palette-match/palette-ranking'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   searchBrowserPages,
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
-} from '@/lib/browser-palette-search'
-import {
-  searchSimulatorTabs,
-  type SearchableSimulatorTab,
-  type SimulatorPaletteSearchResult
-} from '@/lib/simulator-palette-search'
-import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
-import {
-  searchWorkspaceTabs,
-  type SearchableWorkspaceTab,
-  type WorkspaceTabContentType,
-  type WorkspaceTabPaletteSearchResult
-} from '@/lib/workspace-tab-palette-search'
+} from '@/lib/browser/palette/browser-palette-search'
+import { searchSimulatorTabs } from '@/lib/simulator/search/simulator-palette-search'
+import type {
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from '@/lib/simulator/search/simulator-palette-search-types'
+import { getUnifiedTabPaletteExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
+import type {
+  SearchableWorkspaceTab,
+  WorkspaceTabContentType
+} from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
+import type { Translate } from '@/i18n/use-translate'
 
 export const OPEN_TAB_SEARCH_RESULT_LIMIT = 4
 
@@ -113,10 +114,7 @@ function getMatchedText(result: EngineResult): string | null {
   return result.secondaryRanges.length > 0 ? result.secondaryText : null
 }
 
-// Why read the path off the entry: the engine overwrites `secondaryText` with
-// whichever string matched, and an absolute-path match leaves no relative path.
-// Why editor-only: diff and review tabs also carry a path, but they are not the
-// same destination as opening the file, so they must not suppress its row.
+// Read paths from editor entries: engine secondaryText may name another matched field, and other path-bearing tab kinds are distinct destinations.
 function getEditorRelativePath(entry: SearchableWorkspaceTab | undefined): string | null {
   if (!entry || entry.tab.contentType !== 'editor') {
     return null
@@ -160,13 +158,16 @@ function rank<TEngine extends EngineResult>(
   })
 }
 
-export function searchOpenTabCandidates({
-  workspaceTabs,
-  browserPages,
-  simulatorTabs,
-  query,
-  context: suppliedContext
-}: OpenTabSearchInput): OpenTabSearchResult[] {
+export function searchOpenTabCandidates(
+  {
+    workspaceTabs,
+    browserPages,
+    simulatorTabs,
+    query,
+    context: suppliedContext
+  }: OpenTabSearchInput,
+  t?: Translate
+): OpenTabSearchResult[] {
   const trimmed = query.trim()
   if (!trimmed || isOpenTabSearchQueryTooLarge(query)) {
     return []
@@ -186,8 +187,7 @@ export function searchOpenTabCandidates({
   )
 
   return [
-    // Why no isCurrentTab filter: Cmd+J lists the tab you are on, and hiding it
-    // made the omnibox look broken when you searched for the tab on screen.
+    // Offer the active tab too so searching for the visible destination remains useful across columns.
     ...rank(
       'workspace',
       searchWorkspaceTabs([...workspaceTabs], trimmed, { context, fieldMode: 'omnibox' }),
@@ -225,7 +225,7 @@ export function searchOpenTabCandidates({
     ),
     ...rank(
       'simulator',
-      searchSimulatorTabs([...simulatorTabs], trimmed, { context, fieldMode: 'omnibox' }),
+      searchSimulatorTabs([...simulatorTabs], trimmed, { context, fieldMode: 'omnibox' }, t),
       (result) => ({
         ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
         source: 'simulator',
@@ -254,8 +254,8 @@ export function searchOpenTabCandidates({
     .map((ranked) => ranked.result)
 }
 
-export function searchOpenTabs(input: OpenTabSearchInput): OpenTabSearchResult[] {
-  return capOpenTabSearchCandidates(searchOpenTabCandidates(input), input.retainedResultId)
+export function searchOpenTabs(input: OpenTabSearchInput, t?: Translate): OpenTabSearchResult[] {
+  return capOpenTabSearchCandidates(searchOpenTabCandidates(input, t), input.retainedResultId)
 }
 
 export function capOpenTabSearchCandidates(

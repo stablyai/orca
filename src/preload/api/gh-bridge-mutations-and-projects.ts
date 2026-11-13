@@ -1,13 +1,15 @@
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 import { ipcRenderer } from 'electron'
-import type { GitHubCommentResult } from '../../shared/github/comment-types'
-import type { GitHubAssignableUser, GitHubOwnerRepo } from '../../shared/github/pull-request-types'
-import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
+import type { GitHubCommentResult } from '../../shared/github/comments/comment-types'
+import type { GitHubAssignableUser } from '../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../shared/github/repositories/repository-identity'
+import type { GetRateLimitResult } from '../../shared/github/api/rate-limit-types'
 import type {
   GhAccountBindingInventory,
   GhAccountBindingValidationResult,
   GhAuthDiagnostic
-} from '../../shared/github/auth-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
+} from '../../shared/github/accounts/auth-types'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -19,7 +21,7 @@ import type {
   ListProjectViewsResult,
   ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefResult
-} from '../../shared/github/project-result-types'
+} from '../../shared/github/projects/project-result-types'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -37,7 +39,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
-} from '../../shared/github/project-request-types'
+} from '../../shared/github/projects/project-request-types'
 import type { AppStarSource } from '../../shared/gh-star-source'
 import type { PreloadApi } from '../api-types'
 
@@ -93,8 +95,9 @@ export const ghMutationsAndProjectsApi = {
     sourceContext?: TaskSourceContext | null
     number: number
     updates: unknown
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('gh:updateIssue', args),
+  }): Promise<
+    { ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }
+  > => ipcRenderer.invoke('gh:updateIssue', args),
   addIssueComment: (args: {
     repoPath: string
     repoId?: string | null
@@ -129,11 +132,15 @@ export const ghMutationsAndProjectsApi = {
     body: string
   }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
   listLabels: (args: {
+    ownerRepo?: GitHubOwnerRepo
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string | null
     sourceContext?: TaskSourceContext | null
   }): Promise<string[]> => ipcRenderer.invoke('gh:listLabels', args),
   listAssignableUsers: (args: {
+    ownerRepo?: GitHubOwnerRepo
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string | null
     sourceContext?: TaskSourceContext | null

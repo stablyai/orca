@@ -1,62 +1,68 @@
 import type { AppState } from '../../types'
+import { recordDraft, tabBucketDraft, type RecordDraft } from '../../keyed-record-transitions'
 
-/**
- * Scratch shared by one multi-workspace reconciliation fold.
- *
- * Reconciling N workspaces one `set()` at a time re-spreads the same
- * workspace-keyed maps N times and rescans `openFiles` N times. A batch lets
- * the fold clone each map once and then write into its own private draft, and
- * index `openFiles` once — `openFiles` is never written by reconciliation, so
- * the index stays valid for the whole fold.
- */
+type ReconciledRecords = Pick<
+  AppState,
+  'unifiedTabsByWorktree' | 'groupsByWorktree' | 'activeGroupIdByWorktree' | 'layoutByWorktree'
+>
+
+/** Drafts of the workspace records reconciliation rewrites, one entry per reconciled workspace. */
+export type ReconciliationDrafts = {
+  unifiedTabs: RecordDraft<AppState['unifiedTabsByWorktree'][string]>
+  groups: RecordDraft<AppState['groupsByWorktree'][string]>
+  // A workspace with no group stores an undefined active group, as the spread it replaced did.
+  activeGroups: RecordDraft<AppState['activeGroupIdByWorktree'][string] | undefined>
+  layout: RecordDraft<AppState['layoutByWorktree'][string]>
+}
+
+export type ReconciliationDraftField = keyof ReconciliationDrafts
+
+/** One multi-workspace fold clones each shared map once and indexes read-only openFiles once, avoiding repeated map spreads and file scans per workspace. */
 export type WorktreeTabModelReconciliationBatch = {
   /** Top-level `AppState` keys this fold already cloned and therefore owns. */
   readonly ownedStateKeys: Set<string>
-  readonly liveEditorIdsByWorktree: ReadonlyMap<string, Set<string>>
+  readonly liveEditorIds: ReadonlySet<string>
+  /** Held across the fold and finished once before the merged patch publishes. */
+  readonly drafts: ReconciliationDrafts
+  /** Draft fields some workspace's patch wrote, so the merged patch carries them. */
+  readonly writtenDraftFields: Set<ReconciliationDraftField>
 }
 
-export const EMPTY_LIVE_EDITOR_IDS: ReadonlySet<string> = new Set<string>()
+export function createReconciliationDrafts(state: ReconciledRecords): ReconciliationDrafts {
+  return {
+    unifiedTabs: tabBucketDraft(state.unifiedTabsByWorktree),
+    groups: recordDraft(state.groupsByWorktree),
+    activeGroups: recordDraft<string | undefined>(state.activeGroupIdByWorktree),
+    layout: recordDraft(state.layoutByWorktree)
+  }
+}
 
 export function createWorktreeTabModelReconciliationBatch(
-  state: Pick<AppState, 'openFiles'>
+  state: Pick<AppState, 'openFiles'> & ReconciledRecords
 ): WorktreeTabModelReconciliationBatch {
-  const liveEditorIdsByWorktree = new Map<string, Set<string>>()
-  for (const file of state.openFiles) {
-    let ids = liveEditorIdsByWorktree.get(file.worktreeId)
-    if (!ids) {
-      ids = new Set<string>()
-      liveEditorIdsByWorktree.set(file.worktreeId, ids)
-    }
-    ids.add(file.id)
+  return {
+    ownedStateKeys: new Set<string>(),
+    liveEditorIds: new Set(state.openFiles.map((file) => file.id)),
+    drafts: createReconciliationDrafts(state),
+    writtenDraftFields: new Set()
   }
-  return { ownedStateKeys: new Set<string>(), liveEditorIdsByWorktree }
 }
 
-/**
- * Sets one workspace entry, mutating the batch's own draft once it owns the
- * map. Insertion order matches the spread it replaces: an existing key keeps
- * its slot, a new key is appended.
- */
-export function writeBatchedWorkspaceRecordEntry<T>(
-  current: Record<string, T>,
-  stateKey: string,
-  worktreeId: string,
-  // `undefined` is accepted because the spread this replaces also stored it.
-  value: T | undefined,
-  batch: WorktreeTabModelReconciliationBatch | undefined
-): Record<string, T> {
-  if (batch?.ownedStateKeys.has(stateKey)) {
-    ;(current as Record<string, T | undefined>)[worktreeId] = value
-    return current
+/** Finishes the written drafts; each becomes one published record. */
+export function finishReconciliationDrafts(
+  drafts: ReconciliationDrafts,
+  written: ReadonlySet<ReconciliationDraftField>
+): Partial<ReconciledRecords> {
+  return {
+    ...(written.has('unifiedTabs') ? { unifiedTabsByWorktree: drafts.unifiedTabs.finish() } : {}),
+    ...(written.has('groups') ? { groupsByWorktree: drafts.groups.finish() } : {}),
+    ...(written.has('activeGroups')
+      ? {
+          activeGroupIdByWorktree:
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: undefined entries were stored before too; readers treat them as absent.
+            drafts.activeGroups.finish() as AppState['activeGroupIdByWorktree']
+        }
+      : {}),
+    ...(written.has('layout') ? { layoutByWorktree: drafts.layout.finish() } : {})
   }
-  // Why: the reconciliation gate writes every map when any one changed; spreading an
-  // already-equal entry would rerender its selectors for no data change. Nothing was
-  // cloned, so ownership is deliberately not claimed. Absent keys still get stored,
-  // matching the spread (`in` check).
-  if (worktreeId in current && Object.is(current[worktreeId], value)) {
-    return current
-  }
-  const next = { ...current, [worktreeId]: value } as Record<string, T>
-  batch?.ownedStateKeys.add(stateKey)
-  return next
 }

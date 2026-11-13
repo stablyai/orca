@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   closeProviderProcess,
   rootOnlyProviderClosePolicy,
@@ -8,14 +8,11 @@ import type { ProviderCloseRequest } from './provider-process-supervisor'
 import { terminateProviderProcessTree } from './provider-process-teardown'
 
 type SupervisedChild = Pick<
-  ChildProcessHandle,
+  ChildProcess,
   'pid' | 'kill' | 'stdin' | 'exitCode' | 'signalCode' | 'once'
 >
 
-/**
- * Closes a supervised child that is not a managed provider process: the shared close, with the
- * root-only policy, its tree forced (filed under `site`) only after the supervisor's full stop.
- */
+/** Allow the supervisor its full stop before forcing tree teardown for this root-only child. */
 export async function stopSupervisedChildProcess(
   child: SupervisedChild,
   {
@@ -36,6 +33,6 @@ export async function stopSupervisedChildProcess(
       ...rootOnlyProviderClosePolicy(true),
       signalSupervisorOnClose: closeRequest === 'stdin-end-and-sigterm'
     },
-    terminateTree: () => terminateProviderProcessTree(child, { site })
+    terminateTree: () => terminateProviderProcessTree(child, { site, supervised: true })
   })
 }

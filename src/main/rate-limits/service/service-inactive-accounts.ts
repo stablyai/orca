@@ -1,11 +1,14 @@
-import { fetchManagedAccountUsage } from '../claude-fetcher'
-import { fetchCodexRateLimits } from '../codex-fetcher'
+import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return
+    }
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
@@ -21,7 +24,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
-    const signal = controller.signal
+    const signal = this.claudeUsageFetchSignal(controller.signal)
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -43,7 +46,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           continue
         }
         try {
-          const fresh = await fetchManagedAccountUsage(account, {
+          const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
@@ -63,7 +66,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
-          // Why: per-account try/catch keeps one Keychain/network error from aborting the remaining accounts in the batch.
+          // Isolate each account's Keychain/network failure so siblings continue.
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
@@ -96,7 +99,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (accounts.length === 0) {
       return
     }
-    // Why: account switching can activate a previewed account while its usage fetch is still in flight; ignore stale results.
+    // Switching can activate a previewed account mid-fetch; ignore its stale preview result.
     const fetchGeneration = this.inactiveCodexAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
@@ -119,7 +122,6 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         }
         if (staggerNextProbe) {
           await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
-          // Why: the account set can change while the stagger delay runs.
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveCodexAccountsGeneration ||
@@ -133,7 +135,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             continue
           }
         }
-        const home = account.resolveHome()
+        const home = await account.resolveHome()
         if (home.kind === 'skip') {
           continue
         }
@@ -141,7 +143,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         this.inactiveCodexFetching.add(account.id)
         this.pushToRenderer()
         try {
-          // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
+          // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
             networkProxySettings: this.networkProxySettingsResolver?.(),
@@ -162,7 +164,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           const cached = this.inactiveCodexCache.get(account.id) ?? null
           this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
-          // Why: per-account try/catch prevents one failure from aborting the batch.
+          // Isolate per-account failures so sibling previews continue.
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveCodexAccountsGeneration ||
@@ -236,7 +238,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
   }
 
   evictInactiveCodexCache(accountId: string): void {
-    // Why: clear only this account, not the generation — bumping it would discard sibling fetches still in flight and their fresh results.
+    // Clear one account without invalidating sibling fetches/results.
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
     this.pushToRenderer()

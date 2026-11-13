@@ -1,5 +1,7 @@
-import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, Selection } from 'monaco-editor'
+// Why: a value import of 'monaco-editor' here would evaluate Monaco ahead of its NLS pack
+// (see monaco-nls-import-order.test.ts); the enum module carries no localized labels.
+import { EditorOption } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js'
 import { installEditorAddReviewNoteShortcut } from '../editor/editor-shortcuts'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
 import {
@@ -10,9 +12,7 @@ import {
   type DiffCommentLineTarget
 } from './diff-comment-line-range'
 
-// Why: the "+" button is mouse-only (it exists only under the cursor), so the bindable
-// Add Review Note chord is the keyboard path into the same composer — and because it reads the
-// editor's selection, shift+arrow then chord is the keyboard multi-line select.
+// The hover-only add button needs a keyboard path; editor selection supplies multiline anchors.
 
 type AddNoteShortcutEditor = Pick<
   monacoEditor.ICodeEditor,
@@ -55,9 +55,7 @@ export function installDiffCommentAddNoteShortcut({
   onOpenComposer: (args: { lineNumber: number; startLine?: number; top: number }) => void
 }): () => void {
   return installEditorAddReviewNoteShortcut(editor.getContainerDomNode(), () => {
-    // Why: an open draft card owns the chord (isComposerOpen reports it, and the card's own guard
-    // eats presses from its textarea); claiming it here too would re-open the card at the editor's
-    // selection and move what the user already typed.
+    // The open composer owns this chord; reopening at the editor selection would move the user’s draft.
     if (isComposerOpen()) {
       return true
     }
@@ -65,7 +63,7 @@ export function installDiffCommentAddNoteShortcut({
     if (!target) {
       return false
     }
-    const lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight)
+    const lineHeight = editor.getOption(EditorOption.lineHeight)
     const top = getDiffCommentPopoverTop(editor, target.lineNumber, lineHeight)
     if (top == null) {
       return false

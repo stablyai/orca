@@ -1,13 +1,17 @@
-import { TmuxAgentHookOwner, type TmuxManagedPty } from '../../../shared/tmux-agent-hook-owner'
+import { TmuxAgentHookOwner } from '../../../shared/tmux-agent-hook-owner'
+import type { TmuxManagedPty } from '../../../shared/tmux-agent-hook-contract'
 import { commitTmuxSelectedStatus } from '../../../shared/tmux-selected-status'
 import {
   serializeAgentStatusSubject,
+  type AgentStatusPtySubject,
   type AgentStatusSubject
-} from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/contracts/agent-status-subject'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 import { tmuxCliWriterEvent } from './cli-writer-observation'
+import { agentSightingOf } from '../identity/pane-agent-identities'
 
 export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeBinder {
   private tmuxOwner: TmuxAgentHookOwner | undefined
@@ -22,43 +26,8 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
       store: () => this.canonicalStatusStore,
       getRoot: (paneKey) => this.tmuxRootResolver(paneKey),
       isRetired: (paneKey) => this.getAgentStatusDisposition(paneKey) === 'suppress',
-      publish: (event, observedAt, subject, stateStartedAt) => {
-        if (this.getAgentStatusDisposition(event.paneKey, event) === 'suppress') {
-          return
-        }
-        this.clearPaneState(event.paneKey, { preserveTmuxInnerSubjects: true })
-        const previous = this.canonicalStatusStore.getParent(subject)?.status
-        const status = commitTmuxSelectedStatus(
-          this.canonicalStatusStore,
-          subject,
-          event,
-          observedAt,
-          stateStartedAt
-        )
-        if (!status) {
-          return
-        }
-        const key = serializeAgentStatusSubject(subject)
-        const subjects =
-          this.canonicalSubjectsByPane.get(event.paneKey) ?? new Map<string, AgentStatusSubject>()
-        subjects.set(key, subject)
-        this.canonicalSubjectsByPane.set(event.paneKey, subjects)
-        if (!this.canonicalListingOrder.has(key)) {
-          this.canonicalListingOrder.set(key, this.nextStatusListingOrder())
-        }
-        const after = {
-          ...structuredStatusLegacyEvent(status),
-          source: event.source,
-          hookEventName: event.hookEventName,
-          hasExplicitPrompt: event.hasExplicitPrompt,
-          launchToken: event.launchToken,
-          promptInteractionKey: event.promptInteractionKey
-        }
-        this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
-        this.recordCurrentAuthorityObservation(after)
-        this.notifyStatusChangeListeners()
-        this.emitEnrichedStatus(tmuxCliWriterEvent(after))
-      },
+      publish: (event, observedAt, subject, stateStartedAt) =>
+        this.publishTmuxSelectedStatus(event, observedAt, subject, stateStartedAt),
       unavailable: (paneKey, subject) => {
         if (this.getAgentStatusDisposition(paneKey) === 'suppress') {
           return
@@ -75,6 +44,58 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
       }
     })
     return this.tmuxOwner
+  }
+
+  /** Commits the attachment's selected terminal status and publishes it like a hook row. */
+  protected publishTmuxSelectedStatus(
+    event: AgentHookEventPayload,
+    observedAt: number,
+    subject: AgentStatusPtySubject,
+    stateStartedAt: number | undefined
+  ): void {
+    if (this.getAgentStatusDisposition(event.paneKey, event) === 'suppress') {
+      return
+    }
+    this.clearPaneState(event.paneKey, { preserveTmuxInnerSubjects: true })
+    const previous = this.canonicalStatusStore.getParent(subject)?.status
+    const status = commitTmuxSelectedStatus(
+      this.canonicalStatusStore,
+      subject,
+      event,
+      observedAt,
+      stateStartedAt
+    )
+    if (!status) {
+      return
+    }
+    const key = serializeAgentStatusSubject(subject)
+    const subjects =
+      this.canonicalSubjectsByPane.get(event.paneKey) ?? new Map<string, AgentStatusSubject>()
+    subjects.set(key, subject)
+    this.canonicalSubjectsByPane.set(event.paneKey, subjects)
+    if (!this.canonicalListingOrder.has(key)) {
+      this.canonicalListingOrder.set(key, this.nextStatusListingOrder())
+    }
+    const committed = structuredStatusLegacyEvent(status)
+    // A tmux-selected terminal agent is named at commit, like a legacy row at admission.
+    const agentIdentity = this.agentIdentities.assignCanonical(
+      key,
+      event.paneKey,
+      agentSightingOf(committed)
+    )
+    const after = {
+      ...committed,
+      ...(agentIdentity ? { agentIdentity } : {}),
+      source: event.source,
+      hookEventName: event.hookEventName,
+      hasExplicitPrompt: event.hasExplicitPrompt,
+      launchToken: event.launchToken,
+      promptInteractionKey: event.promptInteractionKey
+    }
+    this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
+    this.recordCurrentAuthorityObservation(after)
+    this.notifyStatusChangeListeners()
+    this.emitEnrichedStatus(tmuxCliWriterEvent(after))
   }
 
   protected ingestTmuxHook(source: AgentHookSource, body: unknown): Promise<boolean> {
@@ -96,13 +117,15 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
   }
 
   protected getTmuxSelectedStatus(paneKey: string) {
-    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+    for (const [key, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
       if (subject.kind !== 'pty') {
         continue
       }
       const status = this.canonicalStatusStore.getParent(subject)?.status
       if (status) {
-        return structuredStatusLegacyEvent(status)
+        const agentIdentity = this.agentIdentities.canonicalIdentity(key)
+        const row = structuredStatusLegacyEvent(status)
+        return agentIdentity ? { ...row, agentIdentity } : row
       }
     }
     return undefined
@@ -113,9 +136,10 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
     if (!previous) {
       return undefined
     }
-    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+    for (const [key, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
       if (subject.kind === 'pty') {
         this.canonicalStatusStore.applyMutation({ parent: { subject } })
+        this.agentIdentities.dropCanonical(key)
       }
     }
     return previous
@@ -136,6 +160,7 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
       ) {
         continue
       }
+      this.agentIdentities.dropCanonical(key)
       if (!unavailable) {
         subjects?.delete(key)
         this.canonicalListingOrder.delete(key)

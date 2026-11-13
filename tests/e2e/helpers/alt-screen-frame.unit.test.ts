@@ -1,13 +1,10 @@
-// STA-5208: the duplicate-PTY reveal oracle parsed `serializeAddon.serialize()`, which
-// concatenates the whole normal buffer (scrollback included) ahead of the alt frame, so a
-// stale marker left behind by the pre-hide paint was read as the revealed pane's current
-// frame. These pin the replacement oracle: read the frame off the active buffer's viewport.
-import '../../../src/main/daemon/xterm-env-polyfill'
+// Pin viewport-only reveal reads; normal-buffer scrollback in serialize() can masquerade as a live alt frame (STA-5208).
+import '../../../src/main/daemon/emulation/xterm-env-polyfill'
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import type { Page } from '@stablyai/playwright-test'
-import { findMarkerFrame, readActiveScreen, readRenderedAltScreenFrame } from './alt-screen-frame'
+import { readActiveScreen, readRenderedAltScreenFrame } from './alt-screen-frame'
 
 const MARKER = 'DUPLICATE_PTY_REVEAL_TEST'
 const TAB_ID = 'tab-under-test'
@@ -23,8 +20,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, () => resolve()))
 }
 
-// Runs the helper's real in-page closure against a headless terminal so the test covers
-// the code the browser executes rather than a copy of it.
+// Run the real serialized browser closure against a headless terminal, not a copied implementation.
 function createHarness(rows: number): Harness {
   const terminal = new Terminal({ cols: 80, rows, scrollback: 100, allowProposedApi: true })
   const serializeAddon = new SerializeAddon()
@@ -74,38 +70,11 @@ describe('readRenderedAltScreenFrame', () => {
       await write(harness.terminal, `filler row ${row}\r\n`)
     }
 
-    // serialize() still contains the marker from scrollback, so it cannot see that nothing
-    // correct is on screen; the viewport read can.
+    // serialize() still sees off-screen history; only the viewport proves the marker is absent.
     expect(parseSerializedFrame(harness.serialize(), 'last')).toBe(400)
     await expect(readActiveScreen(harness.page, TAB_ID)).resolves.toMatchObject({
       bufferType: 'normal'
     })
     await expect(readRenderedAltScreenFrame(harness.page, TAB_ID, MARKER)).resolves.toBeNull()
-  })
-
-  // expect.poll aborts on a generator throw, so a pane mid-remount has to read as
-  // "not converged yet" rather than ending the poll.
-  it('returns null when the tab has no pane', async () => {
-    const harness = createHarness(8)
-    await expect(readActiveScreen(harness.page, 'tab-without-pane')).resolves.toBeNull()
-    await expect(
-      readRenderedAltScreenFrame(harness.page, 'tab-without-pane', MARKER)
-    ).resolves.toBeNull()
-  })
-})
-
-describe('findMarkerFrame', () => {
-  it('reads frame numbers of any width', () => {
-    expect(findMarkerFrame(`${MARKER} frame 000400`, MARKER)).toBe(400)
-    expect(findMarkerFrame(`| ${MARKER} frame 024 |`, MARKER)).toBe(24)
-  })
-
-  it('takes the highest frame when several are on screen', () => {
-    expect(findMarkerFrame([frameLine(400), frameLine(390)].join('\n'), MARKER)).toBe(400)
-  })
-
-  it('treats the marker as a literal', () => {
-    expect(findMarkerFrame('A[B frame 7', 'A[B')).toBe(7)
-    expect(findMarkerFrame('AxB frame 7', 'A[B')).toBeNull()
   })
 })

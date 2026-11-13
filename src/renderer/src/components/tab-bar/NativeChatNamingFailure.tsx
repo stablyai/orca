@@ -1,34 +1,42 @@
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { NameGenerationFailedDialog } from '../sidebar/AutoRenameFailedDialog'
+import { useAppStore } from '@/store/index'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { NameGenerationFailedDialog } from '../sidebar/workspace-card/identity/AutoRenameFailedDialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { NativeChatNamingFailureControls } from './use-native-chat-naming-failure'
 
-function regenerateLabel(naming: NativeChatNamingFailureControls): string {
+function regenerateLabel(
+  naming: NativeChatNamingFailureControls,
+  t: Translate = translate
+): string {
   return naming.regenerating
-    ? translate('tabHoverCard.namingFailure.regenerating', 'Regenerating…')
-    : translate('tabHoverCard.namingFailure.regenerate', 'Regenerate name')
+    ? t('tabHoverCard.namingFailure.regenerating', 'Regenerating…')
+    : t('tabHoverCard.namingFailure.regenerate', 'Regenerate name')
 }
 
-/** The hover card's block for a chat whose name could not be generated. */
 export function NativeChatNamingErrorBlock({
-  naming
+  naming,
+  onDismiss
 }: {
   naming: NativeChatNamingFailureControls
+  onDismiss?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-1 border-t border-border pt-2" data-tab-hover-card-naming-error>
       <div className="flex items-start gap-1.5 font-medium text-destructive">
         <AlertCircle className="mt-0.5 size-3 shrink-0" aria-hidden />
-        <span>{translate('tabHoverCard.namingFailure.title', "Couldn't name this chat")}</span>
+        <span>{t('tabHoverCard.namingFailure.title', "Couldn't name this chat")}</span>
       </div>
       <p className="pl-4.5 text-muted-foreground">
-        {translate(
+        {t(
           'tabHoverCard.namingFailure.description',
           'The chat-name agent stopped with an error, so the chat keeps its first message as its name.'
         )}
       </p>
-      <div className="flex items-center gap-1.5 pt-1 pl-4.5">
+      <div className="flex flex-wrap items-center gap-1.5 pt-1 pl-4.5">
         <Button
           type="button"
           variant="destructive-chip"
@@ -36,7 +44,7 @@ export function NativeChatNamingErrorBlock({
           onClick={() => naming.setDialogOpen(true)}
         >
           <AlertCircle />
-          {translate('tabHoverCard.namingFailure.viewError', 'view error')}
+          {t('tabHoverCard.namingFailure.viewError', 'view error')}
         </Button>
         {naming.canRegenerate ? (
           <Button
@@ -47,9 +55,25 @@ export function NativeChatNamingErrorBlock({
             onClick={naming.regenerate}
           >
             <RefreshCw />
-            {regenerateLabel(naming)}
+            {regenerateLabel(naming, t)}
           </Button>
         ) : null}
+        {isWebClientLocation() ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="chip"
+            onClick={() => {
+              onDismiss?.()
+              const store = useAppStore.getState()
+              store.openSettingsPage()
+              store.openSettingsTarget({ pane: 'chat', repoId: null, sectionId: 'chat-names' })
+            }}
+          >
+            <Settings aria-hidden />
+            {t('tabHoverCard.namingFailure.settings', 'Settings')}
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -62,19 +86,20 @@ export function NativeChatNamingFailedDialog({
   naming: NativeChatNamingFailureControls
   chatName: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <NameGenerationFailedDialog
       open={naming.dialogOpen}
       onOpenChange={naming.setDialogOpen}
-      title={translate('tabHoverCard.namingFailure.dialogTitle', 'Chat auto-name failed')}
+      title={t('tabHoverCard.namingFailure.dialogTitle', 'Chat auto-name failed')}
       description={
         <>
-          {translate(
+          {t(
             'tabHoverCard.namingFailure.dialogDescriptionStart',
             "Orca couldn't generate a name for"
           )}{' '}
           <span className="font-medium text-foreground">{chatName}</span>{' '}
-          {translate('tabHoverCard.namingFailure.dialogDescriptionEnd', 'from its first message.')}
+          {t('tabHoverCard.namingFailure.dialogDescriptionEnd', 'from its first message.')}
         </>
       }
       error={naming.message}
@@ -90,7 +115,7 @@ export function NativeChatNamingFailedDialog({
               naming.setDialogOpen(false)
             }}
           >
-            {regenerateLabel(naming)}
+            {regenerateLabel(naming, t)}
           </Button>
         ) : undefined
       }

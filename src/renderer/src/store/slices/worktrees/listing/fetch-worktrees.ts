@@ -1,9 +1,6 @@
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import type {
-  DirectSshWorktreeFetchOptions,
-  WorktreeFetchOptions,
-  WorktreeSlice
-} from '../../worktree-helpers'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { DirectSshWorktreeFetchOptions, WorktreeFetchOptions } from './worktree-fetch-options'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
@@ -12,7 +9,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
 import { staleDetectedWorktreeProviderResult } from './detected-worktree-refresh-admission'
@@ -23,9 +20,10 @@ import {
 } from './worktree-host-ownership'
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
+import { listingMetadataCoverage } from './workspace-metadata-coverage'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -77,8 +75,7 @@ export function createFetchWorktrees(
           ? (directCallerAuthority ?? getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
-        // rows as a side effect before returning false would silently weaken that contract.
+        // Authoritative-only callers must not receive non-authoritative store side effects before false returns.
         if (!options?.requireAuthoritative) {
           await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         }
@@ -91,7 +88,8 @@ export function createFetchWorktrees(
         connectionId: repoOwner?.connectionId,
         knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
         isStaleCatalogPublication: (result) =>
-          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
+          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion),
+        ...(options?.forceFresh ? { forceFresh: true } : {})
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
@@ -99,6 +97,7 @@ export function createFetchWorktrees(
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
         return directCallerAuthority ? (refresh.providerResult ?? false) : false
       }
+      const metadata = listingMetadataCoverage(get(), repoId, hostId, refresh)
       const outcome = mergeFetchedWorktrees(set, get, {
         repoId,
         hostId,
@@ -109,20 +108,20 @@ export function createFetchWorktrees(
             : undefined,
         requestStartedWorktrees,
         setup,
-        refresh
+        refresh: metadata.refresh
       })
+      if (outcome === 'applied') {
+        metadata.settle((id, fetchOptions) => get().fetchWorktrees(id, fetchOptions))
+      }
       switch (outcome) {
         case 'applied':
           break
         case 'superseded':
-          // Why current for direct callers: a newer catalog is already applied; 'stale' means a moved
-          // connection. Others relist once: a caller that joined a listing already in flight (a
-          // change event's refresh) may get only that older answer, and nothing else would follow
-          // it. One new listing scans at or past the applied version, so it is admitted.
+          // Direct callers retain current-catalog result; joined refreshes relist once after supersession or their only older answer leaves no follow-up.
           if (directCallerAuthority) {
             return refresh.providerResult ?? false
           }
-          return relistIfStale ? fetchWorktreesAttempt(repoId, options, false) : false
+          return relistIfStale ? await fetchWorktreesAttempt(repoId, options, false) : false
         case 'not-current':
           return directCallerAuthority
             ? (staleDetectedWorktreeProviderResult(refresh) ?? false)

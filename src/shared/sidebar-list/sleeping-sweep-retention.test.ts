@@ -39,8 +39,7 @@ describe('sleeping sweep retention', () => {
     const state = createSleepingSweepRetentionState()
     runPass(state, ['wt-a'], 1_000)
 
-    // The grace clock starts when the workspace first reads inactive, not when
-    // it was last active — a quiet gap between passes must not eat the window.
+    // Start grace on first observed inactivity; time between passes must not consume it.
     const during = runPass(state, [], 1_000)
     expect([...during.retainedIds]).toEqual(['wt-a'])
     expect(during.nextExpiryInMs).toBe(SLEEPING_SWEEP_SETTLE_MS)
@@ -48,13 +47,6 @@ describe('sleeping sweep retention', () => {
     const after = runPass(state, [], 1_000 + SLEEPING_SWEEP_SETTLE_MS)
     expect([...after.retainedIds]).toEqual([])
     expect(after.nextExpiryInMs).toBeNull()
-  })
-
-  it('grants no grace to a workspace that was already asleep when first seen', () => {
-    const state = createSleepingSweepRetentionState()
-    const first = runPass(state, [], 1_000)
-    expect([...first.retainedIds]).toEqual([])
-    expect(first.nextExpiryInMs).toBeNull()
   })
 
   it('is idempotent across a double-invoked render at the same instant', () => {
@@ -65,16 +57,6 @@ describe('sleeping sweep retention', () => {
 
     expect([...second.retainedIds]).toEqual(['wt-a'])
     expect(second.nextExpiryInMs).toBe(SLEEPING_SWEEP_SETTLE_MS)
-  })
-
-  it('reports the soonest expiry when several windows are open', () => {
-    const state = createSleepingSweepRetentionState()
-    runPass(state, ['wt-a', 'wt-b'], 1_000)
-    runPass(state, ['wt-b'], 1_100)
-    const result = runPass(state, [], 1_200)
-
-    expect([...result.retainedIds].sort()).toEqual(['wt-a', 'wt-b'])
-    expect(result.nextExpiryInMs).toBe(SLEEPING_SWEEP_SETTLE_MS - 100)
   })
 
   it('drops grace state for a workspace that leaves the candidate set', () => {

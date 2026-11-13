@@ -1,12 +1,12 @@
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import { registerWorktreeHandlers } from './worktrees'
 import { __resetDetectedWorktreeScanCacheForTests } from './worktrees/listing/detected-worktree-scan-cache'
-import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktrees/content-paths/worktree-shared-directories'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
@@ -28,15 +28,14 @@ import {
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
   resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
+  getBranchConflictKindStrictMock,
   getPRForBranchMock,
   getHostedReviewForBranchMock,
   getWorkItemMock,
   getPullRequestPushTargetMock,
   getEffectiveHooksMock,
-  createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   getEffectiveHooksFromConfigMock,
   getDefaultTabsLaunchMock,
@@ -52,7 +51,6 @@ import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   gitExecFileAsyncMock,
-  getSshFilesystemProviderMock,
   deleteWorktreeHistoryDirMock,
   advertisedUrlWatcherForgetWorktreeMock,
   pruneCleanupScanSnapshotMock,
@@ -73,7 +71,6 @@ export {
   type HandlerMap
 } from './worktrees-test-ipc-surface'
 
-/** The single repo every worktree harness test resolves; exported so a test can vary one field. */
 export const harnessRepo = {
   id: 'repo-1',
   path: '/workspace/repo',
@@ -82,7 +79,6 @@ export const harnessRepo = {
   addedAt: 0
 }
 
-/** Registers worktree IPC handlers against freshly reset shared mocks and returns the runtime stub. */
 export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   delete (store as typeof store & { getAllWorktreeMetaForHost?: (...args: unknown[]) => unknown })
     .getAllWorktreeMetaForHost
@@ -104,9 +100,9 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     resolveLocalGitUsernameMock,
     getBaseRefDefaultMock,
     resolveDefaultBaseRefWithLocalGitMock,
-    resolveDefaultBaseRefViaExecMock,
     getDefaultRemoteMock,
     getBranchConflictKindMock,
+    getBranchConflictKindStrictMock,
     getPRForBranchMock,
     getHostedReviewForBranchMock,
     getWorkItemMock,
@@ -115,7 +111,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     getEffectiveHooksFromConfigMock,
     getDefaultTabsLaunchMock,
     parseOrcaYamlMock,
-    createIssueCommandRunnerScriptMock,
     createSetupRunnerScriptMock,
     buildPosixRunnerScriptMock,
     buildWindowsRunnerScriptMock,
@@ -128,7 +123,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     computeWorktreePathMock,
     ensurePathWithinWorkspaceMock,
     gitExecFileAsyncMock,
-    getSshFilesystemProviderMock,
     mainWindow.webContents.send,
     store.getRepos,
     store.getRepo,
@@ -199,8 +193,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   }
   store.getSettings.mockReturnValue(settings)
   store.getWorktreeMeta.mockReturnValue(undefined)
-  // Host-qualified accessors delegate by default so payload assertions stay on one spy;
-  // host routing itself is covered by worktree-identity-persistence.test.ts.
+  // Delegate host-qualified reads to one spy; identity-persistence tests cover routing.
   store.getWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
     store.getWorktreeMeta(args[0] as string)
   )
@@ -232,14 +225,14 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   resolveLocalGitUsernameMock.mockResolvedValue('')
   getBaseRefDefaultMock.mockResolvedValue('origin/main')
   resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
-  resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
   getDefaultRemoteMock.mockResolvedValue('origin')
   getBranchConflictKindMock.mockResolvedValue(null)
+  getBranchConflictKindStrictMock.mockResolvedValue(null)
   getPRForBranchMock.mockResolvedValue(null)
   getHostedReviewForBranchMock.mockResolvedValue(null)
   getWorkItemMock.mockResolvedValue(null)
   getPullRequestPushTargetMock.mockResolvedValue(null)
-  // Why: createLocalWorktree can still hit the legacy git fetch fallback here; resolve so catch/then chains don't trip on undefined.
+  // Legacy fetch fallback attaches catch/then, so the default mock must resolve a promise.
   gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
   getEffectiveHooksMock.mockReturnValue(null)
   getEffectiveHooksFromConfigMock.mockImplementation(() => getEffectiveHooksMock())
@@ -260,15 +253,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
       GHOSTX_ROOT_PATH: repoArg.path
     })
   )
-  createSetupRunnerScriptMock.mockReturnValue({
+  createSetupRunnerScriptMock.mockResolvedValue({
     runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
-    envVars: {
-      ORCA_ROOT_PATH: '/workspace/repo',
-      ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
-    }
-  })
-  createIssueCommandRunnerScriptMock.mockReturnValue({
-    runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
     envVars: {
       ORCA_ROOT_PATH: '/workspace/repo',
       ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
@@ -293,7 +279,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   )
   ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
   listWorktreesMock.mockResolvedValue([])
-  // Default: no direct-read recovery, so a listing that omits the row still fails the create.
+  // Default recovery cannot rescue a listing that omits the created row.
   describeCreatedWorktreeMock.mockResolvedValue(undefined)
   forceDeleteLocalBranchMock.mockResolvedValue(undefined)
   const runtimeStub = createWorktreeRuntimeStub(mainWindow)

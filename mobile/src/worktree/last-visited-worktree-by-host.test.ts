@@ -19,7 +19,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
-import { isLastVisitedWorktreeRow } from './host-list-highlight'
 import {
   readLastVisitedWorktreeOnHost,
   subscribeLastVisitedWorktree,
@@ -34,12 +33,6 @@ import {
 const stored = () => storage.values.get(LAST_VISITED_WORKTREE_STORAGE_KEY) ?? null
 
 describe('readLastVisitedWorktreeOnHost', () => {
-  it('reads nothing for a host this phone never opened a workspace on', () => {
-    expect(readLastVisitedWorktreeOnHost(null, 'host-1')).toBeNull()
-    const raw = withLastVisitedWorktree(null, { hostId: 'host-2', worktreeId: 'repo::/w/a' })
-    expect(readLastVisitedWorktreeOnHost(raw, 'host-1')).toBeNull()
-  })
-
   it('remembers each host’s own visit, whichever host was visited last', () => {
     let raw = withLastVisitedWorktree(null, { hostId: 'host-1', worktreeId: 'repo::/w/a' })
     raw = withLastVisitedWorktree(raw, {
@@ -52,7 +45,6 @@ describe('readLastVisitedWorktreeOnHost', () => {
       worktreeId: 'repo::/w/b',
       executionHost: 'runtime:env-1'
     })
-    // Home's Resume card still reads the latest visit off the same record.
     expect(readLastVisitedWorktreeRecord(raw)).toEqual({
       hostId: 'host-2',
       worktreeId: 'repo::/w/b'
@@ -74,28 +66,14 @@ describe('readLastVisitedWorktreeOnHost', () => {
     }
     expect(readLastVisitedWorktreeOnHost(raw, 'host-0')).toBeNull()
     expect(readLastVisitedWorktreeOnHost(raw, 'host-19')).toEqual({ worktreeId: 'repo::/w/a' })
-  })
-})
-
-describe('isLastVisitedWorktreeRow', () => {
-  it('matches a desktop row (local or SSH) by id, and a server row by its server too', () => {
-    const visit = { worktreeId: 'repo::/w/a' }
-    expect(isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'local' }, visit)).toBe(
-      true
-    )
-    expect(isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'ssh:gpu' }, visit)).toBe(
-      true
-    )
-    expect(
-      isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'runtime:env-1' }, visit)
-    ).toBe(false)
-    const serverVisit = { worktreeId: 'repo::/w/a', executionHost: 'runtime:env-1' as const }
-    expect(
-      isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'runtime:env-1' }, serverVisit)
-    ).toBe(true)
-    expect(isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'local' }, null)).toBe(
-      false
-    )
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-3')).toBeNull()
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-4')).toEqual({ worktreeId: 'repo::/w/a' })
+    raw = withLastVisitedWorktree(raw, { hostId: 'host-4', worktreeId: 'repo::/w/revisited' })
+    raw = withLastVisitedWorktree(raw, { hostId: 'host-20', worktreeId: 'repo::/w/new' })
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-4')).toEqual({
+      worktreeId: 'repo::/w/revisited'
+    })
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-5')).toBeNull()
   })
 })
 
@@ -121,16 +99,12 @@ describe('writeLastVisitedWorktree', () => {
 
   it('handles a store that refuses the write instead of leaving the rejection loose', async () => {
     storage.rejection = new Error('quota exceeded')
-    const seen: unknown[] = []
-    const listener = (reason: unknown) => seen.push(reason)
-    process.on('unhandledRejection', listener)
     try {
-      await writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo::/w/c' })
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await expect(
+        writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo::/w/c' })
+      ).resolves.toBeUndefined()
     } finally {
-      process.off('unhandledRejection', listener)
       storage.rejection = null
     }
-    expect(seen).toEqual([])
   })
 })

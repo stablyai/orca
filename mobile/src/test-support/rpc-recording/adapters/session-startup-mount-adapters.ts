@@ -1,40 +1,15 @@
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
+import type * as MobileSessionLastTabsModule from '../../../session/tabs/mobile-session-last-tabs'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
-const WORKTREE_ID = 'wt-1'
 const HOST_ID = 'host-1'
 
-/**
- * The session route's startup effect: the host-side activation it announces, and the tab and
- * terminal loads it sequences behind it.
- *
- * Nothing here touches a WebView ref. `ensureSessionTabs`, `fetchTerminals` and `clearTerminalCache`
- * are scope callbacks, so they record as effects — `fetchTerminals` carrying the
- * `allowEmptyLoaded` flag each pass was given, which is what makes the delayed passes distinguishable
- * from the awaited one and from each other.
- *
- * A scenario may also declare that the tab load fails. The stub still records the call it was asked
- * for and then rejects, which is the one thing a scope callback can do that a resolving stub cannot
- * express: the sequence awaits that promise, so whether the terminal loads behind it survive a
- * refused tab load is a product decision no scenario could otherwise reach. Declared, not shaped —
- * the rejection is the scenario's, and the stub neither builds a param nor swallows a throw.
- *
- * Both `worktree.activate` sends live in this one effect and neither is awaited by the sequence: the
- * plain one races the tab load deliberately, and the newly-created one is a timer the effect arms
- * only while the route still carries `created=1`. `created` and the floating-route flag are
- * scenario-declared, because which of the two sites exists at all is what they decide.
- *
- * They are mutually exclusive per pass, so one scenario reaches both only the way the product does:
- * the auto-create clears `created` off the route once it has run, the effect re-runs on the same
- * mount, and the second pass takes the other branch. That is what `consume-created-route` is, and it
- * is what lets the reply matrix drive both sites rather than only the first scenario's.
- *
- * State is the route reset the first effect performs and the loading flag the second one clears,
- * because the sends themselves publish nothing: the only thing read off an activation reply is the
- * sleeping-agent toast, and that lands in the effects.
- */
+// Record callback effects and flags; scenario-declared tab-load rejection tests whether later terminal loads survive.
+// Consume created on the same mount to reach both mutually exclusive activation sites through the real effect rerun.
+// `host-tabs` stands in for an accepted host snapshot (remembered as the screen's controller does, then drawn); `leave` keeps the document's cache for a reopen.
 export function sessionStartupMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -43,8 +18,12 @@ export function sessionStartupMountAdapters(
       const useStartup = modules.load<typeof import('../../../session/use-mobile-session-startup')>(
         'mobile/src/session/use-mobile-session-startup.ts'
       ).useMobileSessionStartup
+      const useLastTabs = modules.load<typeof MobileSessionLastTabsModule>(
+        'mobile/src/session/tabs/mobile-session-last-tabs.ts'
+      ).useMobileSessionLastTabs
 
       let created: string | undefined
+      let worktreeId = 'wt-1'
       let isFloatingWorkspaceRoute = false
       let tabLoadRejects = false
       let terminalsLoaded = true
@@ -56,19 +35,37 @@ export function sessionStartupMountAdapters(
       const terminalGestureInputQueuesRef = { current: new Map<string, never>() }
       const terminalGestureInputInFlightRef = { current: new Set<string>() }
       const sessionTabActionSheetRequestSeqRef = { current: 0 }
+      let sessionTabs: MobileSessionTab[] = []
+      let lastTabs: ReturnType<typeof useLastTabs> | undefined
+      // Stable like the screen's own callbacks, so an update reruns the route reset only when the route changes.
+      const routeResetDeps = {
+        setSplitTerminalHandles: () => {},
+        terminalPaneViewportsRef: { current: new Map() },
+        clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
+        clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
+        clearTerminalCache: () => effect('clear-terminal-cache', {}),
+        terminalResume: { holdsAny: () => false, anyCatchingUp: () => false }
+      }
 
       const hook = hookMount(() => {
+        lastTabs = useLastTabs(HOST_ID, worktreeId)
         useStartup(
           mountFixture<Parameters<typeof useStartup>[0]>({
+            ...routeResetDeps,
             hostId: HOST_ID,
-            worktreeId: WORKTREE_ID,
+            worktreeId,
             created,
             isFloatingWorkspaceRoute,
             connState: 'connected',
             client,
             setTerminals: () => {},
             terminalsRef: { current: [] },
-            setSessionTabs: () => {},
+            setSessionTabs: (update) => {
+              sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
+            },
+            readLastSessionTabs: lastTabs.readLastSessionTabs,
+            watchLastSessionTabs: lastTabs.watchLastSessionTabs,
+            sessionTabsRef: { current: sessionTabs },
             appliedSnapshotMarkerRef,
             closedTabTombstonesRef,
             setTerminalsLoaded: (value: boolean) => {
@@ -95,15 +92,8 @@ export function sessionStartupMountAdapters(
             pendingBrowserFocusPageIdRef: { current: null },
             pendingTerminalActivationAttemptRef: { current: null },
             initialSessionAutoCreateRef: { current: null },
-            bufferedTerminalDraftState: {
-              resetDrafts: () => effect('reset-drafts', {}),
-              clearPendingRestorations: () => effect('clear-pending-restorations', {})
-            },
-            clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
-            clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null }),
-            clearTerminalCache: () => effect('clear-terminal-cache', {}),
             fetchTerminals: async (options) => {
               effect('fetch-terminals', { allowEmptyLoaded: options?.allowEmptyLoaded ?? null })
               return true
@@ -121,7 +111,6 @@ export function sessionStartupMountAdapters(
       return {
         action(name, args) {
           if (name === 'mount') {
-            // Which of the two activation sites exists is the scenario's declaration, not this stub's.
             created = args.created === undefined ? undefined : String(args.created)
             isFloatingWorkspaceRoute = args.floating === true
             tabLoadRejects = args.tabLoadRejects === true
@@ -131,10 +120,30 @@ export function sessionStartupMountAdapters(
             return hook.mount()
           }
           if (name === 'consume-created-route') {
-            // What the auto-create does on a fresh workspace: `router.setParams({ created:
-            // undefined })` on the mounted screen, which re-runs the effect down its other branch.
+            // Clear created as real auto-create does so the mounted effect reruns through the ordinary activation branch.
             created = undefined
             return hook.update()
+          }
+          if (name === 'host-tabs') {
+            const ids = Array.isArray(args.tabs) ? args.tabs.map(String) : []
+            sessionTabs = ids.map((id) =>
+              mountFixture<Extract<MobileSessionTab, { type: 'terminal' }>>({
+                id,
+                type: 'terminal',
+                title: id,
+                terminal: id
+              })
+            )
+            lastTabs?.rememberLastSessionTabs(sessionTabs)
+            return hook.update()
+          }
+          if (name === 'switch-worktree') {
+            // A reused route: same screen, next workspace.
+            worktreeId = String(args.worktree)
+            return hook.update()
+          }
+          if (name === 'leave') {
+            return hook.leave()
           }
           if (name === 'unmount') {
             return hook.unmount()
@@ -142,6 +151,7 @@ export function sessionStartupMountAdapters(
           throw new Error(`Unknown session startup action: ${name}`)
         },
         state: () => ({
+          sessionTabs: sessionTabs.map((tab) => tab.id),
           terminalsLoaded,
           activeHandle,
           initializedHandles: [...initializedHandlesRef.current].sort(),

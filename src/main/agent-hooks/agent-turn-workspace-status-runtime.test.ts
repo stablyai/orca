@@ -25,7 +25,7 @@ vi.mock('./server', () => ({
 }))
 
 import { agentTurnWorkspaceStatusDeps } from './agent-turn-workspace-status-runtime'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 const GIT_WORKTREE_ID = 'repo1::/repo/wt'

@@ -1,5 +1,4 @@
-// Test-only types for Monaco internals the model-URI tests drive directly (the TypeScript worker
-// and the snippet resolver). A script file, so these stay ambient module declarations.
+// Keep these Monaco worker/snippet test declarations ambient by leaving this file a script.
 declare module 'monaco-editor/esm/vs/language/typescript/tsWorker.js' {
   import type { URI } from 'monaco-editor/esm/vs/base/common/uri.js'
   export class TypeScriptWorker {

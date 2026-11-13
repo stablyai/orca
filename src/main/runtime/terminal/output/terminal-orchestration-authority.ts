@@ -1,48 +1,74 @@
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orchestration/terminal-authority/verify-orchestration-compatibility-caller'
-import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { createHash } from 'node:crypto'
 import {
   isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey,
   parsePaneKey
-} from '../../../../shared/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
-import { appendRecentPtyPathCandidates } from '../../terminal-output-path-candidates'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
+import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
-import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runtime-agent-detection-host'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
+import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
-  localOrchestrationCliCommand,
-  resolveTerminalOrchestrationCliCommand,
-  runtimeOrchestrationCliCommand
-} from '../../orchestration/cli-command'
-import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
-import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+  readOrchestrationFleetAgentStatusSnapshot,
+  readAgentOrchestrationProjectionRecords,
+  readCapturedOrchestrationFleetAgentStatusSnapshot
+} from '../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
+import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { matchesProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
+  protected abstract issueHandle(
+    leaf: RuntimeLeafRecord,
+    context?: TerminalIdentityReadContext
+  ): string
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
-  protected abstract getOrchestrationDbIfAvailable(): OrchestrationDb | null
-  abstract getTerminalProcessIncarnation(handle: string): string | null
+  getTerminalProcessIncarnation(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null {
+    const structured = resolveStructuredWorkerAuthority(
+      handle,
+      this.getOrchestrationDbIfAvailable?.() ?? null,
+      context?.structured
+    )
+    if (structured) {
+      return structured.identity.processIncarnation
+    }
+    const live = this.getLivePtyForHandle(handle, context)
+    const record = live?.record ?? this.handles.get(handle)
+    const ptyId = record?.ptyId
+    const pty = live?.pty ?? (ptyId ? this.ptysById.get(ptyId) : this.getRetainedHandlePty(handle))
+    if (pty?.incarnationId) {
+      return `${pty.ptyId}:${pty.incarnationId}`
+    }
+    if (!record?.ptyId) {
+      return (
+        this.getOrchestrationCompatibilitySshTerminal(handle, context)?.processIncarnation ?? null
+      )
+    }
+    // Legacy providers retain the runtime/PTY/generation fence.
+    return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
+  }
   abstract getAgentStatusOrchestrationContextForPaneKey(
     paneKey: string
   ): AgentStatusOrchestrationContext | undefined
-  protected abstract issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
 
   /** Every pane key this PTY could be addressed by, including restored receipts. */
   protected collectPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = new Set<string>()
-    const pty = this.ptysById.get(ptyId)
-    if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
-      paneKeys.add(pty.paneKey)
+    const ptyPaneKey = this.paneOfPty(this.ptysById.get(ptyId)).paneKey
+    if (ptyPaneKey && parsePaneKey(ptyPaneKey)) {
+      paneKeys.add(ptyPaneKey)
     }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
     if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
@@ -56,6 +82,26 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     return paneKeys
   }
 
+  protected claimIdleShellPromptForPty(ptyId: string): Promise<boolean> {
+    const confirm = this.ptyController?.confirmShellForeground?.bind(this.ptyController)
+    const readPane = this.getAgentStatusSnapshotForPaneFn
+    return claimIdleShellPrompt({
+      hasPaneAgent: () => {
+        const paneKeys = [...this.collectPaneKeysForPty(ptyId)]
+        // No store, no pane identity, or any row at all keeps the settle; a stale row costs only the wait.
+        return (
+          this.getPaneTerminalAgent(ptyId) !== null ||
+          !readPane ||
+          paneKeys.length === 0 ||
+          paneKeys.some((paneKey) => readPane(paneKey).length > 0)
+        )
+      },
+      claimPromptMarker: () =>
+        this.headlessTerminals.get(ptyId)?.ownership.claimIdlePrompt() === true,
+      confirmShellForeground: confirm ? () => confirm(ptyId) : null
+    })
+  }
+
   /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
   protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = this.collectPaneKeysForPty(ptyId)
@@ -67,7 +113,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
         paneKeys.add(row.paneKey)
       }
     }
-    const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
+    const ptyPaneKey = this.paneOfPty(this.ptysById.get(ptyId)).paneKey
     if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
       paneKeys.add(ptyPaneKey)
     }
@@ -81,20 +127,19 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   getOrchestrationDispatchAuthority(
-    terminalHandle: string
+    terminalHandle: string,
+    context?: TerminalIdentityReadContext
   ): OrchestrationCompatibilityTerminalAuthority | null {
     const structured = resolveStructuredWorkerAuthority(
       terminalHandle,
-      this.getOrchestrationDbIfAvailable?.() ?? null
+      this.getOrchestrationDbIfAvailable?.() ?? null,
+      context?.structured
     )
     if (structured) {
       return {
         runtimeId: this.runtimeId,
         terminalHandle,
-        // Both EMPTY on purpose. `verifyOrchestrationCompatibilityCaller` falls back to the
-        // restored-authority receipt keyed by ptyId when there is no launch token, so filling
-        // either of these in would silently open hook attestation to a session that has no PTY,
-        // no launch secret, and no hook to attest with.
+        // Empty PTY/token prevent restored-receipt fallback from granting hook attestation to a structured session with no PTY or launch secret.
         ptyId: '',
         worktreeId: structured.identity.worktreeId,
         processIncarnation: structured.identity.processIncarnation,
@@ -106,7 +151,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     let ptyId: string | null
     try {
       ptyId =
-        this.getLivePtyForHandle(terminalHandle)?.pty.ptyId ??
+        this.getLivePtyForHandle(terminalHandle, context)?.pty.ptyId ??
         this.resolveLiveLeafForHandle(terminalHandle)?.ptyId ??
         null
     } catch {
@@ -128,8 +173,8 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       terminalHandle,
       ptyId,
       worktreeId: pty.worktreeId,
-      processIncarnation: this.getTerminalProcessIncarnation(terminalHandle),
-      paneKey: pty.paneKey,
+      processIncarnation: this.getTerminalProcessIncarnation(terminalHandle, context),
+      paneKey: (context ? context.paneOf(pty) : this.paneOfPty(pty)).paneKey,
       launchTokenHash: pty.launchToken
         ? createHash('sha256').update(pty.launchToken).digest('hex')
         : null,
@@ -138,23 +183,28 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
+    const pty = this.retireHeldLaunch(ptyId)
     if (!pty) {
       return
     }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent) {
+    if (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandAgent) {
       return
     }
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const changed = Boolean(pty.launchToken || pty.launchIncarnationId)
     this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     pty.launchToken = null
     pty.launchIncarnationId = null
     pty.launchAgent = null
+    pty.launchCommandAgent = null
     for (const paneKey of paneKeys) {
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+    }
+    if (changed) {
+      this.refreshAgentSenderAssociations()
     }
   }
 
@@ -180,71 +230,13 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     return ptyId ? (this.terminalFileUriHostnameByPtyId.get(ptyId) ?? null) : null
   }
 
-  protected recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
+  protected recordRecentPtyOutput(ptyId: string, data: string): void {
     let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
     if (!recentOutputBuffer) {
-      // Boundaries are only owed to the one-time activation backfill; once
-      // tracking is live, new buffers keep the read-collapsing hot path.
-      recentOutputBuffer = new RecentPtyOutputBuffer({
-        preserveChunkBoundaries: !this.recentPtyPathCandidateTrackingActive
-      })
+      recentOutputBuffer = new RecentPtyOutputBuffer()
       this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
     }
     recentOutputBuffer.append(data)
-    if (
-      this.recentPtyPathCandidateTrackingActive ||
-      // Why: an over-window chunk is stored pre-sliced, so activation backfill
-      // could never replay its original text. Extract while intact; oversized
-      // chunks are rare, so the desktop-only gate still skips the hot path.
-      data.length > RECENT_PTY_OUTPUT_LIMIT
-    ) {
-      this.recentPtyPathCandidatesById.set(
-        ptyId,
-        appendRecentPtyPathCandidates(this.recentPtyPathCandidatesById.get(ptyId), data)
-      )
-    }
-  }
-
-  activateRecentPtyPathCandidateTracking(): void {
-    if (this.recentPtyPathCandidateTrackingActive) {
-      return
-    }
-    this.recentPtyPathCandidateTrackingActive = true
-    // Why: synchronous backfill from the retained raw windows so a file tap
-    // right after first mobile connect resolves exactly as before the gate.
-    // Replay each retained chunk in its original full form: joining or
-    // trimming chunks would change the candidate set (e.g. a window cut can
-    // shorten an over-4KiB line under the extractor's line guard, minting
-    // candidates the eager extractor rejected).
-    // Accepted best-effort loss: output that scrolled past the raw window
-    // before the first-ever connect no longer yields candidates.
-    for (const [ptyId, buffer] of this.recentPtyOutputById) {
-      let candidates = this.recentPtyPathCandidatesById.get(ptyId)
-      const { chunks, headChunkIsPartial } = buffer.retainedChunks()
-      for (let index = 0; index < chunks.length; index += 1) {
-        if (index === 0 && headChunkIsPartial) {
-          // A pre-sliced over-window chunk was already extracted eagerly at
-          // append time (while its original text was intact); replaying its
-          // truncated remainder would mint or drop candidates spuriously.
-          continue
-        }
-        candidates = appendRecentPtyPathCandidates(candidates, chunks[index]!)
-      }
-      if (candidates) {
-        this.recentPtyPathCandidatesById.set(ptyId, candidates)
-      }
-      // Chunk boundaries were owed only to this one-time backfill; return
-      // the buffer to the compact read-collapsing steady state.
-      buffer.compact()
-    }
-  }
-
-  resolveTerminalContext(
-    handle: string
-  ): { worktreeId: string; connectionId: string | null } | null {
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const pty = ptyId ? this.ptysById.get(ptyId) : null
-    return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
   }
 
   // Why: remote clients cannot resolve this runtime's WSL project preference,
@@ -265,50 +257,52 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       {
         store: this.store,
         resolveRepo: (selector) => this.resolveRepoSelector(selector),
-        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector)
+        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector)
       },
       worktreeId,
       repoId
     )
   }
 
-  getOrchestrationFleetAgentStatusSnapshot() {
-    return readOrchestrationFleetAgentStatusSnapshot(this)
+  getOrchestrationFleetAgentStatusSnapshot(context?: TerminalIdentityReadContext) {
+    if (!context) {
+      return readOrchestrationFleetAgentStatusSnapshot(this)
+    }
+    const dependencies = this.agentOrchestrationDependencies({
+      paneOf: (pty) => context.paneOf(pty),
+      issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
+      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
+      getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
+      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
+      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
+      getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
+    })
+    return readCapturedOrchestrationFleetAgentStatusSnapshot(
+      {
+        getAgentStatusSnapshotFn: this.getAgentStatusSnapshotFn,
+        readObservedAgentStatusPaneIdentityFn: (pane) =>
+          this.readObservedAgentStatusPaneIdentityFn(pane),
+        getAgentStatusTerminalHandleForPaneKey: (pane) =>
+          this.getTerminalHandleForPaneKey(pane, context) ?? undefined,
+        getTerminalProcessIncarnation: (handle) =>
+          this.getTerminalProcessIncarnation(handle, context)
+      },
+      dependencies
+    )
   }
 
   getTerminalOrchestrationCliCommand(handle: string) {
-    // A structured session runs in this process: it is told what the structured mail lane types.
-    if (isStructuredWorkerHandle(handle) || parseOrcaSessionAddress(handle)) {
-      return localOrchestrationCliCommand()
-    }
-    let pty: RuntimePtyWorktreeRecord | null = null
-    try {
-      const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-      pty = ptyId ? (this.ptysById.get(ptyId) ?? null) : null
-    } catch {
-      return 'orca'
-    }
-    if (!pty) {
-      return 'orca'
-    }
-    return resolveTerminalOrchestrationCliCommand({
-      connectionId: pty.connectionId,
-      isWsl: pty.isWsl,
-      worktreeId: pty.worktreeId,
-      runtimeCliCommand: runtimeOrchestrationCliCommand(),
-      projectRuntime: this.store
-        ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
-        : undefined
+    return resolveRuntimeTerminalOrchestrationCliCommand(handle, {
+      resolvePtyId: (handle) => this.resolveLeafForHandle(handle)?.ptyId,
+      getPty: (ptyId) => this.ptysById.get(ptyId),
+      getProjectRuntime: (pty) =>
+        this.store
+          ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
+          : undefined
     })
   }
-  /**
-   * Recover a live terminal handle for a worker whose durable handle stopped resolving
-   * (renderer graph epoch bump / handle invalidation) while its PTY is still tracked. Fences on
-   * the recorded process incarnation EXACTLY — never a bare ptyId, worktree, or pane — so a
-   * reused ptyId belonging to a different process can never be closed, and fails closed on an
-   * unknown host scope (this is also consumed by workerShow, which does no lease re-check).
-   * Returns a freshly minted live handle, or null when no live PTY carries that exact incarnation.
-   */
+  /** Recover a handle only for an exact live process incarnation and known host scope; never close a replacement under a reused PTY id. workerShow also uses this without lease rechecks. */
   resolveTerminalHandleByProcessIncarnation(
     processIncarnation: string,
     serializedHostScope: string | null
@@ -316,19 +310,14 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     if (!processIncarnation || !serializedHostScope) {
       return null
     }
-    // Scan by the incarnation itself (startsWith + exact equality, mirroring
-    // classifyWorkerTerminalProcessIncarnation) rather than splitting on a colon, so relay/SSH
-    // ptyIds and colon-bearing incarnationIds still match. A pty with no incarnationId can never
-    // match, so the legacy `${runtimeId}:${ptyId}:${ptyGeneration}` fence stays fail-closed.
+    // Match the complete incarnation rather than splitting colons: PTY/incarnation ids may contain them, and missing-incarnation legacy ids stay fail-closed.
     for (const [ptyId, pty] of this.ptysById) {
       if (!matchesProcessIncarnation(ptyId, pty.incarnationId, processIncarnation)) {
         continue
       }
       const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
       if (!hostScope || JSON.stringify(hostScope) !== serializedHostScope) {
-        // Keep scanning: a colon-ambiguous decoy pty in a different host scope that this
-        // incarnation string happens to prefix-match must not suppress the genuine same-scope
-        // pty later in ptysById. The scope check still fences the real match below.
+        // A colon-ambiguous foreign-host decoy must not hide a later genuine same-scope match.
         continue
       }
       return this.issuePtyHandle(pty)

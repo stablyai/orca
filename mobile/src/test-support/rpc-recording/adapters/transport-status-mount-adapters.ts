@@ -1,4 +1,7 @@
-import type { ConnectionState } from '../../../transport/types'
+import type * as HostStatusGatesModule from '../../../transport/connection/host-status-gates'
+import type * as RuntimeCapabilityProbeModule from '../../../transport/connection/runtime-capability-probe'
+import type * as PairingCandidateRaceModule from '../../../pairing/pairing-candidate-race'
+import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import { hookMount } from '../hook-mount'
@@ -6,18 +9,14 @@ import { candidateClient } from '../relay-pairing-fixtures'
 
 const HOST = 'host-1'
 
-/**
- * The three `status.get` readers the transport owns: the protocol gate hook, the retrying
- * capability probe, and the pairing race that treats a reply as "this path works". They agree on
- * acceptance and disagree on what a refusal costs, which is what the recordings have to show.
- */
+// Drive the real status readers: acceptance is shared, while refusal consequences differ by owner.
 export function transportStatusMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'transport.host-status-gates': ({ client }: MountContext) => {
-      const useGates = modules.load<typeof import('../../../transport/host-status-gates')>(
-        'mobile/src/transport/host-status-gates.ts'
+      const useGates = modules.load<typeof HostStatusGatesModule>(
+        'mobile/src/transport/connection/host-status-gates.ts'
       ).useHostStatusGates
       let connState: ConnectionState = 'connected'
       let gates: ReturnType<typeof useGates> | undefined
@@ -50,8 +49,8 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.capability-probe': ({ client }: MountContext) => {
-      const start = modules.load<typeof import('../../../transport/runtime-capability-probe')>(
-        'mobile/src/transport/runtime-capability-probe.ts'
+      const start = modules.load<typeof RuntimeCapabilityProbeModule>(
+        'mobile/src/transport/connection/runtime-capability-probe.ts'
       ).startRuntimeCapabilityProbe
       const published: unknown[] = []
       let stop: (() => void) | null = null
@@ -75,8 +74,8 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.pairing-race': ({ client, effect }: MountContext) => {
-      const race = modules.load<typeof import('../../../transport/pairing-candidate-race')>(
-        'mobile/src/transport/pairing-candidate-race.ts'
+      const race = modules.load<typeof PairingCandidateRaceModule>(
+        'mobile/src/pairing/pairing-candidate-race.ts'
       ).racePairingCandidates
       let outcome: unknown = 'unraced'
       const candidate = (path: 'direct' | 'relay') => ({
@@ -93,8 +92,7 @@ export function transportStatusMountAdapters(
                 : [candidate('direct'), candidate('relay')]
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the adapter supplies the two members racePairingCandidates reads.
           const settled = race(candidates as Parameters<typeof race>[0])
-          // The winner carries a live client, which the recorder cannot observe; the path it chose
-          // is the whole decision, so settle on that and let the rejection through unchanged.
+          // Project the winner’s path because its live client is unrecordable; preserve rejection unchanged.
           return settled.then(
             (winner) => {
               outcome = winner.path

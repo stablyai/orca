@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
+import { markWorktreeRouteInputsChanged } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 export function projectHostSetupCompatibilityStateEqual(
   state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
@@ -15,8 +16,7 @@ export function projectHostSetupCompatibilityStateEqual(
   )
 }
 
-// Why element-wise: a whole-array JSON.stringify re-serialises every row to answer a
-// question that a shared identity already settles for most of them.
+// Shared row identities avoid whole-array serialization for mostly unchanged projections.
 function arraysEqualByJson<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a === b) {
     return true
@@ -60,7 +60,7 @@ export function mergeProjectHostSetupCompatibilityState(
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
   const projectedHosts = new Set(projection.setups.map(projectHostKey))
-  // Why: legacy/repo-backed setup rows reuse the repo id; keep only independent rows so repo deletion leaves no ghosts.
+  // Repo-backed setups derive from repos; retain only independent rows so deletions leave no ghosts.
   const independentSetups = (state.projectHostSetups ?? [])
     .filter((setup) => {
       if (projectedSetupIds.has(setup.id)) {
@@ -68,14 +68,12 @@ export function mergeProjectHostSetupCompatibilityState(
       }
       return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
     })
-    // Why: follow the repo's project through a derived-id change so no ghost project row survives.
+    // Follow derived project-ID succession so renamed rows cannot leave ghost projects.
     .map((setup) => {
       const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
       return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup
     })
-    // Why: a project resolves to one setup per host. Once a repo projection covers that
-    // pair, a leftover placeholder is a ghost that shadows the ready row — it sorts first
-    // and reads back as "not set up". Runs after the remap so renamed rows are caught too.
+    // After remap, drop placeholders shadowed by ready projections for the same project/host.
     .filter((setup) => !projectedHosts.has(projectHostKey(setup)))
   const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
   const independentProjects = (state.projects ?? [])
@@ -109,4 +107,15 @@ export function makeProjectHostSetupId(
     candidate = `${baseId}::${suffix}`
   }
   return candidate
+}
+
+/** Project membership decides each repo's Git runtime, so applying it changes catalog routes. */
+export function applyProjectHostSetupCompatibilityState(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  repos: readonly Repo[]
+): void {
+  const merged = mergeProjectHostSetupCompatibilityState(state, repos)
+  state.projects = merged.projects
+  state.projectHostSetups = merged.projectHostSetups
+  markWorktreeRouteInputsChanged()
 }

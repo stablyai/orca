@@ -1,3 +1,9 @@
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  unwrapRuntimeRpcResult
+} from '../../runtime/rpc/calls/runtime-rpc-result'
+import type { PreloadApi } from '../../../../preload/api-types'
+import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -6,6 +12,7 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getClientForEnvironment,
+  observeWebRuntimeStatus,
   manuallyDisconnectedEnvironmentIds,
   manuallyDisconnectedResponse,
   requireActiveEnvironment,
@@ -55,7 +62,9 @@ export function assertEnvironmentPairing(selector: string, expectedRevision?: nu
     expectedRevision !== undefined &&
     (current.pairingRevision ?? current.createdAt) !== expectedRevision
   ) {
-    throw new Error('The paired Orca server changed while the request was in progress.')
+    throw new RuntimeConnectionChangedBeforeSendError(
+      'The paired Orca server changed while the request was in progress.'
+    )
   }
 }
 
@@ -90,11 +99,7 @@ async function probeRuntimeStatus(
   return response
 }
 
-/**
- * Why: a request shaped for one runtime's capabilities must reach that runtime. The same client
- * reconnects internally, so pin it to the connection a matching status probe ran on. Probes that
- * bypass this wrapper (the status owner's) leave no proof, so a missing or stale one is re-probed.
- */
+/** Pin capability-shaped requests to the probed connection; clients reconnect internally, and probes outside this wrapper provide no proof, so re-probe stale/missing evidence. */
 async function callPinnedToRuntime(
   client: RuntimeClient,
   method: string,
@@ -113,7 +118,7 @@ async function callPinnedToRuntime(
   }
   const probed = probedConnections.get(client)
   if (probed?.runtimeId !== expectedEnvironmentRuntimeId) {
-    throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    throw new RuntimeConnectionChangedBeforeSendError(RUNTIME_CONNECTION_CHANGED_MESSAGE)
   }
   return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probed.epoch })
 }
@@ -148,7 +153,6 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  assertPairing()
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -158,13 +162,7 @@ export async function callRuntimeResult<TResult>(
   params?: unknown,
   timeoutMs?: number
 ): Promise<TResult> {
-  const response = await callRuntimeEnvelope(method, params, timeoutMs)
-  if (!response.ok) {
-    // Why keep the code: callers classify recoverable host failures by token, and the message alone
-    // (e.g. "Parent selector was not found.") carries none.
-    throw Object.assign(new Error(response.error.message), { code: response.error.code })
-  }
-  return response.result as TResult
+  return unwrapRuntimeRpcResult(await callRuntimeEnvelope<TResult>(method, params, timeoutMs))
 }
 
 export async function callRuntimeResultWithOwner<TResult>(
@@ -202,3 +200,47 @@ export function withRuntimeWorktreeOwner<T extends Worktree>(
 export async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
   return callRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
 }
+
+export function pinnedWebSubscriptionOptions(
+  selector: string,
+  expectedRevision?: number,
+  expectedRuntimeId?: string
+): Pick<WebRuntimeSubscribeOptions, 'expectedEnvironmentRuntimeId' | 'beforeSend'> {
+  return expectedRuntimeId === undefined
+    ? {}
+    : {
+        expectedEnvironmentRuntimeId: expectedRuntimeId,
+        beforeSend: () => {
+          assertEnvironmentPairing(selector, expectedRevision)
+          if (manuallyDisconnectedEnvironmentIds.has(resolveEnvironment(selector).id)) {
+            throw new Error('runtime_manually_disconnected')
+          }
+        }
+      }
+}
+
+export const callWebRuntimeEnvironment: PreloadApi['runtimeEnvironments']['call'] = ({
+  selector,
+  method,
+  params,
+  timeoutMs,
+  expectedEnvironmentPairingRevision,
+  expectedEnvironmentRuntimeId
+}) =>
+  callEnvironmentEnvelope(
+    selector,
+    method,
+    params,
+    timeoutMs,
+    expectedEnvironmentPairingRevision,
+    expectedEnvironmentRuntimeId
+  )
+
+export const getWebRuntimeStatus: PreloadApi['runtimeEnvironments']['getStatus'] = ({
+  selector,
+  timeoutMs,
+  observeOnly
+}) =>
+  observeOnly
+    ? observeWebRuntimeStatus(selector, timeoutMs)
+    : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs)

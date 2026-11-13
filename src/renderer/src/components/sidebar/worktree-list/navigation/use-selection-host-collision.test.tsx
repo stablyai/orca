@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { useSidebarWorktreeSelection } from './use-selection'
-import { getVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import { getVisibleWorktreeShortcutTargets } from '../listing/visible-worktrees'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { MIXED_GROUP } from '../../../../../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -33,9 +36,9 @@ let container: HTMLDivElement
 let root: Root
 let selection: Selection
 
-function Probe(): null {
+function Probe({ sectionRows = rows }: { sectionRows?: HostSectionRow[] }): null {
   selection = useSidebarWorktreeSelection({
-    sectionRows: rows,
+    sectionRows,
     pinnedDisplayPolicy: 'single-location'
   })
   return null
@@ -54,6 +57,34 @@ afterEach(() => {
 })
 
 describe('sidebar selection host collisions', () => {
+  it('keeps selected folder and focus identity through an unrelated row update', () => {
+    const folder = makeFolderWorkspace({ projectGroupId: MIXED_GROUP.id, executionHostId: 'local' })
+    const folderWorktree = getFolderWorkspaceWorktree(folder)
+    const folderRow: HostSectionRow = {
+      type: 'folder-workspace',
+      key: 'folder-row',
+      folderWorkspace: folder,
+      projectGroup: MIXED_GROUP,
+      depth: 0,
+      groupDepth: 0
+    }
+    const other = { ...local, id: 'other' }
+    act(() => root.render(<Probe sectionRows={[folderRow, row(local), row(other)]} />))
+    const additive = {
+      metaKey: navigator.userAgent.includes('Mac'),
+      ctrlKey: !navigator.userAgent.includes('Mac'),
+      shiftKey: false
+    } as React.MouseEvent<HTMLElement>
+    act(() => selection.updateSelectionForGesture(additive, folderWorktree))
+    act(() => selection.updateSelectionForGesture(additive, local))
+    act(() => selection.selectForContextMenu(additive, folderWorktree))
+    const selected = selection.selectedWorktrees
+    const focused = selection.focusedWorktree
+    act(() => root.render(<Probe sectionRows={[folderRow, row(local), row({ ...other })]} />))
+    expect(selection.selectedWorktrees).toBe(selected)
+    expect(selection.focusedWorktree).toBe(focused)
+  })
+
   it('publishes both rows as separate shortcut targets', () => {
     expect(getVisibleWorktreeShortcutTargets()).toEqual([
       { id: 'shared', executionHostId: 'local' },

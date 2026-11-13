@@ -1,10 +1,7 @@
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/structural-value-equality'
-import { catalogRowsEqual } from '../../worktree-catalog-reconciliation'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-
-export function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
-  return catalogRowsEqual(current, next)
-}
 
 /** True when the rows match in place except for `sortOrder`, which an order save rewrites. */
 export function worktreesDifferOnlyInSortOrder(
@@ -38,6 +35,8 @@ export function areDetectedWorktreeResultsEqual(
     current.source === next.source &&
     current.unavailableReason === next.unavailableReason &&
     current.failureKind === next.failureKind &&
+    current.wslDistroStopped?.distro === next.wslDistroStopped?.distro &&
+    current.wslDistroStopped?.state === next.wslDistroStopped?.state &&
     catalogRowsEqual(current.worktrees, next.worktrees)
   )
 }
@@ -51,5 +50,5 @@ export function toVisibleWorktree(
     visible: _visible,
     ...base
   } = worktree
-  return base
+  return { ...base, displayName: base.displayName || resolveWorktreeDisplayName(base) }
 }

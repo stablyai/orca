@@ -1,16 +1,17 @@
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { QuickSubmitOptions } from './quick-creation-request'
-import { findPendingLinkedWorkItemCreationId } from '@/lib/pending-worktree-creation'
+import { findPendingLinkedWorkItemCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { useAppStore } from '@/store'
-import { getWorkspaceSeedName } from '@/lib/new-workspace'
-import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
+import { getWorkspaceSeedName } from '@/lib/workspace/creation/new-workspace'
+import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import { toast } from 'sonner'
+import { scheduleComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
 
 import type { ComposerModel } from './composer-model'
 
@@ -22,6 +23,7 @@ type QuickSubmitActionInput = Pick<
   | 'isProjectGroupTarget'
   | 'isSubmissionCancelled'
   | 'linkedPR'
+  | 'linkedWorkItem'
   | 'name'
   | 'onCreated'
   | 'parsedLinkedIssueNumber'
@@ -30,7 +32,9 @@ type QuickSubmitActionInput = Pick<
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
   | 'selectedRepoRequiresConnection'
+  | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
+  | 'revealSetupChoice'
   | 'setCreateError'
   | 'setCreating'
   | 'setupDecision'
@@ -38,6 +42,8 @@ type QuickSubmitActionInput = Pick<
   | 'sourceIntentBlocksCreate'
   | 'sparseError'
   | 'submitFolderTarget'
+  | 'taskSourceContext'
+  | 'telemetrySource'
 >
 
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
@@ -48,6 +54,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     isProjectGroupTarget,
     isSubmissionCancelled,
     linkedPR,
+    linkedWorkItem,
     name,
     onCreated,
     parsedLinkedIssueNumber,
@@ -56,14 +63,18 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
+    revealSetupChoice,
     setCreateError,
     setCreating,
     setupDecision,
     showProjectRequiredError,
     sourceIntentBlocksCreate,
     sparseError,
-    submitFolderTarget
+    submitFolderTarget,
+    taskSourceContext,
+    telemetrySource
   } = input
 
   const submitQuick = useCallback(
@@ -90,7 +101,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         !workspaceNameSeed ||
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
-        (requiresExplicitSetupChoice && !setupDecision) ||
+        selectedTargetNeedsVisibleHost ||
         sparseError !== null
       ) {
         return
@@ -121,6 +132,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       )
 
       if (pendingCreationId) {
+        liveStore.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
         liveStore.setActivePendingWorktreeCreation(pendingCreationId)
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
@@ -128,9 +140,42 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         return
       }
 
+      if (requiresExplicitSetupChoice && !setupDecision) {
+        // The Run/Skip choice lives in Advanced; reveal it rather than refuse silently.
+        revealSetupChoice()
+        return
+      }
+
       setCreateError(null)
 
       setCreating(true)
+      const handoff = scheduleComposerCreateHandoff({
+        stagingRequest: {
+          repoId,
+          workspaceRunContext,
+          name: workspaceNameSeed,
+          ...(parsedLinkedIssueNumber != null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
+          ...(effectiveLinkedPR != null ? { linkedPR: effectiveLinkedPR } : {}),
+          setupDecision: setupDecision ?? 'inherit',
+          agent: requestedAgent,
+          pendingFirstAgentMessageRename: false,
+          note: '',
+          startupPlan: null,
+          quickPrompt: '',
+          quickTelemetry: null
+        },
+        // Why: closing (even under "Create more") keeps a later dismiss from cancelling this submit.
+        onHandOff: () => onCreated?.(),
+        isCancelled: isSubmissionCancelled,
+        reopenComposer: () =>
+          useAppStore.getState().openModal('new-workspace-composer', {
+            prefilledName: name,
+            initialRepoId: repoId,
+            linkedWorkItem,
+            taskSourceContext,
+            telemetrySource
+          })
+      })
       try {
         const smartGitHubSettlement = await settleComposerSubmit(
           resolvePendingSmartGitHubSubmit(),
@@ -145,16 +190,21 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           workspaceNameSeed,
           workspaceRunContext,
           repoId,
-          options
+          options,
+          handoff
         )
       } catch (error) {
         if (isSubmissionCancelled()) {
           return
         }
         const formattedError = formatWorkspaceCreateError(error)
+        if (handoff.fail(getWorkspaceCreateErrorToastMessage(formattedError))) {
+          return
+        }
         setCreateError(formattedError)
         toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
       } finally {
+        handoff.dispose()
         setCreating(false)
       }
     },
@@ -165,6 +215,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       isProjectGroupTarget,
       isSubmissionCancelled,
       linkedPR,
+      linkedWorkItem,
       name,
       onCreated,
       parsedLinkedIssueNumber,
@@ -173,14 +224,18 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
       selectedRepoRequiresConnection,
+      selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
+      revealSetupChoice,
       setCreateError,
       setCreating,
       setupDecision,
       showProjectRequiredError,
       sourceIntentBlocksCreate,
       sparseError,
-      submitFolderTarget
+      submitFolderTarget,
+      taskSourceContext,
+      telemetrySource
     ]
   )
 

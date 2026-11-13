@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import type { FileHandle } from 'node:fs/promises'
-import type { Store } from '../../persistence'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { Store } from '../../persistence/loading-store/store'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import type { SenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
 import { cleanupLocalTransferPath } from './filesystem-download-promotion'
 

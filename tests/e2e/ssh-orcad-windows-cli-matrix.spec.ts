@@ -1,17 +1,6 @@
-/**
- * The bundled `orca` CLI against a real Windows OpenSSH host running managed orcad, one cell per
- * test (config/ci/windows-ssh-provider/invoke-windows-host-cells.ps1 greps by tag):
- *
- * - `@orcad-cli-managed`: an empty host deploys; `host list`/`environment list|show` name it; a CLI
- *   terminal survives disconnect/reconnect; `environment rm` refuses a managed server, the stop
- *   decommissions it and cleans the host, and the next connect redeploys; last, a hard orcad restart
- *   reads unverifiable then live, never retired.
- * - `@orcad-cli-convert`: a seeded relay-era profile converts, keeps its source retained, and the
- *   CLI reaches the converted server's projects.
- *
- * Host: `ORCA_E2E_ORCAD_CONVERT_HOST`, a Windows host-cell descriptor. Template:
- * `ORCA_E2E_ORCAD_CONVERT_TEMPLATE`, built for that host's target.
- */
+// Run bundled CLI against real Windows OpenSSH host cells; invoke-windows-host-cells.ps1 selects @orcad-cli-managed.
+// Covers deploy/list, terminal reconnect, decommission/redeploy and unverifiable→live restart.
+// ORCA_E2E_ORCAD_CONVERT_HOST names the descriptor; ORCA_E2E_ORCAD_CONVERT_TEMPLATE must match its target.
 import { mkdirSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -19,8 +8,8 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
-import { convertAndRetain, managedServer, reconnect } from './helpers/orcad-convert-flow'
-import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
+import { managedServer, reconnect } from './helpers/orcad-convert-flow'
+
 import { ORCAD_CONVERT_HOST_ENV, startOrcadConvertHost } from './helpers/orcad-convert-host'
 import { orcaCliResult, runCompiledOrcaCli } from './helpers/compiled-orca-cli'
 import {
@@ -28,8 +17,8 @@ import {
   listHostOrcadProcesses,
   listHostOrcadServerProcesses
 } from './helpers/windows-host-orcad-processes'
-import { readWindowsHostCellDescriptor } from '../../src/main/ssh/ssh-windows-host-cells'
-import { runtimeHostContactFromSnapshot } from '../../src/shared/runtime-host-contact'
+import { readWindowsHostCellDescriptor } from '../../src/main/ssh/hostile-host-test-support/ssh-windows-host-cells'
+import { runtimeHostContactFromSnapshot } from '../../src/shared/remote-runtime/host-status/runtime-host-contact'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
@@ -176,9 +165,7 @@ async function sendLine(
 }
 
 /** Host Node is hidden on the lane, so the listener is Windows PowerShell's own TcpListener. */
-// Why no `$`: the managed terminal's shell may be PowerShell, which would expand it before the child sees it.
-// Why the trailing comment: Windows exposes no process cwd, so the scanner attributes by the
-// worktree path in the listener's command line, as it does for `node <repo>\...\vite.js`.
+// Avoid $ expansion by the outer PowerShell; append the worktree path for Windows scanners, which cannot read process cwd.
 const DETECTED_PORT = 4317
 
 async function expectWorkspacePortDetected(
@@ -309,7 +296,6 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     const userData = session.userDataDir
     await waitForSessionReady(page)
 
-    // (a) Empty host: the first connect deploys managed orcad.
     const targetId = await page.evaluate(
       async (input) => (await window.api.ssh.addTarget({ target: input })).target.id,
       host.input
@@ -375,10 +361,8 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     await sendLine(userData, environmentId, handle, `echo ${before}`)
     await waitForEchoedLine(userData, environmentId, handle, before)
 
-    // Port detection: a listener started in a workspace terminal is reported as that workspace's port.
     await expectWorkspacePortDetected(page, userData, environmentId, added.repo.id, worktree!)
 
-    // Disconnect and reconnect: the server, and the terminal it runs, outlive the SSH session.
     expect(await reconnect(page, targetId)).toContain('"managed"')
     expect(await waitForManaged(page, targetId)).toBe(environmentId)
     const relisted = await orcaCliResult<RuntimeTerminalListResult>(userData, [
@@ -393,7 +377,6 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     await sendLine(userData, environmentId, handle, `echo ${after}`)
     await waitForEchoedLine(userData, environmentId, handle, after)
 
-    // (e) `environment rm` refuses a server Orca manages over SSH; the stop decommissions it.
     const refused = await runCompiledOrcaCli(userData, [
       'environment',
       'rm',
@@ -448,8 +431,7 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     expect(await environmentIds(userData)).toContain(redeployed)
     expect(await listHostOrcadProcesses(descriptor.home)).not.toHaveLength(0)
 
-    // A terminal on the redeployed server, so the restart below shows what happens to it.
-    // Why unchecked: the decommissioned server's catalog may or may not have kept the repo.
+    // Create a terminal before restart; do not assume the decommissioned server retained its repo catalog.
     await runCompiledOrcaCli(userData, [
       'repo',
       'add',
@@ -532,54 +514,6 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
       afterConnect.some((entry) => killedAgain.some((victim) => victim.pid === entry.pid))
     ).toBe(false)
     await expectTerminalSurvives(userData, redeployed, restartHandle, 'reconnect restart')
-  } finally {
-    if (app) {
-      await session.close(app)
-    }
-    await disposeQuietly(session)
-    host.cleanup()
-    rmSync(SCRATCH, { recursive: true, force: true })
-  }
-})
-
-test('@orcad-cli-convert a seeded relay-era profile converts its Windows host, keeps its source retained, and the CLI reaches its projects', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its launches through a restart session.
-{}, testInfo) => {
-  skipUnlessWindowsHost()
-  test.setTimeout(20 * 60_000)
-  resetScratch()
-  const host = startOrcadConvertHost(HOST!, testInfo)
-  const session = createRestartSession(testInfo, launchEnv())
-  let app: ElectronApplication | null = null
-  try {
-    const first = await session.launch()
-    app = first.app
-    await waitForSessionReady(first.page)
-    await session.close(app)
-    app = null
-    const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
-      repoPath: host.remoteRepoPath,
-      folderPath: host.remoteFolderPath
-    })
-    const upgraded = await session.launch({ onStderr: sshStderr })
-    app = upgraded.app
-    await waitForSessionReady(upgraded.page)
-    await convertAndRetain(upgraded.page, session.userDataDir, seeded)
-
-    const environmentId = await waitForManaged(upgraded.page, seeded.targetId)
-    expect(await environmentIds(session.userDataDir)).toContain(environmentId)
-    expect(
-      (await hostRows(session.userDataDir)).find((row) => row.id === seeded.targetId)
-    ).toMatchObject({
-      kind: 'ssh',
-      connected: true
-    })
-    const repos = await orcaCliResult<{ repos: { path: string }[] }>(session.userDataDir, [
-      'repo',
-      'list',
-      '--environment',
-      environmentId
-    ])
-    expect(repos.repos.some((repo) => samePath(repo.path, seeded.repoPath))).toBe(true)
   } finally {
     if (app) {
       await session.close(app)

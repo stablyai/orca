@@ -1,9 +1,9 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { Copy } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 type SelectedTextCopyMenuProps = {
   children: React.ReactNode
@@ -43,6 +43,7 @@ export function SelectedTextCopyMenu({
   children,
   className
 }: SelectedTextCopyMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const [menu, setMenu] = React.useState<MenuState | null>(null)
 
   React.useEffect(() => {
@@ -60,8 +61,7 @@ export function SelectedTextCopyMenu({
     window.addEventListener('pointerdown', close)
     addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('scroll', close, true)
-    // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
-    // no dimensions — the menu would close on every window restore.
+    // Reveal repaint emits size-unchanged resize events; only real viewport changes should close the menu.
     const removeViewportListener = addViewportSizeChangeListener(close)
     return () => {
       window.removeEventListener('pointerdown', close)
@@ -77,8 +77,7 @@ export function SelectedTextCopyMenu({
       return
     }
 
-    // Why: allowing the event through reopens the workspace card menu. Render
-    // this through a body portal so transformed hovercards cannot offset it.
+    // Stop card-menu propagation; portal outside transformed hovercards to keep coordinates correct.
     event.preventDefault()
     event.stopPropagation()
     event.nativeEvent.stopImmediatePropagation()
@@ -119,7 +118,7 @@ export function SelectedTextCopyMenu({
               onClick={handleCopy}
             >
               <Copy className="size-3.5 text-muted-foreground" />
-              {translate('auto.components.SelectedTextCopyMenu.9b40d7b018', 'Copy')}
+              {t('auto.components.SelectedTextCopyMenu.9b40d7b018', 'Copy')}
             </button>
           </div>,
           document.body

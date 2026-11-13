@@ -1,15 +1,19 @@
 import { useCallback, useRef, type RefObject } from 'react'
-import { detectLanguage } from '@/lib/language-detect'
-import { getDiffCommentSource } from '@/lib/diff-comment-compat'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { getDiffCommentSource } from '@/lib/source-control/review/comments/diff-comment-compat'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { openWorkspaceFile } from '@/lib/workspace-file-open'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { OpenFileOptions } from '@/store/slices/editor/types/editor-files-slice'
+import {
+  sourceControlScopeRuntimeEnvironmentId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import {
   cancelSourceControlEditorRevealFrames,
   requestSourceControlEditorRevealFrame
@@ -26,6 +30,8 @@ export function useSourceControlNoteOpening({
   entries,
   branchEntries,
   branchSummary,
+  handleOpenDiff,
+  openCommittedDiff,
   sourceControlRef
 }: {
   activeWorktreeId: string | null
@@ -33,17 +39,18 @@ export function useSourceControlNoteOpening({
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
   branchSummary: GitBranchCompareSummary | null
+  handleOpenDiff: (entry: GitStatusEntry) => void
+  openCommittedDiff: (entry: GitBranchChangeEntry) => void
   sourceControlRef: RefObject<HTMLDivElement | null>
 }): SourceControlNoteOpening {
-  const openFile = useAppStore((s) => s.openFile)
-  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
-  const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
-  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
-  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const scope = useSourceControlScope()
+  const placementWorkspaceId = scope?.placementWorkspaceId
+  const executionHostId = scope?.executionHostId
+  const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   const setSourceControlRoot = useCallback(
     (node: HTMLDivElement | null) => {
-      // Why: markdown-note reveal frames target this surface; cancel them on unmount rather than via a passive Effect.
+      // Cancel surface-owned reveal frames on ref detach instead of waiting for passive effect cleanup.
       if (node === null) {
         cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       }
@@ -52,7 +59,7 @@ export function useSourceControlNoteOpening({
     [sourceControlRef]
   )
 
-  // Why: route the note by relative filePath to whichever diff surface owns it — unstaged, then branch compare, else a plain editor tab.
+  // Choose the owning diff by relative path: unstaged, then branch, then editor fallback.
   const handleOpenComment = useCallback(
     (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -60,31 +67,47 @@ export function useSourceControlNoteOpening({
       }
       const filePath = comment.filePath
       const commentId = comment.id
+      // A folder section opens the note in its folder's active group; the file stays the child worktree's.
+      const placementGroupId = placementWorkspaceId
+        ? useAppStore.getState().activeGroupIdByWorktree[placementWorkspaceId]
+        : undefined
+      const placement: OpenFileOptions | undefined = placementWorkspaceId
+        ? {
+            placementWorkspaceId,
+            executionHostId,
+            ...(placementGroupId ? { targetGroupId: placementGroupId } : {})
+          }
+        : undefined
+      const scopedRuntime = runtimeEnvironmentId === undefined ? {} : { runtimeEnvironmentId }
       // Clear any dangling prior scroll request; only the diff branches below re-stamp it.
       cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
-      setScrollToDiffCommentId(null)
+      useAppStore.getState().setScrollToDiffCommentId(null)
       if (getDiffCommentSource(comment) === 'markdown') {
         const absPath = joinPath(worktreePath, filePath)
         const language = detectLanguage(filePath)
-        setEditorViewMode(absPath, 'edit')
-        setMarkdownViewMode(absPath, 'source')
-        openFile({
-          filePath: absPath,
-          relativePath: filePath,
-          worktreeId: activeWorktreeId,
-          language,
-          mode: 'edit'
-        })
-        setPendingEditorReveal(null)
+        useAppStore.getState().setEditorViewMode(absPath, 'edit')
+        useAppStore.getState().setMarkdownViewMode(absPath, 'source')
+        useAppStore.getState().openFile(
+          {
+            filePath: absPath,
+            relativePath: filePath,
+            worktreeId: activeWorktreeId,
+            language,
+            mode: 'edit',
+            ...scopedRuntime
+          },
+          placement
+        )
+        useAppStore.getState().setPendingEditorReveal(null)
         requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
           requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
-            setPendingEditorReveal({
+            useAppStore.getState().setPendingEditorReveal({
               filePath: absPath,
               line: comment.lineNumber,
               column: 1,
               matchLength: 0
             })
-            setScrollToDiffCommentId(commentId)
+            useAppStore.getState().setScrollToDiffCommentId(commentId)
           })
         })
         return
@@ -95,60 +118,49 @@ export function useSourceControlNoteOpening({
         matches.find((e) => e.area === 'untracked') ??
         matches[0]
       if (uncommitted) {
-        openWorkspaceFile({
-          kind: 'uncommitted',
-          intent: 'diff',
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          entry: uncommitted,
-          options: { preview: true }
-        })
+        handleOpenDiff(uncommitted)
         if (commentId) {
-          setScrollToDiffCommentId(commentId)
+          useAppStore.getState().setScrollToDiffCommentId(commentId)
         }
         return
       }
       const branchEntry = branchEntries.find((e) => e.path === filePath)
       if (branchEntry && branchSummary?.status === 'ready') {
-        openWorkspaceFile({
-          kind: 'branch',
-          intent: 'diff',
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          entry: branchEntry,
-          compare: branchSummary,
-          options: { preview: true }
-        })
+        openCommittedDiff(branchEntry)
         if (commentId) {
-          setScrollToDiffCommentId(commentId)
+          useAppStore.getState().setScrollToDiffCommentId(commentId)
         }
         return
       }
-      // Why: neither diff surface has the file (e.g. change committed+merged), so open a plain editor tab in 'changes' mode where DiffViewer picks up the scroll request.
+      // If both diffs lost the file, open changes-mode editor fallback so DiffViewer can consume the reveal request.
       const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
-      openFile({
-        filePath: absPath,
-        relativePath: filePath,
-        worktreeId: activeWorktreeId,
-        language,
-        mode: 'edit'
-      })
+      useAppStore.getState().openFile(
+        {
+          filePath: absPath,
+          relativePath: filePath,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit',
+          ...scopedRuntime
+        },
+        placement
+      )
       if (commentId) {
-        setEditorViewMode(absPath, 'changes')
-        setScrollToDiffCommentId(commentId)
+        useAppStore.getState().setEditorViewMode(absPath, 'changes')
+        useAppStore.getState().setScrollToDiffCommentId(commentId)
       }
     },
     [
       activeWorktreeId,
       branchEntries,
+      executionHostId,
+      placementWorkspaceId,
+      runtimeEnvironmentId,
       branchSummary,
       entries,
-      openFile,
-      setEditorViewMode,
-      setScrollToDiffCommentId,
-      setMarkdownViewMode,
-      setPendingEditorReveal,
+      handleOpenDiff,
+      openCommittedDiff,
       worktreePath
     ]
   )

@@ -14,16 +14,7 @@ import {
   waitForActiveTerminalManager
 } from './helpers/terminal'
 
-// Why: regression coverage for the mobile-presence-lock UX (PR #1532). Strong
-// DOM assertions guard the "doesn't mount / doesn't dismiss" regression class;
-// visual assertions keep the notice from reintroducing a full-pane scrim/blur
-// over the live terminal stream. Screenshots ride in the playwright-traces
-// artifact upload so reviewers can eyeball the rendering on a failed run.
-//
-// Drives the renderer by sending the same IPC events main fires in production
-// (runtime:terminalFitOverrideChanged, runtime:terminalDriverChanged — wired in
-// useIpcEvents.ts). No production-code test backdoor; the spec exercises the
-// renderer-side IPC listener → state mirror → banner JSX chain.
+// #1532: drive production fit/driver IPC → renderer state → banner; DOM assertions cover mounting/dismissal and screenshots expose terminal-obscuring scrims.
 
 test.describe.configure({ mode: 'serial' })
 
@@ -41,10 +32,7 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   const overlay = orcaPage.locator('.mobile-driver-banner')
   await expect(overlay).toHaveCount(0)
 
-  // Fire the IPC events main emits when a mobile client subscribes in 'auto'
-  // mode (handleMobileSubscribe in src/main/runtime/orca-runtime.ts). The
-  // renderer's listener calls setFitOverride + setDriverForPty, the banner
-  // observes the change, and MobileDriverOverlay mounts in loud mode.
+  // Send the auto-subscribe fit/driver events that main emits to mount the loud overlay.
   await sendMobileSubscribeIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
@@ -60,9 +48,7 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
 
   await captureAttachment(orcaPage, testInfo, 'overlay-loud.png')
 
-  // Click Minimize → loud overlay swaps to the corner chip while the lock stays
-  // engaged. The user can keep watching live mobile output while the chip
-  // remains a one-click escape hatch back to desktop control.
+  // Minimize keeps the lock while showing a compact take-back chip over live output.
   await collapse.click()
   await expect(overlay).toContainText(/phone driving/i)
   await expect(overlay.getByRole('button', { name: /take back/i })).toBeVisible()
@@ -78,10 +64,7 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await collapse.click()
   await expect(overlay).not.toContainText(/your phone is in control/i)
 
-  // Take back from the chip dismisses the overlay. The button calls
-  // runtime.restoreTerminalFit via IPC; main responds with desktop-fit + desktop
-  // driver events that we mirror here so the renderer state lands on the
-  // post-take-back terminal state.
+  // Mirror main’s desktop-fit and driver events after proving Take back called the production IPC.
   await overlay.getByRole('button', { name: /take back/i }).click()
   await expectRestoreTerminalFitCalls(electronApp, [ptyId])
   await sendDesktopRestoreIpc(electronApp, { ptyId })
@@ -102,9 +85,7 @@ test('held phone-fit state mounts restore overlay without collapse', async ({
   const overlay = orcaPage.locator('.mobile-driver-banner')
   await expect(overlay).toHaveCount(0)
 
-  // Held-fit is the post-mobile-disconnect state: the phone-fit override remains
-  // while the driver returns to idle. It should stay loud because there is no
-  // active mobile output to keep watching behind a collapsed chip.
+  // After disconnect, idle driver plus held phone fit stays loud because no mobile output remains to watch.
   await sendHeldPhoneFitIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
@@ -329,10 +310,7 @@ async function installRestoreTerminalFitRecorder(electronApp: ElectronApplicatio
       __mobileBannerRestoreCalls?: string[]
     }
     testGlobal.__mobileBannerRestoreCalls = []
-    // Why: the renderer state is driven by production IPC events in this spec,
-    // so the runtime has no real mobile subscriber to reclaim. Replace only the
-    // main-process handler inside the test process to prove the button invokes
-    // the production channel and payload before we mirror the resulting events.
+    // No real subscriber exists: intercept only main’s restore handler to verify the production channel/payload, then mirror its events.
     ipcMain.removeHandler('runtime:restoreTerminalFit')
     ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
       testGlobal.__mobileBannerRestoreCalls?.push(args.ptyId)
@@ -349,8 +327,7 @@ async function installRestoreTerminalFitAutoRestoreRecorder(
       __mobileBannerRestoreCalls?: string[]
     }
     testGlobal.__mobileBannerRestoreCalls = []
-    // Why: the production restore path sets desktop control after clearing the
-    // fit override, so this harness mirrors both renderer-facing events.
+    // Production clears the fit override and restores desktop control; mirror both events.
     ipcMain.removeHandler('runtime:restoreTerminalFit')
     ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
       testGlobal.__mobileBannerRestoreCalls?.push(args.ptyId)
@@ -463,8 +440,7 @@ async function forcePaneToOneColumnAndSwitchWorktree(
           .getPanes?.()
           .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
         if (pane) {
-          // Why: the repro needs the desktop surface to inherit a phone-sized
-          // xterm layout after the workspace is no longer visible.
+          // Reproduce phone-sized xterm layout inherited while the workspace is hidden.
           pane.terminal.resize(1, Math.max(8, pane.terminal.rows))
           pane.terminal.refresh(0, pane.terminal.rows - 1)
           window.__store?.getState().setActiveWorktree(targetWorktreeId)
@@ -560,10 +536,7 @@ async function expectChipIsCompactInPane(page: Page, ptyId: string): Promise<voi
     .toBe(true)
 }
 
-// Why: writing the screenshot to testInfo.outputPath() lands the file in the
-// per-test output dir that ships in the playwright-traces artifact uploaded by
-// .github/workflows/e2e.yml on failure. The `body` form of testInfo.attach
-// didn't reliably persist for the `list` reporter; the path round-trip does.
+// Attach via outputPath so list-reporter screenshots reliably reach playwright-traces artifacts.
 async function captureAttachment(page: Page, testInfo: TestInfo, fileName: string): Promise<void> {
   const dest = testInfo.outputPath(fileName)
   await page.screenshot({ path: dest, fullPage: true })

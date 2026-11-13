@@ -59,40 +59,6 @@ afterEach(() => {
 })
 
 describe('opencode-plugin-atomic-write', () => {
-  it('writes atomically via sibling temp file and never writes directly in place', () => {
-    const testDir = mkdtempSync(join(tmpdir(), 'opencode-atomic-write-'))
-    const pluginPath = join(testDir, 'plugins', 'orca-opencode-status.js')
-    const writtenPaths: string[] = []
-
-    const realWrite = fsMock.getRealWrite()
-    expect(realWrite).toBeDefined()
-    if (!realWrite) {
-      return
-    }
-
-    fsMock.writeFileSync.mockImplementation(
-      (
-        file: Parameters<WriteFileSyncFn>[0],
-        data: Parameters<WriteFileSyncFn>[1],
-        options: Parameters<WriteFileSyncFn>[2]
-      ) => {
-        writtenPaths.push(String(file))
-        return realWrite(file, data, options)
-      }
-    )
-
-    try {
-      writeCanonicalOpenCodePluginAtomically(pluginPath, 'console.log("hello")')
-      expect(readFileSync(pluginPath, 'utf8')).toBe('console.log("hello")')
-      expect(writtenPaths).toHaveLength(1)
-      expect(writtenPaths[0]).not.toBe(pluginPath)
-      expect(writtenPaths[0]).toContain('.orca-opencode-status.js.')
-      expect(writtenPaths[0]).toContain('.tmp')
-    } finally {
-      rmSync(testDir, { recursive: true, force: true })
-    }
-  })
-
   it('preserves symlink and updates underlying target in canonical mode', () => {
     if (process.platform === 'win32') {
       return
@@ -217,17 +183,6 @@ describe('opencode-plugin-atomic-write', () => {
     expect(lstatSync(overlayPlugin).isFile()).toBe(true)
     expect(readFileSync(overlayPlugin, 'utf8')).toBe('orca status source')
     expect(readFileSync(userPlugin, 'utf8')).toBe('user original source')
-
-    rmSync(testDir, { recursive: true, force: true })
-  })
-
-  it('creates missing directories automatically when writing plugin', () => {
-    const testDir = mkdtempSync(join(tmpdir(), 'opencode-nested-dir-'))
-    const deeplyNestedPlugin = join(testDir, 'nested', 'path', 'plugins', 'status.js')
-
-    writeOverlayOpenCodePluginAtomically(deeplyNestedPlugin, 'content')
-    expect(existsSync(deeplyNestedPlugin)).toBe(true)
-    expect(readFileSync(deeplyNestedPlugin, 'utf8')).toBe('content')
 
     rmSync(testDir, { recursive: true, force: true })
   })

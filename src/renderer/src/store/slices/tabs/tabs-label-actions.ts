@@ -1,14 +1,14 @@
-import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { emitNativeChatToggled } from '@/components/native-chat/telemetry/native-chat-telemetry'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
+import { findTabAndWorktree, patchTab, updateGroup } from './tab-group-state'
 import {
   applyTabOrderSortValues,
   dedupeTabOrder,
   partitionPinnedTabOrder,
   reorderProjectedTabOrder
-} from '../../../../../shared/workspace-layout/tab-order'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
@@ -19,6 +19,7 @@ import { recordTabOrderInLayoutOwner } from './tab-order-layout-owner'
 import { withPreviewEnded } from './tab-preview-flag'
 import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 function oppositeViewMode(mode: 'terminal' | 'chat'): 'terminal' | 'chat' {
   return mode === 'chat' ? 'terminal' : 'chat'
@@ -47,9 +48,7 @@ export function createTabsLabelActions(
       }
       return {
         ...tabPatch,
-        // Why the row too: viewMode is declared on both types and host-sync
-        // already writes it to the row. Only these local toggles skipped it, so
-        // readers had to OR the two indices to find out who owns the surface.
+        // Recovery reads terminal rows; mirror viewMode there to match host sync.
         ...rowPatch
       }
     })
@@ -181,17 +180,18 @@ export function createTabsLabelActions(
           changes.push({ worktreeId, from: group.tabOrder, to: nextTabOrder })
           const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
           return {
-            groupsByWorktree: {
-              ...state.groupsByWorktree,
-              [worktreeId]: updateGroup(groups, { ...group, tabOrder: nextTabOrder })
-            },
-            unifiedTabsByWorktree: {
-              ...state.unifiedTabsByWorktree,
-              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
-                const sortOrder = orderMap.get(tab.id)
-                return sortOrder === undefined ? tab : { ...tab, sortOrder }
-              })
-            }
+            groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+              [worktreeId, updateGroup(groups, { ...group, tabOrder: nextTabOrder })]
+            ]),
+            unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+              [
+                worktreeId,
+                (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
+                  const sortOrder = orderMap.get(tab.id)
+                  return sortOrder === undefined ? tab : { ...tab, sortOrder }
+                })
+              ]
+            ])
           }
         }
         return state
@@ -263,21 +263,21 @@ export function createTabsLabelActions(
         const group = groups.find((candidate) => candidate.id === tab.groupId)
         if (!group) {
           return {
-            unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
+            unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+              [worktreeId, tabs]
+            ])
           }
         }
         const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
         return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
-          },
-          // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
+          unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+            [worktreeId, applyTabOrderSortValues(tabs, tabOrder)]
+          ]),
+          // Reconciliation derives pin from terminal rows; mirror it there or host echoes unpin during the round trip.
           ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-          }
+          groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+            [worktreeId, updateGroup(groups, { ...group, tabOrder })]
+          ])
         }
       })
       mirrorTabPinnedToHost(get(), tabId, true)
@@ -304,20 +304,20 @@ export function createTabsLabelActions(
         const group = groups.find((candidate) => candidate.id === tab.groupId)
         if (!group) {
           return {
-            unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
+            unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+              [worktreeId, tabs]
+            ])
           }
         }
         const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
         return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
-          },
+          unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+            [worktreeId, applyTabOrderSortValues(tabs, tabOrder)]
+          ]),
           ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: false }),
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-          }
+          groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+            [worktreeId, updateGroup(groups, { ...group, tabOrder })]
+          ])
         }
       })
       mirrorTabPinnedToHost(get(), tabId, false)

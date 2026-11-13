@@ -13,10 +13,11 @@ import {
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
 import type { StartupTerminalTabHold } from './terminal/startup-terminal-tab-hold'
+import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
 import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
-} from './terminal-pane/use-manual-terminal-worktree-parking'
+} from './terminal-pane/parking/lifecycle/use-manual-terminal-worktree-parking'
 import type { TerminalEditorCloseController } from './use-terminal-editor-close-dialog-actions'
 
 export function useTerminalParkingFoundation(controller: TerminalEditorCloseController) {
@@ -45,7 +46,6 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
 
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
-  const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
   const [browserGuestRetentionRevision, setBrowserGuestRetentionRevision] = useState(0)
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -69,9 +69,9 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  const prewarmLeasesRef = useRef(new Map<string, TerminalPrewarmStage>())
   const startupTerminalTabHoldRef = useRef<StartupTerminalTabHold | null>(null)
-  // Why a ref, not state: the cold-activation pass runs during render, where a
-  // setState would be a render-phase update; the pass returns the count instead.
+  // Cold activation runs during render; return its count into a ref instead of triggering a render-phase state update.
   const activationDeferralPlanRevisionRef = useRef(0)
 
   useEffect(() => {
@@ -135,8 +135,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       closeDialogDebounceTimers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [])
+  }, [closeDialogDebounceTimersRef, measurableBackgroundWorktreeIdsRef, mountedWorktreeIdsRef])
 
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
@@ -146,15 +145,12 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       timers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
-  }, [])
+  }, [terminalWorktreeParkingTimersRef])
 
   return {
     measurableBackgroundWorktreeTimersRef,
     backgroundMountRevision,
     setBackgroundMountRevision,
-    terminalParkingRevision,
-    setTerminalParkingRevision,
     browserGuestRetentionRevision,
     setBrowserGuestRetentionRevision,
     parkedTerminalWorktreeIds,
@@ -169,6 +165,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     backgroundMountTabIdsByWorktreeRef,
     activationDeferredMountTabIdsByWorktreeRef,
     lastActivationWorktreeIdRef,
+    prewarmLeasesRef,
     startupTerminalTabHoldRef,
     activationDeferralPlanRevisionRef
   }

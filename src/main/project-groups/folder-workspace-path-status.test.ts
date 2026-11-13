@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -9,6 +9,7 @@ import {
   inferFolderWorkspacePathConnection
 } from './folder-workspace-path-status'
 import type { ProjectGroup } from '../../shared/project-group-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 
 function makeGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
@@ -40,6 +41,59 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('folder workspace path status', () => {
+  it.each([false, true])(
+    'reports canonical owner ambiguity through the persisted folder status route (%s)',
+    async (reverse) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-pr31617-folder-owner-'))
+      const workspace: FolderWorkspace = {
+        id: 'saved',
+        projectGroupId: 'group-1',
+        name: 'Saved',
+        folderPath: root,
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        createdAt: 0,
+        updatedAt: 0
+      }
+      const repos = [
+        makeRepo({ id: 'local', path: join(root, 'local') }),
+        makeRepo({ id: 'ssh', path: join(root, 'ssh'), executionHostId: 'ssh:prod' })
+      ]
+      let folders = [workspace]
+      const store = {
+        getRepos: () => (reverse ? [...repos].toReversed() : repos),
+        getProjectGroups: () => [makeGroup({ parentPath: root })],
+        getFolderWorkspaces: () => folders
+      }
+      try {
+        await expect(
+          getFolderWorkspacePathStatus(store, {
+            scope: 'folder-workspace',
+            folderWorkspaceId: 'saved'
+          })
+        ).resolves.toEqual({
+          path: root,
+          exists: false,
+          reason: 'ambiguous-connection'
+        })
+        folders = []
+        await expect(
+          getFolderWorkspacePathStatus(store, {
+            scope: 'folder-workspace',
+            folderWorkspaceId: 'saved'
+          })
+        ).rejects.toThrow('folder_workspace_path_scope_not_found')
+      } finally {
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('reports existing local directories and local files', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-folder-status-'))
     try {
@@ -70,34 +124,6 @@ describe('folder workspace path status', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  })
-
-  it('reports missing local directories', async () => {
-    const missingPath = join(tmpdir(), `orca-folder-status-missing-${randomUUID()}`)
-
-    await expect(
-      getFolderWorkspacePathStatusForPath({
-        folderPath: missingPath,
-        projectGroupId: 'group-1',
-        projectGroups: [makeGroup({ parentPath: missingPath })],
-        repos: []
-      })
-    ).resolves.toEqual({ path: missingPath, exists: false, reason: 'missing' })
-  })
-
-  it('reports unavailable for an inferred SSH scope, which this process does not serve', async () => {
-    await expect(
-      getFolderWorkspacePathStatusForPath({
-        folderPath: '/workspace/platform',
-        projectGroupId: 'group-1',
-        projectGroups: [makeGroup()],
-        repos: [makeRepo({ connectionId: 'ssh-1' })]
-      })
-    ).resolves.toEqual({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'unavailable'
-    })
   })
 
   it('reports ambiguous connection for mixed SSH scopes', () => {

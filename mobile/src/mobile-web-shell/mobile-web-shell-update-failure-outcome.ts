@@ -1,11 +1,32 @@
-import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
+import type {
+  MobileWebShellSession,
+  MobileWebShellSessionEffect,
+  MobileWebShellSessionState
+} from './mobile-web-shell-session-contract'
 import {
   updateFailureWallOf,
+  type MobileWebShellUpdateFailureCause,
   type MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-/** What went on screen instead, read off the state the decision produced rather than decided twice. */
-export function updateFailureOutcomeOf(
+// Troubleshoot's record of a failed update: what was offered, what was cached, and where the session landed.
+export function updateFailureRecordEffect(
+  session: MobileWebShellSession,
+  cause: MobileWebShellUpdateFailureCause,
+  landed: MobileWebShellSessionState
+): MobileWebShellSessionEffect {
+  return {
+    kind: 'record-update-failure',
+    failure: {
+      ...cause,
+      offeredBuildId: session.requestedBuildId,
+      cachedBuildId: session.cached?.buildId ?? null,
+      ...updateFailureOutcomeOf(landed)
+    }
+  }
+}
+
+function updateFailureOutcomeOf(
   state: MobileWebShellSessionState
 ): Pick<MobileWebShellUpdateFailureFacts, 'outcome' | 'wall'> {
   switch (state.kind) {

@@ -1,20 +1,19 @@
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
-  ghExecFileAsync,
-  acquire,
-  release,
+  withGitHubRepoExecution,
   ghRepoExecOptions,
   githubRepoContext,
   getRemoteUrlForRepo,
   type LocalGitExecOptions
-} from '../../gh-utils'
-import {
-  getGitHubApiRepositoryForRemote,
-  githubHostExecOptions,
-  type GitHubApiRepository
-} from '../../github-api-repository'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+} from '../../repositories/github-repository-identity'
+import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
+import { getGitHubApiRepositoryForRemote } from '../../repositories/github-api-repository-remote-probe'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { isNotFoundGhError } from './../gh-error-predicates'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 export function pickPushRemoteUrl(args: {
@@ -23,7 +22,7 @@ export function pickPushRemoteUrl(args: {
   sshUrl: string
 }): string {
   const { originUrl, cloneUrl, sshUrl } = args
-  // Why: GHES port-443 SSH uses `ssh.<enterprise-host>`, not just ssh.github.com.
+  // Enterprise SSH-over-443 hosts can use ssh.<enterprise-host>, not just ssh.github.com.
   if (originUrl && (/^(git@|ssh:)/.test(originUrl) || /:\/\/(?:[^@/]+@)?ssh\./.test(originUrl))) {
     return sshUrl
   }
@@ -39,10 +38,7 @@ export function sanitizeRemoteName(owner: string, repo: string): string {
   return slug ? `pr-${slug}` : 'pr-head'
 }
 
-/**
- * A fork push target plus the PR's `maintainer_can_modify` flag, kept outside
- * {@link GitPushTarget} so it never leaks into the persisted push-target shape.
- */
+/** Keep maintainer permissions outside the persisted GitPushTarget shape. */
 export type PullRequestPushTarget = {
   pushTarget: GitPushTarget
   /** false when the PR has "Allow edits from maintainers" off; a push may be rejected. */
@@ -56,99 +52,101 @@ export async function getPullRequestPushTarget(
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference
 ): Promise<PullRequestPushTarget | null> {
-  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  const ghOptions = ghRepoExecOptions(context)
-  const candidates = await resolvePullRequestLookupCandidates(
-    repoPath,
-    preference,
-    connectionId,
-    localGitOptions
-  )
-  if (candidates.length === 0) {
-    return null
-  }
-
-  await acquire()
-  try {
-    let prStdout = ''
-    let matchedRepository: GitHubApiRepository | null = null
-    for (const candidate of candidates) {
-      try {
-        const { stdout } = await ghExecFileAsync(
-          ['api', `repos/${candidate.owner}/${candidate.repo}/pulls/${prNumber}`],
-          { ...ghOptions, ...githubHostExecOptions(candidate) }
-        )
-        prStdout = stdout
-        matchedRepository = candidate
-        break
-      } catch (error) {
-        // Why: origin is often the contributor fork while the PR belongs to upstream; probe all PR repos before giving up.
-        if (isNotFoundGhError(error)) {
-          continue
-        }
-        throw error
-      }
-    }
-    if (!prStdout || !matchedRepository) {
-      return null
-    }
-    const origin = await getGitHubApiRepositoryForRemote(
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+    const ghOptions = ghRepoExecOptions(context)
+    const candidates = await resolvePullRequestLookupCandidates(
       repoPath,
-      'origin',
+      preference,
       connectionId,
       localGitOptions
     )
-    const pr = JSON.parse(prStdout) as {
-      maintainer_can_modify?: boolean
-      head?: {
-        ref?: string
-        repo?: {
-          full_name?: string
-          clone_url?: string
-          ssh_url?: string
-          owner?: { login?: string }
-          name?: string
-        } | null
-      }
-    }
-    const headRepo = pr.head?.repo
-    const branchName = pr.head?.ref?.trim()
-    const owner = headRepo?.owner?.login?.trim()
-    const repo = headRepo?.name?.trim() ?? headRepo?.full_name?.split('/')[1]?.trim()
-    const cloneUrl = headRepo?.clone_url?.trim()
-    const sshUrl = headRepo?.ssh_url?.trim()
-    const maintainerCanModify =
-      typeof pr.maintainer_can_modify === 'boolean' ? pr.maintainer_can_modify : undefined
-    if (!owner || !repo || !branchName || !cloneUrl || !sshUrl) {
+    if (candidates.length === 0) {
       return null
     }
-    if (
-      origin &&
-      githubRepoIdentityKey(origin) ===
-        githubRepoIdentityKey({ owner, repo, host: matchedRepository.host })
-    ) {
+
+    await acquire()
+    try {
+      let prStdout = ''
+      let matchedRepository: GitHubApiRepository | null = null
+      for (const candidate of candidates) {
+        try {
+          const { stdout } = await ghExecFileAsync(
+            ['api', `repos/${candidate.owner}/${candidate.repo}/pulls/${prNumber}`],
+            { ...ghOptions, ...githubHostExecOptions(candidate) }
+          )
+          prStdout = stdout
+          matchedRepository = candidate
+          break
+        } catch (error) {
+          // Fork origin may differ from the upstream PR namespace; exhaust candidate repositories.
+          if (isNotFoundGhError(error)) {
+            continue
+          }
+          throw error
+        }
+      }
+      if (!prStdout || !matchedRepository) {
+        return null
+      }
+      const origin = await getGitHubApiRepositoryForRemote(
+        repoPath,
+        'origin',
+        connectionId,
+        localGitOptions
+      )
+      const pr = JSON.parse(prStdout) as {
+        maintainer_can_modify?: boolean
+        head?: {
+          ref?: string
+          repo?: {
+            full_name?: string
+            clone_url?: string
+            ssh_url?: string
+            owner?: { login?: string }
+            name?: string
+          } | null
+        }
+      }
+      const headRepo = pr.head?.repo
+      const branchName = pr.head?.ref?.trim()
+      const owner = headRepo?.owner?.login?.trim()
+      const repo = headRepo?.name?.trim() ?? headRepo?.full_name?.split('/')[1]?.trim()
+      const cloneUrl = headRepo?.clone_url?.trim()
+      const sshUrl = headRepo?.ssh_url?.trim()
+      const maintainerCanModify =
+        typeof pr.maintainer_can_modify === 'boolean' ? pr.maintainer_can_modify : undefined
+      if (!owner || !repo || !branchName || !cloneUrl || !sshUrl) {
+        return null
+      }
+      if (
+        origin &&
+        githubRepoIdentityKey(origin) ===
+          githubRepoIdentityKey({ owner, repo, host: matchedRepository.host })
+      ) {
+        return {
+          pushTarget: { remoteName: 'origin', branchName },
+          ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+        }
+      }
+
+      let originUrl: string | null = null
+      try {
+        const rawOriginUrl = await getRemoteUrlForRepo(context, 'origin')
+        originUrl = rawOriginUrl?.trim() || null
+      } catch {
+        originUrl = null
+      }
       return {
-        pushTarget: { remoteName: 'origin', branchName },
+        pushTarget: {
+          remoteName: sanitizeRemoteName(owner, repo),
+          branchName,
+          remoteUrl: pickPushRemoteUrl({ originUrl, cloneUrl, sshUrl })
+        },
         ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
       }
+    } finally {
+      release()
     }
-
-    let originUrl: string | null = null
-    try {
-      const rawOriginUrl = await getRemoteUrlForRepo(context, 'origin')
-      originUrl = rawOriginUrl?.trim() || null
-    } catch {
-      originUrl = null
-    }
-    return {
-      pushTarget: {
-        remoteName: sanitizeRemoteName(owner, repo),
-        branchName,
-        remoteUrl: pickPushRemoteUrl({ originUrl, cloneUrl, sshUrl })
-      },
-      ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
-    }
-  } finally {
-    release()
-  }
+  })
 }

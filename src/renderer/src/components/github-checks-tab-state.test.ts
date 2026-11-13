@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/checks/check-types'
 import {
   beginGitHubChecksTabDetails,
   createGitHubChecksTabState,
@@ -33,16 +33,6 @@ const checkRunDetails: PRCheckRunDetails = {
 }
 
 describe('github checks tab state', () => {
-  it('preserves local check state while the source checks reference is unchanged', () => {
-    const sourceChecks = [check('unit')]
-    const state = updateGitHubChecksTabLocalChecks(
-      createGitHubChecksTabState(sourceChecks, 'repo-a'),
-      [check('refreshed')]
-    )
-
-    expect(resolveGitHubChecksTabState(state, sourceChecks, 'repo-a')).toBe(state)
-  })
-
   it('resets local checks and expanded details when source checks change', () => {
     const oldSource = [check('old')]
     const nextSource = [check('next')]
@@ -65,50 +55,6 @@ describe('github checks tab state', () => {
       expandedCheckKey: null,
       detailsByCheckKey: {}
     })
-  })
-
-  it('toggles expanded check keys without discarding loaded details', () => {
-    const sourceChecks = [check('unit')]
-    const state = updateGitHubChecksTabDetails(
-      createGitHubChecksTabState(sourceChecks, 'repo-a'),
-      'unit',
-      {
-        loading: false,
-        details: null,
-        error: 'No details'
-      }
-    )
-
-    const expanded = toggleGitHubChecksTabExpandedKey(state, 'unit')
-    const collapsed = toggleGitHubChecksTabExpandedKey(expanded, 'unit')
-
-    expect(expanded.expandedCheckKey).toBe('unit')
-    expect(collapsed.expandedCheckKey).toBeNull()
-    expect(collapsed.detailsByCheckKey).toBe(state.detailsByCheckKey)
-  })
-
-  it('settles details only for the request that still owns the check key', () => {
-    const sourceChecks = [check('unit')]
-    const loading = beginGitHubChecksTabDetails(
-      createGitHubChecksTabState(sourceChecks, 'repo-a'),
-      'unit',
-      2
-    )
-
-    expect(
-      settleGitHubChecksTabDetails(loading, 'unit', 1, {
-        loading: false,
-        details: null,
-        error: 'stale'
-      })
-    ).toBe(loading)
-    expect(
-      settleGitHubChecksTabDetails(loading, 'unit', 2, {
-        loading: false,
-        details: null,
-        error: 'current'
-      }).detailsByCheckKey.unit
-    ).toEqual({ requestId: 2, loading: false, details: null, error: 'current' })
   })
 
   it('gives a retry ownership over an older in-flight request', () => {

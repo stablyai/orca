@@ -1,14 +1,17 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { useCallback } from 'react'
 import type React from 'react'
-import { getWorktreeSidebarDragAutoscroll } from '../../worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { getPointerDropStatusTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragRuntime } from './use-runtime'
 import type { WorktreeDragSession } from './use-session'
 import { applyWorktreeDropPreview, clearWorktreeDropPreview } from './row-state'
 
-// The HTML5 drag equivalent of pointer autoscroll: the browser gives no move events while
-// hovering the edge, so re-derive the drop preview from the last known point each frame.
+// Native drags emit no moves at stationary edges; refresh the preview from the last point each frame.
 export function useWorktreeNativeDragAutoscroll(args: {
   ctx: WorktreeDropCommitContext
   session: WorktreeDragSession
@@ -49,7 +52,9 @@ export function useWorktreeNativeDragAutoscroll(args: {
       })
       if (autoscroll) {
         markScrollMovement()
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         if (!session.refreshWorktreeDragSession()) {
           clearWorktreeDrag()
           return
@@ -65,7 +70,7 @@ export function useWorktreeNativeDragAutoscroll(args: {
             ? ctx.computeWorktreeStatusDrop({
                 pointerY: point.clientY,
                 status: target.status,
-                draggedIds: dragSession.reorderDraggedIds
+                draggedKeys: dragSession.reorderDraggedKeys
               })
             : null
           if (statusDrop) {

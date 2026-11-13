@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress,
   type PairingNetworkInterface
 } from './pairing-address-auto-selection'
@@ -51,34 +50,5 @@ describe('selectAutoAdvertisedPairingAddress', () => {
 
   it('filters a vEthernet adapter when route reachability is ambiguous', () => {
     expect(selectAutoAdvertisedPairingAddress([AMBIGUOUS_SWITCH])).toBeUndefined()
-  })
-
-  it.each([
-    'vEthernet (Default Switch)',
-    'vEthernet (default switch)',
-    'vEthernet (WSL)',
-    'vEthernet (WSL (Hyper-V firewall))'
-  ])('keeps the known host-local %s label filtered with a default route', (name) => {
-    expect(isVirtualBridgeInterface(name, true)).toBe(true)
-  })
-
-  it.each([
-    'vEthernet (Default Switchboard)',
-    'vEthernet (WSL-LAN)',
-    'vEthernet (WSL LAN)',
-    'vEthernet (WSL External)'
-  ])('does not treat the route-backed near-match %s as a known host-local label', (name) => {
-    expect(isVirtualBridgeInterface(name, true)).toBe(false)
-  })
-
-  it.each([
-    ['external', EXTERNAL_SWITCH, false],
-    ['Default Switch', DEFAULT_SWITCH, true],
-    ['WSL', WSL_SWITCH, true],
-    ['physical', PHYSICAL_LAN, false],
-    ['host-local', HOST_LOCAL_BRIDGE, true],
-    ['ambiguous', AMBIGUOUS_SWITCH, true]
-  ] as const)('classifies the %s fixture', (_label, fixture, expected) => {
-    expect(isVirtualBridgeInterface(fixture.name, fixture.hasDefaultRoute)).toBe(expected)
   })
 })

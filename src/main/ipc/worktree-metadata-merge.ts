@@ -1,14 +1,11 @@
-import { basename } from 'node:path'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
+import { automaticWorktreeDisplayName } from '../../shared/worktree/display-name-provenance'
 
-/**
- * Merge raw git worktree info with persisted user metadata into a full Worktree.
- */
 export function mergeWorktree(
   repoId: string,
   git: GitWorktreeInfo,
@@ -18,7 +15,11 @@ export function mergeWorktree(
   const branchShort = git.branch.replace(/^refs\/heads\//, '')
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta?.creatorProvenance)
   const worktreeId = `${repoId}::${git.path}`
-  const automaticDisplayName = branchShort || defaultDisplayName || basename(git.path)
+  const automaticDisplayName = automaticWorktreeDisplayName({
+    branch: git.branch,
+    projectName: defaultDisplayName,
+    path: git.path
+  })
   // CLI-created labels predate displayNameIsPinned but are still explicit names.
   const legacyCliDisplayNameIsPinned =
     meta?.displayNameIsPinned === undefined && meta?.cliProvenance?.kind === 'created-by-cli'
@@ -51,6 +52,8 @@ export function mergeWorktree(
     ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
     ...(git.removalError ? { removalError: git.removalError } : {}),
+    ...(git.removing ? { removing: true } : {}),
+    ...(git.removalRecorded ? { removalRecorded: true } : {}),
     // Automatic labels follow the live branch; persisted values are only authoritative when pinned.
     displayName:
       meta?.displayNameIsPinned === false
@@ -105,8 +108,6 @@ export function mergeWorktree(
     ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
     ...(meta?.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    // Why: diff comments are persisted on WorktreeMeta and forwarded verbatim
-    // so the renderer store mirrors on-disk state.
     diffComments: meta?.diffComments,
     mobileDiffReview: meta?.mobileDiffReview
   }

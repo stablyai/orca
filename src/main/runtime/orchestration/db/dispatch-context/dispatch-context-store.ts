@@ -1,25 +1,33 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
-import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
-import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import {
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../coordinator/dispatch/task-dispatch-refusal'
+import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
+import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
+import { retireRemotePlacement } from '../remote-owned/remote-placement-hold'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 
 export function createDispatchContext(
   this: OrchestrationDb,
   params: {
     taskId: string
     assigneeHandle: string
-    // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
+    // Pane identity survives handle reissue, preserving worker_done authority.
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
+    /** The assignee's serialized host scope, matching its worker-terminal custody row. */
+    hostScope?: string | null
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
@@ -39,16 +47,9 @@ export function createDispatchContext(
     )
   }
 
-  // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
-  const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
+  assertTakesNewWork(this, params, taskId)
 
-  if (existing) {
-    throw new Error(
-      `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-    )
-  }
-
-  // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
+  // Accumulate failure_count across task retries.
   const prior = this.db
     .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
     .get(taskId) as { max_failures: number | null } | undefined
@@ -86,8 +87,7 @@ export function createDispatchContext(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
-      // Why: the atomic claim lost to a concurrent status change; report it with the same
-      // typed receipt as the precheck so the loser can recover instead of reading runtime_error.
+      // Return the same typed rejection for a lost atomic claim as for a failed precheck.
       const message = `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
       throw current
         ? taskNotStartableError(this, message, current)
@@ -99,6 +99,8 @@ export function createDispatchContext(
       from: 'ready',
       to: 'dispatched'
     })
+    // The Task runs here now; an earlier attempt on a paired server no longer speaks for it.
+    retireRemotePlacement(this, taskId)
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow
@@ -125,9 +127,10 @@ export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
-    | DispatchContextRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  return this.db
+    .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+    .get(dispatchId) as DispatchContextRow | undefined
 }
 
 export function commitDispatchLaunchTokenHash(

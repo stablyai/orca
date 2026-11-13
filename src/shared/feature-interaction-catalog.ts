@@ -9,6 +9,7 @@ export type FeatureInteractionId =
   | 'cmd-j-quick-action'
   | 'cmd-j-create-workspace'
   | 'browser'
+  | 'browser-extensions'
   | 'client-hosted-browser'
   | 'browser-tab-created'
   | 'tasks'
@@ -24,6 +25,7 @@ export type FeatureInteractionId =
   | 'browser-grab'
   | 'markdown-file-created'
   | 'workspace-creation'
+  | 'projects-collapse-all'
   | 'agent-browser-setup'
   | 'agent-browser-use'
   | 'agent-orchestration-setup'
@@ -60,8 +62,7 @@ export type FeatureInteractionDefinition = {
   interaction: string
 }
 
-// Why: these ids become persisted product state; changing them breaks
-// feature-discovery interaction tracking.
+// These IDs persist in product state; changing them breaks discovery tracking.
 export const FEATURE_INTERACTIONS = [
   { id: 'workspace-board', interaction: 'workspace board opened' },
   {
@@ -79,6 +80,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'cmd-j-quick-action', interaction: 'quick action run from Cmd+J' },
   { id: 'cmd-j-create-workspace', interaction: 'workspace creation started from Cmd+J' },
   { id: 'browser', interaction: 'in-app browser opened' },
+  { id: 'browser-extensions', interaction: 'browser extensions toolbar menu opened' },
   { id: 'client-hosted-browser', interaction: 'client-hosted remote browser page opened' },
   { id: 'browser-tab-created', interaction: 'browser tab explicitly created' },
   { id: 'tasks', interaction: 'Tasks page opened' },
@@ -97,6 +99,10 @@ export const FEATURE_INTERACTIONS = [
   { id: 'browser-grab', interaction: 'browser element grab or screenshot used' },
   { id: 'markdown-file-created', interaction: 'untitled markdown file explicitly created' },
   { id: 'workspace-creation', interaction: 'workspace creation flow opened' },
+  {
+    id: 'projects-collapse-all',
+    interaction: 'all sidebar projects collapsed or expanded at once'
+  },
   { id: 'agent-browser-setup', interaction: 'Agent Browser Use setup enabled or opened' },
   { id: 'agent-browser-use', interaction: 'agent browser runtime method used' },
   { id: 'ephemeral-vm-setup', interaction: 'Ephemeral VMs setup opened or scaffold prompt copied' },

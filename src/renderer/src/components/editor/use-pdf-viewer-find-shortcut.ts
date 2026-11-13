@@ -1,16 +1,11 @@
 import { useEffect, type RefObject } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { isEditableTarget } from '@/lib/editable-target'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
-/**
- * Find is this PDF's when the key comes from inside it, or when it owns the panel's commands (the
- * active tab of the focused group, as the browser pane decides) and the key is not typed into a
- * text field. Its own tab, header and the file explorer keep the group focused; a chat, terminal
- * or browser in another split focuses its own group.
- */
+/** Claim Find inside this PDF or through its focused group, excluding other text fields and split/window surfaces. */
 export function pdfViewerOwnsFind(
   root: HTMLElement | null,
   target: EventTarget | null,
@@ -47,8 +42,7 @@ export function usePdfViewerFindShortcut({
       if (!keybindingMatchesAction('editor.find', e, getShortcutPlatform(), keybindings)) {
         return
       }
-      // Why: a PDF stays mounted in a hidden worktree or another split; it must not take
-      // Mod+F from the surface the user is in (a chat, a preview).
+      // Hidden workspaces and other splits retain PDFs; only the current surface may claim Find.
       if (!pdfViewerOwnsFind(rootRef.current, e.target, ownsCommands)) {
         return
       }

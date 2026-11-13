@@ -1,18 +1,20 @@
-import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
-import {
-  cleanGeneratedCommitMessage,
-  stripPrefilledReasoningPreamble,
-  type CommandTemplateBackslash
-} from '../../shared/commit-message-prompt'
-import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
+import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
+import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
+import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
+import { stripPrefilledReasoningPreamble } from '../../shared/source-control/ai/generation/commit-message-agent-output'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   planCommitMessageGeneration,
   type CommitMessagePlan
-} from '../../shared/commit-message-plan'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+} from '../../shared/source-control/ai/generation/commit-message-plan'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
-import { runLocalPlanForAgent } from './source-control-local-generation'
-import { runRemoteSourceControlPlan } from './source-control-remote-generation'
+import { copilotUnavailableModelRetryPlan } from './failures/copilot-unavailable-model-retry'
+import { runLocalPlanForAgent } from './execution/source-control-local-generation'
+import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
+import { cleanAgentAnswer, emptyResultFailure } from './failures/source-control-agent-failure'
+import { runRemoteSourceControlPlan } from './execution/source-control-remote-generation'
 import type {
   CommitMessageGenerationTarget,
   InternalTextGenerationResult,
@@ -33,14 +35,22 @@ export async function runGenerationRequest(input: {
   params: GenerateParams
   prompt: string
   target: CommitMessageGenerationTarget
-  emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
+  shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
-  const params = { ...input.params, backslash: commandBackslashMode(input.target) }
-  const planned = planCommitMessageGeneration(params, input.prompt)
+  const params = {
+    ...input.params,
+    backslash: commandBackslashMode(input.target),
+    toolFree: input.operation === 'dictation-cleanup'
+  }
+  const prompt =
+    input.operation === 'conversation-name'
+      ? conversationNameTaskPrompt(input.prompt)
+      : input.prompt
+  const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
-    return { success: false, error: planned.error }
+    return { success: false, error: planned.error, ...textGenerationFailureCodeFields(planned) }
   }
   const plan = planned.plan
   const execute = (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> =>
@@ -48,27 +58,47 @@ export async function runGenerationRequest(input: {
       ? runRemoteSourceControlPlan({
           plan,
           target: input.target,
-          emptyResultName: input.emptyResultName,
           operation: input.operation
         })
-      : runLocalPlanForAgent({
-          agentId: input.params.agentId,
-          plan,
-          target: input.target,
-          emptyResultName: input.emptyResultName,
-          operation: input.operation,
-          spawnAgent: input.spawnAgent
-        })
-  let result = await runClaudeBackgroundAttempts({
+      : plan.openCodeTask
+        ? runOpenCodeTextTask({
+            plan,
+            target: input.target,
+            operation: input.operation,
+            spawnAgent: input.spawnAgent,
+            shouldExecute: input.shouldExecute,
+            legacyVariantFlag:
+              input.params.agentId === 'opencode' && input.operation !== 'jira-issue-summary'
+          })
+        : runLocalPlanForAgent({
+            agentId: input.params.agentId,
+            plan,
+            target: input.target,
+            operation: input.operation,
+            spawnAgent: input.spawnAgent,
+            shouldExecute: input.shouldExecute
+          })
+  let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
-    run: (strictMcp): Promise<InternalTextGenerationResult> => {
-      if (strictMcp) {
+    run: (attempt): Promise<InternalTextGenerationResult> => {
+      if (attempt.strictMcp && !attempt.legacyToolPolicy) {
         return execute(plan)
       }
-      const retry = planCommitMessageGeneration(params, input.prompt, { strictMcp })
+      // Old CLIs can't deny MCP tools by pattern, so a tool-free task stops rather than load them.
+      if (params.toolFree && !attempt.strictMcp && attempt.legacyToolPolicy) {
+        return Promise.resolve({
+          success: false,
+          error: 'This Claude CLI can’t run without tools under its MCP policy. Update Claude Code.'
+        })
+      }
+      const retry = planCommitMessageGeneration(params, prompt, attempt)
       return retry.ok
         ? execute(retry.plan)
-        : Promise.resolve({ success: false, error: retry.error })
+        : Promise.resolve({
+            success: false,
+            error: retry.error,
+            ...textGenerationFailureCodeFields(retry)
+          })
     },
     failedExit: (outcome) => (outcome.success ? undefined : outcome.failureOutput)
   })
@@ -82,9 +112,13 @@ export async function runGenerationRequest(input: {
       result = await execute(retry)
     }
   }
-  // Why: only a custom command runs a raw model whose chat template can swallow
-  // the opening think tag; a built-in agent's message may just mention the tag.
-  // PR fields are JSON, so they strip only when parsing fails instead.
+  if (!result.success && input.params.agentId === 'copilot') {
+    const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput)
+    if (retry) {
+      result = await execute(retry)
+    }
+  }
+  // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.
   if (
     !result.success ||
     !isCustomAgentId(input.params.agentId) ||
@@ -97,8 +131,8 @@ export async function runGenerationRequest(input: {
   if (answer === result.rawOutput) {
     return result
   }
-  const rawOutput = cleanGeneratedCommitMessage(answer)
+  const rawOutput = cleanAgentAnswer(answer, input.operation)
   return rawOutput
     ? { ...result, rawOutput }
-    : { success: false, error: `${plan.label} returned an empty ${input.emptyResultName}.` }
+    : { success: false, ...emptyResultFailure(input.operation, plan.label) }
 }

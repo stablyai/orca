@@ -1,34 +1,35 @@
-import { useShallow } from 'zustand/react/shallow'
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
-import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { shouldShowWorktreeHistoryControls } from './chrome/titlebar-worktree-history-controls'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
-} from '../components/sidebar/child-workspaces-toggle-target'
+} from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
-import {
-  deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/hovered-workspace-delete'
-import { useAppStore } from '../store'
-import type { usePluginCommands } from '@/store/plugin-panels'
+import { useAppStore } from '../store/index'
+import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
+import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
+import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+export { useAppShortcutActions } from './use-app-shortcut-actions'
+import type { useAppShortcutActions } from './use-app-shortcut-actions'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
-// Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so one dispatch path serves both; KeybindingInput-compatible.
+// Share dispatch between KeyboardEvent and synthetic double-tap input.
 export type ShortcutDispatchInput = {
   isComposing?: boolean
   altGraph?: boolean
@@ -62,56 +63,18 @@ export type AppShortcutState = {
   workspaceChromeActive: boolean
 }
 
-export function useAppShortcutActions() {
-  // Why: consolidate action refs into one useShallow subscription so React runs one equality check per store mutation instead of one per action.
-  return useAppStore(
-    useShallow((s) => ({
-      toggleSidebar: s.toggleSidebar,
-      toggleRightSidebar: s.toggleRightSidebar,
-      setRightSidebarOpen: s.setRightSidebarOpen,
-      setRightSidebarTab: s.setRightSidebarTab,
-      showRightSidebarFiles: s.showRightSidebarFiles,
-      showRightSidebarSearch: s.showRightSidebarSearch,
-      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree
-    }))
-  )
-}
-
 export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
     : 'app'
 }
 
-/**
- * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is
- * addressed by its backing terminal id (`activeTabId`), a structured chat tab by its unified tab
- * id. `activeTabId` is terminal-only state and never moves for a structured tab, so reading it
- * there targets whichever terminal was last active. Mirrors TabGroupPanel's tab-strip resolution.
- */
-function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
-  const store = useAppStore.getState()
-  if (store.activeTabType === 'terminal') {
-    return store.activeTabId
-  }
-  if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
-    return null
-  }
-  const activeTab = store.getActiveTab(activeWorktreeId)
-  return activeTab?.contentType === 'agent-session' ? activeTab.id : null
-}
-
-/**
- * Builds the app-level handlers for every keybindable action. Each returns whether it claimed
- * the chord, so an unavailable surface (settings view, closed floating panel) falls through to
- * the terminal or the next handler instead of silently no-opping.
- *
- * `input` is absent when a command is invoked from the palette/menu rather than a key event.
- */
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
-  keybindingContext: KeybindingContext = 'app'
+  keybindingContext: KeybindingContext = 'app',
+  /** A plugin's `commands.run`: Orca's own action, never a plugin replacement (no loops). */
+  builtInOnly = false
 ): Map<KeybindingActionId, () => boolean> {
   const {
     activeView,
@@ -140,7 +103,12 @@ export function createAppCommandHandlers(
         keybindings
       })
     }
-    run()
+    // A plugin command may replace the action; it falls back to `run`.
+    if (builtInOnly) {
+      run()
+    } else {
+      runBuiltInOrReplacement(actionId, run)
+    }
     return true
   }
   const revealRightSidebarTab = (
@@ -207,7 +175,7 @@ export function createAppCommandHandlers(
         }
         return claim('sidebar.childWorkspaces.toggle', () => {
           const expanding = store.collapsedGroups.has(groupKey)
-          // Why: same scroll anchoring as the chip click, so the viewport does not jump.
+          // Match chip-click scroll anchoring to avoid viewport jumps.
           requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
           store.toggleCollapsedGroup(groupKey)
           if (expanding) {
@@ -231,9 +199,8 @@ export function createAppCommandHandlers(
         if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
-        // Why: a structured chat tab is renamed through the same inline editor, so gating on
-        // 'terminal' alone left the shortcut a silent no-op there.
-        const tabId = resolveRenameTargetTabId(activeWorktreeId)
+        // Resolve both terminal and structured-chat rename targets; a terminal-only gate silently ignores chat.
+        const tabId = resolveActiveTabRenameTarget(activeWorktreeId, useAppStore.getState())
         if (!tabId) {
           return false
         }
@@ -249,22 +216,6 @@ export function createAppCommandHandlers(
         return claim('workspace.rename', () => {
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
-        })
-      }
-    ],
-    [
-      'workspace.delete',
-      () => {
-        if (floatingWorkspaceFocused) {
-          return false
-        }
-        const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
-        if (!target) {
-          return false
-        }
-        return claim('workspace.delete', () => {
-          deleteHoveredWorkspaceImmediately(store, target)
         })
       }
     ],
@@ -291,9 +242,15 @@ export function createAppCommandHandlers(
       }
     ],
     [
+      'view.plugins',
+      createPluginsSettingsShortcutHandler(input?.target, () =>
+        claim('view.plugins', openPluginsSettings)
+      )
+    ],
+    [
       'sidebar.right.toggle',
       () =>
-        canRevealRightSidebar
+        canShowRightSidebarForView(activeView)
           ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
           : false
     ],

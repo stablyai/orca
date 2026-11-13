@@ -1,19 +1,29 @@
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { clearSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { clearSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { isSshConnectionSolelyOwnedBy } from '../../ssh/connection/ssh-connection-attribution'
 import {
   connectInFlight,
+  fenceRunningConnectAttempt,
   invalidateConnectAttempt,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
-import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
+import {
+  connectionManager,
+  getCurrentMainWindow,
+  persistedStore,
+  portForwardManager
+} from './ssh-ipc-context'
+import { broadcastSshTargetRemoved } from './ssh-renderer-broadcast'
+import { clearHostSettingOverride } from '../../../shared/host-setting-overrides'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { forgetPortForwardRestoreState } from './ssh-managed-port-forward-restore'
 import { errorMessage } from '../../../shared/error-message'
 import {
   forgetLegacyRelayTarget,
   stopLegacyRelayBridge
-} from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
@@ -32,24 +42,21 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     try {
       await teardownSshTargetTransport(targetId)
     } catch (err) {
-      // Why: a failed disconnect must not block metadata removal, else the target lingers in the store with uncleaned leases.
+      // Failed disconnect must not leave removed targets and their leases registered.
       console.warn(`[ssh] Failed to disconnect removed target ${targetId}: ${errorMessage(err)}`)
     }
     persistedStore?.removeSshRemotePtyLeases(targetId)
     forgetLegacyRelayTarget(targetId)
     store.removeTarget(targetId)
-    // Why: removal is the storage boundary — the target's browser cookie jars
-    // must not outlive the record that scoped them.
+    // Target removal also retires its scoped browser cookie storage.
     try {
       const [partitions, storage] = await Promise.all([
-        import('../../browser/local-ssh-browser-partitions'),
-        import('../../browser/browser-route-partition-storage-runtime')
+        import('../../browser/routing/local-host-partitions/local-ssh-browser-partitions'),
+        import('../../browser/routing/partitions/browser-route-partition-storage-runtime')
       ])
       await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
       await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
-      // Why (review P2-2): a prepare racing the removal can re-register between
-      // release and clear; one delayed second pass reclaims what slipped
-      // through (mirrors the environment-removal retry).
+      // A prepare can re-register during removal; sweep again after the release/clear race.
       await new Promise((resolve) => setTimeout(resolve, 500))
       await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
       await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
@@ -59,18 +66,32 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       )
     }
   })
+  // Every removal (Settings, CLI, paired client, a recipe VM's cleanup) ends here: the window
+  // drops the target's live state, and its rename must not outlive it.
+  broadcastSshTargetRemoved(getCurrentMainWindow, targetId)
+  dropRemovedSshTargetDisplayLabel(targetId)
+}
+
+function dropRemovedSshTargetDisplayLabel(targetId: string): void {
+  if (!persistedStore) {
+    return
+  }
+  const settings = persistedStore.getSettings()
+  const current = settings.hostSettingOverrides
+  const next = clearHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel')
+  if (current && next !== current) {
+    persistedStore.updateSettings({ hostSettingOverrides: next }, { notifyListeners: true })
+  }
 }
 
 export async function teardownSshTargetTransport(targetId: string): Promise<void> {
   // COMPAT(legacy-relay-bridge): hangs up only this client; the relays keep their terminals.
   stopLegacyRelayBridge(targetId)
-  // Why first: local listeners must be released before disconnect completes, else an immediate
-  // reconnect hits EADDRINUSE.
-  // A managed tunnel's system-SSH `ssh -L` is its own authenticated process, so the session's
-  // disconnect alone would leave it listening.
+  forgetPortForwardRestoreState(targetId)
+  // Release listeners before reconnect; independent system-SSH tunnels also retain ports after session disconnect.
   const [forwards, managedTunnels, disconnect] = await Promise.allSettled([
     portForwardManager?.removeAllForwards(targetId),
-    // Why lazy: the managed tunnel module resolves app paths, which SSH-only callers may lack.
+    // Import lazily: SSH-only callers may lack the app paths resolved by managed tunnels.
     import('../../managed-server/lifecycle/orcad-managed-tunnel').then((tunnels) =>
       tunnels.closeOrcadManagedTunnelsForTarget(targetId)
     ),
@@ -87,11 +108,21 @@ export async function teardownSshTargetTransport(targetId: string): Promise<void
   }
 }
 
-/**
- * A cancelled connect, or one whose server decision failed, closes the transport its own decision
- * opened (a census, deploy or conversion), and only while nothing newer took it over: a completed
- * replacement connect or a managed tunnel adopts it, and a pending replacement may be about to.
- */
+/** Caller holds the target lifecycle; the unlink already committed, so a failed hang-up only warns. */
+export async function releaseUnlinkedHostTransport(targetId: string): Promise<void> {
+  // A connect already past the lifecycle would republish the removed server; queued ones run after.
+  if (connectInFlight.has(targetId)) {
+    fenceRunningConnectAttempt(targetId)
+  }
+  clearSshHostServerStatus(targetId)
+  try {
+    await teardownSshTargetTransport(targetId)
+  } catch (err) {
+    console.warn(`[ssh] Failed to disconnect unlinked host ${targetId}: ${errorMessage(err)}`)
+  }
+}
+
+/** Close decision-created transports only while no completed or pending successor can adopt them. */
 export async function abandonDecisionTransport(
   targetId: string,
   owner: symbol,
@@ -99,8 +130,7 @@ export async function abandonDecisionTransport(
 ): Promise<void> {
   const opened = connectionManager!.getConnection(targetId)
   const newer = connectInFlight.get(targetId)
-  // A pending replacement may be about to reuse it, though it has not adopted it yet. While this
-  // attempt is still current the in-flight entry is its own, so nothing newer can exist.
+  // Pending successors may reuse the transport before adopting it; the current attempt cannot have a newer owner.
   if (
     !opened ||
     !isSshConnectionSolelyOwnedBy(opened, owner) ||
@@ -114,7 +144,7 @@ export async function abandonDecisionTransport(
   try {
     await connectionManager!.disconnectConnection(targetId, opened)
   } catch (error) {
-    // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
+    // Preserve the cancellation error over a secondary teardown failure.
     console.warn(
       `[ssh] Failed to close the transport a cancelled decision opened for ${targetId}: ${errorMessage(error)}`
     )

@@ -1,16 +1,8 @@
-/**
- * `claude` re-reads the which-account file on every launch, so a switch reaches open terminals
- * (superset's wrapper rule). Defined only in a pane Orca routed (pointer env set) where `claude` is
- * a real executable. A missing or empty file is System default, which restores the user's own value
- * Orca's replaced. The user's own CLAUDE_CONFIG_DIR (ORCA_CLAUDE_USER_CONFIG_DIR, e.g. an rc export)
- * follows the selection like System default's folder does; any other value set in the pane wins.
- * Prints nothing: an account folder with no login is created, and Claude's own first run signs in
- * there. The shell's Anthropic auth passes through untouched, as on System default. A pointer that names no absolute folder (never written by Orca) runs nothing, since any
- * fallback would be another account.
- */
+/** Re-read account selection on every launch in Orca-routed panes with a real claude binary. Missing/empty pointer restores the user’s config; another pane override wins. Create account homes without a login silently and preserve Anthropic auth. Refuse nonabsolute pointers rather than run under the wrong account. */
 export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
-if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
+# Why typeset -f: a user's own claude function wins; command -v prints its bare name, which -x tests against the cwd.
+if ! typeset -f claude >/dev/null 2>&1 && [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
   function claude {
     local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
@@ -20,24 +12,25 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
       { [ -z "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ] || [ "\${CLAUDE_CONFIG_DIR%/}" != "\${ORCA_CLAUDE_USER_CONFIG_DIR%/}" ]; }; then
       command claude "$@"; return
     fi
+    # Why exec: bash can keep the subshell leading Claude's foreground group; zsh exec runs functions, hence unset -f.
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
     if [ -z "$__orca_claude_home" ] && [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ -n "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
-      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; unset -f claude; exec claude "$@" ); return
     fi
     if [ -z "$__orca_claude_home" ]; then
-      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; unset -f claude; exec claude "$@" ); return
     fi
     case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
     # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
     [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; unset -f claude; exec claude "$@" )
   }
 fi
 unset __orca_claude_binary
 `
 }
 
-/** Leading newline: the codex fragment it follows ends without one. */
+/** Leading newline separates the preceding codex fragment, which has no trailing newline. */
 export function getFishClaudeShellFunction(): string {
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)

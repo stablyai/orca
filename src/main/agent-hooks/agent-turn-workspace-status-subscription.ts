@@ -1,11 +1,11 @@
-import { agentHookServer } from './server'
+import { agentHookServer } from './server/agent-hook-server'
 import type { EnrichedAgentHookEventPayload } from './server/server-types'
 import {
   maybeSyncWorkspaceStatusOnAgentTurn,
   type AgentTurnWorkspaceStatusEvent
 } from './agent-turn-workspace-status-sync'
 import { agentTurnWorkspaceStatusDeps } from './agent-turn-workspace-status-runtime'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 function turnEventOf(enriched: EnrichedAgentHookEventPayload): AgentTurnWorkspaceStatusEvent {

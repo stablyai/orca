@@ -1,52 +1,16 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
-import {
-  PINNED_GROUP_KEY,
-  getWorktreeLineageGroupKey
-} from '../../../../../../shared/sidebar-list/group-keys'
-import { getRenderRowKey } from '../listing/render-row'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import type { RenderRow } from '../listing/render-row'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 // Why: HostSectionHeader wraps its h-8 (32px) card in pt-1 (4px), so the row is 36px.
 export const HOST_HEADER_ROW_HEIGHT = 36
-export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 6
+export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 0
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56
 const FOLDER_WORKSPACE_ROW_HEIGHT = 64
-
-/**
- * Old row key -> current row key for rows that were re-keyed without moving.
- *
- * A parent's key flips between `wt:` and `lineage-group:` the moment it gains
- * its first child (and back when it loses its last), even though the row still
- * starts at the same pixel. Without this, a scroll anchor recorded under the
- * old key resolves a fallback row below it and the sidebar visibly jumps.
- */
-export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap<string, string> {
-  const rekeyed = new Map<string, string>()
-  for (const row of rows) {
-    if (row.type === 'lineage-group') {
-      const groupKey = getRenderRowKey(row)
-      for (const member of row.rows) {
-        rekeyed.set(`wt:${member.rowKey}`, groupKey)
-      }
-      continue
-    }
-    if (row.type !== 'item') {
-      continue
-    }
-    // Why: deliberately unguarded by lineageChildCount — the dissolve case (last
-    // child deleted) is exactly when the count is already 0 but an anchor still
-    // holds the group key.
-    rekeyed.set(
-      `lineage-group:${row.sectionKey}:${getWorktreeLineageGroupKey(row.worktree)}`,
-      getRenderRowKey(row)
-    )
-  }
-  return rekeyed
-}
 
 export function shouldUseHeaderTopSpacing(args: {
   rows: readonly RenderRow[]
@@ -69,6 +33,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'host-header') {
     return (
       HOST_HEADER_ROW_HEIGHT +
+      6 +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -81,6 +46,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'header') {
     return (
       GROUP_HEADER_ROW_HEIGHT +
+      6 +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -90,14 +56,11 @@ export function estimateRenderRowSize(
         : 0)
     )
   }
-  if (row?.type === 'lineage-group') {
-    return 100 + Math.max(0, row.rows.length - 1) * 96
-  }
   if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
-    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT
+    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT + 6
   }
   if (row?.type === 'pending-creation') {
-    return PENDING_CREATION_ROW_HEIGHT
+    return PENDING_CREATION_ROW_HEIGHT + 6
   }
   if (row?.type === 'folder-workspace') {
     return FOLDER_WORKSPACE_ROW_HEIGHT
@@ -141,9 +104,7 @@ export function pruneStaleVirtualRowElementCache<TElement extends Element>({
     if (activeRowKeys.has(rowKey) || element.isConnected) {
       continue
     }
-    // Why: measured row nodes retain their React fiber tree. Once TanStack's
-    // public null-measure cleanup has run, drop any disconnected stale key left
-    // behind so old WorktreeCard scopes do not survive runtime-host row churn.
+    // Drop disconnected measured nodes after TanStack cleanup so their React fibers cannot retain old card scopes.
     virtualizer.elementsCache.delete(key)
   }
 }
@@ -151,8 +112,7 @@ export function pruneStaleVirtualRowElementCache<TElement extends Element>({
 export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
   const indexes: number[] = []
   rows.forEach((row, index) => {
-    // Why: project groups are the top-level repo sidebar context; nested repo
-    // headers should not replace their containing group as the pinned header.
+    // Pin top-level project groups rather than nested repo headers.
     if (
       row.type === 'host-header' ||
       (row.type === 'header' && (row.projectGroupDepth ?? 0) === 0)
@@ -163,9 +123,7 @@ export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
   return indexes
 }
 
-// Why: the pinned host card is h-8 (32px) inside a pt-1 (4px) wrapper; the
-// group tier pins one pixel up to sit flush beneath it. Keep in sync with
-// HostSectionHeader's layout.
+// Keep pinned host height in sync with HostSectionHeader; its group tier pins one pixel up.
 export const HOST_STICKY_PINNED_HEIGHT = HOST_HEADER_ROW_HEIGHT
 
 export type ActiveStickyIndexes = {
@@ -179,9 +137,7 @@ function getHostStickyIndexes(rows: readonly RenderRow[], sticky: readonly numbe
   return sticky.filter((index) => rows[index]?.type === 'host-header')
 }
 
-/** Two-tier sticky resolution: the host card is the outer hierarchy level so
- *  it stays pinned for the whole section while group headers hand off beneath
- *  it. Without host sections this degrades to the original single-tier rules. */
+/** Keep the host pinned while groups hand off below it; without hosts, use a single sticky tier. */
 export function getActiveStickyIndexesForScroll(args: {
   rows: readonly RenderRow[]
   rangeStartIndex: number
@@ -210,10 +166,7 @@ export function getActiveStickyIndexesForScroll(args: {
     }
     const candidate = virtualItemsByIndex.get(candidateIndex)
     if (!candidate) {
-      // Why: scrollToIndex/reveal can advance rangeStartIndex before TanStack
-      // mounts the candidate row. Pinning without geometry lets a Project
-      // sticky paint over the Host card (#10088). Prefer a previous mounted
-      // sticky; group tier waits for geometry, host tier may keep the id.
+      // Reveal may precede mounting; prefer previous measured stickies, and defer group pinning without geometry.
       const previous = getPreviousStickyHeaderIndex(candidates, candidateIndex)
       if (previous !== null) {
         const previousItem = virtualItemsByIndex.get(previous)
@@ -223,8 +176,7 @@ export function getActiveStickyIndexesForScroll(args: {
       }
       return fallbackToCandidate ? candidateIndex : null
     }
-    // Why: hand off the moment the incoming header reaches its pinned slot
-    // (top of the viewport, or the bottom edge of the pinned host card).
+    // Hand off when the incoming header reaches its pinned slot, including any host offset.
     if (args.scrollOffset + pinnedOffset >= candidate.start) {
       return candidateIndex
     }
@@ -232,9 +184,7 @@ export function getActiveStickyIndexesForScroll(args: {
     if (previous !== null) {
       return previous
     }
-    // Why: a host section's first group is still in flow below the pinned
-    // host card until it reaches the slot — pinning it early would double
-    // it up. The host tier keeps the legacy fallback.
+    // The first group stays in flow until it reaches the host’s lower edge; only hosts retain the legacy fallback.
     return fallbackToCandidate ? candidateIndex : null
   }
 
@@ -247,8 +197,7 @@ export function getActiveStickyIndexesForScroll(args: {
     if (args.rows[index]?.type !== 'header') {
       return false
     }
-    // Why: a group from the previous host must never pin beneath the next
-    // host's card — only groups inside the pinned host's section qualify.
+    // Only groups inside the current pinned host’s section may pin beneath it.
     if (hostIndex !== null) {
       return index > hostIndex && index < (nextHostIndex ?? Number.POSITIVE_INFINITY)
     }
@@ -304,8 +253,7 @@ export function extractWorktreeVirtualRowIndexes(args: {
     args.stickyHeaderIndexes,
     activeStickyHeaderIndex
   )
-  // Why: the pinned host card (tier 1) can be far above the visible range
-  // while group headers hand off beneath it — keep it mounted regardless.
+  // Keep the pinned host mounted even when it is far above the visible group range.
   const hostIndexes = args.rows ? getHostStickyIndexes(args.rows, args.stickyHeaderIndexes) : []
   const activeHostIndex = getActiveStickyHeaderIndex(hostIndexes, args.range.startIndex)
   return Array.from(
@@ -334,10 +282,7 @@ export function getActiveStickyHeaderIndexForScroll(args: {
     return candidateIndex
   }
 
-  // Why: hand off the moment the candidate header's row reaches the top, so the
-  // incoming repo pins as soon as its group begins. Gating on start + spacer
-  // instead kept the previous repo's opaque header pinned over the incoming one
-  // for the height of its inter-group spacer.
+  // Pin as the header reaches the top; waiting for its spacer would leave the previous header covering it.
   if (args.scrollOffset >= candidate.start) {
     return candidateIndex
   }

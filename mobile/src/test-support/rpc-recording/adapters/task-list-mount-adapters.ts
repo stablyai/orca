@@ -1,19 +1,18 @@
+import type * as UseMobileTasksProviderLoadActionsModule from '../../../tasks/task-list/use-mobile-tasks-provider-load-actions'
+import type * as UseMobileTasksTaskListLoadingModule from '../../../tasks/task-list/use-mobile-tasks-task-list-loading'
+import type * as UseMobileTasksTaskPaginationActionsModule from '../../../tasks/task-list/use-mobile-tasks-task-pagination-actions'
+import type * as UseMobileTasksTaskCreateActionsModule from '../../../tasks/task-list/use-mobile-tasks-task-create-actions'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import { mountFixture } from '../recorder-fixture-shape'
-import type { RuntimeHydrationModel } from '../../../tasks/use-mobile-tasks-runtime-hydration'
+import type { RuntimeHydrationModel } from '../../../tasks/screen-state/use-mobile-tasks-runtime-hydration'
 
 const REPO_ID = 'repo-1'
 
-/** The one hosted repository every task family queries, shaped the way `isHostedTaskRepo` needs. */
 const HOSTED_REPO = { id: REPO_ID, displayName: 'Repo', path: '/repo', provider: 'github' }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -61,19 +60,13 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * The task list screen's loads and the composer's writes: provider item pages and counts, the
- * Linear account context, the list query itself, connecting Linear, and creating a task. Every one
- * of these keeps a generation guard between the request and the state commit.
- */
+// Drive generation guards through real task-list loads and composer writes.
 export function taskListMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
-
   const providerLoad: MountAdapter = (context) => {
-    const useActions = load<typeof import('../../../tasks/use-mobile-tasks-provider-load-actions')>(
-      'use-mobile-tasks-provider-load-actions.tsx'
+    const useActions = modules.load<typeof UseMobileTasksProviderLoadActionsModule>(
+      'mobile/src/tasks/task-list/use-mobile-tasks-provider-load-actions.tsx'
     ).useMobileTasksProviderLoadActions
     return mountModelHook(context, {
       useHook: (model) => useActions<RuntimeHydrationModel>(model),
@@ -84,6 +77,7 @@ export function taskListMountAdapters(
         defaultLinearTeamSelectionRef: { current: null },
         jiraStatusRequestIdRef: { current: 0 },
         githubKind: 'issues',
+        keepSettings: () => {},
         taskUiReady: true,
         tasksSupported: true,
         linearConnected: false,
@@ -99,8 +93,7 @@ export function taskListMountAdapters(
             new Set(['team-1']),
             mountFixture([{ id: 'team-1' }, { id: 'team-2' }])
           ),
-        // `context.client` rather than `model.client`: the model holds that same client under an
-        // `unknown` fixture record, and reading it there would need a cast the context does not.
+        // The typed context client avoids casting the fixture’s unknown model member.
         'github-page': () =>
           actions().fetchGitHubItemsPage(context.client, mountFixture([HOSTED_REPO])),
         'github-count': () =>
@@ -120,9 +113,11 @@ export function taskListMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-task-list-loading')>(
-            'use-mobile-tasks-task-list-loading.tsx'
-          ).useMobileTasksTaskListLoading(model),
+          modules
+            .load<typeof UseMobileTasksTaskListLoadingModule>(
+              'mobile/src/tasks/task-list/use-mobile-tasks-task-list-loading.tsx'
+            )
+            .useMobileTasksTaskListLoading(model),
         fixture: {
           appliedQuery: '',
           clientRef: { current: context.client },
@@ -135,9 +130,11 @@ export function taskListMountAdapters(
             sourceErrors: [],
             sourceFallbacks: []
           }),
+          githubKind: 'issues',
           githubMode: 'items',
           gitlabFilter: 'opened',
           gitlabView: 'project',
+          hostId: 'host-1',
           jiraConnection: { connected: false, sites: [], selection: null, credentialError: null },
           jiraFilter: 'assigned',
           linearConnected: true,
@@ -149,10 +146,12 @@ export function taskListMountAdapters(
           resetGitHubItemsState: () => {},
           selectedLinearTeamIds: new Set<string>(),
           selectedLinearWorkspaceId: 'linear-workspace',
+          selectedRepoIds: new Set<string>(),
           effectiveRepoIds: new Set<string>(),
           serverRepoList: [],
           taskStateHydrated: true,
           tasksSupported: true,
+          taskUiReady: true,
           items: [],
           error: '',
           loading: false,
@@ -161,8 +160,7 @@ export function taskListMountAdapters(
         },
         actions: ({ actions, model, update }) => ({
           load: () => actions().loadTasks(),
-          // Re-renders and sends nothing: loadTasks is a useCallback over appliedQuery, so the
-          // search arm is only reachable through a rebuilt closure.
+          // Rebuild loadTasks after changing appliedQuery; the old callback cannot reach the search arm.
           'set-query': (args) => {
             model.appliedQuery = String(args.query ?? '')
             return update()
@@ -178,9 +176,9 @@ export function taskListMountAdapters(
   }
 
   const linearConnect: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-task-pagination-actions')
-    >('use-mobile-tasks-task-pagination-actions.tsx').useMobileTasksTaskPaginationActions
+    const useActions = modules.load<typeof UseMobileTasksTaskPaginationActionsModule>(
+      'mobile/src/tasks/task-list/use-mobile-tasks-task-pagination-actions.tsx'
+    ).useMobileTasksTaskPaginationActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
@@ -191,11 +189,14 @@ export function taskListMountAdapters(
         githubPages: [[]],
         githubPaginationLoading: false,
         githubCountedTotalPages: null,
+        hostId: 'host-1',
         linearApiKeyDraft: 'lin_api_key',
         linearConnectState: 'idle',
         loadGenerationRef: { current: 0 },
         loadLinearContext: async () => {},
         loadTasks: async () => {},
+        loading: false,
+        revalidating: false,
         selectedHostedRepos: [HOSTED_REPO],
         taskUiReady: true,
         tasksSupported: true,
@@ -220,9 +221,11 @@ export function taskListMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-task-create-actions')>(
-            'use-mobile-tasks-task-create-actions.tsx'
-          ).useMobileTasksTaskCreateActions(model),
+          modules
+            .load<typeof UseMobileTasksTaskCreateActionsModule>(
+              'mobile/src/tasks/task-list/use-mobile-tasks-task-create-actions.tsx'
+            )
+            .useMobileTasksTaskCreateActions(model),
         fixture: {
           createBody: 'a body',
           createRepoId: REPO_ID,

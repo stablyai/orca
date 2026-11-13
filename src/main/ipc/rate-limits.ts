@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
 import type { CodexAccountService } from '../codex-accounts/service'
 
@@ -19,15 +19,11 @@ export function registerRateLimitHandlers(
   ipcMain.handle('rateLimits:refreshClaudeForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshClaudeForTarget(target)
   )
-  ipcMain.handle('rateLimits:setPollingInterval', (_event, ms: number) =>
-    rateLimits.setPollingInterval(ms)
-  )
   ipcMain.handle('rateLimits:fetchInactiveClaudeAccounts', () =>
     rateLimits.fetchInactiveClaudeAccountsOnOpen()
   )
   ipcMain.handle('rateLimits:fetchInactiveCodexAccounts', () =>
     rateLimits.fetchInactiveCodexAccountsOnOpen()
   )
-  ipcMain.handle('rateLimits:refreshMiniMax', () => rateLimits.refresh())
   ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
 }

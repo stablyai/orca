@@ -1,24 +1,23 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { MountedTerminalWorktrees } from './terminal/split-group-mount'
+import { useEffect, useRef } from 'react'
+import { useTerminalStartupActivation } from './terminal/use-terminal-startup-activation'
+import { useTerminalParkingWorkspaceChanges } from './terminal-pane/parking/use-terminal-parking-workspace-changes'
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
-import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import {
-  canWatcherCoverParkedTerminalTab,
+  syncParkedTerminalTabWatchersForWorkspaces,
+  type ParkedTerminalTabWatcherSyncEntry
+} from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
+import {
   disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,
-  syncParkedTerminalTabWatchersForWorkspaces,
-  terminalWatcherLiveWorkspaceIds,
-  type ParkedTerminalTabWatcherSyncEntry
-} from './terminal-pane/terminal-parked-tab-watchers'
+  terminalWatcherLiveWorkspaceIds
+} from './terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
+
 import { useAppStore } from '@/store'
-import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
-import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
-import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
-import { hasStructuredAgentLaunchInWorktree } from '@/lib/structured-agent-session-launch'
-import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
 // Why shared: surfaces without watchable live tabs need no per-pass allocation.
 const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
@@ -53,6 +52,7 @@ type TerminalWatcherController = Pick<
   | 'terminalStartupRestorationReady'
   | 'terminalTitleSnapshotAuthorityEnabled'
   | 'workspaceSessionReady'
+  | 'workspaceSurfaceIdSet'
   | 'workspaceSurfaceIds'
 >
 
@@ -62,37 +62,127 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     activeTabId,
     activeTabIdByWorktree,
     activeView,
-    activeWorktreeId,
     activityTerminalPortals,
     anyMountedWorktreeHasLayout,
     backgroundMountRevision,
-    createTab,
     effectiveParkedTerminalWorktreeIds,
     evictionExemptTerminalTabIds,
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
-    hydrationSucceeded,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
-    reconcileWorktreeTabModel,
     renderedActiveWorktreeId,
     startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalProviderSnapshotCapabilityRevision,
     terminalSshParkingEnabled,
-    terminalStartupRestorationReady,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
+    workspaceSurfaceIdSet,
     workspaceSurfaceIds
   } = controller
 
+  const { revision, takeChangedWorkspaces } =
+    useTerminalParkingWorkspaceChanges(workspaceSurfaceIds)
+  const previousWatcherInputs = useRef<TerminalWatcherController | null>(null)
   useEffect(() => {
-    pruneParkedTerminalWatchers(terminalWatcherLiveWorkspaceIds(workspaceSurfaceIds))
+    const previous = previousWatcherInputs.current
+    previousWatcherInputs.current = controller
+    const dirty = takeChangedWorkspaces()
+    if (mountedWorktreeIdsRef.current instanceof MountedTerminalWorktrees) {
+      for (const id of mountedWorktreeIdsRef.current.takeCommittedChanges('watcher')) {
+        dirty.add(id)
+      }
+    }
+    if (!previous || previous.workspaceSurfaceIds !== workspaceSurfaceIds) {
+      const previousIds = new Set(previous?.workspaceSurfaceIds)
+      for (const id of workspaceSurfaceIds) {
+        if (!previousIds.has(id)) {
+          dirty.add(id)
+        }
+      }
+      pruneParkedTerminalWatchers(terminalWatcherLiveWorkspaceIds(workspaceSurfaceIds))
+    }
+    if (previous) {
+      if (
+        previous.activeTabId !== activeTabId ||
+        previous.backgroundMountRevision !== backgroundMountRevision
+      ) {
+        if (renderedActiveWorktreeId) {
+          dirty.add(renderedActiveWorktreeId)
+        }
+      }
+      if (
+        previous.activeView !== activeView ||
+        previous.renderedActiveWorktreeId !== renderedActiveWorktreeId
+      ) {
+        if (previous.renderedActiveWorktreeId) {
+          dirty.add(previous.renderedActiveWorktreeId)
+        }
+        if (renderedActiveWorktreeId) {
+          dirty.add(renderedActiveWorktreeId)
+        }
+      }
+      if (previous.startupTerminalTabHold !== startupTerminalTabHold) {
+        if (previous.startupTerminalTabHold) {
+          dirty.add(previous.startupTerminalTabHold.worktreeId)
+        }
+        if (startupTerminalTabHold) {
+          dirty.add(startupTerminalTabHold.worktreeId)
+        }
+      }
+      if (previous.activityTerminalPortals !== activityTerminalPortals) {
+        for (const portal of [...previous.activityTerminalPortals, ...activityTerminalPortals]) {
+          dirty.add(portal.worktreeId)
+        }
+      }
+      if (previous.effectiveParkedTerminalWorktreeIds !== effectiveParkedTerminalWorktreeIds) {
+        for (const id of previous.effectiveParkedTerminalWorktreeIds) {
+          if (!effectiveParkedTerminalWorktreeIds.has(id)) {
+            dirty.add(id)
+          }
+        }
+        for (const id of effectiveParkedTerminalWorktreeIds) {
+          if (!previous.effectiveParkedTerminalWorktreeIds.has(id)) {
+            dirty.add(id)
+          }
+        }
+      }
+      if (previous.evictionExemptTerminalTabIds !== evictionExemptTerminalTabIds) {
+        const state = useAppStore.getState()
+        for (const tabId of new Set([
+          ...previous.evictionExemptTerminalTabIds,
+          ...evictionExemptTerminalTabIds
+        ])) {
+          if (
+            previous.evictionExemptTerminalTabIds.has(tabId) ===
+            evictionExemptTerminalTabIds.has(tabId)
+          ) {
+            continue
+          }
+          const id = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+          if (id) {
+            dirty.add(id)
+          }
+        }
+      }
+      if (previous.anyMountedWorktreeHasLayout !== anyMountedWorktreeHasLayout) {
+        for (const id of mountedWorktreeIdsRef.current) {
+          dirty.add(id)
+        }
+      }
+    }
+    if (dirty.size === 0) {
+      return
+    }
     const syncEntriesByWorktreeId = new Map<string, ParkedTerminalTabWatcherSyncEntry>()
-    for (const workspaceId of workspaceSurfaceIds) {
+    for (const workspaceId of dirty) {
+      if (!workspaceSurfaceIdSet.has(workspaceId)) {
+        continue
+      }
       if (
         anyMountedWorktreeHasLayout &&
         mountedWorktreeIdsRef.current.has(workspaceId) &&
@@ -167,8 +257,11 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       })
     }
     syncParkedTerminalTabWatchersForWorkspaces(syncEntriesByWorktreeId)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
+    controller,
+    revision,
+    takeChangedWorkspaces,
+    activationDeferredMountTabIdsByWorktreeRef,
     activeTabId,
     activeView,
     activityTerminalPortals,
@@ -179,6 +272,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
+    measurableBackgroundWorktreeIdsRef,
+    mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
@@ -189,124 +284,10 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     terminalSshParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
+    workspaceSurfaceIdSet,
     workspaceSurfaceIds
   ])
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
 
-  const startupActivationGateWorktreeIdsRef = useRef(new Set<string>())
-  // Why a store subscription rather than a read inside the effects: the verdict flips to `none` the
-  // moment the execution host answers, and that transition is what re-runs the passes below.
-  // Why the retained selector: resolution walks the owner catalogs, so recomputing it on every store
-  // write would be the STA-3363 render-path multiplier again.
-  const hostAuthoritySelector = useMemo(
-    () => createWorkspaceTerminalHostAuthoritySelector(activeWorktreeId),
-    [activeWorktreeId]
-  )
-  const activeWorktreeHostAuthority = useAppStore(hostAuthoritySelector)
-
-  useEffect(() => {
-    if (!workspaceSessionReady || !terminalStartupRestorationReady || !activeWorktreeId) {
-      return
-    }
-    // Why: the execution host owns terminal creation, and a host that has not answered is not a host
-    // with no terminals — seeding into that gap duplicates its tabs on every launch (STA-4658).
-    if (activeWorktreeHostAuthority !== 'none') {
-      return
-    }
-    if (startupActivationGateWorktreeIdsRef.current.has(activeWorktreeId)) {
-      return
-    }
-    let cancelled = false
-    void gateWorktreeAgentActivation(activeWorktreeId).then((outcome) => {
-      if (
-        cancelled ||
-        outcome === 'blocked' ||
-        useAppStore.getState().activeWorktreeId !== activeWorktreeId
-      ) {
-        return
-      }
-      // A reseed awaiting agent detection owns the surface. Left unmarked: that reseed bails if the
-      // user leaves during the wait, so a later return must seed here.
-      if (outcome === 'empty' && isEmptyWorkspaceDefaultSurfacePending(activeWorktreeId)) {
-        return
-      }
-      // Why mark only once a decision applies: a cancelled or blocked check must stay retryable,
-      // and a rerun shares the gate's in-flight promise instead of repeating its work.
-      startupActivationGateWorktreeIdsRef.current.add(activeWorktreeId)
-      if (outcome !== 'empty') {
-        return
-      }
-      // A pending or unanswered chat create owns the surface even before its tab is published.
-      if (hasStructuredAgentLaunchInWorktree(activeWorktreeId)) {
-        return
-      }
-      // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
-      const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-      // Why (main): only a workspace emptied by a recorded close stays empty; an empty row with no
-      // record is unknown and seeds. Read at decision time: the row can change while the check runs.
-      const activeWorktreeHasTerminalState = isTerminalWorkspaceEmptiedOnPurpose(
-        useAppStore.getState(),
-        activeWorktreeId
-      )
-      if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
-        // Switch point: main decides whether the workspace gets its first tab.
-        if (
-          ORCA_LAYOUT_OWNER_IS_MAIN &&
-          createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, () =>
-            createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-          )
-        ) {
-          return
-        }
-        // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
-        createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [
-    activeWorktreeId,
-    activeWorktreeHostAuthority,
-    createTab,
-    reconcileWorktreeTabModel,
-    terminalStartupRestorationReady,
-    workspaceSessionReady
-  ])
-
-  const startupResumeWorktreeIdsRef = useRef(new Set<string>())
-  useEffect(() => {
-    if (
-      !workspaceSessionReady ||
-      !terminalStartupRestorationReady ||
-      !hydrationSucceeded ||
-      !activeWorktreeId
-    ) {
-      return
-    }
-    if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
-      return
-    }
-    // Why not consume the one-shot here: the sweep declines outright while the host is unanswered,
-    // so marking it done would strand every sleeping agent on the workspace for the session.
-    if (activeWorktreeHostAuthority === 'unverifiable') {
-      return
-    }
-    startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
-    // Startup recovery needs the same host census and in-flight gate as explicit activation.
-    void gateWorktreeAgentActivation(activeWorktreeId).then(
-      (outcome) => {
-        if (outcome === 'blocked') {
-          startupResumeWorktreeIdsRef.current.delete(activeWorktreeId)
-        }
-      },
-      () => startupResumeWorktreeIdsRef.current.delete(activeWorktreeId)
-    )
-  }, [
-    activeWorktreeId,
-    activeWorktreeHostAuthority,
-    hydrationSucceeded,
-    terminalStartupRestorationReady,
-    workspaceSessionReady
-  ])
+  useTerminalStartupActivation(controller)
 }

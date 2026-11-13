@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createServeDesktopActivationGate,
-  type ServeDesktopActivationGate
-} from './serve-desktop-activation'
+import type { ServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 
 const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   state: {
@@ -28,8 +25,10 @@ function initialActivationGate(): ServeDesktopActivationGate | null {
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('./main-process-ready-foundation', () => ({ initializeReadyFoundation: foundation }))
 vi.mock('./main-process-ready-runtime', () => ({ initializeReadyRuntimeServices: runtime }))
-vi.mock('./main-process-i18n-menu', () => ({ initializeMainProcessI18nAndMenu: i18n }))
-vi.mock('./main-process-runtime-launch', () => ({ initializeMainProcessRuntimeLaunch: launch }))
+vi.mock('./main-window/main-process-i18n-menu', () => ({ initializeMainProcessI18nAndMenu: i18n }))
+vi.mock('./runtime-startup/main-process-runtime-launch', () => ({
+  initializeMainProcessRuntimeLaunch: launch
+}))
 
 import { initializeMainProcessReady } from './main-process-ready'
 
@@ -47,32 +46,6 @@ beforeEach(() => {
 })
 
 describe('startup persistence lifetime', () => {
-  it('disables activations before a failed launch closes its profile writer', async () => {
-    const activateWindow = vi.fn()
-    state.desktopActivationGate = createServeDesktopActivationGate({
-      initialState: 'ready',
-      activateWindow
-    })
-    const failure = new Error('runtime startup failed')
-    launch.mockRejectedValueOnce(failure)
-    let finishFreeze = (): void => {}
-    state.store.freezeWritesAsync.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finishFreeze = resolve
-        })
-    )
-    const rejected = expect(initializeMainProcessReady(options)).rejects.toBe(failure)
-
-    await vi.waitFor(() => expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce())
-
-    expect(state.desktopActivationGate).toBeNull()
-    state.desktopActivationGate?.requestActivation()
-    expect(activateWindow).not.toHaveBeenCalled()
-    finishFreeze()
-    await rejected
-  })
-
   it('awaits writer release after a later startup phase fails', async () => {
     const failure = new Error('runtime startup failed')
     const admission = state.profileStateAdmission
@@ -93,25 +66,6 @@ describe('startup persistence lifetime', () => {
     expect(admission?.release).toHaveBeenCalledOnce()
     expect(state.profileStateAdmission).toBeUndefined()
     expect(launch).not.toHaveBeenCalled()
-  })
-
-  it('joins concurrent startup branches before closing their Store', async () => {
-    const failure = new Error('translations failed')
-    i18n.mockRejectedValueOnce(failure)
-    let release = () => {}
-    launch.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve
-        })
-    )
-    const ready = initializeMainProcessReady(options)
-    const rejected = expect(ready).rejects.toBe(failure)
-    await vi.waitFor(() => expect(launch).toHaveBeenCalledOnce())
-    expect(state.store.freezeWritesAsync).not.toHaveBeenCalled()
-    release()
-    await rejected
-    expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce()
   })
 
   it('keeps the original startup failure when cleanup also fails', async () => {

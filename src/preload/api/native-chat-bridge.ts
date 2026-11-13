@@ -2,20 +2,34 @@ import { ipcRenderer } from 'electron'
 import type {
   NativeChatAppendedPayload,
   NativeChatReadSessionResult,
-  NativeChatSubscriptionFrame,
-  PreloadApi
-} from '../api-types'
-import type { AgentType } from '../../shared/native-chat-types'
+  NativeChatSubscriptionFrame
+} from './native-chat-api'
+import type { PreloadApi } from '../api-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import {
+  NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH,
+  type NativeChatVisualTheme
+} from '../../shared/native-chat/native-chat-visual-shell'
 
 export const nativeChatApi = {
+  // Acknowledge the in-memory snapshot before guest creation can start its preload.
+  publishVisualGuestTheme: (theme: NativeChatVisualTheme): void => {
+    ipcRenderer.sendSync(NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH, theme)
+  },
   readSession: (
     agent: AgentType,
     sessionId: string,
     limit?: number,
-    transcriptPath?: string
+    transcriptPath?: string,
+    options?: { wakeWslDistro?: boolean }
   ): Promise<NativeChatReadSessionResult> =>
-    ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
-  /** Start live tailing; onAppended fires with only newly-appended messages. Returns an unsubscribe fn that closes the watcher. */
+    ipcRenderer.invoke('nativeChat:readSession', {
+      agent,
+      sessionId,
+      limit,
+      transcriptPath,
+      wakeWslDistro: options?.wakeWslDistro
+    }),
   subscribe: (
     args: {
       subscriptionId: string
@@ -23,6 +37,7 @@ export const nativeChatApi = {
       sessionId: string
       transcriptPath?: string
       limit?: number
+      wakeWslDistro?: boolean
     },
     onFrame: (frame: NativeChatSubscriptionFrame) => void
   ): (() => void) => {

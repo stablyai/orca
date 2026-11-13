@@ -1,5 +1,3 @@
-// `layout.apply`'s editor file records and views (see LayoutApplyParams).
-
 import { z } from 'zod'
 import type { EditorTabView } from '../editor-tab-view-types'
 
@@ -19,13 +17,13 @@ const EDITOR_VIEW_MODES: ReadonlySet<unknown> = new Set<EditorTabView['mode']>([
   'diff',
   'markdown-preview',
   'conflict-review',
-  'check-details'
+  'check-details',
+  'git-graph'
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/** Checks the mode, and an edit view's conflict; the snapshots are the window's own records. */
 function isEditorTabView(value: unknown): value is EditorTabView {
   return (
     isRecord(value) &&

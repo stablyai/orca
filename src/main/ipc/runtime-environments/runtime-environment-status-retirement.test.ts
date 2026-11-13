@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   addManagedOrcadEnvironment,
   refreshManagedOrcadPairing
-} from '../../../shared/runtime-environment-managed-orcad-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { pairingCode } from './runtime-environments-ipc-test-harness'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import {
@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => ({
   reconnect: vi.fn(),
   diagnostics: vi.fn()
 }))
-vi.mock('../../../shared/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: mocks.request
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: mocks.request
 }))
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')

@@ -2,13 +2,7 @@ import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
 
-/**
- * Lazy accessors for the speech services.
- *
- * Why the construction is injected: each host picks how `ModelManager` downloads (Chromium's
- * `net` on the desktop, Node's `https` on orcad). Both the desktop and orcad install factories;
- * a host without them rejects per call rather than returning a stub that appears to transcribe.
- */
+/** Hosts inject Chromium/Node download factories; missing services reject per call rather than appearing to transcribe. */
 
 type SpeechSettingsStore = {
   getSettings(): {
@@ -18,7 +12,8 @@ type SpeechSettingsStore = {
 
 export type SpeechServiceFactories = {
   createModelManager(customModelsDir: string | undefined): ModelManager
-  createSttService(models: ModelManager): SttService
+  /** `gpuEnabled` reads the user's Voice setting at each recognizer start. */
+  createSttService(models: ModelManager, gpuEnabled: () => boolean): SttService
 }
 
 let factories: SpeechServiceFactories | null = null
@@ -49,7 +44,15 @@ export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager 
 
 export function getSpeechSttService(store: SpeechSettingsStore): SttService {
   if (!sttService) {
-    sttService = requireFactories().createSttService(getSpeechModelManager(store))
+    sttService = requireFactories().createSttService(
+      getSpeechModelManager(store),
+      () => store.getSettings().voice?.speechGpu !== 'off'
+    )
   }
+  return sttService
+}
+
+/** The service only if something already created it, so a host with voice off never builds one. */
+export function findSpeechSttService(): SttService | null {
   return sttService
 }

@@ -1,11 +1,8 @@
-import { watch, type FSWatcher } from 'node:fs'
-import { basename } from 'node:path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import {
-  getEnvironmentStorePath,
-  listEnvironments
-} from '../../../shared/runtime-environment-store'
-import type { Store } from '../../persistence'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import type { Store } from '../../persistence/loading-store/store'
+import { watchFileAcrossReplacement } from '../filesystem/watcher-process/native-subscriptions/rebinding-file-watch'
 
 type PreferenceStore = Pick<Store, 'getSettings' | 'updateSettings'>
 
@@ -40,11 +37,15 @@ export function readSettingsWithRuntimeEnvironmentPreference(
   return reconcileRuntimeEnvironmentPreference(store, environments)
 }
 
+// Bound renderer staleness when the registry is created or replaced without a native watch event.
+const REGISTRY_REBIND_SWEEP_MS = 30_000
+
 export function watchRuntimeEnvironmentPreference(
   store: PreferenceStore,
-  userDataPath: string
+  userDataPath: string,
+  // Renderers cache the catalog; CLI edits reach them only through this watch.
+  onRegistryChanged: () => void = () => {}
 ): () => void {
-  const registryName = basename(getEnvironmentStorePath(userDataPath))
   const repairPreference = (): void => {
     try {
       readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)
@@ -54,23 +55,36 @@ export function watchRuntimeEnvironmentPreference(
   }
   // Reconcile changes made while the native watch was being installed.
   const initialCheck = setImmediate(repairPreference)
-  let watcher: FSWatcher | undefined
-  try {
-    // Watch the directory because registry writes atomically replace the file.
-    watcher = watch(userDataPath, { persistent: false }, (_event, filename) => {
-      if (filename === null || filename.toString() === registryName) {
-        repairPreference()
-      }
-    })
-    watcher.on('error', (error) => {
-      watcher?.close()
-      console.warn('[runtime-environments] Active Server preference watch failed:', error)
-    })
-  } catch (error) {
-    console.warn('[runtime-environments] Active Server preference watch failed:', error)
-  }
+  const stopRegistryWatch = watchRuntimeEnvironmentRegistry(
+    userDataPath,
+    () => {
+      repairPreference()
+      onRegistryChanged()
+    },
+    'Active Server preference'
+  )
   return () => {
     clearImmediate(initialCheck)
-    watcher?.close()
+    stopRegistryWatch()
+  }
+}
+
+/** Calls `onChanged` after any write to the saved-server registry, in-app or by the CLI. */
+export function watchRuntimeEnvironmentRegistry(
+  userDataPath: string,
+  onChanged: () => void,
+  owner: string
+): () => void {
+  // Watch the file: macOS directory watches recursively stream Orca's own userData writes.
+  const registryWatch = watchFileAcrossReplacement(
+    getEnvironmentStorePath(userDataPath),
+    onChanged,
+    (error) => console.warn(`[runtime-environments] ${owner} watch failed:`, error)
+  )
+  const sweep = setInterval(() => void registryWatch.refresh(), REGISTRY_REBIND_SWEEP_MS)
+  sweep.unref?.()
+  return () => {
+    clearInterval(sweep)
+    void registryWatch.close()
   }
 }

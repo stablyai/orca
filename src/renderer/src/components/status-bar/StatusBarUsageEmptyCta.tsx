@@ -1,31 +1,27 @@
 import React, { useCallback } from 'react'
-import { BarChart3, EyeOff } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EyeOffDismissButton } from '@/components/dismiss/EyeOffDismissButton'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
 
-// Why: a brand-new user has no configured provider, so the bottom-left would
-// otherwise be empty but for a refresh icon with nothing to refresh. This CTA
-// names the surface and routes to AI Provider Accounts — connecting an account
-// there is what makes the usage chips (and account switching) appear here.
-// A remote owner's empty state names that host: this device's setup cannot fill it.
+// Name the empty usage surface and route setup to its owning host; client-local setup cannot fill a remote bar.
 export function StatusBarUsageEmptyCta({
   remoteOwner
 }: {
   remoteOwner: RemoteUsageOwner | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const dismissUsageEmptyState = useAppStore((s) => s.dismissUsageEmptyState)
 
-  // Why: the accounts pane lists every provider, so we don't preselect a
-  // section ID — a brand-new user has no "Claude" or "Codex" yet.
+  // Open all providers because a new user has no provider selection yet.
   const handleOpenSettings = useCallback(() => {
     recordFeatureInteraction('usage-tracking')
     openSettingsTarget({
@@ -37,15 +33,10 @@ export function StatusBarUsageEmptyCta({
   }, [openSettingsPage, openSettingsTarget, recordFeatureInteraction, remoteOwner])
 
   const label = remoteOwner
-    ? translate(
-        'auto.components.status.bar.StatusBarUsageEmptyCta.remoteLabel',
-        'No usage on {{host}}',
-        { host: remoteOwner.label }
-      )
-    : translate(
-        'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
-        'Configure usage tracking'
-      )
+    ? t('auto.components.status.bar.StatusBarUsageEmptyCta.remoteLabel', 'No usage on {{host}}', {
+        host: remoteOwner.label
+      })
+    : t('auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9', 'Configure usage tracking')
 
   const handleHide = useCallback(() => {
     dismissUsageEmptyState()
@@ -69,43 +60,29 @@ export function StatusBarUsageEmptyCta({
           <div className="flex items-start justify-between gap-2">
             <div className="font-semibold text-foreground">
               {remoteOwner
-                ? translate(
+                ? t(
                     'auto.components.status.bar.StatusBarUsageEmptyCta.remoteTitle',
                     'Usage on {{host}}',
                     { host: remoteOwner.label }
                   )
-                : translate(
+                : t(
                     'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
                     'Agent usage limits'
                   )}
             </div>
-            {/* Why: permanently hide the teaching CTA — styling mirrors the
-                SetupGuideSidebarEntry hover-state icon (muted → foreground). */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleHide}
-                  aria-label={translate(
-                    'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
-                    'Hide from status bar'
-                  )}
-                  className="-mr-1 -mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-                >
-                  <EyeOff className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
-                  'Hide from status bar'
-                )}
-              </TooltipContent>
-            </Tooltip>
+            {/* Mirror the setup-guide dismiss control so hiding this teaching CTA stays recognizable. */}
+            <EyeOffDismissButton
+              label={t(
+                'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
+                'Hide from status bar'
+              )}
+              onClick={handleHide}
+              className="-mr-1 -mt-0.5"
+            />
           </div>
           {remoteOwner ? (
             <p className="text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.status.bar.StatusBarUsageEmptyCta.remoteBody',
                 "This workspace runs on {{host}}, so the bar shows that host's usage. Sign in to an agent there, or focus a local workspace to see this computer's usage.",
                 { host: remoteOwner.label }
@@ -114,19 +91,15 @@ export function StatusBarUsageEmptyCta({
           ) : (
             <>
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
                   'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
                 )}
               </p>
-              {/* Why: name the full provider set so the feature doesn't read as
-                  support for just one agent. */}
+              {/* Name the provider set so setup does not imply support for only one agent. */}
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <span>
-                  {translate(
-                    'auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811',
-                    'Supports:'
-                  )}
+                  {t('auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811', 'Supports:')}
                 </span>
                 <ClaudeIcon size={13} />
                 <OpenAIIcon size={13} />
@@ -144,12 +117,12 @@ export function StatusBarUsageEmptyCta({
             className="mt-0.5 h-7 w-full text-xs"
           >
             {remoteOwner
-              ? translate(
+              ? t(
                   'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
                   'Open {{host}} accounts',
                   { host: remoteOwner.label }
                 )
-              : translate(
+              : t(
                   'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
                   'Connect an account'
                 )}

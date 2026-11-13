@@ -2,8 +2,10 @@ import { FileText, Search } from 'lucide-react'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { Button } from '@/components/ui/button'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
+import BrowserHistoryRowRemoveButton from '../history/BrowserHistoryRowRemoveButton'
+import { isRemovableHistoryRow } from '../history/browser-history-row-removal'
 
 const NO_SELECTED_ROW = 'orca:no-selected-row'
 
@@ -16,6 +18,7 @@ type BrowserAddressBarSuggestionListProps = {
   /** The row whose button holds keyboard focus (focus itself stays in the input). */
   switchFocusedUrl: string | null
   onSwitchToTab: (url: string) => void
+  onRemove: (suggestion: BrowserAddressBarSuggestion) => void
 }
 
 export default function BrowserAddressBarSuggestionList({
@@ -25,11 +28,12 @@ export default function BrowserAddressBarSuggestionList({
   onSelect,
   hasSwitchTarget,
   switchFocusedUrl,
-  onSwitchToTab
+  onSwitchToTab,
+  onRemove
 }: BrowserAddressBarSuggestionListProps): React.ReactElement {
+  const t = useTranslate()
   return (
-    // Why the sentinel: cmdk selects its first row whenever the value is empty, and an empty bar
-    // has no row Enter would pick.
+    // cmdk auto-selects its first row for an empty value; use a sentinel when Enter has no target.
     <Command
       shouldFilter={false}
       value={selectedValue || NO_SELECTED_ROW}
@@ -63,8 +67,7 @@ export default function BrowserAddressBarSuggestionList({
               </div>
               {hasSwitchTarget(entry) ? (
                 <Button
-                  // Why a variant and not a ring: focus stays in the input, so :focus-visible never
-                  // applies; the filled button shows Tab has moved onto it.
+                  // Focus stays in the input, so show virtual button focus without relying on :focus-visible.
                   variant={entry.url === switchFocusedUrl ? 'default' : 'outline'}
                   size="xs"
                   tabIndex={-1}
@@ -76,11 +79,11 @@ export default function BrowserAddressBarSuggestionList({
                     onSwitchToTab(entry.url)
                   }}
                 >
-                  {translate(
-                    'auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92',
-                    'Switch to tab'
-                  )}
+                  {t('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab')}
                 </Button>
+              ) : null}
+              {isRemovableHistoryRow(entry) ? (
+                <BrowserHistoryRowRemoveButton onRemove={() => onRemove(entry)} />
               ) : null}
             </CommandItem>
           ))}

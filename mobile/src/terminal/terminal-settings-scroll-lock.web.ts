@@ -1,13 +1,9 @@
 import type { RefObject } from 'react'
-import type { ScrollView } from 'react-native'
+import type { ScrollViewInstance } from 'react-native'
 
-/**
- * RN Web renders a ScrollView as a div and drives its overflow from a class, so clearing the
- * inline value restores scrolling and no saved copy of it is needed. `overflowY` rather than
- * `touch-action`, which stops a touch drag but leaves the wheel and the trackpad scrolling.
- */
+// Clear inline overflowY to restore RN Web’s class-driven scrolling; touch-action alone would leave wheels/trackpads enabled.
 export function setTerminalSettingsScrollEnabled(
-  ref: RefObject<ScrollView | null>,
+  ref: RefObject<ScrollViewInstance | null>,
   enabled: boolean
 ): void {
   const node = ref.current

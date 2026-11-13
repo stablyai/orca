@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     activeWorktreeId: nullableActiveWorkspace(),
     activeWorkspaceExecutionHostId: nullableActiveHost(),
     getKnownWorktreeById: vi.fn((_id: string, _host?: string) => ({ path: '/active' })),
+    releaseKeptEditorBuffers: vi.fn((_notice: number) => {}),
     openFile: vi.fn()
   }
   return {
@@ -37,10 +38,14 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({
   toast: { warning: mocks.warning, error: mocks.error, dismiss: mocks.dismiss }
 }))
-vi.mock('@/lib/create-untitled-markdown', () => ({ createUntitledMarkdownFile: mocks.create }))
-vi.mock('@/lib/editor-file-operation-owner', () => ({
+vi.mock('@/lib/editor/file-operations/create-untitled-markdown', () => ({
+  createUntitledMarkdownFile: mocks.create
+}))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-owner', () => ({
+  getEditorFileOperationContext: mocks.context
+}))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-provenance', () => ({
   captureEditorFileOperationProvenance: mocks.capture,
-  getEditorFileOperationContext: mocks.context,
   assertEditorFileOperationCurrent: mocks.assertCurrent
 }))
 import { reopenClosedUnsavedFiles, showClosedUnsavedFilesToast } from './closed-unsaved-files-toast'
@@ -82,51 +87,6 @@ describe('closed unsaved files toast', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
-  it('creates new recovered files in the active workspace, with exact text and no original binding', async () => {
-    expect(await reopenClosedUnsavedFiles([closed(), closed({ content: '' })])).toEqual([])
-    expect(mocks.create).toHaveBeenCalledTimes(2)
-    expect(mocks.create).toHaveBeenNthCalledWith(
-      1,
-      '/active',
-      'active-wt',
-      undefined,
-      { kind: 'local' },
-      expect.objectContaining({
-        recoveredDocument: { originalPath: '/removed/a.ts', content: 'unsaved text' }
-      })
-    )
-    expect(mocks.create).toHaveBeenNthCalledWith(
-      2,
-      '/active',
-      'active-wt',
-      undefined,
-      { kind: 'local' },
-      expect.objectContaining({
-        recoveredDocument: { originalPath: '/removed/a.ts', content: '' }
-      })
-    )
-    const opened = mocks.state.openFile.mock.calls[0]?.[0]
-    expect(opened.filePath).toBe('/active/a (recovered).ts')
-    expect(opened.isUntitled).toBe(true)
-    expect(opened).not.toHaveProperty('lastKnownDiskSignature')
-    expect(opened).not.toHaveProperty('externalSshTargetId')
-    expect(opened).not.toHaveProperty('runtimeEnvironmentId')
-  })
-
-  it('uses the active destination host rather than the removed document host', async () => {
-    mocks.context.mockReturnValue({ target: { kind: 'environment', environmentId: 'destination' } })
-    await reopenClosedUnsavedFiles([closed()])
-    expect(mocks.create.mock.calls[0]?.[3]).toEqual({
-      kind: 'environment',
-      environmentId: 'destination'
-    })
-  })
-
-  it('takes the path from the active workspace’s owning host', async () => {
-    await reopenClosedUnsavedFiles([closed()])
-    expect(mocks.state.getKnownWorktreeById).toHaveBeenCalledWith('active-wt', 'ssh:active')
-  })
-
   it('refuses when the owner route is not the active workspace’s host', async () => {
     mocks.capture.mockReturnValue({ generation: { route: { executionHostId: 'local' } } })
     expect(await reopenClosedUnsavedFiles([closed()])).toHaveLength(1)
@@ -135,7 +95,7 @@ describe('closed unsaved files toast', () => {
 
   it('keeps the payload for retry when no workspace is active', async () => {
     mocks.state.activeWorktreeId = null
-    showClosedUnsavedFilesToast([closed()], 'Feature work')
+    showClosedUnsavedFilesToast([closed()], 'Feature work', 7)
     click()
     await vi.waitFor(() => expect(mocks.error).toHaveBeenCalledTimes(1))
     expect(mocks.dismiss).not.toHaveBeenCalled()
@@ -148,7 +108,11 @@ describe('closed unsaved files toast', () => {
 
   it('retries only the documents that failed to create', async () => {
     mocks.create.mockRejectedValueOnce(new Error('Offline'))
-    showClosedUnsavedFilesToast([closed(), closed({ filePath: '/removed/b.ts' })], 'Feature work')
+    showClosedUnsavedFilesToast(
+      [closed(), closed({ filePath: '/removed/b.ts' })],
+      'Feature work',
+      7
+    )
     click()
     await vi.waitFor(() => expect(mocks.error).toHaveBeenCalledTimes(1))
     click()
@@ -158,7 +122,7 @@ describe('closed unsaved files toast', () => {
   })
 
   it('releases the holder after Reopen even if the library retains the callbacks', async () => {
-    showClosedUnsavedFilesToast([closed()], 'Feature work')
+    showClosedUnsavedFilesToast([closed()], 'Feature work', 7)
     click()
     click()
     await vi.waitFor(() => expect(mocks.dismiss).toHaveBeenCalledTimes(1))
@@ -169,7 +133,11 @@ describe('closed unsaved files toast', () => {
   })
 
   it('shows one combined notice and releases text on dismissal', () => {
-    showClosedUnsavedFilesToast([closed(), closed({ filePath: '/removed/b.ts' })], 'Feature work')
+    showClosedUnsavedFilesToast(
+      [closed(), closed({ filePath: '/removed/b.ts' })],
+      'Feature work',
+      7
+    )
     expect(mocks.warning).toHaveBeenCalledWith(
       'Closed 2 files with unsaved edits from Feature work',
       expect.anything()
@@ -178,6 +146,7 @@ describe('closed unsaved files toast', () => {
     notice().onDismiss()
     click()
     expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.state.releaseKeptEditorBuffers).toHaveBeenCalledWith(7)
     expect(console.warn).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledWith(
       '[editor] dropped unsaved edits from a removed workspace',

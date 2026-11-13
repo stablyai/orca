@@ -1,13 +1,13 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
-import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { cn } from '@/lib/class-names'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './listing/automations-table-layout'
 import {
   LIST_TABLE_CONTAINER_CLASS,
   LIST_TABLE_HEADER_CLASS,
   LIST_TABLE_STICKY_HEADER_CELL_CLASS,
   LIST_TABLE_STICKY_ROW_CELL_CLASS
-} from '@/lib/list-table-layout'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/list-interaction/list-table-layout'
+import { useTranslate } from '@/i18n/use-translate'
 
 function SkeletonBar({ className }: { className?: string }): React.JSX.Element {
   return <div className={cn('animate-pulse rounded bg-muted/60', className)} />
@@ -111,11 +111,12 @@ const TABLE_ROW_SKELETONS = [
 ] as const
 
 export function AutomationsPageSkeleton(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pb-4 md:px-5"
       aria-busy="true"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.automations.AutomationsPageSkeleton.55527b7bcf',
         'Loading automations'
       )}

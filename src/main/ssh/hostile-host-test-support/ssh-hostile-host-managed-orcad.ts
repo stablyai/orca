@@ -1,8 +1,4 @@
-/**
- * One hostile-host cell: on a fresh host, resolve the context, deploy orcad, and prove it picked
- * the cell's runtime, uploaded no other and ran no toolchain. An activated server must be live; an
- * unavailable host must fail with the classified reason the connect reports.
- */
+/** Prove each host gets only its required runtime without toolchain use, then either a live server or its expected classified refusal. */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
@@ -12,11 +8,14 @@ import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { managedOrcadSlot } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
-import { orcadSlotDir, type OrcadSlotOptions } from '../orcad-recovery-slot'
+import {
+  orcadSlotDir,
+  type OrcadSlotOptions
+} from '../../managed-server/activation/orcad-recovery-slot'
 import { resolveOrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
-import { deployOrcad } from '../orcad-remote-deploy'
+import { deployOrcad } from '../../managed-server/install/orcad-remote-deploy'
 import { getMainHttpClient, setMainHttpClient } from '../../network/http-client'
 import {
   orcadLivenessProbeCommand,
@@ -28,7 +27,7 @@ import {
   ORCAD_READINESS_FILENAME
 } from '../../managed-server/install/orcad-remote-host-support'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   forbiddenToolActions,
   type HostileHostCellCore,
@@ -129,11 +128,7 @@ async function assertLiveThenDecommissioned(
   expect(await liveness()).toBe('DEAD')
 }
 
-/**
- * #31125: orcad runs at the SSH login's umask, so the git, terminals and agents it spawns create
- * the user's files, while the readiness file holding the pairing token stays owner-only.
- * Linux only: macOS has no /proc to read another process's umask from.
- */
+/** #31125: inherit SSH login umask for user files while pairing-token readiness stays owner-only. Linux /proc exposes the daemon umask; macOS does not. */
 async function assertOrcadRunsAtLoginUmask(slot: OrcadSlotOptions, slotDir: string): Promise<void> {
   if (slot.host.os !== 'linux') {
     return
@@ -155,7 +150,6 @@ async function assertOrcadRunsAtLoginUmask(slot: OrcadSlotOptions, slotDir: stri
   expect(readinessMode).toBe('600')
 }
 
-/** An empty runtime cache and a refusing network on this computer, until `restore`. */
 function refuseDesktopDownloads(): {
   cacheRoot: string
   refusedUrls: () => string[]

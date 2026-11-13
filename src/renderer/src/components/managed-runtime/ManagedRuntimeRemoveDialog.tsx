@@ -1,6 +1,6 @@
-import { translate } from '@/i18n/i18n'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { useAppStore } from '@/store'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useTranslate } from '@/i18n/use-translate'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { Button } from '../ui/button'
@@ -13,7 +13,6 @@ import {
   DialogTitle
 } from '../ui/dialog'
 
-/** Confirms removing the runtime Orca downloaded: it stops running chats. */
 export function ManagedRuntimeRemoveDialog(props: {
   agentLabel: string
   host: RuntimeClientTarget
@@ -21,25 +20,26 @@ export function ManagedRuntimeRemoveDialog(props: {
   onOpenChange: (open: boolean) => void
   onRemove: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { agentLabel, host, open, onOpenChange, onRemove } = props
-  const hostLabel = useAppStore((state) =>
+  const hostLabel = useAppStateValue((state) =>
     host.kind === 'environment'
       ? selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(host.environmentId))
-      : translate('components.managed-runtime.thisComputer', 'this computer')
+      : t('components.managed-runtime.thisComputer', 'this computer')
   )
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'components.managed-runtime.removeTitle',
               'Remove the downloaded {{agent}} runtime from {{host}}?',
               { agent: agentLabel, host: hostLabel }
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'components.managed-runtime.removeDescription',
               '{{agent}} chats that are running stop. Their history is kept.',
               { agent: agentLabel }
@@ -48,7 +48,7 @@ export function ManagedRuntimeRemoveDialog(props: {
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {translate('components.managed-runtime.removeKeep', 'Cancel')}
+            {t('components.managed-runtime.removeKeep', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -57,7 +57,7 @@ export function ManagedRuntimeRemoveDialog(props: {
               onRemove()
             }}
           >
-            {translate('components.managed-runtime.removeConfirm', 'Remove')}
+            {t('components.managed-runtime.removeConfirm', 'Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>

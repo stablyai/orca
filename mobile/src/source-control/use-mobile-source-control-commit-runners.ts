@@ -1,4 +1,5 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
 import type {
@@ -11,7 +12,8 @@ type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => P
 type RunGitWorkflow = (
   actionId: string,
   runner: () => Promise<void>,
-  options?: { clearCommitMessage?: boolean }
+  // The committed message; the field is cleared only while it still holds that text.
+  options?: { clearCommitMessage?: string }
 ) => Promise<boolean>
 
 type Params = {
@@ -27,12 +29,10 @@ type Params = {
   busyActionRef: MutableRefObject<string | null>
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
-  setCommitMessage: (next: string) => void
+  setCommitMessage: Dispatch<SetStateAction<string>>
   recordCommitFailure: RecordMobileCommitFailure
 }
 
-// Commit + commit-then-action runners. Split from the main runners hook to keep
-// each file under the line limit; behavior is unchanged from the original.
 export function useMobileSourceControlCommitRunners(params: Params) {
   const {
     commitMessage,
@@ -50,8 +50,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
     setCommitMessage,
     recordCommitFailure
   } = params
-  // Why: as on desktop, committing the box's message cancels a running generation so its late
-  // reply cannot refill the box the commit empties.
+  // Cancel generation before committing so its late reply cannot refill the cleared message box.
   const sendCommitRequest = useCallback(
     (message: string) => {
       cancelGenerateCommitMessage()
@@ -72,14 +71,17 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           await sendCommitRequest(message)
         } catch (err) {
           recordCommitFailure({
-            error: err instanceof Error ? err.message : 'Commit failed',
+            error:
+              err instanceof Error
+                ? err.message
+                : translate('sourceControl.commitRunners.commitFailed', 'Commit failed'),
             commitMessage: message,
             stagedEntries
           })
           throw err
         }
       },
-      { clearCommitMessage: true }
+      { clearCommitMessage: message }
     )
   }, [commitMessage, recordCommitFailure, runGitWorkflow, sendCommitRequest, stagedEntries])
 
@@ -100,27 +102,29 @@ export function useMobileSourceControlCommitRunners(params: Params) {
       try {
         await sendCommitRequest(message)
         didCommit = true
+        // The commit landed: a kill during the push must not bring its message back, and text typed since stays.
+        setCommitMessage((current) => (current.trim() === message ? '' : current))
         await afterCommit()
         if (!mountedRef.current) {
           return false
         }
-        setCommitMessage('')
         triggerSuccess()
-        await loadStatus({ preserveReadyOnFailure: true, force: true })
+        await loadStatus({ force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
           return false
         }
         triggerError()
-        const errorMessage = err instanceof Error ? err.message : 'Source control action failed'
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : translate('sourceControl.commitRunners.actionFailed', 'Source control action failed')
         if (!didCommit) {
           recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
         }
         if (didCommit) {
-          setCommitMessage('')
           await loadStatus({
-            preserveReadyOnFailure: true,
             clearActionErrorOnSuccess: false,
             force: true
           })

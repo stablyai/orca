@@ -1,10 +1,7 @@
 import { z } from 'zod'
 
-/**
- * One section's collapse, sent by `ui.setCollapsed`. A retry resends the same opId. `seq` must grow
- * with each change a writer makes, so a client mints a fresh `writer` whenever its counter restarts;
- * reusing one with a reset counter makes the host drop those changes as already settled.
- */
+/** Retry with the same opId; seq grows per writer. Mint a new writer when resetting its counter,
+ * or the host will treat new changes as already settled. */
 export const SetCollapsedParams = z.object({
   key: z.string().min(1).max(1024),
   collapsed: z.boolean(),

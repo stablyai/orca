@@ -1,12 +1,13 @@
-import type { GitHubWorkItem } from '../github/work-item-types'
+import type { GitHubWorkItem } from '../github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../gitlab-types'
-import type { JiraIssue } from '../jira-types'
+import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
 import type { BaseRefSearchResult } from '../repo-types'
-import { parseJiraIssueUrl } from '../jira-issue-url'
-import { buildJiraTextMatchJql } from '../jira-search-input-jql'
-import type { GitHubIssueOrPRLink } from '../github/links'
+import { branchRefLabel, branchRefLabels } from '../git/refs/branch-ref-label'
+import { parseJiraIssueUrl } from '../jira/jira-issue-url'
+import { buildJiraTextMatchJql } from '../jira/jira-search-input-jql'
+import type { GitHubIssueOrPRLink } from '../github/repositories/links'
 import {
   buildSmartWorkspaceUrlSourceRows,
   type SmartWorkspaceGitLabUrlIntent
@@ -25,7 +26,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
-  | { kind: 'branch'; value: string; refName: string; localBranchName: string }
+  | { kind: 'branch'; value: string; refName: string; localBranchName: string; label?: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
 
@@ -116,11 +117,7 @@ export function getBranchSearchRequest({
   return { repoId: selectedRepoId, query: trimmedQuery, limit }
 }
 
-/**
- * Why: provider arrays lag the live input (200ms debounce). Keep them while the
- * user is still typing, but hide immediately when the field is cleared so prior
- * non-empty results cannot stay selectable until debounce catches up.
- */
+/** Hold provider results during 200ms debounce, but clear immediately on empty input so stale rows cannot remain selectable. */
 export function getVisibleHeldProviderResults<T>({
   items,
   value,
@@ -164,9 +161,7 @@ export function getVisibleBranchResults({
     return []
   }
   const currentQuery = value.trim()
-  // Why: hold the last settled list while the user extends/trims the query so the
-  // dropdown does not blank between debounced keystrokes. Drop the hold when the
-  // query diverges (e.g. "feat" → "bug") so unrelated rows do not linger.
+  // Retain settled rows for prefix edits during debounce; drop unrelated queries such as feat → bug.
   if (currentQuery === '') {
     return resultQuery === '' ? branches : []
   }
@@ -179,11 +174,7 @@ export function getVisibleBranchResults({
 /** Max |live − settled| length while still treating a prefix as "still typing". */
 const SOURCE_RESULT_HOLD_MAX_DELTA = 4
 
-/**
- * Why: prefix-only hold lets a settled "f" stick under "fix-unrelated-…" for the
- * whole next debounce. Cap the length delta so hold covers fast typing, not long
- * continuations of a short settled query.
- */
+/** Bound prefix-hold length delta: a settled f must not remain under a long unrelated continuation for the full debounce. */
 export function shouldHoldSourceResultsForQuery({
   resultQuery,
   value
@@ -288,23 +279,26 @@ export function buildSmartWorkspaceSourceRows({
   const shouldShowBranches = mode === 'branches' || (mode === 'smart' && trimmed.length > 0)
   if (shouldShowBranches) {
     const branchExactMatch = branches.some(
-      (branch) => branch.refName === trimmed || branch.localBranchName === trimmed
+      (branch) => branchRefLabel(branch.refName) === trimmed || branch.localBranchName === trimmed
     )
     if (trimmed && mode === 'branches' && !branchExactMatch) {
       nextRows.push({ kind: 'create-branch', value: 'create-branch', name: trimmed })
     }
+    const labels = branchRefLabels(branches.map((branch) => branch.refName))
     nextRows.push(
       ...branches.map((branch) => ({
         kind: 'branch' as const,
         value: `branch-${branch.refName}`,
         refName: branch.refName,
+        ...(labels.get(branch.refName) !== branchRefLabel(branch.refName)
+          ? { label: labels.get(branch.refName) }
+          : {}),
         localBranchName: branch.localBranchName
       }))
     )
   }
   if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
-    // Why: mixed-version runtime responses may briefly carry the paginated
-    // collection shape into this render path; rendering must stay recoverable.
+    // Recover from mixed-version responses briefly returning paginated collections in this array render path.
     nextRows.push(
       ...resolvedLinearIssues.map((issue) => ({
         kind: 'linear' as const,

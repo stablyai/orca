@@ -3,10 +3,11 @@ import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
-import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
+import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useBrowserPageKeyboardShortcuts({
   browserTabId,
@@ -106,7 +107,6 @@ export function useBrowserPageKeyboardShortcuts({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      // Ignore if modifier keys are held — user may be doing Cmd+C etc.
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return
       }

@@ -6,9 +6,14 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
-import { cn } from '@/lib/utils'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
-import { useImeTextFieldProps } from '@/lib/ime-text-field'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { useTranslate } from '@/i18n/use-translate'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
+import { useImeTextFieldProps } from '@/lib/text-input/ime/ime-text-field'
+import { DialogOverlay } from '@/components/ui/dialog'
 
 const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md', {
   variants: {
@@ -19,9 +24,27 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
     density: {
       default: '',
       // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
-      menu: '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px] [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
+      menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
+      model:
+        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]',
+      // Why: a flat launcher card (split-pane landing): field on a divider over a fixed-height list of 36px rows.
+      card: [
+        'rounded-[12px] border border-border',
+        // Field height, list padding, list height (5 rows + padding) and field inset (list padding + row px, so icons align) move as one set.
+        '[&_[data-cmdk-input-wrapper]]:h-10 [&_[cmdk-list]]:p-2 [&_[cmdk-list]]:h-[196px] [&_[data-cmdk-input-wrapper]]:px-[18px]',
+        '[&_[data-cmdk-input-wrapper]]:gap-2.5 [&_[data-cmdk-input-wrapper]]:bg-transparent [&_[data-cmdk-input-wrapper]]:py-0 [&_[data-cmdk-input-wrapper]_svg]:mr-0 [&_[data-cmdk-input-wrapper]_svg]:opacity-80',
+        '[&_[cmdk-input]]:h-full [&_[cmdk-input]]:py-0 [&_[cmdk-input]]:leading-none [&_[cmdk-input]]:text-ellipsis [&_[cmdk-group]]:p-0',
+        '[&_[cmdk-item]]:h-9 [&_[cmdk-item]]:gap-2.5 [&_[cmdk-item]]:rounded-[7px] [&_[cmdk-item]]:px-2.5 [&_[cmdk-item]]:py-0'
+      ]
     }
   },
+  compoundVariants: [
+    {
+      density: ['menu', 'model'],
+      className:
+        '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
+    }
+  ],
   defaultVariants: { surface: 'default', density: 'default' }
 })
 
@@ -42,13 +65,14 @@ function Command({
 
 function CommandDialog({
   children,
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title,
+  description,
   shouldFilter,
   onOpenAutoFocus,
   onCloseAutoFocus,
   contentClassName,
   overlayClassName,
+  surface = 'default',
   commandProps,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root> & {
@@ -59,51 +83,55 @@ function CommandDialog({
   onCloseAutoFocus?: (e: Event) => void
   contentClassName?: string
   overlayClassName?: string
+  /** `palette` is the larger full-search surface (worktree jump palette). */
+  surface?: 'default' | 'palette'
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
+  const t = useTranslate()
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope()
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
 
   return (
     <DialogPrimitive.Root {...props}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay
-          // Why: matches the DialogOverlay recipe — deeper scrim + 2px backdrop
-          // blur so the dark canvas lifts off the command palette. A flat
-          // bg-black/50 disappears in dark mode.
-          className={cn(
-            'fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            overlayClassName
-          )}
-        />
-        <DialogPrimitive.Content
-          // Why: matches the DialogContent recipe — translucent surface, solid
-          // 14% border, dual shadow, and 2xl backdrop blur. bg-popover equals
-          // the canvas in dark mode (#171717 vs #0a0a0a) and the previous
-          // border-border + shadow-lg was barely visible against the dark
-          // canvas.
-          className={cn(
-            'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-            contentClassName
-          )}
-          onEscapeKeyDown={(event) => handleImeOverlayEscape(event)}
-          onOpenAutoFocus={onOpenAutoFocus}
-          onCloseAutoFocus={onCloseAutoFocus}
-        >
-          <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
-            {description}
-          </DialogPrimitive.Description>
-          <Command
-            shouldFilter={shouldFilter}
+        <DialogOverlay className={overlayClassName} />
+        <OverlayFocusScope value={scope}>
+          <DialogPrimitive.Content
+            data-slot="command-dialog-content"
+            ref={focusScopeRef}
+            // Match DialogContent’s surface/border/shadow recipe so the palette remains distinct in dark mode.
             className={cn(
-              '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
-              commandClassName
+              'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-dialog-surface text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+              surface === 'palette' &&
+                'rounded-xl border-border/70 shadow-[0_26px_84px_rgba(0,0,0,0.32)]',
+              contentClassName
             )}
-            {...commandRootProps}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event)}
+            onOpenAutoFocus={onOpenAutoFocus}
+            onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, onCloseAutoFocus)}
           >
-            {children}
-          </Command>
-        </DialogPrimitive.Content>
+            <DialogPrimitive.Title className="sr-only">
+              {title ?? t('auto.components.ui.command.paletteTitle', 'Command Palette')}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">
+              {description ??
+                t(
+                  'auto.components.ui.command.paletteDescription',
+                  'Search for a command to run...'
+                )}
+            </DialogPrimitive.Description>
+            <Command
+              shouldFilter={shouldFilter}
+              className={cn(
+                '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
+                commandClassName
+              )}
+              {...commandRootProps}
+            >
+              {children}
+            </Command>
+          </DialogPrimitive.Content>
+        </OverlayFocusScope>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )
@@ -167,12 +195,7 @@ function CommandList({
 }) {
   const internalRef = React.useRef<HTMLDivElement>(null)
 
-  // Why: Radix Dialog applies react-remove-scroll which calls preventDefault()
-  // on wheel events for portaled elements (e.g. Popover) outside the Dialog's
-  // DOM tree. The scrollbar renders (CSS overflow works) but the browser never
-  // scrolls because the native event is cancelled. A non-passive wheel listener
-  // directly on the list takes over scrolling manually so it works regardless
-  // of whether a scroll-lock is active.
+  // Radix dialog scroll-lock cancels wheel defaults on external portals; a non-passive list listener restores scrolling.
   React.useEffect(() => {
     const el = internalRef.current
     if (!el) {
@@ -183,7 +206,7 @@ function CommandList({
         return
       }
       e.preventDefault()
-      el.scrollTop += e.deltaY
+      el.scrollTop += getWheelScrollDeltaY(e, el.clientHeight)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -246,13 +269,26 @@ function CommandGroup({
 }
 
 const commandItemVariants = cva('', {
-  variants: { selection: { default: '', palette: 'jump-palette-item' } },
+  variants: {
+    selection: { default: '', palette: 'jump-palette-item' },
+    density: { default: '', workspace: 'px-3 py-2 text-xs' },
+    // Cmd+J's workspace row box: titles share one column across row kinds.
+    shape: {
+      default: '',
+      'palette-row':
+        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
+    },
+    emphasis: { default: '', pinned: 'bg-muted/35' }
+  },
   defaultVariants: { selection: 'default' }
 })
 
 function CommandItem({
   className,
   selection,
+  density,
+  emphasis,
+  shape,
   ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Item> & VariantProps<typeof commandItemVariants>) {
@@ -262,7 +298,7 @@ function CommandItem({
       data-slot="command-item"
       className={cn(
         'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
-        commandItemVariants({ selection }),
+        commandItemVariants({ selection, density, emphasis, shape }),
         className
       )}
       {...props}

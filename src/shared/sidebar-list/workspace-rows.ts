@@ -1,29 +1,52 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import { folderWorkspaceToWorktree } from '../folder-workspace-worktree'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../repo-types'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
-import { getWorkspaceAttachments } from '../workspace-attachments'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
+import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
+import { parseWorkspaceKey, worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
 } from '../worktree/host-qualified-identity'
-import type { WorktreeLineage } from '../worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineageEdge,
+  WorktreeLineage
+} from '../worktree/lineage-types'
+import { folderLineageEdgeOf } from '../worktree/folder-lineage-parents'
+import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { SMART_TIERS } from './sort-stamps'
 
-/**
- * One workspace this host lists, as the sidebar reads it: catalog, metadata and the host's sort
- * stamps. Activity and PR state are their own domains, so plain terminal output never changes a row.
- */
+/** A row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */
+export const CrossStoreParentRecordSchema = z
+  .custom<CrossStoreWorkspaceLineage>(isCrossStoreWorkspaceLineage)
+  .optional()
+  .catch(undefined)
+
+/** A row's folder workspace parent (folder-lineage-parents.ts); unreadable reads as none. */
+export const WorkspaceLineageEdgeSchema = z
+  .object({
+    parentWorkspaceKey: z.custom<WorkspaceKey>(
+      (value) => typeof value === 'string' && parseWorkspaceKey(value) !== null
+    ),
+    parentInstanceId: z.string().nullable().optional(),
+    childInstanceId: z.string().nullable().optional()
+  })
+  .nullable()
+  .optional()
+  .catch(undefined)
+
+/** Catalog/metadata/sort stamps only; separate activity and review domains keep terminal output from invalidating rows. */
 export const WorkspaceRowSchema = z.object({
   id: z.string(),
   hostId: z.string(),
@@ -34,7 +57,7 @@ export const WorkspaceRowSchema = z.object({
   displayName: z.string(),
   isMainWorktree: z.boolean(),
   instanceId: z.string().optional(),
-  /** The stored lineage record's edge; the builder decides whether it is valid. */
+  /** Stored lineage edge; the builder validates it. */
   lineage: z
     .object({
       parentWorktreeId: z.string(),
@@ -42,13 +65,20 @@ export const WorkspaceRowSchema = z.object({
       parentWorktreeInstanceId: z.string()
     })
     .nullable(),
+  /** Saved parent in another Orca store; the reader resolves it (cross-store-lineage-resolution.ts). */
+  crossStoreParent: CrossStoreParentRecordSchema,
+  /** Folder workspace parent in this store; null for none, absent from older hosts. */
+  workspaceLineage: WorkspaceLineageEdgeSchema,
   isPinned: z.boolean(),
   isArchived: z.boolean(),
+  removing: z.literal(true).optional(),
+  removalRecorded: z.literal(true).optional(),
+  removalError: z.string().optional(),
   isUnread: z.boolean(),
   workspaceStatus: z.string(),
   comment: z.string(),
   manualOrder: z.number().optional(),
-  /** The saved order Manual falls back to where a row has no manualOrder; older hosts omit it. */
+  /** Manual fallback for rows lacking manualOrder; old hosts omit it. */
   sortOrder: z.number().optional(),
   createdAt: z.number().optional(),
   creatorProvenance: z
@@ -58,7 +88,7 @@ export const WorkspaceRowSchema = z.object({
     ])
     .optional(),
   linkedIssue: z.number().nullable(),
-  /** The linked PR number from metadata; a branch's PR from the cache is the review domain. */
+  /** Metadata link only; cached branch PR belongs to the review domain. */
   linkedPR: z.number().nullable(),
   linkedLinearIssue: z.string().nullable(),
   linkedGitLabMR: z.number().nullable(),
@@ -69,16 +99,15 @@ export const WorkspaceRowSchema = z.object({
   automationName: z.string().optional(),
   cliCreated: z.literal(true).optional(),
   detachedHead: z.literal(true).optional(),
-  /** Main's alone: the platform a terminal in the workspace runs on. */
+  /** Main-owned terminal platform. */
   terminalPlatform: z.string().optional(),
-  /** The owning host's sort stamps (sort-stamps.ts); optional, as older hosts write no tier. */
+  /** Host-owned sort stamps (sort-stamps.ts); old hosts omit tiers. */
   recentAt: z.number().optional(),
   smartTier: z.enum(SMART_TIERS).optional(),
   smartAt: z.number().optional()
 })
 
-/** Keyed by the row's identity as every client keys it: a local row whose metadata names no host
- *  keeps `|id`, while `hostId` still says which host owns it. */
+/** Legacy local rows without metadata host retain `|id` keys even when hostId names their owner. */
 export const WorkspaceRowsSnapshotSchema = z.object({
   revision: z.number(),
   rows: z.record(z.string(), WorkspaceRowSchema)
@@ -92,7 +121,9 @@ function toWorkspaceRow(
   hostId: ExecutionHostId,
   kind: WorkspaceRow['kind'],
   repo: Repo | undefined,
-  lineage: WorktreeLineage | undefined
+  lineage: WorktreeLineage | undefined,
+  crossStoreParent?: unknown,
+  workspaceLineage?: WorkspaceLineageEdge | null
 ): WorkspaceRow {
   const kindFacts = getWorkspaceRowKindFacts(worktree, repo)
   return {
@@ -112,8 +143,13 @@ function toWorkspaceRow(
           parentWorktreeInstanceId: lineage.parentWorktreeInstanceId
         }
       : null,
+    ...(isCrossStoreWorkspaceLineage(crossStoreParent) ? { crossStoreParent } : {}),
+    ...(workspaceLineage !== undefined ? { workspaceLineage } : {}),
     isPinned: worktree.isPinned,
     isArchived: worktree.isArchived,
+    ...(worktree.removing ? { removing: true } : {}),
+    ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
+    ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
     isUnread: worktree.isUnread,
     workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     comment: worktree.comment,
@@ -140,20 +176,19 @@ type ListedRow = { identity: HostScopedWorktreeKey; hostId: ExecutionHostId }
 type ListedWorktree = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
 type ListedRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
-/** Where this host lists a workspace, or null for one it does not (a paired server's). */
+/** Null for rows this host does not list, such as paired-server workspaces. */
 function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): ListedRow | null {
   const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
   if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
     return null
   }
-  // As the window stamps rows (worktree-host-ownership.ts): a remote repo's host always, a local
-  // row only the host its metadata names.
+  // Match window ownership: stamp remote hosts always, local hosts only when metadata names one.
   const identityHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
   return { identity: composeWorktreeHostIdentity(identityHostId, worktree.id), hostId }
 }
 
-/** Each git worktree with the repo it belongs to; the same repo id can be registered on two hosts. */
-function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
+/** Resolve each row’s own repo; repo IDs can collide across hosts. */
+export function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
   worktrees: readonly W[],
   repos: readonly R[]
 ): { worktree: W; repo: R | undefined }[] {
@@ -170,7 +205,7 @@ function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
   })
 }
 
-/** Each git worktree this host lists, under the key `buildWorkspaceRows` lists it and with its own repo. */
+/** Listed git worktrees with their own repos and buildWorkspaceRows keys. */
 export function listGitWorkspaceRows<W extends ListedWorktree, R extends ListedRepo>(
   worktrees: readonly W[],
   repos: readonly R[]
@@ -181,7 +216,6 @@ export function listGitWorkspaceRows<W extends ListedWorktree, R extends ListedR
   })
 }
 
-/** The keys `buildWorkspaceRows` lists these git worktrees under. */
 export function listGitWorkspaceRowKeys(
   worktrees: readonly Worktree[],
   repos: readonly Repo[]
@@ -189,15 +223,16 @@ export function listGitWorkspaceRowKeys(
   return listGitWorkspaceRows(worktrees, repos).map(({ identity }) => identity)
 }
 
-/**
- * Every workspace this host lists, from its own catalog: git worktrees (folder projects included)
- * and folder workspaces. A paired server's rows are another domain, so they are left out.
- */
+/** Own catalog only, including folder projects/workspaces; paired-server rows use another domain. */
 export function buildWorkspaceRows(catalog: {
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   repos: readonly Repo[]
   lineageById: Readonly<Record<string, WorktreeLineage>>
+  /** This store's saved cross-store parents, by child workspace key. */
+  crossStoreLineageByChildKey?: Readonly<Record<string, unknown>>
+  /** This store's workspace records (list 2), by child workspace key. */
+  workspaceLineageByChildKey?: Readonly<Record<string, WorkspaceLineageEdge>>
 }): Map<HostScopedWorktreeKey, WorkspaceRow> {
   const rows = new Map<HostScopedWorktreeKey, WorkspaceRow>()
   const add = (
@@ -208,7 +243,29 @@ export function buildWorkspaceRows(catalog: {
   ): void => {
     const listed = listedRow(worktree, repo)
     if (listed) {
-      rows.set(listed.identity, toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage))
+      const crossStoreParent =
+        kind === 'git'
+          ? catalog.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(worktree.id)]
+          : undefined
+      const workspaceLineage =
+        kind === 'git' && catalog.workspaceLineageByChildKey
+          ? folderLineageEdgeOf(
+              catalog.workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)],
+              worktree.instanceId
+            )
+          : undefined
+      rows.set(
+        listed.identity,
+        toWorkspaceRow(
+          worktree,
+          listed.hostId,
+          kind,
+          repo,
+          lineage,
+          crossStoreParent,
+          workspaceLineage
+        )
+      )
     }
   }
   for (const { worktree, repo } of withOwnerRepos(catalog.worktrees, catalog.repos)) {

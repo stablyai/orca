@@ -1,15 +1,11 @@
-/**
- * The two headless `orca serve` hosts the layout oracle drives with no window: orcad (plain Node)
- * and Electron serve. Both keep their pairing port across restarts so paired clients and the
- * oracle's layout stream reconnect.
- */
+// Keep profile and pairing port stable across Node-orcad/Electron-serve restarts so existing client streams reconnect.
 
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
-import { resolveBundledOrcadRuntime } from '../../../src/main/orcad/orcad-bundled-runtime'
+import { resolveBundledOrcadRuntime } from '../../../src/main/orcad/runtime-launch/orcad-bundled-runtime'
 import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../../src/shared/node-runtime-pin'
 import { cleanupE2EDaemons } from './electron-process-shutdown'

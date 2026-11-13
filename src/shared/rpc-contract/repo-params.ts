@@ -1,7 +1,17 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+
+// Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
+export const RepoList = z.object({
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
+})
+import {
+  OptionalBoolean,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
-import { RepoSelector } from './github-repo-target-params'
+import { RepoSelector, RepoShow } from './github-repo-target-params'
 
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
@@ -17,7 +27,8 @@ export const RepoCreate = z.object({
 
 export const RepoClone = z.object({
   url: requiredString('Missing clone URL'),
-  destination: requiredString('Missing clone destination')
+  destination: requiredString('Missing clone destination'),
+  folderName: z.string().optional()
 })
 
 export const RepoSetBaseRef = z.object({
@@ -27,7 +38,19 @@ export const RepoSetBaseRef = z.object({
 
 export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
 
+/** `repo.setHidden`: sidebar-only; `repoHostId` picks one host's copy of a repo id set up on several. */
+export const RepoSetHidden = RepoShow.extend({
+  hidden: z.boolean()
+})
+
+/** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
+export const RepoHooksCheck = RepoSelector.extend({
+  background: z.boolean().optional(),
+  wakeWslDistro: OptionalBoolean
+})
+
 export const RepoSearchRefs = z.object({
+  namespace: z.literal('remote').optional(),
   repo: requiredString('Missing repo selector'),
   query: z
     .unknown()
@@ -54,12 +77,17 @@ export const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: OptionalString.nullable().optional()
   })
 })
 
 export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
+})
+
+export const ProjectGroupUpdateMany = z.object({
+  mutations: z.array(ProjectGroupUpdate)
 })
 
 // Why `connectionId` is optional: older clients omit it, and older hosts strip it (bare selector).
@@ -83,16 +111,17 @@ export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
   }),
   z.object({
     parentPath: requiredString('Missing parent path'),
-    // Why: blank group names fall back to the scanned folder basename; separate
-    // imports do not create a group but share the same renderer payload shape.
+    // Blank group names use the scanned folder basename; separate imports share the payload but create no group.
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('separate')
   })
 ])
 
+/** `wakeWslDistro`: the user saving their own edit, which may start a stopped WSL distro; older hosts drop it. */
 export const RepoIssueCommandWrite = RepoSelector.extend({
-  content: z.string()
+  content: z.string(),
+  wakeWslDistro: OptionalBoolean
 })
 
 export const RepoSparsePresetSave = RepoSelector.extend({

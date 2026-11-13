@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useSourceControlWatchConsumers } from './source-control-watch-consumers'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,
@@ -17,6 +18,10 @@ import {
   releaseWatchRoot,
   type HeldWatchRoots
 } from './editor-external-watch-local-roots'
+import {
+  selectLocalTabFoldersKey,
+  SymlinkedTabFolderWatches
+} from './editor-external-watch-symlink-folders'
 
 type FsChangedHandler = (
   payload: FsChangedPayload,
@@ -33,14 +38,26 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
   })
 }
 
-/** Keeps editor filesystem subscriptions alive beyond any individual editor surface. */
 export function useEditorExternalWatch(): void {
-  const snapshot = useAppStore(selectEditorExternalWatchTargets)
+  const sectionTargets = useSourceControlWatchConsumers()
+  const snapshot = useAppStore(
+    useCallback(
+      (state) => selectEditorExternalWatchTargets(state, sectionTargets),
+      [sectionTargets]
+    )
+  )
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
   const unwatchedTargetKeysRef = useRef<ReadonlySet<string>>(new Set())
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const heldWatchRootsRef = useRef<HeldWatchRoots>(new Map())
   const fsChangedHandlerRef = useRef<FsChangedHandler | null>(null)
+  const [symlinkedFolders] = useState(() => new SymlinkedTabFolderWatches(warnExternalWatchFailure))
+  const tabFoldersKey = useAppStore(
+    useCallback(
+      (state) => selectLocalTabFoldersKey(state.openFiles, snapshot.targets),
+      [snapshot.targets]
+    )
+  )
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
@@ -61,31 +78,30 @@ export function useEditorExternalWatch(): void {
     targetsRef.current = nextTargets
     // Why: acquire before release so a root shared by an added and a removed target is never dropped in between.
     for (const target of added) {
-      // Why: writes made while it was unwatched (background trim) were never reported. Resync like a
-      // reconnect does — one overflow through the normal pipeline — once the watch is in place.
-      const resync = previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))
-        ? () =>
-            fsChangedHandlerRef.current?.(
-              markWorktreeCatchUpPayload({
-                worktreePath: target.worktreePath,
-                events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
-                connectionId: target.connectionId,
-                resync: true
-              }),
-              target.runtimeEnvironmentId,
-              target
-            )
-        : undefined
+      // Overflow-resync missed changes through the normal pipeline, scoped to this target.
+      const resync = (): void => {
+        fsChangedHandlerRef.current?.(
+          markWorktreeCatchUpPayload({
+            worktreePath: target.worktreePath,
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            connectionId: target.connectionId,
+            resync: true
+          }),
+          target.runtimeEnvironmentId,
+          target
+        )
+      }
       if (target.runtimeEnvironmentId) {
-        // Why: the host's ready event means its watcher is installed, so nothing after the resync is lost.
+        // Why: the remote watch decides when to resync (each host watcher install and each recovery).
         subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef, resync)
         continue
       }
       const installed = acquireWatchRoot(heldWatchRootsRef.current, target, (err) => {
-        // Why: SSH providers can disappear while tabs still reference the worktree; report the failure without an uncaught renderer promise.
+        // Provider disappearance must report watch failure without uncaught renderer rejection.
         warnExternalWatchFailure(target, err)
       })
-      if (resync) {
+      // After reacquiring trimmed background watches, catch up on changes made while unwatched.
+      if (previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))) {
         void installed.then(resync)
       }
     }
@@ -103,20 +119,30 @@ export function useEditorExternalWatch(): void {
     // Why: the selector keeps the snapshot identity until a target or unwatched key changes.
   }, [snapshot])
 
+  // Why: runs after the target diff so targetsRef holds the targets these folders belong to.
+  useEffect(() => {
+    symlinkedFolders.sync(tabFoldersKey, targetsRef.current, heldWatchRootsRef.current)
+  }, [symlinkedFolders, tabFoldersKey])
+
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const heldWatchRoots = heldWatchRootsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId, connectionId) =>
-        targetsRef.current.filter(
+      (worktreePath, runtimeEnvironmentId, connectionId) => [
+        ...targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
             target.runtimeEnvironmentId === runtimeEnvironmentId &&
             // Why: a local and an SSH root can share a path; runtime streams are already per host.
             (runtimeEnvironmentId !== null || target.connectionId === connectionId)
-        )
+        ),
+        // Why: a watched tab folder reports under its own path; its workspaces reconcile the events.
+        ...(runtimeEnvironmentId === null
+          ? symlinkedFolders.targetsFor(worktreePath, connectionId)
+          : [])
+      ]
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
     fsChangedHandlerRef.current = handleFsChanged
@@ -129,19 +155,20 @@ export function useEditorExternalWatch(): void {
         remoteUnsubscribe()
       }
       remoteWatchUnsubs.clear()
+      symlinkedFolders.clear()
       releaseAllWatchRoots(heldWatchRoots)
       targetsRef.current = []
       unwatchedTargetKeysRef.current = new Set()
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
     }
-  }, [])
+  }, [symlinkedFolders])
 }
 
 function subscribeRuntimeTarget(
   target: EditorExternalWatchTarget,
   remoteWatchUnsubs: Map<string, () => void>,
   fsChangedHandlerRef: { current: FsChangedHandler | null },
-  onFirstReady: (() => void) | undefined
+  onCatchUp: () => void
 ): void {
   const runtimeEnvironmentId = target.runtimeEnvironmentId
   if (!runtimeEnvironmentId) {
@@ -154,7 +181,7 @@ function subscribeRuntimeTarget(
       { ...target, runtimeEnvironmentId },
       (payload) => fsChangedHandlerRef.current?.(payload, runtimeEnvironmentId),
       (error) => warnExternalWatchFailure(target, error),
-      onFirstReady
+      onCatchUp
     )
   )
 }

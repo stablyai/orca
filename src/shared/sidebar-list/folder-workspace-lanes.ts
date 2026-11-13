@@ -1,26 +1,20 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
+import { getFolderWorkspaceHostId } from '../folder-workspaces/folder-workspace-host-id'
 import type { WorkspaceStatusDefinition } from '../worktree/types'
 import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../workspace-statuses'
 import { ALL_GROUP_KEY, getPRLaneKey } from './group-keys'
 import { compareCodePoints, compareSidebarText } from './text-order'
 import type { WorktreeGroupBy } from './row-types'
 
-/** A folder workspace paired with the project group that owns it. The pair is
- *  carried through grouping because FolderWorkspaceRow needs a non-optional
- *  ProjectGroup and the section emitters have no owner resolver. */
+/** Carry the owning ProjectGroup through emission: FolderWorkspaceRow requires it and emitters cannot resolve owners. */
 export type RenderableFolderWorkspace = {
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
 }
 
-/**
- * The single place that decides which folder workspaces can render.
- *
- * Why one place: membership used to be computed inside the repo-grouping branch,
- * so every other Group by mode dropped folder workspaces entirely (#15362).
- * Modes may choose a lane; they may never subtract from this list.
- */
+/** Resolve membership before grouping so every mode renders the same folder workspaces (#15362); modes choose lanes only. */
 export function getRenderableFolderWorkspaces(
   folderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
@@ -33,18 +27,23 @@ export function getRenderableFolderWorkspaces(
     if (!projectGroup?.parentPath) {
       continue
     }
-    renderable.push({ folderWorkspace, projectGroup })
+    // Stamp an unstamped folder the way catalog adoption does, so its card, label and section name
+    // the host it runs on (folder-workspace-execution-host.ts).
+    const hostId = folderWorkspace.executionHostId
+      ? null
+      : getFolderWorkspaceHostId(folderWorkspace, projectGroups)
+    renderable.push({
+      folderWorkspace:
+        hostId && hostId !== LOCAL_EXECUTION_HOST_ID
+          ? { ...folderWorkspace, executionHostId: hostId }
+          : folderWorkspace,
+      projectGroup
+    })
   }
   return renderable
 }
 
-/**
- * Which lane a folder workspace belongs to, per Group by mode.
- *
- * Deliberately exhaustive with no `default:` so a new WorktreeGroupBy variant is
- * a compile error here rather than a silent fall-through that hides folder
- * workspaces again. Total by construction: a folder workspace always gets a lane.
- */
+/** Switch exhaustively so new grouping modes cannot silently hide folder workspaces again. */
 export function getFolderWorkspaceLaneKey(
   pair: RenderableFolderWorkspace,
   groupBy: Exclude<WorktreeGroupBy, 'repo'>,
@@ -54,20 +53,22 @@ export function getFolderWorkspaceLaneKey(
     case 'workspace-status':
       return getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
     case 'pr-status':
-      // Why in-progress: a folder workspace has no branch or repo, so it can
-      // never resolve a PR. The window's PR reader returns this same lane for any
-      // worktree without one, so the two stay consistent.
+      // Folders cannot resolve a PR; match worktrees without one in the in-progress lane.
       return getPRLaneKey('in-progress')
     case 'none':
       return ALL_GROUP_KEY
   }
 }
 
-/** Sidebar display order: user-authored order first, then name. Mirrors the rule
- *  the project-group emitter has always used, so lanes and groups agree. */
+type FolderWorkspaceDisplayOrder = Pick<
+  FolderWorkspace,
+  'id' | 'name' | 'sortOrder' | 'manualOrder' | 'executionHostId'
+>
+
+/** Match project-group ordering: user rank, then name. */
 export function compareFolderWorkspacesForDisplay(
-  left: FolderWorkspace,
-  right: FolderWorkspace
+  left: FolderWorkspaceDisplayOrder,
+  right: FolderWorkspaceDisplayOrder
 ): number {
   const leftOrder = left.manualOrder ?? left.sortOrder
   const rightOrder = right.manualOrder ?? right.sortOrder

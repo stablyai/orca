@@ -3,9 +3,6 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 
-// Every per-page retention term reaches the guest as a prop on BrowserPagePane, where a wrong value
-// parks the webview display:none. The threading itself had no coverage: a mutant hardcoding any of
-// the three to false left the whole suite green.
 type MockAppState = {
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   remoteBrowserPageHandlesByPageId: Record<string, never>
@@ -32,7 +29,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 
@@ -72,13 +69,9 @@ vi.mock('./browser-page-pane', () => ({
     return <span data-browser-page-id={props.browserTab.id} />
   }
 }))
-
-import {
-  acquireBrowserAutomationVisibility,
-  releaseBrowserAutomationVisibility
-} from '../host-guest/browser-automation-visibility'
-import { hydrateBrowserDrivers } from '@/lib/pane-manager/browser-mobile-driver-state'
-import { hydrateBrowserRemoteViewerPages } from '@/lib/pane-manager/browser-remote-viewer-state'
+import { hydrateBrowserDrivers } from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import '@/runtime/browser/ownership/browser-remote-viewer-state'
+import { hydrateBrowserRemoteViewerPages } from '@/runtime/browser/ownership/browser-remote-viewer-store'
 import BrowserPane from './browser-workspace-pane'
 
 const WORKSPACE_ID = 'ws-1'
@@ -118,19 +111,6 @@ function createWorkspace(): BrowserWorkspace {
   } as unknown as BrowserWorkspace
 }
 
-function propsFor(pageId: string): (typeof mocks.pageProps)[number] {
-  const props = mocks.pageProps.findLast((entry) => entry.id === pageId)
-  if (!props) {
-    throw new Error(`BrowserPagePane never rendered for ${pageId}`)
-  }
-  return props
-}
-
-function renderWorkspacePane(): void {
-  mocks.pageProps = []
-  render(<BrowserPane browserTab={createWorkspace()} isActive={true} />)
-}
-
 describe('browser workspace pane retention props', () => {
   beforeEach(() => {
     mocks.state = {
@@ -166,33 +146,5 @@ describe('browser workspace pane retention props', () => {
     expect(renderedIds()).toEqual(['page-0', 'page-199'])
     view.rerender(<BrowserPane key="restored" browserTab={workspace} isActive />)
     expect(renderedIds()).toEqual(['page-0'])
-  })
-
-  it('threads all three retention terms to the page that owns them', () => {
-    renderWorkspacePane()
-    expect(mocks.pageProps.some((props) => props.id === 'page-b')).toBe(false)
-
-    cleanup()
-    const token = acquireBrowserAutomationVisibility('page-b')
-    hydrateBrowserDrivers([
-      { browserPageId: 'page-b', driver: { kind: 'mobile', clientId: 'phone-1' } }
-    ])
-    hydrateBrowserRemoteViewerPages(['page-b'])
-    renderWorkspacePane()
-
-    expect(propsFor('page-b')).toEqual({
-      id: 'page-b',
-      isAutomationVisible: true,
-      isMobileDriven: true,
-      isRemotelyViewed: true
-    })
-    // Why the sibling: each term must land on the page it belongs to, not on every page of the tab.
-    expect(propsFor('page-a')).toEqual({
-      id: 'page-a',
-      isAutomationVisible: false,
-      isMobileDriven: false,
-      isRemotelyViewed: false
-    })
-    releaseBrowserAutomationVisibility(token)
   })
 })

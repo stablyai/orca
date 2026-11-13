@@ -1,13 +1,16 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { useAppStore } from '@/store'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
-import { githubProjectHost } from '../../../../shared/github/project-identity'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
+import { githubProjectHost } from '../../../../shared/github/projects/project-identity'
+import type {
+  GitHubProjectRow,
+  GitHubProjectTable
+} from '../../../../shared/github/projects/project-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import {
   resolveMissingRepoProjectDialogState,
@@ -16,6 +19,7 @@ import {
 import { resolveSelectedProjectRowRepo } from './project-row-filtering'
 import { buildProjectWorkItem } from './project-work-item'
 import { useProjectRowMutations } from './useProjectRowMutations'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type DialogRepoItem = {
   workItem: GitHubWorkItem
@@ -121,7 +125,7 @@ export function useProjectRowActions({
   )
   const openUrlWithMessage = useCallback((row: GitHubProjectRow, message: string) => {
     if (row.content.url) {
-      void window.api.shell.openUrl(row.content.url)
+      openAppHttpLink(row.content.url)
     }
     toast.message(message)
   }, [])
@@ -158,7 +162,7 @@ export function useProjectRowActions({
       const origin = buildOrigin(row)
       if (!origin) {
         if (row.content.url) {
-          void window.api.shell.openUrl(row.content.url)
+          openAppHttpLink(row.content.url)
         }
         return
       }
@@ -206,7 +210,7 @@ export function useProjectRowActions({
       if (!workItem) {
         return
       }
-      // Why: issue #4756 changed only TaskPage's "Create workspace"; Project view stays on direct "start work now" launch.
+      // Project actions start work immediately; TaskPage’s background creation flow does not apply.
       void launchWorkItemDirect({
         item: workItem,
         repoId: resolution.repo.id,
@@ -214,7 +218,7 @@ export function useProjectRowActions({
         telemetrySource: 'sidebar',
         openModalFallback: () => {
           if (row.content.url) {
-            void window.api.shell.openUrl(row.content.url)
+            openAppHttpLink(row.content.url)
           }
         }
       })

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
 import {
@@ -22,7 +22,9 @@ import {
   type RemoteBrowserPaneNotice,
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
-import { subscribeRuntimeEnvironment } from '@/runtime/runtime-environment-pairing-refresh'
+import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -47,9 +49,7 @@ export function useRemoteBrowserPageLifecycle({
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
   const setFrameUrlRef = useRef(setFrameUrl)
   const setFrameMetadataRef = useRef(setFrameMetadata)
-  // The single source for what the stream is doing. busy, the notice, and whether the reconnect
-  // control renders are all derived below, so they cannot disagree — see
-  // remote-browser-stream-status.ts for the four ways they used to.
+  // Derive busy, notice and reconnect from one status so they cannot disagree.
   const [streamStatus, setStreamStatus] = useState<RemoteBrowserStreamStatus>(
     REMOTE_BROWSER_STREAM_IDLE
   )
@@ -65,12 +65,13 @@ export function useRemoteBrowserPageLifecycle({
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const runtimeWorktreeRef = useRef(runtimeWorktree)
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
-  // Why: the stream lifecycle is built once per pane, before the callbacks it needs exist. It
-  // reaches them through this bridge so it never captures a render's stale closure.
+  // The lifecycle is built once; bridge committed callbacks to avoid stale render closures.
   const streamBridgeRef = useRef<RemoteBrowserStreamBridge>(NO_REMOTE_BROWSER_STREAM_BRIDGE)
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  // Stable for the provider's life, so the once-built lifecycle may hold it.
+  const confirm = useConfirmationDialog()
 
   useLayoutEffect(() => {
     currentBrowserTabIdRef.current = browserTab.id
@@ -106,12 +107,7 @@ export function useRemoteBrowserPageLifecycle({
       getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
       setStatus: (status) => {
         setStreamStatus(status)
-        // Why every status change clears the pane's notice, not just the recovering ones: a pane
-        // notice describes the situation the PREVIOUS status described, so any transition makes it
-        // stale. Clearing only on live/opening left a 'direct' notice — which outranks the stream's
-        // own — on screen after the stream stopped, so a stranded pane showed "Enter a valid http(s)
-        // or localhost URL." beside its Reconnect button and never showed the actual cause.
-        // It also has no other owner: nothing else would dismiss it.
+        // Every transition invalidates the pane notice; stale direct feedback would outrank the stream’s failure beside Reconnect.
         setPaneNotice(null)
       },
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
@@ -121,7 +117,8 @@ export function useRemoteBrowserPageLifecycle({
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
-      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId)
+      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
+      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
     })
   }
   const lifecycle = lifecycleRef.current

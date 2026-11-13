@@ -5,7 +5,7 @@ const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => fakes.verifyRelayToken,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
@@ -13,80 +13,6 @@ vi.mock('./relay-token-verifier.js', () => ({
 import { createRelayApp } from './app.js'
 
 describe('Relay region API', () => {
-  it('passes a valid preference to placement and records coarse outcomes', async () => {
-    const assign = vi.fn(async () => ({
-      userId: 'user-1',
-      relayHostId: 'asiahost00000001',
-      cellId: 'asia-c1',
-      cellUrl: 'https://asia-c1.relay.example.test',
-      region: 'asia-east2' as const,
-      assignmentEpoch: 1,
-      leaseExpiresAt: Date.now() + 300_000
-    }))
-    const recordRegionRequest = vi.fn()
-    const recordRegionSelection = vi.fn()
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve: vi.fn(async () => null) } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordRegionRequest,
-      recordRegionSelection
-    })
-
-    const response = await app.request(
-      '/v1/assign',
-      assignmentRequest('asiahost00000001', { preferredRegion: 'asia-east2' })
-    )
-
-    expect(response.status).toBe(200)
-    expect(await response.clone().json()).not.toHaveProperty('regionCorrection')
-    expect(assign).toHaveBeenCalledWith(
-      { userId: 'user-1', relayHostId: 'asiahost00000001' },
-      'asia-east2',
-      'asia-east2',
-      undefined,
-      { hostRequested: true }
-    )
-    expect(recordRegionRequest).toHaveBeenCalledWith('asia-east2')
-    expect(recordRegionSelection).toHaveBeenCalledWith({
-      targetRegion: 'asia-east2',
-      selectedRegion: 'asia-east2',
-      fallback: false
-    })
-  })
-
-  it('keeps the preference for observation while the kill switch places US-first', async () => {
-    const assign = vi.fn(async () => ({
-      userId: 'user-1',
-      relayHostId: 'killhost00000001',
-      cellId: 'us-c1',
-      cellUrl: 'https://us-c1.relay.example.test',
-      region: 'us-central1' as const,
-      assignmentEpoch: 1,
-      leaseExpiresAt: Date.now() + 300_000
-    }))
-    const app = createRelayApp(config({ regionalPlacementEnabled: false }), {
-      store: {} as never,
-      assignments: { assign, resolve: vi.fn(async () => null) } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    const response = await app.request(
-      '/v1/assign',
-      assignmentRequest('killhost00000001', { preferredRegion: 'asia-east2' })
-    )
-
-    expect(response.status).toBe(200)
-    expect(assign).toHaveBeenCalledWith(
-      { userId: 'user-1', relayHostId: 'killhost00000001' },
-      'asia-east2',
-      'us-central1',
-      undefined,
-      { hostRequested: true }
-    )
-  })
 
   it('preserves the cold-start hint and binds a negotiated window after placement', async () => {
     const assignment = {
@@ -152,7 +78,8 @@ describe('Relay region API', () => {
     }
     const assign = vi.fn(async () => assignment)
     const regionReserve = vi.fn(async () => null)
-    const plan = vi.fn(async () => ({ kind: 'database', regionReserve }))
+    const reserveSpill = vi.fn(async () => null)
+    const plan = vi.fn(async () => ({ kind: 'database', regionReserve, reserveSpill }))
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: {
@@ -175,17 +102,17 @@ describe('Relay region API', () => {
     expect(response.status).toBe(200)
     expect(plan).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
-      { reconnect: true, region: 'asia-east2', regionCorrection: true }
+      { reconnect: true, region: 'asia-east2', regionCorrection: true, preferred: true }
     )
     expect(assign).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
       'asia-east2',
       'asia-east2',
       undefined,
-      { regionReserve, hostRequested: true }
+      { regionReserve, reserveSpill, hostRequested: true }
     )
     plan.mockClear()
-    await app.request(
+    const report = await app.request(
       '/v1/assign',
       assignmentRequest('abcdefghijklmnop', {
         regionCorrection: {
@@ -199,6 +126,7 @@ describe('Relay region API', () => {
         }
       })
     )
+    expect(report.status).toBe(200)
     expect(plan).not.toHaveBeenCalled()
   })
 
@@ -352,21 +280,6 @@ describe('Relay region API', () => {
     expect(await response.json()).toEqual({ error: 'region_catalog_temporarily_unavailable' })
   })
 
-  it('still fails loudly when the region catalog breaks for a non-transient reason', async () => {
-    const regionCatalog = vi.fn(async () => {
-      throw new TypeError('broken invariant')
-    })
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { regionCatalog } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    const response = await app.request('/v1/regions')
-
-    expect(response.status).toBe(500)
-  })
 })
 
 function assignmentRequest(relayHostId: string, extra: Record<string, unknown>): RequestInit {

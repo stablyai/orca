@@ -23,8 +23,7 @@ export async function seedLineageScenario(
       state.setGroupBy('none')
     }
     state.setSortBy('recent')
-    // Why: these specs assert lineage structure, not the user's persisted
-    // sidebar filters. Make the seeded child render even when it has no live PTY.
+    // Clear persisted sidebar filters so structure tests render the child even without a live PTY.
     state.setShowActiveOnly(false)
     state.setShowSleepingWorkspaces(true)
     state.setHideDefaultBranchWorkspace(false)

@@ -1,9 +1,5 @@
-/**
- * A live app's kitty keyboard flags survive park and reveal in both records:
- * xterm (which encodes keys) and the pane mirror (which Orca's shortcut policy
- * reads). The reveal builds a fresh xterm, so without the replay epilogue's
- * restore xterm would sit at 0 while the mirror adopted the host's flags.
- */
+// Require kitty flags in fresh xterm and the pane policy mirror after park/reveal.
+// Without replay-epilogue restore, xterm stays at 0 while the mirror adopts host flags.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'

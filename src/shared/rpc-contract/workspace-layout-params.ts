@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isTerminalLeafId } from '../stable-pane-id'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
 import { EditorFileRecord, EditorViewRecord } from './workspace-layout-editor-file-params'
@@ -94,10 +94,7 @@ const SplitGroupCommand = z.object({
   direction: z.enum(['left', 'right', 'up', 'down'])
 })
 
-/**
- * The window's close of one tab it already closed; main records a terminal's close with the
- * window's reason. An editor tab's close records nothing.
- */
+/** Record terminal closes with the window’s reason; editor closes leave no terminal record. */
 const CloseTabsCommand = z.object({
   type: z.literal('closeTabs'),
   workspace: OnPane.workspace,
@@ -105,15 +102,12 @@ const CloseTabsCommand = z.object({
   recordClose: z.enum(['user', 'cleanup']).optional()
 })
 
-/**
- * An editor tab under the id the window proposes; main refuses an id another tab holds. Main
- * places it and replaces the group's preview by the same rules as the window.
- */
+/** Use window-proposed editor IDs, rejecting collisions; placement/preview replacement follows window rules. */
 const OpenEditorTabCommand = z.object({
   type: z.literal('openEditorTab'),
   ...OnTab,
   fileId: z.string().min(1),
-  contentType: z.enum(['editor', 'diff', 'conflict-review', 'check-details']),
+  contentType: z.enum(['editor', 'diff', 'conflict-review', 'check-details', 'git-graph']),
   file: EditorFileRecord.optional(),
   view: EditorViewRecord.optional(),
   groupId: z.string().min(1).optional(),
@@ -141,7 +135,8 @@ const MovePaneToNewTabCommand = z.object({
 const AiVaultTitle = z.object({
   agent: z.enum(['claude', 'codex']),
   sessionId: z.string(),
-  title: z.string()
+  title: z.string(),
+  kind: z.enum(['named', 'fallback']).optional().catch(undefined)
 })
 
 /** A tab's rename: a title as the window stores it today; null clears it. */
@@ -150,7 +145,10 @@ const RenameTabCommand = z.discriminatedUnion('kind', [
     type: z.literal('renameTab'),
     ...OnTab,
     kind: z.enum(['custom', 'generated']),
-    title: z.union([z.string(), z.null()])
+    title: z.union([z.string(), z.null()]),
+    expected: z
+      .object({ entityId: z.string(), executionHostId: z.string(), customTitle: z.string() })
+      .optional()
   }),
   z.object({
     type: z.literal('renameTab'),
@@ -169,10 +167,7 @@ const SetTabPropsCommand = z.object({
   clearLaunchAgent: z.literal(true).optional()
 })
 
-/**
- * A browser tab under the ids the window drew it with: its pages and the tab's own callers need
- * them at once. Main refuses an id another tab or page holds; the same open again changes nothing.
- */
+/** Preserve window-created browser tab/page IDs for immediate callers; refuse collisions and replay opens idempotently. */
 const OpenBrowserTabCommand = z.object({
   type: z.literal('openBrowserTab'),
   workspace: OnPane.workspace,
@@ -189,10 +184,7 @@ const OpenBrowserTabCommand = z.object({
   split: NewGroupSplit
 })
 
-/**
- * A chat tab under the id the window drew it with: status and attention address it at once. The
- * same open again changes nothing; an id another tab holds is refused.
- */
+/** Preserve window chat IDs for status/attention; refuse collisions and replay opens idempotently. */
 const OpenAgentSessionTabCommand = z.object({
   type: z.literal('openAgentSessionTab'),
   ...OnTab,
@@ -250,10 +242,7 @@ const OpenSimulatorTabCommand = z.object({
   split: NewGroupSplit
 })
 
-/**
- * Restored editor tabs the window asks main to move to the workspace that owns their file (F42),
- * under the ids it proposes: the window resolved that owner.
- */
+/** Move restored editor tabs to the window-resolved owning workspace, preserving proposed IDs (F42). */
 const MoveTabToWorkspaceCommand = z.object({
   type: z.literal('moveTabToWorkspace'),
   workspace: OnPane.workspace,
@@ -272,10 +261,7 @@ const MoveTabToWorkspaceCommand = z.object({
   file: EditorFileRecord.optional()
 })
 
-/**
- * Open files renamed or moved on disk, under the ids the window proposes; an edit-mode file's record
- * moves from its old path, and a non-plain tab's view takes its new path.
- */
+/** Apply disk renames to window-proposed editor IDs: move edit records and update non-plain tab view paths. */
 const EditorFileRenames = z
   .array(
     z.object({
@@ -298,14 +284,8 @@ const RenameEditorFilesCommand = z.object({
     .optional()
 })
 
-/**
- * A window's layout command (`layout.apply`, registered only in a layout-owner build). The window
- * names what it acts on; main mints every new id but a created terminal tab's
- * (see CreateTerminalTabCommand), a browser tab's and page's, which the window already shows
- * (see OpenBrowserTabCommand), an editor tab's (see OpenEditorTabCommand), a chat tab's (see
- * OpenAgentSessionTabCommand), a simulator tab's (see OpenSimulatorTabCommand), and the group an
- * open into a new split makes (see NewGroupSplit).
- */
+/** Layout-owner command: main mints IDs except window-proposed terminal/browser/editor/chat/simulator tabs,
+ * browser pages and groups created by NewGroupSplit. */
 export const LayoutApplyParams = z.object({
   command: z.discriminatedUnion('type', [
     CreateTerminalTabCommand,

@@ -6,12 +6,11 @@ import type {
 } from './drop-commit-context'
 import { commitWorktreePointerDrop } from './pointer-commit'
 import type { WorktreePointerDrag } from './row-state'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 
-// Pointer drags escape the row that started them, so move/up/cancel are tracked on the
-// window in capture phase.
+// Capture move/up/cancel on window because drags escape their starting row.
 export function useWorktreePointerDragWindowEvents(args: {
   ctx: WorktreeDropCommitContext
   runtime: WorktreeDragRuntime

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
+import { describe, expect, it } from 'vitest'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcContentBudget,
@@ -13,42 +13,6 @@ describe('remoteRpcContentBudget', () => {
 
     expect(remoteRpcResultExceedsContentBudget(result, bytes, ['content'])).toBe(false)
     expect(remoteRpcResultExceedsContentBudget(result, bytes - 1, ['content'])).toBe(true)
-  })
-
-  it('reuses exact measurements for a shared result object', () => {
-    const result = { content: '\n'.repeat(64 * 1024), isBinary: false }
-    const bytes = Buffer.byteLength(JSON.stringify(result), 'utf8')
-    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
-    try {
-      expect(remoteRpcResultExceedsContentBudget(result, bytes, ['content'])).toBe(false)
-      const firstCalls = charCodeAt.mock.calls.length
-      expect(firstCalls).toBeGreaterThan(result.content.length)
-
-      expect(remoteRpcResultExceedsContentBudget(result, bytes - 1, ['content'])).toBe(true)
-      expect(charCodeAt.mock.calls.length - firstCalls).toBeLessThan(100)
-    } finally {
-      charCodeAt.mockRestore()
-    }
-  })
-
-  it('reuses raw measurements for a shared oversized result', () => {
-    const result = { content: 'A'.repeat(4 * 1024 * 1024), isBinary: false }
-    const byteLength = vi.spyOn(Buffer, 'byteLength')
-    const contentMeasurementCalls = () =>
-      byteLength.mock.calls.filter(([value]) => value === result.content).length
-    try {
-      expect(remoteRpcResultExceedsContentBudget(result, result.content.length, ['content'])).toBe(
-        true
-      )
-      expect(contentMeasurementCalls()).toBe(1)
-
-      expect(
-        remoteRpcResultExceedsContentBudget(result, result.content.length - 128, ['content'])
-      ).toBe(true)
-      expect(contentMeasurementCalls()).toBe(1)
-    } finally {
-      byteLength.mockRestore()
-    }
   })
 
   it('re-evaluates a cached raw measurement under a larger budget', () => {

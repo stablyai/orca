@@ -4,11 +4,12 @@ import {
   CancelGenerateIssueSummary
 } from '../../../shared/rpc-contract/jira-params'
 import type { Store } from '../../persistence/loading-store/store'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import {
   cancelJiraIssueSummaryRequest,
   generateJiraIssueSummaryRequest
-} from '../../text-generation/jira-issue-summary-requests'
+} from '../../text-generation/requests/jira-issue-summary-requests'
+import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
 
 export function registerJiraIssueSummaryGenerationHandlers(
   store: Pick<Store, 'getSettings'>,
@@ -18,7 +19,7 @@ export function registerJiraIssueSummaryGenerationHandlers(
     const request = GenerateIssueSummary.parse(args)
     const owner = `window:${event.sender.id}`
     const cancel = (): void => cancelJiraIssueSummaryRequest(owner, request)
-    event.sender.once('destroyed', cancel)
+    const releaseDestroyed = addFanoutListener(event.sender, 'destroyed', cancel)
     try {
       return await generateJiraIssueSummaryRequest(
         {
@@ -29,7 +30,7 @@ export function registerJiraIssueSummaryGenerationHandlers(
         request
       )
     } finally {
-      event.sender.removeListener('destroyed', cancel)
+      releaseDestroyed()
     }
   })
   ipcMain.handle('jira:cancelGenerateIssueSummary', (event, args: unknown) => {

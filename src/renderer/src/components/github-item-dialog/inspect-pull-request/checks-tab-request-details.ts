@@ -1,18 +1,18 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
-import { createRuntimeRpcAbortError } from '@/runtime/abortable-runtime-environment-call'
-import { normalizeCheckRunDetailsLogTails } from '@/lib/check-run-details-log-normalization'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { withGitHubCheckDetailsTimeout } from '@/runtime/repository-github/github-check-details-timeout'
+import { createRuntimeRpcAbortError } from '@/runtime/rpc/calls/abortable-runtime-environment-call'
+import { normalizeCheckRunDetailsLogTails } from '@/lib/source-control/checks/check-run-details-log-normalization'
 import {
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE,
   isGitHubCheckDetailsTimeout
-} from '../../../../../shared/github/check-details-deadline'
+} from '../../../../../shared/github/checks/check-details-deadline'
 import {
   beginGitHubChecksTabDetails,
   settleGitHubChecksTabDetails,
   type CheckDetailsLoadState
 } from '@/components/github-checks-tab-state'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { translate } from '@/i18n/i18n'
 import type { ChecksTabActionContext } from './checks-tab-actions'
 

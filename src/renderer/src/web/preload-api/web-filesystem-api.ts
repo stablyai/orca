@@ -1,13 +1,13 @@
-import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime-environment-call'
-import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
+import { callAbortableRuntimeEnvironment } from '../../runtime/rpc/calls/abortable-runtime-environment-call'
+import { unwrapRuntimeRpcResult } from '../../runtime/rpc/calls/runtime-rpc-result'
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { SearchResult } from '../../../../shared/code-search-types'
-import { assertFileMutationOwnershipCapability } from '../../../../shared/file-mutation-ownership'
-import type { DirEntry } from '../../../../shared/filesystem-entry-types'
+import type { SearchResult } from '../../../../shared/file-search/code-search-types'
+import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
+import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { createWebFileMutationMethods } from '../web-file-mutation-methods'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web-runtime-request-registry'
 import { callRuntimeResult } from './web-runtime-calls'
@@ -22,6 +22,7 @@ import {
 } from './web-runtime-session'
 import { isMissingPathError, resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import { uploadBrowserFilesToWebAgentSessionAttachments } from './web-agent-session-attachment-upload'
 
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   const searches = new Map<string, AbortController>()
@@ -44,6 +45,12 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
+    },
+    // No orca-media protocol in a browser; audio and video keep the binary placeholder.
+    grantRuntimeFilePreview: async () => null,
+    // Never minted here, so no viewer asks.
+    readPreviewRange: async () => {
+      throw new Error('Preview ranges are not available in the web client')
     },
     readFile: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
@@ -124,7 +131,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       return result.files.map((entry) => entry.relativePath)
     },
     cancelListFiles: async () => {
-      // Why: paired-web lists files over runtime RPC with its own timeout; there's no host-side scan to abort here.
+      // Runtime RPC owns its timeout; no host-side search cancellation exists here.
     },
     cancelSearch: async ({ requestToken }) => {
       searches.get(requestToken)?.abort()
@@ -169,7 +176,9 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       throw new Error('Uploading local files is not supported in the web client')
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
-    uploadPathsToAgentSessionAttachments: async () => ({ uploaded: [], skipped: [], failed: [] }),
+    uploadPathsToAgentSessionAttachments: uploadBrowserFilesToWebAgentSessionAttachments,
+    // Why: the paired web client watches nothing, so there is no symlinked folder to add a watch for.
+    hasSymlinkBelowRoot: () => Promise.resolve(false),
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe

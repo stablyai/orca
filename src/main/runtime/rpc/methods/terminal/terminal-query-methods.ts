@@ -1,8 +1,14 @@
 import { defineMethod } from '../../core'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { remoteFileContentBudget } from '../files-remote-content-budget'
+import { remoteFileContentBudget } from '../files/files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import {
+  formatOrcaSessionAddress,
+  type OrcaSessionAddress
+} from '../../../../../shared/orca-session-address'
+import {
+  TerminalAgentId,
   TerminalHandle,
   TerminalInspectProcess,
   TerminalListParams,
@@ -26,11 +32,24 @@ export const TERMINAL_QUERY_METHODS = [
       if (ORCA_LAYOUT_OWNER_IS_MAIN && params.placeUnshownLiveTerminals && params.worktree) {
         await runtime.placeUnshownLiveTerminalsOf(params.worktree)
       }
-      return runtime.listTerminals(params.worktree, params.limit, {
+      const result = await runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
+      if (params.includePreview !== false && !params.includeAttention) {
+        return result
+      }
+      return {
+        ...result,
+        terminals: result.terminals.map(({ preview, ...terminal }) => ({
+          ...terminal,
+          ...(params.includePreview !== false ? { preview } : {}),
+          ...(params.includeAttention && terminal.ptyId
+            ? { attention: runtime.getTerminalAttention(terminal.ptyId) }
+            : {})
+        }))
+      }
     }
   }),
   defineMethod({
@@ -53,6 +72,22 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
+    // The id lives with the pane's hook server, so a failed earlier commit is retried here.
+    name: 'terminal.agentId',
+    permission: 'workspace',
+    params: TerminalAgentId,
+    handler: async (params, { runtime }): Promise<{ orcaSessionId: OrcaSessionAddress | null }> => {
+      // Re-read on each look: the pane may wake or sleep while the worker answers.
+      const id = await agentHookServer.resolvePaneAgentId(
+        params.paneKey,
+        () =>
+          runtime.getWorkspaceSessionForWorktree(params.worktreeId)
+            ?.sleepingAgentSessionsByPaneKey?.[params.paneKey]
+      )
+      return { orcaSessionId: id ? formatOrcaSessionAddress(id) : null }
+    }
+  }),
+  defineMethod({
     name: 'terminal.recoverPane',
     permission: 'workspace',
     params: TerminalRecoverPane,
@@ -73,8 +108,7 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
-    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
-    // worker too, and must therefore never hand back anything that looks writable.
+    // Read identity only: structured workers have no writable terminal, so never return terminal.show's shape.
     name: 'terminal.resolveIdentity',
     permission: 'workspace',
     params: TerminalHandle,

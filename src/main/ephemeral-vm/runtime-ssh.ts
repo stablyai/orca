@@ -11,8 +11,20 @@ import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 export type RuntimeOwnedSshConnectionResult = {
   targetId: string
   target: SshTarget
-  /** The managed Orca server that serves this host. */
   environmentId: string
+}
+
+/** Saves the recipe's current SSH address for its VM without dialing it, so a later explicit
+ *  Connect reaches the VM where it now is. */
+export function refreshRuntimeOwnedSshTarget(args: {
+  runtimeId: string
+  connection: Extract<EphemeralVmRecipeConnection, { type: 'ssh' }>
+}): SshTarget {
+  const store = getSshConnectionStore()
+  if (!store) {
+    throw new Error('SSH handlers are not registered.')
+  }
+  return store.upsertRuntimeOwnedTarget(args.runtimeId, args.connection.target)
 }
 
 export async function connectRuntimeOwnedSshTarget(args: {
@@ -30,14 +42,12 @@ export async function connectRuntimeOwnedSshTarget(args: {
     if (state.status !== 'connected') {
       throw new Error(state.error || `SSH target did not connect: ${state.status}`)
     }
-    // Why no wait: only a managed server can serve the host, so an unserved connect fails now.
     if (state.managedServer?.kind !== 'managed') {
       throw new SshHostNotServedError(target.id)
     }
     environmentId = state.managedServer.environmentId
   } catch (error) {
-    // The target is persisted at upsert, so a failed connect would orphan it;
-    // remove it (idempotent) before rethrowing so cleanup is complete.
+    // Upsert persisted the target; remove it on failure to avoid orphaning it.
     await removeRuntimeOwnedSshTarget(target.id).catch(() => undefined)
     throw error
   }

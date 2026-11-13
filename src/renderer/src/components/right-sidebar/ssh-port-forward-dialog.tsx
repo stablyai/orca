@@ -9,9 +9,10 @@ import {
 import { Button } from '@/components/ui/button'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 
-// Why: ports < 1024 require root to bind on the local machine. Remap them
-// to a high port so the default "Forward" action doesn't fail with EACCES.
+// Remap privileged ports to avoid EACCES when binding locally without root.
 function safeLocalPort(remotePort: number): number {
   if (remotePort < 1024) {
     return remotePort + 10000
@@ -43,6 +44,7 @@ export function SshPortForwardDialog({
   activeConnectionId: string | null
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const isOpen = state.mode !== 'closed'
   const isEdit = state.mode === 'edit'
 
@@ -74,9 +76,7 @@ export function SshPortForwardDialog({
         ? (state.defaults.label ?? '')
         : ''
 
-  // Why: capture the target at dialog-open time via defaults.targetId so
-  // switching worktrees while the dialog is open doesn't redirect the
-  // forward to the wrong SSH connection.
+  // Pin the dialog-open target so worktree navigation cannot redirect the SSH forward.
   const targetId =
     state.mode === 'edit'
       ? state.entry.connectionId
@@ -97,19 +97,16 @@ export function SshPortForwardDialog({
         <DialogHeader>
           <DialogTitle className="text-sm">
             {isEdit
-              ? translate(
-                  'auto.components.right.sidebar.PortsPanel.80206251c8',
-                  'Edit Port Forward'
-                )
-              : translate('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
+              ? t('auto.components.right.sidebar.PortsPanel.80206251c8', 'Edit Port Forward')
+              : t('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {isEdit
-              ? translate(
+              ? t(
                   'auto.components.right.sidebar.PortsPanel.10360598a4',
                   'Update the port forwarding configuration.'
                 )
-              : translate(
+              : t(
                   'auto.components.right.sidebar.PortsPanel.31e80cff2d',
                   'Forward a remote port to your local machine.'
                 )}
@@ -156,6 +153,7 @@ function PortForwardForm({
   targetId: string
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [remotePort, setRemotePort] = useState(initialRemotePort)
   const [localPort, setLocalPort] = useState(initialLocalPort)
   const [remoteHost, setRemoteHost] = useState(initialRemoteHost)
@@ -172,11 +170,21 @@ function PortForwardForm({
       const lPort = Number.parseInt(localPort || remotePort, 10)
 
       if (Number.isNaN(rPort) || rPort < 1 || rPort > 65535) {
-        setError('Remote port must be 1\u201365535')
+        setError(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.remotePortOutOfRange',
+            'Remote port must be 1\u201365535'
+          )
+        )
         return
       }
       if (Number.isNaN(lPort) || lPort < 1 || lPort > 65535) {
-        setError('Local port must be 1\u201365535')
+        setError(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.localPortOutOfRange',
+            'Local port must be 1\u201365535'
+          )
+        )
         return
       }
 
@@ -202,9 +210,21 @@ function PortForwardForm({
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('EADDRINUSE') || msg.includes('already in use')) {
-          setError(`Port ${lPort} is already in use. Choose a different local port.`)
+          setError(
+            translate(
+              'auto.components.right.sidebar.PortsPanel.localPortInUse',
+              'Port {{port}} is already in use. Choose a different local port.',
+              { port: lPort }
+            )
+          )
         } else if (msg.includes('EACCES') || msg.includes('permission denied')) {
-          setError(`Port ${lPort} requires elevated privileges. Use a local port \u2265 1024.`)
+          setError(
+            translate(
+              'auto.components.right.sidebar.PortsPanel.localPortRequiresPrivileges',
+              'Port {{port}} requires elevated privileges. Use a local port \u2265 1024.',
+              { port: lPort }
+            )
+          )
         } else {
           setError(msg)
         }
@@ -219,9 +239,9 @@ function PortForwardForm({
       <div className="space-y-2">
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
-            {translate('auto.components.right.sidebar.PortsPanel.9e5a4118b0', 'Remote Port')}
+            {t('auto.components.right.sidebar.PortsPanel.9e5a4118b0', 'Remote Port')}
           </span>
-          <input
+          <ImeInput
             type="text"
             inputMode="numeric"
             value={remotePort}
@@ -244,50 +264,41 @@ function PortForwardForm({
 
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
-            {translate('auto.components.right.sidebar.PortsPanel.b950b1948b', 'Local Port')}
+            {t('auto.components.right.sidebar.PortsPanel.b950b1948b', 'Local Port')}
           </span>
-          <input
+          <ImeInput
             type="text"
             inputMode="numeric"
             value={localPort}
             onChange={(e) => setLocalPort(digitsOnly(e.target.value))}
             className={INPUT_CLASS}
-            placeholder={translate(
-              'auto.components.right.sidebar.PortsPanel.d57545ff92',
-              'Same as remote'
-            )}
+            placeholder={t('auto.components.right.sidebar.PortsPanel.d57545ff92', 'Same as remote')}
           />
         </label>
 
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
-            {translate('auto.components.right.sidebar.PortsPanel.a3721a50b0', 'Remote Host')}
+            {t('auto.components.right.sidebar.PortsPanel.a3721a50b0', 'Remote Host')}
           </span>
-          <input
+          <ImeInput
             type="text"
             value={remoteHost}
             onChange={(e) => setRemoteHost(e.target.value)}
             className={INPUT_CLASS}
-            placeholder={translate(
-              'auto.components.right.sidebar.PortsPanel.17bea6e391',
-              'localhost'
-            )}
+            placeholder={t('auto.components.right.sidebar.PortsPanel.17bea6e391', 'localhost')}
           />
         </label>
 
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
-            {translate('auto.components.right.sidebar.PortsPanel.8dfed0a15c', 'Label (optional)')}
+            {t('auto.components.right.sidebar.PortsPanel.8dfed0a15c', 'Label (optional)')}
           </span>
-          <input
+          <ImeInput
             type="text"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             className={INPUT_CLASS}
-            placeholder={translate(
-              'auto.components.right.sidebar.PortsPanel.4eb801ce93',
-              'dev-server'
-            )}
+            placeholder={t('auto.components.right.sidebar.PortsPanel.4eb801ce93', 'dev-server')}
           />
         </label>
       </div>
@@ -296,16 +307,16 @@ function PortForwardForm({
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onClose}>
-          {translate('auto.components.right.sidebar.PortsPanel.3ea4a02a8f', 'Cancel')}
+          {t('auto.components.right.sidebar.PortsPanel.3ea4a02a8f', 'Cancel')}
         </Button>
         <Button type="submit" size="sm" disabled={submitting || !remotePort}>
           {submitting
             ? mode === 'edit'
-              ? translate('auto.components.right.sidebar.PortsPanel.d7c83cfd24', 'Saving...')
-              : translate('auto.components.right.sidebar.PortsPanel.9f475dc994', 'Forwarding...')
+              ? t('auto.components.right.sidebar.PortsPanel.d7c83cfd24', 'Saving...')
+              : t('auto.components.right.sidebar.PortsPanel.9f475dc994', 'Forwarding...')
             : mode === 'edit'
-              ? translate('auto.components.right.sidebar.PortsPanel.9079776663', 'Save')
-              : translate('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}
+              ? t('auto.components.right.sidebar.PortsPanel.9079776663', 'Save')
+              : t('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}
         </Button>
       </div>
     </form>

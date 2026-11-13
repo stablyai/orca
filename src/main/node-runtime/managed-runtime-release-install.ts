@@ -1,19 +1,25 @@
-// Puts one pinned release of a managed runtime on disk: reuses a whole copy, else downloads, unpacks,
-// verifies and starts it in a staging folder, then publishes it by rename. The caller owns the
-// lifecycle (one install at a time, cancel, status); `commit` marks the point a cancel can't undo.
+// Verify/start in staging, then publish by rename; commit precedes cleanup so later failures cannot undo installation.
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, mkdir, rename, rm, statfs } from 'node:fs/promises'
 import { basename, join } from 'node:path'
+import {
+  excerptAgentFailureOutput,
+  sanitizeAgentFailureDetail,
+  stripAnsiControlSequences
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { ManagedRuntimeOperation } from '../../shared/managed-runtime-install'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
+import { redactString } from '../observability/redactor'
 import {
   resolveInstalledRuntimeRelease,
+  ManagedRuntimeStartError,
   RUNTIME_RELEASE_RECEIPT,
   writeRuntimeReleaseReceipt,
   type ManagedRuntime,
-  type ManagedRuntimePin
+  type ManagedRuntimePin,
+  type ManagedRuntimeStartFailure
 } from './managed-runtime-release'
 import { verifyFileSha256 } from './pinned-runtime-materializer'
 import { extractPinnedZipMembers } from './pinned-zip-members'
@@ -27,16 +33,14 @@ const FREE_SPACE_MARGIN_BYTES = 256 * 1024 * 1024
 const PROGRESS_INTERVAL_MS = 250
 
 export type RuntimeReleaseInstall = {
-  /** Names the agent in log lines. */
   agent: string
   runtime: Pick<ManagedRuntime, 'label' | 'validate'>
-  /** The folder that holds only this runtime's releases. */
   root: string
   pin: ManagedRuntimePin
   fetcher?: MainHttpClient['fetch']
   signal: AbortSignal
   publish: (patch: Partial<ManagedRuntimeOperation>) => void
-  /** Called right after the release is in place, before any cleanup that may still fail. */
+  /** Mark committed immediately after publication, before fallible cleanup. */
   commit: () => void
 }
 
@@ -59,7 +63,7 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       await validate(input, folder)
       signal.throwIfAborted()
       if (!resolveInstalledRuntimeRelease(root, pin).release?.current) {
-        // Whole members without a valid receipt read as damaged; rewriting it ends that loop.
+        // Complete members without a valid receipt need repair to escape damaged status.
         await rm(join(folder, RUNTIME_RELEASE_RECEIPT), { force: true })
         await writeRuntimeReleaseReceipt(folder, pin)
       }
@@ -68,7 +72,6 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     }
     publish({ phase: 'downloading' })
   }
-  // Bookkeeping only: a host that can't report free space still installs.
   const space = await statfs(root).catch((error: unknown) => {
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
@@ -114,7 +117,6 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()
-    // A damaged copy moves into staging, which is deleted below or reclaimed on the next start.
     if (existsSync(folder)) {
       await rename(folder, join(staging, 'damaged'))
     }
@@ -125,7 +127,6 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-/** The sentence a failed install shows; `deadline` is the install's overall time limit. */
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {
   const message = error instanceof Error ? error.message : String(error)
   if (deadline.aborted) {
@@ -145,11 +146,32 @@ async function validate(input: RuntimeReleaseInstall, folder: string): Promise<v
   await runtime.validate?.(folder, pin, signal).catch((error: unknown) => {
     signal.throwIfAborted()
     console.warn(`[managed-runtime] ${input.agent} did not start from ${folder}:`, error)
+    const observed = error instanceof ManagedRuntimeStartError ? error.failure : null
     throw new Error(
-      `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.`,
+      `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.${observed ? ` ${startFailureText(observed)}` : ''}`,
       { cause: error }
     )
   })
+}
+
+function startFailureText(failure: ManagedRuntimeStartFailure): string {
+  switch (failure.kind) {
+    case 'timeout':
+      return `It timed out after ${Math.round(failure.timeoutMs / 1000)} seconds.`
+    case 'version': {
+      const answered = sanitizeAgentFailureDetail(
+        redactString(stripAnsiControlSequences(failure.answered))
+      )
+      return `It answered as version ${answered ?? 'unknown'}, expected ${failure.expected}.`
+    }
+    case 'exit': {
+      const { code, signal } = failure.exit
+      const status = code !== null ? `code ${code}` : `signal ${signal ?? 'unknown'}`
+      const stderr = redactString(stripAnsiControlSequences(failure.stderr))
+      const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput('', stderr))
+      return detail ? `It exited with ${status}: ${detail}` : `It exited with ${status}.`
+    }
+  }
 }
 
 async function verifyMembers(

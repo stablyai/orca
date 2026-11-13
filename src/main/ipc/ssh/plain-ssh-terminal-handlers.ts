@@ -7,10 +7,10 @@ import {
 } from '../../../shared/plain-ssh-terminal'
 import { isSshHostMoveBlocked } from '../../../shared/ssh-host-move-blocked'
 import { mayUserSshConfigClaimAlias } from '../../ssh/config/ssh-config-alias-claim'
-import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { findSystemSsh } from '../../ssh/system-transport/system-ssh-binary'
-import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty-utils'
+import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
 import {
   ackPlainSshTerminal,
   closePlainSshTerminal,
@@ -27,7 +27,7 @@ const deps: PlainSshTerminalDeps = {
   findSsh: findSystemSsh,
   mayConfigClaimAlias: mayUserSshConfigClaimAlias,
   loadPtySpawn: async () => {
-    // Why: a packaged macOS build can lose node-pty's spawn-helper exec bit; the pane paths repair it too.
+    // Packaged macOS updates can lose the node-pty spawn-helper executable bit.
     ensureNodePtySpawnHelperExecutable()
     return (await import('node-pty')).spawn
   },
@@ -37,7 +37,7 @@ const deps: PlainSshTerminalDeps = {
 
 const watchedOwners = new Set<number>()
 
-/** A reload, a crash or a closed window can't show its sessions again, so they end with it. */
+/** Plain SSH sessions cannot reattach after owner reload, crash or close. */
 function endSessionsWithOwner(sender: WebContents): void {
   if (watchedOwners.has(sender.id)) {
     return

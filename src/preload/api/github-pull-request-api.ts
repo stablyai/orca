@@ -1,28 +1,29 @@
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 import type { AppStarSource } from '../../shared/gh-star-source'
-import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../shared/github/check-types'
+import type { GhAuthDiagnostic } from '../../shared/github/accounts/auth-types'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../shared/github/checks/check-types'
 import type {
   GitHubCommentResult,
   GitHubPRReviewCommentInput,
   GitHubReactionContent,
   PRComment
-} from '../../shared/github/comment-types'
+} from '../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
   PRRefreshOutcome
-} from '../../shared/github/pull-request-refresh-types'
+} from '../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubViewer,
   PRInfo
-} from '../../shared/github/pull-request-types'
-import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
+} from '../../shared/github/pull-requests/pull-request-types'
+import type { GetRateLimitResult } from '../../shared/github/api/rate-limit-types'
 import type { GitHubRepoSelectorArgs } from './github-work-item-api'
 
 export type GithubPullRequestApi = {
@@ -38,15 +39,19 @@ export type GithubPullRequestApi = {
   prForBranch: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     branch: string
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
+    wakeWslDistro?: boolean
+    userRefresh?: boolean
   }) => Promise<PRInfo | null>
   refreshPRNow: (args: {
     candidate: GitHubPRRefreshCandidate
     reason?: GitHubPRRefreshReason
+    userRefresh?: boolean
   }) => Promise<PRRefreshOutcome>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
@@ -75,11 +80,15 @@ export type GithubPullRequestApi = {
       headSha?: string
       prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
+      /** Refresh or a check action: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      userRefresh?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   prCheckDetails: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     checkRunId?: number
     workflowRunId?: number
@@ -98,6 +107,7 @@ export type GithubPullRequestApi = {
   prComments: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     prNumber: number
     prRepo?: GitHubOwnerRepo | null
@@ -106,6 +116,7 @@ export type GithubPullRequestApi = {
   setPRCommentReaction: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     reactionSubjectId: string
     content: GitHubReactionContent
@@ -115,6 +126,7 @@ export type GithubPullRequestApi = {
   resolveReviewThread: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     threadId: string
     resolve: boolean
@@ -122,6 +134,7 @@ export type GithubPullRequestApi = {
   }) => Promise<boolean>
   setPRFileViewed: (
     args: GitHubRepoSelectorArgs & {
+      expectedGhAccount?: GhAccountBinding | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
       pullRequestId: string
@@ -197,12 +210,8 @@ export type GithubPullRequestApi = {
   ) => Promise<GitHubCommentResult>
   checkOrcaStarred: () => Promise<boolean | null>
   starOrca: (source: AppStarSource) => Promise<boolean>
-  /**
-   * GitHub API rate-limit snapshot. Does NOT consume quota (the
-   * `rate_limit` endpoint is exempt). Cached 30s server-side — pass
-   * `force: true` to bust after a known-expensive op.
-   */
+  /** Quota-exempt; cached for 30s unless force is true. */
   rateLimit: (args?: { force?: boolean }) => Promise<GetRateLimitResult>
-  /** Explains scope_missing ProjectV2 failures — notably a shell `GITHUB_TOKEN` shadowing the keyring credential, where `gh auth refresh` is a no-op. */
+  /** Detects missing scopes and shell tokens shadowing keyring credentials. */
   diagnoseAuth: (args?: { host?: string }) => Promise<GhAuthDiagnostic>
 }

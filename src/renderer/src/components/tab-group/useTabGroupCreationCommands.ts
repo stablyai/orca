@@ -1,17 +1,22 @@
 import { toast } from 'sonner'
-import { useAppStore } from '../../store'
-import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
-import { createBrowserUuid } from '../../lib/browser-uuid'
-import { createWebRuntimeSessionBrowserTab } from '../../runtime/web-runtime-browser-creation'
-import { createWebRuntimeSessionTerminal } from '../../runtime/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-environment'
-import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
-import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
-import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
-import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { useAppStore } from '../../store/index'
+import { focusTerminalTabSurface } from '../terminal-pane/input/focus/focus-terminal-tab-surface'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createWebRuntimeSessionBrowserTab } from '../../runtime/browser/creation/web-runtime-browser-creation'
+import { createWebRuntimeSessionTerminal } from '../../runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { openTabBarEntry } from '../tab-bar/tab-create-entry-action'
+import type { TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
+import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
+import {
+  ensureSimulatorTab,
+  getSimulatorTabForWorktree
+} from '@/lib/simulator/tabs/ensure-simulator-tab'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplicate-browser-tab-options'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { translate } from '@/i18n/i18n'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupCreationCommands({
@@ -37,7 +42,6 @@ export function useTabGroupCreationCommands({
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
 
-  // Why: these stay unmemoized plain lambdas — the original built them inline in the returned commands object.
   return {
     newBrowserTab: () => {
       void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
@@ -50,7 +54,6 @@ export function useTabGroupCreationCommands({
             void ensureSimulatorTab(worktreeId, { surfacePane: true })
             return
           }
-          // Why: mobile simulators are most useful beside the current tab group.
           void openMobileEmulatorTab(worktreeId, {
             placement: 'rightSplit',
             targetGroupId: groupId
@@ -92,7 +95,12 @@ export function useTabGroupCreationCommands({
           if (created) {
             return
           }
-          throw new Error('The paired runtime could not duplicate the managed browser tab.')
+          throw new Error(
+            translate(
+              'auto.components.tab.group.useTabGroupCreationCommands.duplicateBrowserTabFailed',
+              'The paired runtime could not duplicate the managed browser tab.'
+            )
+          )
         }
         // Why no targetGroupId: a source-following duplicate joins the source's live group.
         createBrowserTab(worktreeId, source.url, {
@@ -117,13 +125,16 @@ export function useTabGroupCreationCommands({
           useAppStore.getState(),
           worktreeId
         )
-        const outcome = await createWebRuntimeSessionTerminal({
-          worktreeId,
-          environmentId,
-          targetGroupId: groupId,
-          shell: shellOverride,
-          activate: true
-        })
+        const outcome = await createWebRuntimeSessionTerminal(
+          {
+            worktreeId,
+            environmentId,
+            targetGroupId: groupId,
+            shell: shellOverride,
+            activate: true
+          },
+          { userAct: true }
+        )
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
           return
         }

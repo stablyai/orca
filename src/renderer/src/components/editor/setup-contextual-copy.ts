@@ -1,6 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import { useAppStore } from '@/store'
 import { editorShortcutMatches } from './editor-shortcuts'
 import {
@@ -12,7 +12,9 @@ import {
   PRIMARY_SELECTION_MAX_LENGTH,
   isPrimarySelectionEnabled,
   setPrimarySelectionText
-} from '@/lib/primary-selection'
+} from '@/lib/clipboard/primary-selection/primary-selection'
+import { translate } from '@/i18n/i18n'
+import { createContextualCopyHintRefresh } from './contextual-copy-hint-refresh'
 
 export function setupContextualCopy({
   editorInstance,
@@ -31,7 +33,6 @@ export function setupContextualCopy({
   }>
   copyToastTimeoutRef: React.MutableRefObject<number | null>
 }): void {
-  let copyHintInterval: number | null = null
   let primarySelectionTimer: number | null = null
   let copyHintWidgetPosition: editor.IContentWidgetPosition | null = null
   let lastCopiedSelectionKey: string | null = null
@@ -39,10 +40,13 @@ export function setupContextualCopy({
   copyHintNode.className =
     'pointer-events-none rounded-md border border-border/90 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur whitespace-nowrap'
   const updateCopyHintLabel = (): void => {
-    copyHintNode.textContent = `Copy context ${formatShortcutLabel(
-      'editor.copyContext',
-      useAppStore.getState().keybindings
-    )}`
+    copyHintNode.textContent = translate(
+      'auto.components.editor.contextualCopy.copyContextHint',
+      'Copy context {{shortcut}}',
+      {
+        shortcut: formatShortcutLabel('editor.copyContext', useAppStore.getState().keybindings)
+      }
+    )
   }
   updateCopyHintLabel()
   copyHintNode.style.display = 'none'
@@ -93,7 +97,7 @@ export function setupContextualCopy({
     updateCopyHintLabel()
     const model = editorInstance.getModel()
     const selection = editorInstance.getSelection()
-    // Why: hint ticks need selection bounds; extracting the selected text scales with file size.
+    // Selection bounds avoid extracting text that scales with file size.
     if (!model || !selection || selection.isEmpty() || !canCopySelectionWithContext(selection)) {
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
@@ -159,35 +163,8 @@ export function setupContextualCopy({
 
   const isCopyHintVisible = (): boolean => copyHintNode.style.display === 'block'
 
-  const startCopyHintPolling = (): void => {
-    if (copyHintInterval !== null) {
-      return
-    }
-    copyHintInterval = window.setInterval(() => {
-      updateCopyHint()
-      if (!isCopyHintVisible()) {
-        stopCopyHintPolling()
-      }
-    }, 150)
-  }
-
-  const stopCopyHintPolling = (): void => {
-    if (copyHintInterval !== null) {
-      window.clearInterval(copyHintInterval)
-      copyHintInterval = null
-    }
-  }
-
-  const refreshCopyHintAndPolling = (): void => {
-    updateCopyHint()
-    if (editorInstance.hasTextFocus() && isCopyHintVisible()) {
-      // Why: the interval only tracks a visible content widget. Keeping it
-      // alive while the focused editor has no selection burns idle CPU.
-      startCopyHintPolling()
-    } else {
-      stopCopyHintPolling()
-    }
-  }
+  const { refresh: refreshCopyHint, dispose: disposeCopyHintRefresh } =
+    createContextualCopyHintRefresh(editorInstance, isCopyHintVisible, updateCopyHint)
 
   const getContextualCopyText = (): string | null => {
     const model = editorInstance.getModel()
@@ -238,8 +215,7 @@ export function setupContextualCopy({
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
     }
-    // Why: Monaco emits intermediate selection changes during drag; match the
-    // editor selection clipboard debounce so we don't churn the clipboard.
+    // Debounce intermediate drag selections like the editor selection clipboard to avoid clipboard churn.
     primarySelectionTimer = window.setTimeout(() => {
       primarySelectionTimer = null
       updatePrimarySelectionBuffer()
@@ -252,13 +228,9 @@ export function setupContextualCopy({
       return false
     }
 
-    // Why: terminal agents only receive pasted plain text. We write the
-    // contextual payload at copy time so file and line metadata survives
-    // once the snippet leaves Orca and is pasted into a terminal.
+    // Embed file/line context at copy time because terminal agents receive plain text only.
     await window.api.ui.writeClipboardText(copiedText)
-    // Why: once the user has copied this exact selection, surfacing the
-    // affordance again during the confirmation toast reads like duplicate
-    // UI. We keep it suppressed until the selection actually changes.
+    // Suppress the hint for this selection after copying so it does not duplicate the confirmation toast.
     lastCopiedSelectionKey = getSelectionKey()
     copyHintNode.style.display = 'none'
     copyHintWidgetPosition = null
@@ -274,16 +246,15 @@ export function setupContextualCopy({
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   })
   const scrollListener = editorInstance.onDidScrollChange(() => {
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   })
   const focusListener = editorInstance.onDidFocusEditorText(() => {
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   })
   const blurListener = editorInstance.onDidBlurEditorText(() => {
-    stopCopyHintPolling()
     copyHintNode.style.display = 'none'
     copyHintWidgetPosition = null
     editorInstance.layoutContentWidget(copyHintWidget)
@@ -295,25 +266,21 @@ export function setupContextualCopy({
       return
     }
 
-    // Why: Monaco and Chromium can claim some Cmd/Ctrl+Shift shortcuts before the Monaco
-    // command callback runs. Capturing the shortcut on the editor DOM keeps the
-    // contextual-copy action reliable without changing native Cmd/Ctrl+C.
+    // Capture before Monaco/Chromium claim the chord; preserve ordinary native copy.
     event.preventDefault()
     event.stopPropagation()
     void copySelectionWithContext()
   }
   editorDomNode.addEventListener('keydown', handleKeyDown, true)
-  editorDomNode.addEventListener('mouseup', refreshCopyHintAndPolling, true)
-  editorDomNode.addEventListener('keyup', refreshCopyHintAndPolling, true)
+  editorDomNode.addEventListener('mouseup', refreshCopyHint, true)
+  editorDomNode.addEventListener('keyup', refreshCopyHint, true)
   editorInstance.onDidDispose(() => {
-    // Why: Monaco owns these emitters, but disposing explicitly keeps this
-    // feature's lifecycle symmetrical with the DOM listener cleanup below.
+    disposeCopyHintRefresh()
     selectionListener.dispose()
     scrollListener.dispose()
     focusListener.dispose()
     blurListener.dispose()
-    // Why: the confirmation toast timeout belongs to the Monaco editor that
-    // scheduled it, so editor disposal is the earliest reliable cleanup point.
+    // Clear the toast timer when its owning Monaco editor is disposed.
     if (copyToastTimeoutRef.current !== null) {
       window.clearTimeout(copyToastTimeoutRef.current)
       copyToastTimeoutRef.current = null
@@ -324,13 +291,12 @@ export function setupContextualCopy({
       primarySelectionTimer = null
     }
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
-    editorDomNode.removeEventListener('mouseup', refreshCopyHintAndPolling, true)
-    editorDomNode.removeEventListener('keyup', refreshCopyHintAndPolling, true)
-    stopCopyHintPolling()
+    editorDomNode.removeEventListener('mouseup', refreshCopyHint, true)
+    editorDomNode.removeEventListener('keyup', refreshCopyHint, true)
     editorInstance.removeContentWidget(copyHintWidget)
   })
   if (editorInstance.hasTextFocus()) {
-    refreshCopyHintAndPolling()
+    refreshCopyHint()
   } else {
     updateCopyHint()
   }

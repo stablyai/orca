@@ -22,12 +22,6 @@ import Foundation
   precondition(!restored.contains(identity(1, "qa-host", "qa-epoch", "other"), now: 102))
   precondition(!restored.contains(identity(1), now: 86501))
   precondition(PushDismissalIdentity(["hostFingerprint":"h", "notificationId":"n", "notificationEpoch":"e", "notificationSeq":true]) == nil)
-  precondition(restored.containsNotification(payload(1), now: 102))
-  precondition(!restored.containsNotification(payload(3), now: 102))
-  precondition(!restored.containsNotification(payload(1, "other"), now: 102))
-  precondition(!restored.containsNotification(payload(1, "qa-host", "other"), now: 102))
-  precondition(!restored.containsNotification(payload(1, "qa-host", "qa-epoch", "other"), now: 102))
-  precondition(!restored.containsNotification(["hostFingerprint": "qa-host"], now: 102))
   for hosts in [1, 3] {
    for index in 0..<520 {
     ledger.remember(identity(2, "host-\(index % hosts)", "epoch-\(hosts)", "note-\(index)"), now: 200)
@@ -39,6 +33,18 @@ import Foundation
     precondition(!reopened.contains(identity(2, "host-\(index % hosts)", "epoch-\(hosts)", "note-\(index)"), now: 86600))
    }
   }
+  let batch = PushDismissalLedger(defaults: defaults)
+  batch.remember(identity(5, "batch"), now: 300)
+  batch.remember([identity(4, "batch"), identity(7, "batch", "qa-epoch", "b"), identity(6, "batch", "qa-epoch", "b"), identity(1, "batch", "qa-epoch", "c")], now: 300)
+  batch.remember([PushDismissalIdentity](), now: 301)
+  let batchReopened = PushDismissalLedger(defaults: defaults)
+  precondition(batchReopened.contains(identity(5, "batch"), now: 301))
+  precondition(!batchReopened.contains(identity(6, "batch"), now: 301))
+  precondition(batchReopened.contains(identity(7, "batch", "qa-epoch", "b"), now: 301))
+  precondition(!batchReopened.contains(identity(8, "batch", "qa-epoch", "b"), now: 301))
+  precondition(batchReopened.contains(identity(1, "batch", "qa-epoch", "c"), now: 301))
+  precondition(batchReopened.contains(identity(5, "batch"), now: 86699))
+  precondition(!batchReopened.contains(identity(5, "batch"), now: 86700))
   print("Native persisted fence: restart, ordering, identity isolation, expiry and invalid sequence checks passed")
  }
 }

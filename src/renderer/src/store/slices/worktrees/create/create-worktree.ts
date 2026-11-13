@@ -1,13 +1,15 @@
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
+import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
+import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
   isUnresolvedOwnerHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { adoptFromEndpoint } from '../../../host-catalog/endpoint-catalog-adoption'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import {
   pickClientWorktreeCreateSettings,
   type ClientWorktreeCreateSettings
@@ -18,14 +20,17 @@ import {
   getGeneratedWorktreeCreateRetryCandidate,
   isRetryableWorktreeCreateConflict
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../../../runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
+import { runtimeTargetSupportsCapability } from '../../../../runtime/rpc/compatibility/runtime-target-capability'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import {
+  WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
+  WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
+} from '../../../../../../shared/worktree-runtime-capabilities'
+import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
@@ -33,24 +38,23 @@ import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
 import {
   buildLocalWorktreeCreateArgs,
-  buildRuntimeWorktreeCreateParams,
+  type CreatedWorktreeResult,
   type WorktreeCreateAttempt,
   type WorktreeCreateRequest
 } from './worktree-create-payload'
-import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
+import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import {
+  resolveCreateCrossStoreParent,
+  withoutRefusedInferredParent
+} from './worktree-create-cross-store-parent'
+import {
+  lostRequestedParent,
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
-  type WorktreeCreateParentPick
+  type CreateAttemptOutcome
 } from './worktree-create-parent-pick'
 
 type RuntimeTarget = RuntimeClientTarget
-
-type CreateAttemptOutcome = {
-  result: CreateWorktreeResult
-  /** The host had no such parent, so this attempt was retried unattached. */
-  droppedParent: boolean
-}
 
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
@@ -61,7 +65,7 @@ async function runCreateAttempt(
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
-  ): Promise<CreateWorktreeResult> =>
+  ): Promise<CreatedWorktreeResult> =>
     provisionedRoot
       ? target.kind === 'environment'
         ? await adoptRuntimeProvisionedRoot(
@@ -79,43 +83,24 @@ async function runCreateAttempt(
           await window.api.worktrees.create(
             buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
           )
-        : await callRuntimeRpc<CreateWorktreeResult>(
-            target,
-            'worktree.create',
-            {
-              ...buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
-              // Why: the host's own store defaults would otherwise override the user's choices.
-              ...clientCreateSettings
-            },
-            { timeoutMs: 10 * 60_000 }
+        : await createWorktreeOnRuntimeHost(
+            target.environmentId,
+            request,
+            { ...attempt, parentWorkspace },
+            clientCreateSettings
           )
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
   } catch (error) {
+    const unnested = withoutRefusedInferredParent(attempt, error)
+    if (unnested) {
+      return await runCreateAttempt(request, unnested, target, clientCreateSettings)
+    }
     if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
       throw error
     }
     return { result: await create(undefined), droppedParent: true }
   }
-}
-
-/** True when the create landed without the nesting the caller asked for. */
-function lostRequestedParent(
-  outcome: CreateAttemptOutcome,
-  parent: WorktreeCreateParentPick,
-  target: RuntimeTarget
-): boolean {
-  if (outcome.droppedParent) {
-    return true
-  }
-  if (parent.pickedParentWorktreeId) {
-    return !outcome.result.lineage
-  }
-  // Why local-only: older hosts predate the top-level workspace lineage field, so its absence
-  // over RPC would warn about a nesting that actually landed.
-  return (
-    target.kind === 'local' && Boolean(parent.parentWorkspace) && !outcome.result.workspaceLineage
-  )
 }
 
 export function createCreateWorktree(
@@ -197,6 +182,26 @@ export function createCreateWorktree(
         requestedHostId: options?.executionHostId,
         resolveOwnHostId: () => repoHostId(get(), repoId)
       })
+      if (options?.branchIntent === 'create-exact') {
+        if (options.provisionedRoot) {
+          throw new Error('An exact-name create cannot adopt a provisioned root.')
+        }
+        // The caller checked this host's capability; another await here would let the active parent drift.
+        request.branchIntent = 'create-exact'
+      } else if (options?.branchIntent) {
+        const capability =
+          options.branchIntent === 'open-existing-v2'
+            ? WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
+            : options.branchIntent === 'create-new'
+              ? WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY
+              : WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
+        if (!(await runtimeTargetSupportsCapability(target, capability))) {
+          throw new Error(
+            'Update Orca on the workspace host to reuse a branch or explicitly create a separate branch.'
+          )
+        }
+        request.branchIntent = options.branchIntent
+      }
       // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
       const parent = resolveWorktreeCreateParent(get(), options?.parentWorktreeId, creationHostId)
       let warnedParentDropped = false
@@ -210,6 +215,12 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
+      const crossStoreParent = await resolveCreateCrossStoreParent(get(), target, {
+        pick: parent,
+        requestedParentWorktreeId: options?.parentWorktreeId,
+        note: options?.note,
+        warnParentDropped: warnParentDroppedOnce
+      })
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -241,6 +252,7 @@ export function createCreateWorktree(
                 ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
+              ...crossStoreParent,
               manualOrder
             },
             target,
@@ -255,7 +267,12 @@ export function createCreateWorktree(
             holdCreatedSidebarWorkspace({ worktree: created })
           }
           const { result } = outcome
-          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
+          showWorktreeCreateWarningToast(result.warning)
+          reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
+          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
+            updateSettings: get().updateSettings,
+            executionHostId: creationHostId
+          })
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }
@@ -268,7 +285,10 @@ export function createCreateWorktree(
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          const shouldRetry = isRetryableWorktreeCreateConflict(message)
+          const shouldRetry =
+            request.branchIntent !== 'open-existing-v2' &&
+            request.branchIntent !== 'create-exact' &&
+            isRetryableWorktreeCreateConflict(message)
           if (!shouldRetry || attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1) {
             throw error
           }

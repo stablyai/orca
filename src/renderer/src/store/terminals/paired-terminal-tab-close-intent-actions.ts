@@ -1,15 +1,12 @@
-import type { PairedTerminalTabCloseIntent } from '../../../../shared/paired-terminal-tab-close-intent'
+import type { PairedTerminalTabCloseIntent } from '../../../../shared/workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import {
   clearPairedTerminalTabCloseIntents,
   recordPairedTerminalTabCloseIntent,
   type PairedTerminalTabCloseIntentsByEnvironment
-} from '../../runtime/paired-terminal-tab-close-intents'
+} from '../../runtime/web-session-tabs-sync/closing/paired-terminal-tab-close-intents'
 
 export type PairedTerminalTabCloseIntentSlice = {
-  /**
-   * User closes of a paired host's tabs that never reached it, keyed by runtime environment.
-   * Persisted so a reload cannot let the host's next snapshot bring the closed tab back.
-   */
+  /** Persist unacknowledged paired-host closes by environment so reload/snapshots cannot reopen closed tabs. */
   pairedTerminalTabCloseIntentsByEnvironment: PairedTerminalTabCloseIntentsByEnvironment
   recordPairedTerminalTabCloseIntent: (
     environmentId: string,

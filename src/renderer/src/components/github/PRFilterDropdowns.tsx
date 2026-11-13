@@ -1,35 +1,31 @@
-// Why: GitHub-style PR filter UI. A single "Filters" button opens a popover
-// containing Author / Label / Reviewer / Assignee sections, mirroring GitHub's
-// own collapsed Filters dropdown so the toolbar stays uncluttered when nothing
-// is set. Active filters surface as inline removable pills next to the button.
 import React, { useMemo, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import type { PickerOption } from '@/components/github/PRFilterPickers'
 import {
+  filterDraftLabel,
+  filterLabelsValue,
+  filterStateLabel,
   SectionDetail,
   SectionMenu,
   type PRFilterChange,
   type SectionKey
 } from '@/components/github/PRFilterSections'
-import type {
-  GitHubAssignableUser,
-  GitHubOwnerRepo
-} from '../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type Props = {
   parsed: ParsedTaskQuery
   kind: 'prs' | 'issues'
   authorLogins: string[]
-  // Why: drive label + assignable-user lookups off the first selected repo.
-  // Cross-repo filters can't enumerate every repo's labels in one popover —
-  // GitHub's own PR list scopes the dropdown to a single repo too.
+  // Scope metadata to the first selected repo; one popover cannot enumerate every repo’s labels and users.
   primarySlug: GitHubOwnerRepo | null
   /** Host that owns the repo the primary slug came from. */
   ownerTarget?: RuntimeClientTarget | null
@@ -37,6 +33,10 @@ type Props = {
 }
 
 export type { PRFilterChange } from '@/components/github/PRFilterSections'
+
+function currentUserLabel(t: Translate = translate): string {
+  return t('auto.components.github.PRFilterDropdowns.currentUser', 'Current user')
+}
 
 function userOptions(users: GitHubAssignableUser[]): PickerOption[] {
   return users.map((u) => ({ key: u.login, primary: u.login, secondary: u.name ?? undefined }))
@@ -51,13 +51,14 @@ function ActivePill({
   value: string
   onClear: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/50 pl-2 pr-1 text-[11px] text-foreground">
       <span className="text-muted-foreground">{label}:</span>
       <span className="max-w-[160px] truncate font-medium">{value}</span>
       <button
         type="button"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.github.PRFilterDropdowns.8a2ffbf9b3',
           'Remove {{value0}} filter',
           { value0: label }
@@ -79,6 +80,7 @@ export default function PRFilterDropdowns({
   ownerTarget,
   onChange
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [openSection, setOpenSection] = useState<SectionKey | null>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
   const owner = primarySlug?.owner ?? null
@@ -98,19 +100,23 @@ export default function PRFilterDropdowns({
     primarySlug?.host
   )
 
-  // Why: surface @me as a first-class option even though it's not a real
-  // login — GitHub's search API resolves it server-side to the authenticated
-  // user, matching the behavior of the built-in "Mine" / "Needs review" presets.
+  // Offer @me because GitHub resolves it server-side to the authenticated user.
   const userOpts = useMemo<PickerOption[]>(() => {
-    const meOption: PickerOption = { key: '@me', primary: '@me', secondary: 'Current user' }
+    const meOption: PickerOption = {
+      key: '@me',
+      primary: '@me',
+      secondary: currentUserLabel()
+    }
     return [meOption, ...userOptions(hasPrimarySlug ? assigneesState.data : [])]
   }, [assigneesState.data, hasPrimarySlug])
   const authorOpts = useMemo<PickerOption[]>(() => {
     const options = new Map<string, PickerOption>()
-    options.set('@me', { key: '@me', primary: '@me', secondary: 'Current user' })
-    // Why: the Author filter should reflect actual visible item authors.
-    // Assignable-user metadata is repo-collaborator scoped and can omit outside
-    // contributors.
+    options.set('@me', {
+      key: '@me',
+      primary: '@me',
+      secondary: currentUserLabel()
+    })
+    // Use visible authors because assignable-user metadata excludes outside contributors.
     for (const login of authorLogins) {
       options.set(login.toLowerCase(), { key: login, primary: login })
     }
@@ -131,20 +137,17 @@ export default function PRFilterDropdowns({
   >(null)
   const reviewerMode = reviewerModeOverride ?? reviewerKind
 
-  // Why: treat anything other than the implicit "open" default as an active
-  // status filter so the user can see (and clear) it via the inline pill.
+  // Expose any non-default status as a removable pill.
   const statusActive = (parsed.state !== null && parsed.state !== 'open') || parsed.draft
   const statusPillValue = ((): string | null => {
     const parts: string[] = []
-    if (parsed.state === 'closed') {
-      parts.push('Closed')
-    } else if (parsed.state === 'merged') {
-      parts.push('Merged')
+    if (parsed.state === 'closed' || parsed.state === 'merged') {
+      parts.push(filterStateLabel(parsed.state, t))
     } else if (parsed.state === 'all') {
-      parts.push('Any')
+      parts.push(t('auto.components.github.PRFilterDropdowns.anyState', 'Any'))
     }
     if (parsed.draft) {
-      parts.push('Draft')
+      parts.push(filterDraftLabel(t))
     }
     return parts.length > 0 ? parts.join(' · ') : null
   })()
@@ -178,14 +181,12 @@ export default function PRFilterDropdowns({
             variant="outline"
             size="sm"
             className={cn(
-              // Why: solid fill + full foreground text so the control stays
-              // readable on both page canvas and the muted toolbar band.
               'h-8 gap-1.5 rounded-md border-border/60 bg-background px-2.5 text-xs font-medium text-foreground shadow-xs hover:bg-muted/60',
               activeCount > 0 && 'border-border'
             )}
           >
             <ListFilter className="size-3.5" />
-            {translate('auto.components.github.PRFilterDropdowns.79c54552f7', 'Filters')}
+            {t('auto.components.github.PRFilterDropdowns.79c54552f7', 'Filters')}
             {activeCount > 0 ? (
               <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium text-foreground">
                 {activeCount}
@@ -201,8 +202,7 @@ export default function PRFilterDropdowns({
               reviewerActive={reviewerActive}
               reviewerKind={reviewerKind}
               onPick={(s) => {
-                // Why: each reviewer menu visit should start from the parsed
-                // query unless the user toggles mode during this visit.
+                // Reset reviewer mode to the parsed query on each menu visit.
                 if (s === 'reviewer') {
                   setReviewerModeOverride(null)
                 }
@@ -247,22 +247,22 @@ export default function PRFilterDropdowns({
       </Popover>
       {statusPillValue ? (
         <ActivePill
-          label={translate('auto.components.github.PRFilterDropdowns.13b3ac0a84', 'Status')}
+          label={t('auto.components.github.PRFilterDropdowns.13b3ac0a84', 'Status')}
           value={statusPillValue}
           onClear={() => onChange({ state: 'open', draft: false })}
         />
       ) : null}
       {parsed.author ? (
         <ActivePill
-          label={translate('auto.components.github.PRFilterDropdowns.01f3f3d161', 'Author')}
+          label={t('auto.components.github.PRFilterDropdowns.01f3f3d161', 'Author')}
           value={parsed.author}
           onClear={() => onChange({ author: null })}
         />
       ) : null}
       {parsed.labels.length > 0 ? (
         <ActivePill
-          label={translate('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label')}
-          value={parsed.labels.length === 1 ? parsed.labels[0] : `${parsed.labels.length} labels`}
+          label={t('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label')}
+          value={filterLabelsValue(parsed.labels, t) ?? ''}
           onClear={() => onChange({ labels: [] })}
         />
       ) : null}
@@ -270,8 +270,8 @@ export default function PRFilterDropdowns({
         <ActivePill
           label={
             reviewerKind === 'reviewed-by'
-              ? translate('auto.components.github.PRFilterDropdowns.7f1ba66c3e', 'Reviewed by')
-              : translate('auto.components.github.PRFilterDropdowns.b27b7e526c', 'Review from')
+              ? t('auto.components.github.PRFilterDropdowns.7f1ba66c3e', 'Reviewed by')
+              : t('auto.components.github.PRFilterDropdowns.b27b7e526c', 'Review from')
           }
           value={reviewerActive}
           onClear={() => onChange({ reviewer: null })}
@@ -279,7 +279,7 @@ export default function PRFilterDropdowns({
       ) : null}
       {parsed.assignee ? (
         <ActivePill
-          label={translate('auto.components.github.PRFilterDropdowns.979be3cf6b', 'Assignee')}
+          label={t('auto.components.github.PRFilterDropdowns.979be3cf6b', 'Assignee')}
           value={parsed.assignee}
           onClear={() => onChange({ assignee: null })}
         />

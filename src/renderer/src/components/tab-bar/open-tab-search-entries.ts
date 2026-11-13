@@ -1,26 +1,25 @@
-// Builds one worktree's tabs, browser pages and simulator tabs into the shapes
-// the three Cmd+J engines search.
-
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
-import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
-import {
-  buildSearchableSimulatorTabs,
-  type SearchableSimulatorTab
-} from '@/lib/simulator-palette-search'
-import {
-  buildSearchableWorkspaceTabs,
-  type SearchableWorkspaceTab
-} from '@/lib/workspace-tab-palette-search'
+import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
+import type { SearchableBrowserPage } from '@/lib/browser/palette/browser-palette-search'
+import { buildSearchableSimulatorTabs } from '@/lib/simulator/search/simulator-palette-search'
+import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import { getPaletteOwnershipWorktreeIds } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { Translate } from '@/i18n/use-translate'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -54,7 +53,6 @@ export type OpenTabSearchEntryState = Pick<
   worktree: Worktree
 }
 
-/** What the browser-page part of the entries reads; a narrower store subscription than the rest. */
 export type OpenTabSearchBrowserPageState = Pick<
   OpenTabSearchEntryState,
   | 'activeBrowserTabId'
@@ -70,8 +68,7 @@ export type OpenTabSearchBrowserPageState = Pick<
   | 'worktreesByRepo'
 >
 
-// Why picked: the full entry state also follows terminal titles and editor tabs, which would
-// re-render a subscriber that only needs the open browser pages.
+// Select browser state separately so terminal-title and editor writes cannot rerender browser-only consumers.
 export function selectOpenTabSearchBrowserPageState(
   state: AppState,
   worktreeId: string
@@ -117,8 +114,7 @@ export type OpenTabSearchAgentState = Pick<
   | 'terminalLayoutsByTabId'
 >
 
-// No group id: every tab of the worktree is offered, including the one the
-// column already shows, matching how Cmd+J lists the tab you are on.
+// Offer every workspace tab across groups, including the active one, to match Cmd+J.
 export function selectOpenTabSearchEntryState(
   state: AppState,
   worktreeId: string
@@ -140,8 +136,7 @@ export function selectOpenTabSearchEntryState(
       : undefined) ??
     repoCandidates[0] ??
     null
-  // preferredHostId last: it found this worktree, so it beats the local default
-  // when neither the worktree nor a repo names a host.
+  // Use the host that found the workspace when workspace/repo metadata has no host; do not silently fall back to local.
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined, preferredHostId)
   return {
     activeBrowserTabId: state.activeBrowserTabId,
@@ -209,12 +204,14 @@ export function buildOpenTabSearchBrowserPages(
 
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
-  agentState: OpenTabSearchAgentState
+  agentState: OpenTabSearchAgentState,
+  chatNames: StructuredChatTabNames,
+  t?: Translate
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
 
   return {
-    workspaceTabs: buildSearchableWorkspaceTabs({
+    workspaceTabs: buildSearchableWorkspaceTabEntries({
       ...scope,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       tabsByWorktree: state.tabsByWorktree,
@@ -233,16 +230,20 @@ export function buildOpenTabSearchEntries(
       activeFileId: state.activeFileId,
       activeFileIdByWorktree: state.activeFileIdByWorktree,
       activeTabTypeByWorktree: state.activeTabTypeByWorktree,
-      generatedTitlesEnabled: state.generatedTitlesEnabled
+      generatedTitlesEnabled: state.generatedTitlesEnabled,
+      chatNames
     }),
     browserPages: buildOpenTabSearchBrowserPages(state, scope),
-    simulatorTabs: buildSearchableSimulatorTabs({
-      ...scope,
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-      activeGroupIdByWorktree: state.activeGroupIdByWorktree,
-      groupsByWorktree: state.groupsByWorktree,
-      activeWorktreeId: state.activeWorktreeId,
-      activeTabType: state.activeTabType
-    })
+    simulatorTabs: buildSearchableSimulatorTabs(
+      {
+        ...scope,
+        unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+        activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+        groupsByWorktree: state.groupsByWorktree,
+        activeWorktreeId: state.activeWorktreeId,
+        activeTabType: state.activeTabType
+      },
+      t
+    )
   }
 }

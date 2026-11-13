@@ -5,17 +5,20 @@ import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
 import type { HoveredTabInsertion } from './useTabDragSplit'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { setGroupRatioThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
 
-function ResizeHandle({
+export function ResizeHandle({
   direction,
   onResizeStart,
+  onResizeEnd,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
   onResizeStart: () => void
+  onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
@@ -49,6 +52,8 @@ function ResizeHandle({
       onResizeStart()
       setDragging(true)
       handle.setPointerCapture(event.pointerId)
+      // Why: a guest page under the first move takes the gesture before capture activates; keep guests click-through.
+      const releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
       // Why: measure outside pointermove so pane writes never force a readback.
       let rect = container.getBoundingClientRect()
       const resizeObserver = new ResizeObserver(() => {
@@ -58,7 +63,13 @@ function ResizeHandle({
       let draggedRatio: number | null = null
 
       const onPointerMove = (moveEvent: PointerEvent): void => {
-        if (moveEvent.pointerId !== event.pointerId || !handle.hasPointerCapture(event.pointerId)) {
+        // Why: Linux Chromium delivers pointermove while hasPointerCapture() reports false; own by pointerId only.
+        if (moveEvent.pointerId !== event.pointerId) {
+          return
+        }
+        // Why: a release outside the window can arrive as a buttonless move instead of pointerup.
+        if (moveEvent.buttons === 0) {
+          cleanup()
           return
         }
         const ratio = isHorizontal
@@ -66,9 +77,7 @@ function ResizeHandle({
           : (moveEvent.clientY - rect.top) / rect.height
         const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio))
         draggedRatio = clamped
-        // Why: direct style writes keep the drag off the store — a commit per
-        // pointermove published 60-120 global store updates/s against every
-        // subscriber (STA-3328). React re-applies identical flex on commit.
+        // Write pane styles during drag to avoid 60–120 global store updates per second; commit once on release.
         firstPane.style.flex = `${clamped} 1 0%`
         secondPane.style.flex = `${1 - clamped} 1 0%`
       }
@@ -80,6 +89,8 @@ function ResizeHandle({
         }
         cleaned = true
         resizeObserver.disconnect()
+        releaseWebviewDragPassthrough()
+        onResizeEnd?.()
         if (draggedRatio !== null) {
           onRatioChange(draggedRatio)
         }
@@ -93,10 +104,13 @@ function ResizeHandle({
         } catch {
           // Best effort: unmount cleanup can run after Chromium has already dropped capture.
         }
-        handle.removeEventListener('pointermove', onPointerMove)
-        handle.removeEventListener('pointerup', onPointerUp)
-        handle.removeEventListener('pointercancel', onPointerCancel)
+        window.removeEventListener('pointermove', onPointerMove)
+        window.removeEventListener('pointerup', onPointerUp)
+        window.removeEventListener('pointercancel', onPointerCancel)
         handle.removeEventListener('lostpointercapture', onLostPointerCapture)
+        window.removeEventListener('blur', onWindowBlur)
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+        window.removeEventListener('pointerdown', onNextPointerDown, true)
         if (activeResizeCleanupRef.current === cleanup) {
           activeResizeCleanupRef.current = null
         }
@@ -120,13 +134,30 @@ function ResizeHandle({
         }
       }
 
-      handle.addEventListener('pointermove', onPointerMove)
-      handle.addEventListener('pointerup', onPointerUp)
-      handle.addEventListener('pointercancel', onPointerCancel)
+      // Why: a release outside a blurred or hidden window may never arrive; end the gesture so guests take input again.
+      const onWindowBlur = (): void => cleanup()
+      // Why: a new press of the same pointer anywhere proves the old release was missed; end it before the press is handled.
+      const onNextPointerDown = (downEvent: PointerEvent): void => {
+        if (downEvent.pointerId === event.pointerId) {
+          cleanup()
+        }
+      }
+      const onVisibilityChange = (): void => {
+        if (document.visibilityState === 'hidden') {
+          cleanup()
+        }
+      }
+
+      window.addEventListener('pointermove', onPointerMove)
+      window.addEventListener('pointerup', onPointerUp)
+      window.addEventListener('pointercancel', onPointerCancel)
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
+      window.addEventListener('blur', onWindowBlur)
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      window.addEventListener('pointerdown', onNextPointerDown, true)
       activeResizeCleanupRef.current = cleanup
     },
-    [isHorizontal, onRatioChange, onResizeStart]
+    [isHorizontal, onRatioChange, onResizeStart, onResizeEnd]
   )
 
   return (
@@ -185,10 +216,7 @@ function SplitNode({
         groupId={node.groupId}
         worktreeId={worktreeId}
         isVisible={isWorktreeActive}
-        // Why: hidden worktrees stay mounted so their PTYs and split layouts
-        // survive worktree switches, but only the visible worktree may own the
-        // global terminal shortcuts. If an offscreen group's pane stays
-        // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
+        // Retain hidden PTYs/layouts, but grant global terminal shortcuts only to the visible focused group.
         isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
         tabStrip={tabStrip}
@@ -232,8 +260,7 @@ function SplitNode({
           touchesLeftEdge={touchesLeftEdge}
           touchesBottomEdge={isHorizontal ? touchesBottomEdge : false}
           suppressLeftBorder={suppressLeftBorder}
-          // Why: the resize handle paints the inner seam — pane borders here
-          // stack into a triple-line bar beside the divider.
+          // The resize handle owns the inner seam; pane borders would stack into extra lines.
           suppressRightBorder={isHorizontal ? true : suppressRightBorder}
           suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
@@ -244,7 +271,6 @@ function SplitNode({
         direction={node.direction}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) =>
-          // Switch point: main saves the group sizes once the drag ends.
           ORCA_LAYOUT_OWNER_IS_MAIN
             ? setGroupRatioThroughLayoutOwner(worktreeId, nodePath, nextRatio)
             : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
@@ -275,14 +301,7 @@ function SplitNode({
   )
 }
 
-/**
- * The chrome-free group tree: recursive splits, resize handles, and one TabGroupPanel per leaf.
- * The host owns the drag scope (WorkspaceTabDragLayer), outer chrome, and edge policy.
- *
- * Host contract: the tree's nodes size themselves as flex items (`flex-1`), so the host must
- * mount it in a flex container that owns its rect (WorktreeSplitSurface's `absolute inset-0
- * flex`, the floating panel's surface frame). In a block parent every pane collapses to 0px.
- */
+/** Host this chrome-free tree in a sized flex container or panes collapse; the host owns drag scope and outer seams. */
 export function TabGroupSplitNodeTree({
   layout,
   worktreeId,

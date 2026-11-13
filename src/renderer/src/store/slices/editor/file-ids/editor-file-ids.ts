@@ -4,8 +4,8 @@ import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
 import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
-import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
@@ -179,19 +179,6 @@ export function getOpenedEditFileIdAfterOpen(
   }
   return (
     state.openFiles.find(
-      (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'
-    )?.id ?? filePath
-  )
-}
-
-/** The id a conflict-review overview shows a file under: an open edit tab's, so its unsaved edits show. */
-export function conflictOverviewFileId(
-  openFiles: readonly OpenFile[],
-  worktreeId: string,
-  filePath: string
-): string {
-  return (
-    openFiles.find(
       (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'
     )?.id ?? filePath
   )

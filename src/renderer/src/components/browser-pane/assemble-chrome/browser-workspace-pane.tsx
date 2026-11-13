@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { isClientHostedBrowserPageHandle } from '@/store/slices/browser'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
 import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import { useBrowserAutomationVisiblePageIds } from '../host-guest/browser-automation-visibility'
@@ -11,8 +11,8 @@ import {
   IDLE_BROWSER_DRIVER,
   useBrowserDriverForPage,
   useBrowserMobileDrivenPageIds
-} from '@/lib/pane-manager/browser-mobile-driver-state'
-import { useBrowserRemotelyViewedPageIds } from '@/lib/pane-manager/browser-remote-viewer-state'
+} from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import { useBrowserRemotelyViewedPageIds } from '@/runtime/browser/ownership/browser-remote-viewer-state'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getBrowserPageRuntimeEnvironmentId } from '../describe-page/browser-page-url-display'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
@@ -23,6 +23,10 @@ import { WorkspaceDocPagePane } from '../workspace-doc/workspace-doc-page-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
+import {
+  ManagedBrowserProfileHold,
+  useManagedBrowserProfileStatus
+} from './managed-browser-profile-hold'
 import {
   isBrowserPageMountAdmitted,
   useAnyBrowserPageMountAdmission
@@ -77,6 +81,7 @@ export default function BrowserPane({
     [localBrowserPages]
   )
   const hasAdmittedPage = useAnyBrowserPageMountAdmission(localBrowserPageIds)
+  const managedProfileStatus = useManagedBrowserProfileStatus(browserTab.sessionProfileId)
   const pageDriver = useBrowserDriverForPage(activeBrowserPageId)
   // Why: a runtime-backed page is streamed, never locally driven, so its driver must read idle.
   const activeBrowserDriver = runtimeEnvironmentActive ? IDLE_BROWSER_DRIVER : pageDriver
@@ -92,11 +97,9 @@ export default function BrowserPane({
     }
   }, [activeRuntimeEnvironmentId, browserPages, runtimeEnvironmentActive])
 
-  useContextualTour(
-    'browser',
-    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive,
-    'browser_visible'
-  )
+  const localBrowserPageVisible =
+    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive
+  useContextualTour('browser', localBrowserPageVisible, 'browser_visible')
 
   const reclaimActiveBrowserForDesktop = useCallback(async (): Promise<void> => {
     if (!activeBrowserPageId) {
@@ -115,13 +118,7 @@ export default function BrowserPane({
         : null
     const clientPlacement =
       environmentHandle?.placement?.kind === 'client' ? environmentHandle.placement : null
-    // Why: a staged page this client expects to host itself mounts the client-hosted pane from the
-    // first frame. The host mints the placement, so keying on it would swap component and key at
-    // adoption — a remount that replays open dropdowns and throws away focus and drafts. The pane
-    // renders connecting until adoption fills the placement in.
-    // A row restored from a previous run has no placement until the relaunched host recovers
-    // the page, and the streamed pane would meanwhile open a server screencast the host refuses
-    // for a client-placed page. It mounts quiet on the client pane until adoption fills it in.
+    // Mount expected client-hosted pages before placement arrives to preserve chrome; restored client pages must also wait here because the host refuses server screencasts for them.
     const clientHosted = environmentHandle
       ? isClientHostedBrowserPageHandle(environmentHandle)
       : false
@@ -155,6 +152,11 @@ export default function BrowserPane({
     ) : (
       <div className="flex h-full min-h-0 flex-1 bg-background" />
     )
+  }
+
+  // Why: until main has the workspace's profile, a webview would load on another partition or be refused.
+  if (localBrowserPages.length > 0 && managedProfileStatus) {
+    return <ManagedBrowserProfileHold status={managedProfileStatus} />
   }
 
   return (

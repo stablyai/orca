@@ -6,7 +6,7 @@ import type { SidebarFeedCatalog } from './sidebar-feed-rows'
 
 /** A repo as a served catalog or a host's repo.list names it, before the builder reads it. */
 export type SidebarCatalogRepo = ProjectSectionRepo &
-  Partial<Pick<Repo, 'badgeColor' | 'projectGroupId' | 'projectGroupOrder'>>
+  Partial<Pick<Repo, 'badgeColor' | 'projectGroupId' | 'projectGroupOrder' | 'hiddenAt'>>
 
 function catalogRepo(repo: SidebarCatalogRepo): Repo {
   return {
@@ -18,14 +18,12 @@ function catalogRepo(repo: SidebarCatalogRepo): Repo {
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {}),
     ...(repo.projectGroupId ? { projectGroupId: repo.projectGroupId } : {}),
-    ...(repo.projectGroupOrder !== undefined ? { projectGroupOrder: repo.projectGroupOrder } : {})
+    ...(repo.projectGroupOrder !== undefined ? { projectGroupOrder: repo.projectGroupOrder } : {}),
+    ...(typeof repo.hiddenAt === 'number' ? { hiddenAt: repo.hiddenAt } : {})
   }
 }
 
-/**
- * The builder's catalog from a served one (every host, paired servers included), or from a
- * host that serves none, its own repos and project groups.
- */
+/** Use served all-host catalogs when available, otherwise the host’s own repos/groups. */
 export function buildSidebarFeedCatalog(
   served: ServedProjectSections | null,
   hostRepos: readonly SidebarCatalogRepo[],

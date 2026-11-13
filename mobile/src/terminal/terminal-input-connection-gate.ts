@@ -1,4 +1,4 @@
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 type MobileTerminalInputGateOptions = {
   readonly connState: ConnectionState
@@ -7,7 +7,7 @@ type MobileTerminalInputGateOptions = {
 }
 
 type MobileTerminalInputGate = {
-  // Why: composing is local — it must survive an outage so typed text is held, not discarded (#6713).
+  // An active terminal to type into, even before the connection allows sending.
   readonly canCompose: boolean
   readonly canSend: boolean
 }

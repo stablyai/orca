@@ -3,9 +3,9 @@ import { Kanban } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
+import { ScrollToCurrentWorkspaceToolbarButton } from './worktree-list/navigation/ScrollToCurrentWorkspaceToolbarButton'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 
@@ -23,11 +23,8 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   workspaceBoardDragPreviewOpen = false,
   onWorkspaceBoardToggle
 }: SidebarToolbarProps) {
-  // Why: this memo boundary needs its own language subscription, while
-  // translate() preserves Orca's pseudo-localization behavior. Without it the
-  // toolbar (and the ScrollToCurrentWorkspaceToolbarButton it renders) keeps
-  // whatever language was active at boot — English, since the persisted locale
-  // is applied asynchronously after the lazy catalog loads.
+  const t = useTranslate()
+  // Subscribe across this memo boundary so asynchronously applied locale changes relabel the toolbar and its children.
   useTranslation()
   const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
   const movedHintEligibleRef = React.useRef<boolean | null>(null)
@@ -40,8 +37,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     if (!persistedUIReady) {
       return
     }
-    // Why: only users who had already opened the old board location should
-    // see the relocation hint; first-time users should not become eligible.
+    // Limit relocation hints to users who opened the board at its old location.
     if (movedHintEligibleRef.current === null) {
       movedHintEligibleRef.current = hasUsedWorkspaceBoard
     }
@@ -80,14 +76,12 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
           <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>
               <Button
-                // Why: previewing the board from a card drag lights up the
-                // trigger so it's clear the drag is another way to open it.
                 variant={
                   workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'
                 }
                 size="icon-xs"
                 type="button"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.sidebar.SidebarToolbar.49f62c5665',
                   'Workspace board'
                 )}
@@ -102,19 +96,13 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
               {workspaceBoardMovedHintOpen
-                ? translate(
+                ? t(
                     'auto.components.sidebar.SidebarToolbar.87d0064026',
                     'Workspace board moved to the bottom bar'
                   )
                 : workspaceBoardOpen
-                  ? translate(
-                      'auto.components.sidebar.SidebarToolbar.a30e34eb5c',
-                      'Close workspace board'
-                    )
-                  : translate(
-                      'auto.components.sidebar.SidebarToolbar.49f62c5665',
-                      'Workspace board'
-                    )}
+                  ? t('auto.components.sidebar.SidebarToolbar.a30e34eb5c', 'Close workspace board')
+                  : t('auto.components.sidebar.SidebarToolbar.49f62c5665', 'Workspace board')}
             </TooltipContent>
           </Tooltip>
         </div>

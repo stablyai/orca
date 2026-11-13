@@ -1,44 +1,43 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime-client'
-import type {
-  RuntimeOrchestrationEnvelope,
-  RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { sendRemoteRuntimeRequestAbortable } from './runtime-environment-abortable-requests'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { sendRemoteRuntimeSharedControlRequestOnRuntime } from './runtime-environment-request-connections'
+import type { RuntimeEnvironmentCall } from './runtime-environment-call'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
-
-type PinnedCall = {
-  method: string
-  params: unknown
-  timeoutMs: number
-  envelope?: RuntimeOrchestrationEnvelope
-  signal?: AbortSignal
-}
 
 /** A one-shot socket that sends only after its own `status.get` names `expectedRuntimeId`; null otherwise. */
 async function sendOneShotRequestOnRuntime(
   connection: PairedRuntimeConnection,
-  call: PinnedCall,
+  call: RuntimeEnvironmentCall,
   expectedRuntimeId: string
 ): Promise<RuntimeRpcResponse<unknown> | null> {
   let otherRuntime = false
   try {
-    return await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
+    const requestMethod = call.method
+    const requestParams = call.params
+    const requestTimeoutMs = call.timeoutMs
+    const orchestrationEnvelope = call.envelope
+    const requestSignal = call.signal
+    const requestPreparation = call.prepareRequest
+    return await sendRemoteRuntimeRequestOnSocket<unknown>(
       connection,
-      call.method,
-      call.params,
-      call.timeoutMs,
+      requestMethod,
+      requestParams,
+      requestTimeoutMs,
+      orchestrationEnvelope,
       (status) => {
         otherRuntime = !status.ok || status.result.runtimeId !== expectedRuntimeId
         if (otherRuntime) {
           throw new Error('Runtime changed before sending')
         }
       },
-      call.envelope,
+      requestSignal,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-      call.signal
+      undefined,
+      requestPreparation
     )
   } catch (error) {
     if (otherRuntime) {
@@ -48,13 +47,10 @@ async function sendOneShotRequestOnRuntime(
   }
 }
 
-/**
- * Sends a call shaped for one runtime only over a socket that runtime answered on. Why: the cached
- * identity a support route accepts can outlive a server restart behind the same endpoint.
- */
+/** Cached support identity can survive server restart; verify identity on the sending socket. */
 export async function sendSupportRoutedCallOnRuntime(
   route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
-  call: PinnedCall,
+  call: RuntimeEnvironmentCall,
   expectedRuntimeId: string,
   transport: 'shared' | 'one-shot'
 ): Promise<RuntimeRpcResponse<unknown>> {
@@ -63,13 +59,29 @@ export async function sendSupportRoutedCallOnRuntime(
       ? await sendRemoteRuntimeSharedControlRequestOnRuntime<unknown>(
           route.environment.id,
           route.connection,
-          call.method,
-          call.params,
-          call.timeoutMs,
-          expectedRuntimeId,
-          call.envelope,
-          call.signal
+          call,
+          expectedRuntimeId
         )
       : await sendOneShotRequestOnRuntime(route.connection, call, expectedRuntimeId)
   return response ?? runtimeEnvironmentChangedFailure(route.environment, call.method)
+}
+
+/** One-shot enveloped call; a pinned one proves its runtime on the sending socket, since the registry's id can predate a restart. */
+export function sendEnvelopedOneShotCall(
+  route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
+  call: RuntimeEnvironmentCall,
+  expectedRuntimeId: string | undefined
+): Promise<RuntimeRpcResponse<unknown>> {
+  return expectedRuntimeId === undefined
+    ? sendRemoteRuntimeRequestAbortable(
+        route.connection,
+        call.method,
+        call.params,
+        call.timeoutMs,
+        call.envelope,
+        call.signal,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        call.prepareRequest
+      )
+    : sendSupportRoutedCallOnRuntime(route, call, expectedRuntimeId, 'one-shot')
 }

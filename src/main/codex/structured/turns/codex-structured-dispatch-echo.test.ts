@@ -1,0 +1,135 @@
+import { describe, expect, it } from 'vitest'
+import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import { createCodexDispatchEchoes, readCodexDispatchEcho } from './codex-structured-dispatch-echo'
+
+const CODEX_IDENTITY: AgentJournalItemIdentity = {
+  provider: 'codex',
+  threadId: 'thread-1',
+  turnId: 'turn-1',
+  ordinal: 3
+}
+
+it.each(['different', 'repeat'])(
+  'matches the current causal front with %s historical text',
+  (oldText) => {
+    const echoes = createCodexDispatchEchoes()
+    const content = (text: string) => [
+      { type: 'text', text },
+      { type: 'localImage', path: '/captured.png' }
+    ]
+    echoes.arm('timed-out')
+    echoes.expect('timed-out', 'thread-1', 'start', content('repeat'))
+    echoes.answered('timed-out', echoes.tick())
+    echoes.arm('old-A')
+    echoes.expect('old-A', 'thread-1', 'steer', content(oldText), 'old-turn')
+    echoes.bindTurn('old-A', 'thread-1', 'old-turn', 'steer')
+    echoes.endTurn('thread-1', 'old-turn', { status: 'completed' })
+    echoes.arm('B')
+    echoes.expect('B', 'thread-1', 'steer', content('repeat'), 'turn-1')
+    echoes.bindTurn('B', 'thread-1', 'turn-1', 'steer')
+    const receipt = {
+      type: 'userMessage',
+      id: 'captured-user',
+      clientId: null,
+      content: content('repeat')
+    }
+    expect(readCodexDispatchEcho(receipt, CODEX_IDENTITY, echoes)?.clientMessageId).toBe('B')
+    echoes.settle('B')
+    echoes.arm('next')
+    echoes.expect('next', 'thread-1', 'steer', content('repeat'), 'turn-1')
+    // A duplicate cannot consume the next equal message; its identity still belongs to B.
+    expect(readCodexDispatchEcho(receipt, CODEX_IDENTITY, echoes)?.clientMessageId).toBe('B')
+    echoes.disarm('old-A')
+    expect(
+      readCodexDispatchEcho({ ...receipt, clientId: 'old-A', content: [] }, CODEX_IDENTITY, echoes)
+        ?.clientMessageId
+    ).toBe('old-A')
+  }
+)
+
+it.each(['start', 'steer'] as const)(
+  'reconciles a no-ID %s receipt across its actual RPC turn boundary',
+  (via) => {
+    const received: string[] = []
+    const echoes = createCodexDispatchEchoes(
+      () => {},
+      (id) => received.push(id)
+    )
+    const content = [{ type: 'text', text: 'captured words' }]
+    echoes.arm('boundary')
+    echoes.expect('boundary', 'thread-1', via, content, via === 'steer' ? 'prior-turn' : undefined)
+    const receipt = { type: 'userMessage', id: 'captured-user', clientId: null, content }
+    expect(readCodexDispatchEcho(receipt, CODEX_IDENTITY, echoes)).toBeNull()
+    echoes.bindTurn('boundary', 'thread-1', 'turn-1', via)
+    expect(received).toEqual(['boundary'])
+    echoes.arm('after-answer')
+    echoes.expect('after-answer', 'thread-1', via, content, 'turn-1')
+    echoes.bindTurn('after-answer', 'thread-1', 'turn-1', via)
+    const identity = { ...CODEX_IDENTITY, ordinal: 4 }
+    expect(readCodexDispatchEcho(receipt, identity, echoes)?.clientMessageId).toBe('after-answer')
+  }
+)
+
+describe('the sends Codex holds', () => {
+  const held = (echoes: ReturnType<typeof createCodexDispatchEchoes>) => [...echoes.heldSends()]
+
+  it('holds a replied start until its turn is published without consuming its echo', () => {
+    const changes: string[] = []
+    const echoes = createCodexDispatchEchoes(() => changes.push(held(echoes).join(',')))
+    echoes.arm('sent')
+    expect(held(echoes)).toEqual(['sent'])
+
+    echoes.bindTurn('sent', 'thread-1', 'turn-1', 'start', echoes.tick())
+    expect(held(echoes)).toEqual(['sent'])
+
+    echoes.opened('thread-1', 'turn-1')
+    expect(held(echoes)).toEqual(['sent'])
+    echoes.published('thread-1', 'turn-1')
+    expect(held(echoes)).toEqual([])
+    expect(changes).toEqual([''])
+  })
+
+  it('releases a replied steer into a published turn while retaining exact late correlation', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.published('thread-1', 'turn-1')
+    echoes.arm('steered')
+    echoes.expect('steered', 'thread-1', 'steer', [], 'turn-1')
+    expect(held(echoes)).toEqual(['steered'])
+    echoes.bindTurn('steered', 'thread-1', 'turn-1', 'steer', echoes.tick())
+    expect(held(echoes)).toEqual([])
+    expect(
+      readCodexDispatchEcho(
+        {
+          type: 'userMessage',
+          id: 'late-user',
+          clientId: 'steered'
+        },
+        CODEX_IDENTITY,
+        echoes
+      )?.clientMessageId
+    ).toBe('steered')
+  })
+
+  it('holds a send answered into no turn only while a status read after its answer says running', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.arm('timed-out')
+    // Pre-answer idle status cannot prove Codex has read the send.
+    echoes.observeStatus(false)
+    expect(held(echoes)).toEqual(['timed-out'])
+    echoes.answered('timed-out', echoes.tick())
+    expect(held(echoes)).toEqual([])
+
+    echoes.observeStatus(true)
+    expect(held(echoes)).toEqual(['timed-out'])
+    echoes.observeStatus(false)
+    expect(held(echoes)).toEqual([])
+  })
+
+  it('lets a running status read before the answer hold nothing', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.arm('sent')
+    echoes.observeStatus(true)
+    echoes.answered('sent', echoes.tick())
+    expect(held(echoes)).toEqual([])
+  })
+})

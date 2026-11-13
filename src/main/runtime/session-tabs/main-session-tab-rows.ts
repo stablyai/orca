@@ -1,9 +1,8 @@
-// Layout-owner builds: a workspace main owns publishes its rows, tab order and groups from main's
-// layout (projectSessionTabs). The window's live publication supplies what the user sees: selection,
-// the focused pane, dirty state and live terminal titles (main's copy of the view lags a debounced
-// save), the rows main's layout does not list yet, and the facts only the window has (terminal
-// theme, agent status, launch drafts, a markdown view's mode, file id, draft version and untitled
-// flag).
+import {
+  normalizeMobileSessionTabSelection,
+  resolveMobileSessionActiveTab
+} from './mobile-session-tab-selection'
+// Use main's rows/order/groups, augmented by window-only rows and live view facts (selection, dirty state, titles, theme/status and editor drafts).
 
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
@@ -12,20 +11,14 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-session-contracts'
 
-type Row = RuntimeMobileSessionSnapshotTab
-
 /** Main's projection of the rows (projectSessionTabs): the snapshot minus the runtime's stamps. */
 export type MainSessionTabRows = Omit<
   RuntimeMobileSessionTabsSnapshot,
   'publicationEpoch' | 'snapshotVersion' | 'worktreeInstanceId' | 'retiredTerminalSurfaces'
 >
 
-/**
- * Rows main's layout answers for, with the window's facts: terminals and edit-mode files. Main also
- * lists browser, chat, diff and markdown-preview rows, but the window's row of the same id stands
- * whole while the window lists it (its draft is what makes a diff dirty).
- */
-function isMainRow(row: Row): boolean {
+/** Merge window facts into terminal/edit rows; keep window browser/chat/diff/preview rows whole while listed, including diff-draft dirty state. */
+function isMainRow(row: RuntimeMobileSessionSnapshotTab): boolean {
   return (
     row.type === 'terminal' ||
     (row.type === 'file' && row.mode !== 'diff') ||
@@ -34,7 +27,7 @@ function isMainRow(row: Row): boolean {
 }
 
 /** A terminal row with a manual name: its tab's custom title or its pane's own title. */
-function isNamed(row: Extract<Row, { type: 'terminal' }>): boolean {
+function isNamed(row: Extract<RuntimeMobileSessionSnapshotTab, { type: 'terminal' }>): boolean {
   return !!row.customTitle || !!row.parentLayout?.titlesByLeafId?.[row.leafId]?.trim()
 }
 
@@ -66,12 +59,12 @@ function keepsWindowPtyId(
   return !!live && live(window) && !live(main)
 }
 
-/**
- * Main's row with the fields only the window knows, from the window's row of the same id. A
- * window terminal id names a pane main has not bound yet (an SSH restore before its terminal
- * registers), unless main has seen that terminal exit: then main's cleared binding wins.
- */
-function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules): Row {
+/** Use window-only fields and pending terminal bindings until main catches up; main's certified exit overrides the window's old terminal id. */
+function withWindowFacts(
+  row: RuntimeMobileSessionSnapshotTab,
+  windowRow: RuntimeMobileSessionSnapshotTab | undefined,
+  rules: MergeRules
+): RuntimeMobileSessionSnapshotTab {
   if (row.type === 'terminal' && windowRow?.type === 'terminal') {
     return {
       ...row,
@@ -81,6 +74,10 @@ function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules
       ...(windowRow.agentStatus !== undefined ? { agentStatus: windowRow.agentStatus } : {}),
       ...(keepsWindowPtyId(row.ptyId, windowRow.ptyId, rules) ? { ptyId: windowRow.ptyId } : {}),
       ...(windowRow.launchDraft !== undefined ? { launchDraft: windowRow.launchDraft } : {}),
+      // Main's row holds the saved name; only the window resolves it.
+      ...(windowRow.resolvesSessionTitle
+        ? { aiVaultTitle: windowRow.aiVaultTitle ?? null, resolvesSessionTitle: true as const }
+        : {}),
       ...(windowRow.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: windowRow.launchDraftCreatedAt }
         : {})
@@ -105,10 +102,10 @@ function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules
 
 /** Main's rows in main's order, each window-only row after the row it follows in the window's. */
 function withWindowOnlyRows(
-  rows: Row[],
-  windowRows: readonly Row[],
+  rows: RuntimeMobileSessionSnapshotTab[],
+  windowRows: readonly RuntimeMobileSessionSnapshotTab[],
   windowOnly: ReadonlySet<string>
-): Row[] {
+): RuntimeMobileSessionSnapshotTab[] {
   const merged = [...rows]
   windowRows.forEach((row, index) => {
     if (!windowOnly.has(row.id)) {
@@ -124,11 +121,7 @@ function withWindowOnlyRows(
   return merged
 }
 
-/**
- * The window's live snapshot of a workspace main owns, with main's terminal and editor rows, tab
- * order and groups. The window keeps its publication stamps (so the snapshot fences hold as today)
- * and its view: what it selects stands whenever main lists that row.
- */
+/** Project main layout into window snapshots while retaining window publication stamps and any selection main still lists. */
 export function withMainSessionTabRows(
   published: RuntimeMobileSessionTabsSnapshot,
   projected: MainSessionTabRows,
@@ -149,8 +142,15 @@ export function withMainSessionTabRows(
   )
   const windowOnlyIds = new Set(windowOnly.map((row) => row.id))
   const merged = withWindowOnlyRows(rows, published.tabs, windowOnlyIds)
-  const listed = new Map(merged.map((row) => [row.id, row]))
-  const windowActive = published.activeTabId ? listed.get(published.activeTabId) : undefined
+  const windowSelected = published.tabs.find((row) => row.id === published.activeTabId)
+  const mainRetiredSelection =
+    windowSelected &&
+    isMainRow(windowSelected) &&
+    !merged.some((row) => row.id === windowSelected.id)
+  const navigation = mainRetiredSelection ? projected : published
+  const windowActive = mainRetiredSelection
+    ? undefined
+    : (resolveMobileSessionActiveTab(published, merged) ?? undefined)
   const windowGroups = new Map((published.tabGroups ?? []).map((group) => [group.id, group]))
   // Groups list a terminal under its tab (orderIdOf), so a kept pane keeps its tab's place.
   const windowOnlyOrder = new Set(windowOnly.map(orderIdOf))
@@ -159,28 +159,24 @@ export function withMainSessionTabRows(
     published.tabGroups ?? [],
     windowOnlyOrder
   )
-  // The tab the window shows in each group, when main's group still holds it; while main's
-  // selection stands (the window selects a row main lacks), main's groups stay as main has them.
+  // Keep each window selection if main still lists it in that group; otherwise retain main's groups/selection.
   let tabGroups: RuntimeMobileSessionTabGroup[] = placement.groups.map((group) => {
-    const shown = windowActive ? windowGroups.get(group.id)?.activeTabId : undefined
-    return shown && group.tabOrder.includes(shown) ? { ...group, activeTabId: shown } : group
+    const shown = !mainRetiredSelection ? windowGroups.get(group.id)?.activeTabId : undefined
+    return shown !== undefined ? { ...group, activeTabId: shown } : group
   })
-  const activeGroupIndex = (activeRow: Row | undefined): number => {
+  const activeGroupIndex = (activeRow: RuntimeMobileSessionSnapshotTab | undefined): number => {
     const byRow = activeRow
       ? tabGroups.findIndex((group) => group.tabOrder.includes(orderIdOf(activeRow)))
       : -1
     if (byRow !== -1) {
       return byRow
     }
-    const byWindow = windowActive
-      ? tabGroups.findIndex((group) => group.id === published.activeGroupId)
-      : -1
+    const byWindow = tabGroups.findIndex((group) => group.id === navigation.activeGroupId)
     return byWindow !== -1
       ? byWindow
       : tabGroups.findIndex((group) => group.id === projected.activeGroupId)
   }
-  // A window-only row in a group main does not hold joins the active group: groups and their
-  // layout are main's, so the phone gets no group the layout lacks.
+  // Window-only rows from unknown groups join main's active group; never expose groups the layout lacks.
   const { stray } = placement
   if (tabGroups.length > 0) {
     tabGroups = withStrayIn(tabGroups, stray, Math.max(activeGroupIndex(windowActive), 0))
@@ -193,8 +189,7 @@ export function withMainSessionTabRows(
       }
     }
   }
-  // The window's selection is the user's view; main's stands only while the window selects a row
-  // main does not list (a pane drawn before main's frame, or one main closed).
+  // Preserve user selection unless main lacks its row (not yet drawn or already closed).
   const index = activeGroupIndex(windowActive)
   const activeGroup = index === -1 ? undefined : tabGroups[index]
   if (windowActive && activeGroup) {
@@ -207,16 +202,16 @@ export function withMainSessionTabRows(
         activeTabType: windowActive.type
       }
     : {
-        activeGroupId: projected.activeGroupId,
-        activeTabId: projected.activeTabId,
-        activeTabType: projected.activeTabType
+        activeGroupId: navigation.activeGroupId,
+        activeTabId: navigation.activeTabId,
+        activeTabType: navigation.activeTabType
       }
   const activeId = selection.activeTabId
   const { tabGroups: _windowGroups, tabGroupLayout: _windowLayout, ...stamps } = published
-  return {
+  return normalizeMobileSessionTabSelection({
     ...stamps,
     ...selection,
-    ...(tabGroups.length > 0 ? { tabGroups } : {}),
+    ...(tabGroups.length > 0 || published.tabGroups !== undefined ? { tabGroups } : {}),
     ...(projected.tabGroupLayout
       ? { tabGroupLayout: projected.tabGroupLayout }
       : tabGroups.length > 0 && published.tabGroupLayout
@@ -225,5 +220,5 @@ export function withMainSessionTabRows(
     tabs: merged.map((row) =>
       row.isActive === (row.id === activeId) ? row : { ...row, isActive: row.id === activeId }
     )
-  }
+  })
 }

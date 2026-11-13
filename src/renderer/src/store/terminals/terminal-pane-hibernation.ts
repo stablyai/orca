@@ -1,19 +1,22 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-dispatcher'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree
-} from '../slices/agent-status'
+} from '../slices/agent-status/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { removePanesAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
@@ -34,8 +37,7 @@ export function createTerminalPaneHibernationActions(
       const state = get()
       const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
       const teardownOwner = resolveTerminalTeardownOwner(worktreeOwner, [opts.ptyId])
-      // Why: a twin-published worktree must route by the PTY's own owner; a remote PTY with no
-      // host stop to run would otherwise lose its binding while the agent keeps running.
+      // Use PTY owner for twins; losing bindings without an attributable host stop leaves unseen running agents.
       if (
         teardownOwner.kind === 'refused' ||
         (worktreeOwner.kind === 'ambiguous' &&
@@ -108,16 +110,13 @@ export function createTerminalPaneHibernationActions(
           for (const ptyId of exitGuardPtyIds) {
             delete next[ptyId]
           }
-          const nextSleeping = { ...s.sleepingAgentSessionsByPaneKey }
-          for (const key of sleepingRecordKeys) {
-            const replaced = replacedSleepingRecords[key]
-            if (replaced) {
-              nextSleeping[key] = replaced
-            } else {
-              delete nextSleeping[key]
-            }
+          return {
+            suppressedPtyExitIds: next,
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+              s.sleepingAgentSessionsByPaneKey,
+              sleepingRecordKeys.map((key) => [key, replacedSleepingRecords[key] ?? null] as const)
+            )
           }
-          return { suppressedPtyExitIds: next, sleepingAgentSessionsByPaneKey: nextSleeping }
         })
       }
       set((s) => ({
@@ -125,10 +124,10 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        sleepingAgentSessionsByPaneKey: {
-          ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
-        }
+        sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+          s.sleepingAgentSessionsByPaneKey,
+          Object.entries(sleepingAgentSessionRecords)
+        )
       }))
       if (expectedRuntimePtyIds.length > 0) {
         if (!runtimeEnvironmentId) {
@@ -199,8 +198,8 @@ export function createTerminalPaneHibernationActions(
           const existingPtyIds = s.ptyIdsByTabId[opts.tabId] ?? []
           const shutdownPtyIdSet = new Set(rendererShutdownPtyIds)
           const remainingPtyIds = existingPtyIds.filter((ptyId) => !shutdownPtyIdSet.has(ptyId))
-          const nextTabsByWorktree = { ...s.tabsByWorktree }
-          const tabs = nextTabsByWorktree[worktreeId] ?? []
+          const tabs = s.tabsByWorktree[worktreeId] ?? []
+          const replacements: [string, typeof tabs][] = []
           const tabIndex = tabs.findIndex((candidate) => candidate.id === opts.tabId)
           if (tabIndex !== -1) {
             const nextTabs = [...tabs]
@@ -208,7 +207,7 @@ export function createTerminalPaneHibernationActions(
               ...nextTabs[tabIndex],
               ptyId: remainingPtyIds.at(-1) ?? null
             }
-            nextTabsByWorktree[worktreeId] = nextTabs
+            replacements.push([worktreeId, nextTabs])
           }
           const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
           for (const ptyId of exitGuardPtyIds) {
@@ -216,11 +215,8 @@ export function createTerminalPaneHibernationActions(
           }
           const nextLastKnownRelay =
             remainingPtyIds.length === 0
-              ? { ...s.lastKnownRelayPtyIdByTabId }
+              ? replaceRecordEntries<string>(s.lastKnownRelayPtyIdByTabId, [[opts.tabId, null]])
               : s.lastKnownRelayPtyIdByTabId
-          if (remainingPtyIds.length === 0) {
-            delete nextLastKnownRelay[opts.tabId]
-          }
           let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
           const numericPaneId = Number(opts.leafId)
           if (
@@ -229,21 +225,15 @@ export function createTerminalPaneHibernationActions(
           ) {
             const nextByPane = { ...s.runtimePaneTitlesByTabId[opts.tabId] }
             delete nextByPane[numericPaneId]
-            nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-            if (Object.keys(nextByPane).length > 0) {
-              nextRuntimePaneTitlesByTabId[opts.tabId] = nextByPane
-            } else {
-              delete nextRuntimePaneTitlesByTabId[opts.tabId]
-            }
+            nextRuntimePaneTitlesByTabId = replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+              [opts.tabId, Object.keys(nextByPane).length > 0 ? nextByPane : null]
+            ])
           }
           const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
           delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
           return {
-            tabsByWorktree: nextTabsByWorktree,
-            ptyIdsByTabId: {
-              ...s.ptyIdsByTabId,
-              [opts.tabId]: remainingPtyIds
-            },
+            tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, replacements),
+            ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [[opts.tabId, remainingPtyIds]]),
             lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
             suppressedPtyExitIds: {
               ...s.suppressedPtyExitIds,
@@ -251,7 +241,9 @@ export function createTerminalPaneHibernationActions(
             },
             codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
             ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
-              ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
+              ? {
+                  runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId
+                }
               : {}),
             ...removePanesAttention(s, new Set([opts.paneKey])),
             lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey

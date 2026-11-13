@@ -1,15 +1,19 @@
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
+import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
-import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal-render-desync-evidence'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
+import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
 } from '../../shared/keyboard-layout-events'
-import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
-import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../preload-runtime-support'
+import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
+import {
+  awaitBeforeUnloadCheckpoint,
+  startupDiagnosticsEnabled
+} from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {
@@ -26,6 +30,8 @@ export const appApi = {
   getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
   getWindowsAdministratorStatus: (): Promise<boolean | null> =>
     ipcRenderer.invoke('app:getWindowsAdministratorStatus'),
+  getMacosUpgradeSupport: (minimumMacosVersion: string): Promise<MacosUpgradeSupport> =>
+    ipcRenderer.invoke('app:getMacosUpgradeSupport', minimumMacosVersion),
   restartAsAdministrator: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,
@@ -34,6 +40,8 @@ export const appApi = {
     ),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
+  setWindowMaterialSuppressed: (suppressed: boolean): Promise<void> =>
+    ipcRenderer.invoke('app:setWindowMaterialSuppressed', suppressed),
   relaunch: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,
@@ -53,9 +61,13 @@ export const appApi = {
       awaitBeforeUnloadCheckpoint
     ),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
-    const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as { ok?: unknown }
+    const result: { ok?: unknown; error?: unknown } | null | undefined = ipcRenderer.sendSync(
+      'app:stage-before-unload-sync',
+      args
+    )
     if (result?.ok !== true) {
-      throw new Error('Failed to stage renderer state before unload.')
+      const reason = typeof result?.error === 'string' ? `: ${result.error}` : '.'
+      throw new Error(`Failed to stage renderer state before unload${reason}`)
     }
   },
   awaitBeforeUnloadCheckpoint: () => awaitBeforeUnloadCheckpoint(),
@@ -73,8 +85,10 @@ export const appApi = {
     ipcRenderer.on('app:structuredAgentSessionsHeldChanged', listener)
     return () => ipcRenderer.removeListener('app:structuredAgentSessionsHeldChanged', listener)
   },
-  recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
-    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }): Promise<void> =>
+    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup', options),
   startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
     startupDiagnosticsEnabled
       ? ipcRenderer.invoke('app:startupDiagnostic', event, details)

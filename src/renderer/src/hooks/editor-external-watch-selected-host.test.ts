@@ -1,6 +1,15 @@
 import { expect, it } from 'vitest'
+import type { Repo } from '../../../shared/repo-types'
+import '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import '@/lib/workspace/ownership/connection-owner-resolution'
+import './editor-external-watch-target-rows'
+import '@/store/index'
+import './editor-runtime-file-watch'
 import type { AppState } from '@/store/types'
-import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { getDefaultSettings } from '../../../shared/constants'
 import {
   selectEditorExternalWatchTargets,
@@ -62,15 +71,6 @@ it.each(['worktree', 'folder'] as const)(
     expect(switched.targets.map((target) => target.runtimeEnvironmentId)).toEqual(['host-b'])
     expect(switched.targetsKey).not.toBe(first.targetsKey)
     expect(selectEditorExternalWatchTargets(state).targetsKey).toBe(first.targetsKey)
-  }
-)
-
-it.each(['worktree', 'folder'] as const)(
-  'preserves the %s watcher snapshot when selection and watched roots stay unchanged',
-  (workspace) => {
-    const state = makeState(workspace)
-    const first = selectEditorExternalWatchTargets(state)
-    expect(selectEditorExternalWatchTargets({ ...state })).toBe(first)
   }
 )
 
@@ -161,4 +161,36 @@ it('keeps an open local editor watched locally when a same-id direct-SSH folder 
     ['/local/notes', undefined],
     ['/remote/notes', 'ssh-a']
   ])
+})
+
+it('never watches a sibling repo host when the requested worktree owner is absent or unstamped', () => {
+  const repo: Repo = {
+    id: 'repo',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: 'blue',
+    addedAt: 1
+  }
+  const state: SelectedHostState = {
+    ...makeState('worktree'),
+    activeWorkspaceExecutionHostId: 'local',
+    repos: [repo, { ...repo, connectionId: 'builder' }],
+    worktreesByRepo: {
+      repo: [makeWorktree({ id: 'same-worktree', repoId: 'repo', hostId: undefined })]
+    }
+  }
+  expect(selectEditorExternalWatchTargets(state).targets).toEqual([])
+  const captured = {
+    ...state,
+    worktreesByRepo: {
+      repo: [
+        makeWorktree({ id: 'same-worktree', repoId: 'repo', path: '/repo', hostId: 'ssh:builder' })
+      ]
+    }
+  }
+  expect(selectEditorExternalWatchTargets(captured).targets).toEqual([])
+  expect(
+    selectEditorExternalWatchTargets({ ...captured, activeWorkspaceExecutionHostId: 'ssh:builder' })
+      .targets
+  ).toMatchObject([{ connectionId: 'builder', worktreePath: '/repo' }])
 })

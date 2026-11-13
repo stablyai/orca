@@ -1,8 +1,8 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/runtime-client-target'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'
+import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -75,7 +75,7 @@ export function detectedWorktreeRefreshKey(
     targetKey,
     options.requireAuthoritative === true ? 'authoritative' : 'best-effort'
   ]
-  // Why: only remote targets run a compat preflight, so a foreground (reuse:false) refresh must re-probe not coalesce onto a stale-failure background scan; local targets have no preflight and stay coalesced.
+  // Remote foreground refresh must re-probe instead of joining cached-failure background scans; local has no preflight and still coalesces.
   if (target.kind === 'environment') {
     parts.push(`connection:${getEnvironmentSshStateGeneration(target.environmentId)}`)
     parts.push(`runtime:${getRuntimeEnvironmentConnectionGeneration(target.environmentId)}`)
@@ -113,23 +113,7 @@ export function rejectedDetectedWorktreeProviderResult(
 export async function startDetectedWorktreeProviderRequest(
   request: ListDetectedWorktreesArgs
 ): Promise<HostQualifiedDetectedWorktreeResult> {
-  const worktreesApi = window.api.worktrees as typeof window.api.worktrees & {
-    listDetected?: typeof window.api.worktrees.listDetected
-  }
-  if (typeof worktreesApi.listDetected !== 'function') {
-    if (request.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
-      return rejectedDetectedWorktreeProviderResult(request)
-    }
-    const worktrees = await worktreesApi.list({ repoId: request.repoId })
-    return {
-      status: 'complete',
-      providerRequestId: request.providerRequestId,
-      repoId: request.repoId,
-      authority: { kind: 'local', executionHostId: LOCAL_EXECUTION_HOST_ID },
-      result: toLegacyDetectedWorktreeResult(request.repoId, { worktrees })
-    }
-  }
-  const result = await worktreesApi.listDetected(request)
+  const result = await window.api.worktrees.listDetected(request)
   if (result && typeof result === 'object' && 'status' in result && 'providerRequestId' in result) {
     return result as unknown as HostQualifiedDetectedWorktreeResult
   }
