@@ -1,5 +1,4 @@
 import type { App, BrowserWindow } from 'electron'
-import type { MainWindowOpenOptions } from '../main-window/main-window-contracts'
 import {
   isBackgroundLaunch,
   isWindowlessLaunch,
@@ -13,7 +12,8 @@ export type FocusExistingMainWindowResult = 'focused' | 'opened' | 'pending'
 export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
-  openWindow: (options?: MainWindowOpenOptions) => BrowserWindow
+  // Structural: the web project typechecks this file and can't reach main-window-contracts.
+  openWindow: (options?: { revealInBackground?: boolean }) => BrowserWindow
   /** `orca open` asked: show the window if needed, never take the foreground. */
   background?: boolean
   /** False while some other path must own the first window; the reopen is dropped, not queued. */
