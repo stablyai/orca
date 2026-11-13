@@ -35,7 +35,7 @@ export function useNativeChatDeliveryProjection(
 
 export function useNativeChatPendingProjection(
   pending: Parameters<typeof pendingSendsAsMessages>[0],
-  messages: Parameters<typeof pendingSendsAsMessages>[1],
+  messages: NonNullable<Parameters<typeof pendingSendsAsMessages>[1]>,
   sendWorkingEpoch: Parameters<typeof pendingSendsAsMessages>[2],
   sessionId: ReturnType<typeof useNativeChatRetainedSession>['sessionId']
 ) {
