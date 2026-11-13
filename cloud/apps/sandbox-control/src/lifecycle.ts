@@ -900,7 +900,8 @@ export async function createSandbox(
       try {
         return await createVm()
       } catch (error) {
-        if (!freshBuildSnapshot404(error, source, deps.now())) {
+        // Never for a create its owner deleted meanwhile (a cancel's delete also makes the provider 404).
+        if (!freshBuildSnapshot404(error, source, deps.now()) || (await deletedMeanwhile(deps, row))) {
           throw error
         }
         const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))

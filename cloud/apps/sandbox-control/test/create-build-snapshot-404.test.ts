@@ -77,6 +77,19 @@ describe('CREATE-BUILD-SNAPSHOT-404', () => {
     expect(t.lastError('ws-twice')).toBe('provider_404')
   })
 
+  it('no retry when the create was deleted meanwhile (a cancel): its 404 is the delete, not the snapshot', async () => {
+    const t = await setup()
+    t.h.vercel.createSandbox = async (params) => {
+      // The owner's delete lands while the VM is being made; the provider then answers 404.
+      t.h.raw.prepare(`UPDATE sandboxes SET status = 'destroyed' WHERE workspace_id = 'ws-cancelled'`).run()
+      t.snapshotsTried.push(params.snapshotId)
+      throw new ProviderError(404, 'not_found')
+    }
+    expect((await t.create('ws-cancelled')).status).not.toBe(200)
+    expect(t.sleeps).toEqual([])
+    expect(t.snapshotsTried).toHaveLength(1)
+  })
+
   it('no retry for a build older than 15 min', async () => {
     const t = await setup()
     t.h.advance(16 * 60_000)
