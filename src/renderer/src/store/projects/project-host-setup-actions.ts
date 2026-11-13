@@ -8,7 +8,6 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
 import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
@@ -27,6 +26,12 @@ import {
   upsertProjectHostSetup
 } from './project-host-routing'
 import { toastProjectAddFailure } from './project-add-failure-toast'
+import {
+  assertProjectDefaultSetupSupport,
+  configuredProjectDefault,
+  confirmProjectDefaultOnSetupHost
+} from './project-default-host-setup'
+import { cloneProjectRepositoryOnHost } from './project-host-setup-clone'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -44,13 +49,19 @@ export function createProjectHostSetupActions(
       try {
         assertNotSshProjectHost(get(), args.hostId)
         const target = getProjectSetupRuntimeTarget(args.hostId)
+        const defaultTuiAgent = configuredProjectDefault(get(), args.projectId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
+        await assertProjectDefaultSetupSupport(target, defaultTuiAgent)
         const projectProviderIdentity =
           args.projectProviderIdentity ??
           get().projects.find((project) => project.id === args.projectId)?.providerIdentity
         // Why: the target host may not have a project record yet; carry the selected source-host identity across the boundary.
-        const setupArgs = projectProviderIdentity ? { ...args, projectProviderIdentity } : args
-        const result =
+        const setupArgs = {
+          ...args,
+          ...(projectProviderIdentity ? { projectProviderIdentity } : {}),
+          ...(defaultTuiAgent !== undefined ? { defaultTuiAgent } : {})
+        }
+        const created =
           target.kind === 'local'
             ? await window.api.projects.setupExistingFolder(setupArgs)
             : (
@@ -61,6 +72,7 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
+        const result = confirmProjectDefaultOnSetupHost(created, defaultTuiAgent)
         const repo = adoptFromEndpoint(target, {
           kind: 'repo',
           row: result.repo
@@ -82,11 +94,10 @@ export function createProjectHostSetupActions(
           const nextProjects = s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project]
-          const nextSetups = upsertProjectHostSetup(s.projectHostSetups, setup)
           return {
             repos: nextRepos,
             projects: nextProjects,
-            projectHostSetups: nextSetups
+            projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
           }
         })
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
@@ -103,18 +114,25 @@ export function createProjectHostSetupActions(
     createProjectHostSetup: async (args) => {
       try {
         const target = getProjectSetupRuntimeTarget(args.hostId)
+        const defaultTuiAgent = configuredProjectDefault(get(), args.projectId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
-        const result =
+        await assertProjectDefaultSetupSupport(target, defaultTuiAgent)
+        const setupArgs = {
+          ...args,
+          ...(defaultTuiAgent !== undefined ? { defaultTuiAgent } : {})
+        }
+        const created =
           target.kind === 'local'
-            ? await window.api.projects.createHostSetup(args)
+            ? await window.api.projects.createHostSetup(setupArgs)
             : (
                 await callRuntimeRpc<{ result: ProjectHostSetupCreateResult }>(
                   target,
                   'projectHostSetup.create',
-                  args,
+                  setupArgs,
                   { timeoutMs: 15_000 }
                 )
               ).result
+        const result = confirmProjectDefaultOnSetupHost(created, defaultTuiAgent)
         const setup = adoptFromEndpoint(target, {
           kind: 'projectHostSetup',
           row: result.setup
@@ -258,25 +276,16 @@ export function createProjectHostSetupActions(
         assertNotSshProjectHost(get(), args.hostId)
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
-        const repo =
-          target.kind === 'local'
-            ? await window.api.repos.clone({
-                url: args.url,
-                destination: args.destination,
-                folderName: args.folderName
-              })
-            : (
-                await callRuntimeRpc<{ repo: Repo }>(
-                  target,
-                  'repo.clone',
-                  {
-                    url: args.url,
-                    destination: args.destination,
-                    folderName: args.folderName
-                  },
-                  { timeoutMs: 10 * 60_000 }
-                )
-              ).repo
+        await assertProjectDefaultSetupSupport(
+          target,
+          configuredProjectDefault(get(), args.projectId)
+        )
+        const repo = await cloneProjectRepositoryOnHost(
+          target,
+          args.url,
+          args.destination,
+          args.folderName
+        )
         return await get().setupProjectExistingFolder({
           projectId: args.projectId,
           hostId: args.hostId,

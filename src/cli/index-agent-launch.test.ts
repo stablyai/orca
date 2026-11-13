@@ -55,9 +55,9 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
-import { queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { agentLaunchHostFixture } from './agents/agent-launch-test-fixtures'
+import { okFixture, queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { agentLaunchFixture, agentLaunchHostFixture } from './agents/agent-launch-test-fixtures'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
 const ORIGINAL_EXIT_CODE = process.exitCode
@@ -89,6 +89,118 @@ describe('orca cli agent launch', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  it('resolves default for the selected folder workspace on the paired host', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'server-1')
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(['project.default-agent.v1']),
+      okFixture('req_default', {
+        agent: 'claude',
+        source: 'project',
+        projectId: 'project-b',
+        projectName: 'B'
+      }),
+      agentLaunchFixture('folder:server-folder')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'agent',
+        'launch',
+        '--agent',
+        'default',
+        '--environment',
+        'server-1',
+        '--worktree',
+        'id:folder:server-folder',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith('agent.resolveDefault', {
+      worktree: 'id:folder:server-folder'
+    })
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({
+        agent: 'claude',
+        target: { kind: 'existing', worktree: 'id:folder:server-folder' }
+      })
+    )
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result.resolvedAgent).toEqual({
+      agent: 'claude',
+      source: 'project',
+      projectId: 'project-b',
+      projectName: 'B'
+    })
+  })
+
+  it('refuses a default blank terminal before launching', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(['project.default-agent.v1']),
+      okFixture('req_default', { agent: null, source: 'project', projectId: 'project-b' })
+    )
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'default',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--json'
+    ])
+    expect(JSON.parse(output).error.code).toBe('invalid_argument')
+    expect(callMock).toHaveBeenCalledWith('agent.resolveDefault', {
+      worktree: 'id:repo-1::/tmp/repo'
+    })
+    expect(launchCalls()).toEqual([])
+  })
+
+  it('refuses default on an older host before launching', async () => {
+    queueFixtures(callMock, agentLaunchHostFixture())
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'default',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--json'
+    ])
+    expect(JSON.parse(output).error.code).toBe('incompatible_runtime')
+    expect(callMock).not.toHaveBeenCalledWith('agent.resolveDefault', expect.anything())
+    expect(launchCalls()).toEqual([])
+  })
+
+  it('puts the resolved agent into the replay command after a lost launch reply', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(['project.default-agent.v1']),
+      okFixture('req_default', { agent: 'claude', source: 'global' })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('runtime_unavailable', 'The Orca runtime closed the connection.')
+    )
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'default',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--json'
+    ])
+    const error = JSON.parse(output).error
+    expect(error.code).toBe('agent_session_operation_unknown')
+    expect(error.data.recoveryCommand).toContain('claude')
+    expect(error.data.recoveryCommand).not.toContain('default')
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({ agent: 'claude', operationId: error.data.operationId })
+    )
   })
 
   it('returns an exact recovery command and removes blind retry advice after a lost reply', async () => {

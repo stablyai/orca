@@ -22,6 +22,7 @@ import type { WorkspaceSshGate } from '../new-workspace/creation/workspace-ssh-g
 import type { useMobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
 import type { WorktreeCreateIdempotencySupport } from '../new-workspace/creation/worktree-create-idempotency-policy'
 import {
+  newWorktreeAgentOptionFor,
   pickPreferredNewWorktreeAgent,
   type NewWorktreeAgentOption,
   type NewWorktreeRuntimeSettings
@@ -37,26 +38,26 @@ import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import type { OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
+import { resolveMobileNewWorkspaceDefaultAgent } from './new-workspace-project-default-agent'
 
 type CreateOptions = {
   setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>
   approvedSetupContentHash?: string
 }
 
-type Composer = ReturnType<typeof useMobileComposerSource>
-
 export function useNewWorkspaceCreateSubmit(args: {
   client: RpcClient | null
   repos: readonly MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
+  agentOverridden: boolean
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
   runtimeSettings: NewWorktreeRuntimeSettings | null
   setRuntimeSettings: (settings: NewWorktreeRuntimeSettings) => void
   detectedAgentIds: Set<string> | null
   sshGate: WorkspaceSshGate
-  composer: Composer
+  composer: ReturnType<typeof useMobileComposerSource>
   note: string
   existingWorktreePaths?: readonly string[]
   retiredWorktreeNames: RetiredNameRegistry
@@ -118,6 +119,11 @@ export function useNewWorkspaceCreateSubmit(args: {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
       }
+      const selectedAgent = args.agentOverridden
+        ? args.selectedAgent
+        : newWorktreeAgentOptionFor(
+            (await resolveMobileNewWorkspaceDefaultAgent(client, selectedRepo)).agent
+          )
       let latestRuntimeSettings = args.runtimeSettings
       try {
         const settingsReply = await settingsRead.request(client)
@@ -131,8 +137,9 @@ export function useNewWorkspaceCreateSubmit(args: {
         // The runtime validates the same setting before spawning.
       }
       if (
-        args.selectedAgent.id !== '__blank__' &&
-        !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+        args.agentOverridden &&
+        selectedAgent.id !== '__blank__' &&
+        !isMobileTuiAgentEnabled(selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
       ) {
         args.setSelectedAgent(
           pickPreferredNewWorktreeAgent(latestRuntimeSettings, args.detectedAgentIds)
@@ -187,8 +194,6 @@ export function useNewWorkspaceCreateSubmit(args: {
         return
       }
 
-      const createdWithAgentId =
-        args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
       const trimmedNote = args.note.trim() || undefined
       const selection = args.composer.createSelection
       const result = selection
@@ -197,7 +202,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             selection,
             targetRepoId: selectedRepo.id,
             setupDecision,
-            agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
+            agent: { choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
@@ -213,7 +218,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             repoId: selectedRepo.id,
             baseName,
             nameWasGenerated: !trimmedName,
-            createdWithAgentId,
+            createdWithAgentId: selectedAgent.id !== '__blank__' ? selectedAgent.id : undefined,
             comment: trimmedNote,
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
@@ -279,10 +284,9 @@ export function useNewWorkspaceCreateSubmit(args: {
         alwaysTrust
       })
       args.setTrustedOrcaHooks(nextTrust)
-      const approvedHash = setupTrustPrompt.contentHash
       setSetupTrustPrompt(null)
       args.transitionDrawer('form')
-      await create({ setupOverride: 'run', approvedSetupContentHash: approvedHash })
+      await create({ setupOverride: 'run', approvedSetupContentHash: setupTrustPrompt.contentHash })
     } catch (error) {
       args.setError(error instanceof Error ? error.message : 'Failed to trust setup script.')
     } finally {

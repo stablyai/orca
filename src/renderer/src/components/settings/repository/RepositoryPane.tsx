@@ -1,6 +1,6 @@
 import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -12,6 +12,7 @@ import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
+import { ProjectDefaultAgentSetting } from '../ProjectDefaultAgentSetting'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './hooks/RepositoryHooksSection'
 import { McpConfigSection } from './mcp/McpConfigSection'
@@ -162,12 +163,6 @@ export function RepositoryPane({
     [clearCopiedTemplateResetTimer]
   )
 
-  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
-    updateSelectedRepo(repo.id, {
-      hookSettings: nextSettings
-    })
-  }
-
   const handleCopyTemplate = async () => {
     // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
     await window.api.ui.writeClipboardText(`scripts:
@@ -188,6 +183,7 @@ export function RepositoryPane({
 
   const {
     identity: identityEntries,
+    defaultAgent: defaultAgentEntry,
     sparsePresets: sparsePresetEntries,
     hooks: hooksEntries,
     mcp: mcpEntries,
@@ -212,7 +208,7 @@ export function RepositoryPane({
         copiedTemplate={copiedTemplate}
         forceVisible={forceFullPaneForRepoMatch}
         onCopyTemplate={() => void handleCopyTemplate()}
-        onUpdateHookSettings={updateSelectedRepoHookSettings}
+        onUpdateHookSettings={(hookSettings) => updateSelectedRepo(repo.id, { hookSettings })}
       />
     ) : null
 
@@ -287,6 +283,17 @@ export function RepositoryPane({
         >
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
+
+        {project && updateProject ? (
+          <ProjectDefaultAgentSetting
+            project={project}
+            globalDefault={settings?.defaultTuiAgent}
+            executionHostId={selectedHostId}
+            updateProject={updateProject}
+            keywords={defaultAgentEntry.keywords}
+            forceVisible={forceFullPaneForRepoMatch}
+          />
+        ) : null}
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}

@@ -6,7 +6,6 @@
 1 src/renderer/src/components/JiraIssueWorkspace.tsx
 3 src/renderer/src/components/LinearIssueTextEditor.tsx
 1 src/renderer/src/components/LinearItemDrawer.tsx
-1 src/renderer/src/components/NewWorkspaceComposerModal.tsx
 1 src/renderer/src/components/QuickOpen.tsx
 2 src/renderer/src/components/StarNagCard.tsx
 2 src/renderer/src/components/TerminalLegacyTerminalPanes.tsx

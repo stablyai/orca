@@ -38,6 +38,8 @@ export function NewWorktreeFormSheet(props: {
   sshGate: WorkspaceSshGate
   composer: Composer
   selectedAgent: NewWorktreeAgentOption
+  agentLabel: string
+  agentError: string | null
   showAdvanced: boolean
   note: string
   setupCommand: string | null
@@ -71,7 +73,7 @@ export function NewWorktreeFormSheet(props: {
     : t('components.newWorktreeFormSheet.createWorkspace', 'Create workspace')
   const agentLabel = gated
     ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
-    : props.selectedAgent.label
+    : props.agentLabel
   return (
     <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
       <View style={styles.header}>
@@ -149,6 +151,7 @@ export function NewWorktreeFormSheet(props: {
               accessibilityLabel={`${t('components.newWorktreeFormSheet.agent', 'Agent')}, ${agentLabel}`}
             />
           </ListGroup>
+          {props.agentError ? <Text style={styles.error}>{props.agentError}</Text> : null}
 
           <NewWorktreeFormOptions
             expanded={props.showAdvanced}

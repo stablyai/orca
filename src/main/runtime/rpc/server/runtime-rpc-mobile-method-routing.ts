@@ -14,6 +14,7 @@ export const EXECUTION_HOST_METHODS = [
   // Read state lives with the host whose worktree.ps reports it.
   'agentActivity.clear',
   'agentActivity.setRead',
+  'agent.resolveDefault',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
   // Transcripts live on the host that ran the agent, which is also where resume launches it.

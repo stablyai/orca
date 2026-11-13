@@ -30,13 +30,17 @@ argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 sca
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent default
 ```
 
-`<agent>` is an Orca agent id: one the user named, else the agent you are
-running as when the worker shares your execution host. Otherwise, such as a
-different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
-that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
+Use an explicit agent ID when the user names one. Otherwise, use `--agent default`
+to resolve the target project on the execution host, including SSH/WSL and `--on`.
+The coordinator agent and project do not choose for the target. Default resolution
+checks availability before creation or dispatch; explicit IDs retain their usual
+launch validation and do not change the saved project default. Blank Terminal, an
+unavailable configured agent, or an older host unable to resolve defaults fails
+before workspace creation or dispatch. `worker-start` still requires `--agent`
+or `--terminal`.
 
 - Start every independent worker, then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
@@ -49,9 +53,9 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run
-  `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
+  `ORCA worktree create --name <name> --no-parent --agent default --prompt "<brief>" --json`
   and end your turn.
-- Add `--model` only if the user named one.
+- Add `--model` only if the user named one; for example, `--agent claude --model opus --effort high`.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use

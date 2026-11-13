@@ -17,6 +17,7 @@ import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../share
 import { normalizeProjectRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
 export type ProjectHostMutationOperations = {
@@ -88,6 +89,15 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
+    if (
+      'defaultTuiAgent' in updates &&
+      updates.defaultTuiAgent !== undefined &&
+      updates.defaultTuiAgent !== null &&
+      updates.defaultTuiAgent !== 'blank' &&
+      !isTuiAgent(updates.defaultTuiAgent)
+    ) {
+      throw new Error('Unknown project default agent')
+    }
     if ('localWindowsRuntimePreference' in updates) {
       for (const repoId of project.sourceRepoIds) {
         this.operations.bumpLocalWorktreeScanGeneration(repoId)
@@ -98,6 +108,13 @@ export class ProjectHostPersistenceOperations {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('defaultTuiAgent' in updates) {
+      if (updates.defaultTuiAgent === undefined) {
+        delete project.defaultTuiAgent
+      } else {
+        project.defaultTuiAgent = updates.defaultTuiAgent
       }
     }
     project.updatedAt = Date.now()
@@ -124,6 +141,14 @@ export class ProjectHostPersistenceOperations {
     if (duplicateSetup) {
       throw new Error(`Project host setup already exists: ${duplicateSetup.id}`)
     }
+    if (
+      args.defaultTuiAgent !== undefined &&
+      args.defaultTuiAgent !== null &&
+      args.defaultTuiAgent !== 'blank' &&
+      !isTuiAgent(args.defaultTuiAgent)
+    ) {
+      throw new Error('Unknown project default agent')
+    }
     const now = Date.now()
     const existingIds = new Set(this.state.projectHostSetups.map((entry) => entry.id))
     const setup: ProjectHostSetup = {
@@ -143,8 +168,14 @@ export class ProjectHostPersistenceOperations {
     }
     // Independent setup persistence survives future repo projection sync.
     this.state.projectHostSetups.push(setup)
-    this.scheduleSave(['projectHostSetups'])
-    return { project, setup }
+    if (args.defaultTuiAgent !== undefined) {
+      project.defaultTuiAgent = args.defaultTuiAgent
+      project.updatedAt = now
+    }
+    this.scheduleSave(
+      args.defaultTuiAgent === undefined ? ['projectHostSetups'] : ['projects', 'projectHostSetups']
+    )
+    return { project: { ...project }, setup }
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {

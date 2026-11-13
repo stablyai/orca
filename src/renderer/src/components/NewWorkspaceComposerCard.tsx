@@ -41,6 +41,7 @@ import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-st
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
 import { buildDefaultAgentSettingsUpdate } from '../../../shared/agent-launch/choices/default-agent-settings'
+import { selectCanonicalProjects } from '@/store/projects/project-host-setup-selector'
 
 // Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
 const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
@@ -95,12 +96,12 @@ export default function NewWorkspaceComposerCard(
   })
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
-  const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
+  const globalDefaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
   const updateSettings = useAppStore((state) => state.updateSettings)
-  const projects = useAppStore((state) => state.projects)
+  const projects = useAppStore(selectCanonicalProjects)
   const repos = useAppStore((state) => state.repos)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
@@ -340,7 +341,7 @@ export default function NewWorkspaceComposerCard(
           createDisabled={props.createDisabled || sparseEditing}
           advancedLocked={sparseEditing}
           visibleQuickAgents={visibleQuickAgents}
-          defaultTuiAgent={defaultTuiAgent}
+          defaultTuiAgent={globalDefaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
         />
         <NewWorkspaceComposerAdvancedSection
