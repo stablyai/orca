@@ -89,7 +89,8 @@ const base: TeamPageViewProps = {
   onSeePlans: noop,
   onManageBilling: noop,
   onCreateWorkspace: noop,
-  onDismissArrival: noop
+  onDismissArrival: noop,
+  onOpenEnterprise: noop
 }
 
 function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {
@@ -103,6 +104,21 @@ function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {
 }
 
 export const ownerOnTeam = defineFixture({ width, render: () => <Page /> })
+
+/** TEAM-MODAL-CENTER: in a tall window the dialog sits in the middle, not pinned near the top. */
+export const centeredInWindow = defineFixture({
+  width,
+  render: () => (
+    <div className="h-[1000px]">
+      <Page
+        roster={{
+          status: 'ok',
+          roster: { ...roster, members: roster.members.slice(0, 2), pendingInvites: [] }
+        }}
+      />
+    </div>
+  )
+})
 
 export const justUpgraded = defineFixture({
   width,

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { KeyRound, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -55,6 +55,8 @@ export type TeamPageViewProps = {
   inline?: { onOpenPlanBilling: () => void }
   /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
   dangerZone?: React.ReactNode
+  /** Opens Settings › Enterprise (SSO, SCIM, audit log). Shown to owners and admins only. */
+  onOpenEnterprise?: () => void
 }
 
 function SkeletonRows(): React.JSX.Element {
@@ -108,6 +110,10 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
   const rows = roster ? teamRows(roster, props.viewerUserId) : []
   const selfRow = rows.find((row) => row.self)
   const viewerRole = roster?.viewerRole ?? 'member'
+  // Matches who sees Settings › Enterprise: team owners and admins (Enterprise or not).
+  const showEnterprise =
+    Boolean(props.onOpenEnterprise) &&
+    (roster?.viewerRole === 'owner' || roster?.viewerRole === 'admin')
   const canLeave =
     Boolean(selfRow) &&
     (viewerRole !== 'owner' || (roster ? otherOwnerCount(roster, props.viewerUserId) > 0 : false))
@@ -275,8 +281,33 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {props.dangerZone ? (
+      {showEnterprise || props.dangerZone ? (
         <div className="divide-y divide-border/60 rounded-xl border border-border">
+          {showEnterprise ? (
+            // One quiet pointer to Settings › Enterprise, which owns SSO, SCIM and the audit log
+            // (and shows the upsell to teams without Enterprise). Same audience as that section.
+            <section
+              aria-labelledby="team-enterprise-title"
+              className="flex flex-wrap items-center gap-3 p-4"
+            >
+              <h3
+                id="team-enterprise-title"
+                className="flex min-w-[14rem] flex-1 items-center gap-2 text-sm font-medium"
+              >
+                <KeyRound aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                {t(
+                  'auto.components.billing.team.enterpriseRowTitle',
+                  'Single sign-on, SCIM and audit log'
+                )}
+              </h3>
+              <Button type="button" variant="outline" size="sm" onClick={props.onOpenEnterprise}>
+                {t(
+                  'auto.components.billing.team.openEnterpriseSettings',
+                  'Open Enterprise settings'
+                )}
+              </Button>
+            </section>
+          ) : null}
           {props.dangerZone}
         </div>
       ) : null}

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { OrcaOrgMembersRoster } from '../../../../../shared/orca-profiles'
 import { sampleTeam } from '../plan-billing-fixtures'
@@ -60,4 +60,39 @@ it('keeps the header to the name and counts: no role sentence, no Plan & billing
   expect(header.querySelector('button')).toBeNull()
   // Seat counts and prices live only in Plan & billing.
   expect(screen.queryByText(/open seat/)).toBeNull()
+})
+
+it('points owners and admins to Settings › Enterprise with one plain button', () => {
+  const onOpenEnterprise = vi.fn()
+  for (const viewerRole of ['owner', 'admin'] as const) {
+    render(
+      <TeamPageView
+        {...props}
+        roster={{ status: 'ok', roster: { ...roster, viewerRole } }}
+        onOpenEnterprise={onOpenEnterprise}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    const row = screen.getByRole('region', { name: 'Single sign-on, SCIM and audit log' })
+    // No Copy link split: the row has exactly one control.
+    expect(row.querySelectorAll('button')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Enterprise settings' }))
+    cleanup()
+  }
+  expect(onOpenEnterprise).toHaveBeenCalledTimes(2)
+})
+
+it('hides the Enterprise row from plain members', () => {
+  render(
+    <TeamPageView
+      {...props}
+      roster={{
+        status: 'ok',
+        roster: { ...roster, viewerRole: 'member', canManageMembers: false }
+      }}
+      onOpenEnterprise={() => {}}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(screen.queryByText('Single sign-on, SCIM and audit log')).toBeNull()
 })

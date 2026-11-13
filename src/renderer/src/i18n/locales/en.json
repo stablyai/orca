@@ -21352,7 +21352,9 @@
           "perSeat": "Per seat",
           "perSeatMonthValue": "{{value0}}/mo",
           "seatRulesShort": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.",
-          "inviteSeatRule": "Each invite uses a seat once accepted."
+          "inviteSeatRule": "Each invite uses a seat once accepted.",
+          "enterpriseRowTitle": "Single sign-on, SCIM and audit log",
+          "openEnterpriseSettings": "Open Enterprise settings"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
