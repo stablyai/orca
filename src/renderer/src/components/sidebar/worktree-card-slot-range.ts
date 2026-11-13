@@ -41,6 +41,8 @@ export function createLineageSlotReader(
     /** Slots to re-project before reading; reads find them without scanning their range. */
     stale: StaleSlotSet
     indicesById: Map<string, number[]>
+    /** How many of the tree's in-place row replacements are already marked stale. */
+    replacementsSeen: number
   }
   const treeSlots = new WeakMap<WorktreeLineageTree, TreeSlots>()
   const emptyAggregate = (): SlotAggregate => ({ record: toLineageSlotRecord([]), latestAt: null })
@@ -54,6 +56,16 @@ export function createLineageSlotReader(
   function syncTree(state: AppState, tree: WorktreeLineageTree): TreeSlots {
     const snapshot = slotSnapshot(state)
     const cached = treeSlots.get(tree)
+    const replacements = tree.replacedRows
+    if (cached && replacements && cached.replacementsSeen < replacements.length) {
+      // A reused tree's fallback rows changed; only those slots may project differently.
+      for (let step = cached.replacementsSeen; step < replacements.length; step++) {
+        for (const index of replacements[step]!) {
+          cached.stale.mark(index)
+        }
+      }
+      cached.replacementsSeen = replacements.length
+    }
     if (cached?.snapshot === snapshot) {
       return cached
     }
@@ -90,7 +102,8 @@ export function createLineageSlotReader(
         combineSlots
       ),
       stale,
-      indicesById
+      indicesById,
+      replacementsSeen: tree.replacedRows?.length ?? 0
     }
     treeSlots.set(tree, result)
     return result

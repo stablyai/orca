@@ -277,6 +277,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               subjectLabel={subjectLabel}
               expanded={compactRootListExpanded}
               onToggle={toggleCompactRootList}
+              unreadByPaneKey={unvisitedByPaneKey}
             />
             <CompactAgentExpansion expanded={compactRootListExpanded}>
               {rootAgents.map((rootAgent) =>

@@ -37,7 +37,15 @@ export function isExecutionHostForWorktree(
     worktreeId,
     worktreeHostId
   )
-  return owner !== null && isExecutionHostAliasForWorktree(executionHostId, owner.worktree)
+  return (
+    owner !== null &&
+    isExecutionHostAliasForWorktree(executionHostId, {
+      ...owner.worktree,
+      hostId:
+        owner.worktree.hostId ??
+        (owner.worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : owner.hostId)
+    })
+  )
 }
 
 /** Qualify legacy repo proof without changing the raw index's absent-host compatibility rule. */

@@ -17,7 +17,7 @@ import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
-import { workspaceHasLiveMarker } from './workspace-live-markers'
+import { workspaceHasLiveMarkerForHost } from './workspace-marker-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { ownerHostOwnsSidebarInputs } from '../worktrees/listing/owner-host-sidebar-inputs'
 import { folderRowOnHost, folderRowToMark, isWorkspaceFlagSet } from './workspace-unread-flag-reads'
@@ -269,23 +269,22 @@ function lowerWorkspaceUnreadFlag(
     }
     return
   }
+  const host = executionHostId ?? undefined
+  const updates = { isUnread: false }
   let shouldPersist = false
   set((s) => {
-    const worktree = findKnownWorktreeById(s, worktreeId)
+    const worktree = findKnownWorktreeById(s, worktreeId, host)
     if (!worktree || !worktree.isUnread) {
       // Why: return `s` (not {}) to keep the object reference on a no-op, avoiding selector churn.
       return s
     }
     shouldPersist = true
-    const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
-      isUnread: false
-    })
+    const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, updates, host)
     const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
       s.detectedWorktreesByRepo,
       worktreeId,
-      {
-        isUnread: false
-      }
+      updates,
+      host
     )
     return {
       ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
@@ -302,8 +301,9 @@ function lowerWorkspaceUnreadFlag(
   persistPassiveWorktreeMetaForOwner(
     get,
     worktreeId,
-    { isUnread: false },
-    'persist cleared unread worktree state'
+    updates,
+    'persist cleared unread worktree state',
+    host
   )
 }
 
@@ -314,7 +314,7 @@ function lowerWorkspaceUnreadFlag(
  */
 export type WorkspaceUnreadSettleCause = 'arrival' | 'markers'
 
-/** Lower flags only after the last live marker disappears. Unscoped same-ID folders share workspace-keyed markers, so lower every row only when none remain. */
+/** Lower each host flag only after its last live marker disappears. */
 export function settleWorkspaceUnreadFlag(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,
@@ -325,15 +325,16 @@ export function settleWorkspaceUnreadFlag(
   // Why only downward: raising here would override another client's Mark as read with this
   // renderer's local markers; marking already raises the flag together with its marker.
   const state = get()
-  if (workspaceHasLiveMarker(state, worktreeId)) {
-    return
-  }
   if (cause === 'markers') {
     for (const identity of markerRaiseIdentities(state, worktreeId, executionHostId)) {
       const hostId = getExecutionHostIdFromWorktreeHostIdentity(identity)
-      clearWorkspaceUnreadFlag(set, get, worktreeId, hostId)
+      if (!workspaceHasLiveMarkerForHost(state, worktreeId, hostId)) {
+        clearWorkspaceUnreadFlag(set, get, worktreeId, hostId)
+      }
     }
     return
   }
-  clearWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)
+  if (!workspaceHasLiveMarkerForHost(state, worktreeId, executionHostId)) {
+    clearWorkspaceUnreadFlag(set, get, worktreeId, executionHostId)
+  }
 }

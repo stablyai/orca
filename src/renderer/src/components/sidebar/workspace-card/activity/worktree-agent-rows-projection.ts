@@ -1,6 +1,5 @@
 import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
@@ -34,7 +33,7 @@ function rowBelongsToHost(
   state: AppState,
   row: DashboardAgentRow,
   hostId: ExecutionHostId,
-  owner: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'> | undefined
+  owner: ReturnType<typeof resolveQualifiedWorktreeExecutionOwner> | undefined
 ): boolean {
   const paneKey = row.activationPaneKey ?? row.paneKey
   const entry =
@@ -48,7 +47,12 @@ function rowBelongsToHost(
       paneHost &&
       paneHost !== 'foreign' &&
       owner &&
-      isExecutionHostAliasForWorktree(paneHost, owner)
+      isExecutionHostAliasForWorktree(paneHost, {
+        ...owner.worktree,
+        hostId:
+          owner.worktree.hostId ??
+          (owner.worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : owner.hostId)
+      })
     )
   )
 }
@@ -82,7 +86,7 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
           state.repos,
           worktreeId,
           hostId
-        )?.worktree
+        )
       : undefined
     if (hostId && ownerTabs !== representedTabs) {
       ownerTabs = representedTabs
@@ -107,7 +111,7 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       selectFreshness(state),
       representedTabs,
       workspaceOwner?.hostId,
-      workspaceOwner?.runtimeOwnerEnvironmentId,
+      workspaceOwner?.worktree.runtimeOwnerEnvironmentId,
       ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : [])
     ]
     if (

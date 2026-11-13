@@ -67,24 +67,16 @@ export function createWorkspaceReferenceRefreshTargetsSelector(options?: {
         nextSleeping.set(worktree.id, value)
       }
       sleeping = nextSleeping
-    } else {
-      const updateSleep = (id: string): void => {
-        if (!sleeping.has(id)) {
-          return
+    } else if (nextLiveWorktreeIds !== liveWorktreeIds) {
+      // Why: only tracked workspaces can change the result, and status updates replace the live
+      // set without changing membership, so diff just those instead of walking both sets.
+      for (const [id, previous] of sleeping) {
+        if (liveWorktreeIds.has(id) === nextLiveWorktreeIds.has(id)) {
+          continue
         }
         const value = selectIsSleepingWorktree(state, id)
-        changed ||= value !== sleeping.get(id)
+        changed ||= value !== previous
         sleeping.set(id, value)
-      }
-      for (const id of liveWorktreeIds) {
-        if (!nextLiveWorktreeIds.has(id)) {
-          updateSleep(id)
-        }
-      }
-      for (const id of nextLiveWorktreeIds) {
-        if (!liveWorktreeIds.has(id)) {
-          updateSleep(id)
-        }
       }
     }
     liveWorktreeIds = nextLiveWorktreeIds

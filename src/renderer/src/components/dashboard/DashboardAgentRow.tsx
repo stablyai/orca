@@ -313,6 +313,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 size={stateDotSize}
                 title={null}
                 progress={presentation.progress}
+                unread={isUnvisited}
               />
             </span>
           </TooltipTrigger>

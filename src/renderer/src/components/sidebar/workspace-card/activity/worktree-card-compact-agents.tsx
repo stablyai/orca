@@ -26,6 +26,7 @@ type CompactAgentSummaryButtonProps = {
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
+  unreadByPaneKey?: Readonly<Record<string, boolean>>
 }
 
 type CompactAgentExpansionProps = {
@@ -76,11 +77,15 @@ export function CompactAgentSummaryButton({
   agents,
   subjectLabel,
   expanded,
-  onToggle
+  onToggle,
+  unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
   const summary = summarizeAgents(agents, subjectLabel, t)
-  const groups = buildSummaryAgentGroups(agents)
+  const groups = buildSummaryAgentGroups(
+    agents,
+    unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
+  )
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
@@ -144,10 +149,15 @@ export function CompactAgentSummaryButton({
               const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
               return (
                 <span
-                  key={group.state}
+                  key={group.unread ? 'unread' : group.state}
                   className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
                 >
-                  <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
+                  <AgentStateDot
+                    state={group.state}
+                    unread={group.unread}
+                    size="sm"
+                    tooltipSide="right"
+                  />
                   {/* Overlap identities only within the same status cluster to save width. */}
                   <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
                     {iconAgents.map((agent) => (

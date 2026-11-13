@@ -55,5 +55,5 @@ export function isWorkspaceFlagSet(
           getFolderWorkspaceHostId(workspace, state.projectGroups) === executionHostId)
     )
   }
-  return Boolean(findKnownWorktreeById(state, worktreeId)?.isUnread)
+  return Boolean(findKnownWorktreeById(state, worktreeId, executionHostId ?? undefined)?.isUnread)
 }

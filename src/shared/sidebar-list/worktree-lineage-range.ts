@@ -9,7 +9,15 @@ export type WorktreeLineageTree = {
   identities: HostScopedWorktreeKey[]
   worktrees: Worktree[]
   ends: number[]
+  /**
+   * Indices whose row was replaced in place, one entry per plan that replaced any. Readers
+   * remember how many entries they have seen and re-read only the indices added since.
+   */
+  replacedRows?: number[][]
 }
+
+/** Past this many in-place replacements a section rebuilds its tree, bounding the journal. */
+const MAX_ROW_REPLACEMENTS = 256
 
 export type WorktreeLineageRange = {
   tree: WorktreeLineageTree
@@ -52,20 +60,35 @@ export function buildWorktreeLineageRanges(
   const previousRanges = previousPlan ? rangesByPlan.get(previousPlan) : undefined
   for (const [sectionKey, occurrences] of plan.bySection) {
     const previous = previousPlan?.bySection.get(sectionKey)
-    // Review/group labels can rebuild the plan without changing its lineage or fallback rows.
+    const previousTree = previous?.[0] && previousRanges?.get(previous[0].key)?.tree
+    // Review/group labels and row replacements (unread, activity) rebuild the plan without
+    // changing its lineage: same order, depth and identities keep the tree and its ranges.
     if (
       previous &&
       previousRanges &&
+      previousTree &&
       previous.length === occurrences.length &&
+      (previousTree.replacedRows?.length ?? 0) < MAX_ROW_REPLACEMENTS &&
       occurrences.every((occurrence, index) => {
         const before = previous[index]!
         return (
-          before.row === occurrence.row &&
           before.depth === occurrence.depth &&
-          before.key === occurrence.key
+          before.key === occurrence.key &&
+          (before.row === occurrence.row ||
+            previousTree.identities[index] === getWorktreeHostIdentity(occurrence.row))
         )
       })
     ) {
+      const replaced: number[] = []
+      occurrences.forEach((occurrence, index) => {
+        if (previousTree.worktrees[index] !== occurrence.row) {
+          previousTree.worktrees[index] = occurrence.row
+          replaced.push(index)
+        }
+      })
+      if (replaced.length > 0) {
+        ;(previousTree.replacedRows ??= []).push(replaced)
+      }
       for (const { key } of occurrences) {
         result.set(key, previousRanges.get(key)!)
       }

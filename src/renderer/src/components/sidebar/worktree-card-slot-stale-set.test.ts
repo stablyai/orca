@@ -11,9 +11,12 @@ describe('createStaleSlotSet', () => {
   it('matches a brute-force scan for random marks and ranges', () => {
     let seed = 7
     const random = (limit: number) => {
-      seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31
-      return seed % limit
+      seed ^= seed << 13
+      seed ^= seed >>> 17
+      seed ^= seed << 5
+      return (seed >>> 0) % limit
     }
+    const operations = new Set<string>()
     for (const length of [1, 2, 3, 17, 64, 100]) {
       const set = createStaleSlotSet(length)
       const truth = Array.from({ length }, () => true)
@@ -21,9 +24,11 @@ describe('createStaleSlotSet', () => {
       for (let step = 0; step < 200; step++) {
         const index = random(length)
         if (random(2) === 0) {
+          operations.add('mark')
           set.mark(index)
           truth[index] = true
         } else {
+          operations.add('clear')
           set.clear(index)
           truth[index] = false
         }
@@ -37,5 +42,6 @@ describe('createStaleSlotSet', () => {
       set.markAll()
       expect(staleIn(set, 0, length)).toEqual(Array.from({ length }, (_, i) => i))
     }
+    expect([...operations].sort()).toEqual(['clear', 'mark'])
   })
 })

@@ -159,6 +159,97 @@ describe('explicit workspace and agent reads', () => {
     expect(dismiss).toHaveBeenCalledWith([], ['local:11111111-1111-4111-8111-111111111111'])
   })
 
+  it('preserves a remote completion in an inactive split when reading the local host', () => {
+    const dismiss = installAttentionMockApi()
+    const { store } = createAttentionStore({ windowOnScreen: false })
+    const local = finishedAgentOffScreen(store)
+    const remoteLeaf = '22222222-2222-4222-8222-222222222222'
+    const remoteKey = `tab-a1:${remoteLeaf}`
+    const state = store.getState()
+    const layout = state.terminalLayoutsByTabId[local.tabId]!
+    store.setState({
+      terminalLayoutsByTabId: {
+        ...state.terminalLayoutsByTabId,
+        [local.tabId]: {
+          ...layout,
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            ratio: 0.5,
+            first: layout.root!,
+            second: { type: 'leaf', leafId: remoteLeaf }
+          },
+          ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [remoteLeaf]: 'remote:box@@pty' }
+        }
+      },
+      unreadTerminalTabs: { [local.tabId]: 'terminal-bell' },
+      unreadAgentCompletionPanes: {
+        [local.paneKey]: 'agent-completion',
+        [remoteKey]: 'agent-completion'
+      }
+    })
+
+    store.getState().setWorkspaceUnreadByUser(WS_A, false, 'local')
+
+    expect(store.getState().unreadTerminalTabs).toEqual({})
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({
+      'tab-a1:22222222-2222-4222-8222-222222222222': 'agent-completion'
+    })
+    expect(dismiss).toHaveBeenCalledWith([], ['tab-a1:11111111-1111-4111-8111-111111111111'])
+    expect(
+      expandWorkspaceUnreadTargets(store.getState(), [
+        workspaceUnreadTarget(WS_A, 900, 'runtime:box')
+      ])[0]?.unreadPaneKeys
+    ).toEqual(['tab-a1:22222222-2222-4222-8222-222222222222'])
+  })
+
+  it('settles only the arrived host while a same-ID host still has live markers', () => {
+    const { store } = createAttentionStore({ windowOnScreen: false })
+    const remote = addLiveTerminalTab(store, WS_A, 'remote')
+    store.setState({
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WS_A, repoId: 'repo1', hostId: 'local', isUnread: true }),
+          makeWorktree({ id: WS_A, repoId: 'repo1', hostId: 'runtime:box', isUnread: true })
+        ]
+      },
+      activeWorktreeId: WS_A,
+      activeWorkspaceExecutionHostId: 'local',
+      agentStatusByPaneKey: {
+        [remote.paneKey]: {
+          paneKey: remote.paneKey,
+          state: 'done',
+          agentType: 'claude',
+          prompt: '',
+          updatedAt: 900,
+          stateStartedAt: 900,
+          stateHistory: [],
+          terminalHandle: 'remote:box@@pty'
+        }
+      },
+      tabsByWorktree: {
+        [WS_A]: [makeTab({ id: 'remote', worktreeId: WS_A, ptyId: 'remote:box@@pty' })]
+      },
+      terminalLayoutsByTabId: {},
+      unreadAgentCompletionPanes: { [remote.paneKey]: 'agent-completion' }
+    })
+
+    store
+      .getState()
+      .readOnScreenAttention({ workspaceIds: [WS_A], targets: [] }, { screenArrived: true })
+    expect(isWorkspaceFlagSet(store.getState(), WS_A, 'local')).toBe(false)
+    expect(isWorkspaceFlagSet(store.getState(), WS_A, 'runtime:box')).toBe(true)
+
+    store.setState({
+      activeWorkspaceExecutionHostId: 'runtime:box',
+      unreadAgentCompletionPanes: {}
+    })
+    store
+      .getState()
+      .readOnScreenAttention({ workspaceIds: [WS_A], targets: [] }, { screenArrived: true })
+    expect(isWorkspaceFlagSet(store.getState(), WS_A, 'runtime:box')).toBe(false)
+  })
+
   it('Mark read also reads the agents, so their lines lose the dot with the flag', () => {
     const { store } = createAttentionStore()
     const pane = finishedAgentOffScreen(store)

@@ -2,7 +2,13 @@ import type { AppState } from '../../types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
-import { workspaceMarkerTabs, type MarkerTab } from './workspace-live-markers'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import {
+  completionPaneKeysByTabId,
+  paneKeyTabId,
+  workspaceMarkerTabs,
+  type MarkerTab
+} from './workspace-live-markers'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 
 type WorkspaceTabIndex = {
@@ -48,15 +54,25 @@ export function markerTabPaneKey(state: Pick<AppState, 'terminalLayoutsByTabId'>
   return paneKey
 }
 
-function markerTabHost(state: AppState, index: WorkspaceTabIndex, tab: MarkerTab) {
+function markerTabHost(
+  state: AppState,
+  index: WorkspaceTabIndex,
+  tab: MarkerTab,
+  paneKey = markerTabPaneKey(state, tab)
+) {
   const layout = state.terminalLayoutsByTabId[tab.id]
-  const paneKey = markerTabPaneKey(state, tab)
+  const leafId = parsePaneKey(paneKey)?.leafId
   const entry = state.agentStatusByPaneKey[paneKey]
   const ptyId =
-    (layout?.activeLeafId ? layout.ptyIdsByLeafId?.[layout.activeLeafId] : undefined) ??
+    (leafId ? layout?.ptyIdsByLeafId?.[leafId] : undefined) ??
     index.terminalPtyById.get(tab.id) ??
     state.ptyIdsByTabId[tab.id]?.[0]
-  if (tab.sessionId === null && !entry && !ptyId) {
+  if (
+    tab.sessionId === null &&
+    !ptyId &&
+    !entry?.terminalHandle &&
+    entry?.connectionId === undefined
+  ) {
     const stampedHost = index.stampedHostByTerminalId.get(tab.id)
     if (stampedHost) {
       return stampedHost
@@ -87,5 +103,55 @@ export function workspaceMarkerTabIdsForHost(
         )
       )
       .map((tab) => tab.id)
+  )
+}
+
+/** Pane markers follow their own execution host, including inactive panes in mixed-host tabs. */
+export function workspaceMarkerPaneKeysForHost(
+  state: AppState,
+  workspaceId: string,
+  executionHostId: ExecutionHostId | undefined,
+  paneKeys: Iterable<string>
+): Set<string> {
+  const tabs = new Map(workspaceMarkerTabs(state, workspaceId).map((tab) => [tab.id, tab]))
+  const index = indexWorkspaceTabs(state, workspaceId)
+  return new Set(
+    [...paneKeys].filter((key) => {
+      const tabId = paneKeyTabId(key)
+      const tab = tabId ? tabs.get(tabId) : undefined
+      return (
+        tab &&
+        (executionHostId === undefined ||
+          isExecutionHostForWorktree(
+            state,
+            workspaceId,
+            executionHostId,
+            markerTabHost(state, index, tab, key)
+          ))
+      )
+    })
+  )
+}
+
+export function workspaceHasLiveMarkerForHost(
+  state: AppState,
+  workspaceId: string,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  const tabIds = workspaceMarkerTabIdsForHost(state, workspaceId, executionHostId ?? undefined)
+  if ([...tabIds].some((id) => Boolean(state.unreadTerminalTabs[id]))) {
+    return true
+  }
+  const completions = completionPaneKeysByTabId(state.unreadAgentCompletionPanes)
+  const liveKeys = workspaceMarkerTabs(state, workspaceId).flatMap((tab) =>
+    tab.sessionId === null
+      ? [...(completions.get(tab.id) ?? [])]
+      : state.unreadAgentCompletionPanes[structuredAgentSessionPaneKey(tab.id, tab.sessionId)]
+        ? [structuredAgentSessionPaneKey(tab.id, tab.sessionId)]
+        : []
+  )
+  return (
+    workspaceMarkerPaneKeysForHost(state, workspaceId, executionHostId ?? undefined, liveKeys)
+      .size > 0
   )
 }

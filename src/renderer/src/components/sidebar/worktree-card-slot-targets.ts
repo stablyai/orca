@@ -1,3 +1,4 @@
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -11,10 +12,14 @@ import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structure
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { workspaceMarkerTabIdsForHost } from '@/store/slices/workspace-attention/workspace-marker-host'
+import {
+  workspaceMarkerTabIdsForHost,
+  workspaceMarkerPaneKeysForHost
+} from '@/store/slices/workspace-attention/workspace-marker-host'
 import {
   completionPaneKeysByTabId,
   paneKeyTabId,
+  workspaceMarkerTabs,
   workspaceLiveMarkerTabIds
 } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { activateWorktreeAgentPane } from './workspace-card/activity/use-worktree-agent-activation'
@@ -108,14 +113,29 @@ export function expandWorkspaceUnreadTargets(
       state.unifiedTabsByWorktree[target.worktreeId]
     )
     const structuredKeysByTabId = new Map([...representedTabs].map(([key, tab]) => [tab.id, key]))
+    const ownedPanes = workspaceMarkerPaneKeysForHost(
+      state,
+      target.worktreeId,
+      target.executionHostId,
+      workspaceMarkerTabs(state, target.worktreeId).flatMap((tab) =>
+        unreadPaneKeysForTab(
+          completionKeysByTab.get(tab.id) ?? [],
+          structuredKeysByTabId.get(tab.id)
+        )
+      )
+    )
     const tabTargets = workspaceLiveMarkerTabIds(state, target.worktreeId)
-      .filter((tabId) => ownedTabs.has(tabId))
+      .filter(
+        (tabId) =>
+          (ownedTabs.has(tabId) && Boolean(state.unreadTerminalTabs[tabId])) ||
+          (completionKeysByTab.get(tabId) ?? []).some((key) => ownedPanes.has(key))
+      )
       .map((tabId): SlotTarget => ({
         ...target,
         tabId,
-        terminalBell: state.unreadTerminalTabs[tabId] === 'terminal-bell',
+        terminalBell: ownedTabs.has(tabId) && state.unreadTerminalTabs[tabId] === 'terminal-bell',
         unreadPaneKeys: unreadPaneKeysForTab(
-          completionKeysByTab.get(tabId) ?? [],
+          (completionKeysByTab.get(tabId) ?? []).filter((key) => ownedPanes.has(key)),
           structuredKeysByTabId.get(tabId)
         )
       }))
@@ -192,7 +212,12 @@ export function workspaceUnreadTargetsOutsideAgentRows(
 /** Open the target the way its own row would, after unfolding its card's agent list. */
 export function openSlotTarget(target: SlotTarget): void {
   if (target.tabId !== undefined) {
-    activateUnreadTab(target.worktreeId, target.tabId, target.executionHostId)
+    activateUnreadTab(
+      target.worktreeId,
+      target.tabId,
+      target.executionHostId,
+      target.unreadPaneKeys
+    )
     return
   }
   const representedTab = target.paneKey
@@ -217,7 +242,8 @@ export function openSlotTarget(target: SlotTarget): void {
 function activateUnreadTab(
   worktreeId: string,
   tabId: string,
-  executionHostId: ExecutionHostId | undefined
+  executionHostId: ExecutionHostId | undefined,
+  unreadPaneKeys: readonly string[] | undefined
 ): void {
   if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
     return
@@ -228,7 +254,15 @@ function activateUnreadTab(
   const state = useAppStore.getState()
   if ((state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)) {
     state.setActiveTabType('terminal', worktreeId)
-    activateTabAndFocusPane(tabId, null, {
+    const layout = state.terminalLayoutsByTabId[tabId]
+    const leafId =
+      unreadPaneKeys
+        ?.map((key) => parsePaneKey(key))
+        .find(
+          (pane) =>
+            pane?.tabId === tabId && layout && collectLeafIds(layout.root).includes(pane.leafId)
+        )?.leafId ?? null
+    activateTabAndFocusPane(tabId, leafId, {
       flashFocusedPane: true,
       scrollToBottomIfOutputSinceLastView: true
     })

@@ -100,6 +100,30 @@ describe('createLineageSlotReader', () => {
     expect(reader.descendantSlot(makeState(new Map([[changed, 42]])), tree, 0).latestAt).toBe(42)
   })
 
+  it('re-projects only rows the reused tree replaced in place', () => {
+    const tree: WorktreeLineageTree = {
+      identities: ['a', 'b', 'c', 'd'].map((id) => composeWorktreeHostIdentity('local', id)),
+      worktrees: [],
+      ends: [4, 4, 4, 4]
+    }
+    const projected: string[] = []
+    const reader = createLineageSlotReader((_state, identity): WorkspaceSlot => {
+      projected.push(identity)
+      return { targets: [], record: toLineageSlotRecord([]), latestAt: null }
+    })
+    const state = makeState(new Map())
+    reader.descendantSlot(state, tree, 0)
+    projected.length = 0
+
+    // Same snapshot: only the replaced row's fallback may project differently.
+    tree.replacedRows = [[2]]
+    reader.descendantSlot(state, tree, 0)
+    expect(projected).toEqual([tree.identities[2]])
+    projected.length = 0
+    reader.descendantSlot(state, tree, 0)
+    expect(projected).toEqual([])
+  })
+
   it('aggregates fresh and lazily refreshed slots across nested ranges', () => {
     // a ─ b ─ c, then d: reading b's range first must not leave a's aggregate stale.
     const tree: WorktreeLineageTree = {

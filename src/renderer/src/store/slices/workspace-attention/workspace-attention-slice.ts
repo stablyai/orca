@@ -8,7 +8,7 @@ import {
   sameMarkers,
   type RemovedAttention
 } from './attention-removal-follow-up'
-import { removeTabsAttention } from './subject-attention-transitions'
+import { removePanesAttention, removeTabsAttention } from './subject-attention-transitions'
 import {
   markWorkspaceUnreadFlag,
   settleWorkspaceUnreadFlag,
@@ -18,7 +18,10 @@ import {
 import { isWorkspaceFlagSet, onScreenHostId } from './workspace-unread-flag-reads'
 import { paneKeyTabId } from './workspace-live-markers'
 import { workspaceAgentPaneKeys } from './workspace-agent-pane-index'
-import { workspaceMarkerTabIdsForHost } from './workspace-marker-host'
+import {
+  workspaceMarkerTabIdsForHost,
+  workspaceMarkerPaneKeysForHost
+} from './workspace-marker-host'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
@@ -29,6 +32,7 @@ import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
+import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { hasUnreadAgentSessionTab } from '@/components/terminal-pane/notifications/unread-agent-session-membership'
 
 const emptyTerminalTabs: AppState['tabsByWorktree'] = {}
@@ -69,15 +73,26 @@ export const createWorkspaceAttentionSlice: StateCreator<
     )
   }
   /** Removes every marker of the tabs and dismisses their panes' notifications. */
-  const removeAndDismiss = (tabIds: Iterable<string>): RemovedAttention | null => {
+  const removeAndDismiss = (
+    tabIds: Iterable<string>,
+    paneKeys?: ReadonlySet<string>,
+    notificationPaneKeys?: (keys: Iterable<string>) => Set<string>
+  ): RemovedAttention | null => {
     const before = get()
     set((s) => {
-      const next = removeTabsAttention(s, tabIds)
+      const next = paneKeys
+        ? {
+            unreadTerminalTabs: omitRecordKeys(s.unreadTerminalTabs, new Set(tabIds)),
+            ...removePanesAttention(s, paneKeys)
+          }
+        : removeTabsAttention(s, tabIds)
       return sameMarkers(s, next) ? s : next
     })
     const removed = collectRemovedAttention(before, get())
     if (removed) {
-      dismissReadNotifications(removed.paneKeys)
+      dismissReadNotifications(
+        notificationPaneKeys ? notificationPaneKeys(removed.paneKeys) : removed.paneKeys
+      )
     }
     return removed
   }
@@ -197,8 +212,16 @@ export const createWorkspaceAttentionSlice: StateCreator<
         return
       }
       noteWorkspaceRead(worktreeId)
+      const before = get()
+      const hostPanes = (keys: Iterable<string>) =>
+        workspaceMarkerPaneKeysForHost(before, worktreeId, executionHostId, keys)
       const removed = removeAndDismiss(
-        workspaceMarkerTabIdsForHost(get(), worktreeId, executionHostId)
+        workspaceMarkerTabIdsForHost(before, worktreeId, executionHostId),
+        hostPanes([
+          ...Object.keys(before.unreadTerminalPanes),
+          ...Object.keys(before.unreadAgentCompletionPanes)
+        ]),
+        hostPanes
       )
       void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
       // Mark read reads the agents too, or their lines keep the dot the user just cleared.
