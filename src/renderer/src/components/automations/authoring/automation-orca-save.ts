@@ -135,8 +135,10 @@ export async function saveOrcaAutomation(
         })
       : currentAutomation.setupDecision
   const { trust, setupTrustHash } = await confirmAutomationSaveSetup(context, {
+    // A new base can bring different orca.yaml setup, so it needs its own approval.
     prompt:
-      setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision')),
+      setupDecision === 'run' &&
+      ((targetEdited && !recordedContext) || edited('setupDecision') || edited('baseBranch')),
     repoId: draft.projectId,
     hostId: setupHostId,
     baseBranch: edited('baseBranch') ? draft.baseBranch : currentAutomation?.baseBranch,
