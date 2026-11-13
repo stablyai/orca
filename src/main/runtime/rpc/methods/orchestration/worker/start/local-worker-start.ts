@@ -34,6 +34,7 @@ import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-t
 import { releaseRetriedWorkerTerminal } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
+import { reusedWorkerLaunchReceipt } from './launch/worker-launch-preferences'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../../orchestration/workers/launch/worker-start-card'
@@ -135,6 +136,7 @@ export async function startLocalWorker(args: {
       coordinator,
       resolvedWorktreeId: resolvedWorktree?.id
     })
+    launch.receipt = reusedWorkerLaunchReceipt(runtime, launch.receipt, terminal)
   }
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
