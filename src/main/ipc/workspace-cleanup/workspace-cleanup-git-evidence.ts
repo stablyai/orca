@@ -10,7 +10,10 @@ import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupMergeEvidence
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
-import { readWorkspaceCleanupMergeEvidence } from './workspace-cleanup-merge-evidence'
+import {
+  readWorkspaceCleanupMergeEvidence,
+  type WorkspaceCleanupRepoRefs
+} from './workspace-cleanup-merge-evidence'
 import {
   hasWorktreeAtRiskLocalFiles,
   type WorktreeAtRiskLocalFiles
@@ -54,6 +57,7 @@ export async function readWorkspaceCleanupGitEvidence(
   repo: Repo,
   repoRoute: WorkspaceCleanupGitRoute,
   prCache: PRCacheView<PRInfo>,
+  repoRefs: WorkspaceCleanupRepoRefs,
   signal?: AbortSignal,
   coordinatorBranch?: string | null
 ): Promise<WorkspaceCleanupGitEvidence> {
@@ -117,6 +121,7 @@ export async function readWorkspaceCleanupGitEvidence(
     worktree,
     repo,
     prCache,
+    repoRefs,
     signal,
     coordinatorBranch
   )

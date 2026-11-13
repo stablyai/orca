@@ -13,7 +13,11 @@ import {
 } from './wsl-git-read-environment'
 import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
 import { withWslWindowsCheckoutGitConfig } from './wsl-windows-checkout-git-config'
-import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
+import {
+  resolveCommand,
+  WSL_DIRECT_GIT_FORWARDED_ENV,
+  type ResolvedCommand
+} from './wsl-command-resolution'
 import type { GitExecOptions } from '../git-exec-options'
 
 // Linux Git needs Windows-checkout settings; classify original args and inject only at spawn.
@@ -66,7 +70,9 @@ function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boo
     !options.useConfiguredSshCommandForNetwork &&
     !Object.entries(options.env ?? {}).some(
       ([key, value]) =>
-        key.startsWith('GIT_') && key !== 'GIT_OPTIONAL_LOCKS' && value !== process.env[key]
+        key.startsWith('GIT_') &&
+        !WSL_DIRECT_GIT_FORWARDED_ENV.includes(key) &&
+        value !== process.env[key]
     )
   )
 }
