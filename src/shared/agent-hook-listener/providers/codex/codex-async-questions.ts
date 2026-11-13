@@ -1,6 +1,7 @@
 import {
   CODEX_ASYNC_QUESTION_TOOL,
-  parseCodexAsyncQuestionsInput
+  parseCodexAsyncQuestionsInput,
+  readCodexAsyncQuestionReply
 } from '../../../codex-async-question-input'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
@@ -14,9 +15,6 @@ type CodexAsyncQuestionCall = {
 
 /** Pending mid-turn async questions in one Codex pane, by tool call id, oldest first. */
 export type CodexAsyncQuestions = Map<string, CodexAsyncQuestionCall>
-
-const REPLY_OPEN = '<send_user_message_question_reply>'
-const REPLY_CLOSE = '</send_user_message_question_reply>'
 
 /** The questions Codex's TUI is holding open for the user; the newest call is shown. */
 export type CodexPendingAsyncQuestion = { toolName: string; prompt: string }
@@ -106,18 +104,16 @@ function openCall(
 // Each answer is `[{answer, question, questionItemId: '["request_user_input_async", callId, index]'}]`.
 function answerCalls(state: HookListenerState, paneKey: string, prompt: string | undefined): void {
   const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
-  const body = prompt?.trim()
+  const replies = readCodexAsyncQuestionReply(prompt)
   if (!calls) {
     return
   }
-  // A plain message answers or abandons them all, as native chat's transcript scan reads it.
-  if (!body?.startsWith(REPLY_OPEN) || !body.endsWith(REPLY_CLOSE)) {
+  // The TUI abandons its questions on plain input; native chat keeps unrelated questions open.
+  if (replies === null) {
     state.codexAsyncQuestionsByPaneKey.delete(paneKey)
     return
   }
-  for (const [callId, index] of readReplyItems(
-    body.slice(REPLY_OPEN.length, -REPLY_CLOSE.length)
-  )) {
+  for (const [callId, index] of replies) {
     const call = calls.get(callId)
     call?.unanswered.delete(index)
     if (call?.unanswered.size === 0) {
@@ -126,32 +122,5 @@ function answerCalls(state: HookListenerState, paneKey: string, prompt: string |
   }
   if (calls.size === 0) {
     state.codexAsyncQuestionsByPaneKey.delete(paneKey)
-  }
-}
-
-function readReplyItems(json: string): [string, number][] {
-  const items = parseJson(json)
-  if (!Array.isArray(items)) {
-    return []
-  }
-  return items.flatMap((item): [string, number][] => {
-    const id =
-      item && typeof item === 'object' && 'questionItemId' in item
-        ? parseJson(String(item.questionItemId))
-        : null
-    return Array.isArray(id) &&
-      id[0] === CODEX_ASYNC_QUESTION_TOOL &&
-      typeof id[1] === 'string' &&
-      typeof id[2] === 'number'
-      ? [[id[1], id[2]]]
-      : []
-  })
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
   }
 }

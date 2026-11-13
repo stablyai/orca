@@ -5,6 +5,20 @@ import { subagentGroupFallbackText } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from '../native-chat-types'
 
 describe('nativeChatMessageCopyText', () => {
+  it('renders addressed async answers as readable quoted replies', () => {
+    expect(
+      nativeChatMessageCopyText({
+        role: 'user',
+        blocks: [
+          {
+            type: 'text',
+            text: '<send_user_message_question_reply>[{"questionItemId":"[\\"request_user_input_async\\",\\"call\\",0]","question":"Deploy?","answer":"Yes"}]</send_user_message_question_reply>'
+          }
+        ]
+      })
+    ).toBe('> Deploy?\n\nYes')
+  })
+
   it('leaves out the roster twin a drawn subagent group replaces', () => {
     const agents: NativeChatSubagentEntry[] = [{ id: 'a', label: 'Explore', state: 'completed' }]
     expect(

@@ -1,4 +1,5 @@
 import { isTextBlock, type NativeChatBlock } from '../native-chat-types'
+import { codexAsyncQuestionReplyMarkdown } from '../../codex-async-question-input'
 
 export function nativeChatProseToMarkdown(blocks: NativeChatBlock[], maxLength = Infinity): string {
   const parts: string[] = []
@@ -15,7 +16,7 @@ export function nativeChatProseToMarkdown(blocks: NativeChatBlock[], maxLength =
       parts.push(separator)
       length += separator.length
     }
-    const part = block.text.slice(0, maxLength - length)
+    const part = codexAsyncQuestionReplyMarkdown(block.text).slice(0, maxLength - length)
     parts.push(part)
     length += part.length
   }

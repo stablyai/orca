@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatAskAnswer,
   isPendingNativeChatUserMessage,
   nativeChatAnswerOperationPending
 } from './native-chat-ask-answer'
@@ -132,6 +133,51 @@ describe('async questions', () => {
     role: 'user',
     ...flags
   })
+  it('sends the selected question identity when titles repeat', () => {
+    const pending = extractPendingAsk([
+      message('a', [asyncCall('first', 'Same?')]),
+      message('b', [asyncCall('second', 'Same?')])
+    ])!
+    expect(formatAskAnswer(pending, [{ indices: [] }, { indices: [1] }])).toBe(
+      '<send_user_message_question_reply>[{"questionItemId":"[\\"request_user_input_async\\",\\"second\\",0]","question":"Same?","answer":"No"}]</send_user_message_question_reply>'
+    )
+    const answered = userTurn(
+      'answer',
+      '<send_user_message_question_reply>[{"questionItemId":"[\\"request_user_input_async\\",\\"second\\",0]","answer":"No"}]</send_user_message_question_reply>'
+    )
+    expect(
+      scanPendingAsks([
+        message('a', [asyncCall('first', 'Same?')]),
+        message('b', [asyncCall('second', 'Same?')]),
+        answered,
+        message('replay', [asyncCall('second', 'Same?')])
+      ]).contributors.map((entry) => entry.sourceRowId)
+    ).toEqual(['a'])
+  })
+
+  it('holds only the addressed part of a queued answer, preserving unanswered siblings', () => {
+    const asked = message('a', [
+      call('request_user_input_async', {
+        questions: [{ title: 'Database?' }, { title: 'Region?' }]
+      })
+    ])
+    const text = '> Database?\n\nPostgres'
+    const contributors = scanPendingAsks([asked]).contributors
+    expect(aggregateAsyncQuestions(contributors, undefined, undefined, [text])?.questions).toEqual([
+      { question: 'Region?', multiSelect: false, options: [] }
+    ])
+    expect(
+      scanPendingAsks([
+        asked,
+        {
+          ...userTurn('queued-answer', text),
+          queuedMessageId: 'queued',
+          deliveryState: 'pending'
+        }
+      ]).contributors.flatMap((entry) => entry.questions.map((question) => question.question))
+    ).toEqual(['Region?'])
+  })
+
   it('addresses accepted calls independently of definition, provider IDs and unrelated blocks', () => {
     const first = message('a', [
       call('request_user_input_async', { questions: [{ title: 'A?' }, { title: 'B?' }] }),
@@ -299,6 +345,8 @@ describe('async questions', () => {
     expect(scanner.current().blocking).not.toBeNull()
     expect(scanner.append(message('replay', [asyncCall('same-call', 'duplicate')]))).toEqual([])
     scanner.append({ ...notice, id: 'legacy-human', from: undefined })
+    expect(scanner.current().contributors).toEqual(pending)
+    scanner.append(interrupted('cancel'))
     expect(scanner.current().contributors).toEqual([])
     expect(scanner.append(message('new', [asyncCall('same-call', 'new question')]))).toHaveLength(1)
     expect(
