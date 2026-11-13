@@ -10,7 +10,8 @@ import {
   getOrcaCloudMcpSearchEntries,
   getOrcaCloudSkillsSearchEntries,
   getOrcaCloudSecretsSearchEntries,
-  getOrcaCloudTeamSearchEntries
+  getOrcaCloudTeamSearchEntries,
+  getOrcaCloudWorkspacesSearchEntries
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -22,6 +23,7 @@ import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
 import {
   BookOpenText,
   Boxes,
+  Cloud,
   Building2,
   CreditCard,
   KeySquare,
@@ -69,6 +71,17 @@ export function buildOrcaCloudSettingsSections(
     // Team owners and admins only; members and personal accounts never see the entry.
     ...(isOrcaTeamAdmin
       ? [
+          {
+            id: 'cloud-workspaces',
+            title: t('settings.teamWorkspaces.title', 'Cloud workspaces'),
+            description: t(
+              'settings.teamWorkspaces.description',
+              'Every cloud workspace on your team. Only owners and admins can see this page.'
+            ),
+            icon: Cloud,
+            searchEntries: getOrcaCloudWorkspacesSearchEntries(),
+            group
+          },
           {
             id: 'cloud-enterprise',
             title: t('settings.enterprise.title', 'Enterprise'),
