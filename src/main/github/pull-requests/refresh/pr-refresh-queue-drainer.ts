@@ -1,8 +1,7 @@
+import { admitPreparedPRRead } from './pr-refresh-read-admission'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import {
-  preparePRBranchRead,
-  type PRReadSettlement
-} from '../../client/lookup/pr-for-branch-outcome'
+import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
   hostedReviewOptionArgs,
   freshQueuedPROutcome,
@@ -31,7 +30,7 @@ export class PRRefreshQueueDrainer {
   registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
   readonly hostedJobs: HostedPRReadJobs
-  private readonly scheduler: PRRefreshQueueScheduler
+  readonly scheduler: PRRefreshQueueScheduler
   readonly scheduleVisibleFollowUp: PRRefreshQueueScheduler['scheduleVisibleFollowUp']
 
   constructor(
@@ -71,6 +70,7 @@ export class PRRefreshQueueDrainer {
     }
     this.draining = true
     try {
+      const { queue, pacing, events, scheduler, watchJobs } = this
       while (this.queue.size > 0) {
         let next = this.scheduler.ordered()[0]
         if (this.hostedJobs.completeFromCache(next)) {
@@ -160,7 +160,6 @@ export class PRRefreshQueueDrainer {
             requestSequence
           )
         }
-
         const joinedRead = next.hosted?.prepared.pending()
         if (isBackground(next.reason) && !joinedRead) {
           const checkRateLimit = () => prRefreshRateLimitPausedUntil(next.candidate, true)
@@ -191,15 +190,18 @@ export class PRRefreshQueueDrainer {
           if (this.hostedJobs.completeFromCache(next)) {
             continue
           }
-          if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
+          if (
+            next.watch &&
+            next.bypassBackgroundBudget !== true &&
+            isBudgetedBackground(next.reason)
+          ) {
             this.pacing.noteBackgroundStart(next)
             this.watchJobs.noteBudgetedStart(next)
           }
-          if (usesActiveRefreshPacing(next)) {
+          if (next.watch && usesActiveRefreshPacing(next)) {
             this.pacing.noteActiveStart(next)
           }
         }
-
         if (await this.watchJobs.readHead(next)) {
           continue
         }
@@ -220,31 +222,29 @@ export class PRRefreshQueueDrainer {
               watchPRKey: next.watch?.prKey
             })
           ))
-        const settle: PRReadSettlement = (outcome, producer) => {
-          if (!prepared.isCurrent()) {
-            return outcome
-          }
-          const settled =
-            producer.retained &&
-            outcome.kind === 'upstream-error' &&
-            (next.hosted || this.visibility.has(next.key))
-              ? this.retry.settleProducerError(
-                  outcome,
-                  next.key,
-                  next.hosted
-                    ? { ...next.candidate, isSelected: false }
-                    : this.visibility.candidate(next.key, next.candidate),
-                  prepared,
-                  this.queue
-                )
-              : outcome
-          this.events.observe(next.candidate, settled, aliases)
-          return settled
+        const admitted = admitPreparedPRRead(
+          { queue, pacing, events, scheduler, watchJobs },
+          next,
+          prepared,
+          aliases,
+          requestSequence,
+          requestStartedAt,
+          Boolean(joinedRead)
+        )
+        if (!admitted) {
+          continue
         }
-        const outcome = await (joinedRead ??
-          (next.hosted ? prepared.readRetained(settle) : prepared.read(settle)))
+        const settle = this.scheduler.settleRead(
+          next.key,
+          next.candidate,
+          aliases,
+          prepared,
+          Boolean(next.hosted)
+        )
+        const result = await (joinedRead ?? prepared.readResult(settle, Boolean(next.hosted)))
+        const outcome = result ? deliverablePRBranchOutcome(prepared, result) : null
         if (!outcome) {
-          next.hosted?.finish(null)
+          this.scheduler.finishWithoutOutcome(next, aliases, requestSequence)
           continue
         }
         if (

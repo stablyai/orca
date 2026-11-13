@@ -147,7 +147,9 @@ export function startPullRequestLookup(args: {
                   ...requestOptions,
                   repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
                 })
-            return normalizeGitHubPRForBranchOutcome(response)
+            return isPRRevalidationOnly(response)
+              ? response
+              : normalizeGitHubPRForBranchOutcome(response)
           })()
       const outcome = await response.catch(() => {
         transportFailed = true

@@ -4,6 +4,7 @@ import type {
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
@@ -72,11 +73,11 @@ export class HostedPRReadJobs {
   ): Promise<PRRefreshOutcome> {
     const current = await prepared.reprepare()
     try {
-      const outcome = await current.read()
-      if (current.didRead()) {
+      const result = await current.readResult((outcome) => {
         this.observe(candidate, outcome)
-      }
-      return outcome
+        return outcome
+      })
+      return result!.outcome
     } finally {
       current.release()
     }
@@ -89,6 +90,14 @@ export class HostedPRReadJobs {
       outcome?.kind === 'upstream-error'
         ? Math.max(outcome.nextAutoRetryAt ?? 0, outcome.retryDisabledUntil ?? 0)
         : 0
+    )
+  }
+
+  retryAfterMs(prepared: PreparedPRBranchRead): number {
+    return Math.max(
+      RETRY_MS,
+      this.pacing.nextBudgetDelay(),
+      prepared.isCurrent() ? this.gateUntil(prepared) - Date.now() : 0
     )
   }
 
@@ -111,11 +120,7 @@ export class HostedPRReadJobs {
         return fresh
       }
     }
-    const delay = Math.max(
-      RETRY_MS,
-      this.pacing.nextBudgetDelay(),
-      current ? this.gateUntil(prepared) - Date.now() : 0
-    )
+    const delay = this.retryAfterMs(prepared)
     const cached = current ? prepared.cached()?.outcome : null
     if (cached) {
       return cached.kind === 'upstream-error'
@@ -133,31 +138,25 @@ export class HostedPRReadJobs {
     acceptRevalidationOnly: boolean
   ): Promise<PRSnapshotReply> {
     try {
-      const outcome = await (acceptRevalidationOnly
-        ? prepared.readRetained((outcome) => {
-            if (
-              outcome.kind !== 'upstream-error' ||
-              !prepared.isCurrent() ||
-              !prepared.accepts(outcome)
-            ) {
-              return outcome
-            }
-            const key = `hosted::${prepared.key}`
-            return this.retry.settleProducerError(
-              outcome,
-              key,
-              { ...candidate, isSelected: false },
-              prepared,
-              this.queue
-            )
-          })
-        : prepared.read())
-      if (!outcome) {
-        return await this.complete(prepared, candidate, null, acceptRevalidationOnly)
-      }
-      if (prepared.didRead()) {
-        this.observe(candidate, outcome)
-      }
+      const result = await prepared.readResult((outcome) => {
+        const settled =
+          acceptRevalidationOnly && outcome.kind === 'upstream-error'
+            ? this.retry.settleProducerError(
+                outcome,
+                `hosted::${prepared.key}`,
+                { ...candidate, isSelected: false },
+                prepared,
+                this.queue
+              )
+            : outcome
+        this.observe(candidate, settled)
+        return settled
+      }, acceptRevalidationOnly)
+      const outcome = result
+        ? acceptRevalidationOnly
+          ? deliverablePRBranchOutcome(prepared, result)
+          : result.outcome
+        : null
       return await this.complete(prepared, candidate, outcome, acceptRevalidationOnly)
     } finally {
       prepared.release()

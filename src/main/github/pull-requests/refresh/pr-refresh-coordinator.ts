@@ -1,4 +1,5 @@
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
@@ -67,18 +68,29 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
  *  so a desktop read in flight for the same checkout keeps its follow-up. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
-  read: () => Promise<PRRefreshOutcome>,
+  read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead,
   didRead: () => boolean = () => true,
   release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
   try {
+    if (typeof read !== 'function') {
+      const result = await read.readResult((outcome) => {
+        events.observe(candidate, outcome)
+        return outcome
+      })
+      return result!.outcome
+    }
     const outcome = await read()
     if (didRead()) {
       events.observe(candidate, outcome)
     }
     return outcome
   } finally {
-    release()
+    if (typeof read !== 'function') {
+      read.release()
+    } else {
+      release()
+    }
   }
 }
 
@@ -97,7 +109,13 @@ export async function runHostedPRSnapshot(
   }
   const pending = prepared.pending()
   if (pending) {
-    return drainer.hostedJobs.complete(prepared, candidate, await pending, acceptRevalidationOnly)
+    const result = await pending
+    return drainer.hostedJobs.complete(
+      prepared,
+      candidate,
+      acceptRevalidationOnly ? deliverablePRBranchOutcome(prepared, result) : result.outcome,
+      acceptRevalidationOnly
+    )
   }
   return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
 }
@@ -206,7 +224,7 @@ export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
-): Promise<PRRefreshOutcome> {
+): Promise<PRSnapshotReply> {
   return runImmediatePRRefresh(
     { queue, retry, visibility, events, drainer },
     candidate,

@@ -205,6 +205,7 @@ export function readTimedPROutcome(
 ): {
   outcome: PRRefreshOutcome
   quietIntervalMs: number | null
+  sequence: number
 } | null {
   const entry = exactOutcomes.get(requestKey)
   if (!entry?.outcome || entry.ownerKey !== key) {
@@ -218,7 +219,8 @@ export function readTimedPROutcome(
   }
   return {
     outcome: entry.outcome,
-    quietIntervalMs: entry.quiet ? QUIET_PR_REFRESH_INTERVAL_MS : null
+    quietIntervalMs: entry.quiet ? QUIET_PR_REFRESH_INTERVAL_MS : null,
+    sequence: entry.start.sequence
   }
 }
 

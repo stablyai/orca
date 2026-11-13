@@ -149,7 +149,7 @@ export class RuntimeHostedReviewCommands {
     if (reason === 'swr' && userRefresh !== true) {
       return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
     }
-    return runHostedPRRead(candidate, prepared.read, prepared.didRead, prepared.release)
+    return runHostedPRRead(candidate, prepared)
   }
 
   async getHostedReviewForBranch(args: {

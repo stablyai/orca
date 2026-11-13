@@ -1,9 +1,11 @@
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRRefreshOutcome,
+  PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
 import {
   aliasFromCandidate,
   refreshKey,
@@ -35,7 +37,7 @@ export async function runImmediatePRRefresh(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
-): Promise<PRRefreshOutcome> {
+): Promise<PRSnapshotReply> {
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
   const existing = queue.get(key)
@@ -115,23 +117,32 @@ export async function runImmediatePRRefresh(
     ...hostedReviewOptionArgs(candidate, reason, options)
   )
   try {
-    const outcome = await prepared.read((outcome, producer) => {
-      if (!prepared.isCurrent()) {
-        return outcome
+    const result = await prepared.readResult(
+      drainer.scheduler.settleRead(key, candidate, aliases, prepared)
+    )
+    if (!result) {
+      throw new Error('An unrestricted PR read must return its own result')
+    }
+    const outcome = deliverablePRBranchOutcome(prepared, result)
+    if (!outcome) {
+      if (queue.ownsRequest(key, requestSequence)) {
+        events.broadcast(
+          { aliases, reason, status: 'skipped', skippedReason: 'fresh' },
+          requestSequence
+        )
+        drainer.scheduler.completeWithoutOutcome(
+          key,
+          candidate,
+          aliases,
+          40,
+          undefined,
+          !isBackground(reason)
+        )
       }
-      const settled =
-        producer.retained && outcome.kind === 'upstream-error' && visibility.has(key)
-          ? retry.settleProducerError(
-              outcome,
-              key,
-              visibility.candidate(key, candidate),
-              prepared,
-              queue
-            )
-          : outcome
-      events.observe(candidate, settled, aliases)
-      return settled
-    })
+      return {
+        revalidation: { invalidated: true, retryAfterMs: drainer.hostedJobs.retryAfterMs(prepared) }
+      }
+    }
     if (!queue.ownsRequest(key, requestSequence)) {
       events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
       return outcome
