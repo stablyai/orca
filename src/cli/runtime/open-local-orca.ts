@@ -20,7 +20,7 @@ export async function openLocalOrca(
   // Relaunching a running Orca would hand it the foreground, so ask it to show its own window.
   const asked =
     initial?.result.runtime.reachable === true && (await askToOpenWindow(openWindowInBackground))
-  if (windowStatus === 'available') {
+  if (initial && windowStatus === 'available') {
     return initial
   }
   if (!asked) {
