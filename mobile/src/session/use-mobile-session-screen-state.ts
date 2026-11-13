@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
-import { useTerminalSplitLayout } from '../terminal/session/use-terminal-split-layout'
-import { createLiveInputCapture } from '../terminal/session/live-input-capture'
+import { useTerminalSplitLayout } from '../terminal/session/pane-layout/use-terminal-split-layout'
+import { createLiveInputCapture } from '../terminal/session/input-controls/live-input-capture'
 import { Animated } from 'react-native'
 import type { MobileAnimatedValue } from '../platform/animated-handles'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
@@ -11,7 +11,7 @@ import {
 } from '../terminal/key-input/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
-import { useWorktreeSessionTabsLoaded } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { DiffNotesDelivery } from '../source-control/review/mobile-review-comment-state'
@@ -20,7 +20,8 @@ import type {
   FileDocState,
   MarkdownDocState
 } from '../files/session-documents/session-document-state'
-import type { MobileDisplayMode, Terminal } from '../terminal/session/mobile-terminal-model'
+import type { MobileDisplayMode } from '../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../terminal/session/inventory/mobile-terminal-records'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'

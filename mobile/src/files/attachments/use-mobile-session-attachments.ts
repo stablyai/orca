@@ -11,8 +11,8 @@ import {
   resolveMobileNativeChatSessionId
 } from '../../session/native-chat/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
-import { useMobileTerminalPaste } from '../../terminal/session/use-mobile-terminal-paste'
-import type { MobileSessionAccessorySelectionModel } from '../../terminal/session/use-mobile-session-accessory-selection'
+import { useMobileTerminalPaste } from '../../terminal/session/input-controls/use-mobile-terminal-paste'
+import type { MobileSessionAccessorySelectionModel } from '../../terminal/session/accessory-keys/use-mobile-session-accessory-selection'
 
 export function useMobileSessionAttachments(scope: MobileSessionAccessorySelectionModel) {
   const {

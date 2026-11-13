@@ -13,7 +13,7 @@ import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-mes
 import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
 import { isFileExistsErrorMessage } from '../files/mutation-ownership/file-exists-error'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
-import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/use-mobile-session-terminal-create-actions'
+import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/creation/use-mobile-session-terminal-create-actions'
 
 const BROWSER_NAVIGATION_COMMANDS = {
   'browser.back': browserGoBack,

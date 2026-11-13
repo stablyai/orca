@@ -308,21 +308,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
