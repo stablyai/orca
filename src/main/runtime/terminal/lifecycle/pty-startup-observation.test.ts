@@ -44,6 +44,7 @@ function fixture(inspect: () => Promise<TerminalProcessInspection>) {
     lastOscTitle: 'claude',
     commandPaint: paint
   })
+  let outputSequence = 0
   let controller: RuntimePtyController = {
     write: () => true,
     kill: () => true,
@@ -53,12 +54,16 @@ function fixture(inspect: () => Promise<TerminalProcessInspection>) {
   const owner = new RuntimePtyForegroundAgent({
     getController: () => controller,
     getPty: () => pty,
+    getOutputSequence: () => outputSequence,
     touchSnapshot: () => {},
     finishDelayedSnapshot: () => {}
   })
   return {
     owner,
     pty,
+    advanceOutput() {
+      outputSequence++
+    },
     replaceController(next: RuntimePtyController) {
       controller = next
     }
@@ -461,6 +466,107 @@ it('admits an existing interested candidate on read after C and re-admits after 
     await flush()
     expect(inspect).toHaveBeenCalledTimes(2)
     expect(owner.startup.read('pty-1')).toEqual({ kind: 'shell', candidate: 'claude' })
+    stop()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retains only a current positive mode after settlement and expires it to the legacy fallback', async () => {
+  vi.useFakeTimers()
+  try {
+    const sample = inspection('claude')
+    if (sample.foregroundObservation?.verdict === 'observed') {
+      sample.foregroundObservation.inputMode = 'noninteractive'
+      sample.foregroundObservation.capturedAgeMs = 1_000
+    }
+    const { owner, pty } = fixture(async () => sample)
+    pty.launchAgent = 'claude'
+    const stop = owner.startup.watch('pty-1', () => {})
+    await flush()
+    expect(owner.startup.read('pty-1')).toEqual({
+      kind: 'agent',
+      agent: 'claude',
+      inputMode: 'noninteractive'
+    })
+    stop()
+    expect(owner.startup.read('pty-1')).toEqual({
+      kind: 'agent',
+      agent: 'claude',
+      inputMode: 'noninteractive'
+    })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    const stopNext = owner.startup.watch('pty-1', () => {})
+    await flush()
+    expect(owner.startup.read('pty-1')).toMatchObject({ inputMode: 'noninteractive' })
+    pty.providerGenerationResetAtEpochMs = Date.now()
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    stopNext()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('fences a deferred mode on every qualified completion including false-to-false', async () => {
+  vi.useFakeTimers()
+  try {
+    let resolve!: (value: TerminalProcessInspection) => void
+    const sample = inspection('claude')
+    if (sample.foregroundObservation?.verdict === 'observed') {
+      sample.foregroundObservation.inputMode = 'noninteractive'
+    }
+    const { owner, pty } = fixture(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        })
+    )
+    pty.launchAgent = 'claude'
+    pty.commandPaint!.observe('\x1b]133;D;0\x07', '')
+    const stop = owner.startup.watch('pty-1', () => {})
+    await flush()
+    pty.commandPaint!.observe('\x1b]133;D;0\x07', '')
+    owner.startup.forget('pty-1', true)
+    resolve(sample)
+    await flush()
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    stop()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retires mode on output even when distinct chunks share the same wall clock', async () => {
+  vi.useFakeTimers()
+  try {
+    const sample = inspection('claude')
+    if (sample.foregroundObservation?.verdict === 'observed') {
+      sample.foregroundObservation.inputMode = 'noninteractive'
+    }
+    let release!: (value: TerminalProcessInspection) => void
+    let pending = false
+    const { owner, pty, advanceOutput } = fixture(() =>
+      pending
+        ? new Promise((done) => {
+            release = done
+          })
+        : Promise.resolve(sample)
+    )
+    pty.launchAgent = 'claude'
+    const stop = owner.startup.watch('pty-1', () => {})
+    await flush()
+    expect(owner.startup.read('pty-1')).toMatchObject({ inputMode: 'noninteractive' })
+    advanceOutput()
+    expect(owner.startup.read('pty-1')).toBeUndefined()
+    pending = true
+    await vi.advanceTimersByTimeAsync(2_000)
+    owner.startup.refresh('pty-1')
+    await flush()
+    advanceOutput()
+    release(sample)
+    await flush()
+    expect(owner.startup.read('pty-1')).toBeUndefined()
     stop()
   } finally {
     vi.useRealTimers()

@@ -129,6 +129,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       observeTerminalCommandPaint(pty, data, undefined, {
         alternateScreen: initialAlternateScreen,
         onBoundary: (boundary) => {
+          this.ptyForegroundAgent.startup.forget(ptyId, true)
           this.retireAgentPromptOperationsForBoundary(ptyId, boundary)
           this.orchestrationMailboxNotifications.retirePty(ptyId)
           this.wakeInterestedTerminalDelivery(ptyId)

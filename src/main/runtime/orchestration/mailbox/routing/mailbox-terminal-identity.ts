@@ -5,8 +5,23 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 
 /** Which live terminal orchestration types mail into, and the handle it is known by. */
 export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+  terminalAgentInputMode(handle: string): 'noninteractive' | undefined {
+    const pty = this.getLivePtyForHandle(handle)?.pty
+    const sample = pty ? this.ptyForegroundAgent.startup.read(pty.ptyId) : undefined
+    return sample?.kind === 'agent' ? sample.inputMode : undefined
+  }
+
+  assertTerminalAgentPromptInputSupported(handle: string): void {
+    if (this.terminalAgentInputMode(handle) === 'noninteractive') {
+      throw new Error('terminal_guard_not_writable')
+    }
+  }
+
   protected terminalHasCurrentAgentMailAuthority(pty: RuntimePtyWorktreeRecord): boolean {
     const startup = this.ptyForegroundAgent.startup.read(pty.ptyId)
+    if (startup?.kind === 'agent' && startup.inputMode === 'noninteractive') {
+      return false
+    }
     const ended = pty.commandPaint?.commandActive === false
     const unrelated = startup?.kind === 'non-agent' || startup?.kind === 'shell'
     return !(ended || unrelated) || !!pty.foregroundAgent || !!pty.lastExplicitAgentStatus

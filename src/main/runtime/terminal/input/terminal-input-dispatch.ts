@@ -215,6 +215,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     action: { enter?: boolean },
     options: RuntimeTerminalWriteOptions
   ): Promise<boolean> {
+    const observation = this.ptyForegroundAgent.startup.read(ptyId)
+    if (observation?.kind === 'agent' && observation.inputMode === 'noninteractive') {
+      return true
+    }
     if (!(options.waitForLaunchComposer && action.enter)) {
       return true
     }

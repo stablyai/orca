@@ -14,12 +14,13 @@ import type { PtyForegroundProcessRead } from './pty-foreground-observation-stat
 
 export type StartupAgentObservation =
   | { kind: 'shell'; candidate: TuiAgent }
-  | { kind: 'agent'; agent: TerminalAgent }
+  | { kind: 'agent'; agent: TerminalAgent; inputMode?: 'noninteractive' }
   | { kind: 'non-agent' }
 
 type Dependencies = {
   getController(): RuntimePtyController | null
   getPty(ptyId: string): RuntimePtyWorktreeRecord | null
+  getOutputSequence?(ptyId: string): number | undefined
   read(
     ptyId: string,
     generation: PtyStartupObservationEntry,
@@ -37,10 +38,20 @@ export type PtyStartupObservationEntry = {
   listeners: Set<() => void>
   result: StartupAgentObservation | null
   outputAt: number | null
+  outputSequence: number | undefined
   flight: Promise<void> | null
   nextAttemptAt: number
   retryMs: number
   unsupported: boolean
+  modeExpiresAt: number
+}
+
+function knownClaude(pty: RuntimePtyWorktreeRecord): boolean {
+  return (
+    [pty.launchAgent, pty.launchCommandAgent, pty.foregroundAgent].includes('claude') ||
+    (pty.commandPaint?.commandActive !== false &&
+      resolveTerminalTitlePolicyAgentType(pty.lastOscTitle ?? '') === 'claude')
+  )
 }
 
 // The terminal owns discovery; additional waiters neither multiply reads nor restart recovery.
@@ -77,17 +88,26 @@ export class PtyStartupObservation {
         listeners: entry?.listeners ?? new Set(),
         result: null,
         outputAt: pty.lastOutputAt,
+        outputSequence: this.deps.getOutputSequence?.(ptyId),
         flight: null,
         nextAttemptAt: 0,
         retryMs: 2_000,
-        unsupported: false
+        unsupported: false,
+        modeExpiresAt: 0
       }
       this.entries.set(ptyId, entry)
     }
-    if (entry.outputAt !== pty.lastOutputAt) {
+    if (
+      entry.outputAt !== pty.lastOutputAt ||
+      entry.outputSequence !== this.deps.getOutputSequence?.(ptyId) ||
+      (entry.result?.kind === 'agent' &&
+        entry.result.inputMode &&
+        performance.now() >= entry.modeExpiresAt)
+    ) {
       cleared ||= entry.result != null
       entry.result = null
       entry.outputAt = pty.lastOutputAt
+      entry.outputSequence = this.deps.getOutputSequence?.(ptyId)
     }
     if (cleared) {
       const clearedEntry = entry
@@ -104,7 +124,17 @@ export class PtyStartupObservation {
 
   read(ptyId: string): StartupAgentObservation | undefined {
     const pty = this.deps.getPty(ptyId)
-    if (!pty || pty.launchAgent || pty.launchCommandAgent) {
+    if (!pty) {
+      return undefined
+    }
+    const entry = this.entry(ptyId)
+    if (entry?.result?.kind === 'agent' && entry.result.inputMode) {
+      return entry.result
+    }
+    if (knownClaude(pty)) {
+      this.refresh(ptyId)
+    }
+    if (pty.launchAgent || pty.launchCommandAgent) {
       return undefined
     }
     const candidate = resolveTerminalTitlePolicyAgentType(pty.lastOscTitle ?? '')
@@ -118,7 +148,6 @@ export class PtyStartupObservation {
     if (pty.foregroundAgent) {
       return undefined
     }
-    const entry = this.entry(ptyId)
     if (signal && pty.commandPaint.hasObservedAgentComposer(signal)) {
       return { kind: 'agent', agent: candidate }
     }
@@ -126,12 +155,19 @@ export class PtyStartupObservation {
     return entry?.listeners.size ? (entry.result ?? undefined) : undefined
   }
 
+  noninteractiveRemainingMs(ptyId: string): number | undefined {
+    const entry = this.entry(ptyId)
+    return entry?.result?.kind === 'agent' && entry.result.inputMode === 'noninteractive'
+      ? Math.max(0, entry.modeExpiresAt - performance.now())
+      : undefined
+  }
+
   watch(ptyId: string, changed: () => void): () => void {
     const entry = this.entry(ptyId)
     if (!entry) {
       return () => {}
     }
-    if (!entry.listeners.size) {
+    if (!entry.listeners.size && !(entry.result?.kind === 'agent' && entry.result.inputMode)) {
       entry.result = null
     }
     entry.listeners.add(changed)
@@ -148,11 +184,12 @@ export class PtyStartupObservation {
       entry.flight ||
       entry.unsupported ||
       Date.now() < entry.nextAttemptAt ||
-      entry.pty.commandPaint?.commandActive !== true ||
-      entry.pty.launchAgent ||
-      entry.pty.launchCommandAgent ||
-      entry.pty.foregroundAgent ||
-      !isTuiAgent(resolveTerminalTitlePolicyAgentType(entry.pty.lastOscTitle ?? ''))
+      (!knownClaude(entry.pty) &&
+        (entry.pty.commandPaint?.commandActive !== true ||
+          entry.pty.launchAgent ||
+          entry.pty.launchCommandAgent ||
+          entry.pty.foregroundAgent ||
+          !isTuiAgent(resolveTerminalTitlePolicyAgentType(entry.pty.lastOscTitle ?? ''))))
     ) {
       return
     }
@@ -161,10 +198,15 @@ export class PtyStartupObservation {
       return
     }
     const outputAt = entry.pty.lastOutputAt
+    const outputSequence = this.deps.getOutputSequence?.(ptyId)
     const previous = entry.result
     entry.flight = read
       .then((sample) => {
-        if (!this.current(ptyId, entry) || entry.pty.lastOutputAt !== outputAt) {
+        if (
+          !this.current(ptyId, entry) ||
+          entry.pty.lastOutputAt !== outputAt ||
+          this.deps.getOutputSequence?.(ptyId) !== outputSequence
+        ) {
           return
         }
         entry.unsupported = sample.unsupported === true
@@ -174,7 +216,15 @@ export class PtyStartupObservation {
         }
         const agent = sample.agent ?? recognizeAgentProcess(sample.process)?.agent
         if (agent) {
-          entry.result = { kind: 'agent', agent }
+          const observation = sample.observation
+          const inputMode = observation?.verdict === 'observed' ? observation.inputMode : undefined
+          entry.modeExpiresAt =
+            performance.now() + Math.max(0, 16_000 - (observation?.capturedAgeMs ?? 0))
+          entry.result = {
+            kind: 'agent',
+            agent,
+            ...(inputMode && performance.now() < entry.modeExpiresAt ? { inputMode } : {})
+          }
         } else if (isShellProcess(sample.process)) {
           const candidate = resolveTerminalTitlePolicyAgentType(entry.pty.lastOscTitle ?? '')
           if (isTuiAgent(candidate)) {

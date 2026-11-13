@@ -554,7 +554,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,84 +841,499 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,84 +841,585 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -1010,6 +1010,92 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
 +  return promise;
 +}
 +
++
++// Exact argv stays local to the selected foreground inspection, never ps formatting.
++class OrcaProcessArgvWorker : public Napi::AsyncWorker {
++ public:
++  OrcaProcessArgvWorker(Napi::Env env, pid_t pid)
++      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)), pid_(pid), found_(false) {}
++  Napi::Promise Promise() { return deferred_.Promise(); }
++
++  void Execute() override {
++    struct kinfo_proc before;
++    if (!orca_read_kinfo_pid(pid_, &before) || before.kp_proc.p_stat == SZOMB) return;
++    int mib[3] = { CTL_KERN, KERN_PROCARGS2, pid_ };
++    std::vector<char> bytes(1024 * 1024);
++    size_t size = bytes.size();
++    if (sysctl(mib, 3, bytes.data(), &size, NULL, 0) != 0 || size < sizeof(int) || size > bytes.size()) return;
++    int argc;
++    memcpy(&argc, bytes.data(), sizeof(argc));
++    if (argc <= 0 || (size_t)argc > size - sizeof(argc)) return;
++    const char* path = bytes.data() + sizeof(argc);
++    const char* end = bytes.data() + size;
++    const char* terminator = (const char*)memchr(path, '\0', end - path);
++    if (!terminator) return;
++    executable_.assign(path, terminator - path);
++    // The kernel aligns the saved executable path before argv; empty argv[0] is not padding.
++    size_t width = (before.kp_proc.p_flag & P_LP64) ? 8 : 4;
++    size_t path_size = (size_t)(terminator - path) + 1;
++    size_t aligned = (path_size + width - 1) & ~(width - 1);
++    if (aligned >= (size_t)(end - path)) return;
++    const char* cursor = path + aligned;
++    for (const char* padding = terminator + 1; padding < cursor; padding++) {
++      if (*padding != '\0') return;
++    }
++    for (int index = 0; index < argc; index++) {
++      const char* stop = (const char*)memchr(cursor, '\0', end - cursor);
++      if (!stop) return;
++      argv_.emplace_back(cursor, stop - cursor);
++      cursor = stop + 1;
++    }
++    // Stop at argc: the remainder is environment and must never be interpreted as arguments.
++    if (!orca_read_kinfo_pid(pid_, &proc_) || proc_.kp_proc.p_stat == SZOMB ||
++        before.kp_proc.p_starttime.tv_sec != proc_.kp_proc.p_starttime.tv_sec ||
++        before.kp_proc.p_starttime.tv_usec != proc_.kp_proc.p_starttime.tv_usec ||
++        before.kp_eproc.e_pgid != proc_.kp_eproc.e_pgid ||
++        before.kp_eproc.e_tpgid != proc_.kp_eproc.e_tpgid ||
++        (before.kp_proc.p_flag & P_LP64) != (proc_.kp_proc.p_flag & P_LP64) ||
++        memcmp(before.kp_proc.p_comm, proc_.kp_proc.p_comm, sizeof(before.kp_proc.p_comm)) != 0) return;
++    found_ = true;
++  }
++
++  void OnOK() override {
++    Napi::Env env = Env();
++    if (!found_) { deferred_.Resolve(env.Null()); return; }
++    Napi::Object result = Napi::Object::New(env);
++    result.Set("pid", Napi::Number::New(env, pid_));
++    result.Set("pgid", Napi::Number::New(env, proc_.kp_eproc.e_pgid));
++    result.Set("tpgid", Napi::Number::New(env, proc_.kp_eproc.e_tpgid));
++    result.Set("executable", Napi::String::New(env, executable_));
++    Napi::Array argv = Napi::Array::New(env, argv_.size());
++    for (size_t index = 0; index < argv_.size(); index++) {
++      argv.Set(index, Napi::String::New(env, argv_[index]));
++    }
++    result.Set("argv", argv);
++    deferred_.Resolve(result);
++  }
++  void OnError(const Napi::Error& error) override { deferred_.Reject(error.Value()); }
++
++ private:
++  Napi::Promise::Deferred deferred_;
++  pid_t pid_;
++  bool found_;
++  struct kinfo_proc proc_;
++  std::string executable_;
++  std::vector<std::string> argv_;
++};
++
++Napi::Value OrcaReadProcessArgv(const Napi::CallbackInfo& info) {
++  Napi::Env env = info.Env();
++  double pid = info.Length() && info[0].IsNumber() ? info[0].As<Napi::Number>().DoubleValue() : 0;
++  if (!(pid >= 1 && pid <= INT32_MAX) || pid != (double)(int32_t)pid) {
++    throw Napi::TypeError::New(env, "Usage: readProcessArgv(pid)");
++  }
++  OrcaProcessArgvWorker* worker = new OrcaProcessArgvWorker(env, (pid_t)pid);
++  Napi::Promise promise = worker->Promise();
++  worker->Queue();
++  return promise;
++}
 +// PROC_PIDVNODEPATHINFO stats the cwd vnode and proc_pidpath may ask the filesystem for a path, so either can block
 +// on a dead network mount: both run on a worker thread and JS bounds how many may be outstanding.
 +class OrcaProcessPathWorker : public Napi::AsyncWorker {
@@ -1078,7 +1164,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  /**
   * Init
   */
-@@ -793,6 +1343,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -793,6 +1429,12 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
    exports.Set("resize",  Napi::Function::New(env, PtyResize));
    exports.Set("process", Napi::Function::New(env, PtyGetProc));
@@ -1086,6 +1172,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
 +  exports.Set("readProcessTable", Napi::Function::New(env, OrcaProcessTableAsync));
 +  exports.Set("readProcessCwd", Napi::Function::New(env, OrcaReadProcessCwd));
 +  exports.Set("readProcessPath", Napi::Function::New(env, OrcaReadProcessPath));
++  exports.Set("readProcessArgv", Napi::Function::New(env, OrcaReadProcessArgv));
 +#endif
    return exports;
  }

@@ -190,12 +190,15 @@ export const TERMINAL_SEND_METHODS = [
           assertSequenceBinding ||
           assertSendPreconditions ||
           assertStartupDialogCurrent ||
-          (orchestrationMutation && params.agentPrompt === true)
+          params.agentPrompt === true
             ? async (ptyId?: string): Promise<void> => {
                 assertSequenceBinding?.(ptyId)
                 await assertSendPreconditions?.(ptyId)
                 assertSequenceBinding?.(ptyId)
                 assertStartupDialogCurrent?.(ptyId)
+                if (params.agentPrompt === true) {
+                  runtime.assertTerminalAgentPromptInputSupported(params.terminal)
+                }
                 if (orchestrationMutation && params.agentPrompt === true) {
                   markMutationEffectPossible?.()
                 }

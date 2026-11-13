@@ -18,11 +18,10 @@ import {
 type Dependencies = {
   getController(): RuntimePtyController | null
   getPty(ptyId: string): RuntimePtyWorktreeRecord | null
+  getOutputSequence?(ptyId: string): number | undefined
   touchSnapshot(ptyId: string): void
   finishDelayedSnapshot(ptyId: string, changed: boolean): void
 }
-
-const NATIVE_CLAUDE_VERSION_NAME = /^\d+\.\d+\.\d+$/
 
 export class RuntimePtyForegroundAgent {
   private readonly refreshes = new Map<string, PtyForegroundAgentRefresh>()
@@ -257,7 +256,7 @@ export class RuntimePtyForegroundAgent {
     const foregroundName = result.process
     const agent = result.agent ?? recognizeAgentProcess(foregroundName)?.agent ?? null
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
-    if (agent || !foregroundName || !NATIVE_CLAUDE_VERSION_NAME.test(foregroundName)) {
+    if (agent || !foregroundName || !/^\d+\.\d+\.\d+$/.test(foregroundName)) {
       this.confirmedByPtyId.delete(ptyId)
       return agent
     }

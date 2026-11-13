@@ -2,7 +2,10 @@ import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox/terminal-pointer/mailbox-pointer-pty-write'
-import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import {
+  writeRefused,
+  type WriteSettlement
+} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
@@ -31,6 +34,10 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     ptyId: string,
     data: string
   ): WriteSettlement | Promise<WriteSettlement> {
+    const observation = this.ptyForegroundAgent.startup.read(ptyId)
+    if (observation?.kind === 'agent' && observation.inputMode === 'noninteractive') {
+      return writeRefused('provider_refused_write')
+    }
     return writeOrchestrationPointerWithSettlement({
       ptyId,
       data,

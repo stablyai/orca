@@ -131,7 +131,9 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
     this.ptyForegroundAgent.startup.refresh(ptyId)
     const pty = this.ptysById.get(ptyId)
+    const modeRemainingMs = this.ptyForegroundAgent.startup.noninteractiveRemainingMs(ptyId)
     if (
+      modeRemainingMs === undefined &&
       pty &&
       pty.commandPaint?.commandActive === false &&
       !this.terminalHasCurrentAgentMailAuthority(pty)
@@ -144,9 +146,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
     // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
     const delay =
-      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
-        ? DIALOG_HOLD_RECHECK_MS
-        : quietRemainingMs + 50
+      modeRemainingMs !== undefined
+        ? modeRemainingMs + 1
+        : this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
+          ? DIALOG_HOLD_RECHECK_MS
+          : quietRemainingMs + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByPtyId.delete(ptyId)
       // Delivery rechecks settlement first; the agent may have become busy again.

@@ -83,6 +83,7 @@ export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRunti
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
     const hooked = agentPromptHookApplies(options)
+    this.assertTerminalAgentPromptInputSupported(handle)
     return this.pluginHookOrder.run(
       handle,
       terminalHookOrderKind(hooked, {}, options),

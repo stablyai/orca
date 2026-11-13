@@ -152,9 +152,13 @@ export function ptyTuiIdleEvidence(
   const scope = pty.commandPaint?.contentOrigin
   const oldTitle = terminalTitleIsPredecessor(pty)
   const startup = source.startupObservation?.read(pty.ptyId)
+  const noninteractive = startup?.kind === 'agent' && startup.inputMode === 'noninteractive'
   const commandBoundaryPending = pty.commandPaint?.commandBoundaryPending === true
   const terminalAgent =
-    commandBoundaryPending || startup?.kind === 'non-agent' || startup?.kind === 'shell'
+    noninteractive ||
+    commandBoundaryPending ||
+    startup?.kind === 'non-agent' ||
+    startup?.kind === 'shell'
       ? null
       : ((source.getPaneTerminalAgent
           ? source.getPaneTerminalAgent(pty.ptyId)
@@ -162,15 +166,21 @@ export function ptyTuiIdleEvidence(
   const agent = isTuiAgent(terminalAgent) ? terminalAgent : null
   const readScreen = screenReader(source, agent, pty.ptyId)
   const record = evidenceRecord(source, pty)
-  if (oldTitle) {
+  if (oldTitle || noninteractive) {
     record.lastOscTitle = null
   }
   const statusOrigin = pty.commandPaint?.titleStatusOrigin
-  if (pty.commandPaint && terminalOriginIsPredecessor(pty.commandPaint, statusOrigin)) {
+  if (
+    noninteractive ||
+    (pty.commandPaint && terminalOriginIsPredecessor(pty.commandPaint, statusOrigin))
+  ) {
     record.lastAgentStatus = null
   }
   let blocked: RuntimeTerminalWaitBlockedReason | null | undefined
   const readBlocked = (): RuntimeTerminalWaitBlockedReason | null => {
+    if (noninteractive) {
+      return null
+    }
     if (blocked !== undefined) {
       return blocked
     }
@@ -194,31 +204,37 @@ export function ptyTuiIdleEvidence(
     record,
     readTailBlockedReason: readBlocked,
     readPositiveBodyEvidence: () =>
-      (!oldTitle &&
+      !noninteractive &&
+      ((!oldTitle &&
         agent !== 'qoder' &&
         agent !== 'qoder-cn' &&
         agent !== 'hermes' &&
         source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
-      isKnownReadyPromptBody(
-        waitText(),
-        agent,
-        readScreen,
-        record.lastOutputAt !== null,
-        actionText.query,
-        scope
-      ),
+        isKnownReadyPromptBody(
+          waitText(),
+          agent,
+          readScreen,
+          record.lastOutputAt !== null,
+          actionText.query,
+          scope
+        )),
     readQuietReadyBodyEvidence: () =>
+      noninteractive ||
       isQuietReadyScreenBody(waitText(), agent, readScreen, actionText.query, scope),
     readAgentRuleVerdict: () =>
-      readAgentRuleVerdict(agent, record, readScreen, waitText, actionText.lowerQuery, scope),
-    readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
+      noninteractive
+        ? null
+        : readAgentRuleVerdict(agent, record, readScreen, waitText, actionText.lowerQuery, scope),
+    readScreenInputVeto: noninteractive
+      ? () => null
+      : screenInputVetoReader(source, agent, pty.ptyId),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
     terminalAgent,
     commandBoundaryPending,
     shellStartup: startup?.kind === 'shell',
-    firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
-    readHookTurn: hookTurnReader(source, agent, pty.ptyId),
+    firstPartyStatus: noninteractive ? null : source.getFirstPartyAgentStatus(pty.ptyId),
+    readHookTurn: noninteractive ? undefined : hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
     // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
     readCommandPainted: () =>

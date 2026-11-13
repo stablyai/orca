@@ -114,6 +114,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         throw new Error('terminal_handle_stale')
       }
       this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+      this.assertTerminalAgentPromptInputSupported(handle)
       if (this.isPtyStopRequested(ptyId)) {
         throw new Error('terminal_not_writable')
       }

@@ -250,6 +250,9 @@ export class RuntimeTerminalIdlePolls {
     entry: IdlePollEntry,
     ptyId: string
   ): Promise<RuntimeTerminalWaitBlockedReason | null> | null {
+    if (this.noninteractive(ptyId)) {
+      return null
+    }
     const screenRead = this.deps.readVisibleScreen(ptyId)
     if (!screenRead) {
       return null
@@ -257,7 +260,7 @@ export class RuntimeTerminalIdlePolls {
     entry.screenReadInFlight = true
     return screenRead
       .then((screen) => {
-        if (!screen) {
+        if (!screen || this.noninteractive(ptyId)) {
           return null
         }
         if (typeof screen === 'string') {
@@ -272,6 +275,11 @@ export class RuntimeTerminalIdlePolls {
       .finally(() => {
         entry.screenReadInFlight = false
       })
+  }
+
+  private noninteractive(ptyId: string): boolean {
+    const observed = this.deps.startupObservation?.read(ptyId)
+    return observed?.kind === 'agent' && observed.inputMode === 'noninteractive'
   }
 
   private settle(entry: IdlePollEntry, result: RuntimeTerminalWait): void {

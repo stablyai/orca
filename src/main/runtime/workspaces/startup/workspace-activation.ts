@@ -227,6 +227,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       signal
     }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeTerminalWait> {
+    const deadline = performance.now() + timeoutMs
     return waitForTerminalComposer(
       {
         handle,
@@ -235,12 +236,32 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         waiters: this.terminalWaiters,
         signal
       },
-      (target, stop) =>
-        waitForFreshComposerOnPty(this.freshComposerPtyHost(), target.ptyId, agent, timeoutMs, {
-          requireComposerMarker,
-          stopOnDialog,
-          stop
+      async (target, stop) => {
+        const ready = await waitForFreshComposerOnPty(
+          this.freshComposerPtyHost(),
+          target.ptyId,
+          agent,
+          timeoutMs,
+          {
+            requireComposerMarker,
+            stopOnDialog,
+            stop
+          }
+        )
+        if (
+          ready ||
+          stop.signal.aborted ||
+          this.terminalAgentInputMode(handle) !== 'noninteractive'
+        ) {
+          return ready
+        }
+        await this.waitForTerminal(handle, {
+          condition: 'tui-idle',
+          timeoutMs: Math.max(1, deadline - performance.now()),
+          signal: stop.signal
         })
+        return target.ptyId
+      }
     )
   }
 

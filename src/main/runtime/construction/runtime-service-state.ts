@@ -153,6 +153,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
+    getOutputSequence: (ptyId) => this.ptyOutputSequenceById.get(ptyId),
     getController: () => this.ptyController,
     getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
