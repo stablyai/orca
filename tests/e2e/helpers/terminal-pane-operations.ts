@@ -101,8 +101,11 @@ export async function waitForActiveTerminalManager(page: Page, timeoutMs = 30_00
             tabId,
             managerPresent: Boolean(manager),
             paneCount: manager?.getPanes?.().length ?? 0,
-            rendererError: report?.details.errorMessage,
-            componentStack: report?.details.componentStack
+            reportId: report?.id,
+            surface: report?.details.surface,
+            rendererError: report?.details.error_message,
+            errorStack: report?.details.error_stack,
+            componentStack: report?.details.component_stack
           }
         }, tabId)
         .catch(() => null)
