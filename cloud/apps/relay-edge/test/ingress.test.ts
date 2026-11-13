@@ -160,6 +160,19 @@ describe('token-mode ingress (a load balancer that cannot sign)', () => {
     }
   })
 
+  it('director admin calls are matched before the range rule: no 403 even from inside the ranges', async () => {
+    const h = harness({ ...tokenEnv, EDGE_BACKEND: 'object', ADMIN_SIGNING_KEY: 'k'.repeat(40), ADMIN_ISSUER: 'https://director.test.invalid' })
+    for (const op of ['assign', 'export', 'erase']) {
+      const response = await worker.fetch(new Request(`https://edge.relay.example/__admin/${op}`, { method: 'POST', headers: { 'cf-connecting-ip': '34.96.3.9' }, body: '{}' }), h.env)
+      // Unsigned, so the admin check refuses it (401); the range rule never ran.
+      expect(response.status).toBe(401)
+    }
+    expect(h.metrics.filter((m) => m.startsWith('ingress_rejected'))).toEqual([])
+    // Everything else from the ranges still meets the rule.
+    const spike = await worker.fetch(new Request(`https://edge.relay.example/__spike/host/${HOST}`, { headers: { 'cf-connecting-ip': '34.96.3.9' } }), h.env)
+    expect(spike.status).toBe(403)
+  })
+
   it('outside the front door ranges, a token header is ignored and the request is direct, as today', async () => {
     const today = await harness().send()
     for (const ip of ['203.0.113.1', '34.96.16.1']) {

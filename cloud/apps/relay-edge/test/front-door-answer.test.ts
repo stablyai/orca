@@ -9,6 +9,8 @@ describe('G4 answer classification', () => {
     expect(classify(a(101, {}))).toBe('upgraded')
     expect(classify(a(426))).toBe('edge')
     expect(classify(a(401))).toBe('edge')
+    expect(classify(a(403))).toBe('edge')
+    expect(classify(a(403, cf, '<html>blocked</html>'))).toBe('other')
     expect(classify(a(200, cf, '{"ok":true}'))).toBe('edge')
     expect(classify(a(429))).toBe('edge-preauth-limiter')
     expect(classify(a(403, { ...cf, 'cf-mitigated': 'challenge' }, '<html>'))).toBe('cf-zone')

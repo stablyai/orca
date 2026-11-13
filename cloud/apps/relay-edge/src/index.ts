@@ -91,6 +91,10 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) return reject(400)
+    // Director admin calls are signature-authenticated and never go through a front door: matched
+    // before the ingress rules, so an egress overlap with a front door's ranges cannot 403 them.
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
+    if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
     // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
     // anything else, including a header that fails to verify, is treated as absent.
     const ingress = await readIngress(edgeConfig(env), request)
@@ -101,8 +105,6 @@ export default {
       return reject(403)
     }
     if (!ingress && request.headers.has(INGRESS_HEADER)) metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request))
-    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
-    if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
