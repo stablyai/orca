@@ -6,8 +6,7 @@
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",
-    "../src/shared/**/*.spec.tsx",
-    "../src/renderer/src/store/github/pull-requests/github-pr-hosted-receipt-loop.test.ts"
+    "../src/shared/**/*.spec.tsx"
   ],
   "include": [
     "../src/renderer/src/env.d.ts",

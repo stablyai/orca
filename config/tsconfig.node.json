@@ -39,8 +39,7 @@
     "../src/types/**/*"
   ],
   "exclude": [
-    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
-    "../src/main/runtime/integrations/reviews/runtime-hosted-pr-snapshots.perf.test.ts"
+    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts"
   ],
   "compilerOptions": {
     "composite": true,
