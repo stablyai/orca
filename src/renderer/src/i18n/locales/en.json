@@ -17314,7 +17314,10 @@
           "close": "Close",
           "copiedPng": "Copied as PNG",
           "copyPngFailed": "Could not copy image",
-          "copyPng": "Copy as PNG"
+          "copyPng": "Copy as PNG",
+          "position": "{{current}} of {{total}}",
+          "previous": "Previous image",
+          "next": "Next image"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",

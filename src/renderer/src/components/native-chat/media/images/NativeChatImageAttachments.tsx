@@ -41,22 +41,18 @@ function transcriptImageIdentity(
 // Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
 const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
-function TranscriptImagePreview({
-  block,
-  runtimeContext
-}: {
-  block: Extract<NativeChatBlock, { type: 'image-ref' }>
-  runtimeContext: RuntimeFileOperationArgs | null | undefined
-}): React.JSX.Element {
-  const t = useTranslate()
-  const [open, setOpen] = useState(false)
-  const [near, setNear] = useState(false)
-  const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
+type ImageRefBlock = Extract<NativeChatBlock, { type: 'image-ref' }>
+
+const NO_IMAGE: ImageRefBlock = { type: 'image-ref' }
+
+function useTranscriptImageSrc(
+  block: ImageRefBlock,
+  runtimeContext: RuntimeFileOperationArgs | null | undefined,
+  leaseActive: boolean
+): { displaySrc: string | undefined; previewable: boolean } {
   const source = block.url?.trim() || block.path
   const filePath = block.path ?? source ?? ''
   const external = renderableImageSource(source)
-  const leaseActive = near || open
   const localSrc = useLocalImageSrc(
     leaseActive && !external && runtimeContext !== undefined ? source : undefined,
     filePath,
@@ -64,11 +60,14 @@ function TranscriptImagePreview({
     runtimeContext,
     TRANSCRIPT_IMAGE_ACCESS
   )
-  const displaySrc = external && leaseActive ? source : localSrc
-  const copySrc = copyableNativeChatImageSrc(displaySrc)
-  const label = nativeChatImageLabel(block)
-  const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
-  const fallback = (
+  return {
+    displaySrc: (external && leaseActive ? source : localSrc) ?? undefined,
+    previewable: Boolean(source) && (external || runtimeContext !== null)
+  }
+}
+
+function TranscriptImageFallback({ label }: { label: string }): React.JSX.Element {
+  return (
     <div
       className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-chat-canvas px-2 py-1 text-xs text-chat-foreground-faint"
       title={label}
@@ -77,6 +76,25 @@ function TranscriptImagePreview({
       <span className="truncate">{label}</span>
     </div>
   )
+}
+
+function TranscriptImagePreview({
+  block,
+  runtimeContext,
+  onOpen
+}: {
+  block: ImageRefBlock
+  runtimeContext: RuntimeFileOperationArgs | null | undefined
+  onOpen: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [near, setNear] = useState(false)
+  const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const { displaySrc, previewable } = useTranscriptImageSrc(block, runtimeContext, near)
+  const copySrc = copyableNativeChatImageSrc(displaySrc)
+  const label = nativeChatImageLabel(block)
+  const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
 
   useEffect(() => {
     const element = ref.current
@@ -86,12 +104,14 @@ function TranscriptImagePreview({
     return observeTranscriptVisibility(element, setNear)
   }, [])
 
-  const previewable = Boolean(source) && (external || runtimeContext !== null)
-  const showPreview =
-    previewable && leaseActive && Boolean(displaySrc) && displaySrc !== thumbnailErrorSrc
+  const showPreview = previewable && near && Boolean(displaySrc) && displaySrc !== thumbnailErrorSrc
 
   if (!previewable) {
-    return <div ref={ref}>{fallback}</div>
+    return (
+      <div ref={ref}>
+        <TranscriptImageFallback label={label} />
+      </div>
+    )
   }
   // Offscreen or loading keeps the thumbnail's square so scrolling never rewraps the row.
   if (!showPreview) {
@@ -113,7 +133,7 @@ function TranscriptImagePreview({
         aria-label={`${viewImageLabel}: ${label}`}
         title={label}
         data-native-chat-copy-image-src={copySrc}
-        onClick={() => setOpen(true)}
+        onClick={onOpen}
         className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <img
@@ -124,17 +144,48 @@ function TranscriptImagePreview({
           className="size-full object-cover"
         />
       </button>
-      <PanZoomImageDialog
-        open={open}
-        onOpenChange={setOpen}
-        src={displaySrc}
-        title={label}
-        showTitle
-        onInteractOutside={keepPreviewOpenForChatMenu}
-        data-native-chat-copy-image-src={copySrc}
-        fallback={fallback}
-      />
     </div>
+  )
+}
+
+/** One viewer for a row of thumbnails, so the row can be stepped through without closing. */
+function TranscriptImageGallery({
+  images,
+  openIndex,
+  onOpenIndexChange,
+  runtimeContext
+}: {
+  images: ImageRefBlock[]
+  openIndex: number | null
+  onOpenIndexChange: (index: number | null) => void
+  runtimeContext: RuntimeFileOperationArgs | null | undefined
+}): React.JSX.Element | null {
+  const position = openIndex === null ? 0 : Math.min(openIndex, images.length - 1)
+  const block = images[position]
+  const open = openIndex !== null && block !== undefined
+  const { displaySrc } = useTranscriptImageSrc(block ?? NO_IMAGE, runtimeContext, open)
+  if (!block) {
+    return null
+  }
+  const label = nativeChatImageLabel(block)
+  const count = images.length
+  return (
+    <PanZoomImageDialog
+      open={open}
+      onOpenChange={(next) => onOpenIndexChange(next ? position : null)}
+      src={displaySrc}
+      title={label}
+      showTitle
+      onInteractOutside={keepPreviewOpenForChatMenu}
+      data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
+      fallback={<TranscriptImageFallback label={label} />}
+      navigation={{
+        position,
+        count,
+        onPrevious: () => onOpenIndexChange((position - 1 + count) % count),
+        onNext: () => onOpenIndexChange((position + 1) % count)
+      }}
+    />
   )
 }
 
@@ -151,6 +202,7 @@ export function NativeChatImageAttachments({
   className?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
   const images = blocks.filter((block) => block.type === 'image-ref')
   if (images.length === 0) {
     return null
@@ -190,7 +242,7 @@ export function NativeChatImageAttachments({
   }
   return (
     <div className={cn('mb-2 flex flex-wrap gap-1.5', className)}>
-      {images.map((image) => {
+      {images.map((image, index) => {
         const label =
           image.alt ??
           image.path ??
@@ -205,9 +257,16 @@ export function NativeChatImageAttachments({
             key={`${imageKeyBase}-${identity}-${occurrence}`}
             block={image}
             runtimeContext={runtimeContext}
+            onOpen={() => setOpenIndex(index)}
           />
         )
       })}
+      <TranscriptImageGallery
+        images={images}
+        openIndex={openIndex}
+        onOpenIndexChange={setOpenIndex}
+        runtimeContext={runtimeContext}
+      />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,14 @@ import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from './use-pan-zoom-viewport'
 import { useViewerZoomCommands } from './use-viewer-zoom-commands'
 
+/** Steps through a set of images in one dialog, wrapping at both ends; position is 0-based. */
+export type PanZoomImageNavigation = {
+  position: number
+  count: number
+  onPrevious: () => void
+  onNext: () => void
+}
+
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
   'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size'
@@ -34,6 +42,7 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
+  navigation?: PanZoomImageNavigation
 }
 
 async function copyImageAsPng(
@@ -82,7 +91,9 @@ export function PanZoomImageDialog({
   background,
   fallback,
   toolbarActions,
+  navigation,
   onCloseAutoFocus,
+  onKeyDown,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -93,6 +104,18 @@ export function PanZoomImageDialog({
         {...contentProps}
         showCloseButton={false}
         className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
+        onKeyDown={(event) => {
+          onKeyDown?.(event)
+          const plainKey = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+          if (event.defaultPrevented || !navigation || !plainKey) {
+            return
+          }
+          const step = navigationStep(event.key, navigation)
+          if (step) {
+            event.preventDefault()
+            step()
+          }
+        }}
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -120,8 +143,9 @@ export function PanZoomImageDialog({
         }}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        {/* Mount with dialog content so each opening starts fitted. */}
+        {/* Mount with dialog content, and again per image, so each one starts fitted. */}
         <PanZoomImageCanvas
+          key={navigation ? navigation.position : undefined}
           src={src}
           size={size}
           title={title}
@@ -129,11 +153,25 @@ export function PanZoomImageDialog({
           background={background}
           fallback={fallback}
           toolbarActions={toolbarActions}
+          navigation={navigation}
           onClose={() => onOpenChange(false)}
         />
       </DialogContent>
     </Dialog>
   )
+}
+
+function navigationStep(key: string, navigation: PanZoomImageNavigation): (() => void) | null {
+  if (navigation.count < 2) {
+    return null
+  }
+  if (key === 'ArrowLeft') {
+    return navigation.onPrevious
+  }
+  if (key === 'ArrowRight') {
+    return navigation.onNext
+  }
+  return null
 }
 
 function PanZoomImageCanvas({
@@ -144,10 +182,18 @@ function PanZoomImageCanvas({
   background,
   fallback,
   toolbarActions,
+  navigation,
   onClose
 }: Pick<
   PanZoomImageDialogProps,
-  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
+  | 'src'
+  | 'size'
+  | 'title'
+  | 'showTitle'
+  | 'background'
+  | 'fallback'
+  | 'toolbarActions'
+  | 'navigation'
 > & { onClose: () => void }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -188,6 +234,18 @@ function PanZoomImageCanvas({
             </span>
           ) : null}
           <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
+            {navigation && navigation.count > 1 ? (
+              <span className="px-1.5 text-sm tabular-nums text-muted-foreground">
+                {t(
+                  'auto.components.editor.PanZoomImageDialog.position',
+                  '{{current}} of {{total}}',
+                  {
+                    current: navigation.position + 1,
+                    total: navigation.count
+                  }
+                )}
+              </span>
+            ) : null}
             <ToolbarButton
               label={t('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
               disabled={!panZoom.canZoomOut}
@@ -227,6 +285,30 @@ function PanZoomImageCanvas({
             </ToolbarButton>
           </div>
         </div>
+        {navigation && navigation.count > 1 ? (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+              <div className="pointer-events-auto rounded-md border border-border bg-background p-0.5 shadow-xs">
+                <ToolbarButton
+                  label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
+                  onClick={navigation.onPrevious}
+                >
+                  <ChevronLeft />
+                </ToolbarButton>
+              </div>
+            </div>
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <div className="pointer-events-auto rounded-md border border-border bg-background p-0.5 shadow-xs">
+                <ToolbarButton
+                  label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
+                  onClick={navigation.onNext}
+                >
+                  <ChevronRight />
+                </ToolbarButton>
+              </div>
+            </div>
+          </>
+        ) : null}
       </TooltipProvider>
     </>
   )
