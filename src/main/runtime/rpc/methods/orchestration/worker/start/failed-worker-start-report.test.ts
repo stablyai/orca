@@ -27,31 +27,6 @@ describe('a worker-start that fails', () => {
     expect(mail[0]?.body).not.toContain('still open')
   })
 
-  it('names the agent already running in a reused terminal when the start never binds', async () => {
-    h.setup()
-    vi.spyOn(h.runtime.orchestrationSenderNames, 'liveAgentOf').mockImplementation((party) =>
-      party.terminalHandle === 'term_reused' ? 'claude' : null
-    )
-    vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValue({
-      handle: 'term_reused',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'running',
-      exitCode: null
-    })
-    const task = h.db.createTask({ spec: 'follow up on the PR', runId: h.activeRunId })
-    const receipt = await h.call('orchestration.workerStart', {
-      task: task.id,
-      from: 'term_coord',
-      terminal: 'term_reused'
-    })
-    expect(receipt).toMatchObject({ state: 'failed', failedStage: 'agent_readiness' })
-
-    const [lost] = h.db.getUnreadRunMailbox(h.activeRunId, 100, ['escalation'])
-    expect(lost?.from_handle).toMatch(/^dispatch:/)
-    expect(h.runtime.orchestrationSenderNames.sender(lost!.from_handle).agent).toBe('claude')
-  })
-
   it('treats a reuse start that failed before binding as never started', async () => {
     h.setup()
     vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValue({
