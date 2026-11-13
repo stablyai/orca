@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
-import { currentSoftKeyboardHeight } from '../platform/keyboard-occlusion'
+import { currentSoftKeyboardHeight } from '../platform/keyboard/keyboard-occlusion'
 import {
   clearTerminalLiveInputFocusTimer,
   focusTerminalLiveInputTarget,

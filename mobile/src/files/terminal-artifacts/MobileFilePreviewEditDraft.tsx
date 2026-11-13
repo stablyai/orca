@@ -4,9 +4,9 @@ import {
   useDocumentEditDraft,
   type DocumentEditDraftOffer
 } from '../../drafts/use-document-edit-draft'
-import { useClipboardWriter } from '../../platform/clipboard'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { spacing } from '../../theme/mobile-theme'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { MobileFilePreviewSource } from '../preview/mobile-file-preview-request'

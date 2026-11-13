@@ -1,4 +1,4 @@
-import { useShellStorage } from '../platform/shell-storage'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'

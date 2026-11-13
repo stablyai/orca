@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
-vi.mock('../platform/live-input-composing-range', () => ({
+vi.mock('../platform/text-input/live-input-composing-range', () => ({
   reportedLiveInputComposing: (isComposing: boolean | undefined) => isComposing
 }))
 

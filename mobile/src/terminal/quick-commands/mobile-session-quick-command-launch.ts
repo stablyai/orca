@@ -1,6 +1,6 @@
 import { buildMobileQuickCommandLaunch, type MobileQuickCommandLaunch } from '../quick-commands'
 
-import { triggerError } from '../../platform/haptics'
+import { triggerError } from '../../platform/haptics/haptics'
 import { translate } from '../../i18n/mobile-i18n'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import type { MobileNewTabAgentOption } from '../../session/agent-launch/mobile-new-tab-agent-options'

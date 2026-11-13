@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { Pressable, Text, View } from 'react-native'
 import { Edit3, Moon, Pin, PinOff } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'

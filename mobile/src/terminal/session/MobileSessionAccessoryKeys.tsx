@@ -7,7 +7,7 @@ import {
   Plus,
   Smartphone
 } from 'lucide-react-native'
-import { triggerMediumImpact } from '../../platform/haptics'
+import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal-accessory-repeat'
 import { getVisibleTerminalAccessoryKeys } from '../terminal-accessory-layout'
@@ -18,7 +18,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors } from '../../theme/mobile-theme'
 import { styles as sessionStyles } from '../../session/mobile-session-styles'
-import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
 import {

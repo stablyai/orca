@@ -1,6 +1,6 @@
 import type { RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-write-operations'
-import { triggerSuccess, triggerError } from '../../platform/haptics'
+import { triggerSuccess, triggerError } from '../../platform/haptics/haptics'
 import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
 import { createMobileSessionTerminalCreateFeedback } from './mobile-session-terminal-create-feedback'
 import { buildTerminalSendParams } from '../terminal-send-request'
