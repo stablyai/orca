@@ -23,7 +23,8 @@ async function startLegacyHelper(
   filename: string,
   signal: AbortSignal,
   check: boolean,
-  spawn: PipedProcessSpawner = spawnProcess
+  spawn: PipedProcessSpawner = spawnProcess,
+  track?: (exited: Promise<void>) => void
 ) {
   signal.throwIfAborted()
   const child = spawn({
@@ -67,6 +68,7 @@ async function startLegacyHelper(
     })
   })
   void done.catch(() => {})
+  track?.(done)
   const force = () => {
     if (!exited) {
       void signalProcessTree(child, 'SIGKILL')
@@ -144,17 +146,26 @@ export function acquireJournalLegacyFileLock(
   return startLegacyHelper(filename, signal, false, spawn)
 }
 
-export async function checkJournalLegacyFileLock(
-  filename: string,
-  signal: AbortSignal
-): Promise<void> {
-  if (!existsSync(journalLegacyFileLockPath())) {
-    throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
+export function createJournalLegacyFileEligibility() {
+  let pending: Promise<void> | undefined
+  return {
+    present: requireJournalLegacyFileLock,
+    async check(filename: string, signal: AbortSignal): Promise<void> {
+      if (pending) {
+        throw new Error('legacy journal eligibility pending')
+      }
+      await startLegacyHelper(filename, signal, true, spawnProcess, (exited) => {
+        pending = exited
+        const clear = () => {
+          pending = undefined
+        }
+        void exited.then(clear, clear)
+      })
+    }
   }
-  await startLegacyHelper(filename, signal, true)
 }
 
-export function requireJournalLegacyFileLock(): void {
+function requireJournalLegacyFileLock(): void {
   if (!existsSync(journalLegacyFileLockPath())) {
     throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
   }

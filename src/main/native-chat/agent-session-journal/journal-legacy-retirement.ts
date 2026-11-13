@@ -19,8 +19,7 @@ import {
 import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
-  checkJournalLegacyFileLock,
-  requireJournalLegacyFileLock
+  createJournalLegacyFileEligibility
 } from './journal-legacy-file-lock'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -58,10 +57,7 @@ export class JournalLegacyRetirement {
     private readonly ownsProfile = () => ownsOrcadProfileDirectory(directory),
     private readonly lock = acquireJournalLegacyFileLock,
     private readonly rest: (started: number) => Promise<void> = async () => {},
-    private readonly eligibility = {
-      check: checkJournalLegacyFileLock,
-      present: requireJournalLegacyFileLock
-    }
+    private readonly eligibility = createJournalLegacyFileEligibility()
   ) {
     this.filename = journalDatabasePath(directory)
   }

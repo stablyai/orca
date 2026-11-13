@@ -6,7 +6,7 @@ import { spawnProcess } from '@orca/process-host'
 import { afterEach, expect, it } from 'vitest'
 import {
   acquireJournalLegacyFileLock,
-  checkJournalLegacyFileLock,
+  createJournalLegacyFileEligibility,
   journalLegacyFileLockPath
 } from './journal-legacy-file-lock'
 import { openJournalDatabase } from './database/journal-database'
@@ -53,7 +53,7 @@ it.skipIf(!process.env.CI)(
       reader.once('error', reject)
     })
     const signal = new AbortController()
-    await checkJournalLegacyFileLock(filename, signal.signal)
+    await createJournalLegacyFileEligibility().check(filename, signal.signal)
     await expect(acquireJournalLegacyFileLock(filename, signal.signal)).rejects.toThrow()
     reader.stdin.end()
     await exited

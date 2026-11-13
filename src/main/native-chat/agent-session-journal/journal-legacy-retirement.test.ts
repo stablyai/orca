@@ -12,6 +12,9 @@ import {
 } from 'node:fs'
 import { join, basename } from 'node:path'
 import { tmpdir } from 'node:os'
+import { ChildProcess } from 'node:child_process'
+import { PassThrough } from 'node:stream'
+import { spawnProcess } from '@orca/process-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { openJournalDatabase } from './database/journal-database'
@@ -28,7 +31,10 @@ import {
 import { message } from './journal-sql-message.test-fixture'
 import { journalDatabasePath } from './database/journal-host-database'
 import { JournalSqlBatch } from './journal-sql-batch'
-import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
+import {
+  acquireJournalLegacyFileLock,
+  createJournalLegacyFileEligibility
+} from './journal-legacy-file-lock'
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import {
   advanceLegacyRetirementClock,
@@ -43,8 +49,11 @@ import { prepareJournalDomainImport } from './journal-domain-import'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 
+vi.mock('@orca/process-host', { spy: true })
+
 const cleanup: (() => void)[] = []
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   for (const close of cleanup.splice(0).toReversed()) {
     close()
@@ -564,5 +573,70 @@ it('retires in the same owner after a missing helper is restored', async () => {
   test.arm()
   await test.retirement.run()
   expect(test.errors).toHaveLength(1)
+  expect(existsSync(test.filename)).toBe(false)
+})
+
+it('keeps eligibility pending until a termination-resistant check exits, then retires', async () => {
+  let now = 0
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
+  const test = await profile(undefined, {
+    ...createJournalLegacyFileEligibility(),
+    present: () => {}
+  })
+  const proof = vi.spyOn(test.readers, 'legacyProof')
+  const recycle = vi.spyOn(test.readers, 'recycleSourceReaders')
+  const child = () => {
+    const helper = Object.assign(new ChildProcess(), {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(() => false)
+    })
+    cleanup.push(() => {
+      helper.emit('exit', null, 'SIGKILL')
+      helper.stdin.destroy()
+      helper.stdout.destroy()
+      helper.stderr.destroy()
+    })
+    return helper
+  }
+  const stuck = child()
+  const started = Promise.withResolvers<void>()
+  const spawn = vi.mocked(spawnProcess).mockClear()
+  spawn.mockImplementationOnce(() => {
+    started.resolve()
+    return stuck
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const attempt = test.retirement.run()
+  await started.promise
+  await vi.advanceTimersByTimeAsync(5_250)
+  await attempt
+  vi.useRealTimers()
+  expect(stuck.kill).toHaveBeenCalledWith('SIGKILL')
+  for (now of [60_001, 180_002, 420_003]) {
+    await test.retirement.run()
+    expect(test.errors.at(-1)).toMatchObject({ message: 'legacy journal eligibility pending' })
+  }
+  expect(spawn).toHaveBeenCalledOnce()
+  expect(proof).not.toHaveBeenCalled()
+  expect(recycle).not.toHaveBeenCalled()
+  expect(existsSync(test.filename)).toBe(true)
+
+  stuck.emit('exit', null, 'SIGKILL')
+  const recovered = child()
+  spawn.mockImplementationOnce(() => {
+    queueMicrotask(() => {
+      recovered.stdout.write('eligible\n')
+      recovered.emit('exit', 0)
+    })
+    return recovered
+  })
+  now = 900_004
+  await test.retirement.run()
+  expect(test.receiptState().phase).toBe('grace')
+  test.arm()
+  await test.retirement.run()
+  expect(test.errors).toHaveLength(2)
   expect(existsSync(test.filename)).toBe(false)
 })
