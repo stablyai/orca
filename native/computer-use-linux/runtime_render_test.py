@@ -509,6 +509,7 @@ class RuntimeRenderTest(unittest.TestCase):
             {"name": "window on another workspace", "desktops": ("0", "2"), "error": "another workspace"},
             {"name": "unmapped window on another workspace", "windows": 2, "ack": True, "desktops": ("0", "2"), "error": "another workspace"},
             {"name": "window on every workspace", "desktops": ("0", "-1"), "expected": True, "native": True},
+            {"name": "unreadable window workspace", "desktops": ("0", ""), "error": "another workspace"},
             {"name": "Wayland", "session": "wayland", "error": "unsupported capability"},
             {"name": "search timeout", "timeout": "search"},
             {"name": "activation timeout", "timeout": "windowactivate"},

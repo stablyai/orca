@@ -268,11 +268,12 @@ def refuse_other_desktop(xdotool, window_ids):
     current = desktop("get_desktop")
     if current is None:
         return
-    # Why: activating a window on another desktop switches the user's whole view there.
-    if any(target is not None and target not in ALL_DESKTOPS and target != current
+    # Why: activating a window on another desktop switches the user's whole view there; with desktops in use, an
+    # unreadable one can't be shown safe.
+    if any(target is None or target not in ALL_DESKTOPS and target != current
            for target in (desktop("get_desktop_for_window", window_id) for window_id in window_ids)):
-        raise RuntimeError("background_unavailable: a window of this app is on another workspace, and raising the "
-                           "target could switch the user's view there; nothing was sent. Ask the user to move it to "
+        raise RuntimeError("background_unavailable: a window of this app is on another workspace (or its workspace "
+                           "can't be read), and raising the target could switch the user's view there; nothing was sent. Ask the user to move it to "
                            "the current workspace or switch there themselves")
 
 
