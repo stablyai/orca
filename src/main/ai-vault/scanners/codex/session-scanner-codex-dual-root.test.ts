@@ -341,6 +341,7 @@ async function canonicalCopies(nonUser = false) {
       codexSessionsDir: join(realHome, 'sessions'),
       defaultCodexHomeDir: realHome,
       additionalCodexSessionsDirs: [join(managedHome, 'sessions')],
+      platform: 'darwin' as const,
       limit: 1
     }
   }
