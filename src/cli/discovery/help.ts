@@ -102,6 +102,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (scopedHelp) {
     return scopedHelp
   }
+  if (command === 'terminal close' && flag === 'tab-id') {
+    return '--tab-id <tabId>       Close one stopped terminal tab by its tab id'
+  }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }

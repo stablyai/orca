@@ -95,6 +95,9 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       snapshot,
       observedPtyIds
     })
+    if (options.requireStoppedTerminalTab) {
+      this.assertStoppedTab(worktreeId, tabId, tab, lifecycleClose)
+    }
     if (!snapshot || !tab) {
       return adjudicateAbsentMobileSessionTabClose({
         host: this.getMobileSessionLifecycleCloseHost(),

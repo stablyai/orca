@@ -63,8 +63,14 @@ function session(split: boolean, pinned: boolean): WorkspaceSessionState {
   }
 }
 
-export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolean } = {}) {
+export async function setupMainOwnedWorkspace(
+  opts: { split?: boolean; pinned?: boolean; stopped?: boolean } = {}
+) {
   let current = session(opts.split === true, opts.pinned === true)
+  if (opts.stopped) {
+    current.tabsByWorktree[WORKTREE_ID]![0]!.ptyId = null
+    current.terminalLayoutsByTabId[TAB_ID]!.ptyIdsByLeafId = {}
+  }
   const written = new Set<(hostId: string | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
     current = next
@@ -75,6 +81,8 @@ export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: 
   const store = withDurableRuntimeStore(
     withRuntimePaneAdmission({
       getRepos: () => [REPO],
+      getWorktreeMeta: () => undefined,
+      getAllWorktreeMeta: () => ({}),
       getRepo: (id: string) => (id === REPO.id ? REPO : undefined),
       getWorkspaceSession: () => current,
       getWorkspaceSessionHostIds: () => ['local'],
@@ -108,7 +116,7 @@ export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: 
     getForegroundProcess: async () => null
   })
   await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-  const ptyIds = opts.split ? [PTY_A, PTY_B] : [PTY_A]
+  const ptyIds = opts.stopped ? [] : opts.split ? [PTY_A, PTY_B] : [PTY_A]
   for (const [index, ptyId] of ptyIds.entries()) {
     const leafId = index === 0 ? LEAF_A : LEAF_B
     runtime.registerPty(ptyId, WORKTREE_ID, null, { tabId: TAB_ID, leafId })

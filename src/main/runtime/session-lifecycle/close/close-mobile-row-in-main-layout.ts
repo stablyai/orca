@@ -1,6 +1,11 @@
+import { assertStoppedTerminalTab } from './stopped-terminal-tab-guard'
+import type { MobileSessionLifecycleCloseContext } from './mobile-session-lifecycle-close-adjudication'
 // In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileSessionSnapshotTab
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeSessionTabCloseReason } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import {
@@ -15,6 +20,21 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     ptyIds: readonly string[],
     addressedPtyId: string
   ): Promise<ExplicitCloseStop>
+
+  protected assertStoppedTab(
+    worktreeId: string,
+    tabId: string,
+    tab: RuntimeMobileSessionSnapshotTab | undefined,
+    context: MobileSessionLifecycleCloseContext
+  ): void {
+    assertStoppedTerminalTab(
+      tab,
+      tabId,
+      context,
+      (id) => this.getPtyLivenessVerdict(id),
+      this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId]
+    )
+  }
 
   /** Close parent::leaf as a pane or parent as a tab; null falls back for workspaces/rows main does not own. */
   protected async closeMobileRowInMainLayout(

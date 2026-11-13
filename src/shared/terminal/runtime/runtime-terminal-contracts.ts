@@ -104,6 +104,8 @@ export type RuntimeTerminalListHostScope = RuntimeListingHostScope
 
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
+  /** Saved tabs without a terminal handle, including stopped tabs; only for a selected worktree. */
+  tabs?: { worktreeId: string; tabId: string; title: string | null }[]
   visualLayouts?: RuntimeTerminalVisualLayout[]
   topologyRevisions?: Record<string, number>
   totalCount: number

@@ -34,6 +34,29 @@ describe('terminal send CLI', () => {
     process.exitCode = ORIGINAL_EXIT_CODE
   })
 
+  it.each([
+    { closed: false },
+    { closed: true },
+    { closed: true, refused: true, refusalReason: 'unknown-liveness' }
+  ])('rejects an unconfirmed tab close receipt %j', async (receipt) => {
+    const client = terminalClient(vi.fn().mockResolvedValue({ result: receipt }))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: new Map<string, string | true>([
+        ['tab-id', 'tab-1'],
+        ['worktree', 'id:repo::/workspace']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    expect(process.exitCode).toBe(1)
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'terminal_tab_close_unconfirmed', data: { close: receipt } }
+    })
+  })
+
   it('fails closed when the host downgrades after the prompt capability preflight', async () => {
     const response = {
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 8 } },

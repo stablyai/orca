@@ -1,3 +1,4 @@
+import type { RuntimeMobileSessionTabCloseResult } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalClose,
   RuntimeWorktreeTerminalCloseResult
@@ -8,6 +9,7 @@ import { reportCliError } from '../output/cli-error'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getRequiredWorktreeSelector } from '../workspace-selection/workspace-selector'
+import { getRequiredStringFlag } from '../arguments/flags'
 import { getTerminalHandle } from './terminal-selector'
 import { describeUnconfirmedCloseStop } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
@@ -49,6 +51,47 @@ function terminalCloseAllFailure(
 }
 
 export const terminalCloseHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
+  if (flags.has('tab-id')) {
+    if (flags.has('terminal') || flags.has('tab') || flags.has('all')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--tab-id cannot be combined with --terminal, --tab, or --all'
+      )
+    }
+    const tabId = getRequiredStringFlag(flags, 'tab-id')
+    try {
+      const result = await client.call<RuntimeMobileSessionTabCloseResult>(
+        'terminal.closeTabById',
+        {
+          tabId,
+          worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+        }
+      )
+      const close = result.result
+      if (close.closed !== true || close.retirementConfirmed !== true || close.refused) {
+        reportCliError(
+          new RuntimeClientError(
+            'terminal_tab_close_unconfirmed',
+            `Terminal tab ${tabId} closure was not confirmed.`,
+            { close }
+          ),
+          json
+        )
+        process.exitCode = 1
+        return
+      }
+      printResult(result, json, () => `Closed terminal tab ${tabId}.`)
+      return
+    } catch (error) {
+      if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support closing a stopped terminal tab by id. Update Orca on the host and try again.'
+        )
+      }
+      throw error
+    }
+  }
   if (flags.get('all') === true) {
     if (flags.has('terminal') || flags.get('tab') === true) {
       throw new RuntimeClientError(
