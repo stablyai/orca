@@ -12,7 +12,9 @@ export const ENTITLEMENT_KEYS = [
   'max_concurrent_sandboxes',
   'max_concurrent_sandboxes_per_member',
   'machine_sizes',
-  'overage_allowed'
+  'overage_allowed',
+  // Feature flags (Enterprise): viewing the team audit log. Recording never depends on it.
+  'audit_log'
 ] as const
 export type EntitlementKey = (typeof ENTITLEMENT_KEYS)[number]
 
@@ -27,8 +29,14 @@ export const ENTITLEMENT_REGISTRY: Record<EntitlementKey, { schema: z.ZodType; a
   max_concurrent_sandboxes: { schema: NonNegativeInt, aggregate: 'sum', perSeatAllowed: true },
   max_concurrent_sandboxes_per_member: { schema: NonNegativeInt, aggregate: 'max', perSeatAllowed: false },
   machine_sizes: { schema: z.array(z.enum(MACHINE_SIZES)).max(MACHINE_SIZES.length), aggregate: 'union', perSeatAllowed: false },
-  overage_allowed: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false }
+  overage_allowed: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false },
+  audit_log: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false }
 }
+
+/** Boolean features a plan switches on. They gate a surface, never sandbox starts or usage. */
+export const FEATURE_KEYS = ['audit_log'] as const satisfies readonly EntitlementKey[]
+export type FeatureKey = (typeof FEATURE_KEYS)[number]
+export type FeatureFlags = Record<FeatureKey, boolean>
 
 export function isEntitlementKey(value: string): value is EntitlementKey {
   return (ENTITLEMENT_KEYS as readonly string[]).includes(value)
@@ -62,6 +70,7 @@ export type EffectiveValues = {
   maxConcurrentSandboxesPerMember: number
   machineSizes: MachineSize[]
   overageAllowed: boolean
+  auditLog: boolean
 }
 
 /** Combines grant values by each key's rule. Per-seat values multiply by max(1, seats). */
@@ -69,7 +78,7 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
   const sums: Record<string, number> = {}
   const maxes: Record<string, number> = {}
   const sizes = new Set<MachineSize>()
-  let overage = false
+  const flags: Record<string, boolean> = {}
   for (const grant of grants) {
     const multiplier = grant.perSeat ? Math.max(1, grant.seats ?? 1) : 1
     const definition = ENTITLEMENT_REGISTRY[grant.key]
@@ -86,7 +95,7 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
         }
         break
       case 'or':
-        overage = overage || grant.value === true
+        flags[grant.key] = flags[grant.key] === true || grant.value === true
         break
     }
   }
@@ -98,6 +107,7 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
     maxConcurrentSandboxesPerMember: maxes.max_concurrent_sandboxes_per_member ?? 0,
     // Registry order, so the list is stable whatever order grants came in.
     machineSizes: MACHINE_SIZES.filter((size) => sizes.has(size)),
-    overageAllowed: overage
+    overageAllowed: flags.overage_allowed === true,
+    auditLog: flags.audit_log === true
   }
 }
