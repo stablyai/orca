@@ -188,14 +188,21 @@ function hostStructuredAgentsInput(
   return agents ? { hostStructuredAgents: agents.map((row) => row.agent) } : {}
 }
 
-export function resolveAgentLaunchHost(
+export function resolveAgentLaunchOwner(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace
 ) {
   const owner = workspace.worktreeId
     ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
     : undefined
-  const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
+  return { owner, executionHostId: owner ?? resolveExecutionHostId(store, workspace) }
+}
+
+export function resolveAgentLaunchHost(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+) {
+  const { owner, executionHostId } = resolveAgentLaunchOwner(store, workspace)
   return {
     owner,
     executionHostId,

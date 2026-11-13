@@ -17,6 +17,7 @@ import {
 } from './usage-credential-host'
 import type { UsageHostSettingsModel } from './use-usage-host-settings'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 
 export function MiniMaxAccountsSection({
   host,
@@ -49,7 +50,7 @@ export function MiniMaxAccountsSection({
     void usageSettings.update({ minimaxEndpoint: value })
   }
   return (
-    <div id="accounts-minimax" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.minimax} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

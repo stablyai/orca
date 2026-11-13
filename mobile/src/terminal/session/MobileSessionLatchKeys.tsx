@@ -1,6 +1,6 @@
 import { Pressable, Text, type GestureResponderEvent } from 'react-native'
-import type { TerminalShortcutModifier } from '../terminal-accessory-keys'
-import type { StickyModifiers } from '../terminal-sticky-modifiers'
+import type { TerminalShortcutModifier } from '../key-input/terminal-accessory-keys'
+import type { StickyModifiers } from '../key-input/terminal-sticky-modifiers'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'

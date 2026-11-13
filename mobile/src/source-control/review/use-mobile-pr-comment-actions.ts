@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { GitHubPrRepoSlug } from './github-pr-repo-slug'
 import { useHostMutation } from '../../query/host-mutation'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
   buildAddRootCommentParams,

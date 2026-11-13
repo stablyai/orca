@@ -15,7 +15,7 @@
     },
     {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
-      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission, which is what a browser outside the shell can honestly say."
+      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/audio-capture/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission, which is what a browser outside the shell can honestly say."
     },
     {
       "file": "src/navigation/use-back-claim.web.ts",
@@ -58,15 +58,15 @@
       "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
     },
     {
-      "file": "src/platform/text-input-font-size.web.ts",
+      "file": "src/platform/text-input/text-input-font-size.web.ts",
       "reason": "iOS zooms the page on focus of any text input under 16px and does not zoom back out, which leaves the document at a scale other than 1 for a whole typing session. keyboard-occlusion.web.ts reads a scale other than 1 as 'not a keyboard' on purpose, because geometry cannot separate a zoom from a keyboard, so the commit bar and the note composer would never lift on the platform they were written for. The web file raises the app's 14px body size to that floor; the native file is the body size, so a phone renders exactly what it rendered before. maximum-scale=1 on the viewport meta was the other fix and was rejected: Android WebView honours it and it would take deliberate pinch zoom away from low-vision users."
     },
     {
-      "file": "src/platform/text-input-content-height.web.ts",
+      "file": "src/platform/text-input/text-input-content-height.web.ts",
       "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the chat composer grows with its draft, placeholder, and dictation preview; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
     },
     {
-      "file": "src/platform/haptics.web.ts",
+      "file": "src/platform/haptics/haptics.web.ts",
       "reason": "expo-haptics has a web build that fakes an iOS haptic by appending a hidden <label><input type=\"checkbox\" switch> to document.head, clicking it and removing it, once per call. C1.9 traced a long press that never fired on the worktree list to that stray click, and the file explorer calls triggerSelection on every row tap. So the page asks the shell for the device's own haptic instead, over the native.haptics.trigger notify behind the haptics grant: 70 to 77 bytes per frame, no reply, and haptics.ts's own Platform.OS split on the other side. A notify rather than a verb because nothing is owed back and a reply would spend a slot in the same in-flight window a forwarded request does, at 90 call sites (rulings-ota-c7.md ruling 30). The five exports are the five kinds the frame admits; mobile-web-app-haptics-seam.test.mjs is the fence."
     },
     {
@@ -82,15 +82,15 @@
       "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
     },
     {
-      "file": "src/platform/external-link.web.ts",
+      "file": "src/platform/external-links/external-link.web.ts",
       "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
     },
     {
-      "file": "src/platform/keyboard-occlusion.web.ts",
+      "file": "src/platform/keyboard/keyboard-occlusion.web.ts",
       "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document — the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
     },
     {
-      "file": "src/platform/clipboard.web.ts",
+      "file": "src/platform/clipboard/clipboard.web.ts",
       "reason": "expo-clipboard resolves to navigator.clipboard on the web, which needs a secure context; the iOS shell serves the page from the custom scheme orca-mobile-web://<session>/ while Android serves https, so that path would work on one platform and silently not on the other. This one asks the shell through the native.clipboard.write and native.clipboard.read verbs, where the pasteboard is the device's, and rejects when the route was not granted one so the caller's own catch puts that on screen. An image is the same pasteboard reached a different way: native.clipboard.read admits only text, and a 24 MiB base64 image cannot cross an 8 MiB reply cap, so readImage runs native.media.pick with source 'clipboard', reads the staged bytes back a chunk at a time and gives the handle back. contents answers per grant without probing, because the shell serves no 'is there text' verb and reading to find out would raise iOS's paste-consent prompt on every mount."
     },
     {
@@ -142,35 +142,31 @@
       "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll. It also measures the shown text to grow the textarea, whose default two rows do not grow with content, and caps it to the space above the keyboard."
     },
     {
-      "file": "src/terminal/TerminalWebView.web.tsx",
+      "file": "src/terminal/webview/TerminalWebView.web.tsx",
       "reason": "react-native-webview has no web build that renders anything: on the page it paints the line \"React Native WebView does not support this platform\" where the terminal was, which is a red line and no terminal rather than a crash. This file mounts the same document the WebView loads — xterm imported from @xterm/xterm with the unicode11 and webgl addons, and the document's own modules imported in the order the generator emits them — behind the identical TerminalWebViewProps and TerminalWebViewHandle, so nothing above the contract can tell the two apart."
     },
     {
-      "file": "src/terminal/terminal-webview-html.web.ts",
-      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else."
-    },
-    {
-      "file": "src/platform/dictation-capture.web.ts",
+      "file": "src/platform/audio-capture/dictation-capture.web.ts",
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
     },
     {
-      "file": "src/platform/on-device-speech.web.ts",
+      "file": "src/platform/speech/on-device-speech.web.ts",
       "reason": "Dictation's on-device recognizer. Native screens never dictate on the phone, so the native file answers null; the session page asks the shell over native.speech.act, whose recognizer hears the microphone the shell already captures, and answers null on shells that do not grant the verb so dictation goes to the computer as before."
     },
     {
-      "file": "src/platform/on-device-speech-locale.web.ts",
+      "file": "src/platform/speech/on-device-speech-locale.web.ts",
       "reason": "The language the phone's recognizer is asked about. The native file reads the device's language list through expo-localization, which the page does not load; the WebView's navigator.languages is that same list, so the shell's Voice settings and the session page ask about one locale."
     },
     {
-      "file": "src/platform/pdf-opener.web.ts",
+      "file": "src/platform/pdf-viewing/pdf-opener.web.ts",
       "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
     {
-      "file": "src/platform/image-actions.web.ts",
+      "file": "src/platform/image-actions/image-actions.web.ts",
       "reason": "The page cannot reach the clipboard, Photos or the share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share. This one stages a base64 image to the shell a chunk at a time over native.image.act, because a chat image passes the 640 KiB frame cap, then asks the shell to copy, save or share it; web images go by URL because the page cannot read cross-origin pixels. Shells that do not grant the verb get null, so the viewer offers no actions."
     },
     {
-      "file": "src/platform/media-picker.web.ts",
+      "file": "src/platform/media-picking/media-picker.web.ts",
       "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
     },
     {
@@ -190,15 +186,15 @@
       "reason": "Natively there is no `init` and the shell layout decides who draws the host sidebar. Inside the page the only answer is the `ownsHostArea` init fact, never the page's own width, because a detail-route page on a wide iPad sits beside the shell's sidebar."
     },
     {
-      "file": "src/terminal/terminal-settings-scroll-lock.web.ts",
+      "file": "src/terminal/preferences/terminal-settings-scroll-lock.web.ts",
       "reason": "setNativeProps does not exist on React Native Web, where an Animated.ScrollView ref is the DOM node, so the drag's scroll lock threw instead of landing; this one sets overflowY inline and clears it again, which RN Web's own class then takes back over."
     },
     {
-      "file": "src/terminal/terminal-live-input-text-write.web.ts",
+      "file": "src/terminal/live-input/terminal-live-input-text-write.web.ts",
       "reason": "setNativeProps does not exist on React Native Web, where a TextInput ref is the DOM node, so the native write threw out of the session route's mount effect and faulted the page instead of clearing the field; this one sets value on the <input> or <textarea> RN Web rendered."
     },
     {
-      "file": "src/terminal/terminal-text-field-submit-binding.web.ts",
+      "file": "src/terminal/live-input/terminal-text-field-submit-binding.web.ts",
       "reason": "react-native-web's keydown handler withholds onSubmitEditing whenever the Enter keydown reports a composition — nativeEvent.isComposing, or the Android keyCode 229 that stands for it — which is a soft keyboard's normal state mid-word, so Enter on the page neither sent the line nor cleared the field while native Android's editor action fired as it always does. Both terminal fields reach their send through onSubmitEditing alone and both are bound here: the live input's carriage return, and the buffered command field's draft. The native file binds nothing, because that editor action needs no help; this one listens for beforeinput and acts on insertLineBreak and insertParagraph, the browser's own end-of-line signals. react-native-web calls preventDefault on every keydown it does submit on, so those events exist only in the cases it dropped and never produce a second carriage return; an IME still choosing a candidate reports insertCompositionText and is left alone."
     },
     {
@@ -234,7 +230,7 @@
       "reason": "React Native Web has no native animation driver, so every working ring and live tool-run pulse ran as its own JS loop writing a style each frame on the page's main thread, which is busiest while a reply streams. The native file keeps the native-driver loops; this one runs the same spin and pulse as Web Animations on the element, which the compositor plays, with one shared phase like desktop's spinner."
     },
     {
-      "file": "src/platform/shell-storage.web.ts",
+      "file": "src/platform/shell-storage/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     },
     {
@@ -246,11 +242,11 @@
       "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
     },
     {
-      "file": "src/platform/page-box.web.ts",
+      "file": "src/platform/view-measurement/page-box.web.ts",
       "reason": "RNW's measure() is asynchronous and drops its callback for a detached node, so a held mic released over the dictation cancel button would never stop. The page reads the DOM box synchronously; native keeps measure()."
     },
     {
-      "file": "src/platform/accessibility-announcer.web.ts",
+      "file": "src/platform/accessibility/accessibility-announcer.web.ts",
       "reason": "React Native Web's announceForAccessibility is a no-op and VoiceOver in the shell's WebView doesn't read the page's live regions, so the page asks the shell to announce through native.a11y.announce; without it, the caller keeps its live region."
     }
   ]

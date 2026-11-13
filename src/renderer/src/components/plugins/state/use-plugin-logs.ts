@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
-import type { PluginHostListEntry, PluginHostLogLine } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginHostLogLine } from '../../../../../preload/api/plugin-host-api'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type PluginLogsState = {

@@ -1,7 +1,10 @@
 import { useEffect, useCallback } from 'react'
-import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../../platform/keyboard-occlusion'
-import { useTerminalViewportRefit } from '../terminal-viewport-refit'
-import { removeCustomKey, type CustomKey } from '../terminal-custom-keys'
+import {
+  currentSoftKeyboardHeight,
+  subscribeSoftKeyboard
+} from '../../platform/keyboard/keyboard-occlusion'
+import { useTerminalViewportRefit } from '../viewport/terminal-viewport-refit'
+import { removeCustomKey, type CustomKey } from '../key-input/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { writeLastVisitedWorktree } from '../../worktree/last-visited-worktree-by-host'
 import type { MobileSessionLifecycleModel } from '../../session/use-mobile-session-lifecycle'

@@ -10,7 +10,7 @@ import {
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
 import { agentInlineImageMimeType } from '../../../../shared/agent-inline-image-types'
-import { detectImageFileSignature } from '../../../media/image-file-signature'
+import { detectImageFileSignature } from '../../../../shared/image-file-signature'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionFact

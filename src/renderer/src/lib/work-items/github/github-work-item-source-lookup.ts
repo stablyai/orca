@@ -2,16 +2,16 @@ import {
   capturePRCheckContract,
   type PRCheckContract
 } from '../../source-control/checks/pr-check-observation-contract'
-import { acceptPRCheckObservation } from '../../../../../shared/github/complete-pr-check-owner'
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
+import { acceptPRCheckObservation } from '../../../../../shared/github/checks/complete-pr-check-owner'
+import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { getWorkItemRepo } from '../work-item-repo-row'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { callGitHubTargetOperation } from './github-work-item-target-request'
 import {
@@ -19,7 +19,7 @@ import {
   matchesGitHubWorkItemTarget,
   GitHubWorkItemTargetError,
   requireGitHubWorkItemTargetDetails
-} from '../../../../../shared/github/work-item-target'
+} from '../../../../../shared/github/work-items/work-item-target'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
@@ -141,6 +141,9 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           args.sourceContext
         ))
       : null
+  if (args.accepts?.() === false) {
+    return null
+  }
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(

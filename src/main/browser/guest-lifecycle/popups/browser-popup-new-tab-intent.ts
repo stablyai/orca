@@ -1,10 +1,12 @@
-// Keep named and OAuth popups attached to their opener; tab conversion returns null to the page.
-export function isNewBrowserTabPopupIntent(details: {
+export type NewBrowserTabPopupRequest = {
   url: string
   frameName: string
   disposition: string
   postBody?: Electron.PostBody | null
-}): boolean {
+}
+
+// Keep named and OAuth popups attached to their opener; tab conversion returns null to the page.
+export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): boolean {
   return (
     isBrowserTabPopupRequest(details) &&
     !isBlankBrowserPopupUrl(details.url) &&

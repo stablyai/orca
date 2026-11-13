@@ -1,7 +1,7 @@
 import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugin-host-api'
 import {
   isOfficialMarketplaceGitSource,
   isSameGitRepository

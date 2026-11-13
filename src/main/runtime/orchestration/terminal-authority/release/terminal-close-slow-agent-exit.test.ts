@@ -10,7 +10,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
-import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/worker-release-completion'
+import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/release/worker-release-completion'
 
 type Harness = Awaited<ReturnType<typeof startLateExitHarness>>
 

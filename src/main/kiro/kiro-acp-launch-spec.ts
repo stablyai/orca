@@ -4,7 +4,7 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { KIRO_ACP_DIALECT } from '../acp/acp-dialects/kiro-dialect'
 import { KIRO_MODEL_LISTING_ARGS, parseKiroModelListing } from './kiro-model-listing'
-import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
+import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 

@@ -88,6 +88,8 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
       <SidebarRepositoryFilterSection
         filterRepoIds={agentsFilterRepoIds}
         setFilterRepoIds={setAgentsFilterRepoIds}
+        // Hidden projects' agents still list here, so their projects stay filterable.
+        includeHidden
       />
       {hasScopeFilter ? (
         <DropdownMenuItem

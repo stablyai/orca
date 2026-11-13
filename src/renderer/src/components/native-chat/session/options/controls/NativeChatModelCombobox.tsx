@@ -55,7 +55,11 @@ export function NativeChatModelCombobox({
   const searching = Boolean(query.trim())
   // Membership ignores the selection, so picking a model never moves rows in the open list.
   const folded = (choice: SessionOptionSelectChoice) => !searching && Boolean(choice.legacy)
-  const legacyChoices = choices.filter(folded)
+  // The current value stays listed even while a pending pick still carries its hidden flag.
+  const listed = choices.filter(
+    (choice) => searching || !choice.hidden || choice.value === currentValue
+  )
+  const legacyChoices = listed.filter(folded)
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)
     const current = choice.value === currentValue
@@ -114,7 +118,7 @@ export function NativeChatModelCombobox({
           <CommandGroup>
             {/* One keyed array, so a row moving between sections keeps its highlight. */}
             {[
-              ...choices.filter((choice) => !folded(choice)).map(renderChoice),
+              ...listed.filter((choice) => !folded(choice)).map(renderChoice),
               ...(legacyExpanded ? legacyChoices.map(renderChoice) : []),
               <AgentPickerLegacyModelsToggle
                 key="legacy-toggle"

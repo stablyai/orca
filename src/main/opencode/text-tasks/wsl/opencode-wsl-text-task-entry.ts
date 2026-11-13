@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SearchSubprocessLineAccumulator } from '../../../../shared/search-subprocess-lines'
-import { killSourceControlAgentProcess } from '../../../text-generation/source-control-agent-termination'
-import { spawnSupervisedAgent } from '../../../text-generation/source-control-supervised-agent-spawn'
+import { killSourceControlAgentProcess } from '../../../text-generation/execution/source-control-agent-termination'
+import { spawnSupervisedAgent } from '../../../text-generation/execution/source-control-supervised-agent-spawn'
 import {
   OPENCODE_WSL_TEXT_TASK_CLEANUP_MS,
   OPENCODE_WSL_TEXT_TASK_REQUEST_MAX_BYTES,
@@ -25,7 +25,8 @@ const request = z.object({
       'pull-request-fields',
       'branch-name',
       'jira-issue-summary',
-      'conversation-name'
+      'conversation-name',
+      'dictation-cleanup'
     ])
     .optional(),
   timeoutMs: z.number().int().positive()

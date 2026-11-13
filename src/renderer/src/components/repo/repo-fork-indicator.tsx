@@ -1,6 +1,6 @@
 import React from 'react'
 import { GitFork } from 'lucide-react'
-import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'

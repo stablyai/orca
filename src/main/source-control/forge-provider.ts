@@ -23,12 +23,10 @@ import {
   getGiteaRepoSlug
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
-import {
-  createGitHubPullRequest,
-  getGitHubPRLookupRateLimitBlock,
-  getPRForBranchOutcome,
-  getRepoSlug
-} from '../github/client'
+import { createGitHubPullRequest } from '../github/client/create/create-github-pull-request'
+import { getGitHubPRLookupRateLimitBlock } from '../github/client/lookup/pr-lookup-rate-limit'
+import { getPRForBranchOutcome } from '../github/client/lookup/pr-for-branch-outcome'
+import { getRepoSlug } from '../github/client/fetch/repo-slug-upstream'
 import {
   getMergeRequest,
   getMergeRequestForBranchOrThrow,

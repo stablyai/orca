@@ -96,12 +96,15 @@ export async function canCheckoutExistingLocalBranch(
   }
   const worktrees = await listWorktrees(repoPath, gitOptions)
   let busy = worktrees.find((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
-  if (explicitReuse && !busy) {
+  if (!busy) {
+    // Why: macOS Git resolves case and NFC/NFD aliases to one stored ref; Linux keeps them distinct.
+    // Explicit reuse already verified that the requested spelling is stored exactly.
     for (const worktree of worktrees) {
       const checkedOutBranch = normalizeLocalBranchName(worktree.branch)
       if (
         foldGitRefNameCase(checkedOutBranch) === foldGitRefNameCase(branchName) &&
-        !(await hasExactBranchRef(checkedOutBranch))
+        ((!explicitReuse && !(await hasExactBranchRef(branchName))) ||
+          !(await hasExactBranchRef(checkedOutBranch)))
       ) {
         busy = worktree
         break

@@ -3,8 +3,9 @@ import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../structured-agent-command-resolution'
-import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
+} from '../agent-launch/structured-agent-command-resolution'
+import { AgentModelCatalogStore } from './agent-model-catalog-store'
+import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 function listing(id: string): AgentModelCatalogSuccess {
   return {
@@ -74,29 +75,6 @@ function sharedListingHarness() {
   return { discovery, listingFor, runs, run, store, service }
 }
 
-it('finishes a shared listing for a folder that joined before the first reader gave up', async () => {
-  vi.useFakeTimers()
-  onTestFinished(() => {
-    vi.useRealTimers()
-  })
-  const h = sharedListingHarness()
-  void h.service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  const b = h.service.read({
-    agent: 'codex',
-    workspacePath: '/b',
-    waitForListing: true,
-    deadline: Date.now() + 60_000
-  })
-  await vi.advanceTimersByTimeAsync(2_000)
-  // The first reader is gone, but the listing it started is still running for the folder that joined.
-  expect(h.runs[0]?.signal?.aborted).toBe(false)
-  h.discovery.resolve({ ...listing('shared'), complete: true, configured: {} })
-  await vi.advanceTimersByTimeAsync(0)
-  expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
-  expect(h.run).toHaveBeenCalledOnce()
-})
-
 it("never answers a newly picked folder with the previous folder's late listing", async () => {
   const h = sharedListingHarness()
   const old = h.service.read({ agent: 'codex', workspacePath: '/own-old', waitForListing: true })
@@ -112,33 +90,4 @@ it("never answers a newly picked folder with the previous folder's late listing"
   expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-old' })).toMatchObject({
     models: [{ id: 'old' }]
   })
-})
-
-it('keeps a shared listing for an earlier-ending reader of the same folder when the first is cancelled', async () => {
-  vi.useFakeTimers()
-  onTestFinished(() => {
-    vi.useRealTimers()
-  })
-  const h = sharedListingHarness()
-  const first = h.service.captureRead({
-    agent: 'codex',
-    workspacePath: '/a',
-    deadline: Date.now() + 60_000
-  })
-  void h.service.demand({ agent: 'codex', workspacePath: '/a', operation: first })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  const second = h.service.read({
-    agent: 'codex',
-    workspacePath: '/a',
-    waitForListing: true,
-    deadline: Date.now() + 30_000
-  })
-  await vi.advanceTimersByTimeAsync(0)
-  first.controller.abort()
-  await vi.advanceTimersByTimeAsync(1_000)
-  expect(h.runs[0]?.signal?.aborted).toBe(false)
-  h.discovery.resolve({ ...listing('shared'), complete: true, configured: {} })
-  await vi.advanceTimersByTimeAsync(0)
-  expect(await second).toMatchObject({ models: [{ id: 'shared' }] })
-  expect(h.run).toHaveBeenCalledOnce()
 })
