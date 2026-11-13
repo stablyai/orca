@@ -512,9 +512,20 @@ it.each([10, 100])(
     let sessionWritten: (host: ExecutionHostId | null) => void = () => {}
     const records: Record<string, SleepingAgentSessionRecord> = {}
     const mailboxes: string[] = []
+    const isRecordProperty = (
+      target: SleepingAgentSessionRecord,
+      property: string | symbol
+    ): property is keyof SleepingAgentSessionRecord =>
+      typeof property === 'string' && Object.hasOwn(target, property)
+    const countRecordVisits: ProxyHandler<SleepingAgentSessionRecord> = {
+      get(target, property) {
+        visits++
+        return isRecordProperty(target, property) ? target[property] : undefined
+      }
+    }
     for (let i = 0; i < count; i++) {
       const key = `tab-${i}:11111111-1111-4111-8111-${String(i).padStart(12, '0')}`
-      records[key] = new Proxy(
+      records[key] = new Proxy<SleepingAgentSessionRecord>(
         {
           ...record,
           paneKey: key,
@@ -533,12 +544,7 @@ it.each([10, 100])(
             }
           }
         },
-        {
-          get(target, property, receiver) {
-            visits++
-            return Reflect.get(target, property, receiver)
-          }
-        }
+        countRecordVisits
       )
       const run = db.createRun({
         objective: 'scale',
@@ -611,15 +617,7 @@ it.each([10, 100])(
         sleepingAgentSessionsByPaneKey: Object.fromEntries(
           Object.keys(records).map((key) => [
             key,
-            new Proxy(
-              { ...record, paneKey: key },
-              {
-                get(target, property, receiver) {
-                  visits++
-                  return Reflect.get(target, property, receiver)
-                }
-              }
-            )
+            new Proxy<SleepingAgentSessionRecord>({ ...record, paneKey: key }, countRecordVisits)
           ])
         )
       }
