@@ -84,7 +84,11 @@ function summarizeMatches(
 
 type RulesChange = (rules: WorkspaceCleanupRules) => WorkspaceCleanupRules
 
-type PendingChange = WorkspaceCleanupRuleChangeRequest & { change: RulesChange }
+type PendingChange = WorkspaceCleanupRuleChangeRequest & {
+  change: RulesChange
+  /** The host's rules the listed rows were previewed against. */
+  previewedRules: string
+}
 
 export function WorkspaceCleanupSettingsPane({
   hostScope,
@@ -189,37 +193,45 @@ export function WorkspaceCleanupSettingsPane({
       return
     }
     const nextRules = change(latest)
-    let rows: WorkspaceCleanupPreviewRow[] = []
-    if (request && hasEnabledWorkspaceCleanupRule(nextRules)) {
-      // Project rules can delete with every global rule off, so the current rules are always read.
-      const previews = await Promise.all([
-        previewRules(nextRules, { save: true }),
-        previewRules(latest)
-      ]).catch((error: unknown) => {
-        toast.error(
-          t(
-            'components.settings.workspaceCleanup.previewFailed',
-            "Couldn't check which workspaces this change matches."
-          ),
-          { description: errorMessage(error) }
-        )
-        return null
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      if (!previews) {
-        finishChange(false)
-        return
-      }
-      rows = newRemovals(previews[0], previews[1])
+    const rows =
+      request && hasEnabledWorkspaceCleanupRule(nextRules)
+        ? await previewNewRemovals(latest, nextRules)
+        : []
+    if (!mountedRef.current) {
+      return
+    }
+    if (!rows) {
+      finishChange(false)
+      return
     }
     if (request && rows.length > 0) {
       setPendingRule(null)
-      setPendingChange({ ...request, rows, change })
+      setPendingChange({ ...request, rows, change, previewedRules: JSON.stringify(latest) })
       return
     }
     finishChange(await update(nextRules))
+  }
+
+  /** Null when the preview failed; the toast says so. */
+  const previewNewRemovals = async (
+    latest: WorkspaceCleanupRules,
+    nextRules: WorkspaceCleanupRules
+  ): Promise<WorkspaceCleanupPreviewRow[] | null> => {
+    // Project rules can delete with every global rule off, so the current rules are always read.
+    const previews = await Promise.all([
+      previewRules(nextRules, { save: true }),
+      previewRules(latest)
+    ]).catch((error: unknown) => {
+      toast.error(
+        t(
+          'components.settings.workspaceCleanup.previewFailed',
+          "Couldn't check which workspaces this change matches."
+        ),
+        { description: errorMessage(error) }
+      )
+      return null
+    })
+    return previews ? newRemovals(previews[0], previews[1]) : null
   }
 
   const toggleRule = (key: WorkspaceCleanupRuleKey): void => {
@@ -240,6 +252,22 @@ export function WorkspaceCleanupSettingsPane({
     const change = pendingChange
     if (!change) {
       return
+    }
+    // The dialog can stay open a while; if the rules moved, what it lists may no longer be all.
+    const latest = await readLatest()
+    if (!latest || !mountedRef.current) {
+      return
+    }
+    if (JSON.stringify(latest) !== change.previewedRules) {
+      const rows = await previewNewRemovals(latest, change.change(latest))
+      if (!rows || !mountedRef.current) {
+        return
+      }
+      const listed = new Set(change.rows.map(workspaceCleanupRowKey))
+      if (rows.some((row) => !listed.has(workspaceCleanupRowKey(row)))) {
+        setPendingChange({ ...change, rows, previewedRules: JSON.stringify(latest) })
+        return
+      }
     }
     // Pinned workspaces are always kept, so Keep is a pin rather than a second keep list.
     for (const row of keep) {
@@ -262,11 +290,6 @@ export function WorkspaceCleanupSettingsPane({
         )
         return
       }
-    }
-    // The dialog can stay open a while; apply the change to the rules as they are now.
-    const latest = await readLatest()
-    if (!latest || !mountedRef.current) {
-      return
     }
     if (await update(change.change(latest))) {
       setPendingChange(null)
