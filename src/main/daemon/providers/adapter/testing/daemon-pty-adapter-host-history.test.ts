@@ -283,12 +283,16 @@ describe('daemon-owned terminal history', () => {
         )
       const before = saved()
 
-      // This client keeps no app-side history store, so the daemon's own hold meets these files.
-      const { id } = await harness.adapter.spawn(request)
+      // A create that declares no supersession, so the daemon's own hold decides over these files.
+      await harness.server.host.createOrAttach({
+        ...request,
+        streamClient: { onData: () => {}, onExit: () => {} }
+      })
       expect(spawned).toBe(1)
       child._simulateData('NEW_ROW\r\n')
       // The journal starts no origin over them: its history stays unavailable instead.
-      expect(await harness.server.host.historyJournals!.live(id)?.flush()).toBe(false)
+      const journal = harness.server.host.historyJournals!.live(request.sessionId)
+      expect(await journal?.flush()).toBe(false)
       expect(saved()).toEqual(before)
     },
     30_000
