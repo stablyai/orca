@@ -27,8 +27,9 @@ const actions = {
   onMoveToComputer: noop,
   onDelete: noop
 }
-// PAIRED-CHROME: what a paired row (created on another desktop) can do today.
-const pairedActions = { onSleep: noop, onDelete: noop }
+// PAIRED-CHROME: what a paired row (created on another desktop) can do today: no Archive or Move
+// until PAIRED-ARCHIVE.
+const pairedActions = { onWake: noop, onRestart: noop, onSleep: noop, onDelete: noop }
 
 const running: HostedWorkspaceStatus = {
   state: 'ready',
@@ -191,9 +192,9 @@ export const menuOpen = defineFixture({
 
 /** PAIRED-CHROME: a paired row running: Sleep and ⋯ (Delete only). */
 export const pairedRunningCard = card({ id: 'card-paired-running', paired: true })
-/** PAIRED-CHROME: a paired row asleep: no Wake button (opening the row wakes it). */
+/** PAIRED-CHROME: a paired row asleep: Wake, as on an owned row. */
 export const pairedAsleepCard = card({ id: 'card-paired-asleep', state: 'sleeping', paired: true })
-/** PAIRED-CHROME: the ⋯ menu on a paired row: Details and Delete, no Restart, Move or Archive. */
+/** PAIRED-CHROME: the ⋯ menu on a paired row: Details, Restart and Delete; no Move or Archive. */
 export const pairedMenuOpen = defineFixture({
   width: 320,
   render: () => (
