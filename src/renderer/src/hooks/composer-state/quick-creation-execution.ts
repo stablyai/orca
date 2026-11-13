@@ -13,11 +13,10 @@ import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { composerCreateLaunchRoute } from './composer-create-launch-route'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { parentWorktreeForRunOn } from '@/components/new-workspace/run-on/cloud-advanced-options'
 import { reportCloudStartAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-agent-coverage'
-import { ORCA_CLOUD_PENDING_HOST_CAPABILITIES } from '@/lib/orca-cloud/orca-cloud-pending-host-capabilities'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -139,29 +138,18 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const promptDelivery = quickDraftPrompt ? 'draft' : 'auto-submit'
       // Why: the verdict is persisted on the request as data and re-entered once the worktree exists.
-      const agentLaunchRoute = !agent
-        ? 'terminal-tui'
-        : (options?.launchChoice?.route ??
-          resolveAgentSessionLaunchRoute(
-            useAppStore.getState(),
-            {
-              agent,
-              workspace: {
-                kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
-                repoId,
-                executionHostId: ephemeralVmRecipe
-                  ? 'runtime:pending-ephemeral-vm'
-                  : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
-              },
-              prompt: quickDraftPrompt ?? quickPrompt,
-              promptDelivery,
-              // CLOUD-HELD-SURFACE: the VM doesn't exist yet; its image's capabilities stand in.
-              ...(ephemeralVmRecipe?.recipeId === ORCA_CLOUD_RECIPE_ID
-                ? { pendingHostCapabilities: ORCA_CLOUD_PENDING_HOST_CAPABILITIES }
-                : {})
-            },
-            { reportDowngrade: true }
-          ))
+      const agentLaunchRoute = composerCreateLaunchRoute(useAppStore.getState(), {
+        agent,
+        launchChoice: options?.launchChoice,
+        vmRecipeId: ephemeralVmRecipe?.recipeId,
+        workspace: {
+          kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+          repoId,
+          executionHostId: workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined
+        },
+        prompt: quickDraftPrompt ?? quickPrompt,
+        promptDelivery
+      })
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
       const quickStartup = await prepareQuickComposerStartup({
