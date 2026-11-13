@@ -246,11 +246,13 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Object.values(state.agentStatusByPaneKey ?? EMPTY)) {
-    embedded(entry)
-  }
-  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? EMPTY)) {
-    embedded(retained.entry, retained.worktreeId)
+  if (canonical.size) {
+    for (const entry of Object.values(state.agentStatusByPaneKey ?? EMPTY)) {
+      embedded(entry)
+    }
+    for (const retained of Object.values(state.retainedAgentsByPaneKey ?? EMPTY)) {
+      embedded(retained.entry, retained.worktreeId)
+    }
   }
   const previous = cache?.contexts
   const equal =
