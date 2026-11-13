@@ -206,6 +206,8 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
       ...origin,
       scope: { ...origin.scope, workspaceId: 'another-workspace' }
     })
+    // The idle sweep keeps a chat whose delivery loop has not parked after the second send.
+    await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)
     await vi.waitFor(() => expect(rig.host.hasSession(SESSION)).toBe(false))
