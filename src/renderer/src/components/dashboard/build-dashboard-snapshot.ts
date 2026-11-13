@@ -4,6 +4,11 @@ import { sayNativeChatApprovalTranslated } from '../native-chat/prompts/native-c
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AppState } from '@/store/types'
 import {
+  executionHostIdForStructuredTarget,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/structured-agent-session-owner'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import {
   DASHBOARD_MAX_MAP_WORKSPACES,
   type DashboardCard,
   type DashboardSnapshot,
@@ -207,10 +212,21 @@ export function buildDashboardSnapshot(
         : undefined
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+      const chatTab = includeCardDetails
+        ? state.unifiedTabsByWorktree?.[worktreeId]?.find(
+            (tab) => tab.id === tabId && isStructuredTab(tab)
+          )
+        : undefined
+      const chatTarget = chatTab ? structuredAgentSessionTargetForTab(state, chatTab) : null
 
       cards.push({
         paneKey: row.paneKey,
         ptyId,
+        ...(chatTab &&
+        chatTarget &&
+        executionHostIdForStructuredTarget(chatTarget) === hostMetadata?.executionHostId
+          ? { chatSession: { sessionId: chatTab.entityId, target: chatTarget } }
+          : {}),
         agentType: row.agentType,
         bucket,
         dotState,

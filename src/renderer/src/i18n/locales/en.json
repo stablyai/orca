@@ -22535,6 +22535,12 @@
       "ssh": "SSH host",
       "remoteNamed": "Remote Orca host · {{host}}",
       "remote": "Remote Orca host"
+    },
+    "chat": {
+      "readFailed": "Unable to load this chat. Open the workspace to reconnect.",
+      "connecting": "Connecting to chat…",
+      "loadOlder": "Load earlier messages",
+      "empty": "No messages in this chat yet."
     }
   },
   "dashboard": {

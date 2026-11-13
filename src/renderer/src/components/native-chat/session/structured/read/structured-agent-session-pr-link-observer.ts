@@ -12,12 +12,18 @@ export function createStructuredAgentSessionPRLinkObserver(
   target: RuntimeClientTarget
 ): (
   event: AgentSessionSubscribeEvent,
-  getState: StructuredAgentSessionReadEffects['getState']
+  readers: Iterable<StructuredAgentSessionReadEffects>
 ) => void {
   const detect = createTerminalGitHubPRLinkDetector()
-  return (event, getState) => {
+  return (event, readers) => {
     // Why: only live batches; replayed history would re-link PRs the user may have unlinked.
     if (event.type !== 'batch') {
+      return
+    }
+    const reader = Array.from(readers).find(
+      (candidate) => candidate.observeWorkspaceLinks !== false
+    )
+    if (!reader) {
       return
     }
     const links = event.batch.items.flatMap((item) =>
@@ -28,7 +34,7 @@ export function createStructuredAgentSessionPRLinkObserver(
     if (!links.length) {
       return
     }
-    const state = getState()
+    const state = reader.getState()
     const tab = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).find((candidate) => {
       const tabTarget =
         candidate.entityId === sessionId && structuredAgentSessionTargetForTab(state, candidate)

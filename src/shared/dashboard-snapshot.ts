@@ -3,6 +3,7 @@ import type { AgentType, AgentWorkingMode } from './agent-status/contracts/agent
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import type { RuntimeClientTarget } from './runtime-client-target'
 
 /** Main renderer owns live state and relays structured-clone-safe snapshots through main to the presentation-only pop-out; no functions/class instances. */
 
@@ -86,6 +87,8 @@ export type DashboardCard = {
   paneKey: string
   /** Live preview PTY; null does not imply that the agent's destination is closed. */
   ptyId: string | null
+  /** Read-only transcript route for structured chats; never infer it from a PTY or provider id. */
+  chatSession?: { sessionId: string; target: RuntimeClientTarget }
   agentType: AgentType
   bucket: DashboardBucket
   dotState: DashboardCardDotState

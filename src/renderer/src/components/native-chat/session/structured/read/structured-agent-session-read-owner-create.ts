@@ -25,6 +25,7 @@ import {
   forgetStructuredReadOwner
 } from './structured-agent-session-read-owner-registry'
 
+/** Share history and transport across activations; workspace-link effects must use readers that are still active. */
 export function createReadOwner(
   key: string,
   sessionId: string,
@@ -155,7 +156,7 @@ export function createReadOwner(
         ) {
           commandListeners.forEach((listener) => listener())
         }
-        observePRLinks(event, effects.getState)
+        observePRLinks(event, activations.values())
       },
       applyError: (message, refusal) => {
         // After loading, transport failures retain history while retrying; host refusals are explicit answers to show.

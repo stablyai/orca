@@ -20,6 +20,12 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+import {
+  isBoundedString,
+  isOptionalBoundedString,
+  isFiniteNumber,
+  isDashboardChatSession
+} from './dashboard-field-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
 const MAX_DASHBOARD_REPO_ICONS = 500
@@ -52,18 +58,6 @@ const DASHBOARD_HOST_PLATFORMS = new Set([
 ])
 const WINDOWS_SHIFT_ENTER_ENCODINGS = new Set(['alt-enter', 'csi-u'])
 const WINDOWS_INPUT_RECORD_PASTE_NEWLINES = new Set(['alt-enter', 'csi-u'])
-
-function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
-  return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
-}
-
-function isOptionalBoundedString(value: unknown, maxLength: number): boolean {
-  return value === undefined || isBoundedString(value, maxLength, true)
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
 
 export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRevealAgentArgs {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -222,6 +216,7 @@ function imageIconCacheKey(icon: unknown): string | null {
     : null
 }
 
+/** Reject the whole IPC card when a supplied preview route is malformed; missing optional fields remain backward compatible. */
 function isDashboardCard(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
@@ -230,6 +225,7 @@ function isDashboardCard(value: unknown): boolean {
   return (
     isBoundedString(card.paneKey, MAX_ID_LENGTH) &&
     (card.ptyId === null || isBoundedString(card.ptyId, MAX_ID_LENGTH)) &&
+    isDashboardChatSession(card.chatSession, MAX_ID_LENGTH) &&
     isBoundedString(card.agentType, AGENT_TYPE_MAX_LENGTH) &&
     typeof card.bucket === 'string' &&
     DASHBOARD_BUCKETS.has(card.bucket) &&

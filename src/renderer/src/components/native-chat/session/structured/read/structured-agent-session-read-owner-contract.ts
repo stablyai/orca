@@ -45,5 +45,7 @@ export type StructuredAgentSessionAdmission = {
 
 export type StructuredAgentSessionReadEffects = {
   getState: () => AppState
+  /** Read-only previews must not associate PRs printed by live tools with the workspace. */
+  observeWorkspaceLinks?: boolean
   subscribeRetryNow: (retry: () => void) => () => void
 }

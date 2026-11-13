@@ -55,6 +55,7 @@
     "../src/main/jira/adf-text-marks.ts",
     "../src/main/jira/adf-media-destination.ts",
     "../src/main/ipc/dashboard-payload-validation.ts",
+    "../src/main/ipc/dashboard-field-validation.ts",
     "../src/main/ipc/dashboard-agent-launch-validation.ts",
     "../src/main/ipc/dashboard-workspace-payload-validation.ts",
     "../src/main/ipc/dashboard-filter-payload-validation.ts",

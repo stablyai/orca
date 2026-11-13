@@ -22,15 +22,18 @@ function useReadOwnerSnapshot(
   return { owner, snapshot }
 }
 
+/** Visibility activates the stream; previews must separately disable viewed acknowledgements and workspace-link observation. */
 export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget
   isVisible?: boolean
   isViewed?: boolean
+  observeWorkspaceLinks?: boolean
 }) {
   const { sessionId, target, isVisible = true } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
   const isViewed = args.isViewed ?? isVisible
+  const observeWorkspaceLinks = args.observeWorkspaceLinks !== false
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observationKey = structuredAttentionReadObservation(snapshot.state)
   const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
@@ -39,12 +42,13 @@ export function useStructuredAgentSessionRead(args: {
     if (isVisible) {
       return owner.activate({
         getState: useAppStore.getState,
+        observeWorkspaceLinks,
         subscribeRetryNow: (retry) =>
           environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
       })
     }
     return undefined
-  }, [isVisible, owner, environmentId])
+  }, [isVisible, owner, environmentId, observeWorkspaceLinks])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {
