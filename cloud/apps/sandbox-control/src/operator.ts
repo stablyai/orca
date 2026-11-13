@@ -9,6 +9,8 @@
 //   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's keys, phones and workspace grants, disable their routines (auth calls this)
 //   GET    /v1/internal/fair-use?days=30                 per-account CPU utilisation + fair-use flag (U22; internal only, never billed)
 //   POST   /v1/internal/session-cpu/sweep               fetch CPU for recently stopped sessions now (the cron does this every 5 min)
+//   GET    /v1/internal/secrets/kek                     which KEK ids stored secrets reference; which retired ids can be dropped
+//   POST   /v1/internal/secrets/rewrap {limit?, cursor?, dryRun?}   move one batch of rows to the active KEK (secrets-rewrap.ts)
 import { z } from 'zod'
 import { audit } from './api/audit'
 import { syncMemberRole } from './api/member-role-sync'
@@ -20,6 +22,8 @@ import { guardrails, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { removeMember } from './member-removal'
+import type { Keyring } from './secrets-crypto'
+import { kekStatus, rewrapBatch, RewrapError, REWRAP_MAX_LIMIT } from './secrets-rewrap'
 import { fairUseReport, FAIR_USE_WINDOW_DAYS, sweepSessionCpu } from './session-cpu'
 import { listByStatus } from './store'
 
@@ -38,6 +42,9 @@ const BindingBody = z
 const ChangedAt = z.number().int().positive().optional()
 const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), changedAt: ChangedAt }).strict()
 const RoleChangedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), role: z.enum(['owner', 'admin', 'member']), changedAt: ChangedAt }).strict()
+const RewrapBody = z
+  .object({ limit: z.number().int().min(1).max(REWRAP_MAX_LIMIT).optional(), cursor: z.string().max(2048).nullable().optional(), dryRun: z.boolean().optional() })
+  .strict()
 const UnbindBody = z.object({ installationId: z.number().int().positive(), accountId: AccountId.optional() }).strict()
 
 async function digest(value: string): Promise<Uint8Array> {
@@ -55,7 +62,13 @@ export async function isOperator(request: Request, operatorToken: string | undef
 export async function handleOperator(
   request: Request,
   path: string,
-  deps: { life: LifecycleDeps; github?: GitHubAppMinter; readJson: () => Promise<unknown> }
+  deps: {
+    life: LifecycleDeps
+    github?: GitHubAppMinter
+    readJson: () => Promise<unknown>
+    /** The Worker's keyring; null when SECRETS_KEK is not configured. Throws on a malformed key config. */
+    keyring?: () => Promise<Keyring> | null
+  }
 ): Promise<Response | null> {
   const { life } = deps
   const now = life.now()
@@ -153,6 +166,35 @@ export async function handleOperator(
     }
     case 'POST /v1/internal/session-cpu/sweep':
       return Response.json({ sweep: await sweepSessionCpu(life.db, life.provider, now) })
+    case 'GET /v1/internal/secrets/kek':
+    case 'POST /v1/internal/secrets/rewrap': {
+      const noStore = { 'cache-control': 'no-store' }
+      let keyring: Keyring | null
+      try {
+        keyring = (await deps.keyring?.()) ?? null
+      } catch {
+        // A malformed SECRETS_KEK* value. The cause is not echoed: it could quote key material.
+        return Response.json({ error: 'secrets_misconfigured' }, { status: 503, headers: noStore })
+      }
+      if (!keyring) {
+        return Response.json({ error: 'secrets_unconfigured' }, { status: 503, headers: noStore })
+      }
+      if (request.method === 'GET') {
+        return Response.json(await kekStatus(life.db, keyring), { headers: noStore })
+      }
+      const body = RewrapBody.safeParse(await deps.readJson())
+      if (!body.success) {
+        return Response.json({ error: 'invalid_request' }, { status: 400, headers: noStore })
+      }
+      try {
+        return Response.json(await rewrapBatch(life.db, keyring, body.data), { headers: noStore })
+      } catch (error) {
+        if (error instanceof RewrapError) {
+          return Response.json({ error: 'invalid_request', reason: error.reason }, { status: 400, headers: noStore })
+        }
+        throw error
+      }
+    }
     default:
       return null
   }

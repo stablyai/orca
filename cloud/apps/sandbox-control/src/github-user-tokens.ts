@@ -9,7 +9,7 @@
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { GitHubConnectError, authorizeUrl, signState, tokenRequest, type GitHubConnectConfig, type TokenSet } from './github-connect'
-import type { Keyring, SealedSecret } from './secrets-crypto'
+import type { Keyring, SealedSecret, SecretBinding } from './secrets-crypto'
 
 const STATE_TTL_MS = 10 * 60_000
 /** Refresh a little before GitHub's 8 h expiry so a push never races it. */
@@ -31,11 +31,13 @@ export type GitHubUserTokenRow = {
 
 export type { TokenSet }
 
-const binding = (row: { account_id: string; user_id: string }) => ({
+const binding = (row: { account_id: string; user_id: string }): SecretBinding => ({
   scope: 'github_user',
   ownerId: `${row.account_id}#${row.user_id}`,
   name: 'oauth'
 })
+/** The AAD identity of a github_user_tokens row (the KEK re-wrap sweep opens rows by it). */
+export const githubUserTokenBinding = binding
 
 export async function createUserConnectState(
   db: D1Database,

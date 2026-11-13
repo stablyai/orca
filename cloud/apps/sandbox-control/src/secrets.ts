@@ -416,12 +416,14 @@ export function keyringFor(env: Env): Promise<Keyring> | null {
   if (!env.SECRETS_KEK) {
     return null
   }
-  const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}`
+  // Anything but the exact opt-in stays v1, the format every deployed version reads.
+  const sealFormat = env.SECRETS_SEAL_FORMAT === 'v2' ? 'v2' : 'v1'
+  const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}\n${sealFormat}`
   if (cachedKeyring?.source !== source) {
     const retired = env.SECRETS_KEK_RETIRED ? (JSON.parse(env.SECRETS_KEK_RETIRED) as Record<string, string>) : {}
     cachedKeyring = {
       source,
-      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, retired)
+      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, retired, { sealFormat })
     }
   }
   return cachedKeyring.keyring

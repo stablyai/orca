@@ -92,11 +92,19 @@ export type Env = {
 
   // Secret store (src/secrets.ts). SECRETS_KEK is a base64 32-byte AES key (secret); SECRETS_KEK_ID
   // names it (default `k1`). After a rotation, SECRETS_KEK_RETIRED (secret, JSON {"<id>":"<b64>"})
-  // keeps older rows readable. Without SECRETS_KEK the /v1/secrets routes answer 503 and sessions
-  // start without injected secrets.
+  // keeps older rows readable until POST /v1/internal/secrets/rewrap has moved them to the active
+  // KEK; GET /v1/internal/secrets/kek says when a retired id is no longer referenced and can be
+  // dropped (src/secrets-rewrap.ts). Without SECRETS_KEK the /v1/secrets routes answer 503 and
+  // sessions start without injected secrets.
   SECRETS_KEK?: string
   SECRETS_KEK_ID?: string
   SECRETS_KEK_RETIRED?: string
+  /**
+   * `v1` (default) | `v2`: the row format new secrets are sealed in (src/secrets-crypto.ts). With
+   * v2 a KEK rotation re-wraps data keys only. Set it only once every Worker version that reads this
+   * database (previews and the rollback target included) can read v2: older code skips v2 rows.
+   */
+  SECRETS_SEAL_FORMAT?: string
   /**
    * Model API keys (Anthropic, OpenAI, AI Gateway, custom provider) reach the VM as placeholders and
    * the egress proxy swaps the real key in (forwardURL path). Unset or `on` (default): every account;
