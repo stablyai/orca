@@ -105,7 +105,10 @@ export class MobileEndpointSupervisor {
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
-      canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
+      canSchedule: () =>
+        !dependencies.directUnavailable &&
+        this.isActive() &&
+        this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
       migrate: (client, path, abort) => this.logical.migrateTo(client, path, undefined, abort),
