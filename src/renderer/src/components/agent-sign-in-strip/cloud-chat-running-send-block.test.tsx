@@ -98,14 +98,13 @@ function composer(sendBlockedReason: string | null, draft: string) {
     disabled: false,
     structuredTransport: {
       sendOut: false,
-      sendFollowUp: undefined,
-      optionSnapshot: undefined,
+      optionSnapshot: [],
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {})
     },
     editSession: undefined,
     isWorking: false,
     canStop: false
-  } as Parameters<typeof nativeChatComposerSendState>[0])
+  })
 }
 
 beforeEach(() => {
