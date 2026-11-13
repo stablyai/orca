@@ -21,7 +21,7 @@ import {
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { triggerSelection } from '../platform/haptics'
+import { triggerSelection } from '../platform/haptics/haptics'
 import {
   dragReorderTarget,
   dragReorderLayout,

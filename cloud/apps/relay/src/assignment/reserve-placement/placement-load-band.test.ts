@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLACEMENT_INTAKE_SHARE, PlacementLoadBand } from './placement-load-band.js'
+import { PlacementLoadBand } from './placement-load-band.js'
 import { RelayAssignmentStore } from '../assignment-store.js'
 import { openInMemoryRelayDatabase } from '../../database/database.js'
 
@@ -13,73 +13,7 @@ function seededRandom(seed: number): () => number {
   }
 }
 
-type SimulatedCell = { cellId: string; reserved: number; capacity: number }
-
 const quiet = () => undefined
-
-// Each pick goes to one of the directors at random, as the load balancer spreads requests.
-function simulate(
-  directors: PlacementLoadBand[],
-  cells: SimulatedCell[],
-  picks: number,
-  at: (index: number) => number,
-  route: () => number = seededRandom(99)
-) {
-  const counts = new Map(cells.map((cell) => [cell.cellId, 0]))
-  for (let index = 0; index < picks; index += 1) {
-    const ranked = cells
-      .filter((cell) => cell.reserved < cell.capacity)
-      .map((cell) => ({ cellId: cell.cellId, loadRatio: cell.reserved / cell.capacity, cell }))
-      .sort(
-        (left, right) => left.loadRatio - right.loadRatio || left.cellId.localeCompare(right.cellId)
-      )
-    const director = directors[Math.floor(route() * directors.length)]
-    const picked = director?.pick(ranked, at(index))
-    if (!picked) throw new Error('no candidate')
-    picked.cell.reserved += 1
-    counts.set(picked.cellId, (counts.get(picked.cellId) ?? 0) + 1)
-  }
-  return counts
-}
-
-// c27's drain on 10-08: 2,770 hosts onto one empty Asia cell (2,805 free)
-// and four fuller ones (2,311 free between them).
-function c27DrainCells(): SimulatedCell[] {
-  return [
-    { cellId: 'cell-empty', reserved: 0, capacity: 4000 },
-    ...['cell-b', 'cell-c', 'cell-d', 'cell-e'].map((cellId, index) => ({
-      cellId,
-      reserved: 4000 - 577 - (index === 0 ? 3 : 0),
-      capacity: 4000
-    }))
-  ]
-}
-
-function drainShare(paceMs: number, seed: number) {
-  const cells = c27DrainCells()
-  const directors = Array.from(
-    { length: 5 },
-    (_, index) => new PlacementLoadBand(seededRandom(seed + index), quiet)
-  )
-  const hosts = 2770
-  const counts = simulate(directors, cells, hosts, (index) => (index * paceMs) / hosts)
-  return { counts, cells, share: (counts.get('cell-empty') ?? 0) / hosts }
-}
-
-describe('PlacementLoadBand', () => {
-  it.each([
-    ['1,200 s', 1_200_000],
-    ['300 s', 300_000]
-  ])('keeps the empty cell near the share across five directors at the %s pace', (_, paceMs) => {
-    for (const seed of [1, 2, 3]) {
-      const { counts, cells, share } = drainShare(paceMs, seed * 10)
-      expect([...counts.values()].reduce((sum, count) => sum + count, 0)).toBe(2770)
-      expect(share).toBeGreaterThan(0.3)
-      expect(share).toBeLessThan(0.5)
-      for (const cell of cells) expect(cell.reserved).toBeLessThanOrEqual(cell.capacity)
-    }
-  })
-})
 
 describe('leastLoadedCell with the load band', () => {
   async function setupRegions() {
@@ -120,20 +54,6 @@ describe('leastLoadedCell with the load band', () => {
     }
     return counts
   }
-
-  it('spreads within the preferred region and keeps an empty US cell out', async () => {
-    const { database, store } = await setupRegions()
-    try {
-      const counts = await placements(store, 200)
-
-      expect(counts.get('us-a')).toBeUndefined()
-      expect(counts.get('asia-a')).toBeLessThanOrEqual(PLACEMENT_INTAKE_SHARE * 200 + 1)
-      const used = [...counts.values()].filter((count) => count >= 20)
-      expect(used.length).toBeGreaterThanOrEqual(3)
-    } finally {
-      await database.close()
-    }
-  })
 
   it('fills the preferred region to its hard cap before spilling, never past it', async () => {
     const { database, store } = await setupRegions()

@@ -1,4 +1,4 @@
-import type { MobileFileMedia } from '../mobile-file-media'
+import type { MobileFileMedia } from '../media/mobile-file-media'
 import type { MobileDiffLine } from '../../source-control/review/mobile-diff-lines'
 import type { FileDocState, MarkdownDocState, ReadyFileDocState } from './session-document-state'
 

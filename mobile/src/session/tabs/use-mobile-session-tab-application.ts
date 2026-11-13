@@ -1,4 +1,4 @@
-import { keepsTerminalPaneVisible } from '../../terminal/session/mobile-terminal-pane-layout'
+import { keepsTerminalPaneVisible } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { orphanedMarkdownDraftTabs } from '../../files/session-documents/orphaned-markdown-draft-tabs'
 import {
   pendingSelectionHandle,
@@ -14,7 +14,7 @@ import {
   mobileFileTabsReadSameDocument,
   mobileSessionTabsEqual,
   terminalRecordsEqual
-} from '../../terminal/session/mobile-terminal-records'
+} from '../../terminal/session/inventory/mobile-terminal-records'
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,
@@ -24,11 +24,11 @@ import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-healt
 import { getActiveTabIdForHandle } from './terminal-tab-selection'
 import { resolveActiveSessionTab } from './active-session-tab'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
-import { releaseTerminalCreateLock } from '../../terminal/session/terminal-create-lock'
+import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
-import type { MobileSessionTerminalListModel } from '../../terminal/session/use-mobile-session-terminal-list'
+import type { MobileSessionTerminalListModel } from '../../terminal/session/inventory/use-mobile-session-terminal-list'
 import { pruneMobileNativeChatTabDrafts } from '../native-chat/composer/mobile-native-chat-draft-store'
 import {
   trackPhoneOwnedDraftTabs,

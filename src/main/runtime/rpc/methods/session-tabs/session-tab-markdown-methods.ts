@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   ActivateTab,
   SaveMarkdownTab
-} from '../../../../../shared/rpc-contract/session-tabs-schemas-params'
+} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 
 export const SESSION_TAB_MARKDOWN_METHODS = [
   defineMethod({

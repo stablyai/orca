@@ -1,12 +1,12 @@
-import type * as UseMobileSessionAccessorySelectionModule from '../../../terminal/session/use-mobile-session-accessory-selection'
-import type * as UseMobileTerminalPasteModule from '../../../terminal/session/use-mobile-terminal-paste'
-import type * as UseMobileSessionTerminalSendActionsModule from '../../../terminal/session/use-mobile-session-terminal-send-actions'
-import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
+import type * as UseMobileSessionAccessorySelectionModule from '../../../terminal/session/accessory-keys/use-mobile-session-accessory-selection'
+import type * as UseMobileTerminalPasteModule from '../../../terminal/session/input-controls/use-mobile-terminal-paste'
+import type * as UseMobileSessionTerminalSendActionsModule from '../../../terminal/session/input-controls/use-mobile-session-terminal-send-actions'
+import type * as MobileTerminalOperations from '../../../terminal/host-operations/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter, MountContext } from '../recording-scenario'
-import type { TerminalModes } from '../../../terminal/terminal-webview-contract'
+import type { TerminalModes } from '../../../terminal/webview/terminal-webview-contract'
 
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
@@ -39,13 +39,13 @@ function mountTerminalClipboard(
   { client, effect }: MountContext
 ) {
   const useAccessorySelection = modules.load<typeof UseMobileSessionAccessorySelectionModule>(
-    'mobile/src/terminal/session/use-mobile-session-accessory-selection.ts'
+    'mobile/src/terminal/session/accessory-keys/use-mobile-session-accessory-selection.ts'
   ).useMobileSessionAccessorySelection
   const useTerminalPaste = modules.load<typeof UseMobileTerminalPasteModule>(
-    'mobile/src/terminal/session/use-mobile-terminal-paste.ts'
+    'mobile/src/terminal/session/input-controls/use-mobile-terminal-paste.ts'
   ).useMobileTerminalPaste
   const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
-    'mobile/src/terminal/mobile-terminal-operations.ts'
+    'mobile/src/terminal/host-operations/mobile-terminal-operations.ts'
   )
 
   const ptyModesRef = { current: new Map([[HANDLE, PTY_MODES]]) }
@@ -137,10 +137,10 @@ function mountTerminalInputSend(
   { client, effect }: MountContext
 ) {
   const useSendActions = modules.load<typeof UseMobileSessionTerminalSendActionsModule>(
-    'mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts'
+    'mobile/src/terminal/session/input-controls/use-mobile-session-terminal-send-actions.ts'
   ).useMobileSessionTerminalSendActions
   const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
-    'mobile/src/terminal/mobile-terminal-operations.ts'
+    'mobile/src/terminal/host-operations/mobile-terminal-operations.ts'
   )
 
   const activeHandleRef = { current: HANDLE }

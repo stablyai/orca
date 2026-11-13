@@ -495,7 +495,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       file === 'tests/e2e/helpers/connector-fake-claude.ts' ||
       (isProductSource(file) &&
-        /^src\/(?:main\/external-conversations\/|main\/runtime\/rpc\/methods\/connector\.ts$|cli\/(?:connectors|specs)\/connector\.ts$|shared\/rpc-contract\/connector-params\.ts$)/.test(
+        /^src\/(?:main\/external-conversations\/|main\/runtime\/rpc\/methods\/connector\.ts$|cli\/(?:connectors|specs)\/connector\.ts$|shared\/rpc-contract\/connectors\/connector-params\.ts$)/.test(
           file
         ))
   }

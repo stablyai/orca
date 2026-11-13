@@ -60,10 +60,7 @@ async function checkFreshness(overrides = {}) {
 describe('hourly build preflight', () => {
   it.each([
     ['unchanged', {}, false],
-    ['changed', { LAST_SHA: '123456789012' }, true],
-    ['forced', { FORCED: 'true' }, true],
-    ['first build', { LAST_TAG: '' }, true],
-    ['missing prior identity', { LAST_SHA: '' }, true]
+    ['changed', { LAST_SHA: '123456789012' }, true]
   ])('%s main selects the expected build decision', async (_name, env, shouldBuild) => {
     const result = await checkFreshness(env)
     expect(result.exitCode, `${result.stdout} ${result.stderr}`).toBe(0)

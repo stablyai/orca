@@ -5,17 +5,24 @@ import * as esbuild from 'esbuild'
 import {
   terminalNerdFontCss,
   terminalSymbolsFontCss
-} from '../src/terminal/terminal-font-face-css.mjs'
+} from '../src/terminal/fonts/terminal-font-face-css.mjs'
 
 const require = createRequire(import.meta.url)
 const scriptDir = import.meta.dirname
 const mobileRoot = path.resolve(scriptDir, '..')
-const outputPath = path.join(mobileRoot, 'src', 'terminal', 'terminal-webview-engine.generated.ts')
+const outputPath = path.join(
+  mobileRoot,
+  'src',
+  'terminal',
+  'document',
+  'terminal-webview-engine.generated.ts'
+)
 // Emit stylesheet separately: native WebView needs both strings; page needs CSS without pulling in ~612 KiB engine string forbidden by script-src self.
 const cssOutputPath = path.join(
   mobileRoot,
   'src',
   'terminal',
+  'document',
   'terminal-webview-engine-css.generated.ts'
 )
 const target = 'chrome74'

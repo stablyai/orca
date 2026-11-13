@@ -2,7 +2,7 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage,
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
-} from '@/components/task-page/github/task-page-github-status-actions'
+} from '@/components/task-page/github/issue-status/task-page-github-status-actions'
 import { translate } from '@/i18n/i18n'
 
 export function closeGHEditAsDuplicate({

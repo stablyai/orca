@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import ts from 'typescript-api'
 
 // Web seam is sole permitted page-closure importer of native Linking; builder selects .web.ts sibling.
-export const EXTERNAL_LINK_SEAM = 'src/platform/external-link.web.ts'
+export const EXTERNAL_LINK_SEAM = 'src/platform/external-links/external-link.web.ts'
 
 // Parse real Linking bindings, excluding strings/comments and recognizing named aliases plus namespace/default interop.
 // Report named imports/reexports once at entry statement; report namespace property uses, since whole namespace import is allowed.

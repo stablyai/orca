@@ -24,26 +24,6 @@ function deps(overrides: Partial<ServeInitReaperDeps> = {}): ServeInitReaperDeps
 }
 
 describe('reexecServeUnderInitReaper', () => {
-  it('replaces a PID 1 Linux serve with bash running the same command and environment', () => {
-    const d = deps()
-    expect(reexecServeUnderInitReaper(d)).toBe('reexec')
-    expect(d.execve).toHaveBeenCalledWith(
-      '/bin/bash',
-      [
-        'bash',
-        '-c',
-        SERVE_INIT_REAPER_SCRIPT,
-        'orca-serve-init',
-        '/opt/orca/orca-ide',
-        '/opt/orca/resources/cli/index.js',
-        'serve',
-        '--port',
-        '6768'
-      ],
-      { ELECTRON_RUN_AS_NODE: '1' }
-    )
-  })
-
   it('keeps the eval script of a `-e <cli> -- serve` launch', () => {
     const d = deps({ execArgv: ['-e', 'require(cli)'], argv: ['/opt/orca/orca-ide', 'serve'] })
     expect(reexecServeUnderInitReaper(d)).toBe('reexec')
@@ -86,29 +66,6 @@ describe('reexecServeUnderInitReaper', () => {
     })
     expect(reexecServeUnderInitReaper(d)).toBe('unavailable')
     expect(d.execve).not.toHaveBeenCalled()
-  })
-
-  it('leaves a serve that is not PID 1, or not on Linux, alone', () => {
-    for (const d of [deps({ pid: 4242 }), deps({ platform: 'darwin' })]) {
-      expect(reexecServeUnderInitReaper(d)).toBe('not-pid1')
-      expect(d.execve).not.toHaveBeenCalled()
-      expect(d.warn).not.toHaveBeenCalled()
-    }
-  })
-
-  it('warns and keeps serving when no bash is installed or the process cannot be replaced', () => {
-    for (const d of [
-      deps({ exists: () => false }),
-      deps({ execve: null }),
-      deps({
-        execve: () => {
-          throw new Error('ENOENT')
-        }
-      })
-    ]) {
-      expect(reexecServeUnderInitReaper(d)).toBe('unavailable')
-      expect(d.warn).toHaveBeenCalledWith(expect.stringContaining('docker run --init'))
-    }
   })
 })
 

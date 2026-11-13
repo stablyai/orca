@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { MobileSourceControlRoutePanel } from '../source-control/MobileSourceControlRoutePanel'
-import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
+import { MobileFileExplorerPanel } from '../files/explorer/MobileFileExplorerPanel'
 import type { ActivePanel } from './session-panel-host'
 
 export type SessionDockPanelContentProps = {

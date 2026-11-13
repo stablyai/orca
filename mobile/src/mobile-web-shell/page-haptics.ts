@@ -4,7 +4,7 @@ import {
   triggerMediumImpact,
   triggerSelection,
   triggerSuccess
-} from '../platform/haptics'
+} from '../platform/haptics/haptics'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 
 // Reuse native functions so platform styles stay identical. The typed table covers every bridge kind; the platform-seams haptics census checks new native functions also get a kind.

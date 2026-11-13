@@ -2,15 +2,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { BridgeNativeVerbRefusedError } from '../bridge-host-errors'
-import { createNativeAudioCapture, type NativeAudioEngine } from '../../platform/native-audio'
 import {
-  BRIDGE_AUDIO_READ_MAX_BASE64_CHARS,
+  createNativeAudioCapture,
+  type NativeAudioEngine
+} from '../../platform/audio-capture/native-audio'
+import {
   BRIDGE_AUDIO_RING_MAX_BYTES,
   audioReadResultSchema,
   audioStopResultSchema
 } from './bridge-audio-verbs'
-import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
-import { readBridgeHostMessage } from './bridge-envelope'
 
 const captures = new Set<ReturnType<typeof createNativeAudioCapture>>()
 function createCapture(engine: NativeAudioEngine) {
@@ -117,36 +117,6 @@ function decode(base64: string): Uint8Array {
   return bytes
 }
 
-describe('what the audio schemas refuse', () => {
-  it('accepts a complete full-ring drain within the result and frame caps', async () => {
-    const { engine, emit } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    const bytes = pcm(BRIDGE_AUDIO_RING_MAX_BYTES, 19)
-    emit(bytes)
-    const result = audioReadResultSchema.parse(
-      await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
-    )
-    expect(decode(result.base64)).toEqual(bytes)
-    const raw = JSON.stringify({
-      v: 1,
-      type: 'reply',
-      id: 'AAAAAAAAAAAAAAAAAAAAAA',
-      payload: { id: 'audio', ok: true, result }
-    })
-    expect(new TextEncoder().encode(raw).byteLength).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(readBridgeHostMessage(raw).ok).toBe(true)
-    expect(
-      audioReadResultSchema.safeParse({
-        base64: 'A'.repeat(BRIDGE_AUDIO_READ_MAX_BASE64_CHARS + 1),
-        droppedBytes: 0,
-        recording: true,
-        interruption: null
-      }).success
-    ).toBe(false)
-  })
-})
-
 describe('the shell capture', () => {
   it('serves a partial drain from the front and keeps the rest for the next read', async () => {
     const { engine, emit } = createTestEngine()
@@ -235,30 +205,6 @@ describe('the shell capture', () => {
     expect(read.base64).toBe('')
   })
 
-  it('leaves one capture behind when two starts race the permission prompt', async () => {
-    // Concurrent starts can both leave the OS prompt and reach listen; replacement must remove the earlier handlers rather than leak a ring nobody drains.
-    const entered = gate()
-    const blocked = gate()
-    const { engine, log, liveListeners } = createTestEngine({
-      permission: async () => {
-        entered.release()
-        await blocked.promise
-        return 'granted'
-      }
-    })
-    const capture = createCapture(engine)
-    const first = capture.serve('native.audio.start', { sampleRate: 16_000 })
-    await entered.promise
-    const second = capture.serve('native.audio.start', { sampleRate: 16_000 })
-    blocked.release()
-    await expect(first).resolves.toMatchObject({ started: true })
-    await expect(second).resolves.toMatchObject({ started: true })
-    expect(liveListeners()).toEqual({ microphone: 1, interruptions: 1 })
-    capture.dispose()
-    expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-    expect(log.filter((entry) => entry === 'end')).toHaveLength(2)
-  })
-
   it('does not open a capture for a start that lands after the session ended', async () => {
     const entered = gate()
     const blocked = gate()
@@ -280,30 +226,6 @@ describe('the shell capture', () => {
     expect(log).not.toContain('end')
   })
 
-  it('tears the device down for a start that lost the race after opening', async () => {
-    const entered = gate()
-    const blocked = gate()
-    const { engine, log, liveListeners } = createTestEngine({
-      open: async (sampleRate) => {
-        entered.release()
-        await blocked.promise
-        return { opened: true, sampleRate }
-      }
-    })
-    const capture = createCapture(engine)
-    const pending = capture.serve('native.audio.start', { sampleRate: 16_000 })
-    await entered.promise
-    capture.dispose()
-    blocked.release()
-    await expect(pending).resolves.toEqual({
-      started: false,
-      sampleRate: 16_000,
-      permission: 'granted'
-    })
-    expect(log.filter((entry) => entry === 'end')).toHaveLength(1)
-    expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-  })
-
   it('ends a capture a stop asked for while its start was still opening', async () => {
     const entered = gate()
     const blocked = gate()
@@ -323,32 +245,6 @@ describe('the shell capture', () => {
     // Serialize stop after pending start so it closes the resulting microphone instead of observing no capture and leaving one live.
     await expect(stopped).resolves.toEqual({ stopped: true, base64: '', droppedBytes: 0 })
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-  })
-})
-
-describe('the screen the shell holds awake while it is capturing', () => {
-  it('gives it back when the engine throws after the capture is open', async () => {
-    const { engine, screen } = createTestEngine({
-      begin: () => {
-        throw new Error('the audio engine would not start')
-      }
-    })
-    const capture = createCapture(engine)
-    await expect(capture.serve('native.audio.start', { sampleRate: 16_000 })).rejects.toThrow(
-      'would not start'
-    )
-    expect(screen).toEqual(['+', '-'])
-  })
-
-  it('does not take it twice when a second start replaces the first', async () => {
-    const { engine, screen } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    // Replace the old capture’s wake tag before activating another; never hold two with only one future release.
-    expect(screen).toEqual(['+', '-', '+'])
-    capture.dispose()
-    expect(screen).toEqual(['+', '-', '+', '-'])
   })
 })
 

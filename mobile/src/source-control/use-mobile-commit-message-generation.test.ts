@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileGenerateCommitMessageResult } from './mobile-commit-message-ai'
 
-vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
+vi.mock('../platform/haptics/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
 const reply = vi.hoisted(() => {
   const held: {
     resolve: ((result: MobileGenerateCommitMessageResult) => void) | null

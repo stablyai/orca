@@ -134,19 +134,16 @@ function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
   })
 }
 
-async function openHostControl(input?: {
-  controlResumeSecret?: string
-  previousGeneration?: number
-  keyPair?: nacl.BoxKeyPair
-  assignmentEpoch?: number
-  capabilities?: string
-}): Promise<{ socket: WebSocket; ack: Record<string, unknown>; keyPair: nacl.BoxKeyPair }> {
-  const keyPair = input?.keyPair ?? nacl.box.keyPair()
+async function openHostControl(): Promise<{
+  socket: WebSocket
+  ack: Record<string, unknown>
+  keyPair: nacl.BoxKeyPair
+}> {
+  const keyPair = nacl.box.keyPair()
   const hostId = createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
   const socket = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/host/control`, {
     headers: {
-      authorization: `Bearer ${await relayToken('orca-relay', hostId)}`,
-      ...(input?.capabilities ? { ['x-orca-host-capabilities']: input.capabilities } : {})
+      authorization: `Bearer ${await relayToken('orca-relay', hostId)}`
     },
     perMessageDeflate: false
   })
@@ -159,13 +156,9 @@ async function openHostControl(input?: {
       type: 'host-hello',
       v: 1,
       relayHostId: hostId,
-      assignmentEpoch: input?.assignmentEpoch ?? 1,
+      assignmentEpoch: 1,
       hostPublicKeyB64: Buffer.from(keyPair.publicKey).toString('base64'),
-      appVersion: 'test',
-      ...(input?.controlResumeSecret ? { controlResumeSecret: input.controlResumeSecret } : {}),
-      ...(input?.previousGeneration === undefined
-        ? {}
-        : { previousGeneration: input.previousGeneration })
+      appVersion: 'test'
     })
   )
   const challenge = await nextMessage(socket)

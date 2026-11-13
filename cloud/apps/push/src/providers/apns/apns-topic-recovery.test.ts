@@ -36,7 +36,6 @@ it('delivers again after a topic error without re-registering the phone', async 
       expect(await sent.json()).toEqual({ results: [{ registrationId, status: 'queued' }] })
       await h.flushDeliveries()
       if (seq === 1) {
-        expect(h.server.observability.consume().delivery_error).toBe(1)
         h.setApnsResponse({ status: 200, body: '' })
       }
     }

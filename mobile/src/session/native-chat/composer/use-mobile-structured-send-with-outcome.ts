@@ -14,7 +14,7 @@ import {
   type StructuredAgentSessionSendControl
 } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { MAX_SKILL_REFS } from '../../../../../src/shared/rpc-contract/structured-agent-session-message-params'
+import { MAX_SKILL_REFS } from '../../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import {
   structuredAgentSessionGoalObjective,
   type StructuredAgentSessionComposerOptions

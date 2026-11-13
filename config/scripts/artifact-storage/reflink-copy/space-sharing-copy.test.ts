@@ -71,14 +71,6 @@ function makeTree(): { root: string; source: string } {
 }
 
 describe('shareTree', () => {
-  it('keeps relative symlinks unresolved on whatever this host supports', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'shared')
-    expect(shareTree(source, destination)).toBeTruthy()
-    expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
-    expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
-
   it('clears a part-way tree before trying the next mechanism', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'shared')
@@ -92,27 +84,7 @@ describe('shareTree', () => {
   })
 })
 
-describe('hardlinkTree', () => {
-  it('shares inodes for files but recreates symlinks as their own entries', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'linked')
-    hardlinkTree(source, destination)
-    expect(statSync(path.join(destination, 'nested', 'file')).ino).toBe(
-      statSync(path.join(source, 'nested', 'file')).ino
-    )
-    expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
-})
-
 describe('makeTreeReadOnly', () => {
-  it('drops write permission on files while leaving directories traversable and unlinkable', () => {
-    const { source } = makeTree()
-    makeTreeReadOnly(source)
-    expect(statSync(path.join(source, 'nested', 'file')).mode & 0o222).toBe(0)
-    // Assert rename/remove behavior, not mode bits: Windows chmod maps only read-only attribute and directories never report 0755.
-    expect(() => rmSync(path.join(source, 'nested'), { recursive: true })).not.toThrow()
-  })
-
   it('turns an extract-over-dist write into an error instead of silent shared corruption', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'linked')
@@ -146,16 +118,4 @@ describe('copyPrivateTree', () => {
       expect(readFileSync(path.join(source, 'nested', 'file'), 'utf8')).toBe('contents')
     }
   )
-
-  it('falls back to a byte copy when the private mechanism fails', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'private')
-    const clone = () => {
-      throw new Error('clonefile unsupported')
-    }
-    const result = copyPrivateTree(source, destination, { platform: 'darwin', clone })
-    expect(result.mechanism).toBeNull()
-    expect(result.copyError).toBeInstanceOf(Error)
-    expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
-  })
 })

@@ -9,7 +9,7 @@ import { buildLinearIssueWorkspaceAttachmentIndex } from '@/lib/work-items/linea
 import {
   collectLinkedLinearIssueRefsFromWorktrees,
   linkedLinearIssueRefsSignature
-} from '@/components/task-page/linear/task-page-linear-in-orca-issues'
+} from '@/components/task-page/linear/issues/task-page-linear-in-orca-issues'
 import type { LinearMode } from '@/components/task-page/task-page-localized-options'
 import {
   type LinearViewMode,
@@ -33,8 +33,8 @@ import type { LinearIssueAttributeFilter } from '../../../../../shared/linear/is
 import type {
   LinearIssueListFilterRead,
   LinearPrimaryTeamObservation
-} from '@/components/task-page/linear/task-page-linear-issue-request'
-import type { LinearProjectTab } from './task-page-linear-issue-model'
+} from '@/components/task-page/linear/issues/task-page-linear-issue-request'
+
 import { useTaskPageLinearContextState } from './use-task-page-linear-context-state'
 export type TaskPageLinearViewStatePreludeModel = ReturnType<
   typeof useTaskPageLinearViewStatePrelude
@@ -255,3 +255,5 @@ export function useTaskPageLinearViewState(model: TaskPageDetailRoutingModel) {
   return useTaskPageLinearContextState(preludeModel)
 }
 export type TaskPageLinearViewStateModel = ReturnType<typeof useTaskPageLinearViewState>
+
+export type LinearProjectTab = 'overview' | 'issues'

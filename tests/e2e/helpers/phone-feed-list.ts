@@ -2,15 +2,15 @@ import { expect } from '@stablyai/playwright-test'
 import type { Page } from '@stablyai/playwright-test'
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
-import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
-import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
+import { buildHostFeedView } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-inputs'
+import { buildHostFeedSections } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-sections'
 import { NO_WORKTREE_HOST_CONTEXT } from '../../../mobile/src/worktree/worktree-host-context-labels'
 import {
   readHostSidebarFeed,
   type HostSidebarFeedRead
-} from '../../../mobile/src/host-screen/use-host-sidebar-feed'
-import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
-import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
+} from '../../../mobile/src/host-screen/sidebar-feed/use-host-sidebar-feed'
+import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-connection'
+import { readHostMethodReply } from '../../../mobile/src/host-screen/sidebar-feed/host-sidebar-feed-operations'
 import type { SharedClientEventsClient } from '../../../mobile/src/transport/connection/shared-client-events'
 import {
   hostPlatformRead,

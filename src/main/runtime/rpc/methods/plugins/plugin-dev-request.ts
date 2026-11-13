@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { PluginDevRequestParams } from '../../../../../shared/rpc-contract/plugins-params'
+import { PluginDevRequestParams } from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import { requestPluginDevPanelHandler } from '../../../../plugins/plugin-dev-panel-request'
 import { requirePluginService } from './plugins'
 

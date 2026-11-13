@@ -19,7 +19,7 @@ import {
   formatMessageBannerWithContent,
   formatMessagePointer
 } from '../formatting/message-formatting'
-import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 
 export type MailSourceMessage = Pick<
   MessageRow,

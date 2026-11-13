@@ -10,7 +10,7 @@ import {
 import { useCallback, useMemo } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
-import type { MobileImageSource } from '../../../platform/media-picker-contract'
+import type { MobileImageSource } from '../../../platform/media-picking/media-picker-contract'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
 import {

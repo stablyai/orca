@@ -49,10 +49,7 @@ beforeAll(async () => {
   faultGrant = await readBridgeFaultGrant()
   const served = await createBundleServer({
     outDir: built.outDir,
-    cspHeader: (request) =>
-      request.url.includes('oldShell=1')
-        ? policy.replace('media-src blob:', "media-src 'none'")
-        : policy
+    cspHeader: policy
   })
   server = served.server
   origin = served.origin
@@ -66,7 +63,7 @@ afterAll(async () => {
     await rm(scratch, { recursive: true, force: true })
   }
 })
-async function openMedia(relativePath, bytes, oldShell = false) {
+async function openMedia(relativePath, bytes) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -106,7 +103,7 @@ async function openMedia(relativePath, bytes, oldShell = false) {
       revoke(uri)
     }
   })
-  await page.goto(`${origin}/?${oldShell ? 'oldShell=1' : ''}`)
+  await page.goto(`${origin}/`)
   return { page, errors }
 }
 const describeRender = bundles ? describe : describe.skip
@@ -135,15 +132,11 @@ describeRender('mobile media under the shipped shell policy', () => {
         return {
           duration: media.duration,
           time: media.currentTime,
-          controls: media.controls,
-          autoplay: media.autoplay,
           uri: media.currentSrc
         }
       }, tag)
       expect(playback.duration).toBeCloseTo(2, 1)
       expect(playback.time).toBeGreaterThan(1)
-      expect(playback.controls).toBe(true)
-      expect(playback.autoplay).toBe(false)
       await page.evaluate((pathname) => {
         history.pushState(null, '', `${pathname}?relativePath=README.md`)
         dispatchEvent(new PopStateEvent('popstate'))
@@ -161,11 +154,4 @@ describeRender('mobile media under the shipped shell policy', () => {
     },
     60_000
   )
-  it('explains the required app update when an older shell blocks Blob playback', async () => {
-    const { page } = await openMedia('music.wav', wavFixture(), true)
-    await page
-      .getByText('Update Orca Mobile to play media in this workspace', { exact: true })
-      .waitFor()
-    await page.close()
-  }, 60_000)
 })

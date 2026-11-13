@@ -11,10 +11,10 @@ import {
 import {
   RestartResumableParams,
   RestartResumeParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import { ContinueInterruptedParams } from '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import { ContinueInterruptedParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { structuredAgentsReadBy } from '../structured-agent-session-policy'
 
 export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [

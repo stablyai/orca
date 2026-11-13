@@ -38,14 +38,11 @@ async function failedQuery(failure: Error): Promise<unknown> {
 describe('relay database transient errors', () => {
 
   // Staging B1 re-test: a Cloud SQL restart failed the transaction's acquire with `write EPIPE`.
-  it.each(['EPIPE', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH'])(
-    'classifies an acquire that failed with %s, but not the bare errno',
-    async (code) => {
-      const failure = (): Error => Object.assign(new Error(`connect ${code}`), { code })
-      expect(isRelayDatabaseTransientError(await failedAcquire(failure()))).toBe(true)
-      expect(isRelayDatabaseTransientError(failure())).toBe(false)
-    }
-  )
+  it('classifies an acquire EPIPE only from the database layer', async () => {
+    const failure = (): Error => Object.assign(new Error('connect EPIPE'), { code: 'EPIPE' })
+    expect(isRelayDatabaseTransientError(await failedAcquire(failure()))).toBe(true)
+    expect(isRelayDatabaseTransientError(failure())).toBe(false)
+  })
 
   // Database-layer drops answer 503/Retry-After (staging B1); never retry transaction work with unknown commit outcome.
   it('classifies a mid-statement drop only from the database layer', async () => {

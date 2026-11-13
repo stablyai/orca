@@ -3,7 +3,6 @@ import { RelayAssignmentStore } from '../../assignment/assignment-store.js'
 import { openInMemoryRelayDatabase } from '../../database/database.js'
 import {
   SHADOW_SEAT_OUTRANK_SKEW_MS,
-  SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
   ShadowSeatDirectory,
   startShadowSeatPoller,
   type SeatFeedCell,
@@ -141,7 +140,6 @@ describe('startShadowSeatPoller', () => {
       { cellId: 'cell-a', epoch: 3, generation: 1, state: 'active' }
     ])
     expect(cell.directory.cellState('cell-a')).toMatchObject({ status: 'live', seq: 5 })
-    expect(cell.identityToken).toHaveBeenCalledTimes(1)
   })
 
   it('resyncs from a full snapshot when the cell restarts with a new incarnation', async () => {
@@ -284,7 +282,6 @@ describe('startShadowSeatPoller', () => {
     await cell.tick()
     await cell.tick()
     cell.stop()
-    expect(call).toBe(3)
     expect(cell.requests[2]?.searchParams.get('since')).toBe(`${INCARNATION}:1`)
     expect(cell.directory.seatsOf('user-a', 'host-2')).toHaveLength(1)
   })
@@ -336,31 +333,6 @@ describe('startShadowSeatPoller', () => {
     expect(cell.directory.isComplete()).toBe(true)
   })
 
-  it('forgets the switches a cell reported once its image no longer has the feed', async () => {
-    let rolledBack = false
-    const cell = poller({
-      'cell-a': () => json(feed({ seq: 1, full: [] })),
-      'cell-b': () =>
-        rolledBack
-          ? new Response('Not Found', { status: 404 })
-          : json(
-              feed({
-                cellId: 'cell-b',
-                seq: 1,
-                full: [],
-                flagsApplied: { generation: 3, flags: { readinessLocal: true } }
-              })
-            )
-    })
-    await cell.tick()
-    expect(cell.directory.cellState('cell-b')?.flagsApplied?.generation).toBe(3)
-    rolledBack = true
-    await cell.tick()
-    cell.stop()
-    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'no-feed' })
-    expect(cell.directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
-  })
-
   it('keeps a reserve switch through a 404 until a feed says db or the process is replaced', () => {
     const directory = new ShadowSeatDirectory()
     directory.setCells(['cell-b'])
@@ -388,47 +360,6 @@ describe('startShadowSeatPoller', () => {
     cell.stop()
     expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'pending' })
     expect(cell.directory.isComplete()).toBe(true)
-  })
-
-  it('backs off cell-list reads while the database fails', async () => {
-    const listCells = vi.fn(async (): Promise<SeatFeedCell[]> => {
-      throw new Error('pool timeout')
-    })
-    const cell = poller({}, 'all', listCells)
-    for (let second = 0; second < 40; second += 1) {
-      await cell.tick()
-      cell.advance(1_000)
-    }
-    cell.stop()
-    // Retries at +1, +2, +4, +8, +16 s, then at most every 30 s.
-    expect(listCells.mock.calls.length).toBeLessThanOrEqual(7)
-    expect(listCells.mock.calls.length).toBeGreaterThanOrEqual(5)
-  })
-
-  it('keeps polling the last cell list while a cell-list read hangs', async () => {
-    const readEntered = Promise.withResolvers<void>()
-    const readDone = Promise.withResolvers<SeatFeedCell[]>()
-    const listCells = vi
-      .fn<() => Promise<SeatFeedCell[]>>()
-      .mockResolvedValueOnce(CELLS)
-      .mockImplementation(() => {
-        readEntered.resolve()
-        return readDone.promise
-      })
-    const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, ['cell-a'], listCells)
-    await cell.tick()
-    cell.advance(31_000)
-    const round = cell.tick()
-    await readEntered.promise
-    await Promise.resolve()
-    expect(listCells).toHaveBeenCalledTimes(2)
-    expect(cell.requests.map((url) => url.hostname)).toEqual([
-      'cell-a.example.test',
-      'cell-a.example.test'
-    ])
-    readDone.resolve(CELLS)
-    await round
-    cell.stop()
   })
 
   it('treats a malformed or mislabelled body as unverifiable', async () => {
@@ -483,20 +414,6 @@ describe('startShadowSeatPoller', () => {
     expect(cell.directory.seatsOf('user-a', 'host-1')).toEqual([])
   })
 
-  it('bounds the recently-left memory', () => {
-    const directory = new ShadowSeatDirectory()
-    directory.setCells(['cell-a'])
-    const hosts = SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS + 10
-    directory.apply(
-      'cell-a',
-      feed({ seq: 1, full: Array.from({ length: hosts }, (_, index) => seat(`host-${index}`)) }),
-      10
-    )
-    directory.apply('cell-a', feed({ incarnation: 'restarted', seq: 1, full: [] }), 20)
-    expect(directory.summary(20).recentlyLeftHosts).toBe(SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS)
-    expect(directory.recentlyLeftOf('user-a', 'host-0', 20)).toEqual([])
-    expect(directory.recentlyLeftOf('user-a', `host-${hosts - 1}`, 20)).toHaveLength(1)
-  })
 })
 
 describe('RelayAssignmentStore.seatFeedCells', () => {

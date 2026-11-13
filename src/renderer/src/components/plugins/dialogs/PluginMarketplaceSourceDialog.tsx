@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugin-host-api'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'

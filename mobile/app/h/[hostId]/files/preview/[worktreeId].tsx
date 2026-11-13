@@ -7,7 +7,7 @@ import { useLocalSearchParams } from 'expo-router'
 import {
   mobileFilePreviewShellParams,
   normalizeMobileFilePreviewRouteParams
-} from '../../../../../src/files/mobile-file-preview-route'
+} from '../../../../../src/files/preview/mobile-file-preview-route'
 import {
   shellScreenRoute,
   shellScreenRouteKey

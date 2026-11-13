@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript-api'
 
-export const MEDIA_PICKER_SEAM = 'src/platform/media-picker.web.ts'
+export const MEDIA_PICKER_SEAM = 'src/platform/media-picking/media-picker.web.ts'
 
 export const NATIVE_PICKER_MODULES = ['expo-image-picker', 'expo-document-picker']
 

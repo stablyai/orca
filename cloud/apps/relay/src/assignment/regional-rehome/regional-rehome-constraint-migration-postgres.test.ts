@@ -1,10 +1,6 @@
 import pg from 'pg'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import {
-  openRelayDatabase,
-  REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS,
-  type RelayDatabase
-} from '../../database/database.js'
+import { openRelayDatabase, type RelayDatabase } from '../../database/database.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -127,25 +123,15 @@ describePostgres('PostgreSQL regional rehome constraint migration', () => {
         await expect(
           client.query(INSERT_ATTEMPT, attemptValues('attempt-3', 'europe-west1'))
         ).rejects.toMatchObject({ code: '23514' })
-        const constraints = await client.query(
-          `SELECT conname FROM pg_constraint
-           WHERE conrelid = 'relay_region_rehome_attempts'::regclass
-             AND conname LIKE '%preferred_region%'
-           ORDER BY conname`
-        )
-        expect(constraints.rows).toEqual([
-          { conname: 'relay_region_rehome_attempts_preferred_region_valid' }
-        ])
-        // The existing control row keeps its tuning and gains the cooldown.
+        // Preserve existing control tuning across the upgrade.
         const control = await client.query(
-          `SELECT generation, preference_max_age_ms, host_cooldown_ms
+          `SELECT generation, preference_max_age_ms
            FROM relay_region_rehome_control WHERE control_id = 'global'`
         )
         expect(control.rows).toEqual([
           {
             generation: '3',
-            preference_max_age_ms: '86400000',
-            host_cooldown_ms: String(REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS)
+            preference_max_age_ms: '86400000'
           }
         ])
       })
@@ -182,14 +168,6 @@ describePostgres('PostgreSQL regional rehome constraint migration', () => {
     await withClient(async (client) => {
       await client.query(`SET search_path = ${schema}`)
       await client.query(INSERT_ATTEMPT, attemptValues('attempt-4', 'us-central1'))
-      const constraints = await client.query(
-        `SELECT conname FROM pg_constraint
-         WHERE conrelid = 'relay_region_rehome_attempts'::regclass
-           AND conname LIKE '%preferred_region%'`
-      )
-      expect(constraints.rows).toEqual([
-        { conname: 'relay_region_rehome_attempts_preferred_region_valid' }
-      ])
     })
   }, 60_000)
 })

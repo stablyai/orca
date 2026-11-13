@@ -1,5 +1,9 @@
-import { saveErrorMessageFromPreviewResult } from './mobile-file-preview-response'
-import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
+import {
+  saveErrorMessageFromPreviewResult,
+  previewError,
+  type MobileFilePreviewResult
+} from './preview/mobile-file-preview-response'
+import { MobileChatAttachmentPreview } from './attachments/MobileChatAttachmentPreview'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -15,33 +19,34 @@ import { useWorkspaceClient } from '../worktree/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import {
   loadMobileFilePreview,
-  previewError,
-  saveMobileTerminalArtifactPreview,
-  type MobileFilePreviewResult
-} from './mobile-file-preview-request'
-import { MobileFilePreviewDiscardModal } from './MobileFilePreviewDiscardModal'
+  saveMobileTerminalArtifactPreview
+} from './preview/mobile-file-preview-request'
+import { MobileFilePreviewDiscardModal } from './preview/MobileFilePreviewDiscardModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { MobileFilePreviewBody } from './MobileFilePreviewBody'
+import { MobileFilePreviewBody } from './preview/MobileFilePreviewBody'
 import {
   MobileMarkdownPreviewModeBar,
   useMarkdownPreviewMode
-} from './MobileMarkdownPreviewModeBar'
+} from './markdown/MobileMarkdownPreviewModeBar'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
-} from './mobile-file-preview-route'
-import { previewSourceFromRoute, sourceKeyForPreview } from './mobile-file-preview-source'
-import { normalizeMobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
+} from './preview/mobile-file-preview-route'
+import { previewSourceFromRoute, sourceKeyForPreview } from './preview/mobile-file-preview-source'
+import { normalizeMobileFilePreviewLineColumn } from './preview/mobile-file-preview-line-column'
 import {
   hasUnsavedMobileTerminalArtifactDraft,
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
-} from './mobile-file-preview-editability'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
-import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
-import { filePreviewEditDraftKey, MobileFilePreviewEditDraft } from './MobileFilePreviewEditDraft'
+} from './terminal-artifacts/mobile-file-preview-editability'
+import { filePreviewStyles as styles } from './preview/mobile-file-preview-styles'
+import { mobileMarkdownFileLink } from './markdown/mobile-markdown-file-link'
+import { useMobileFilePreviewBack } from './preview/use-mobile-file-preview-back'
+import {
+  filePreviewEditDraftKey,
+  MobileFilePreviewEditDraft
+} from './terminal-artifacts/MobileFilePreviewEditDraft'
 import { dropDocumentEditDraft } from '../drafts/document-edit-draft-rows'
 
 type Props = {

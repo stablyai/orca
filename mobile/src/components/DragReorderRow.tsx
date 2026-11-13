@@ -18,7 +18,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { triggerMediumImpact } from '../platform/haptics'
+import { triggerMediumImpact } from '../platform/haptics/haptics'
 import {
   type DragReorderLayout,
   orderedKeysFromDragReorderPositions,

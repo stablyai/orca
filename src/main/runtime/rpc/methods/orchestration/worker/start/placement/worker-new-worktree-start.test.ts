@@ -13,7 +13,7 @@ import { RpcDispatcher } from '../../../../../dispatcher'
 import type { RpcRequest } from '../../../../../core'
 import { ORCHESTRATION_METHODS } from '../../../orchestration'
 import '../launch/worker-opencode-model-preflight'
-import '../../../../../../../../shared/rpc-contract/orchestration-federation-start-params'
+import '../../../../../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 
 describe('orchestration new-worktree workers', () => {
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'

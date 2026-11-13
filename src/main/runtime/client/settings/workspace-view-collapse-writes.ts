@@ -2,7 +2,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import type {
   SetCollapsedRequest,
   SetCollapsedResult
-} from '../../../../shared/rpc-contract/workspace-view-collapse-params'
+} from '../../../../shared/rpc-contract/workspaces/workspace-view-collapse-params'
 
 // Far above writers x sections in use; an evicted entry only lets a very old retry apply again.
 const MAX_TRACKED_WRITES = 4096

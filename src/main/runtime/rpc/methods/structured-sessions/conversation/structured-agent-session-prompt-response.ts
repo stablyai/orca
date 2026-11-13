@@ -7,11 +7,11 @@ import {
 import {
   RespondParams,
   SetOptionParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
-import { RespondToQuestionParams } from '../../../../../../shared/rpc-contract/structured-agent-session-question-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
+import { RespondToQuestionParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-question-params'
 
 export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
   defineMethod({

@@ -2,7 +2,7 @@ import * as z from 'zod'
 import {
   HOME_WORKTREE_COUNTS_FAMILY,
   type NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { defineHostQuery } from '../query/host-query'
 import {
   homeAgentEntries,

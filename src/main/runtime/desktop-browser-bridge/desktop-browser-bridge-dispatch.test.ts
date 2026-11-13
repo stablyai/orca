@@ -9,8 +9,8 @@ import { defineMethod } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from '../rpc/methods/browser/desktop-browser-bridge'
 import { BrowserTarget } from '../../../shared/rpc-contract/rpc-param-primitives'
-import { Goto } from '../../../shared/rpc-contract/browser-params'
-import { BrowserOpenUrlParams } from '../../../shared/rpc-contract/browser-tab-create-params'
+import { Goto } from '../../../shared/rpc-contract/browser/browser-params'
+import { BrowserOpenUrlParams } from '../../../shared/rpc-contract/browser/browser-tab-create-params'
 import {
   getDesktopBrowserBridgeRegistry,
   setDesktopBrowserBridgeHostEnabled

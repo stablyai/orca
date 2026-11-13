@@ -1,6 +1,6 @@
 import { normalizeBrowserUrl } from '../browser/pane-view/browser-url'
 import { translate } from '../i18n/mobile-i18n'
-import { captureMobileFileMutationOwnership } from '../files/mobile-file-mutation-ownership'
+import { captureMobileFileMutationOwnership } from '../files/mutation-ownership/mobile-file-mutation-ownership'
 import {
   browserGoBack,
   browserGoForward,
@@ -11,9 +11,9 @@ import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-sessio
 import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
-import { isFileExistsErrorMessage } from '../files/file-exists-error'
+import { isFileExistsErrorMessage } from '../files/mutation-ownership/file-exists-error'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
-import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/use-mobile-session-terminal-create-actions'
+import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/creation/use-mobile-session-terminal-create-actions'
 
 const BROWSER_NAVIGATION_COMMANDS = {
   'browser.back': browserGoBack,

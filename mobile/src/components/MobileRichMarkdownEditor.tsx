@@ -15,7 +15,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
 import { TextInputModal } from './TextInputModal'
 import {

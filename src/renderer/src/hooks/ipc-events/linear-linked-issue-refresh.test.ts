@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime/runtime-environment-subscriptions'
-import { linearApi } from '../../../../preload/api/linear-bridge'
+import { linearApi } from '../../../../preload/api/work-items/linear-bridge'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { runtimeCompatibilityChecks } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
@@ -12,7 +12,7 @@ import { getWorkspaceReferenceRequest } from '@/components/sidebar/workspace-car
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { LinearLinkedIssueUpdated } from '../../../../preload/api/linear-api'
+import type { LinearLinkedIssueUpdated } from '../../../../preload/api/work-items/linear-api'
 
 const { localIpc } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')

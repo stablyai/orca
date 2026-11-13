@@ -13,7 +13,7 @@ src/renderer/src/components/settings/skills/linear/LinearAgentSkillPane.tsx
 src/renderer/src/components/settings/tasks/use-task-source-provider-readiness.ts
 src/renderer/src/components/sidebar/workspace-card/details/use-worktree-card-review-details.ts
 src/renderer/src/components/task-page/jira/Content.tsx
-src/renderer/src/components/task-page/jira/use-task-page-jira-list-projection.ts
+src/renderer/src/components/task-page/jira/listing/use-task-page-jira-list-projection.ts
 src/renderer/src/components/task-page/jira/use-task-page-jira-list-state.ts
 src/renderer/src/hooks/use-integration-provider-status-refresh.ts
 

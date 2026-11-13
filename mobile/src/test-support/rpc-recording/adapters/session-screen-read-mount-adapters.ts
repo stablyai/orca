@@ -1,12 +1,12 @@
 import type * as UseMobileSessionDocumentReadersModule from '../../../files/session-documents/use-mobile-session-document-readers'
-import type * as UseMobileSessionTerminalListModule from '../../../terminal/session/use-mobile-session-terminal-list'
+import type * as UseMobileSessionTerminalListModule from '../../../terminal/session/inventory/use-mobile-session-terminal-list'
 import { hookMount, performHookAction } from '../hook-mount'
 import type {
   FileDocState,
   MarkdownDocState
 } from '../../../files/session-documents/session-document-state'
 import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
-import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
+import type { TerminalRecord } from '../../../terminal/session/inventory/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -73,7 +73,7 @@ export function sessionScreenReadMountAdapters(
     },
     'session.terminal-inventory': ({ client, effect }) => {
       const useList = modules.load<typeof UseMobileSessionTerminalListModule>(
-        'mobile/src/terminal/session/use-mobile-session-terminal-list.ts'
+        'mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts'
       ).useMobileSessionTerminalList
       let terminals: TerminalRecord[] = []
       const terminalsRef: { current: TerminalRecord[] } = { current: [] }

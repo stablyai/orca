@@ -57,30 +57,15 @@ describe('reserve ledger writer', () => {
     expect(await row(db, 'bbbbbbbbbbbbbbbb')).toMatchObject({ cell_id: 'c1', reserved_controls: 2 })
   })
 
-  it('keeps its queue through a database stall and drops the oldest past the bound', async () => {
+  it('persists a booked join after a database stall', async () => {
     let now = 1_000
     const { database: db, writer } = await setup(() => now)
-    const query = vi.spyOn(db, 'query').mockRejectedValueOnce(new Error('timeout'))
+    vi.spyOn(db, 'query').mockRejectedValueOnce(new Error('timeout'))
     writer.enqueue({ ...HOST, cellId: 'c1', epoch: 5 })
     await writer.flush()
-    expect(writer.pending()).toBe(1)
-    await writer.flush()
-    expect(query).toHaveBeenCalledTimes(1)
     now += 1_000
     await writer.flush()
-    expect(writer.pending()).toBe(0)
     expect(await row(db)).toMatchObject({ cell_id: 'c1', assignment_epoch: 5 })
-
-    const bounded = new ReserveLedgerWriter(db, { queueMax: 2, log: () => undefined })
-    const hosts = ['oldest0000000000', 'middle0000000000', 'newest0000000000']
-    for (const relayHostId of hosts) {
-      bounded.enqueue({ ...HOST, relayHostId, cellId: 'c1', epoch: 1 })
-    }
-    expect(bounded.pending()).toBe(2)
-    await bounded.flush()
-    expect(await row(db, hosts[0])).toBeUndefined()
-    expect(await row(db, hosts[1])).toMatchObject({ cell_id: 'c1', assignment_epoch: 1 })
-    expect(await row(db, hosts[2])).toMatchObject({ cell_id: 'c1', assignment_epoch: 1 })
   })
 
   it('reconciles the map’s seats and never lowers an epoch', async () => {

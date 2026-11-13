@@ -1,3 +1,6 @@
+import type * as FileMutationOwnershipModule from '../../../files/mutation-ownership/mobile-file-mutation-ownership'
+import type * as FilePreviewRequestModule from '../../../files/preview/mobile-file-preview-request'
+import type * as FileTabDocModule from '../../../files/session-documents/mobile-file-tab-doc'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 
@@ -21,8 +24,8 @@ export function fileRequestMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'files.mutation-ownership': ({ client }) => {
-      const capture = modules.load<typeof import('../../../files/mobile-file-mutation-ownership')>(
-        'mobile/src/files/mobile-file-mutation-ownership.ts'
+      const capture = modules.load<typeof FileMutationOwnershipModule>(
+        'mobile/src/files/mutation-ownership/mobile-file-mutation-ownership.ts'
       ).captureMobileFileMutationOwnership
       let ownership: unknown = 'uncaptured'
       return {
@@ -36,8 +39,8 @@ export function fileRequestMountAdapters(
       }
     },
     'files.preview-load': ({ client, effect }) => {
-      const load = modules.load<typeof import('../../../files/mobile-file-preview-request')>(
-        'mobile/src/files/mobile-file-preview-request.ts'
+      const load = modules.load<typeof FilePreviewRequestModule>(
+        'mobile/src/files/preview/mobile-file-preview-request.ts'
       ).loadMobileFilePreview
       let preview: unknown = 'unloaded'
       return {
@@ -59,8 +62,8 @@ export function fileRequestMountAdapters(
       }
     },
     'files.preview-save': ({ client, effect }) => {
-      const save = modules.load<typeof import('../../../files/mobile-file-preview-request')>(
-        'mobile/src/files/mobile-file-preview-request.ts'
+      const save = modules.load<typeof FilePreviewRequestModule>(
+        'mobile/src/files/preview/mobile-file-preview-request.ts'
       ).saveMobileTerminalArtifactPreview
       let saved: unknown = 'unsaved'
       return {
@@ -78,8 +81,8 @@ export function fileRequestMountAdapters(
       }
     },
     'files.tab-doc': ({ client }) => {
-      const resolve = modules.load<typeof import('../../../files/mobile-file-tab-doc')>(
-        'mobile/src/files/mobile-file-tab-doc.ts'
+      const resolve = modules.load<typeof FileTabDocModule>(
+        'mobile/src/files/session-documents/mobile-file-tab-doc.ts'
       ).resolveMobileFileTabDoc
       const docs: Record<string, unknown> = {}
       return {

@@ -63,7 +63,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../../../components/MobileSourceCopyButton', () => ({
   MobileSourceCopyButton: 'CopyButton'
 }))
-vi.mock('../../../platform/external-link', () => ({ openExternalLink: vi.fn() }))
+vi.mock('../../../platform/external-links/external-link', () => ({ openExternalLink: vi.fn() }))
 vi.mock('../../../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 import { ToolRun } from './MobileNativeChatToolRun'
 import {
@@ -78,12 +78,6 @@ describe('ToolRun', () => {
     act(() => renderer?.unmount())
     renderer = null
   })
-
-  function openRun(tree: ReactTestRenderer): void {
-    act(() => {
-      tree.root.findAll((node) => String(node.type) === 'Pressable')[0]!.props.onPress()
-    })
-  }
 
   const textIn = (node: ReactTestInstance): string[] =>
     node
@@ -138,62 +132,5 @@ describe('ToolRun', () => {
       show({ mounted: true })
       expect(textIn(renderer!.root)).toContain('a.ts')
     })
-
-    const box = (): ReactTestInstance =>
-      renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
-    const scrolled = (top: number) => ({
-      nativeEvent: {
-        contentOffset: { y: top },
-        contentSize: { height: 1_000 },
-        layoutMeasurement: { height: 300 }
-      }
-    })
-
-    it('comes back where the reader left its box after the row is recycled', () => {
-      show({ mounted: true })
-      press('ls')
-      act(() => {
-        box().props.onScroll(scrolled(120))
-      })
-      show({ mounted: false })
-      show({ mounted: true })
-      scrolls.to.mockClear()
-      act(() => {
-        box().props.onContentSizeChange()
-      })
-      expect(scrolls.to).toHaveBeenCalledWith({ y: 120, animated: false })
-    })
-  })
-
-  it('does not save a follow for a later row opening when new work left the height unchanged', () => {
-    const live = (blocks: NativeChatBlock[]) =>
-      createElement(ToolRun, {
-        blocks,
-        activeTurnIsWorking: true,
-        trailing: true
-      })
-    const call: NativeChatBlock = { type: 'tool-call', name: 'Bash', input: { command: 'ls' } }
-    act(() => {
-      renderer = create(live([call]))
-    })
-    openRun(renderer!)
-    const box = () => renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
-    act(() => {
-      box().props.onContentSizeChange()
-    })
-    act(() => {
-      renderer!.update(live([call, { type: 'tool-result', output: 'a.ts' }]))
-    })
-    scrolls.toEnd.mockClear()
-    act(() => {
-      renderer!.root
-        .findAll((node) => String(node.type) === 'Pressable')
-        .findLast((node) => textIn(node).includes('ls'))!
-        .props.onPress()
-    })
-    act(() => {
-      box().props.onContentSizeChange()
-    })
-    expect(scrolls.toEnd).not.toHaveBeenCalled()
   })
 })

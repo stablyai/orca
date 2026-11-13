@@ -1,6 +1,6 @@
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import type { MobileImageSource } from '../../platform/media-picker-contract'
+import type { MobileImageSource } from '../../platform/media-picking/media-picker-contract'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome

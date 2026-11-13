@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { PtyManagementSession } from '../../../../../../preload/api/pty-management-api'
+import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { getManageSessionsSearchEntries } from './manage-sessions-search'

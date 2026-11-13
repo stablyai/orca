@@ -11,7 +11,7 @@ import { mobileStructuredSessionOpenMessage } from './native-chat/agent-session/
 import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import type { useMobileSessionTabSwitching } from './tabs/use-mobile-session-tab-switching'
-import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
 export function useMobileStructuredSessionOpening(
   scope: Pick<

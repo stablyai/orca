@@ -8,10 +8,13 @@ import {
   assertClipboardImageByteLengthWithinLimit
 } from '../../../../src/shared/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
-import { isPickedImageMime } from '../../platform/mobile-picked-file-name'
+import { isPickedImageMime } from '../../platform/media-picking/mobile-picked-file-name'
 // Import permission errors from the Expo-free contract so page-side catches cannot pull native picker code into the bundle.
-import { ImageLibraryPermissionError } from '../../platform/media-picker-contract'
-import type { MobileImageSource, PickedMobileImage } from '../../platform/media-picker-contract'
+import { ImageLibraryPermissionError } from '../../platform/media-picking/media-picker-contract'
+import type {
+  MobileImageSource,
+  PickedMobileImage
+} from '../../platform/media-picking/media-picker-contract'
 
 const MOBILE_IMAGE_READ_CHUNK_BYTES = 256 * 1024
 

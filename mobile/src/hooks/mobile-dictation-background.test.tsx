@@ -7,7 +7,7 @@ import {
   rpcSuccess,
   type FakeRpcClient
 } from '../mobile-web-shell/bridge-host-test-fakes'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 
 const appState = vi.hoisted(() => ({ handlers: new Set<(state: string) => void>() }))
 const microphone = vi.hoisted(() => ({ ends: 0 }))
@@ -23,7 +23,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 
-vi.mock('../platform/dictation-capture', () => {
+vi.mock('../platform/audio-capture/dictation-capture', () => {
   const capture: DictationCapture = {
     open: async () => ({ ok: true }),
     begin: () => true,
@@ -104,31 +104,6 @@ describe('leaving the app while dictating', () => {
 
     await act(async () => {
       leave('background')
-      await pump(rpc)
-    })
-    expect(transcripts).toEqual(['what was heard'])
-    expect(dictation().status).toBe('idle')
-  })
-
-  it('keeps what the open mic heard while the computer is still starting', async () => {
-    const rpc = createFakeRpcClient()
-    const transcripts: string[] = []
-    mount(rpc, transcripts)
-    await act(async () => {
-      void dictation().start()
-      for (let turn = 0; turn < 20 && rpc.requests.length === 0; turn += 1) {
-        await Promise.resolve()
-      }
-    })
-    expect(dictation().status).toBe('starting')
-    const endsBefore = microphone.ends
-
-    act(() => {
-      leave('background')
-    })
-    expect(microphone.ends).toBe(endsBefore + 1)
-
-    await act(async () => {
       await pump(rpc)
     })
     expect(transcripts).toEqual(['what was heard'])

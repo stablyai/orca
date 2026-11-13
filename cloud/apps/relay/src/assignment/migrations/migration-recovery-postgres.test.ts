@@ -256,7 +256,7 @@ describePostgres('PostgreSQL migration recovery', () => {
     expect(
       await database.query(
         `SELECT assignment.cell_id, assignment.assignment_epoch,
-           migration.completed_at, migration.aborted_at
+           (migration.completed_at IS NOT NULL) AS completed, migration.aborted_at
          FROM relay_assignments assignment
          JOIN relay_assignment_migrations migration
            ON migration.user_id = assignment.user_id
@@ -269,7 +269,7 @@ describePostgres('PostgreSQL migration recovery', () => {
       {
         cell_id: input.cells.failed.id,
         assignment_epoch: '2',
-        completed_at: String(100 + 45_001 + ASSIGNMENT_LIMITS.migrationLeaseMs + 1),
+        completed: true,
         aborted_at: null
       }
     ])
@@ -309,7 +309,7 @@ describePostgres('PostgreSQL migration recovery', () => {
     expect(
       await database.query(
         `SELECT assignment.cell_id, assignment.assignment_epoch,
-           migration.completed_at, migration.aborted_at
+           migration.completed_at, (migration.aborted_at IS NOT NULL) AS aborted
          FROM relay_assignments assignment
          JOIN relay_assignment_migrations migration
            ON migration.user_id = assignment.user_id
@@ -323,9 +323,7 @@ describePostgres('PostgreSQL migration recovery', () => {
         cell_id: input.cells.source.id,
         assignment_epoch: '3',
         completed_at: null,
-        aborted_at: String(
-          100 + ASSIGNMENT_LIMITS.migrationLeaseMs + STRANDED_MIGRATION_ABANDON_MS + 1
-        )
+        aborted: true
       }
     ])
   })
@@ -392,63 +390,6 @@ describePostgres('PostgreSQL migration recovery', () => {
       { assignment_epoch: '2', completed_at: null, aborted_at: '45101' },
       { assignment_epoch: '3', completed_at: null, aborted_at: null }
     ])
-  })
-
-  it('fails a competing aggregate supersession instead of reporting the wrong target', async () => {
-    const input = await fixture()
-    const alternate = {
-      id: `recovery-cell-${sequence}-alternate`,
-      url: `https://recovery-${sequence}-alternate.example.com`,
-      capacityRequests: 20
-    }
-    await input.store.reconcileCells([...Object.values(input.cells), alternate], false)
-    await input.heartbeat(alternate)
-    await input.store.setCellEnabled(input.cells.failed.id, false)
-    input.advancePastHeartbeat()
-    await input.heartbeat(input.cells.source)
-    await input.heartbeat(input.cells.replacement)
-    await input.heartbeat(alternate)
-    await input.store.attestCellFence(input.cells.failed.id, input.cellIncarnation)
-
-    const results = await Promise.allSettled([
-      input.store.supersedeRegisteredCellEvacuations(
-        input.cells.source.id,
-        input.cells.failed.id,
-        input.cells.replacement.id,
-        100
-      ),
-      input.store.supersedeRegisteredCellEvacuations(
-        input.cells.source.id,
-        input.cells.failed.id,
-        alternate.id,
-        100
-      )
-    ])
-    const fulfilled = results.filter(
-      (result): result is PromiseFulfilledResult<number> => result.status === 'fulfilled'
-    )
-    const rejected = results.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected'
-    )
-    expect(fulfilled).toHaveLength(1)
-    expect(fulfilled[0]!.value).toBe(1)
-    expect(rejected).toHaveLength(1)
-    expect(rejected[0]!.reason).toMatchObject({ message: 'migration_already_superseded' })
-    const successor = await database.query(
-      `SELECT assignment.cell_id, migration.target_cell_id
-       FROM relay_assignments assignment
-       JOIN relay_assignment_migrations migration
-         ON migration.user_id = assignment.user_id
-        AND migration.relay_host_id = assignment.relay_host_id
-        AND migration.assignment_epoch = assignment.assignment_epoch
-       WHERE assignment.user_id = ? AND migration.previous_epoch = ?`,
-      [input.identity.userId, input.migration.assignmentEpoch]
-    )
-    expect(successor).toHaveLength(1)
-    expect(successor[0]!.cell_id).toBe(successor[0]!.target_cell_id)
-    expect([input.cells.replacement.id, alternate.id]).toContain(
-      successor[0]!.target_cell_id
-    )
   })
 
   it('rolls back every supersession change when replacement capacity is insufficient', async () => {

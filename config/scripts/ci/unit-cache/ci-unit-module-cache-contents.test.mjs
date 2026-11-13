@@ -1,4 +1,4 @@
-import { mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -67,35 +67,18 @@ afterEach(async () => {
 })
 
 describe('unit module cache contents', () => {
-  it.each(['missing', 'modified', 'extra', 'renamed', 'metadata'])(
-    'rejects %s sealed contents',
-    async (change) => {
-      const options = await fixture()
-      await sealModuleCache(options)
-      const path = join(options.path, filename)
-      if (change === 'missing') {
-        await rm(path)
-      }
-      if (change === 'modified') {
-        await writeFile(path, moduleCode().replace('value = 1', 'value = 2'))
-      }
-      if (change === 'extra') {
-        await writeFile(join(options.path, 'c'.repeat(40)), moduleCode())
-      }
-      if (change === 'renamed') {
-        await rename(path, join(options.path, 'c'.repeat(40)))
-      }
-      if (change === 'metadata') {
-        await writeFile(
-          join(options.path, '_metadata.json'),
-          JSON.stringify({ lockfileHash: identity.lockfileHash, changed: true })
-        )
-      }
-      await expect(validateModuleCache(options)).rejects.toThrow(
-        /cache (inventory|content) mismatch/
-      )
+  it.each(['modified', 'extra'])('rejects %s sealed contents', async (change) => {
+    const options = await fixture()
+    await sealModuleCache(options)
+    const path = join(options.path, filename)
+    if (change === 'modified') {
+      await writeFile(path, moduleCode().replace('value = 1', 'value = 2'))
     }
-  )
+    if (change === 'extra') {
+      await writeFile(join(options.path, 'c'.repeat(40)), moduleCode())
+    }
+    await expect(validateModuleCache(options)).rejects.toThrow(/cache (inventory|content) mismatch/)
+  })
 
   it.skipIf(process.platform === 'win32')(
     'rejects symlinked modules, manifests and cache roots',

@@ -1,14 +1,14 @@
 import { defineMethod } from '../../core'
-import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import {
   TerminalSetAutoRestoreFit,
   TerminalSetDisplayMode,
   TerminalUnsubscribe,
   TerminalUpdateViewport
-} from '../../../../../shared/rpc-contract/terminal-viewport-schemas-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-viewport-schemas-params'
 import { updateViewportForClient } from './terminal-viewport-update'
-import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal-viewport-methods-params'
-import { TerminalAckOutput } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal/terminal-viewport-methods-params'
+import { TerminalAckOutput } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 import { acknowledgeTerminalStreamOutput } from './terminal-stream-tokens'
 
 export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [

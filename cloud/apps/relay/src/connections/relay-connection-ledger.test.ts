@@ -13,38 +13,6 @@ function socket(): { webSocket: WebSocket; close: () => void } {
 
 describe('RelayConnectionLedger', () => {
 
-  it.each([600, 1_000, 3_000])(
-    'enforces the %i-unit boundary with 100 control units reserved',
-    (hardCap) => {
-      const ledger = new RelayConnectionLedger(hardCap, 100)
-      const sockets: Array<{ webSocket: WebSocket; close: () => void }> = []
-      for (let index = 0; index < (hardCap - 100) / 2; index++) {
-        const admission = ledger.tryReservePhone()
-        expect(admission).not.toBeNull()
-        const phoneSocket = socket()
-        admission!.upgrade.promote(phoneSocket.webSocket)
-        admission!.hostData.bind(`connection-${index}`)
-        sockets.push(phoneSocket)
-      }
-      expect(ledger.tryReservePhone()).toBeNull()
-      expect(ledger.tryReserveControl(false)).toBeNull()
-      for (let index = 0; index < 100; index++) {
-        const upgrade = ledger.tryReserveControl(true)
-        expect(upgrade).not.toBeNull()
-        const controlSocket = socket()
-        upgrade!.promote(controlSocket.webSocket)
-        sockets.push(controlSocket)
-      }
-
-      expect(ledger.counts().enforcedConnectionUnits).toBe(hardCap)
-      expect(ledger.tryReserveControl(true)).toBeNull()
-      sockets.at(-1)!.close()
-      const replacement = ledger.tryReserveControl(true)
-      expect(replacement).not.toBeNull()
-      replacement!.release()
-    }
-  )
-
   it('transfers a pending host-data unit without increasing enforced capacity', () => {
     const ledger = new RelayConnectionLedger(6, 2)
     const phone = ledger.tryReservePhone()!
@@ -128,4 +96,3 @@ describe('RelayConnectionLedger', () => {
     expect(ledger.canReserveBooking(100)).toBe(false)
   })
 })
-

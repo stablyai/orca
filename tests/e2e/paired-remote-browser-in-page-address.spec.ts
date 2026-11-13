@@ -45,7 +45,9 @@ test('history updates and hash links in a server page reach the paired address b
     const created = (
       await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
         worktree,
-        url: `${origin}/`
+        url: `${origin}/`,
+        // Unplaced server-side creates go to the paired desktop; this test drives a streamed page.
+        placement: { kind: 'server' }
       })
     ).result
     await focusMaterializedRemoteBrowserPane(page, {

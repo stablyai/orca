@@ -31,7 +31,7 @@ import type { MobileDiffReviewThread } from '../source-control/review/mobile-dif
 import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 import { CommentGroupView } from './pr-sidebar/PRCommentsSection'
 import { useNow } from '../hooks/use-now'
-import { triggerSelection } from '../platform/haptics'
+import { triggerSelection } from '../platform/haptics/haptics'
 
 const NO_OPENED_LINES: ReadonlySet<number> = new Set()
 

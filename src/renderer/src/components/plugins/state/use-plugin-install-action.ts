@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api/plugin-host-api'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'

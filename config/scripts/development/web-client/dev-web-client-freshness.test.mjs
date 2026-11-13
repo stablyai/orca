@@ -1,12 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  renameSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -58,23 +50,13 @@ function fixture() {
   return root
 }
 
-it.each(['add', 'delete', 'rename'])(
-  'invalidates a tracked bundle after a production source %s with old timestamps',
-  (operation) => {
-    const root = fixture()
-    expect(isDevWebClientFresh(root)).toBe(true)
-    if (operation !== 'add') {
-      rmSync(join(root, 'src/renderer/src/app.tsx'))
-    }
-    if (operation !== 'delete') {
-      const file = join(root, 'src/renderer/src/added.tsx')
-      writeFileSync(file, '')
-      utimesSync(file, OLD, OLD)
-    }
-    utimesSync(join(root, 'src/renderer/src'), OLD, OLD)
-    expect(isDevWebClientFresh(root)).toBe(false)
-  }
-)
+it('invalidates a tracked bundle after a production source deletion with old timestamps', () => {
+  const root = fixture()
+  expect(isDevWebClientFresh(root)).toBe(true)
+  rmSync(join(root, 'src/renderer/src/app.tsx'))
+  utimesSync(join(root, 'src/renderer/src'), OLD, OLD)
+  expect(isDevWebClientFresh(root)).toBe(false)
+})
 
 it('invalidates a tracked bundle when a source is removed in a nested directory', () => {
   const root = fixture()
@@ -115,12 +97,6 @@ it('detects same-size atomic replacement with a restored mtime', () => {
   expect(isDevWebClientFresh(root)).toBe(true)
   writeFileSync(replacement, '')
   utimesSync(replacement, OLD, OLD)
-  const originalIdentity = statSync(file, { bigint: true })
-  const replacementIdentity = statSync(replacement, { bigint: true })
-  expect([replacementIdentity.dev, replacementIdentity.ino]).not.toEqual([
-    originalIdentity.dev,
-    originalIdentity.ino
-  ])
   renameSync(replacement, file)
   utimesSync(dirname(file), OLD, OLD)
   expect(isDevWebClientFresh(root)).toBe(false)

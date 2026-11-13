@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api/plugin-host-api'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { PLUGIN_CONTRIBUTION_SUMMARY_LIMIT } from '../../../../../shared/plugins/contributions/plugin-contribution-summary'
 import {

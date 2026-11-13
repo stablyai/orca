@@ -3,6 +3,7 @@ import {
   type AgentSessionBackgroundTaskStops
 } from '../../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionCapabilities } from '../../../../shared/agent-session/agent-session-capabilities'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
@@ -22,6 +23,14 @@ import type { AgentSessionRefusalReason } from '../../../../shared/agent-session
 export type ConversationCommandChildWork = {
   views: readonly AgentChildWorkView[] | undefined
   open: boolean
+}
+
+/** Null where the agent compacts beside background tasks, so they don't hold /compact. */
+export function compactionChildWork(
+  capabilities: Pick<AgentSessionCapabilities, 'compactBesideBackgroundTasks'> | null | undefined,
+  childWork: () => ConversationCommandChildWork
+): ConversationCommandChildWork | null {
+  return capabilities?.compactBesideBackgroundTasks ? null : childWork()
 }
 
 export type ConversationCommandAdmissionContext = {
@@ -51,7 +60,7 @@ export function conversationCommandInFlight(): AgentSessionWireRefusal {
 export function conversationCommandBlocked(
   ctx: ConversationCommandAdmissionContext,
   record: AgentSessionRecord,
-  childWork: ConversationCommandChildWork,
+  childWork: ConversationCommandChildWork | null,
   admission?: 'at-rest' | 'handover'
 ): AgentSessionWireRefusal | null {
   const { items, submissions } = agentSessionCurrentContextRows(
@@ -82,7 +91,7 @@ export function conversationCommandBlocked(
     )
   }
   // Closed generations’ leftover child work must not block admission.
-  if (work.liveFence !== null && childWork.open) {
+  if (work.liveFence !== null && childWork?.open) {
     return blocked(
       'backgroundTasksRunning',
       stripOffersStop(childWork.views ?? [], ctx.adapter.backgroundTaskStops?.(ctx.sessionId))

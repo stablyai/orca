@@ -1,4 +1,4 @@
-import { MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES } from '../../../shared/rpc-contract/speech-params'
+import { MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES } from '../../../shared/rpc-contract/speech/speech-params'
 
 export type MobileDictationChunk = { audioBase64: string; sampleRate: number }
 

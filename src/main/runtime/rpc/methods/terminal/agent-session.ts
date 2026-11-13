@@ -9,7 +9,7 @@ import { defineMethod, type RpcContext } from '../../core'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
-} from '../../../../../shared/rpc-contract/agent-session-params'
+} from '../../../../../shared/rpc-contract/terminal/agent-session-params'
 
 function callerContext(context: RpcContext): RuntimeAgentSessionRpcCaller {
   const { pairedDeviceId, clientId, clientKind, signal } = context

@@ -1,4 +1,4 @@
-import { sameCellBox, type TerminalLaidOutCellBox } from '../../terminal-cell-box'
+import { sameCellBox, type TerminalLaidOutCellBox } from '../../viewport/terminal-cell-box'
 import type { TerminalDocumentScope } from '../document-scope'
 import { notify } from '../host-bridge/host-notify'
 

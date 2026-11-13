@@ -27,15 +27,19 @@ export type StructuredConversationCommandHold =
 
 /** Queued commands wait only for earlier unaccepted sends; ordinary commands wait for all in-flight agent work. */
 export function structuredConversationCommandHold(input: {
+  command: AgentSessionConversationCommand
   /** A /compact the host can hold as a card behind the turn or prompt. */
   waitsInLine: boolean
   /** A turn runs, or the chat shows the agent working on a message it has not answered. */
   agentWorking: boolean
   promptPending: boolean
+  /** Holds /clear only; the host knows whether the agent can compact beside them. */
   backgroundTasksRunning: boolean
+  /** A rewind on its way holds any command, in background work's words. */
+  rewindInFlight?: boolean
   sendPending: boolean
 }): StructuredConversationCommandHold | null {
-  if (input.backgroundTasksRunning) {
+  if (input.rewindInFlight || (input.backgroundTasksRunning && input.command === 'clear')) {
     return 'background'
   }
   if (input.waitsInLine) {

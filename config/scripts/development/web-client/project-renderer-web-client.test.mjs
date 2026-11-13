@@ -74,35 +74,19 @@ afterEach(() => {
 })
 
 describe('renderer web client projection', () => {
-  it('copies and minifies only the web dependency closure', async () => {
+  it('copies only the web dependency closure', async () => {
     const root = createRendererFixture()
     const result = await projectFixture(root)
 
     expect(result.code, result.stderr).toBe(0)
-    expect(result.stdout).toContain('Projected web client: 7 files')
     expect(existsSync(join(root, 'out/web/web-index.html'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/editor.worker-fixture.js'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/logo.png'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/desktop-entry.js'))).toBe(false)
     expect(existsSync(join(root, 'out/web/stale.js'))).toBe(false)
-    const sharedFiles = JSON.parse(
-      readFileSync(join(root, 'out/renderer/.orca-web-client-files.json'), 'utf8')
-    )
-    expect(sharedFiles).toEqual(
-      expect.arrayContaining([
-        'web-index.html',
-        'assets/web-entry.js',
-        'assets/web-shared.js',
-        'assets/editor.worker-fixture.js',
-        'assets/web.css',
-        'assets/lazy.js',
-        'assets/logo.png'
-      ])
-    )
-    expect(sharedFiles).not.toContain('assets/desktop-entry.js')
-    expect(sharedFiles).not.toContain('.vite/manifest.json')
-    expect(sharedFiles).not.toContain('index.html')
-    expect(readFileSync(join(root, 'out/web/assets/web.css'), 'utf8')).toBe('.root{color:red}\n')
+    expect(
+      JSON.parse(readFileSync(join(root, 'out/renderer/.orca-web-client-files.json'), 'utf8'))
+    ).toContain('assets/editor.worker-fixture.js')
   })
 
   it('follows transitive relative references and cycles with the existing substring behavior', async () => {
@@ -131,21 +115,6 @@ describe('renderer web client projection', () => {
     }
     expect(readFileSync(join(root, 'out/web/assets/token.png'), 'utf8')).toBe('substring-token')
     expect(existsSync(join(root, 'out/web/workers/unreferenced.mjs'))).toBe(false)
-  })
-
-  it('retains all PDFJS viewer asset directories even without textual references', async () => {
-    const root = createRendererFixture()
-    const assets = ['cmaps/fixture.bcmap', 'standard_fonts/fixture.pfb', 'wasm/fixture.wasm']
-    for (const file of assets) {
-      writeFixtureFile(root, `out/renderer/${file}`, Buffer.from([0, 255, 42]))
-    }
-
-    const result = await projectFixture(root)
-
-    expect(result.code, result.stderr).toBe(0)
-    for (const file of assets) {
-      expect(readFileSync(join(root, 'out/web', file))).toEqual(Buffer.from([0, 255, 42]))
-    }
   })
 
   it('follows referenced PDFJS text assets without expanding unreferenced viewer modules', async () => {

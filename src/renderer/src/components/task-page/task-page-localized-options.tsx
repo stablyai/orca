@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import type { GitLabMRInvolvement } from '../../../../shared/gitlab-types'
-import type { GitHubPRStateChip, GitHubPRWhoChip } from './github/task-page-pr-chips'
+import type { GitHubPRStateChip, GitHubPRWhoChip } from './github/listing/task-page-pr-chips'
 import type { TaskProvider } from '../../../../shared/work-items/task-providers'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 

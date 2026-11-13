@@ -1,4 +1,4 @@
-import { resolveMobileTerminalTabOwnedAgentId } from '../../terminal/session/mobile-terminal-tab-agent'
+import { resolveMobileTerminalTabOwnedAgentId } from '../../session/tabs/mobile-terminal-tab-agent'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 
 export function resolveMobileImageAttachmentAgent(

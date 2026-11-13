@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { scopeStyleToHost } from '../../style-scoping/document-style-scoping'
-import { XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
+import { XTERM_ENGINE_CSS } from '../document/terminal-webview-engine-css.generated'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE } from './document-style'
 
 // Verify native root rules remain separate while page-injected rules can reach only terminal-owned elements.

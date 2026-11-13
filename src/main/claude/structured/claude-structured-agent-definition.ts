@@ -12,6 +12,7 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     fork: 'checkpoint',
     compact: true,
     compactInstructions: true,
+    compactBesideBackgroundTasks: true,
     threadGoal: false,
     contextUsage: true,
     imagePrompts: true,

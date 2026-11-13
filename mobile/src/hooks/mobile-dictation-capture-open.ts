@@ -1,5 +1,5 @@
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 
 type OpenMobileDictationCaptureOptions = {
   capture: DictationCapture

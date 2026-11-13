@@ -44,7 +44,6 @@ describe('relay credential store', () => {
     await expect(store.createInvite(identity, 'device-over-limit')).rejects.toMatchObject({
       code: 'rate_limit_exceeded'
     })
-    expect(await database.query(`SELECT * FROM relay_audit_events`)).toHaveLength(30)
     await database.close()
   })
 

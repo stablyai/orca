@@ -1,6 +1,6 @@
 import { Animated } from 'react-native'
 import { Hourglass, LoaderCircle } from 'lucide-react-native'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from './use-working-motion'
 
 // Match desktop one-second spinner; reduced motion uses distinct working icon so frozen circle does not look stuck.

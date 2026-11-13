@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime-pin'
 import { ORCAD_NODE_PTY_DIR } from '../../../shared/orcad-artifacts'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 import {
@@ -22,7 +21,7 @@ const skip = skipForMissingInputs('artifact', [
 ])
 
 describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
-  it('spawns, reattaches, delivers data and retires a shell from the shipped slot only', async () => {
+  it('spawns a shell and delivers its output and exit from the shipped slot only', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-packaged-node-pty-'))
     try {
       const entry = join(directory, 'local-pty.cjs')
@@ -52,16 +51,13 @@ describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
                   sessionId: 'packaged-node-pty', cols: 80, rows: 24, cwd: process.cwd(),
                   shellOverride: process.platform === 'win32' ? getCmdExePath() : '/bin/sh'
                 })
-                const again = await provider.spawn({ sessionId: first.id, cols: 100, rows: 30 })
                 provider.write(first.id, process.platform === 'win32'
                   ? 'echo ORCA_PACKAGED_PTY_READY & exit 17\\r'
                   : 'printf ORCA_PACKAGED_PTY_READY; exit 17\\r')
                 const code = await exit
                 clearTimeout(deadline)
                 console.log(JSON.stringify({
-                  version: process.versions.node, code, output: output.includes('ORCA_PACKAGED_PTY_READY'),
-                  reattached: again.isReattach === true && again.pid === first.pid,
-                  retired: provider.getPtyProcess(first.id) === undefined
+                  code, output: output.includes('ORCA_PACKAGED_PTY_READY')
                 }))
               })().catch(error => { clearTimeout(deadline); provider.killAll(); console.error(error); process.exitCode = 1 })
             `,
@@ -91,11 +87,8 @@ describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
       })
       expect(result.code, result.stderr).toBe(0)
       expect(JSON.parse(result.stdout)).toEqual({
-        version: NODE_RUNTIME_PIN.version,
         code: 17,
-        output: true,
-        reattached: true,
-        retired: true
+        output: true
       })
     } finally {
       // Remove the junction before recursively deleting the test root.

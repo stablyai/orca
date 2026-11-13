@@ -1,7 +1,7 @@
 import { withWorkspaceRoute } from '../../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFilePreviewScreen } from '../../../../../src/files/MobileFilePreviewScreen'
-import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/mobile-file-preview-route'
+import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/preview/mobile-file-preview-route'
 
 // Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default withWorkspaceRoute(function MobileFilePreviewRoute() {

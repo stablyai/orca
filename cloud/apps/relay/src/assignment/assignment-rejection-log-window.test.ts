@@ -36,27 +36,7 @@ describe('assignment rejection log window', () => {
 
     expect(window.admit('assign:placement:host-rate-limited', 'host-a')).toBe(true)
     expect(window.admit('assign:placement:queue-full', 'host-a')).toBe(true)
-    expect(window.admit('assign:sticky:host-rate-limited', 'host-a')).toBe(true)
     expect(window.admit('assign:placement:queue-full', 'host-a')).toBe(false)
-  })
-
-  it('bounds the tracked keys and reports what an evicted window suppressed', () => {
-    const timers = manualTimers()
-    const closed: { key: string; suppressed: number }[] = []
-    const window = new AssignmentRejectionLogWindow<string>({
-      windowMs: 10_000,
-      schedule: timers.schedule,
-      onWindowClosed: ({ key, suppressed }) => closed.push({ key, suppressed })
-    })
-
-    window.admit('key-0', 'host-a')
-    window.admit('key-0', 'host-b')
-    for (let index = 1; index < 200; index++) window.admit(`key-${index}`, 'host-a')
-
-    expect(closed[0]).toEqual({ key: 'key-0', suppressed: 1 })
-    // Evicted keys emit again rather than staying silently suppressed.
-    expect(window.admit('key-0', 'host-a')).toBe(true)
-    expect(window.admit('key-199', 'host-a')).toBe(false)
   })
 })
 

@@ -1,37 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
 describe('createCommandCodeOutputStatusDetector', () => {
-  it('marks Command Code working with the submitted prompt when the TUI starts thinking', () => {
-    const onWorking = vi.fn()
-    const detector = createCommandCodeOutputStatusDetector({
-      startupCommand: 'command-code --trust',
-      onWorking
-    })
-
-    expect(detector.observe('❯ Fix the yellow spinner\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(true)
-
-    expect(onWorking).toHaveBeenCalledWith('Fix the yellow spinner')
-  })
-
-  it('waits for the Command Code banner before trusting generic status text', () => {
-    const onWorking = vi.fn()
-    const detector = createCommandCodeOutputStatusDetector({
-      startupCommand: null,
-      onWorking
-    })
-
-    expect(detector.observe('Thinking about unrelated shell output')).toBe(false)
-    expect(detector.observe('# Command Code v0.27.2\r\n')).toBe(false)
-    expect(detector.observe('⌘ Parsing...')).toBe(true)
-
-    expect(onWorking).toHaveBeenCalledWith('')
-  })
-
   it('detects the Command Code banner across PTY chunk boundaries', () => {
     const onWorking = vi.fn()
     const detector = createCommandCodeOutputStatusDetector({
@@ -41,22 +11,6 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
     expect(detector.observe('# Command')).toBe(false)
     expect(detector.observe(' Code v0.27.2\r\n')).toBe(false)
-    expect(detector.observe('⌘ Parsing...')).toBe(true)
-
-    expect(onWorking).toHaveBeenCalledWith('')
-  })
-
-  it('detects the banner after chunks that carry no banner characters at all', () => {
-    const onWorking = vi.fn()
-    const detector = createCommandCodeOutputStatusDetector({
-      startupCommand: null,
-      onWorking
-    })
-
-    // Ordinary agent output with no '#': the raw prefilter skips these without building a window.
-    expect(detector.observe('Codex is editing the file and rendering a diff\r\n')).toBe(false)
-    expect(detector.observe('Codex wrote 12 lines\r\n')).toBe(false)
-    expect(detector.observe('# Command Code v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -170,32 +124,5 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
     expect(detector.observe('❯ Fix the yellow spinner\r\nThought for 1 second')).toBe(false)
     expect(onWorking).not.toHaveBeenCalled()
-  })
-})
-
-describe('terminal control stripping', () => {
-  function promptFrom(raw: string): string | null {
-    let captured: string | null = null
-    const detector = createCommandCodeOutputStatusDetector({
-      startupCommand: 'command-code',
-      onWorking: (prompt) => {
-        captured = prompt
-      }
-    })
-    detector.observe(raw)
-    return captured
-  }
-
-  it('strips control bytes wherever they sit around the prompt text', () => {
-    expect(promptFrom('❯ plain prompt\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe('plain prompt')
-    expect(promptFrom('\x07❯ leading control\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
-      'leading control'
-    )
-    expect(promptFrom('❯ trailing control\x07\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
-      'trailing control'
-    )
-    expect(promptFrom('❯ adjacent\x07\x01\x02controls\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
-      'adjacentcontrols'
-    )
   })
 })

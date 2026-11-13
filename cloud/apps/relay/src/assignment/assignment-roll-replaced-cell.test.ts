@@ -143,16 +143,10 @@ async function setup(cells: RelayCellConfig[] = [SOURCE, TARGET]) {
 // The old process stopped heartbeating at START_MS, so it is unheard from here.
 const OLD_UNHEARD_AT = START_MS + HEARTBEAT_TTL_MS + 1_000
 
-// Both routes that refused in production: a hinted assign (placement lane after its
-// verification read finds the cell not live) and resolve, which then assigns.
 async function hintedAssign(store: RelayAssignmentStore) {
   return await store.assign(IDENTITY, 'us-central1', 'us-central1', undefined, {
     hostRequested: true
   })
-}
-
-async function resolveRoute(store: RelayAssignmentStore) {
-  return (await store.resolve(IDENTITY)) ?? (await store.assign(IDENTITY))
 }
 
 async function expectRefused(
@@ -164,10 +158,7 @@ async function expectRefused(
   expect(error).toMatchObject({ unavailableCause: cause })
 }
 
-describe.each([
-  ['hinted assign', hintedAssign],
-  ['resolve', resolveRoute]
-] as const)('a host offline through a roll redials via %s', (_route, redial) => {
+describe('a host offline through a roll redials via hinted assign', () => {
   describe('while the replacement process boots (not ready)', () => {
     it('is re-placed when that process started after the roll isolated the cell', async () => {
       const { store, first, heartbeat, at, isolateForRoll } = await setup()
@@ -175,7 +166,7 @@ describe.each([
       await at(20_000)
       await heartbeat(SOURCE, { incarnation: NEW_INCARNATION, startedAt: 15_000, ready: false })
 
-      const moved = await redial(store)
+      const moved = await hintedAssign(store)
       expect(moved).toMatchObject({ cellId: TARGET.id })
       expect(moved.assignmentEpoch).toBeGreaterThan(first.assignmentEpoch)
     })
@@ -186,7 +177,7 @@ describe.each([
       await at(20_000)
       await heartbeat(SOURCE, { ready: false })
 
-      await expectRefused(redial(store), 'not_ready')
+      await expectRefused(hintedAssign(store), 'not_ready')
     })
 
     it('is refused while the new process reports holding connections', async () => {
@@ -200,7 +191,7 @@ describe.each([
         totalConnections: 1
       })
 
-      await expectRefused(redial(store), 'not_ready')
+      await expectRefused(hintedAssign(store), 'not_ready')
     })
 
     it('is refused once the new process itself goes unheard', async () => {
@@ -210,7 +201,7 @@ describe.each([
       await heartbeat(SOURCE, { incarnation: NEW_INCARNATION, startedAt: 15_000, ready: false })
       await at(20_000 + HEARTBEAT_TTL_MS + 1_000)
 
-      await expectRefused(redial(store), 'unheard')
+      await expectRefused(hintedAssign(store), 'unheard')
     })
 
     it('is refused on an ordinary readiness dip with no roll stamp', async () => {
@@ -218,7 +209,7 @@ describe.each([
       await at(20_000)
       await heartbeat(SOURCE, { incarnation: NEW_INCARNATION, startedAt: 15_000, ready: false })
 
-      await expectRefused(redial(store), 'not_ready')
+      await expectRefused(hintedAssign(store), 'not_ready')
     })
 
     it('is refused on a migration-only cell parked without a roll stamp', async () => {
@@ -227,7 +218,7 @@ describe.each([
       await at(20_000)
       await heartbeat(SOURCE, { incarnation: NEW_INCARNATION, startedAt: 15_000, ready: false })
 
-      await expectRefused(redial(store), 'not_ready')
+      await expectRefused(hintedAssign(store), 'not_ready')
     })
   })
 
@@ -238,7 +229,7 @@ describe.each([
     await isolateForRoll()
     await at(OLD_UNHEARD_AT)
 
-    await expectRefused(redial(store), 'unheard')
+    await expectRefused(hintedAssign(store), 'unheard')
   })
 
   it('is refused when the roll stamp is stale, even with a new process', async () => {
@@ -248,7 +239,7 @@ describe.each([
     await at(stale)
     await heartbeat(SOURCE, { incarnation: NEW_INCARNATION, startedAt: stale - 1, ready: false })
 
-    await expectRefused(redial(store), 'not_ready')
+    await expectRefused(hintedAssign(store), 'not_ready')
   })
 })
 

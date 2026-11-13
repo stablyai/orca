@@ -10,7 +10,7 @@ import Animated, {
 import { Check } from 'lucide-react-native'
 import { SHEET_CURVE } from '../components/sheet-motion-values'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { pairScanStyles as scanStyles } from '../pair-scan-styles'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

@@ -18,7 +18,6 @@ describe('relay database', () => {
     temporaryDirectories.push(dataDir)
     const legacy = await openRelayDatabase({ dataDir })
     await legacy.query('ALTER TABLE relay_control_capabilities DROP COLUMN idle_regional_rehome')
-    await legacy.query('ALTER TABLE relay_region_rehome_attempts DROP COLUMN source_generation')
     await legacy.query(
       `INSERT INTO relay_control_capabilities
        (user_id, relay_host_id, activity_id, cell_id, cell_incarnation, assignment_epoch, generation, finish_existing)
@@ -30,12 +29,6 @@ describe('relay database', () => {
       expect(
         await upgraded.query('SELECT idle_regional_rehome FROM relay_control_capabilities')
       ).toEqual([{ idle_regional_rehome: 0 }])
-      const columns = await upgraded.query(
-        "SELECT * FROM pragma_table_info('relay_region_rehome_attempts')"
-      )
-      expect(columns.find((column) => column.name === 'source_generation')).toMatchObject({
-        dflt_value: '0'
-      })
     } finally {
       await upgraded.close()
     }

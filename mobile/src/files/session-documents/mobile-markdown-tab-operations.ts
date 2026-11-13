@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../mobile-file-preview-operations'
+import '../preview/mobile-file-preview-operations'
 import { sessionLaunchUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'
 import '../../agent-history/mobile-ai-vault-resume-reply-schema'
 import '../../browser/tab-navigation/mobile-session-browser-reply-schema'
@@ -17,7 +17,7 @@ export const sessionMarkdownNoteCreate = bindDeferredRpcOperation(
   })
 )
 
-import '../../terminal/terminal-reply-schema'
+import '../../terminal/host-operations/terminal-reply-schema'
 import { markdownTabDocumentSchema } from './mobile-markdown-tab-reply-schema'
 
 // Inspect renderer_unavailable before interpretation so headless hosts can fall back to disk.

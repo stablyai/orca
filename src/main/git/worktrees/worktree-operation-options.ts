@@ -4,7 +4,7 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../../shared/worktree/base-ref-drift-types'
 import { readGitCommandFailureText } from '../../../shared/git/commands/git-command-failure-text'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeCheckoutProgressListener } from './creation/worktree-checkout-progress'
 

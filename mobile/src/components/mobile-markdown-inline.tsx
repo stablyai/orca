@@ -1,7 +1,7 @@
 import type { PhrasingContent } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
 import type { TextProps } from 'react-native'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import {
   detectFilePathSegments,
   isFilePathCodeSpan,

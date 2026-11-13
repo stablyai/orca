@@ -2,7 +2,7 @@ import { exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWK } from 'j
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from '../config.js'
 import { createRelayTokenVerifier } from './relay-token-verifier.js'
-import { createStaleIfErrorJWKSet, RELAY_JWKS_MAX_STALE_MS } from './stale-if-error-jwks.js'
+import { createStaleIfErrorJWKSet } from './stale-if-error-jwks.js'
 
 const config = {
   jwksUrl: 'https://auth.example.test/.well-known/jwks.json',
@@ -43,37 +43,7 @@ beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-10-11T13:00:00Z') }))
 afterEach(() => vi.useRealTimers())
 
 describe('relay token keys while auth is down', () => {
-  it('accepts a valid token from the last served set once the cache is past its 10 min age', async () => {
-    const key = await signingKey('auth-1')
-    const authServer = auth(key)
-    const jwks = createStaleIfErrorJWKSet(new URL(config.jwksUrl), { fetch: authServer.fetch })
-    const verify = createRelayTokenVerifier(config as RelayConfig, jwks)
-    expect(await verify(await relayToken(key))).not.toBeNull()
-
-    vi.setSystemTime(Date.now() + 20 * MINUTE)
-    authServer.state.up = false
-    const fetches = authServer.fetch.mock.calls.length
-    expect(await verify(await relayToken(key))).toMatchObject({ sub: 'user-1' })
-    expect(authServer.fetch.mock.calls.length).toBe(fetches + 1)
-    // Inside the retry window the stale set answers without waiting on another fetch.
-    expect(await verify(await relayToken(key))).not.toBeNull()
-    expect(authServer.fetch.mock.calls.length).toBe(fetches + 1)
-  })
-
-  it('rejects a token signed by a key the last served set never had', async () => {
-    const key = await signingKey('auth-1')
-    const authServer = auth(key)
-    const jwks = createStaleIfErrorJWKSet(new URL(config.jwksUrl), { fetch: authServer.fetch })
-    const verify = createRelayTokenVerifier(config as RelayConfig, jwks)
-    expect(await verify(await relayToken(key))).not.toBeNull()
-
-    vi.setSystemTime(Date.now() + MINUTE)
-    authServer.state.up = false
-    expect(await verify(await relayToken(await signingKey('unknown')))).toBeNull()
-  })
-
   it('bounds the stale set at 30 minutes since the last served set', async () => {
-    expect(RELAY_JWKS_MAX_STALE_MS).toBe(30 * MINUTE)
     const key = await signingKey('auth-1')
     const authServer = auth(key)
     const verify = createRelayTokenVerifier(

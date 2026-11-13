@@ -4,7 +4,7 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import type { WorktreeCreateParent } from '../new-workspace/creation/worktree-create-retry'
 import { createBlankWorkspace } from '../new-workspace/creation/blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../agents/mobile-tui-agents'

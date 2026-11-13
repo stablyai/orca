@@ -3,6 +3,7 @@ import {
   type AgentSessionConversationCommandResult
 } from '../agent-session-conversation-command'
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
+import type { AgentSessionWriteFailure } from './agent-session-write-failure'
 import type { StructuredAgentSessionCommandRefusalCause } from '../view/structured-agent-session-composer'
 
 /** Host refusal reasons that map to visible chat conditions. */
@@ -23,4 +24,12 @@ export function structuredAgentSessionCommandHostRefusalCause(
   return details && 'reason' in details && typeof details.reason === 'string'
     ? CAUSE_OF_HOST_REFUSAL[details.reason]
     : undefined
+}
+
+/** The same mapping for a command the host refused outright, before it ran. */
+export function structuredAgentSessionCommandWriteRefusalCause(
+  failure: AgentSessionWriteFailure
+): StructuredAgentSessionCommandRefusalCause | undefined {
+  const reason = failure.kind === 'refused' ? failure.details?.reason : undefined
+  return typeof reason === 'string' ? CAUSE_OF_HOST_REFUSAL[reason] : undefined
 }

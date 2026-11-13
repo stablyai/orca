@@ -2,7 +2,7 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 import { translate } from '../i18n/mobile-i18n'
 import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'

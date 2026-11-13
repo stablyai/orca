@@ -13,7 +13,7 @@ import {
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
-import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
+import { TERMINAL_TEXT_SCALES } from '../terminal/preferences/terminal-text-scales'
 
 const PINS_PREFIX = 'orca:pins:'
 // Push-service consent is independent of legacy socket notifications.
@@ -69,7 +69,7 @@ export async function saveRemotePushHostRegistrations(
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
 // Keep definitions in the bundled terminal document so it need not import storage.
-export { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
+
 const DEFAULT_TEXT_SCALE = 1
 
 export async function loadTerminalTextScale(): Promise<number> {

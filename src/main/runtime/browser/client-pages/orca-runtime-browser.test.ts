@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
+import { BrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 
 const {
   ipcMainOnMock,
@@ -96,6 +98,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
     resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
+    // No paired desktop: headless creates stay on this host.
+    getBrowserHostLeaseRegistry: () => new BrowserHostLeaseRegistry({ authorityRuntimeId: 'host' }),
+    getBrowserHostRequestRegistry: () => new BrowserHostRequestRegistry(),
     getAuthoritativeWindow: vi.fn(),
     getAvailableAuthoritativeWindow: vi.fn(() => null),
     getOffscreenBrowserBackend: vi.fn(() => null),

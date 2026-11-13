@@ -3,10 +3,10 @@
 import { readAgentSessionConversationOutline } from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-conversation-outline'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
-import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 
 export const STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS = [
   defineMethod({

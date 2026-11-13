@@ -30,7 +30,10 @@ import {
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../../layout/side-safe-area'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../../platform/keyboard-occlusion'
+import {
+  currentSoftKeyboardHeight,
+  subscribeSoftKeyboard
+} from '../../platform/keyboard/keyboard-occlusion'
 import { hostOs } from '../../platform/host-os'
 import { hideDrawer, showDrawer, useBottomDrawerDrag } from './use-bottom-drawer-drag'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'

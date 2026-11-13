@@ -1,5 +1,5 @@
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const automationStyles = themedStyleSheet(() => ({

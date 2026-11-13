@@ -1,7 +1,6 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
@@ -21,7 +20,7 @@
     "../src/preload/renderer/window-commands/close-active-tab-payload-admission.ts",
     "../src/preload/renderer/e2e-config.ts",
     "../src/preload/renderer/hidden-window-frame-pump.ts",
-    "../src/preload/api/gitlab.ts",
+    "../src/preload/api/gitlab/gitlab.ts",
     "../src/preload/renderer/renderer-runtime.ts",
     "../src/preload/renderer/diagnostics/renderer-heap-statistics-reader.ts",
     "../src/preload/renderer/diagnostics/renderer-process-memory-reader.ts",

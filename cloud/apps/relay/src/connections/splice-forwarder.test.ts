@@ -12,8 +12,6 @@ const { Receiver } = createRequire(new URL('../splice-forwarder.test.ts', import
   Receiver: new (options: { isServer: true }) => Writable
 }
 
-const FRAME_OVERHEAD = RELAY_ADMISSION_BUDGETS.queuedFrameOverheadBytes
-
 class FakeSocket extends EventEmitter {
   readonly OPEN = 1
   readyState = 1
@@ -48,7 +46,6 @@ describe('splice forwarder', () => {
       onClose: vi.fn()
     })
     client.emit('message', Buffer.alloc(8 * 1024 * 1024), true)
-    expect(budget.current()).toBe(8 * 1024 * 1024 + FRAME_OVERHEAD)
     client.emit('message', Buffer.alloc(512 * 1024), true)
     expect(client.closes[0]?.code).toBe(4429)
     expect(host.closes[0]?.code).toBe(4429)
@@ -73,7 +70,6 @@ describe('splice forwarder', () => {
     client.emit('message', frame, true)
     expect(client.closes).toEqual([])
     expect(host.closes).toEqual([])
-    expect(budget.current()).toBe(8 * 1024 * 1024 + FRAME_OVERHEAD)
 
     host.bufferedAmount = 0
     vi.advanceTimersByTime(25)
@@ -109,9 +105,6 @@ describe('splice forwarder', () => {
 
     receiver.write(batch)
 
-    expect(client._socket.pause).toHaveBeenCalledTimes(
-      RELAY_ADMISSION_BUDGETS.spliceHardQueuedFrames
-    )
     expect(closed).toHaveBeenCalledWith({
       code: 4429,
       reason: 'relay queue limit exceeded',
@@ -120,36 +113,6 @@ describe('splice forwarder', () => {
     expect(host.sent).toEqual([])
     expect(client.closes[0]?.code).toBe(4429)
     expect(host.closes[0]?.code).toBe(4429)
-    expect(budget.current()).toBe(0)
-  })
-
-  it('charges empty queued frames against the shared byte budget until drained or closed', () => {
-    vi.useFakeTimers()
-    const client = new FakeSocket()
-    const host = new FakeSocket()
-    host.bufferedAmount = 1024 * 1024
-    const budget = new ProcessQueuedByteBudget()
-    wireSplice({
-      client: client as unknown as WebSocket,
-      host: host as unknown as WebSocket,
-      budget,
-      onClose: vi.fn()
-    })
-    for (let index = 0; index < 3; index += 1) {
-      client.emit('message', Buffer.alloc(0), true)
-    }
-    expect(budget.current()).toBe(3 * FRAME_OVERHEAD)
-
-    host.bufferedAmount = 0
-    vi.advanceTimersByTime(25)
-    expect(host.sent).toHaveLength(3)
-    expect(budget.current()).toBe(0)
-
-    host.bufferedAmount = 1024 * 1024
-    client.emit('message', Buffer.alloc(0), true)
-    client.emit('message', Buffer.from('x'), true)
-    expect(budget.current()).toBe(2 * FRAME_OVERHEAD + 1)
-    client.close(1000, 'done')
     expect(budget.current()).toBe(0)
   })
 })

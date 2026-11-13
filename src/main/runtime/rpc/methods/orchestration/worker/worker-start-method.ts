@@ -18,7 +18,7 @@ import {
   qualifyLiveWorkerFollowUp
 } from './start/admission/worker-start-authority'
 import { parseTaskDeps } from './start/admission/task-deps-argument'
-import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs

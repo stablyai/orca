@@ -7,7 +7,7 @@ import {
 import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
-} from '../../../files/native-chat-file-search-operations'
+} from '../../../files/explorer/native-chat-file-search-operations'
 import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles

@@ -9,7 +9,7 @@ import { MESSAGE_TYPES } from '../../../../orchestration/db/orchestration-record
 import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
-} from '../../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 
 const SEND_MESSAGE_TYPE_ERROR = [
   `Invalid --type. Expected one of: ${MESSAGE_TYPES.join(', ')}.`,

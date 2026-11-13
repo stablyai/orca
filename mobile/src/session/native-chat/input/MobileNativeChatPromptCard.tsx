@@ -10,7 +10,7 @@ import {
   type LayoutChangeEvent
 } from 'react-native'
 import { SHEET_CURVE, SHEET_HEIGHT_DURATION_MS } from '../../../components/sheet-motion-values'
-import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

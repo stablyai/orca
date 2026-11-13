@@ -1,6 +1,6 @@
 import { taskProviderFailure } from '../../../shared/work-items/task-provider-failure'
-import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira-quick-filter-params'
-import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira-favourite-filter-params'
+import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira/jira-quick-filter-params'
+import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira/jira-favourite-filter-params'
 import { ipcMain } from 'electron'
 import type { JiraMediaFormat } from '../../../shared/jira/jira-attachment-image'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../../jira/client'

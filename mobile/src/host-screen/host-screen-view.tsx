@@ -7,7 +7,7 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { HostBottomBar } from './host-bottom-bar'
 import { HostConnectionStatus, HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
-import { HostWorkspaceList } from './host-workspace-list'
+import { HostWorkspaceList } from './workspace-list/host-workspace-list'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenView({ controller }: { controller: HostScreenController }) {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import type { DocPreviewExternalLink } from '../../../../../shared/document-preview/doc-preview-scheme'
-import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import {
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener

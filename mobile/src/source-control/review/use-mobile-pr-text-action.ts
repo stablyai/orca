@@ -6,7 +6,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { GitHubPrRepoSlug } from './github-pr-repo-slug'
 import { defineHostMutation, useHostMutation } from '../../query/host-mutation'
 import { fetchUpdatePRBody, fetchUpdatePRTitle } from './github-pr-mutations'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
   buildUpdatePRBodyParams,

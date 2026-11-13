@@ -13,7 +13,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/MobileAgentIcon'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
-import { getQuickCommandAgentLabel } from '../quick-commands'
+import { getQuickCommandAgentLabel } from './quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
   MAX_QUICK_COMMAND_LABEL_LENGTH,

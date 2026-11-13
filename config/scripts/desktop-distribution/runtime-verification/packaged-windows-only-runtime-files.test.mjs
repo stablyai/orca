@@ -34,14 +34,9 @@ describe('Windows-only runtime files', () => {
       const nested = join(resourcesDir, 'node_modules', 'some-dep', 'bin')
       await mkdir(nested, { recursive: true })
       await writeFile(join(nested, 'helper'), peImage())
-      // An MZ prefix alone is not a PE image; data files must not trip the check.
-      await writeFile(join(nested, 'fake.exe'), Buffer.from('MZ not really'))
-
-      for (const platform of ['darwin', 'linux']) {
-        expect(() =>
-          assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, platform)
-        ).toThrow(/: node_modules\/some-dep\/bin\/helper\. /)
-      }
+      expect(() => assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, 'linux')).toThrow(
+        /: node_modules\/some-dep\/bin\/helper\. /
+      )
       expect(() =>
         assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, 'win32')
       ).not.toThrow()

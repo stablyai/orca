@@ -7,7 +7,7 @@ import type { WslProcessGroupTermination } from './wsl-process-group-termination
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { workerExecFile } from './worker-exec-file'
 import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'

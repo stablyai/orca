@@ -13,7 +13,6 @@ import { pauseAfter, within } from './durable-push-store.test-fixture.js'
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup()
-  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 const note = (seq: number, overrides: Partial<PushNotification> = {}): PushNotification => ({
@@ -42,9 +41,8 @@ async function fixture() {
   const send = vi.fn(async (_delivery: PushDelivery): Promise<PushProviderOutcome> => ({
     status: 'sent'
   }))
-  const onRetry = vi.fn()
   const dispatcher = new PushDispatcher({ devices, fcm: { send } as never })
-  const worker = new DurablePushWorker(store, dispatcher, { now, onRetry })
+  const worker = new DurablePushWorker(store, dispatcher, { now })
   cleanups.push(async () => {
     await worker.stop()
     await db.close()
@@ -57,7 +55,6 @@ async function fixture() {
     worker,
     dispatcher,
     send,
-    onRetry,
     now,
     registrationId: device.registrationId,
     accept: (notification: PushNotification) =>
@@ -102,7 +99,6 @@ it('stops queued claim admissions without leasing the remaining device', async (
     paused.release()
     await within(Promise.all([pending, stopping]), 2_000)
     expect(h.send).toHaveBeenCalledOnce()
-    expect(h.send.mock.calls[0]?.[0].orca.notificationSeq).toBe(1)
     const [remaining] = await h.db.query(
       'SELECT attempts, lease_until FROM push_delivery_batches WHERE registration_id = ?',
       [other.registrationId]

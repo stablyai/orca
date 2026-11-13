@@ -4,7 +4,7 @@ import {
   HOST_LIST_TARGET,
   hostRepoLabelsQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useHostQuery } from '../query/host-query'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 

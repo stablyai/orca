@@ -8,7 +8,7 @@ import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
-import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type {
   CreateWorktreeArgs,
@@ -104,7 +104,7 @@ import {
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
-import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
+import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/workspaces/cross-store-parent-params'
 import { assertParentInAnotherStore } from '../runtime/workspaces/lineage/cross-store-parent-store-check'
 import {
   crossStoreManualLineage,
