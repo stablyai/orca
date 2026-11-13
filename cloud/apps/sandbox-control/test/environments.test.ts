@@ -14,8 +14,8 @@ const RESULT = JSON.stringify({
 })
 const log = (data: string, stream = 'stdout') => `${JSON.stringify({ data, stream })}\n`
 
-async function setup(githubFetch?: typeof fetch) {
-  const h = await createHarness({}, githubFetch ? { githubFetch } : {})
+async function setup(githubFetch?: typeof fetch, overrides: Parameters<typeof createHarness>[0] = {}) {
+  const h = await createHarness(overrides, githubFetch ? { githubFetch } : {})
   h.vercel.buildResult = RESULT
   const admin = await h.token('alice', 'acme', 'sandbox', { orgRole: 'admin' })
   const member = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
@@ -83,6 +83,33 @@ describe('org environments', () => {
     expect(lines[0]).toMatchObject({ type: 'build', build: { status: 'failed' } })
     expect(lines.filter((e) => e.type === 'log').map((e) => e.data).join('')).toContain('::orca-error::')
     expect(lines.at(-1)).toEqual({ type: 'end' })
+  })
+
+  it('smoke-boots a build under the configured platform hosts (ORCA_PLATFORM_HOST_SUFFIXES)', async () => {
+    const { h, build } = await setup(undefined, { ORCA_PLATFORM_HOST_SUFFIXES: '*.orca.dev' })
+    const policies: Record<string, unknown>[] = []
+    const create = h.vercel.createSandbox.bind(h.vercel)
+    h.vercel.createSandbox = async (params) => {
+      if (params.name.includes('-smoke-')) {
+        policies.push(params.networkPolicy.allow)
+      }
+      return create(params)
+    }
+    expect(await build(0)).toMatchObject({ status: 'succeeded' })
+    expect(policies).toHaveLength(1)
+    expect(policies[0]).toHaveProperty(['*.orca.dev'])
+    expect(policies[0]).not.toHaveProperty(['*.onorca.dev'])
+  })
+
+  it('refuses a new build under a malformed ORCA_PLATFORM_HOST_SUFFIXES, and still reads the old ones', async () => {
+    const { h, adminCall, envId, build } = await setup()
+    const good = await build(0)
+    h.env.ORCA_PLATFORM_HOST_SUFFIXES = '*.orca.dev, not a host'
+    const refused = await adminCall('POST', `/v1/environments/${envId}/builds`)
+    expect(refused.status).toBe(503)
+    expect(refused.body.error).toBe('platform_hosts_misconfigured')
+    expect((await adminCall('GET', `/v1/environments/${envId}/builds/${good.id}`)).body.build).toMatchObject({ status: 'succeeded' })
+    expect((await adminCall('GET', `/v1/environments/${envId}`)).status).toBe(200)
   })
 
   it('fails a build whose image cannot start orcad, keeping the active one', async () => {

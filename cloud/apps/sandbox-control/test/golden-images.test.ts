@@ -6,6 +6,7 @@ import { createFakeD1 } from './d1-fake'
 import { SCRIPTS_STAMP_PATH, createFakeVercel } from './fake-vercel'
 import { GOLDEN, createHarness } from './harness'
 import { touchesVm } from '../src/golden-source'
+import { egressAllowlistFor } from '../src/network-policy'
 
 const HOUR = 60 * 60_000
 
@@ -84,6 +85,31 @@ describe('golden image rotation', () => {
     // The new image never expires, so nothing more to do; build and smoke boxes are gone.
     expect(await advanceGoldenImages(t.deps)).toBe('idle')
     expect([...t.vercel.boxes.keys()]).toEqual([])
+  })
+
+  it('smoke-boots under the configured platform hosts, not the built-in *.onorca.dev', async () => {
+    const t = setup({ seedExpiresInMs: 20 * HOUR })
+    const policies: Record<string, unknown>[] = []
+    const create = t.deps.provider.createSandbox.bind(t.deps.provider)
+    const deps: GoldenImageDeps = {
+      ...t.deps,
+      provider: {
+        ...t.deps.provider,
+        createSandbox: async (params) => {
+          if (params.name.includes('goldsmoke')) {
+            policies.push(params.networkPolicy.allow)
+          }
+          return create(params)
+        }
+      },
+      config: { ...t.deps.config, egressAllowlist: egressAllowlistFor('*.orca.dev') }
+    }
+    await advanceGoldenImages(deps)
+    await advanceGoldenImages(deps)
+    expect(await advanceGoldenImages(deps)).toBe('activated')
+    expect(policies).toHaveLength(1)
+    expect(policies[0]).toHaveProperty(['*.orca.dev'])
+    expect(policies[0]).not.toHaveProperty(['*.onorca.dev'])
   })
 
   it('keeps serving the previous image when the candidate fails its smoke boot', async () => {

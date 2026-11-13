@@ -13,7 +13,7 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type EgressPreset } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, DEFAULT_EGRESS_PRESET, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type EgressPreset, type PlatformHostSuffixesConfigError } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
 import { ensureEntryPoints } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
@@ -151,6 +151,8 @@ export type LifecycleDeps = {
     pool?: PoolConfig
     /** Base egress allowlist (egressAllowlistFor ORCA_PLATFORM_HOST_SUFFIXES); default DEFAULT_EGRESS_ALLOWLIST. */
     egressAllowlist?: readonly string[]
+    /** A malformed ORCA_PLATFORM_HOST_SUFFIXES: whatever compiles a limited-mode policy refuses with it. */
+    egressAllowlistError?: PlatformHostSuffixesConfigError
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
     /** PARITY-DOCKER: false (SANDBOX_DOCKER=off) makes the VM's `docker` refuse instead of installing or starting Docker. */
@@ -268,6 +270,13 @@ export function effectiveEgressPreset(deps: Pick<LifecycleDeps, 'config'>, row: 
 }
 const LOCAL_ENVIRONMENTS = new Set(['local', 'test'])
 
+/** Refuses up front (503 platform_hosts_misconfigured) when this create or boot would compile a limited policy. */
+export function assertEgressAllowlistUsable(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): void {
+  if (deps.config.egressAllowlistError && effectiveEgressPreset(deps, row) === 'limited') {
+    throw deps.config.egressAllowlistError
+  }
+}
+
 export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string, memberPlaceholders: readonly string[] = []) {
   const proxyUrl = deps.config.egressProxyUrl
   const gitPlaceholder = gitBasicAuthorization(githubPlaceholderToken(row))
@@ -337,6 +346,9 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
   }
   // Limited: custom model-provider hosts (ANTHROPIC_BASE_URL / OPENAI_BASE_URL secrets) recorded at
   // boot, MCP hosts the desktop declared, plus operator-configured extra hosts.
+  if (deps.config.egressAllowlistError) {
+    throw deps.config.egressAllowlistError
+  }
   const allowlist = [...new Set([...(deps.config.egressAllowlist ?? DEFAULT_EGRESS_ALLOWLIST), ...(deps.config.extraEgressHosts ?? []), ...egressAllowHosts(row)])]
   return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: all })
 }
@@ -670,6 +682,7 @@ export async function createSandbox(
   },
   options: { pool?: boolean; fallback?: boolean } = {}
 ): Promise<Ready> {
+  assertEgressAllowlistUsable(deps, { id: request.workspaceId })
   const existing = await liveSandboxForWorkspace(deps.db, caller.accountId, request.workspaceId)
   if (existing) {
     if (existing.status !== 'running' || !existing.session_id) {
@@ -983,6 +996,7 @@ export async function suspendSandbox(deps: LifecycleDeps, row: SandboxRow): Prom
 }
 
 export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
+  assertEgressAllowlistUsable(deps, row)
   if (row.status === 'resuming') {
     const settled = await joinOrAdoptResume(deps, row)
     if ('connection' in settled) {
@@ -1065,6 +1079,7 @@ export async function bootLiveSession(deps: LifecycleDeps, row: SandboxRow, stat
 }
 
 export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
+  assertEgressAllowlistUsable(deps, row)
   const timer = phaseTimer(deps.now)
   // The provider boot is the long pole; secrets and the repo token resolve alongside it.
   const [state, prep] = await Promise.all([

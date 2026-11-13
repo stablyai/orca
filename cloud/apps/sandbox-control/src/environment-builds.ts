@@ -21,7 +21,7 @@ import {
 import type { GitHubAppMinter } from './github-app'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { assertStartsOpen, type GuardrailConfig, DEFAULT_GUARDRAILS } from './guardrails'
-import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute, type PlatformHostSuffixesConfigError } from './network-policy'
 import { SWAPPED_CREDENTIALS } from './provider-env'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
@@ -162,6 +162,10 @@ export type BuildDeps = {
     /** The default region: new builds run here. */
     region: string
     guardrails?: GuardrailConfig
+    /** The workspace base allowlist (ORCA_PLATFORM_HOST_SUFFIXES included); the smoke boot uses it too. */
+    egressAllowlist?: readonly string[]
+    /** A malformed ORCA_PLATFORM_HOST_SUFFIXES: new builds refuse, running ones wait (their smoke needs the list). */
+    egressAllowlistError?: PlatformHostSuffixesConfigError
   }
 }
 
@@ -266,6 +270,9 @@ export async function startBuild(
   options: { config?: BuildConfig } = {}
 ): Promise<BuildRow> {
   requireAdmin(caller)
+  if (deps.config.egressAllowlistError) {
+    throw deps.config.egressAllowlistError
+  }
   const repos = options.config?.repos ?? parseRepos(environment)
   if (repos.length === 0) {
     throw new EnvironmentError('invalid_request', 400, 'no_repos')
@@ -445,7 +452,8 @@ function base64(text: string): string {
  */
 export async function advanceBuild(deps: BuildDeps, row: BuildRow, options: { waitForExit?: boolean } = {}): Promise<BuildRow> {
   const now = deps.now()
-  if (TERMINAL.has(row.status)) {
+  // Reads of a build keep working; it resumes once the platform host list is fixed.
+  if (TERMINAL.has(row.status) || deps.config.egressAllowlistError) {
     return row
   }
   if (row.status === 'starting') {
@@ -549,7 +557,7 @@ async function smokeBoot(deps: BuildDeps, row: BuildRow, snapshotId: string): Pr
       region: row.region,
       timeoutMs: 5 * 60_000,
       ports: [ORCAD_PORT],
-      networkPolicy: compileNetworkPolicy({ mode: 'allowlist' }),
+      networkPolicy: compileNetworkPolicy({ mode: 'allowlist', allowlist: deps.config.egressAllowlist }),
       tags: { orcaEnvBuildSmoke: row.id, orcaEnv: deps.config.environment },
       snapshotExpirationMs: 0,
       persistent: false

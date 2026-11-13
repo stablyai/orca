@@ -8,6 +8,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { pickWorkspaceWorktree, type WorkspaceWorktreeCandidate } from './workspace-worktree-pick'
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -44,17 +45,22 @@ export function cloudWorkspaceTitle(
     : (repoName ?? w.workspaceId)
 }
 
-export function firstWorktreeOnHost(hostId: string): string | null {
+/**
+ * The workspace's row on its server: with `branch`, the worktree on that branch (EP-6: never the
+ * sandbox's base checkout while the workspace has its own); without, the first row on the server.
+ */
+export function firstWorktreeOnHost(hostId: string, branch?: string | null): string | null {
   const state = useAppStore.getState()
+  const onHost: WorkspaceWorktreeCandidate[] = []
   for (const [repoId, worktrees] of Object.entries(selectWorktreesByRepo(state))) {
     const repo = state.repos.find((r) => r.id === repoId)
     for (const worktree of worktrees) {
       if (getWorktreeExecutionHostId(worktree, repo) === hostId) {
-        return worktree.id
+        onHost.push(worktree)
       }
     }
   }
-  return null
+  return branch === undefined ? (onHost[0]?.id ?? null) : pickWorkspaceWorktree(onHost, branch)
 }
 
 function isPairingRejected(error: unknown): boolean {
@@ -75,7 +81,9 @@ export type OpenCloudWorkspaceOptions = {
 async function connectAndReveal(
   environmentId: string,
   name: string,
-  options: OpenCloudWorkspaceOptions = {}
+  options: OpenCloudWorkspaceOptions = {},
+  /** The workspace's branch: its own worktree is the one to open (EP-6). */
+  branch: string | null = null
 ): Promise<OpenOutcome> {
   options.onHost?.(toRuntimeExecutionHostId(environmentId))
   const environments = await window.api.runtimeEnvironments.list()
@@ -105,7 +113,7 @@ async function connectAndReveal(
     (options) => useAppStore.getState().fetchWorktreeLineage(options)
   )
   const hostId = toRuntimeExecutionHostId(environment.id)
-  const worktreeId = firstWorktreeOnHost(hostId)
+  const worktreeId = firstWorktreeOnHost(hostId, branch)
   if (worktreeId) {
     activateAndRevealWorktree(worktreeId, { executionHostId: hostId })
   } else {
@@ -176,7 +184,12 @@ async function pairAndReveal(
         return refused
       }
       try {
-        return await connectAndReveal(binding.environmentId, name, options)
+        return await connectAndReveal(
+          binding.environmentId,
+          name,
+          options,
+          workspace.repo?.branch ?? null
+        )
       } catch (error) {
         // Only a rejected pairing is fixed by pairing again; anything else is surfaced as is.
         if (!isPairingRejected(error)) {
@@ -228,7 +241,7 @@ async function pairAndReveal(
   }
   // Messages to this workspace now carry the sender line if it is shared with the team.
   void refreshCloudMessageSenders().catch(() => undefined)
-  return await connectAndReveal(added.environment.id, name, options)
+  return await connectAndReveal(added.environment.id, name, options, workspace.repo?.branch ?? null)
 }
 
 async function openOnce(

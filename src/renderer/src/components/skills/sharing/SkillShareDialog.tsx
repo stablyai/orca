@@ -22,6 +22,7 @@ import {
 import { useAppStore } from '@/store/index'
 import { matchingManagedSkillShareInstall } from './skill-share-package-selection'
 import { derivedBundleName } from './skill-bundle-name'
+import { noteSkillSharesChanged } from './skill-shares-changed'
 
 type SkillShareDialogProps = {
   skills?: DiscoveredSkill[]
@@ -216,6 +217,8 @@ export function SkillShareDialog({
         return
       }
       setShareUrl(result.value.share.url)
+      // EP-7: Shared links (and its count) list the new link without reopening the page.
+      noteSkillSharesChanged()
     } catch (cause) {
       console.warn('[skills] publish failed:', cause)
       setError(
