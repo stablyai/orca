@@ -33,6 +33,7 @@ export function secretsData(
     caller: role === 'admin' ? ADMIN : MEMBER,
     built: false,
     repoKey: 'github.com/acme/web',
+    shared: false,
     ...patch
   }
 }

@@ -56,12 +56,15 @@ export function missingSecretNames(
   return missing
 }
 
-/** Scopes a person can save a missing value to, Personal first. Shared only where asked for. */
+/**
+ * Scopes a person can save a missing value to, Personal first. Shared only where asked for.
+ * `personal: false` for a workspace shared with teammates: it gets no Personal values (SEC-5).
+ */
 export function writableScopes(
   caller: Pick<CloudSecretsCaller, 'canWrite'>,
-  options: { repo: boolean; shared: boolean }
+  options: { repo: boolean; shared: boolean; personal?: boolean }
 ): CloudSecretScope[] {
-  const scopes: CloudSecretScope[] = ['personal']
+  const scopes: CloudSecretScope[] = options.personal === false ? [] : ['personal']
   if (options.repo && caller.canWrite.repo) {
     scopes.push('repo')
   }
@@ -85,12 +88,25 @@ export type CloudSecretsAskData = {
   /** The environment has been built, so its install script ran without the missing team values. */
   built: boolean
   repoKey: string | null
+  /** The workspace is shared with teammates: no Personal values reach it, so none are offered (SEC-5). */
+  shared: boolean
+}
+
+/** Where this person can save a missing value for this workspace; empty when nowhere reaches it. */
+export function askScopes(data: Pick<CloudSecretsAskData, 'caller' | 'repoKey' | 'shared'>): CloudSecretScope[] {
+  return writableScopes(data.caller, {
+    repo: data.repoKey !== null,
+    shared: true,
+    personal: !data.shared
+  })
 }
 
 export function cloudSecretsAskData(args: {
   environment: Pick<HostedEnvironmentListEntry, 'name' | 'envVarNames' | 'activeBuildId'>
   effective: CloudSecretsEffective
   repoKey: string | null
+  /** Answered by the control plane for a shared workspace (`effective.workspace === 'shared'`). */
+  shared?: boolean
 }): CloudSecretsAskData {
   const declared = args.environment.envVarNames.filter(
     (name) => cloudSecretKind(name) !== 'agent_key'
@@ -101,7 +117,8 @@ export function cloudSecretsAskData(args: {
     missing: missingSecretNames(declared, args.effective),
     caller: args.effective.caller,
     built: args.environment.activeBuildId !== null,
-    repoKey: args.repoKey
+    repoKey: args.repoKey,
+    shared: args.shared === true
   }
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { CloudSecretScope } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
-import { applyDotenvPaste, type CloudSecretsAskData } from './cloud-secrets-ask-model'
+import { applyDotenvPaste, askScopes, type CloudSecretsAskData } from './cloud-secrets-ask-model'
 import {
   EMPTY_ASK_STATE,
   type CloudSecretsAskFormActions,
@@ -31,9 +31,17 @@ export function useCloudSecretsAskForm(args: {
       return
     }
     setState((current) => ({ ...current, phase: 'saving', refused: {} }))
+    // Unchosen names go to the first scope offered (Personal, or Repository in a shared workspace).
+    const fallback = askScopes(data)[0]
+    if (!fallback) {
+      return
+    }
+    const scopes = Object.fromEntries(
+      Object.keys(values).map((name) => [name, state.scopes[name] ?? fallback])
+    )
     const result = await saveMissingSecrets({
       values,
-      scopes: state.scopes,
+      scopes,
       repoKey: data.repoKey,
       refreshRuntimeEnvironmentId
     })

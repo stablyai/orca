@@ -1,5 +1,6 @@
 // Loads what S2 and the panel's section 3 need for one repo: the org environment that lists it and the
 // caller's effective Cloud secrets. Two reads, no new endpoint; nothing here wakes a sandbox.
+import { cloudWorkspaceSecretsMode } from '@/lib/orca-cloud/cloud-workspace-secrets-mode'
 import { useCallback, useEffect, useState } from 'react'
 import {
   cloudSecretsErrorCode,
@@ -30,7 +31,11 @@ export type CloudSecretsAskLoad =
       environment: HostedEnvironmentListEntry
     }
 
-export function useCloudSecretsAskLoad(repoKey: string | null): {
+export function useCloudSecretsAskLoad(
+  repoKey: string | null,
+  /** The workspace's runtime environment; its sharing decides whether Personal values count (SEC-5). */
+  runtimeEnvironmentId: string | null = null
+): {
   load: CloudSecretsAskLoad
   reload: () => void
 } {
@@ -45,10 +50,13 @@ export function useCloudSecretsAskLoad(repoKey: string | null): {
     }
     let cancelled = false
     void (async () => {
-      const [list, effective] = await Promise.all([
+      const [list, mode] = await Promise.all([
         environments.list().catch(() => null),
-        secrets.effective({ repo: repoKey }).catch(() => null)
+        cloudWorkspaceSecretsMode(runtimeEnvironmentId)
       ])
+      const effective = await secrets
+        .effective({ repo: repoKey, ...(mode === 'shared' ? { workspace: mode } : {}) })
+        .catch(() => null)
       if (cancelled) {
         return
       }
@@ -68,7 +76,12 @@ export function useCloudSecretsAskLoad(repoKey: string | null): {
       }
       setLoad({
         status: 'ready',
-        data: cloudSecretsAskData({ environment, effective: effective.value, repoKey }),
+        data: cloudSecretsAskData({
+          environment,
+          effective: effective.value,
+          repoKey,
+          shared: mode === 'shared'
+        }),
         effective: effective.value,
         environment
       })
@@ -76,7 +89,7 @@ export function useCloudSecretsAskLoad(repoKey: string | null): {
     return () => {
       cancelled = true
     }
-  }, [repoKey, generation])
+  }, [repoKey, runtimeEnvironmentId, generation])
   const reload = useCallback(() => setGeneration((value) => value + 1), [])
   return { load, reload }
 }
