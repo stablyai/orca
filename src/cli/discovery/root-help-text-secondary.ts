@@ -45,6 +45,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca account add [--agent claude|codex] [--json]',
   '  orca account list [--json]',
   '  orca account select --agent claude --account <id|email|system> [--json]',
+  '  orca text generate --agent <id> (--prompt <text> | --prompt-file <path|->) [--model <id>] [--effort <level>] [--json]',
   '  orca host list [--json]',
   '  orca host rm --host ssh:<target-id> [--json]',
   '  orca environment add --name <name> --pairing-code <code> [--json]',

@@ -726,6 +726,7 @@ import {
   TerminalUnsubscribe,
   TerminalUpdateViewport
 } from './terminal-viewport-schemas-params'
+import { TextGenerate } from './text-params'
 import { UpdaterCheckParams } from './updater-params'
 import {
   UsageCredentialApiKeyParams,
@@ -1623,6 +1624,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
   'terminalDaemon.setLimit': TerminalLimitUpdateParams,
   'terminalDaemon.severedStatus': null,
+  'text.generate': TextGenerate,
   'ui.get': null,
   'ui.getJiraQuickFilters': null,
   'ui.getJiraSavedFilters': null,

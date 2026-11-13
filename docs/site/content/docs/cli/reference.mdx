@@ -414,6 +414,17 @@ orca account rm --agent codex --account old@example.com         # forget a saved
 
 A selection applies to every agent of that provider launched on the host after it — the same switch as the status-bar account menu — not to a single workspace. An email shared by several accounts (one sign-in in two organizations) is refused; pass the id instead. Antigravity has no `system` default, and `account rm` never removes system credentials.
 
+## Text generation
+
+Ask an agent for one answer through the accounts Orca manages, without a worktree, terminal, or worker:
+
+```bash
+orca text generate --agent claude --model haiku --prompt "Summarize this in one line: ..."
+git diff | orca text generate --agent codex --prompt-file - --json   # { text, agent, model, elapsedMs }
+```
+
+The agent runs once on the host the way Orca writes commit messages: no tools, no hooks, no MCP servers, in an empty temporary folder that is removed afterwards, signed in with the account selected for it. `--model` defaults to the agent's default text-generation model; `--timeout-ms` stops it after that long (default 5 minutes). Failures exit non-zero with `generation_failed`, `timeout`, or `canceled`.
+
 ## Artifacts
 
 Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. Publishing follows **Settings → Artifacts → Allow publishing public artifact links** on the device: on by default for new profiles, while profiles created before this default keep their previous setting. Only a human can change it; there is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
