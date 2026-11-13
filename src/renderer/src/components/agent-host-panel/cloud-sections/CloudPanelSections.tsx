@@ -253,10 +253,10 @@ export function CloudEnvironmentPanelSection({
       title={t('agentHostPanel.section.env', 'Environment')}
       help={
         data?.withoutPersonal
-          ? `${t('agentHostPanel.help.cloudEnv', 'From Cloud secrets: Repository, then Personal, then Shared.')} ${t(
-              'agentHostPanel.env.sharedNoPersonal',
-              'A shared workspace gets nobody’s Personal values, not even its owner’s, so only Repository and Shared apply.'
-            )}`
+          ? t(
+              'agentHostPanel.help.cloudEnvShared',
+              'From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s.'
+            )
           : t(
               'agentHostPanel.help.cloudEnv',
               'From Cloud secrets: Repository, then Personal, then Shared.'

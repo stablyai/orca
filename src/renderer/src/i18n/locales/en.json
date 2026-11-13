@@ -28388,8 +28388,7 @@
       "cancel": "Cancel",
       "save": "Save",
       "empty": "No variables from Cloud secrets yet.",
-      "overrides": "overrides {{scopes}}",
-      "sharedNoPersonal": "A shared workspace gets nobody’s Personal values, not even its owner’s, so only Repository and Shared apply."
+      "overrides": "overrides {{scopes}}"
     },
     "keys": {
       "askAdmin": "Ask an owner or admin to add one.",
@@ -28430,7 +28429,8 @@
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
+      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.",
+      "cloudEnvShared": "From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
