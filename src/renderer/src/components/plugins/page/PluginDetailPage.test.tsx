@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api/plugin-host-api'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { usePluginSyntaxFailureStore } from '@/store/plugins/syntax/plugin-syntax-failures'
 import { usePluginSyntaxStore } from '@/store/plugins/syntax/plugin-syntax-packs'
 import { usePluginThemeStore } from '@/store/plugins/appearance/plugin-themes'
