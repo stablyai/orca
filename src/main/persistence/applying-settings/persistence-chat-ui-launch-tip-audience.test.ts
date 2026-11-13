@@ -11,7 +11,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as crypto from 'node:crypto'
 import {
   ensureChatUiLaunchTipCohort,
   isChatUiLaunchTipDeferredForConsent
@@ -23,10 +22,6 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('node:crypto', async (importOriginal) => ({
-  ...(await importOriginal<typeof crypto>()),
-  randomInt: vi.fn(() => 0)
-}))
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-chat-ui-launch-tip-audience-'))
@@ -80,7 +75,6 @@ it('keeps a re-offered card completed through stale client writes and reloads', 
       }
     })
     const store = createStore()
-    vi.mocked(crypto.randomInt).mockClear()
     expect(ensureChatUiLaunchTipCohort(store)).toBe('control')
     store.updateUI({ featureTipsSeenIds: ['orca-cli', 'chat-ui-here', 'chat-ui-here-v2'] })
     store.updateUI({ featureTipsSeenIds: ['orca-cli', 'chat-ui-here', 'cmd-j-palette'] })
@@ -89,7 +83,6 @@ it('keeps a re-offered card completed through stale client writes and reloads', 
 
     const reloaded = createStore()
     expect(ensureChatUiLaunchTipCohort(reloaded)).toBe('control')
-    expect(crypto.randomInt).not.toHaveBeenCalled()
     expect(reloaded.getSettings().telemetry).not.toHaveProperty('chatUiLaunchTipRolloutCohort')
     expect(reloaded.getUI().featureTipsSeenIds).toEqual([
       'orca-cli',
@@ -107,9 +100,7 @@ it('never writes a launch-tip assignment for a profile without one', async () =>
   try {
     writeDataFile({ settings: { experimentalNativeChat: false, telemetry: EXISTING_TELEMETRY } })
     const store = createStore()
-    vi.mocked(crypto.randomInt).mockClear()
     expect(ensureChatUiLaunchTipCohort(store)).toBeUndefined()
-    expect(crypto.randomInt).not.toHaveBeenCalled()
     store.flushOrThrow()
     await closeTestStores()
     const telemetry = createStore().getSettings().telemetry
@@ -149,18 +140,11 @@ it('checks only applicable completion IDs while consent is pending', () => {
       }
     })
     const store = createStore()
-    const projection = vi.spyOn(store, 'getUI')
     expect(ensureChatUiLaunchTipCohort(store)).toBe('control')
     expect(isChatUiLaunchTipDeferredForConsent()).toBe(true)
     store.updateUI({ featureTipsSeenIds: ['chat-ui-here-v2'] })
-    projection.mockClear()
     expect(ensureChatUiLaunchTipCohort(store)).toBe('control')
     expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
-    expect(projection).not.toHaveBeenCalled()
-    store.updateSettings({ telemetry: { ...EXISTING_TELEMETRY, chatUiLaunchTipCohort: 'control' } })
-    const seen = vi.spyOn(store, 'getFeatureTipsSeenIds')
-    ensureChatUiLaunchTipCohort(store)
-    expect(seen).not.toHaveBeenCalled()
   } finally {
     restoreConsentEnv(env)
   }

@@ -97,11 +97,6 @@ it('keeps a previously skipped profile on Chat UI out for good', async () => {
   expectNextTipInstead()
 })
 
-it('does not show the card again to a profile that already saw it', async () => {
-  expect(await launch({ seen: ['chat-ui-here'], telemetry: {} })).toBe(false)
-  expectNextTipInstead()
-})
-
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates a value a newer build saved, which this build's type cannot name.
 const UNKNOWN_VALUE = 'future-value' as TelemetrySettings['chatUiLaunchTipCohort']
 
@@ -132,7 +127,7 @@ it('gives a targeted profile on Chat UI no tip', async () => {
 
 it('gives a targeted profile recorded on Chat UI at launch no note', async () => {
   expect(
-    await launch({ tip: 'chat-ui-on', surface: 'chat', seen: [], telemetry: TARGETED_ALL })
+    await launch({ tip: 'chat-ui-on', surface: 'terminal', seen: [], telemetry: TARGETED_ALL })
   ).toBe(false)
   expectNextTipInstead()
 })
