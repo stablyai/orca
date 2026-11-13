@@ -42,7 +42,7 @@ runs:
         steps.orcad-prebuild-cache-identity.outcome == 'success' &&
         steps.orcad-prebuild-cache-identity.outputs.key != ''
       continue-on-error: true
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v5.1.0
       with:
         path: ${{ steps.orcad-prebuild-cache-identity.outputs.path }}
         key: ${{ steps.orcad-prebuild-cache-identity.outputs.key }}

@@ -26,10 +26,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Install pinned extension loader
         run: npm install --prefix .cache/pi-owner --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.83.0
       - name: Verify real owner exit and hook delivery

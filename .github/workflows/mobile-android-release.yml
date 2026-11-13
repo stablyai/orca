@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       # Release signing is enforced once ORCA_ANDROID_RELEASE_CERT_SHA256 (or ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true)
       # is set as a repository variable. Until then the build keeps the Expo debug key, with a warning.
@@ -70,13 +70,13 @@ jobs:
           echo "mode=release" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version: 24
           check-latest: true
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
@@ -91,7 +91,7 @@ jobs:
         run: node scripts/prepare-android-release.mjs
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.7.0
         with:
           distribution: temurin
           java-version: 17
@@ -174,7 +174,7 @@ jobs:
           echo "APK is $bytes bytes, sha256 $sha256"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orca-mobile-apk
           path: |
@@ -310,7 +310,7 @@ jobs:
       BRANCH: bump/android-apk-${{ needs.android-build.outputs.version }}
     steps:
       - name: Checkout orca
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           sparse-checkout: config/scripts
 
@@ -318,7 +318,7 @@ jobs:
       # repo, and a PR it opened would not run the site's checks.
       - name: Generate buf0-bot token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@v3.3.0
         with:
           app-id: 2590194
           private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
@@ -328,7 +328,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Checkout marketing site
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           repository: stablyai/orca-marketing-website
           path: site

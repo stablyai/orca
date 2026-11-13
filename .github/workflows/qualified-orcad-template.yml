@@ -25,17 +25,17 @@ jobs:
       key: ${{ steps.identity.outputs.key }}
       hit: ${{ steps.validate.outputs.valid }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
           package-manager-cache: false
       - name: Checkout the workflow policy
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ github.workflow_sha }}
           path: .build/workflow-policy
@@ -49,7 +49,7 @@ jobs:
           RUNNER_PROFILE: ${{ inputs.fast_runners && 'fast' || 'github-hosted' }}
         # Production must never reuse qualification from the adhoc runner pool.
         run: echo "key=orcad-qualified-template-v2-$RUNNER_PROFILE-$(git -C .build/workflow-policy rev-parse HEAD:.github)-$(git rev-parse HEAD)-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v5
+      - uses: actions/cache/restore@v5.1.0
         id: restore
         continue-on-error: true
         with:
@@ -68,7 +68,7 @@ jobs:
           fi
       - name: Reuse the qualified template in this run
         if: steps.validate.outputs.valid == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-template
           path: out/orcad-template/
@@ -94,12 +94,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-template
           path: out/orcad-template
       # Only the full successful qualification can produce a reusable cache entry.
-      - uses: actions/cache/save@v5
+      - uses: actions/cache/save@v5.1.0
         continue-on-error: true
         with:
           path: out/orcad-template

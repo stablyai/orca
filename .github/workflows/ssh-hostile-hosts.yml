@@ -88,18 +88,18 @@ jobs:
             # The image's source-built Git needs no RPM; missing tools come from AlmaLinux.
             dnf --disablerepo='epel*' install -y git procps-ng unzip which xz
           fi
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Build and smoke the linux-x64-glibc slot
         run: |
           pnpm build:orcad-prebuilds --slot=linux-x64-glibc
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
           pnpm build:orcad-prebuilds --slot=linux-x64-glibc --smoke
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: hostile-hosts-glibc-slot
           path: out/orcad-prebuilds
@@ -112,10 +112,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/restore-pnpm-verification
+      - uses: $/.github/actions/restore-pnpm-verification
         id: pnpm-verification
         with:
           container-toolchain: 'true'
@@ -139,7 +139,7 @@ jobs:
           pnpm build:orcad-prebuilds --require-slots linux-x64-musl
           pnpm build:orcad-prebuilds --slot=linux-x64-musl --smoke
           MUSL_SLOT
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: hostile-hosts-musl-slot
           path: out/orcad-prebuilds
@@ -156,10 +156,10 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Build and smoke the glibc 2.17 compat slot under the glibc-217 Node
         run: |
           compat_node="$(node config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --print-runtime)"
@@ -181,7 +181,7 @@ jobs:
           # The image's devtoolset LD_LIBRARY_PATH must not stand in for a host C++ runtime.
           env -u LD_LIBRARY_PATH node config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke
           GLIBC217_COMPAT_SLOT
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: hostile-hosts-glibc217-slot
           path: out/orcad-prebuilds
@@ -196,13 +196,13 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: hostile-hosts-*-slot
           path: ${{ runner.temp }}/hostile-host-prebuild-lanes
@@ -212,7 +212,7 @@ jobs:
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc,linux-x64-musl,linux-x64-glibc217
       # Only the x64 Linux slots exist here, so the template is built for those two, and
       # glibc217 is staged beside its base.
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
       - name: Build the orcad template
         run: node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets linux-x64-glibc,linux-x64-musl
       - name: Run the hostile-host matrix
@@ -241,13 +241,13 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
       - name: Build and smoke this runner's slot and the orcad template
         run: |
           pnpm build:orcad-prebuilds

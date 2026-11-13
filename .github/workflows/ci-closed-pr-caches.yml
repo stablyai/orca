@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Cancel obsolete PR checks
         if: github.event.action == 'synchronize' || github.event.pull_request.merged == false
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           script: |
             const pr = context.payload.pull_request
@@ -123,7 +123,7 @@ jobs:
               }
             }
       # No checkout: this runs trusted default-branch code, including for fork PRs.
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v8.0.0
         if: ${{ !cancelled() && github.event.action == 'closed' }}
         with:
           script: |

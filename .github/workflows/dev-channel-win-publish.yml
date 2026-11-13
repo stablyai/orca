@@ -49,7 +49,7 @@ jobs:
 
       # No run-id: artifacts must belong to this run, never another dispatch.
       - name: Download the staged Windows artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: dev-channel-windows-${{ inputs.tag }}
           path: staged-windows
@@ -67,7 +67,7 @@ jobs:
 
       - name: Wait for successful macOS publication
         if: inputs.wait_for_mac_job != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         env:
           MAC_JOB: ${{ inputs.wait_for_mac_job }}
         with:
@@ -88,7 +88,7 @@ jobs:
 
       - name: Mint dev channel repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -108,7 +108,7 @@ jobs:
           fi
 
       - name: Publish Windows artifacts
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 5
           max_attempts: 2

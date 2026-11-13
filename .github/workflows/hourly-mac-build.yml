@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Mint hourly repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -112,7 +112,7 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
           # Version helpers only read HEAD; published versions come from git tags.
@@ -122,7 +122,7 @@ jobs:
 
       - name: Mint hourly repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -130,10 +130,10 @@ jobs:
           repositories: orca-hourly
 
       - name: Setup pnpm
-        uses: ./.github/actions/setup-pnpm
+        uses: $/.github/actions/setup-pnpm
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -148,13 +148,13 @@ jobs:
         run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
 
       - name: Cache the pinned Node runtime
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/Library/Caches/orca-node-runtime
           key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: |
             ~/Library/Caches/electron
@@ -165,7 +165,7 @@ jobs:
 
       # Install both x64/arm64 optional natives for both macOS packages.
       - name: Install dependencies
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -173,7 +173,7 @@ jobs:
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
       # Build required out/mobile-web from mobile’s React Native/Expo install.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
 
       # Require cert before expensive build; signing enables installation over existing Orca.
       - name: Verify macOS signing environment
@@ -228,7 +228,7 @@ jobs:
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-template
           path: out/orcad-template
@@ -236,7 +236,7 @@ jobs:
       # Refresh write token after build to give long notary/upload work a full hour.
       - name: Re-mint hourly repo token for publish
         id: app_token_publish
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -277,7 +277,7 @@ jobs:
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
       - name: Publish hourly macOS artifacts
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           # Allow two 45min pack/notarize/upload attempts; next hourly picks the same commit rather than paying for a third.
           timeout_minutes: 45

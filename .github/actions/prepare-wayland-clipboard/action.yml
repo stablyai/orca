@@ -31,7 +31,7 @@ runs:
 
     - name: Restore Wayland clipboard helper
       id: cache
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v5.1.0
       continue-on-error: true
       with:
         path: native/wayland-clipboard/.build
@@ -46,7 +46,7 @@ runs:
 
     - name: Save validated Wayland clipboard helper from main
       if: inputs.build != 'false' && inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v5.1.0
       continue-on-error: true
       with:
         path: native/wayland-clipboard/.build

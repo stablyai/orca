@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 5
     steps:
       # Why: release events run this file from the tagged commit, so load the module from the same commit.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           sparse-checkout: |
             config/scripts/release/workflow-contracts/release-policy.mjs
@@ -28,7 +28,7 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Enforce release policy
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           script: |
             const { pathToFileURL } = await import("node:url")

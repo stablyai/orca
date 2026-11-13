@@ -37,7 +37,7 @@ jobs:
       matrix:
         os: [windows-2022, windows-11-arm]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
@@ -50,7 +50,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           mkdir -p .build/windows-native-benchmark
           node -e 'require("node:fs").writeFileSync(".build/windows-native-benchmark/job-start.json", JSON.stringify({startedAt:new Date().toISOString()}))'
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           node-version: '24.22.1'
           native-runtime: none
@@ -70,7 +70,7 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BENCHMARK_RUNNER: ${{ matrix.os }}
         run: node config/scripts/performance/windows-security/benchmark-windows-security-reuse.mjs
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: windows-native-preparation-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}

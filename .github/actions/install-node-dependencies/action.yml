@@ -119,13 +119,13 @@ runs:
 
     # setup-node needs pnpm on PATH to locate and restore its store.
     - name: Setup pnpm
-      uses: ./.github/actions/setup-pnpm
+      uses: $/.github/actions/setup-pnpm
 
     # Desktop-only jobs should not miss their download cache when mobile dependencies change.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v6.5.0
       with:
         node-version-file: package.json
         check-latest: true
@@ -136,7 +136,7 @@ runs:
     - name: Setup requested Node.js
       id: requested-node
       if: inputs.node-version != ''
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v6.5.0
       with:
         node-version: ${{ inputs.node-version }}
         check-latest: true
@@ -179,7 +179,7 @@ runs:
         (runner.os != 'Windows' ||
         !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) &&
         !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v5.1.0
       with:
         path: ${{ steps.pnpm-store.outputs.path }}
         key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
@@ -189,7 +189,7 @@ runs:
     - name: Keep pnpm download store without restoring
       id: pnpm-store-lookup
       if: steps.pnpm-store-mode.outputs.lookup-only == 'true' && runner.environment != 'github-hosted'
-      uses: actions/cache@v5
+      uses: actions/cache@v5.1.0
       with:
         # Twice-nested composite cleanup loses internal step outputs.
         path: ${{ env.ORCA_PNPM_STORE_CACHE_PATH }}
@@ -198,7 +198,7 @@ runs:
 
     - name: Restore pnpm verification record
       id: verification-cache
-      uses: ./.github/actions/restore-pnpm-verification
+      uses: $/.github/actions/restore-pnpm-verification
       with:
         enabled: ${{ inputs.cache-pnpm-verification }}
 
@@ -250,7 +250,7 @@ runs:
     - name: Save pnpm verification record on main
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.verification-cache.outputs.key != '' && steps.verification-cache.outputs.cache-hit != 'true'
       continue-on-error: true
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v5.1.0
       with:
         path: ${{ steps.verification-cache.outputs.path }}
         key: ${{ steps.verification-cache.outputs.key }}
@@ -277,14 +277,14 @@ runs:
     # Main and the warmers own every OS's archive; PR copies duplicated it per PR.
     - name: Cache Electron package archive
       if: github.event_name != 'pull_request' && steps.electron-package-cache.outputs.version != ''
-      uses: actions/cache@v5
+      uses: actions/cache@v5.1.0
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}
         key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
 
     - name: Restore Electron package archive without saving
       if: github.event_name == 'pull_request' && steps.electron-package-cache.outputs.version != ''
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v5.1.0
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}
         key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
@@ -292,7 +292,7 @@ runs:
     - name: Prepare native runtime
       id: native-runtime
       if: inputs.native-runtime != 'none'
-      uses: ./.github/actions/prepare-native-runtime
+      uses: $/.github/actions/prepare-native-runtime
       with:
         native-runtime: ${{ inputs.native-runtime }}
         node-version: ${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}

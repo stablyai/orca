@@ -42,18 +42,18 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout pull request
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           package-json-file: docs/site/package.json
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: docs/site/package.json
           check-latest: true
@@ -209,19 +209,19 @@ jobs:
       VERCEL_TELEMETRY_DISABLED: '1'
     steps:
       - name: Checkout released tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ needs.release_gate.outputs.commit_sha }}
           persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           package-json-file: docs/site/package.json
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: docs/site/package.json
           check-latest: true

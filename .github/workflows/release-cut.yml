@@ -78,7 +78,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout ref
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
@@ -97,7 +97,7 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -670,7 +670,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -721,7 +721,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -742,12 +742,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -763,7 +763,7 @@ jobs:
 
       # Retry node-gyp header fetch ECONNRESET so transient install failures cannot fail the whole release.
       - name: Install dependencies
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -806,7 +806,7 @@ jobs:
 
       - name: Upload Playwright traces
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: golden-e2e-${{ matrix.platform }}-playwright-traces
           path: test-results/
@@ -833,7 +833,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -849,7 +849,7 @@ jobs:
           fi
           git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
 
@@ -871,7 +871,7 @@ jobs:
 
       - name: Archive bounded skill-sharing results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: skill-sharing-release-${{ matrix.platform }}
           path: skill-sharing-release-results.json
@@ -891,7 +891,7 @@ jobs:
         run: apt-get update && apt-get install -y build-essential ca-certificates git python3 unzip
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -910,7 +910,7 @@ jobs:
           fi
           git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
 
@@ -929,7 +929,7 @@ jobs:
 
       - name: Archive bounded skill-sharing results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: skill-sharing-release-linux-glibc-2.31
           path: skill-sharing-release-results.json
@@ -962,7 +962,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -971,12 +971,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -992,7 +992,7 @@ jobs:
 
       # Same node-gyp header fetch as the blocking golden gate above.
       - name: Install dependencies
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -1020,7 +1020,7 @@ jobs:
 
       - name: Upload Playwright traces
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: terminal-rendering-release-evidence-${{ matrix.platform }}-playwright-traces
           path: test-results/
@@ -1146,7 +1146,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -1199,12 +1199,12 @@ jobs:
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -1228,7 +1228,7 @@ jobs:
 
       # Cache Electron and builder downloads (winCodeSign/NSIS/Squirrel/AppImage), saving ~30–90s per job.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ${{ matrix.eb_cache_path }}
           key: electron-builder-${{ matrix.platform }}-${{ steps.eb-versions.outputs.versions }}
@@ -1238,7 +1238,7 @@ jobs:
       # PRs cache tools separately from Electron; identical paths preserve their cache version.
       - name: Seed shared Linux packaging downloads
         if: matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/.cache/electron-builder
           key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
@@ -1247,7 +1247,7 @@ jobs:
 
       # Retry transient Electron CDN 504s during install; keep host-scoped native dependencies for this platform’s package.
       - name: Install dependencies
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -1255,7 +1255,7 @@ jobs:
           command: pnpm install --frozen-lockfile
 
       # Build required out/mobile-web from mobile’s React Native/Expo dependencies.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
 
       # Install AT-SPI runtime bindings for Linux provider verification and rpm for builder’s fpm backend; stock Ubuntu lacks them.
       - name: Install Linux computer-use provider dependencies
@@ -1296,7 +1296,7 @@ jobs:
       # Consumers verify the same official build configuration before restoring the bundle.
       - name: Download release JavaScript
         if: needs.release-javascript.outputs.supported == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: release-javascript
           path: .build/release-javascript
@@ -1327,7 +1327,7 @@ jobs:
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
         if: needs.cut.outputs.ships_orcad_template == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-template
           path: out/orcad-template
@@ -1365,7 +1365,7 @@ jobs:
 
       - name: Publish main-process source maps
         if: matrix.platform == 'linux-x64' && steps.bundle-main-sourcemaps.outputs.has_maps == 'true'
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -1376,7 +1376,7 @@ jobs:
 
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -1387,7 +1387,7 @@ jobs:
 
       - name: Load packaged node-pty on the Linux floor
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -1400,7 +1400,7 @@ jobs:
       # upload only after the production-signed installer has been returned.
       - name: Build Windows release artifacts
         if: matrix.platform == 'win' && github.run_attempt == 1
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -1433,7 +1433,7 @@ jobs:
       - name: Install SignPath PowerShell module
         id: install-signpath
         if: matrix.platform == 'win' && github.run_attempt == 1
-        uses: ./.github/actions/install-signpath-module
+        uses: $/.github/actions/install-signpath-module
 
       # #7785/#23383: sign inner PE zip, including captured NSIS uninstaller, then rebuild/sign installer; SignPath cannot deep-sign inside NSIS and this avoids a third approval.
 
@@ -1495,7 +1495,7 @@ jobs:
       - name: Upload unsigned inner binaries for SignPath
         id: upload-unsigned-inner
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.stage-inner.outcome == 'success'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orca-windows-inner-unsigned-${{ needs.cut.outputs.tag }}
           path: signing-stage/**
@@ -1726,7 +1726,7 @@ jobs:
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win' && github.run_attempt == 1
         id: upload-unsigned-windows-installer
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orca-windows-unsigned-${{ needs.cut.outputs.tag }}
           path: dist/orca-windows-setup.exe
@@ -2061,7 +2061,7 @@ jobs:
 
       - name: Upload Windows inner signing evidence
         if: always() && matrix.platform == 'win' && github.run_attempt == 1
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orca-windows-inner-signing-evidence-${{ needs.cut.outputs.tag }}
           path: |
@@ -2072,7 +2072,7 @@ jobs:
 
       - name: Publish signed Windows release artifacts
         if: matrix.platform == 'win' && github.run_attempt == 1
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -2122,10 +2122,10 @@ jobs:
       wait_deadline_ms: ${{ steps.dispatch.outputs.wait_deadline_ms }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -2159,10 +2159,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -2204,10 +2204,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -2269,7 +2269,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: orca-server-linux-*
           path: orca-server

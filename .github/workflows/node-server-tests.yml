@@ -71,11 +71,11 @@ jobs:
       native_compatibility: ${{ steps.scope.outputs.native_compatibility || steps.graph.outputs.native_compatibility }}
       runners: ${{ steps.scope.outputs.runners || steps.graph.outputs.runners }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 2
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -112,11 +112,11 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: ./.github/actions/prepare-headless-compiler
+      - uses: $/.github/actions/prepare-headless-compiler
         id: compiler
         if: steps.scope.outputs.graph_required == 'true'
         continue-on-error: true
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         if: steps.scope.outputs.graph_required == 'true' && steps.compiler.outputs.available != 'true'
       - name: Check the headless import graph
         id: graph
@@ -169,11 +169,11 @@ jobs:
           git config --global checkout.workers 0
           # These fresh native builds do not need MSBuild's incremental file tracking.
           echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         id: dependencies
         with:
           native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
@@ -193,7 +193,7 @@ jobs:
             echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
             echo 'found=true' >> "$GITHUB_OUTPUT"
           fi
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: oven-sh/setup-bun@v2.2.0
         if: runner.os == 'Linux' && steps.installed-bun.outputs.found != 'true'
         with:
           bun-version-file: config/.bun-version
@@ -213,7 +213,7 @@ jobs:
           echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"
           echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"
       # Linux release slots come from the floor and Alpine lanes; this slot serves local tests.
-      - uses: ./.github/actions/prepare-orcad-prebuilds
+      - uses: $/.github/actions/prepare-orcad-prebuilds
         id: orcad-prebuild
         with:
           resolve-windows-cache: >-
@@ -222,17 +222,17 @@ jobs:
             (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
           restore-windows-cache: ${{ inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'push' }}
       # The template lane cross-compiles arm64 too, as it does for the process-table addon.
-      - uses: ./.github/actions/prepare-windows-cli-launcher
+      - uses: $/.github/actions/prepare-windows-cli-launcher
         if: runner.os == 'Windows'
         with:
           arches: ${{ (inputs.build_template && matrix.os == 'windows-2022') && 'x64 arm64' || (runner.arch == 'ARM64' && 'arm64' || 'x64') }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         if: needs.changes.outputs.qualification != 'false'
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web
       # Narrow test-only runs skip the shared producer but still need a page.
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
         if: needs.changes.outputs.qualification == 'false'
       - run: pnpm build:orcad
         env:
@@ -270,7 +270,7 @@ jobs:
           "
       - name: Keep the Windows process-table addons for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-windows-process-tree
           path: .build/windows-process-tree/
@@ -280,7 +280,7 @@ jobs:
           overwrite: true
       - name: Keep the Windows CLI launchers for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-windows-cli-launcher
           path: .build/windows-cli-launcher/
@@ -298,14 +298,14 @@ jobs:
           node -e "require('./.build/windows-security/x64/windows-security.node').currentUserSid()"
       - name: Keep the Windows security addons for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-windows-security
           path: .build/windows-security/*/windows-security.node
           if-no-files-found: error
           retention-days: 7
           overwrite: true
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         if: runner.arch == 'X64'
         with:
           node-version: '18'
@@ -325,14 +325,14 @@ jobs:
           steps.orcad-prebuild.outputs.cache-identity-outcome == 'success' &&
           steps.orcad-prebuild.outputs.cache-key != ''
         continue-on-error: true
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v5.1.0
         with:
           path: ${{ steps.orcad-prebuild.outputs.cache-path }}
           key: ${{ steps.orcad-prebuild.outputs.cache-key }}
       # Linux release slots come from the floor and Alpine lanes; these runners own the rest.
       - name: Keep this runner's qualified slot for the desktop template
         if: inputs.build_template && runner.os != 'Linux'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-prebuild-${{ matrix.os }}
           path: out/orcad-prebuilds/
@@ -351,13 +351,13 @@ jobs:
     runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-      - uses: ./.github/actions/build-mobile-web-bundle
-      - uses: actions/upload-artifact@v7
+      - uses: $/.github/actions/install-node-dependencies
+      - uses: $/.github/actions/build-mobile-web-bundle
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web/
@@ -413,14 +413,14 @@ jobs:
             # The image's source-built Git needs no RPM; missing tools come from AlmaLinux.
             dnf --disablerepo='epel*' install -y git procps-ng unzip which xz
           fi
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       # A direct install (6-9s) beats restoring the 417 MB store plus a linking install.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           cache-pnpm-store: 'false'
       - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
@@ -428,7 +428,7 @@ jobs:
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds --smoke
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web
@@ -436,7 +436,7 @@ jobs:
       - run: pnpm test:node-server --artifact
       - name: Keep this runner's glibc 2.28 slot for the desktop template
         if: inputs.build_template
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-prebuild-glibc-${{ matrix.os }}
           path: out/orcad-prebuilds/
@@ -461,11 +461,11 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       # Design D6 rung B: the opt-in linux-x64-glibc217 slot beside the unofficial glibc-217 Node.
       # Why docker run and not container: the runner's own Node for JS actions needs glibc 2.28,
       # so the host installs and fetches the pinned Node, and the glibc 2.17 image only builds and
@@ -493,7 +493,7 @@ jobs:
           GLIBC217_COMPAT_SLOT
       - name: Keep the glibc 2.17 compat slot for the desktop template
         if: inputs.build_template
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-prebuild-glibc217
           path: out/orcad-prebuilds/
@@ -523,11 +523,11 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/restore-pnpm-verification
+      - uses: $/.github/actions/restore-pnpm-verification
         id: pnpm-verification
         with:
           container-toolchain: 'true'
@@ -553,7 +553,7 @@ jobs:
           pnpm build:orcad-prebuilds --require-slots "$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds --smoke
           NODE_SERVER_PREPARATION
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web
@@ -569,7 +569,7 @@ jobs:
         run: docker rm --force orcad-alpine
       - name: Keep this runner's musl slot for the desktop template
         if: inputs.build_template
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-prebuild-musl-${{ matrix.os }}
           path: out/orcad-prebuilds/
@@ -587,13 +587,13 @@ jobs:
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
       - name: Wait for every template qualification lane
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           script: |
             const deadline = Date.now() + 25 * 60_000
@@ -632,23 +632,23 @@ jobs:
             throw new Error('Timed out waiting for every template qualification lane')
 
       - name: Collect every lane's slot
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: orcad-prebuild-*
           path: ${{ runner.temp }}/orcad-prebuild-lanes
       - name: Collect the Windows process-table addons
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-windows-process-tree
           path: .build/windows-process-tree
       - name: Collect the Windows CLI launchers
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-windows-cli-launcher
           path: .build/windows-cli-launcher
       - name: Collect the Windows security addons
         if: hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-windows-security
           path: .build/windows-security
@@ -659,7 +659,7 @@ jobs:
           pnpm build:orcad-prebuilds --require-slots
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
       # The page the qualification lanes tested, not a rebuild.
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web
@@ -674,7 +674,7 @@ jobs:
             du -sh out/orcad-template/targets/*
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: orcad-template
           path: out/orcad-template/

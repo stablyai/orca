@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
         with:
           fetch-depth: 1
 
@@ -87,13 +87,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
-      - uses: ./.github/actions/setup-pnpm
+      - uses: $/.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: 24
           check-latest: true
@@ -101,7 +101,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Audit production and development dependencies
         run: pnpm audit --json > security-dependencies.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         if: always()
         with:
           name: cloud-dependency-audit
@@ -123,7 +123,7 @@ jobs:
       APP: ${{ matrix.app }}
       TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Build or resolve the runtime image
         run: |
@@ -162,7 +162,7 @@ jobs:
             --ignorefile '' --show-suppressed --exit-code 1 \
             /repo/security-reports/fixable.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         if: always()
         with:
           name: cloud-container-security-${{ matrix.app }}
@@ -194,13 +194,13 @@ jobs:
       ORCA_CLOUD_DATABASE_TEST_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
       ORCA_RELAY_TEST_POSTGRES_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
-      - uses: ./.github/actions/setup-pnpm
+      - uses: $/.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: 24
           check-latest: true

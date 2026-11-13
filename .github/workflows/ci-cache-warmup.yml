@@ -78,12 +78,12 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
 
       # Default-branch caches can be restored by every PR; PR caches cannot.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
           node-version: '24'
@@ -92,16 +92,16 @@ jobs:
           cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
           cache-pnpm-store-lookup-only: 'true'
 
-      - uses: ./.github/actions/prepare-headless-compiler
+      - uses: $/.github/actions/prepare-headless-compiler
         with:
           seed: 'true'
 
       - name: Populate shared Electron archive
         run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
 
-      - uses: ./.github/actions/prepare-git-compatibility
+      - uses: $/.github/actions/prepare-git-compatibility
 
-      - uses: ./.github/actions/prepare-wayland-clipboard
+      - uses: $/.github/actions/prepare-wayland-clipboard
         with:
           save-cache: 'true'
 

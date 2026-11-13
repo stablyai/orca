@@ -40,7 +40,7 @@ jobs:
       ORCA_COMPUTER_BENCH_ISOLATED: '1'
       ACCESSIBILITY_ENABLED: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -89,14 +89,14 @@ jobs:
             fi
           '
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: computer-task-linux-${{ matrix.target }}
           path: out/task-linux-${{ matrix.target }}
           if-no-files-found: warn
 
       - if: always() && matrix.target == 'electron'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: computer-typing-linux-electron
           path: out/typing-linux-electron
@@ -114,11 +114,11 @@ jobs:
       BENCH_TARGET: ${{ matrix.target }}
       ORCA_COMPUTER_BENCH_ISOLATED: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6.3.0
         with:
           python-version: '3.12'
       - name: Fetch immutable baseline
@@ -158,13 +158,13 @@ jobs:
             --electron "$env:RUNNER_TEMP\electron\node_modules\electron\dist\electron.exe" `
             --out "out/task-windows-$env:BENCH_TARGET" --n 3 --budget 1800
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: computer-task-windows-${{ matrix.target }}
           path: out/task-windows-${{ matrix.target }}
           if-no-files-found: warn
       - if: always() && matrix.target == 'fixture'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: computer-discovery-windows
           path: out/discovery-windows

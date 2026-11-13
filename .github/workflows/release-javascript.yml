@@ -36,7 +36,7 @@ jobs:
       supported: ${{ steps.source.outputs.supported }}
       source_sha: ${{ steps.source.outputs.sha }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -64,12 +64,12 @@ jobs:
         env:
           DEV_BUILD: ${{ inputs.dev_build }}
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         if: steps.source.outputs.supported == 'true'
         with:
           native-runtime: node
 
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
         if: steps.source.outputs.supported == 'true'
 
       - name: Resolve release build identity
@@ -102,7 +102,7 @@ jobs:
           fi
           node "$RELEASE_JAVASCRIPT_ARTIFACT" pack
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: steps.source.outputs.supported == 'true'
         with:
           name: release-javascript

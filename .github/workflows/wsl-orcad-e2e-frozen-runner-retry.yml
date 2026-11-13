@@ -21,7 +21,7 @@ jobs:
       checks: read
     steps:
       - name: Rerun a WSL2 job reaped at its time cap
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           script: |
             const run = context.payload.workflow_run

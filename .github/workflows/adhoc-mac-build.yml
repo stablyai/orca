@@ -105,7 +105,7 @@ jobs:
       name: ${{ steps.adhoc.outputs.name }}
     steps:
       - name: Checkout template detection and version scripts
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ needs.resolve-ref.outputs.sha }}
           sparse-checkout: |
@@ -134,7 +134,7 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -206,7 +206,7 @@ jobs:
     steps:
       - name: Mint adhoc repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -293,7 +293,7 @@ jobs:
         run: *vet-repository-ref
 
       - name: Checkout the requested ref
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # Explicit source input lets main’s workflow build an unmerged branch rather than run that branch’s stale workflow.
           ref: ${{ steps.vetted.outputs.sha }}
@@ -303,12 +303,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
+        uses: pnpm/setup@v2.1.0
         with:
           install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.5.0
         with:
           node-version-file: package.json
           check-latest: true
@@ -323,13 +323,13 @@ jobs:
         run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
 
       - name: Cache the pinned Node runtime
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/Library/Caches/orca-node-runtime
           key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: |
             ~/Library/Caches/electron
@@ -340,7 +340,7 @@ jobs:
 
       # Install both x64/arm64 optional natives because this arm64 runner packages both.
       - name: Install dependencies
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -348,7 +348,7 @@ jobs:
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
       # Build required out/mobile-web after installing its React Native/Expo dependencies.
-      - uses: ./.github/actions/install-mobile-dependencies
+      - uses: $/.github/actions/install-mobile-dependencies
         if: needs.release-javascript.outputs.supported != 'true'
 
       # Require signing cert before expensive build; unsigned macOS cannot update an existing install correctly.
@@ -363,7 +363,7 @@ jobs:
 
       - name: Download shared JavaScript
         if: needs.release-javascript.outputs.supported == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: release-javascript
           path: .build/release-javascript
@@ -390,14 +390,14 @@ jobs:
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
         if: needs.orcad-template-support.outputs.ships == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: orcad-template
           path: out/orcad-template
 
       # Mint the one-hour write token after build, just before potentially long notarization/publish.
       - name: Checkout workflow packaging scripts
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tools
@@ -409,7 +409,7 @@ jobs:
           persist-credentials: false
 
       - name: Package and notarize this Mac architecture
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@v4.0.0
         with:
           # Allow two 45min pack/notarize attempts; an adhoc user can redispatch rather than pay for a third.
           timeout_minutes: 45
@@ -451,7 +451,7 @@ jobs:
 
       - name: Mint adhoc repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -471,7 +471,7 @@ jobs:
           gh release upload "$TAG" "${files[@]}" --repo "$ADHOC_REPO" --clobber
 
       - name: Stage verified architecture manifest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: adhoc-mac-manifest-${{ matrix.arch }}
           path: .build/mac-manifests/${{ matrix.arch }}.json
@@ -496,7 +496,7 @@ jobs:
     steps:
       - name: Mint adhoc repo token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v2.2.2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
@@ -509,7 +509,7 @@ jobs:
         run: test "$ARCH_RESULT" = success
 
       - name: Checkout manifest merger
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
@@ -517,7 +517,7 @@ jobs:
           persist-credentials: false
 
       - name: Download architecture manifests
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: adhoc-mac-manifest-*
           merge-multiple: true
@@ -536,7 +536,7 @@ jobs:
 
       - name: Confirm final template qualification before publication
         if: needs.orcad-template-support.outputs.ships == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         env:
           WAIT_FOR_TEMPLATE_COMPLETION: '1'
         with:

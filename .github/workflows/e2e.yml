@@ -89,7 +89,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -146,7 +146,7 @@ jobs:
           timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
       # Why: the build's plain-Node daemon smoke load resolves node-pty.
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         id: deps
         with:
           native-runtime: node
@@ -156,7 +156,7 @@ jobs:
       # Save Node's ABI before the Electron preparation replaces the same build paths.
       - name: Save compiled Node native modules
         if: steps.deps.outputs.native-cache-key != '' && steps.deps.outputs.native-cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v5.1.0
         with:
           path: ${{ steps.deps.outputs.native-cache-path }}
           key: ${{ steps.deps.outputs.native-cache-key }}
@@ -205,12 +205,12 @@ jobs:
           fi
 
       # The orcad builds downstream refuse to run without the page; older refs predate the action.
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
         if: hashFiles('.github/actions/build-mobile-web-bundle/action.yml') != ''
 
       # Foreground: a background JavaScript action reads the event payload while later steps rewrite it.
       - name: Upload E2E build output
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
@@ -221,14 +221,14 @@ jobs:
       - name: Prepare shared Electron native runtime
         id: electron-native-runtime
         if: steps.native-runtime-action.outputs.available == 'true' && steps.deps.outputs.node-version != ''
-        uses: ./.github/actions/prepare-native-runtime
+        uses: $/.github/actions/prepare-native-runtime
         with:
           native-runtime: electron
           node-version: ${{ steps.deps.outputs.node-version }}
 
       - name: Prepare Electron natives for older refs
         if: steps.native-runtime-action.outputs.available != 'true' || steps.deps.outputs.node-version == ''
-        uses: ./.github/actions/install-node-dependencies
+        uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
 
@@ -274,7 +274,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -287,12 +287,12 @@ jobs:
           ORCA_E2E_APT_PACKAGES: build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils xdotool
         run: *install_e2e_tools
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
 
       - name: Download E2E build output
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
@@ -335,7 +335,7 @@ jobs:
         if: always()
         # Diagnostic upload outages must not change the test verdict.
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: e2e-shard-${{ matrix.shard_name }}-attempt-${{ github.run_attempt }}
           path: ci-shards/
@@ -345,7 +345,7 @@ jobs:
       # Upload failure traces/screenshots so CI failures are diagnosable without reproduction.
       - name: Upload Playwright traces
         if: failure() || cancelled()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: playwright-traces-${{ matrix.shard_name }}
           path: test-results/
@@ -365,7 +365,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -374,12 +374,12 @@ jobs:
         env: *e2e_tool_packages
         run: *install_e2e_tools
 
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
 
       - name: Download E2E build output
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
@@ -452,7 +452,7 @@ jobs:
       - name: Upload changed E2E shard assignment
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: changed-e2e-shard-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
           path: ci-shards-changed/
@@ -480,7 +480,7 @@ jobs:
       - name: Upload layout save divergence report
         if: always() && inputs.layout_owner == 'main'
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: layout-divergence-changed-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
           path: layout-divergence/
@@ -489,7 +489,7 @@ jobs:
 
       - name: Upload parked split visual proof
         if: always() && contains(inputs.test_files, 'tests/e2e/terminal-parked-cli-split.spec.ts')
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: parked-split-proof-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
           path: test-results/**/parked-cli-split-*.png
@@ -498,7 +498,7 @@ jobs:
 
       - name: Upload Playwright traces
         if: failure() || cancelled()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: playwright-traces-changed-${{ strategy.job-index }}${{ inputs.artifact_suffix }}
           path: test-results/
@@ -511,10 +511,10 @@ jobs:
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: node
       - name: Install SSH client
@@ -537,7 +537,7 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -548,10 +548,10 @@ jobs:
           else
             sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
           fi
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
@@ -617,13 +617,13 @@ jobs:
       - name: Upload layout save divergence report
         if: always() && inputs.layout_owner == 'main'
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: layout-divergence-headless${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
           path: layout-divergence/
           retention-days: 14
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: orcad-serve-mode-switch-traces${{ inputs.artifact_suffix }}
@@ -646,7 +646,7 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -655,10 +655,10 @@ jobs:
         run: git fetch --no-tags --depth=1 origin +refs/tags/v1.4.224:refs/tags/v1.4.224
       - name: Install headless tools
         run: *install_headless_tools
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
@@ -722,13 +722,13 @@ jobs:
       - name: Upload layout save divergence report
         if: always() && inputs.layout_owner == 'main'
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: layout-divergence-managed-ssh-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
           path: layout-divergence/
           retention-days: 14
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: orcad-ssh-docker-traces-${{ strategy.job-index }}${{ inputs.artifact_suffix }}
@@ -748,21 +748,21 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
+      - uses: $/.github/actions/install-node-dependencies
         with:
           native-runtime: electron
-      - uses: ./.github/actions/prepare-orcad-prebuilds
+      - uses: $/.github/actions/prepare-orcad-prebuilds
         with:
           resolve-windows-cache: 'true'
           restore-windows-cache: 'true'
-      - uses: ./.github/actions/prepare-windows-cli-launcher
+      - uses: $/.github/actions/prepare-windows-cli-launcher
         with:
           arches: x64
-      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: $/.github/actions/build-mobile-web-bundle
       - name: Build the e2e app, CLI, orcad slot and template
         shell: bash
         env:
@@ -796,7 +796,7 @@ jobs:
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           ORCA_E2E_PRESERVE_PROFILE_LOGS_DIR: ${{ github.workspace }}\test-results\profile-logs
         run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: orcad-serve-mode-switch-windows-traces${{ inputs.artifact_suffix }}
