@@ -21,6 +21,8 @@ export type ProjectComboboxProps = {
   onMoreCloudAccess?: () => void
   /** Present while GitHub has more repositories than are listed. */
   onShowMoreCloudRepos?: (() => void) | null
+  /** GH-LIST-MISSING: GitHub's list couldn't be read; the section says so with Retry. */
+  onRetryCloudRepos?: (() => void) | null
   /** Bumped to open the list at its cloud-only section ("Choose a GitHub repository"). */
   openSignal?: number
   /**

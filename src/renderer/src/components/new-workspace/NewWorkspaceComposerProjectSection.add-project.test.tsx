@@ -13,11 +13,14 @@ afterEach(cleanup)
 function cloudOnly(
   moreAccess: () => void,
   githubHandoff: CloudOnlyRepo['githubHandoff'] = 'idle',
-  checkGitHubAgain: () => void = () => {}
+  checkGitHubAgain: () => void = () => {},
+  overrides: Partial<CloudOnlyRepo> = {}
 ): CloudOnlyRepo {
   return {
     repos: [],
     showMore: null,
+    retryRepos: null,
+    ...overrides,
     picked: null,
     folderProject: false,
     githubStep: null,
@@ -34,7 +37,8 @@ function renderSection(
   recipeId: string | null,
   moreAccess: () => void,
   githubHandoff: CloudOnlyRepo['githubHandoff'] = 'idle',
-  checkGitHubAgain: () => void = () => {}
+  checkGitHubAgain: () => void = () => {},
+  overrides: Partial<CloudOnlyRepo> = {}
 ): void {
   render(
     <TooltipProvider>
@@ -61,7 +65,7 @@ function renderSection(
         cloudStart={{
           onSelectOrcaCloud: () => {},
           onUserPick: () => {},
-          cloudOnly: cloudOnly(moreAccess, githubHandoff, checkGitHubAgain)
+          cloudOnly: cloudOnly(moreAccess, githubHandoff, checkGitHubAgain, overrides)
         }}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
@@ -119,5 +123,20 @@ describe('back from GitHub (REPO-ACCESS-REFRESH)', () => {
     await user.click(screen.getByRole('button', { name: 'Check again' }))
     expect(checkAgain).toHaveBeenCalledOnce()
     expect(screen.getByRole('combobox', { name: 'Project' })).toBeTruthy()
+  })
+})
+
+describe("GitHub's list couldn't be read (GH-LIST-MISSING)", () => {
+  it('the Project picker keeps a GitHub section that says so, with Retry', async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'idle', () => {}, {
+      repos: null,
+      retryRepos: retry
+    })
+    await user.click(screen.getByRole('combobox', { name: 'Project' }))
+    expect(await screen.findByText('Couldn’t load GitHub repositories.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(retry).toHaveBeenCalledOnce()
   })
 })

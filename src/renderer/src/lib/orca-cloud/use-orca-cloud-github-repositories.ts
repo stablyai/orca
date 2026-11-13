@@ -21,7 +21,10 @@ const CACHE_MS = 5 * 60_000
 type Listing = { repos: OrcaCloudGitHubRepository[]; nextCursor: string | null }
 
 /** One listing at a time, for the identity (account and team) that asked for it. */
-let cache: { at: number; identity: string; value: Promise<Listing> } | null = null
+let cache: { at: number; identity: string; value: Promise<Listing>; empty?: boolean } | null = null
+
+/** The list couldn't be read (signed-in state settling after a restart, a role change, GitHub down). */
+class RepositoriesUnavailable extends Error {}
 
 async function fetchPages(after: Listing): Promise<Listing> {
   const repos = [...after.repos]
@@ -29,6 +32,11 @@ async function fetchPages(after: Listing): Promise<Listing> {
   for (let page = 0; page < PAGES_PER_LOAD; page += 1) {
     const result = await window.api.orcaCloudWorkspace.listGitHubRepositories({ cursor })
     if (!result.ok) {
+      // GH-LIST-MISSING: a failed first page used to resolve as an empty list, cached for 5 min,
+      // and an empty list hides the GitHub section: it looked like there were no repositories.
+      if (page === 0) {
+        throw new RepositoriesUnavailable(result.message ?? result.code)
+      }
       break
     }
     const value: HostedGithubRepositoriesResponse = result.value
@@ -43,10 +51,17 @@ async function fetchPages(after: Listing): Promise<Listing> {
   return { repos, nextCursor: cursor }
 }
 
-function loadRepositories(identity: string, more = false): Promise<Listing> {
+/** The listing, or 'unavailable' when GitHub's list couldn't be read (never cached). */
+function loadRepositories(identity: string, more = false): Promise<Listing | 'unavailable'> {
   const now = Date.now()
-  // Another account's or team's repositories are never this one's (sign-out, team switch).
-  if (!cache || cache.identity !== identity || now - cache.at >= CACHE_MS) {
+  // Another account's or team's repositories are never this one's (sign-out, team switch). An
+  // empty answer isn't kept either: each open asks again, in case access arrived meanwhile.
+  if (
+    !cache ||
+    cache.identity !== identity ||
+    now - cache.at >= CACHE_MS ||
+    (!more && cache.empty)
+  ) {
     cache = { at: now, identity, value: fetchPages({ repos: [], nextCursor: null }) }
   } else if (more) {
     const previous = cache.value
@@ -58,12 +73,18 @@ function loadRepositories(identity: string, more = false): Promise<Listing> {
   }
   const entry = cache
   // A failed read isn't cached: the next open asks again.
-  return entry.value.catch(() => {
-    if (cache === entry) {
-      cache = null
+  return entry.value.then(
+    (listing) => {
+      entry.empty = listing.repos.length === 0
+      return listing
+    },
+    () => {
+      if (cache === entry) {
+        cache = null
+      }
+      return 'unavailable' as const
     }
-    return { repos: [], nextCursor: null }
-  })
+  )
 }
 
 /** Forget the list after the user gives Orca Cloud access to more repositories. */
@@ -101,12 +122,20 @@ export function useOrcaCloudGitHubRepositories(
   repos: OrcaCloudGitHubRepository[] | null
   /** Present while GitHub has more pages than are listed. */
   showMore: (() => void) | null
+  /** GitHub's list couldn't be read: the picker says so with Retry instead of hiding the section. */
+  unavailable: boolean
+  retry: () => void
 } {
   const repos = useAppStore((s) => s.repos)
   const identity = useOrcaCloudIdentityKey()
-  const [answer, setAnswer] = useState<{ identity: string; listing: Listing } | null>(null)
+  const [answer, setAnswer] = useState<{
+    identity: string
+    listing: Listing | 'unavailable'
+  } | null>(null)
   const [moreRequests, setMoreRequests] = useState(0)
-  const listing = answer?.identity === identity ? answer.listing : null
+  const [retries, setRetries] = useState(0)
+  const current = answer?.identity === identity ? answer.listing : null
+  const listing = current === 'unavailable' ? null : current
   useEffect(() => {
     if (!enabled) {
       return
@@ -120,7 +149,7 @@ export function useOrcaCloudGitHubRepositories(
     return () => {
       cancelled = true
     }
-  }, [enabled, identity, moreRequests, refreshSignal])
+  }, [enabled, identity, moreRequests, refreshSignal, retries])
   const visible = useMemo(
     () =>
       enabled && listing
@@ -132,5 +161,11 @@ export function useOrcaCloudGitHubRepositories(
     [enabled, listing, repos]
   )
   const showMore = useCallback(() => setMoreRequests((n) => n + 1), [])
-  return { repos: visible, showMore: enabled && listing?.nextCursor ? showMore : null }
+  const retry = useCallback(() => setRetries((n) => n + 1), [])
+  return {
+    repos: visible,
+    showMore: enabled && listing?.nextCursor ? showMore : null,
+    unavailable: enabled && current === 'unavailable',
+    retry
+  }
 }

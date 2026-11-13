@@ -56,6 +56,7 @@ export default function ProjectCombobox({
   onCloudRepoSelected,
   onMoreCloudAccess: onMoreCloudAccessProp,
   onShowMoreCloudRepos = null,
+  onRetryCloudRepos = null,
   openSignal = 0,
   focusSignal = 0
 }: ProjectComboboxProps): React.JSX.Element {
@@ -390,18 +391,17 @@ export default function ProjectCombobox({
                   ))}
                 </div>
               ))}
-              {cloudRepos ? (
-                <ProjectComboboxCloudSection
-                  repos={cloudMatches}
-                  value={cloudRepoValue ? cloudRepoKey(cloudRepoValue) : null}
-                  armedKey={armedKey}
-                  armedId={`${listId}-armed`}
-                  onArm={armClosingCascade}
-                  onCommit={commit}
-                  showMoreAccess={Boolean(onMoreCloudAccess)}
-                  showMoreRepos={Boolean(onShowMoreCloudRepos)}
-                />
-              ) : null}
+              <ProjectComboboxCloudSection
+                repos={cloudRepos ? cloudMatches : null}
+                value={cloudRepoValue ? cloudRepoKey(cloudRepoValue) : null}
+                armedKey={armedKey}
+                armedId={`${listId}-armed`}
+                onArm={armClosingCascade}
+                onCommit={commit}
+                showMoreAccess={Boolean(onMoreCloudAccess)}
+                showMoreRepos={Boolean(onShowMoreCloudRepos)}
+                onRetry={onRetryCloudRepos}
+              />
             </div>
             <ProjectComboboxAddProjectOption
               optionId={armedKey === ADD_PROJECT_KEY ? `${listId}-armed` : undefined}

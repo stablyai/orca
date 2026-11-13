@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
+import { ProjectComboboxCloudUnavailable } from './ProjectComboboxCloudUnavailable'
 
 // Row keys share one namespace with project option ids, and GitHub projects are keyed
 // `github:<owner>/<repo>`; this prefix must never collide with a project id.
@@ -94,9 +95,11 @@ export function ProjectComboboxCloudSection({
   onArm,
   onCommit,
   showMoreAccess,
-  showMoreRepos = false
+  showMoreRepos = false,
+  onRetry = null
 }: {
-  repos: readonly OrcaCloudGitHubRepository[]
+  /** Null while not listed (Orca Cloud not picked, still loading, or the read failed). */
+  repos: readonly OrcaCloudGitHubRepository[] | null
   value: string | null
   armedKey: string | null
   armedId: string
@@ -105,8 +108,13 @@ export function ProjectComboboxCloudSection({
   showMoreAccess: boolean
   /** GitHub has more pages than are listed. */
   showMoreRepos?: boolean
+  /** GH-LIST-MISSING: the read failed; the section says so with Retry instead of hiding. */
+  onRetry?: (() => void) | null
 }): React.JSX.Element | null {
   const t = useTranslate()
+  if (!repos) {
+    return <ProjectComboboxCloudUnavailable onRetry={onRetry} />
+  }
   if (repos.length === 0 && !showMoreAccess) {
     return null
   }
