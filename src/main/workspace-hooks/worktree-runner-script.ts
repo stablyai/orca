@@ -32,7 +32,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
 
 import type { Repo } from '../../shared/repo-types'
-import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
+import type { WorktreeSetupLaunch } from '../../shared/worktree/creation/launch-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 

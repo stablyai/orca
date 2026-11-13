@@ -8,7 +8,7 @@ import type { GitPushTarget } from '../../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
-import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/hosted-review/github-pr-suppression'
 import {
   prBranchFallbackNeedsHint,
   resolvePRBranchFallback,

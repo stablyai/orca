@@ -13,7 +13,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../shared/worktree/visibility-sources'
+} from '../../../../shared/worktree/visibility/visibility-sources'
 import type { RepoSlice, RepoUpdate } from './repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'

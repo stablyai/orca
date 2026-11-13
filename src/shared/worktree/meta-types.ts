@@ -11,7 +11,7 @@ import type {
   WorkspaceStatus
 } from './types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { OrcaWorkspaceLayout } from '../global-settings-types'
+import type { OrcaWorkspaceLayout } from '../orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sort-stamps'
 import type { ExternalConversationLink } from '../external-conversation-link'

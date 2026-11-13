@@ -20,7 +20,7 @@ import { isGitWorktreeMutationInFlight } from '../../git/command-runner/git-work
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/source-control/ignores/check-ignored-paths'
 import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
-import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore

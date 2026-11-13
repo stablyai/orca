@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../execution-host'
 import { getRepoExecutionHostIdOrDefault } from '../execution-host'
-import { getHostContextLabel } from '../worktree/host-context-labels'
+import { getHostContextLabel } from '../worktree/row-display/host-context-labels'
 import type { ImportedWorktreesCardCandidate, Row } from './row-types'
 
 /**

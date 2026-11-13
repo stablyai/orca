@@ -10,7 +10,7 @@ import type {
 import type { GitStagingArea, GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import type { GitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import type {
   GitHistoryItemRef,

@@ -1,6 +1,6 @@
 import { translate } from '../../i18n/mobile-i18n'
 import type { RpcSendParams } from '../../../../src/shared/rpc-contract/rpc-send-params'
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../src/shared/worktree/hosted-review-links'
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../src/shared/worktree/hosted-review/hosted-review-links'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import {
