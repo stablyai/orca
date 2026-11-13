@@ -1,52 +1,108 @@
-import { InputRule, Node, ReactNodeViewRenderer } from '@tiptap/react'
+import {
+  InputRule,
+  Node,
+  ReactNodeViewRenderer,
+  type Editor,
+  type JSONContent
+} from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { NativeChatSideChatPill } from './NativeChatSideChatPill'
 
 export const SIDE_CHAT_NODE = 'nativeChatSideChat'
-const LEADING_COMMAND = /^\/(btw|side)\s/i
+// A literal space only, so the token is exactly what was typed and the draft text never changes.
+const LEADING_COMMAND = /^\/(?:btw|side) /i
 // The pill only means "side chat" where the whole draft parses as one: first, in the first line.
 const PILL_POSITION = 1
 
-type SideChatOptions = { enabled: () => boolean; placeholder: () => string }
+type SideChatStorage = { enabled: boolean }
 
-function commandToken(name: string): string {
-  return `/${name} `
+declare module '@tiptap/core' {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Tiptap Storage requires declaration merging.
+  interface Storage {
+    nativeChatSideChat: SideChatStorage
+  }
 }
 
-/** Turns a draft-leading `/btw ` or `/side ` into the pill; null when the draft does not start so. */
-export function pillLeadingSideChatCommand(state: EditorState): Transaction | null {
+function leadingCommandPill(state: EditorState): Transaction | null {
   const first = state.doc.firstChild?.firstChild
   const match = first?.isText ? LEADING_COMMAND.exec(first.text ?? '') : null
-  if (!match) {
-    return null
-  }
-  return state.tr.replaceWith(
-    PILL_POSITION,
-    PILL_POSITION + match[0].length,
-    state.schema.nodes[SIDE_CHAT_NODE].create({ token: commandToken(match[1]) })
-  )
+  return match
+    ? state.tr.replaceWith(
+        PILL_POSITION,
+        PILL_POSITION + match[0].length,
+        state.schema.nodes[SIDE_CHAT_NODE].create({ token: match[0] })
+      )
+    : null
 }
 
-function misplacedPills(doc: ProseMirrorNode): { pos: number; node: ProseMirrorNode }[] {
+/** Pills found where `keep` says no go back to the text they stand for. */
+function pillsToText(state: EditorState, keep: (pos: number) => boolean): Transaction | null {
   const found: { pos: number; node: ProseMirrorNode }[] = []
-  doc.descendants((node, pos) => {
-    if (node.type.name === SIDE_CHAT_NODE && pos !== PILL_POSITION) {
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === SIDE_CHAT_NODE && !keep(pos)) {
       found.push({ pos, node })
     }
   })
-  return found
+  if (found.length === 0) {
+    return null
+  }
+  const tr = state.tr
+  for (const { pos, node } of found.toReversed()) {
+    tr.replaceWith(pos, pos + node.nodeSize, state.schema.text(String(node.attrs.token)))
+  }
+  return tr
+}
+
+/** A picked `/btw` or `/side` row: its completed text becomes the pill. */
+export function pillLeadingSideChatCommand(editor: Editor): Transaction | null {
+  return editor.storage.nativeChatSideChat.enabled ? leadingCommandPill(editor.state) : null
+}
+
+/** After availability changes or a whole draft loads: a leading command shows as the pill exactly
+ *  where Send opens it as a side chat. Also redraws the empty-question placeholder. */
+export function syncSideChatPill(editor: Editor, enabled: boolean): void {
+  editor.storage.nativeChatSideChat.enabled = enabled
+  const { state } = editor
+  const tr = (enabled ? leadingCommandPill(state) : pillsToText(state, () => false)) ?? state.tr
+  editor.view.dispatch(tr.setMeta('preventUpdate', true).setMeta('addToHistory', false))
+}
+
+/** Saved drafts hold the pill as its text, so a build or window without this node keeps the draft. */
+export function withSideChatPillsAsText(node: JSONContent): JSONContent {
+  if (!node.content) {
+    return node
+  }
+  const content: JSONContent[] = []
+  for (const child of node.content) {
+    const next =
+      child.type === SIDE_CHAT_NODE
+        ? { type: 'text', text: String(child.attrs?.token ?? '') }
+        : withSideChatPillsAsText(child)
+    const previous = content.at(-1)
+    if (next.type === 'text' && previous?.type === 'text' && !next.marks && !previous.marks) {
+      content[content.length - 1] = {
+        ...previous,
+        text: `${previous.text ?? ''}${next.text ?? ''}`
+      }
+    } else {
+      content.push(next)
+    }
+  }
+  return { ...node, content }
 }
 
 /** `token` is the typed `/btw ` or `/side `, its space included, so the draft text never changes. */
-export const NativeChatSideChat = Node.create<SideChatOptions>({
+export const NativeChatSideChat = Node.create<{ placeholder: () => string }, SideChatStorage>({
   name: SIDE_CHAT_NODE,
   group: 'inline',
   inline: true,
   atom: true,
   selectable: true,
-  addOptions: () => ({ enabled: () => false, placeholder: () => '' }),
+  addOptions: () => ({ placeholder: () => '' }),
+  // Set by the composer: whether Send opens this draft as a side chat.
+  addStorage: () => ({ enabled: false }),
   addNodeView: () => ReactNodeViewRenderer(NativeChatSideChatPill),
   addAttributes: () => ({ token: { default: '' } }),
   renderText: ({ node }) => node.attrs.token,
@@ -54,18 +110,14 @@ export const NativeChatSideChat = Node.create<SideChatOptions>({
   addInputRules() {
     return [
       new InputRule({
-        find: /^\/(btw|side)\s$/i,
+        find: /^\/(?:btw|side) $/i,
         // Backspace leaves the typed command, not an undo back to its space.
         undoable: false,
         handler: ({ state, range, match }) => {
-          if (range.from !== PILL_POSITION || !this.options.enabled()) {
+          if (range.from !== PILL_POSITION || !this.storage.enabled) {
             return null
           }
-          state.tr.replaceWith(
-            range.from,
-            range.to,
-            this.type.create({ token: commandToken(match[1] ?? '') })
-          )
+          state.tr.replaceWith(range.from, range.to, this.type.create({ token: match[0] }))
           return undefined
         }
       })
@@ -92,30 +144,21 @@ export const NativeChatSideChat = Node.create<SideChatOptions>({
     }
   },
   addProseMirrorPlugins() {
-    const { enabled, placeholder } = this.options
+    const { storage } = this
+    const { placeholder } = this.options
     return [
       new Plugin({
         // Text typed or dropped before the pill would send a plain message under a side-chat label.
-        appendTransaction: (transactions, _old, state) => {
-          if (!transactions.some((tr) => tr.docChanged)) {
-            return null
-          }
-          const misplaced = misplacedPills(state.doc)
-          if (misplaced.length === 0) {
-            return null
-          }
-          const tr = state.tr
-          for (const { pos, node } of misplaced.toReversed()) {
-            tr.replaceWith(pos, pos + node.nodeSize, state.schema.text(String(node.attrs.token)))
-          }
-          return tr
-        },
+        appendTransaction: (transactions, _old, state) =>
+          transactions.some((tr) => tr.docChanged)
+            ? pillsToText(state, (pos) => pos === PILL_POSITION)
+            : null,
         props: {
           decorations: (state) => {
             const { doc } = state
             const only = doc.childCount === 1 ? doc.firstChild : null
             if (
-              !enabled() ||
+              !storage.enabled ||
               only?.childCount !== 1 ||
               only.firstChild?.type.name !== SIDE_CHAT_NODE
             ) {
