@@ -40,7 +40,10 @@ export class JournalSqlBackgroundMaintenance {
       readers,
       this.conversions,
       () => this.boundary(),
-      this.onError
+      this.onError,
+      undefined,
+      undefined,
+      (started) => this.rest(started)
     )
   }
 

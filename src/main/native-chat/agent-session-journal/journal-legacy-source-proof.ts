@@ -210,14 +210,17 @@ export async function completeJournalLegacyProof(
   conversions: Pick<JournalSqlConversions, 'ensure'>,
   writer: Pick<JournalSqlOwner, 'maintain'>,
   boundary: () => Promise<boolean>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  rest: (started: number) => Promise<void>
 ): Promise<void> {
   let cursor: LegacyProofCursor | null = { table: 0, after: null }
   while (cursor && !signal.aborted) {
     if (!(await boundary())) {
       throw new Error('legacy proof was interrupted')
     }
+    const started = performance.now()
     const page = await readers.legacyProof(cursor)
+    await rest(started)
     for (const source of page.sessions) {
       await conversions.ensure(source.sessionId, false)
       if ((await readers.importState(source.sessionId)).state !== 'ready' && source.empty) {

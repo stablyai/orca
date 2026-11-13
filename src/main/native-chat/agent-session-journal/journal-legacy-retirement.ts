@@ -52,7 +52,8 @@ export class JournalLegacyRetirement {
     private readonly boundary: () => Promise<boolean>,
     private readonly report: (error: unknown) => void,
     private readonly ownsProfile = () => ownsOrcadProfileDirectory(directory),
-    private readonly lock = acquireJournalLegacyFileLock
+    private readonly lock = acquireJournalLegacyFileLock,
+    private readonly rest: (started: number) => Promise<void> = async () => {}
   ) {
     this.filename = journalDatabasePath(directory)
   }
@@ -143,7 +144,8 @@ export class JournalLegacyRetirement {
       this.conversions,
       this.writer,
       this.boundary,
-      this.stopped.signal
+      this.stopped.signal,
+      this.rest
     )
   }
 
