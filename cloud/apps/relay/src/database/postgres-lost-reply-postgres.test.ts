@@ -29,7 +29,9 @@ async function blackholeProxy(target: URL, trigger: string) {
       upstream.write(chunk)
     })
     upstream.on('data', (chunk: Buffer) => {
-      if (!swallowing) client.write(chunk)
+      if (!swallowing) {
+        client.write(chunk)
+      }
     })
     for (const socket of [client, upstream]) {
       socket.on('error', () => undefined)
