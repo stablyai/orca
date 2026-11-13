@@ -7,6 +7,7 @@ import type { JournalObserverResult } from '../../agent-session-journal/journal-
 import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { currentRequestsProjection } from './agent-session-current-requests'
+import { journalDispatchRowApplies } from '../../agent-session-journal/projection/journal-dispatch-settlement'
 
 /** Finished observer answers; selection and live-work policy remain in the reader snapshot. */
 export class StructuredAgentSessionObservedWork {
@@ -38,8 +39,10 @@ export class StructuredAgentSessionObservedWork {
   actionablePromptIds = () => this.work.actionablePrompts.map((item) => item.itemId)
   hasActionablePrompt = () => this.work.actionablePrompts.length > 0
   publishedLatestTurn = (_latest: AgentSessionLatestTurn | null) => this.work.latestTurn
+  // Restatements cover sends this read saw unanswered; a page row already settled is newer than it.
   publishedSubmission = (submission: AgentJournalSubmission) =>
-    this.restated.get(submission.clientMessageId) ?? submission
+    (journalDispatchRowApplies(submission) && this.restated.get(submission.clientMessageId)) ||
+    submission
   restatedSubmissions = () => this.work.restatedSubmissions
   viewKey = () => this.work.viewKey
   workViewKey = () => this.work.workViewKey
