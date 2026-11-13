@@ -1,14 +1,16 @@
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
+import type {
+  ProviderTerminalBufferWait,
+  RuntimeVisibleTerminalState
+} from '../records/runtime-terminal-state-records'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import {
   sameProviderFrameGrid,
   type ProviderVisibleRead
 } from '../lifecycle/terminal-view-resources'
-import type { RuntimeVisibleTerminalState } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   protected abstract captureProviderTerminalBuffer(

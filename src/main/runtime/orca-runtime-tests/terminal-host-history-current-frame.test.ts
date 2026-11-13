@@ -5,6 +5,7 @@ import '../orca-runtime-test-mocks/setup.spec'
 import '../rpc/dispatcher'
 import '../rpc/methods/terminal/terminal'
 import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import type { PtyProviderBufferSnapshot } from '../../providers/pty-provider-contract'
 
 // CJ6: a host-owned current frame used to join an outstanding deep history read and fail with it.
 describe('host-owned terminal current frame', () => {
@@ -70,13 +71,13 @@ describe('host-owned terminal current frame', () => {
 describe('terminal frame across a grid change or lifecycle reset', () => {
   async function terminalAt(cols: number, rows: number, owner: 'host' | 'provider') {
     let grid = { cols, rows }
-    const frames: PromiseWithResolvers<unknown>[] = []
+    const frames: PromiseWithResolvers<PtyProviderBufferSnapshot | null>[] = []
     const issued: Promise<unknown>[] = []
     const serializeProviderBuffer = vi.fn((_ptyId: string, opts?: { scrollbackRows?: number }) => {
       if ((opts?.scrollbackRows ?? 0) > 0) {
         return new Promise<never>(() => {})
       }
-      const frame = Promise.withResolvers<unknown>()
+      const frame = Promise.withResolvers<PtyProviderBufferSnapshot | null>()
       frames.push(frame)
       return frame.promise
     })
