@@ -73,13 +73,11 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => getCodexAccountSyncKey(s.settings))
-  // Observe a remote owner so renames and other clients' changes reach this menu.
-  const { accounts, setAccounts, mountedRef } = useProviderAccountList(
+  const { accounts, setAccounts, loadAccounts, mountedRef } = useProviderAccountList(
     'codex',
     runtimeTarget,
     codexAccountSyncKey,
-    EMPTY_CODEX_ACCOUNTS,
-    true
+    EMPTY_CODEX_ACCOUNTS
   )
   const accountState = resolveCodexStatusAccountState(
     settings,
@@ -221,11 +219,17 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const handleOpenChange = useCallback(
     (nextOpen: boolean): void => {
       setOpen(nextOpen)
+      if (nextOpen) {
+        // A remote host's renames and removals change no local settings; reread on open.
+        void loadAccounts().catch((error: unknown) =>
+          console.error('Failed to load Codex accounts for status bar:', error)
+        )
+      }
       if (nextOpen && !hasActiveRuntimeEnvironment) {
         void fetchInactiveCodexAccountUsage()
       }
     },
-    [fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment]
+    [fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment, loadAccounts]
   )
 
   const selectedRuntimeKey = getCodexStatusRuntimeKey(

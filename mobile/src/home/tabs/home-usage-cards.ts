@@ -12,6 +12,7 @@ export type HomeUsageCard = {
   /** The managed account's id, or null for the agent's own login (System default). */
   accountId: string | null
   email: string | null
+  displayName?: string
   /** Claude's organization or Codex's workspace, when the desktop knows it. */
   subtitle: string | null
   active: boolean
@@ -43,11 +44,13 @@ function managedAccounts(snapshot: AccountsSnapshot, provider: ProviderKey) {
     ? snapshot.claude.accounts.map((account) => ({
         id: account.id,
         email: account.email,
+        displayName: account.displayName,
         subtitle: account.organizationName ?? null
       }))
     : snapshot.codex.accounts.map((account) => ({
         id: account.id,
         email: account.email,
+        displayName: account.displayName,
         subtitle: account.workspaceLabel ?? null
       }))
 }
@@ -78,6 +81,7 @@ export function selectHomeUsageCards(
     cards.push({
       accountId: account.id,
       email: account.email,
+      displayName: account.displayName,
       subtitle: account.subtitle,
       active,
       limits,

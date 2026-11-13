@@ -228,10 +228,13 @@ export class CodexAccountService {
   // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
   // synchronous write touches no state a queued account change reads.
   renameAccount(accountId: string, displayName: string | null): CodexRateLimitAccountsState {
+    const before = this.store.getSettings().managedAccountDisplayNames
     const state = this.selection.rename(accountId, displayName)
-    // Account streams otherwise republish only on usage changes.
-    for (const listener of this.renameListeners) {
-      listener()
+    // Account streams otherwise republish only on usage changes; an unchanged name writes nothing.
+    if (this.store.getSettings().managedAccountDisplayNames !== before) {
+      for (const listener of this.renameListeners) {
+        listener()
+      }
     }
     return state
   }

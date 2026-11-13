@@ -78,3 +78,27 @@ export function getManagedAccountInlineLabel(account: NamedAccount): string {
   const name = account.displayName?.trim()
   return name && name !== account.email ? `${name} (${account.email})` : account.email
 }
+
+/** Applies a host's saved names to its account list; returns the same list when nothing differs. */
+export function withManagedAccountDisplayNames<
+  State extends { accounts: readonly { id: string; displayName?: string }[] }
+>(
+  state: State,
+  names: ManagedAccountDisplayNames | null | undefined,
+  provider: ManagedAccountNameProvider
+): State {
+  if (!names) {
+    return state
+  }
+  let changed = false
+  const accounts = state.accounts.map((account) => {
+    const displayName = getManagedAccountDisplayName(names, provider, account.id)
+    if (displayName === account.displayName) {
+      return account
+    }
+    changed = true
+    const { displayName: _previous, ...rest } = account
+    return displayName ? { ...rest, displayName } : rest
+  })
+  return changed ? { ...state, accounts } : state
+}

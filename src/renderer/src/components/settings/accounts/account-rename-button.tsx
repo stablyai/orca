@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { Loader2, Pencil } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
@@ -23,10 +23,12 @@ export function renameTargetFor(
 
 export function AccountRenameButton({
   disabled,
+  pending,
   onRename,
   t = translate
 }: {
   disabled: boolean
+  pending: boolean
   onRename: () => void
   t?: Translate
 }): React.JSX.Element {
@@ -38,10 +40,10 @@ export function AccountRenameButton({
         event.stopPropagation()
         onRename()
       }}
-      disabled={disabled}
+      disabled={disabled || pending}
       className="h-6 px-2 text-muted-foreground hover:text-foreground"
     >
-      <Pencil className="size-3" />
+      {pending ? <Loader2 className="size-3 animate-spin" /> : <Pencil className="size-3" />}
       {t('accounts.rename.action', 'Rename')}
     </Button>
   )

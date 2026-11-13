@@ -36,6 +36,7 @@ import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
+import { getManagedAccountInlineLabel } from '../../../../src/shared/managed-account-display-names'
 
 const PROVIDER_TITLES: Record<ProviderKey, string> = { claude: 'Claude Code', codex: 'Codex' }
 
@@ -215,7 +216,10 @@ function UsageCard(props: {
   useMobileColorScheme()
   const [pressed, setPressed] = useState(false)
   const { card } = props
-  const title = card.email ?? t('accounts.screen.default', 'System default')
+  const title =
+    card.email == null
+      ? t('accounts.screen.default', 'System default')
+      : getManagedAccountInlineLabel({ email: card.email, displayName: card.displayName })
   const subtitle =
     card.email == null
       ? t('accounts.screen.agentLogin', "Use the agent's own login")

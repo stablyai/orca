@@ -81,9 +81,6 @@ export function createCodexAccountActionRunner(
     try {
       const next = await operation()
       await syncCodexAccounts(next)
-      if (action.startsWith('rename:')) {
-        return
-      }
       recordFeatureInteraction('codex-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
       const shouldPromptRestart =
@@ -185,9 +182,6 @@ export function createClaudeAccountActionRunner(
     try {
       const next = await operation()
       await syncClaudeAccounts(next)
-      if (action.startsWith('rename:')) {
-        return
-      }
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
       const switched = previousActiveAccountId !== nextActiveAccountId

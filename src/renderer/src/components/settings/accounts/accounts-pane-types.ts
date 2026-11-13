@@ -36,7 +36,6 @@ export type ProviderAccountAction =
   | 'adding'
   | `reauth:${string}`
   | `remove:${string}`
-  | `rename:${string}`
   | `select:${string}`
 
 export type RemoveAccountTarget = {
@@ -97,6 +96,9 @@ export type AccountsPaneSectionModel = {
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
+  renameAccount: (target: RenameAccountTarget, displayName: string) => Promise<void>
+  /** `provider:id` of accounts with a rename in flight. */
+  renamingAccountKeys: ReadonlySet<string>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
   codexAction: ProviderAccountAction

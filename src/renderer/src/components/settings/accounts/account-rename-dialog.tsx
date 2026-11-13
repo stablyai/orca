@@ -1,9 +1,5 @@
 import React, { useState } from 'react'
 import { MANAGED_ACCOUNT_DISPLAY_NAME_MAX_LENGTH } from '../../../../../shared/managed-account-display-names'
-import {
-  renameClaudeProviderAccount,
-  renameCodexProviderAccount
-} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
@@ -28,7 +24,7 @@ export function AccountRenameDialog({
   target
 }: AccountRenameDialogProps): React.JSX.Element {
   const t = useTranslate()
-  const { accountOwner, accountRuntimeSentenceLabel, setRenameTarget } = model
+  const { setRenameTarget } = model
   const [value, setValue] = useState(target?.displayName ?? '')
   // Seed the saved name on every open so a canceled draft cannot reappear.
   const [seededFor, setSeededFor] = useState(target)
@@ -37,25 +33,12 @@ export function AccountRenameDialog({
     setValue(target?.displayName ?? '')
   }
 
-  const save = (displayName: string | null): void => {
+  const save = (displayName: string): void => {
     if (!target) {
       return
     }
     setRenameTarget(null)
-    const rename = { accountId: target.id, displayName }
-    if (target.provider === 'claude') {
-      void model.runClaudeAccountAction(
-        `rename:${target.id}`,
-        () => renameClaudeProviderAccount(accountOwner, rename, accountRuntimeSentenceLabel),
-        target.runtime
-      )
-    } else {
-      void model.runCodexAccountAction(
-        `rename:${target.id}`,
-        () => renameCodexProviderAccount(accountOwner, rename, accountRuntimeSentenceLabel),
-        target.runtime
-      )
-    }
+    void model.renameAccount(target, displayName)
   }
 
   return (
@@ -81,7 +64,8 @@ export function AccountRenameDialog({
             placeholder={target?.email}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              // An IME's Enter commits a candidate; it must not save a half-typed name.
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                 event.preventDefault()
                 save(value)
               }
@@ -93,7 +77,7 @@ export function AccountRenameDialog({
             type="button"
             variant="ghost"
             disabled={!target?.displayName}
-            onClick={() => save(null)}
+            onClick={() => save('')}
           >
             {t('accounts.rename.reset', 'Reset to default')}
           </Button>

@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/managed-account-types'
 import { callRuntimeResult } from './web-runtime-calls'
 import { fetchAccountsSnapshot } from './web-rate-limits-api'
+import { renameUnsupportedOnOldHost } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
   Partial<PreloadApi>['minimaxCredentials']
@@ -105,6 +106,13 @@ function rejectHostOnlySignIn(): Promise<never> {
   )
 }
 
+function servingHostLabel(): string {
+  return translate(
+    'auto.components.settings.AccountsPane.remoteServerFallback',
+    'the remote server'
+  )
+}
+
 // Paired server owns accounts; list/select/remove use accounts.* RPCs, while sign-in requires the host login flow.
 export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
   return {
@@ -124,7 +132,9 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
         'accounts.renameClaude',
         { accountId, displayName },
         ACCOUNT_MUTATION_TIMEOUT_MS
-      ),
+      ).catch((error: unknown) => {
+        throw renameUnsupportedOnOldHost(error, servingHostLabel())
+      }),
     select: ({ accountId, runtime }) => {
       // No targeted Claude select RPC; null would clear host lane, while concrete account IDs identify their lane.
       if (runtime === 'wsl' && accountId === null) {
@@ -167,7 +177,9 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
         'accounts.renameCodex',
         { accountId, displayName },
         ACCOUNT_MUTATION_TIMEOUT_MS
-      ),
+      ).catch((error: unknown) => {
+        throw renameUnsupportedOnOldHost(error, servingHostLabel())
+      }),
     // Why: a WSL lane needs the targeted RPC, or a null selection would clear the host lane.
     select: ({ accountId, runtime, wslDistro }) =>
       runtime === 'wsl'
