@@ -1,3 +1,8 @@
+import { runProcess } from '@orca/process-host'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { devNull, tmpdir } from 'node:os'
+import path from 'node:path'
+import { resetMergedPRCommitMembershipCacheForTest } from '../../pull-requests/refresh/merged-pr-commit-membership'
 import type * as GithubRepositoryIdentityModule from '../../repositories/github-repository-identity'
 import type * as GhExecFileModule from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import type * as GithubApiRepositoryModule from '../../repositories/github-api-repository'
@@ -309,4 +314,187 @@ it('keeps historical association visible without emitting merged containment pro
   })
   expect(pr).toMatchObject({ number: 91, state: 'merged' })
   expect(pr?.confirmedContainedHeadOid).toBeUndefined()
+})
+
+it('C5 still tries the push head after discarding an unrelated merged primary match', async () => {
+  resetPRForBranchMocks(clientMocks)
+  getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+  scriptGit(
+    { 'remote.origin.url': 'git@github.com:stablyai/orca.git', 'push.default': 'current' },
+    [
+      'origin\tgit@github.com:stablyai/orca.git (fetch)',
+      'origin\tgit@github.com:contributor/orca.git (push)'
+    ]
+  )
+  scriptGitHub('contributor', 'feature')
+  const serve = ghExecFileAsyncMock.getMockImplementation()!
+  ghExecFileAsyncMock.mockImplementation(async (args: string[], ...rest: []) => {
+    if (args[1]?.includes('/commits/')) {
+      return { stdout: '[]' }
+    }
+    if (args.some((a) => a.includes('HEAD_REF_FORCE_PUSHED_EVENT'))) {
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: { timelineItems: { pageInfo: { hasPreviousPage: false }, nodes: [] } }
+            }
+          }
+        })
+      }
+    }
+    if (args[1]?.includes('/pulls?head=stablyai%3Afeature&')) {
+      return {
+        stdout: JSON.stringify([
+          {
+            number: 90,
+            title: 'Old primary review',
+            state: 'closed',
+            merged_at: '2026-11-01T00:00:00Z',
+            html_url: 'https://github.com/stablyai/orca/pull/90',
+            updated_at: '2026-11-01T00:00:00Z',
+            base: { ref: 'main', sha: 'base-oid' },
+            head: {
+              ref: 'feature',
+              sha: 'b'.repeat(40),
+              repo: { name: 'orca', owner: { login: 'stablyai' } }
+            }
+          }
+        ])
+      }
+    }
+    if (args.includes('number=90') || (args[0] === 'pr' && args[2] === '90')) {
+      const d = JSON.parse((await serve(args, ...rest)).stdout)
+      return {
+        stdout: JSON.stringify({
+          ...d,
+          number: 90,
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/90',
+          headRefOid: 'b'.repeat(40),
+          headRepositoryOwner: { login: 'stablyai' },
+          isCrossRepository: false
+        })
+      }
+    }
+    return serve(args, ...rest)
+  })
+  const pr = await getPRForBranch('/repo-root', BRANCH, null, null, null, {
+    currentHeadOid: 'a'.repeat(40),
+    includeDerivedData: false
+  })
+  expect(pr?.number).toBe(91)
+})
+
+it('reuses an unproven association proof during one lookup', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'full-client-proof-'))
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_COUNT: '0',
+    GIT_AUTHOR_NAME: 'Review',
+    GIT_AUTHOR_EMAIL: 'review@example.invalid',
+    GIT_COMMITTER_NAME: 'Review',
+    GIT_COMMITTER_EMAIL: 'review@example.invalid'
+  }
+  const git = async (args: string[]) => {
+    const r = await runProcess({ program: 'git', args, cwd: repo, env })
+    if (r.code !== 0) {
+      throw new Error(r.stderr)
+    }
+    return r.stdout.trim()
+  }
+  await git(['init', '--quiet'])
+  await git(['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  await writeFile(path.join(repo, 'base.txt'), 'base\n')
+  await git(['add', '.'])
+  await git(['commit', '-qm', 'base'])
+  const base = await git(['rev-parse', 'HEAD'])
+  await git(['checkout', '-qb', 'feature'])
+  await writeFile(path.join(repo, 'old.txt'), 'unlanded\n')
+  await git(['add', '.'])
+  await git(['commit', '-qm', 'old'])
+  const old = await git(['rev-parse', 'HEAD'])
+  await git(['checkout', '-qb', 'replacement', base])
+  await writeFile(path.join(repo, 'new.txt'), 'replacement\n')
+  await git(['add', '.'])
+  await git(['commit', '-qm', 'replacement'])
+  const replacement = await git(['rev-parse', 'HEAD'])
+  await git(['checkout', '-q', 'feature'])
+  await git(['remote', 'add', 'origin', 'https://github.com/stablyai/orca.git'])
+  await git(['update-ref', 'refs/remotes/origin/main', base])
+  await git(['update-ref', 'refs/remotes/upstream/main', base])
+  await git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
+  {
+    resetPRForBranchMocks(clientMocks)
+    resetMergedPRCommitMembershipCacheForTest()
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    const commands: string[][] = []
+    gitExecFileAsyncMock.mockImplementation(async (args, options = {}) => {
+      commands.push(args)
+      const result = await runProcess({
+        program: 'git',
+        args,
+        cwd: options.cwd ?? repo,
+        env: { ...env, ...options.env }
+      })
+      if (result.code !== 0) {
+        throw new Error(result.stderr)
+      }
+      return result
+    })
+    scriptGitHub('stablyai', BRANCH)
+    const serve = ghExecFileAsyncMock.getMockImplementation()!
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[1]?.includes('/commits/')) {
+        return { stdout: '[]' }
+      }
+      if (args.some((a) => a.includes('HEAD_REF_FORCE_PUSHED_EVENT'))) {
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  timelineItems: {
+                    pageInfo: { hasPreviousPage: false },
+                    nodes: [{ beforeCommit: { oid: old } }]
+                  }
+                }
+              }
+            }
+          })
+        }
+      }
+      const result = await serve(args)
+      const parsed = JSON.parse(result.stdout)
+      return {
+        stdout: JSON.stringify(
+          Array.isArray(parsed)
+            ? parsed.map((pr) => ({
+                ...pr,
+                state: 'closed',
+                merged_at: '2026-11-10T00:00:00Z',
+                head: { ...pr.head, sha: replacement }
+              }))
+            : {
+                ...parsed,
+                state: 'MERGED',
+                headRefOid: replacement,
+                mergedAt: '2026-11-10T00:00:00Z'
+              }
+        )
+      }
+    })
+    const pr = await getPRForBranch(repo, BRANCH, null, null, null, {
+      currentHeadOid: old,
+      includeDerivedData: false,
+      userRefresh: true
+    })
+    expect(pr?.confirmedContainedHeadOid).toBeUndefined()
+    expect(pr?.number).toBe(91)
+    expect(commands.filter((args) => args[0] === 'cat-file')).toHaveLength(1)
+    expect(commands.filter((args) => args[0] === 'merge-tree')).toHaveLength(2)
+  }
+  await rm(repo, { recursive: true, force: true })
 })

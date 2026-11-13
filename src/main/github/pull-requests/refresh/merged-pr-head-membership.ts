@@ -38,3 +38,22 @@ export async function mergedPRHeadMembership(args: {
   })
   return equivalent ? 'contained' : membership
 }
+
+export function createMergedPRHeadMembershipResolver() {
+  const cache = new Map<string, Promise<MergedPRHeadRelationship>>()
+  return (args: Parameters<typeof mergedPRHeadMembership>[0]) => {
+    const key = JSON.stringify([
+      args.ownerRepo,
+      args.prNumber,
+      args.prHeadOid,
+      args.baseRefName,
+      args.headOid
+    ])
+    let proof = cache.get(key)
+    if (!proof) {
+      proof = mergedPRHeadMembership(args)
+      cache.set(key, proof)
+    }
+    return proof
+  }
+}

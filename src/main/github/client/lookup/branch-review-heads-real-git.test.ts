@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm } from 'node:fs/promises'
 import { devNull, tmpdir } from 'node:os'
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -45,7 +45,7 @@ import { getConfiguredPushHead } from './branch-review-heads'
 
 type PushCase = {
   name: string
-  config: string[][]
+  config: (string | null)[][]
   destination: string | null
   pushSucceeds: boolean
   noUpstream?: boolean
@@ -133,6 +133,54 @@ const cases: PushCase[] = [
     pushSucceeds: true,
     noUpstream: true,
     remoteName: 'origin'
+  },
+  {
+    name: 'numeric automatic setup in upstream mode',
+    config: [
+      ['push.default', 'upstream'],
+      ['push.autoSetupRemote', '2'],
+      ['branch.feature.remote', 'fork']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true
+  },
+  {
+    name: 'valueless automatic setup',
+    config: [
+      ['push.default', 'simple'],
+      ['push.autoSetupRemote', null]
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true,
+    remoteName: 'origin'
+  },
+  {
+    name: 'explicit empty automatic setup is false',
+    config: [
+      ['push.default', 'simple'],
+      ['push.autoSetupRemote', '']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true,
+    remoteName: 'origin'
+  },
+  {
+    name: 'tracking alias uses upstream branch',
+    config: [['push.default', 'tracking']],
+    destination: 'other',
+    pushSucceeds: true
+  },
+  {
+    name: 'mirror overrides nothing',
+    config: [
+      ['push.default', 'nothing'],
+      ['remote.fork.mirror', 'true']
+    ],
+    destination: 'feature',
+    pushSucceeds: true
   },
   {
     name: 'local tracking stays local in current mode',
@@ -268,7 +316,11 @@ it.for(cases)(
         await git(['config', 'branch.feature.merge', 'refs/heads/other'])
       }
       for (const [key, value] of config) {
-        await git(['config', key, value])
+        if (value === null && key === 'push.autoSetupRemote') {
+          await appendFile(path.join(repo, '.git', 'config'), '\n[push]\n autoSetupRemote\n')
+        } else if (key && value !== null) {
+          await git(['config', key, value])
+        }
       }
       const configuredHead = await getConfiguredPushHead(repo, 'feature', null, {})
       const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')

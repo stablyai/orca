@@ -1,7 +1,7 @@
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import { mergedPRHeadMembership } from '../../pull-requests/refresh/merged-pr-head-membership'
+import { createMergedPRHeadMembershipResolver } from '../../pull-requests/refresh/merged-pr-head-membership'
 import type { MergedPRHeadRelationship } from '../../pull-requests/refresh/merged-pr-commit-membership'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../../../source-control/repo-default-branch'
 import { resolveGitHubApiRepositoryCandidates } from '../../repositories/github-api-repository'
@@ -89,6 +89,7 @@ export async function resolvePRForBranchOutcome(input: {
       ? options.currentHeadOid.trim()
       : null
   let confirmedContainedHeadOid: string | null = null
+  const resolveMembership = createMergedPRHeadMembershipResolver()
   const mergedPRHeadRelationship = async (
     candidate: PullRequestLookupData,
     candidateRepo: OwnerRepo | null,
@@ -97,7 +98,7 @@ export async function resolvePRForBranchOutcome(input: {
     if (!candidateRepo || !headOid) {
       return 'unknown'
     }
-    const membership = await mergedPRHeadMembership({
+    const membership = await resolveMembership({
       ownerRepo: candidateRepo,
       prNumber: candidate.number,
       prHeadOid: candidate.headRefOid,
@@ -120,7 +121,6 @@ export async function resolvePRForBranchOutcome(input: {
     if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
       return false
     }
-    // Prefer the actual worktree head; main-repo HEAD can differ for secondary worktrees.
     currentHeadOidForMergedImplicit ??=
       explicitCurrentHeadOid !== null
         ? explicitCurrentHeadOid
@@ -128,12 +128,12 @@ export async function resolvePRForBranchOutcome(input: {
     if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
       return false
     }
-    // Historical association keeps the review visible without granting cleanup containment proof.
     return !['contained', 'associated'].includes(
       await mergedPRHeadRelationship(candidate, candidateRepo, currentHeadOidForMergedImplicit)
     )
   }
 
+  let mergedBranchLookupNumber: number | null = null
   if (typeof linkedPRNumber === 'number') {
     usedExactNumberLookup = true
     const exactLookup = await lookupPRByNumber({
@@ -162,7 +162,11 @@ export async function resolvePRForBranchOutcome(input: {
       pendingBranchLookupError = branchLookup.pendingError
       hasPendingBranchLookupError = true
     }
-    // Tracked upstream, then the configured push head, disambiguate head branch and fork owner.
+    if (await hideMergedImplicitPR(data, dataRepo)) {
+      mergedBranchLookupNumber = data?.number ?? null
+      data = null
+      dataRepo = null
+    }
     const triedHeads = new Set(headRepo ? [branchHeadKey(headRepo, branchName)] : [])
     const secondaryHeads = [
       () => getTrackedUpstreamHead(repoPath, branchName, connectionId, localGitOptions, headRepo),
@@ -191,17 +195,14 @@ export async function resolvePRForBranchOutcome(input: {
         pendingBranchLookupError = headLookup.pendingError
         hasPendingBranchLookupError = true
       }
-      if (data) {
+      if (data && (await hideMergedImplicitPR(data, dataRepo))) {
+        mergedBranchLookupNumber = data.number
+        data = null
+        dataRepo = null
+      } else if (data) {
         dataHeadRepo = head.headRepo
       }
     }
-  }
-  let mergedBranchLookupNumber: number | null = null
-  if (await hideMergedImplicitPR(data, dataRepo)) {
-    mergedBranchLookupNumber = data?.number ?? null
-    data = null
-    dataRepo = null
-    dataHeadRepo = headRepo
   }
   if (!data && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber === 'number') {
     usedExactNumberLookup = true
@@ -256,7 +257,6 @@ export async function resolvePRForBranchOutcome(input: {
   const shouldPreserveMergedFallback =
     !explicitHeadHidesMergedImplicitPR &&
     (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
-  // Refresh caller-preserved fallbacks after external merges or head-branch deletion.
   if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }

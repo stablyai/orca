@@ -106,13 +106,39 @@ export async function readGitReviewBranchSources(
     expandedUrls.set(remote, result)
     return result
   }
+  const booleanValues = new Map<string, boolean>()
+  const gitBoolean = async (key: string): Promise<boolean> => {
+    const cached = booleanValues.get(key)
+    if (cached !== undefined) {
+      return cached
+    }
+    if (!config.has(key)) {
+      return false
+    }
+    try {
+      const value = (await runGit(['config', '--bool', '--get', key])).stdout.trim() === 'true'
+      booleanValues.set(key, value)
+      return value
+    } catch {
+      return false
+    }
+  }
+  const autoSetup = await gitBoolean('push.autosetupremote')
   const sources = new Map<string, GitReviewBranchSource | Error>()
   for (const branch of branchNames) {
     try {
       const trackedRemoteValue = get(`branch.${branch}.remote`)
       const trackedRemote = trackedRemoteValue ? normalizeRemote(trackedRemoteValue) : undefined
       const explicitRemote = get(`branch.${branch}.pushremote`) ?? get('remote.pushdefault')
-      let remote = normalizeRemote(explicitRemote ?? trackedRemote ?? 'origin')
+      let remote =
+        explicitRemote ??
+        trackedRemote ??
+        (remotes.has('origin')
+          ? 'origin'
+          : remotes.size === 1
+            ? remotes.keys().next().value
+            : undefined) ??
+        'origin'
       const localTracking = remote === '.' && !explicitRemote
       if (localTracking) {
         remote = 'origin'
@@ -129,9 +155,12 @@ export async function readGitReviewBranchSources(
         throw new Error('Review push destination is ambiguous')
       }
       const branchName = destinations.values().next().value ?? branch
+      const mirror = await gitBoolean(`remote.${remote}.mirror`)
+      const pushDefault =
+        get('push.default') === 'tracking' ? 'upstream' : (get('push.default') ?? 'simple')
       let pushBranchName: string | null =
         localTracking ||
-        (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing'))
+        (destinations.size === 0 && (specs.length > 0 || (pushDefault === 'nothing' && !mirror)))
           ? null
           : branchName
       const fetchRemote =
@@ -142,15 +171,15 @@ export async function readGitReviewBranchSources(
             ? remotes.keys().next().value
             : undefined)
       if (
+        !mirror &&
         specs.length === 0 &&
         (!trackedRemote || !get(`branch.${branch}.merge`)) &&
-        (((get('push.default') ?? 'simple') === 'simple' && remote === fetchRemote) ||
-          get('push.default') === 'upstream') &&
-        !/^(true|yes|on|1)$/i.test(get('push.autosetupremote') ?? '')
+        ((pushDefault === 'simple' && remote === fetchRemote) || pushDefault === 'upstream') &&
+        !autoSetup
       ) {
         pushBranchName = null
       }
-      if (destinations.size === 0) {
+      if (destinations.size === 0 && !mirror) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)
           const tracked = merge?.startsWith('refs/heads/')
@@ -163,18 +192,15 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
-          if ((get('push.default') ?? 'simple') === 'simple' && tracked && tracked !== branch) {
+          if (pushDefault === 'simple' && tracked && tracked !== branch) {
             pushBranchName = null
           }
-          if (specs.length === 0 && get('push.default') === 'upstream') {
-            if (!merge) {
-              throw new Error('Review upstream is unavailable')
-            }
-            pushBranchName = tracked ?? null
+          if (specs.length === 0 && pushDefault === 'upstream') {
+            pushBranchName = tracked ?? (autoSetup ? branch : null)
           }
         } else if (
           specs.length === 0 &&
-          get('push.default') === 'upstream' &&
+          pushDefault === 'upstream' &&
           explicitRemote &&
           remote !== trackedRemote
         ) {
