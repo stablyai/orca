@@ -52,3 +52,10 @@ export function primeAgentSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.en
   const agentDir = env.PRIME_AGENT_CODING_AGENT_DIR?.trim()
   return agentDir ? normalizePrimeAgentSessionsDir(agentDir) : defaultPrimeAgentSessionsDir()
 }
+
+export function piSessionHistorySessionsDir(): string {
+  return normalizeAgentSessionsDir(
+    process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
+    '.pi'
+  )
+}

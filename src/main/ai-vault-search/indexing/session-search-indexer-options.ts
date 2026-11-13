@@ -26,3 +26,12 @@ export type SessionSearchIndexerOptions = {
   fullSweepEveryCycles?: number
   onError?: (error: unknown) => void
 }
+
+export function sessionSearchPassDeadlineMs(
+  intervalMs: number,
+  override: number | undefined
+): number {
+  return (
+    override ?? Math.max(1, Math.floor(intervalMs / DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION))
+  )
+}

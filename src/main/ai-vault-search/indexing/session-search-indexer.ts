@@ -3,7 +3,7 @@ import { systemSessionSearchClock, type SessionSearchClock } from './session-sea
 import { waitForAiVaultScan } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES,
-  DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION,
+  sessionSearchPassDeadlineMs,
   DEFAULT_SESSION_SEARCH_RECENT_PER_AGENT,
   DEFAULT_SESSION_SEARCH_RECONCILE_INTERVAL_MS,
   type SessionSearchIndexerOptions
@@ -34,7 +34,6 @@ export class SessionSearchIndexer {
   private roots: SessionSearchIndexerOptions['roots']
   private readonly ownershipPath: string
   private readonly clock: SessionSearchClock
-  private readonly intervalMs: number
   private readonly passDeadlineMs: number
   private readonly recentPerAgent: number
   private readonly fullSweepEveryCycles: number
@@ -67,21 +66,18 @@ export class SessionSearchIndexer {
     this.roots = options.roots
     this.ownershipPath = resolve(options.databasePath)
     this.clock = options.clock ?? systemSessionSearchClock
-    this.intervalMs = options.reconcileIntervalMs ?? DEFAULT_SESSION_SEARCH_RECONCILE_INTERVAL_MS
-    this.passDeadlineMs =
-      options.passDeadlineMs ??
-      Math.max(1, Math.floor(this.intervalMs / DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION))
+    const intervalMs = options.reconcileIntervalMs ?? DEFAULT_SESSION_SEARCH_RECONCILE_INTERVAL_MS
+    this.passDeadlineMs = sessionSearchPassDeadlineMs(intervalMs, options.passDeadlineMs)
     this.recentPerAgent = options.recentPerAgent ?? DEFAULT_SESSION_SEARCH_RECENT_PER_AGENT
     this.fullSweepEveryCycles = Math.max(
       1,
       options.fullSweepEveryCycles ?? DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES
     )
-    const onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
-    this.onError = onError
+    this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
     this.loop = new SessionSearchWorkLoop({
       clock: this.clock,
-      intervalMs: this.intervalMs,
-      onFailure: onError
+      intervalMs,
+      onFailure: this.onError
     })
     if (liveIndexerPaths.has(this.ownershipPath)) {
       throw new Error(
@@ -95,7 +91,7 @@ export class SessionSearchIndexer {
         : undefined
     this.store = new SessionSearchWorkerStore(
       options.databasePath,
-      onError,
+      this.onError,
       () => {
         this.sweepNext = true
       },
@@ -109,7 +105,6 @@ export class SessionSearchIndexer {
     this.unregister = registerSessionSearchIndexConsumer(this.store, this.work?.candidates)
   }
 
-  /** Begin inventory capture, then consume changes and retained debt at the normal cadence. */
   start(): Promise<void> {
     if (this.closed || this.started) {
       return this.loop.settled
@@ -120,7 +115,6 @@ export class SessionSearchIndexer {
     return this.tick()
   }
 
-  /** Queue a pass now; requires a started, open indexer. */
   reconcile(options: { full?: boolean } = {}): Promise<void> {
     if (this.closed) {
       throw new Error('SessionSearchIndexer.reconcile: the indexer is closed')
@@ -156,10 +150,8 @@ export class SessionSearchIndexer {
     if (this.closed) {
       return this.retired()
     }
-    // Preserve final counts for status calls after the store closes.
     this.lastCounts = this.readCounts() ?? this.lastCounts
     this.closed = true
-    // Cancel queued and in-flight passes before closing their store.
     this.loop.close()
     this.unregister()
     this.store.close()

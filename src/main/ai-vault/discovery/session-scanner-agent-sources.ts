@@ -41,7 +41,7 @@ import { isClaudeProjectBucketDirectory } from '../scanners/claude/claude-projec
 import { SUBAGENT_DIR_NAME } from '../scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions, AiVaultAgentSource } from '../session-scanner-types'
 import {
-  normalizeAgentSessionsDir,
+  piSessionHistorySessionsDir,
   primeAgentSessionsDirFromEnv
 } from './agent-session-directories'
 
@@ -53,12 +53,6 @@ const COPILOT_SESSIONS_DIR = join(
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
-export function piSessionHistorySessionsDir(): string {
-  return normalizeAgentSessionsDir(
-    process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
-    '.pi'
-  )
-}
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 const DEVIN_TRANSCRIPTS_DIR = join(
   resolveAbsoluteDirOverride(
@@ -320,3 +314,5 @@ export function sessionRowRootDirs(
 export { isDiscoverableSessionFile } from './session-file-discovery'
 
 export type { AiVaultAgentSource } from '../session-scanner-types'
+
+export { piSessionHistorySessionsDir } from './agent-session-directories'
