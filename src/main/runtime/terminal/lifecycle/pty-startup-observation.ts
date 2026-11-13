@@ -22,12 +22,12 @@ type Dependencies = {
   getPty(ptyId: string): RuntimePtyWorktreeRecord | null
   read(
     ptyId: string,
-    generation: object,
+    generation: PtyStartupObservationEntry,
     isCurrent: () => boolean
   ): Promise<PtyForegroundProcessRead> | null
 }
 
-type ObservationEntry = {
+export type PtyStartupObservationEntry = {
   pty: RuntimePtyWorktreeRecord
   controller: RuntimePtyController | null
   incarnation: RuntimePtyWorktreeRecord['incarnationId']
@@ -45,11 +45,11 @@ type ObservationEntry = {
 
 // The terminal owns discovery; additional waiters neither multiply reads nor restart recovery.
 export class PtyStartupObservation {
-  private readonly entries = new Map<string, ObservationEntry>()
+  private readonly entries = new Map<string, PtyStartupObservationEntry>()
 
   constructor(private readonly deps: Dependencies) {}
 
-  private entry(ptyId: string): ObservationEntry | null {
+  private entry(ptyId: string): PtyStartupObservationEntry | null {
     const pty = this.deps.getPty(ptyId)
     if (!pty) {
       return null
@@ -185,7 +185,7 @@ export class PtyStartupObservation {
       })
   }
 
-  private current(ptyId: string, entry: ObservationEntry): boolean {
+  private current(ptyId: string, entry: PtyStartupObservationEntry): boolean {
     return this.entry(ptyId) === entry && entry.listeners.size > 0
   }
 

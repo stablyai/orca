@@ -9,7 +9,7 @@ import type {
   PtyForegroundProcessReadEntry
 } from './pty-foreground-observation-state'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import { PtyStartupObservation } from './pty-startup-observation'
+import { PtyStartupObservation, type PtyStartupObservationEntry } from './pty-startup-observation'
 import {
   readPtyForegroundObservation,
   confirmPtyForegroundAgent
@@ -55,7 +55,7 @@ export class RuntimePtyForegroundAgent {
   read(
     ptyId: string,
     afterTitle = 0,
-    observation?: { generation: object; isCurrent(): boolean }
+    observation?: { generation: PtyStartupObservationEntry; isCurrent(): boolean }
   ): Promise<PtyForegroundProcessRead> | null {
     const controller = this.deps.getController()
     if (!controller) {
