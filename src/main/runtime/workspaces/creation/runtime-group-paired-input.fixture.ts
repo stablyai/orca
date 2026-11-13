@@ -17,6 +17,8 @@ import { RuntimeTerminalWaiterRegistry } from '../../terminal/wait/terminal-wait
 import { buildPtyTerminalWaitResult } from '../../terminal/wait/terminal-wait-results'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchedAgentForeground } from '../../terminal/wait/launched-agent-foreground'
+import type { WorktreeStartupReadinessHost } from '../startup/runtime-worktree-startup-readiness'
+import type { prepareGroupFolderCreation } from './runtime-group-folder-setup'
 
 const roots: string[] = []
 afterEach(() => {
@@ -78,7 +80,7 @@ export function fixture(
   let afterForeground: (() => void) | undefined
   let afterReady: (() => void) | undefined
   const waiters = new RuntimeTerminalWaiterRegistry()
-  const write = vi.fn()
+  const write = vi.fn<WorktreeStartupReadinessHost['write']>()
   const subscribe = (ptyId: string, listener: (data: string) => void) => {
     const subscriptions = listeners.get(ptyId) ?? new Set()
     listeners.set(ptyId, subscriptions)
@@ -236,7 +238,7 @@ export function fixture(
       settings: getDefaultSettings(root),
       ports: runtime.localWorktreeTerminalPorts({}, () => {}, { id: 'folder:task' }),
       wait,
-      buildStartup: vi.fn()
+      buildStartup: vi.fn<Parameters<typeof prepareGroupFolderCreation>[0]['buildStartup']>()
     },
     write,
     createTerminal,
