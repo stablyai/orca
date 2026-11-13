@@ -79,6 +79,7 @@ import {
   createSandbox,
   destroySandbox,
   githubPlaceholderHeaders,
+  githubPlaceholderToken,
   renewLease,
   resumeSandbox,
   rolloverSandbox,
@@ -145,6 +146,7 @@ import {
   runningSandboxesForDefault
 } from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
+import { gitBasicAuthorization, parseEgressPreset } from './network-policy'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
@@ -346,7 +348,7 @@ export function extraEgressHostsFor(env: Env): string[] {
 }
 
 function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => Promise<ProxiedRoute[]> {
-  const broker = deps.credentials ?? egressCredentials(env)
+  const broker = deps.credentials ?? egressCredentials(env, deps.github ?? githubMinter(env))
   const memberGit = memberGitEnabled(env)
   const members = memberGitRoutes({
     db: env.SANDBOX_DB,
@@ -516,7 +518,12 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
   }
   return async (row, host) => {
     if (host === 'github.com') {
-      return members.routes(row, host)
+      return [
+        // Members first: a member placeholder must never fall through to the app's token.
+        ...(await members.routes(row, host)),
+        // git over HTTPS with the workspace placeholder: the app's installation token for this repo.
+        { header: 'authorization', placeholders: [gitBasicAuthorization(githubPlaceholderToken(row))], credential: () => broker.authorizationFor(row, host) }
+      ]
     }
     if (host === 'api.github.com') {
       return [
@@ -750,18 +757,21 @@ function retentionFromEnv(env: Env): RetentionConfig {
   }
 }
 
-function egressCredentials(env: Env): CredentialBroker {
-  const minter = githubMinter(env)
+function egressCredentials(env: Env, minter: GitHubAppMinter | undefined): CredentialBroker {
   if (!minter) {
     return devCredentials(env)
   }
   return {
     authorizationFor: async (row, host) => {
-      if (host !== 'api.github.com' || !row.repo_url) {
+      if ((host !== 'api.github.com' && host !== 'github.com') || !row.repo_url) {
         return null
       }
       const minted = await minter.tokenForRepo(row.repo_url, row.account_id)
-      return minted ? `Bearer ${minted.token}` : null
+      if (!minted) {
+        return null
+      }
+      // git sends Basic (x-access-token:<token>); Octokit/gh on the API use Bearer.
+      return host === 'github.com' ? gitBasicAuthorization(minted.token) : `Bearer ${minted.token}`
     }
   }
 }
@@ -940,6 +950,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       shareLinkSecret: shareSecret(env),
       egressAllowlist: egressAllowlistFor(env.ORCA_PLATFORM_HOST_SUFFIXES),
       extraEgressHosts: extraEgressHostsFor(env),
+      egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1

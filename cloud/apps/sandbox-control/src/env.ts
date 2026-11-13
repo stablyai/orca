@@ -197,6 +197,8 @@ export type Env = {
   EGRESS_EXTRA_HOSTS?: string
   /** Comma list of Orca platform egress hosts every VM may reach (default `*.onorca.dev`). */
   ORCA_PLATFORM_HOST_SUFFIXES?: string
+  /** Workspace sandbox egress preset: `open` (default, any host) or `limited` (fail-closed allowlist). */
+  SANDBOX_EGRESS_PRESET?: string
   /** GitHub App webhook secret (secret): verifies X-Hub-Signature-256 on /v1/github/webhook. */
   GITHUB_WEBHOOK_SECRET?: string
   /**

@@ -185,7 +185,8 @@ describe('egress swap on a sandbox with the new keys', () => {
     expect(policy.allow['api2.cursor.sh']).toEqual([
       { match: { headers: [{ key: { exact: 'authorization' }, value: { exact: `Bearer orca-ph-cursor-api-key-${id}` } }] }, forwardURL: PROXY_URL }
     ])
-    expect(policy.allow['*']).toBeUndefined()
+    // Open egress (default) keeps these claims and Gemini's trailing deny next to the wildcard.
+    expect(policy.allow['*']).toEqual([])
   })
 
   it('Gemini: the real key reaches Google in x-goog-api-key, and the swap is logged by name only', async () => {

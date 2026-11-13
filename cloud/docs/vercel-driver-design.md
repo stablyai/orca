@@ -101,17 +101,34 @@ basics, `gh`, pinned agent CLIs (Claude Code, Codex, OpenCode, Gemini), git cred
 any auth homes** (clone-safe, risk #1) → snapshot with `expiration: 0` → delete build sandbox → print manifest
 (`snapshotId`, versions, sha256) for `GOLDEN_SNAPSHOT_ID`. Snapshot → orcad ready measured at 3.3–4.3s.
 
-## Network policy (fail closed)
+## Network policy
 
-Compiled per sandbox by `compileNetworkPolicy()`:
-- Allowlist record form, **no `"*"` entry** (unlisted domains don't resolve). Default list: package registries
+Compiled per sandbox by `compileNetworkPolicy()` (workspace sandboxes: `egressPolicy()` in lifecycle.ts):
+- **Default preset `open`** (E3, 2026-11-12, Neil: "Keep us open"): record form with `"*": []`, so any host is
+  reachable, as in Codespaces, Devin or Cursor. Only hosts with credential rules are listed next to it. Verified
+  live: under `"*"`, a listed host's claim and trailing 403 rules still apply. Vercel already blocks the metadata
+  endpoint (169.254.169.254 refuses connections; the VM's DNS resolver is 169.254.0.1, so never deny 169.254/16).
+- **Preset `limited`** (`SANDBOX_EGRESS_PRESET=limited`, operator-wide for now; a per-workspace choice can come
+  later): the allowlist, **no `"*"` entry** (unlisted domains don't resolve). Default list: package registries
   (npm, pypi, crates, go proxy, rubygems), github.com + codeload + objects, agent APIs (Anthropic, OpenAI/ChatGPT,
-  Google), and Orca endpoints. Workspaces can opt into `"open"` (adds `"*": []`), never silently.
-- Credential hosts get `[...inject rules, {response: 403 orca-egress-denied}]`: a request without our placeholder is
-  refused, so the real token can't be paired with an attacker-chosen request shape.
+  Google), and Orca endpoints, plus declared MCP and custom provider hosts. Any other non-empty value of the
+  variable also means `limited` (fails closed). The switch applies at a sandbox's next policy write (create, wake,
+  git token refresh, secret/MCP refresh); a running sandbox with no GitHub App install gets no periodic rewrite, so
+  it stays open until it sleeps, wakes or its secrets change.
+- What open costs (E3 review F2): only swapped credentials (GitHub tokens, Orca-account placeholders, model keys in
+  SWAPPED_CREDENTIALS) are protected by claims. Other secrets that are real inside the VM (team/repo/personal
+  secrets such as DB_PASSWORD, the Cursor access token, the Copilot session token, the workspace API token) had the
+  allowlist as their only containment; under `"*"` anything in the workspace can send them to any host.
+- Under both presets, credential hosts get `[...inject rules, {response: 403 orca-egress-denied}]`: a request without our placeholder is
+  refused, so the real token can't be paired with an attacker-chosen request shape. Under `"*"` this 403 is fail-fast
+  behaviour, not containment: an alias (www.github.com, a trailing-dot name) goes through the wildcard, but the swap
+  only ever happens on the exact claim host (and for forwards only at our proxy).
 - GitHub: VM sets `http.https://github.com/.extraheader = Authorization: Basic b64(x-access-token:<placeholder>)` so
   every git request carries the placeholder (git otherwise sends an unauthenticated probe first, which the trailing
   deny would 403). The control plane mints a 1h GitHub App installation token and rewrites the policy before expiry.
+  With the egress proxy configured (every deployed env), the github.com claim is a `forwardURL` rule and the proxy
+  swaps in `Basic x-access-token:<installation token>`, so the token never enters Vercel's policy store (E3 security
+  review F1); the inline `transform` is the no-proxy fallback only.
 - **Node fetch hang**: with a `transform` rule, the Vercel proxy answers HTTP/1.1 with no `content-length` or
   `transfer-encoding`; undici waits forever. curl/git (libcurl) and Go (`gh`) are fine. Handling: (1) `transform` is
   used only for hosts whose clients are curl/Go (github.com git traffic); (2) hosts Node clients use

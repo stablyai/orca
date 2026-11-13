@@ -1,6 +1,9 @@
-// Fail-closed egress for Orca Cloud sandboxes (Vercel v2 record-form network policy).
-// - No "*" entry unless a workspace opts into open egress: unlisted domains do not resolve.
-// - Credential hosts end with a 403 rule, so only requests carrying our placeholder get through.
+// Egress for Orca Cloud sandboxes (Vercel v2 record-form network policy).
+// - Workspace sandboxes default to the "open" preset: a "*" entry, so any host is reachable. The
+//   "limited" preset is the fail-closed allowlist (no "*": unlisted domains do not resolve).
+// - Either way, credential hosts carry our claim rules and end with a 403 rule, so only requests
+//   carrying our placeholder get through there. Real tokens never enter the VM: the policy swaps
+//   placeholders at egress (transform) or forwards them to our egress proxy (forwardURL).
 // - Hosts Node clients use are forwarded to our egress proxy instead of transformed: with a
 //   transform rule Vercel's proxy answers HTTP/1.1 without content-length or transfer-encoding and
 //   undici fetch hangs on the body (bake-off). curl/git and Go clients are unaffected.
@@ -112,6 +115,22 @@ export function egressAllowlistFor(platformHostSuffixes?: string): readonly stri
 
 export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = egressAllowlistFor()
 
+/**
+ * Workspace sandbox egress presets. `open` (the default) reaches the whole internet, like Codespaces
+ * or Devin; `limited` is the fail-closed allowlist above. Credential routes apply under both.
+ */
+export type EgressPreset = 'open' | 'limited'
+export const DEFAULT_EGRESS_PRESET: EgressPreset = 'open'
+
+/** Operator setting (SANDBOX_EGRESS_PRESET): unset means the default; a value we don't know fails closed. */
+export function parseEgressPreset(value: string | undefined): EgressPreset {
+  const preset = value?.trim().toLowerCase()
+  if (!preset) {
+    return DEFAULT_EGRESS_PRESET
+  }
+  return preset === 'open' ? 'open' : 'limited'
+}
+
 export type CredentialRoute = {
   host: string
   /** Header the VM sends with a placeholder value, matched exactly (one claim rule per value). */
@@ -126,6 +145,7 @@ export type CredentialRoute = {
 
 export type EgressPolicyInput = {
   mode: 'allowlist' | 'open'
+  /** Hosts reachable under `allowlist` mode (default: DEFAULT_EGRESS_ALLOWLIST). Unused when open. */
   allowlist?: readonly string[]
   credentials?: readonly CredentialRoute[]
   /**
@@ -139,7 +159,8 @@ const HOST = /^(\*\.)?([a-z0-9-]+\.)+[a-z]{2,63}$/
 
 export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
   const allow: Record<string, NetworkPolicyRule[]> = {}
-  for (const host of input.allowlist ?? DEFAULT_EGRESS_ALLOWLIST) {
+  // Under "*" a bare host entry adds nothing, so open policies list only hosts that carry rules.
+  for (const host of input.mode === 'open' ? [] : (input.allowlist ?? DEFAULT_EGRESS_ALLOWLIST)) {
     allow[checkedHost(host)] = []
   }
   const denied = new Set<string>()

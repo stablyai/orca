@@ -1,9 +1,11 @@
-import { exportPKCS8, generateKeyPair, decodeJwt } from 'jose'
+import { SignJWT, createLocalJWKSet, exportJWK, exportPKCS8, generateKeyPair, decodeJwt } from 'jose'
 import { describe, expect, it } from 'vitest'
 import { createGitHubAppMinter } from '../src/github-app'
 import { bindInstallation, isInstallationBound, signState, verifyState } from '../src/github-connect'
 import { gitBasicAuthorization } from '../src/network-policy'
 import { START_COMMAND } from '../src/sandbox-vm-commands'
+import { githubPlaceholderToken } from '../src/lifecycle'
+import type { SandboxRow } from '../src/store'
 import { createHarness } from './harness'
 
 const MIN = 60_000
@@ -73,7 +75,7 @@ async function appKey() {
 
 const KEK = Buffer.alloc(32, 7).toString('base64')
 
-async function harnessWithApp(env: Record<string, string> = {}) {
+async function harnessWithApp(env: Record<string, string> = {}, extraDeps: Parameters<typeof createHarness>[1] = {}) {
   let clock = () => 0
   const github = fakeGitHub({ now: () => clock() })
   const pem = await appKey()
@@ -96,7 +98,7 @@ async function harnessWithApp(env: Record<string, string> = {}) {
       EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy',
       ...env
     },
-    { github: minter, githubFetch: github.fetch }
+    { github: minter, githubFetch: github.fetch, ...extraDeps }
   )
   clock = h.now
   dbRef = h.env.SANDBOX_DB
@@ -205,6 +207,73 @@ describe('GitHub App installation tokens', () => {
     await expect(minter.tokenForRepo(REPO, 'user:alice')).rejects.toThrow('unexpected scope')
   })
 
+  it('git on github.com: the proxy swaps the workspace placeholder for the installation token (Basic), nothing else', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256')
+    const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
+    const upstream: { url: string; authorization: string | null }[] = []
+    const { h } = await harnessWithApp(
+      {},
+      {
+        egressKeysForIssuer: () => createLocalJWKSet(jwks),
+        egressFetch: async (input, init) => {
+          upstream.push({ url: String(input), authorization: new Headers(init?.headers).get('authorization') })
+          return new Response('ok', { status: 200 })
+        }
+      }
+    )
+    await bindInstallation(
+      h.env.SANDBOX_DB,
+      {
+        installation_id: 77,
+        account_id: 'user:alice',
+        github_account_id: 1,
+        github_account_login: 'alice-gh',
+        github_account_type: 'User',
+        bound_by_user_id: 'alice',
+        bound_by_github_user_id: 1,
+        method: 'oauth'
+      },
+      h.now()
+    )
+    const created = await h.call('POST', '/v1/sandboxes', { as: 'alice', body: { workspaceId: 'ws-git', machineSize: 'standard', repo: { url: REPO } } })
+    const id: string = created.body.sandbox.id
+    const row = (await h.env.SANDBOX_DB.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(id).first<SandboxRow>())!
+    const placeholder = gitBasicAuthorization(githubPlaceholderToken(row))
+    const oidc = () =>
+      new SignJWT({ team_id: 'team_orca', project_id: 'prj_orca', sandbox_id: 'sbx-v', sandbox_name: `orca-test-${id}` })
+        .setProtectedHeader({ alg: 'RS256', kid: 'v1' })
+        .setIssuer('https://oidc.vercel.com/team_orca')
+        .setAudience('https://sandbox.test/v1/egress/proxy')
+        .setIssuedAt()
+        .setExpirationTime('5m')
+        .sign(privateKey)
+    const proxied = async (authorization: string) => {
+      const path = '/alice-gh/private-repo.git/info/refs?service=git-upload-pack'
+      const response = await h.send(
+        new Request(`https://sandbox.test/v1/egress/proxy${path}`, {
+          headers: {
+            'vercel-forwarded-host': 'github.com',
+            'vercel-forwarded-scheme': 'https',
+            'vercel-forwarded-port': '443',
+            'vercel-forwarded-path': path,
+            'vercel-sandbox-oidc-token': await oidc(),
+            authorization
+          }
+        })
+      )
+      return { status: response.status, body: await response.text() }
+    }
+    expect((await proxied(placeholder)).status).toBe(200)
+    expect(upstream).toHaveLength(1)
+    expect(upstream[0]!.url).toMatch(/^https:\/\/github\.com\/alice-gh\/private-repo\.git\/info\/refs/)
+    const sent = upstream[0]!.authorization!
+    expect(sent).toMatch(/^Basic /)
+    expect(atob(sent.slice('Basic '.length))).toMatch(/^x-access-token:ghs_/)
+    // Anything but the exact placeholder gets no credential.
+    expect((await proxied(gitBasicAuthorization('orca-gh-someone-else'))).status).toBe(403)
+    expect(upstream).toHaveLength(1)
+  })
+
   it('cross-tenant attack: bob names alice’s repo and gets no credential and no token is minted', async () => {
     const { h, github } = await harnessWithApp()
     await bindInstallation(
@@ -231,9 +300,12 @@ describe('GitHub App installation tokens', () => {
     // Alice, bound, gets her token.
     const mine = await h.call('POST', '/v1/sandboxes', { as: 'alice', body: { workspaceId: 'ws-mine', machineSize: 'standard', repo: { url: REPO } } })
     const aliceBox = h.vercel.boxes.get(`orca-test-${mine.body.sandbox.id}`)!
-    expect(aliceBox.policy.allow['github.com']![0]).toMatchObject({
-      transform: [{ headers: { authorization: expect.stringMatching(/^Basic /) } }]
+    // Forwarded to our egress proxy (sec review F1): the installation token never enters Vercel's policy.
+    expect(aliceBox.policy.allow['github.com']![0]).toEqual({
+      match: { headers: [{ key: { exact: 'authorization' }, value: { exact: expect.stringMatching(/^Basic /) } }] },
+      forwardURL: 'https://sandbox.test/v1/egress/proxy'
     })
+    expect(JSON.stringify(aliceBox.policy)).not.toContain('ghs_')
     expect(github.calls.filter((c) => c.path.endsWith('/access_tokens'))).toHaveLength(1)
   })
 
