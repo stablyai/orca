@@ -109,7 +109,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const listedModelIds = proof ? finishedListingIds(proof) : undefined
   const fastMode =
     saved.fastMode === undefined
-      ? rules?.acceptsKey('fastMode')
+      ? rules?.fastModeDefaultsOff
         ? false
         : null
       : decodeStructuredAgentSessionOptionValue('fastMode', saved.fastMode)

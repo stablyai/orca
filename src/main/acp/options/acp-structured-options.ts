@@ -1,4 +1,4 @@
-import { acpSelectChoices } from './acp-select-choices'
+import { acpEffortOption, acpSelectChoices } from './acp-select-choices'
 import { flatAcpModelMenu, withFastModeOption } from './acp-projected-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
@@ -154,7 +154,7 @@ export class AcpStructuredOptions {
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
       }
-      if (this.select('thought_level')) {
+      if (this.effortOption()) {
         this.unobservedCurrent.delete('effort')
       }
     }
@@ -207,7 +207,7 @@ export class AcpStructuredOptions {
   }
 
   offersEffort(value: string): boolean {
-    const option = this.select('thought_level')
+    const option = this.effortOption()
     return !!(
       option &&
       (this.dialect.clampsUnlistedEffort ||
@@ -228,7 +228,7 @@ export class AcpStructuredOptions {
       return this.models ? { method: 'model', modelId: value } : null
     }
     if (key === 'effort') {
-      const option = this.select('thought_level')
+      const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
     }
     return null
@@ -240,7 +240,7 @@ export class AcpStructuredOptions {
     'models' | 'current' | 'forkSupport' | 'fastModeSupport'
   > {
     const modelOption = this.select('model')
-    const effortOption = this.select('thought_level')
+    const effortOption = this.effortOption()
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     return withFastModeOption(
       flatAcpModelMenu({
@@ -304,8 +304,12 @@ export class AcpStructuredOptions {
   private currentValues(): Readonly<Record<string, string | undefined>> {
     return {
       model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
-      effort: this.select('thought_level')?.currentValue
+      effort: this.effortOption()?.currentValue
     }
+  }
+
+  private effortOption(): SelectOption | null {
+    return acpEffortOption(this.configOptions)
   }
 
   private fastOption(): SelectOption | null {

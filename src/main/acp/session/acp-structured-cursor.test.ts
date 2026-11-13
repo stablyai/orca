@@ -1,142 +1,279 @@
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import {
+  closeProviderTimelineRigs,
+  SESSION
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
-import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
-import { openAcpAdapterRig, PROVIDER_SESSION } from './testing/acp-structured-adapter.test-support'
+import { readCursorModelCatalog } from '../acp-dialects/cursor-model-catalog'
+import type { SessionConfigOption } from '../generated/acp-protocol.generated'
+import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
+import {
+  openAcpAdapterRig,
+  PROVIDER_SESSION,
+  sendHello,
+  waitFor
+} from './testing/acp-structured-adapter.test-support'
 
 const CURSOR = acpLaunchSpecFor('cursor')!
 afterEach(closeProviderTimelineRigs)
 
-it('launches cursor-agent acp and signs in with the existing Cursor login', async () => {
+// Recorded from cursor-agent 2026.11.11 over `cursor-agent acp`, which names no session on these.
+const QUESTION = {
+  toolCallId: 'call-1\nfc_1',
+  title: 'Preferences',
+  questions: [
+    {
+      id: 'color',
+      prompt: 'Which color?',
+      options: [
+        { id: 'red', label: 'Red' },
+        { id: 'blue', label: 'Blue' }
+      ],
+      allowMultiple: false
+    }
+  ]
+}
+const QUESTION_FALLBACK = {
+  sessionId: PROVIDER_SESSION,
+  toolCall: { toolCallId: 'call-1\nfc_1_q0', title: 'Which color?', kind: 'other' },
+  options: [
+    { optionId: 'red', name: 'Red', kind: 'allow_once' },
+    { optionId: 'blue', name: 'Blue', kind: 'allow_once' },
+    { optionId: '__ask_question_skip__', name: 'Skip', kind: 'reject_once' }
+  ]
+}
+const OPUS_OPTIONS: SessionConfigOption[] = [
+  {
+    id: 'model',
+    name: 'Model',
+    category: 'model',
+    type: 'select',
+    currentValue: 'claude-opus-4-8',
+    options: [
+      { value: 'default', name: 'Auto' },
+      { value: 'claude-opus-4-8', name: 'Claude Opus 4.8' }
+    ]
+  },
+  {
+    id: 'thinking',
+    name: 'Thinking',
+    category: 'thought_level',
+    type: 'select',
+    currentValue: 'true',
+    options: [
+      { value: 'false', name: 'Off' },
+      { value: 'true', name: 'On' }
+    ]
+  },
+  {
+    id: 'effort',
+    name: 'Effort',
+    category: 'thought_level',
+    type: 'select',
+    currentValue: 'high',
+    options: [
+      { value: 'low', name: 'Low' },
+      { value: 'high', name: 'High' },
+      { value: 'max', name: 'Max' }
+    ]
+  },
+  {
+    id: 'fast',
+    name: 'Fast',
+    category: 'model_config',
+    type: 'select',
+    currentValue: 'false',
+    options: [
+      { value: 'false', name: 'Off' },
+      { value: 'true', name: 'Fast' }
+    ]
+  }
+]
+
+async function fullAccessRig(request: (agent: AcpScriptedAgent) => Promise<unknown>) {
+  const replies: unknown[] = []
+  const rig = await openAcpAdapterRig({
+    spec: CURSOR,
+    launch: { fullAccess: true },
+    script: (agent) =>
+      agent.on('session/prompt', () => {
+        void request(agent).then((reply) => replies.push(reply))
+      })
+  })
+  await rig.acquire({ permissionMode: 'full-access' })
+  await sendHello(rig, 'send-1')
+  return { rig, replies }
+}
+
+it("asks the person Cursor's question in Full access and answers it in Cursor's shape", async () => {
+  const { rig, replies } = await fullAccessRig((agent) =>
+    agent.request(7, 'cursor/ask_question', QUESTION)
+  )
+  const question = await waitFor(async () => {
+    const found = (await rig.rig.rows()).find((row) => row.body.kind === 'question')
+    expect(found).toBeDefined()
+    return found!
+  })
+  expect(replies).toEqual([])
+  await rig.adapter.answerPrompt({
+    sessionId: SESSION,
+    itemId: question.itemId,
+    kind: 'question',
+    response: { kind: 'answers', answers: [{ questionId: 'color', optionIds: ['blue'] }] },
+    fence: 1,
+    commit: async () => {}
+  })
+  await waitFor(() =>
+    expect(replies).toEqual([
+      expect.objectContaining({
+        result: {
+          outcome: {
+            outcome: 'answered',
+            answers: [{ questionId: 'color', selectedOptionIds: ['blue'] }]
+          }
+        }
+      })
+    ])
+  )
+})
+
+it("never picks the first answer of Cursor's fallback question in Full access", async () => {
+  const { rig, replies } = await fullAccessRig((agent) =>
+    agent.request(8, 'session/request_permission', QUESTION_FALLBACK)
+  )
+  await waitFor(async () =>
+    expect((await rig.rig.rows()).some((row) => row.body.kind === 'question')).toBe(true)
+  )
+  expect(replies).toEqual([])
+})
+
+it("shows Cursor's plan and accepts it, which ends the turn without building", async () => {
+  const { rig, replies } = await fullAccessRig((agent) =>
+    agent.request(9, 'cursor/create_plan', {
+      toolCallId: 'call-2\nfc_2',
+      name: 'Add README.md',
+      overview: 'Add a one-line README.md.',
+      plan: '# Add README.md\n\nCreate README.md with one line.',
+      todos: [],
+      isProject: false,
+      phases: []
+    })
+  )
+  await waitFor(() =>
+    expect(replies).toEqual([
+      expect.objectContaining({ result: { outcome: { outcome: 'accepted' } } })
+    ])
+  )
+  expect((await rig.rig.rows()).map((row) => row.body)).toContainEqual(
+    expect.objectContaining({
+      presentation: 'plan-document',
+      text: '# Add README.md\n\nCreate README.md with one line.'
+    })
+  )
+})
+
+it('writes effort to the effort levels, not the thinking switch, and Fast to its own option', () => {
+  const options = new AcpStructuredOptions(CURSOR.dialect)
+  options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
+  expect(options.write('effort', 'max')).toEqual({
+    method: 'config',
+    configId: 'effort',
+    value: 'max'
+  })
+  expect(options.write('fastMode', 'true')).toEqual({
+    method: 'config',
+    configId: 'fast',
+    value: 'true'
+  })
+  expect(options.read().current).toMatchObject({
+    model: 'claude-opus-4-8',
+    effort: 'high',
+    fastMode: false
+  })
+})
+
+it("lists each model's own effort levels and Fast support before a chat exists", async () => {
+  const models = await readCursorModelCatalog({
+    requestSessionFreeExtension: async (method) => {
+      expect(method).toBe('cursor/list_available_models')
+      return {
+        models: [
+          { value: 'default', name: 'Auto', configOptions: [] },
+          {
+            value: 'claude-opus-4-8',
+            name: 'Claude Opus 4.8',
+            configOptions: OPUS_OPTIONS.slice(1)
+          },
+          { value: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', configOptions: [] }
+        ]
+      }
+    }
+  })
+  expect(models).toEqual([
+    { id: 'default', label: 'Auto', isDefault: false, efforts: [], supportsFastMode: false },
+    {
+      id: 'claude-opus-4-8',
+      label: 'Claude Opus 4.8',
+      isDefault: false,
+      efforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' },
+        { value: 'max', label: 'Max' }
+      ],
+      defaultEffort: 'high',
+      supportsFastMode: true
+    },
+    {
+      id: 'gemini-3.1-pro',
+      label: 'Gemini 3.1 Pro',
+      isDefault: false,
+      efforts: [],
+      supportsFastMode: false
+    }
+  ])
+})
+
+it("drops Cursor's new-file markers from an edit's diff", () => {
+  const update = CURSOR.dialect.normalizeToolUpdate!({
+    toolCallId: 'call-3\nfc_3',
+    status: 'completed',
+    content: [
+      {
+        type: 'diff',
+        path: '/tmp/cursor-ws/new.txt',
+        oldText: '-- /dev/null',
+        newText: '++ b//tmp/cursor-ws/new.txt\nhi'
+      }
+    ]
+  })
+  expect(update.content).toEqual([
+    { type: 'diff', path: '/tmp/cursor-ws/new.txt', oldText: null, newText: 'hi' }
+  ])
+})
+
+it("pins Cursor's own config folder, following XDG_CONFIG_HOME as Cursor does", async () => {
+  const stateDirectory = '/state'
+  expect(
+    await CURSOR.account.resolve({ launchEnv: { HOME: '/home/ada' }, stateDirectory })
+  ).toEqual({ variable: 'CURSOR_CONFIG_DIR', path: expect.stringMatching(/[\\/]\.cursor$/) })
+  expect(
+    await CURSOR.account.resolve({
+      launchEnv: { XDG_CONFIG_HOME: '/home/ada/.config' },
+      stateDirectory
+    })
+  ).toEqual({ variable: 'CURSOR_CONFIG_DIR', path: join('/home/ada/.config', 'cursor') })
+})
+
+it('closes a signed-out chat without opening a browser sign-in', async () => {
   const rig = await openAcpAdapterRig({
     spec: CURSOR,
     initialize: { authMethods: [{ id: 'cursor_login', name: 'Cursor Login' }] },
-    script: (agent) => {
-      agent.on('session/new', (frame) =>
-        agent.frames.some((sent) => sent.method === 'authenticate')
-          ? agent.reply(frame, { sessionId: PROVIDER_SESSION })
-          : agent.fail(frame, -32000, 'Authentication required')
-      )
-      agent.on('authenticate', (frame) => agent.reply(frame, {}))
-    }
+    script: (agent) =>
+      agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Authentication required'))
   })
-  await rig.acquire()
-  expect(rig.sent('authenticate')[0]?.params).toEqual({ methodId: 'cursor_login' })
-  expect(CURSOR.loginCommand).toEqual(['cursor-agent', 'login'])
-})
-
-it('sets Cursor effort and fast as their own options, and lists base models before a chat exists', () => {
-  const options = new AcpStructuredOptions(CURSOR.dialect)
-  options.adoptSession(
-    {
-      configOptions: [
-        {
-          id: 'model',
-          name: 'Model',
-          category: 'model',
-          type: 'select',
-          currentValue: 'grok-4.7',
-          options: [
-            { value: 'default', name: 'Auto' },
-            { value: 'grok-4.7', name: 'Grok 4.7' }
-          ]
-        },
-        {
-          id: 'reasoning_effort',
-          name: 'Effort',
-          category: 'thought_level',
-          type: 'select',
-          currentValue: 'medium',
-          options: [
-            { value: 'low', name: 'Low' },
-            { value: 'medium', name: 'Medium' },
-            { value: 'high', name: 'High' }
-          ]
-        },
-        {
-          id: 'fast',
-          name: 'Fast',
-          category: 'model_config',
-          type: 'select',
-          currentValue: 'true',
-          options: [
-            { value: 'false', name: 'Off' },
-            { value: 'true', name: 'Fast' }
-          ]
-        }
-      ]
-    },
-    'new'
-  )
-  expect(options.read().models.map((model) => [model.id, model.label])).toEqual([
-    ['default', 'Auto'],
-    ['grok-4.7', 'Grok 4.7']
-  ])
-  expect(options.read().current).toMatchObject({
-    model: 'grok-4.7',
-    effort: 'medium',
-    fastMode: true
-  })
-  expect(options.write('effort', 'low')).toEqual({
-    method: 'config',
-    configId: 'reasoning_effort',
-    value: 'low'
-  })
-  expect(options.write('fastMode', 'false')).toEqual({
-    method: 'config',
-    configId: 'fast',
-    value: 'false'
-  })
-  expect(CURSOR.dialect.clientCapabilities).toEqual({
-    _meta: { parameterizedModelPicker: true }
-  })
-  expect(CURSOR.modelDiscovery).toMatchObject({ kind: 'command', args: ['models'] })
-  if (CURSOR.modelDiscovery.kind !== 'command') {
-    return
-  }
-  expect(
-    CURSOR.modelDiscovery.parse(
-      'auto - Auto (default)\ngrok-4.7-medium - Grok 4.7 Medium\ngrok-4.7-high-fast - Grok 4.7 High Fast\n'
-    )
-  ).toEqual([
-    { id: 'default', label: 'Auto', isDefault: true, efforts: [] },
-    { id: 'grok-4.7', label: 'Grok 4.7', isDefault: false, efforts: [] }
-  ])
-})
-
-it('grants full access with --yolo and keeps the host Cursor login out of the child environment', async () => {
-  expect(CURSOR.args({ fullAccess: false, pluginDir: null })).toEqual([
-    '--disable-auto-update',
-    'acp'
-  ])
-  expect(CURSOR.args({ fullAccess: true, pluginDir: null })).toEqual([
-    '--disable-auto-update',
-    '--yolo',
-    'acp'
-  ])
-  const home = await CURSOR.account.resolve({
-    launchEnv: { HOME: '/Users/ada' },
-    stateDirectory: '/state'
-  })
-  expect(home).toEqual({
-    variable: 'ORCA_CURSOR_CONFIG_DIR',
-    path: join('/Users/ada', '.cursor')
-  })
-  const launch = await resolveAcpLaunchInvocation(CURSOR, home, {
-    dataDirectory: '/isolated',
-    inheritedEnv: { ORCA_CURSOR_CONFIG_DIR: join('/Users/ada', '.cursor') },
-    resolveEnvironment: async () => ({
-      HOME: '/Users/ada',
-      PATH: '/bin',
-      ORCA_CURSOR_CONFIG_DIR: join('/Users/ada', '.cursor')
-    }),
-    resolveCommand: () => '/bin/cursor-agent'
-  })
-  expect(launch.env).toEqual({ HOME: '/Users/ada', PATH: '/bin' })
-  expect(launch.envToDelete).toEqual(['ORCA_CURSOR_CONFIG_DIR'])
-  expect(() => CURSOR.account.environment({ variable: 'GROK_HOME', path: '/x' }, {})).toThrow(
-    "this chat uses the host's Cursor login"
-  )
+  await rig.acquire().catch(() => {})
+  expect(rig.sent('authenticate')).toEqual([])
+  expect(rig.openVerdict()).toMatchObject({ fact: { kind: 'notSignedIn' } })
 })

@@ -10,7 +10,7 @@ import type { SessionConfigOption, SessionModelState } from '../generated/acp-pr
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
 export function flatAcpModelMenu(input: {
-  dialect: Pick<AcpDialect, 'modelEfforts' | 'modelChoiceLabel'>
+  dialect: Pick<AcpDialect, 'modelEfforts'>
   modelOption: SelectOption | null
   effortOption: SelectOption | null
   availableModels: SessionModelState['availableModels'] | undefined
@@ -25,17 +25,15 @@ export function flatAcpModelMenu(input: {
         ...(choice.description ? { description: choice.description } : {})
       }))
     : []
-  const labelFor = (value: string, name: string): string =>
-    input.dialect.modelChoiceLabel?.(value, name) ?? name
   const listed: { id: string; label: string; description?: string }[] = input.modelOption
     ? acpSelectChoices(input.modelOption).map((choice) => ({
         id: choice.value,
-        label: labelFor(choice.value, choice.name),
+        label: choice.name,
         ...(choice.description ? { description: choice.description } : {})
       }))
     : (input.availableModels?.map((model) => ({
         id: model.modelId,
-        label: labelFor(model.modelId, model.name),
+        label: model.name,
         ...(model.description ? { description: model.description } : {})
       })) ?? [])
   const models: AgentSessionModelOption[] = listed.map((model) => {
