@@ -215,8 +215,11 @@ Product decision: "API-key injection" in the Conductor parity matrix (form 2 = t
   (`src/secrets-crypto.ts`): per-secret random AES-256-GCM DEK; DEK wrapped by the KEK (`SECRETS_KEK`, base64 32
   bytes, Worker secret only; id `SECRETS_KEK_ID`, default `k1`). Both layers take `["orca-secret-v1", layer, kekId,
   scope, ownerId, name]` as AAD, so a row copied onto another owner/name fails to open (skipped at injection,
-  logged by name). Rotation: set the new KEK + id, move the old one into `SECRETS_KEK_RETIRED` (`{"k1":"…"}`); rows
-  re-seal on their next write.
+  logged by name). Rotation: set the new KEK + id, move the old one into `SECRETS_KEK_RETIRED` (`{"k1":"…"}`) in the
+  same deploy, then run the operator sweep `POST /v1/internal/secrets/rewrap` until `done` (`src/secrets-rewrap.ts`;
+  it also covers `agent_credentials` and `github_user_tokens`). `GET /v1/internal/secrets/kek` reports when the
+  retired id is unreferenced and can be dropped. With `SECRETS_SEAL_FORMAT=v2` rows drop the KEK id from the value
+  layer's AAD, so the sweep re-wraps DEKs without decrypting values. KMS plan: `cloud/docs/sec-kms-design.md`.
 - **API** (desktop JWT): `GET /v1/secrets?scope=org|personal|repo[&repo=owner/name]`, `PUT /v1/secrets/:scope/:NAME`
   `{value}`, `DELETE …`. Write-only values: responses carry name, scope, kind, updatedAt, updatedBy and a last-4 hint
   for values ≥16 chars. Owners: org = the org account (`org:<id>`), personal = `user:<sub>`, repo =

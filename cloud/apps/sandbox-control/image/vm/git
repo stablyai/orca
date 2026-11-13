@@ -2,7 +2,7 @@
 # git for agents in Orca Cloud workspaces (first on orcad's PATH). Commands that author or publish
 # work run as the teammate whose message started this agent's turn (orca-git-as: orcad attests the
 # sender's paired device; root-only member identities). Everything else is plain git, untouched.
-real=/usr/bin/git
+real="${ORCA_REAL_GIT:-/usr/bin/git}"
 sub=''
 skip=0
 for arg in "$@"; do
@@ -48,18 +48,91 @@ nudge_once() {
   local mark="${ORCA_GIT_NUDGE_DIR:-/dev/shm}/orca-git-nudge-$(id -u)"
   [ -e "$mark" ] && return 0
   : >"$mark" 2>/dev/null || return 0
-  printf '%s\n' "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings › Account & billing to use yours." >&2
+  printf '%s\n' "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings → Account to use yours." >&2
 }
-# orca-git-as's own fallback line is replaced by the nudge.
+# PUSH-RAW-PROMPT: a push, pull or fetch to github.com that no credential covers (neither the person's
+# connected GitHub nor the App installation) must never fall through to git's own "Username for
+# 'https://github.com':" prompt. Prompts are off for that remote, and git's auth failure becomes one
+# plain line saying what to do.
+github_slug=''
+github_remote_slug() {
+  local arg skip=0 seen=0 remote='' url
+  for arg in "$@"; do
+    if [ "$skip" = 1 ]; then skip=0; continue; fi
+    if [ "$seen" = 0 ]; then
+      case "$arg" in
+        -C | -c | --git-dir | --work-tree | --namespace | --exec-path | --config-env) skip=1 ;;
+        "$sub") seen=1 ;;
+      esac
+      continue
+    fi
+    case "$arg" in
+      --repo=*) remote="${arg#--repo=}"; break ;;
+      -o | --push-option | --receive-pack | --upload-pack | --exec | --depth | --deepen | --shallow-since | --shallow-exclude | --refmap | --recurse-submodules-default | -j | --jobs) skip=1 ;;
+      -*) ;;
+      *) remote="$arg"; break ;;
+    esac
+  done
+  [ -n "$remote" ] || remote="$("$real" config --get "branch.$("$real" symbolic-ref --short -q HEAD 2>/dev/null).remote" 2>/dev/null || true)"
+  [ -n "$remote" ] || remote=origin
+  case "$remote" in
+    *://*) url="$remote" ;;
+    *) url="$("$real" remote get-url "$remote" 2>/dev/null || printf '%s' "$remote")" ;;
+  esac
+  case "$url" in
+    https://github.com/* | https://*@github.com/*) url="${url#*github.com/}" ;;
+    *) return 0 ;;
+  esac
+  url="${url%.git}"
+  url="${url%/}"
+  case "$url" in */*/*) url="${url%%/*}/$(printf '%s' "${url#*/}" | cut -d/ -f1)" ;; esac
+  case "$url" in [A-Za-z0-9_.-]*/[A-Za-z0-9_.-]*) github_slug="$url" ;; esac
+}
+no_access_line() {
+  local owner="${github_slug%%/*}" verb='push to'
+  [ "$sub" = push ] || verb='read'
+  printf '%s\n' "orca: Orca Cloud can't $verb $github_slug. Install the Orca GitHub App on $owner, or connect your GitHub in Settings → Account." >&2
+}
+# GitHub's "not found" is a typo'd name or a private repo it won't confirm: say which half fits whom.
+not_found_line() {
+  printf '%s\n' "orca: Orca Cloud can't find $github_slug. Check the name, or install the Orca GitHub App on ${github_slug%%/*} if it's private." >&2
+}
+# orca-git-as's own fallback line is replaced by the nudge; GitHub auth failures by the plain line.
 fallback_filter() {
-  local line
+  local line said=0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       'orca-git-as: no teammate identity'*) nudge_once ;;
+      'remote: Repository not found.'* | "fatal: repository 'https://github.com/"*"' not found"*)
+        if [ -n "$github_slug" ]; then
+          [ "$said" = 1 ] || not_found_line
+          said=1
+        else
+          printf '%s\n' "$line"
+        fi
+        ;;
+      *"could not read Username for 'https://github.com'"* | *"could not read Password for 'https://"*"github.com'"* | \
+        *"Authentication failed for 'https://github.com/"* | 'remote: Permission to '*' denied to '* | \
+        *"The requested URL returned error: 403"*)
+        if [ -n "$github_slug" ]; then
+          [ "$said" = 1 ] || no_access_line
+          said=1
+        else
+          printf '%s\n' "$line"
+        fi
+        ;;
       *) printf '%s\n' "$line" ;;
     esac
   done
 }
+case "$sub" in
+  push | pull | fetch)
+    github_remote_slug "$@"
+    if [ -n "$github_slug" ]; then
+      export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
+    fi
+    ;;
+esac
 git_as="${ORCA_GIT_AS:-/opt/orca/bin/orca-git-as}"
 case "$sub" in
   commit | push | merge | rebase | cherry-pick | revert | am | pull | tag)
@@ -72,4 +145,7 @@ case "$sub" in
     nudge_once
     ;;
 esac
+if [ -n "$github_slug" ]; then
+  exec "$real" "$@" 2> >(fallback_filter >&2)
+fi
 exec "$real" "$@"

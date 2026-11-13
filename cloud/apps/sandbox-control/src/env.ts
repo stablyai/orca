@@ -92,11 +92,34 @@ export type Env = {
 
   // Secret store (src/secrets.ts). SECRETS_KEK is a base64 32-byte AES key (secret); SECRETS_KEK_ID
   // names it (default `k1`). After a rotation, SECRETS_KEK_RETIRED (secret, JSON {"<id>":"<b64>"})
-  // keeps older rows readable. Without SECRETS_KEK the /v1/secrets routes answer 503 and sessions
-  // start without injected secrets.
+  // keeps older rows readable until POST /v1/internal/secrets/rewrap has moved them to the active
+  // KEK; GET /v1/internal/secrets/kek says when a retired id is no longer referenced and can be
+  // dropped (src/secrets-rewrap.ts). Without SECRETS_KEK the /v1/secrets routes answer 503 and
+  // sessions start without injected secrets.
   SECRETS_KEK?: string
   SECRETS_KEK_ID?: string
   SECRETS_KEK_RETIRED?: string
+  /**
+   * `kms`: the KEKs are held encrypted by a Google Cloud KMS key and unwrapped once per isolate
+   * (src/secrets-kms.ts). Unset (default): SECRETS_KEK / SECRETS_KEK_RETIRED above, unchanged.
+   * With `kms`, SECRETS_KEK and SECRETS_KEK_RETIRED are ignored, and a KMS failure answers 503
+   * `secrets_unavailable` (sessions do not start without their secrets).
+   *   SECRETS_KMS_KEY              projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>
+   *   SECRETS_KMS_SERVICE_ACCOUNT  (secret) service-account JSON allowed to decrypt with that key only
+   *   SECRETS_KEK_WRAPPED          base64 KMS ciphertext of the active KEK's 32 bytes, AAD `orca-secrets-kek:<id>`
+   *   SECRETS_KEK_RETIRED_WRAPPED  JSON {"<id>":"<base64 KMS ciphertext>"} after a rotation
+   */
+  SECRETS_KEK_SOURCE?: string
+  SECRETS_KMS_KEY?: string
+  SECRETS_KMS_SERVICE_ACCOUNT?: string
+  SECRETS_KEK_WRAPPED?: string
+  SECRETS_KEK_RETIRED_WRAPPED?: string
+  /**
+   * `v1` (default) | `v2`: the row format new secrets are sealed in (src/secrets-crypto.ts). With
+   * v2 a KEK rotation re-wraps data keys only. Set it only once every Worker version that reads this
+   * database (previews and the rollback target included) can read v2: older code skips v2 rows.
+   */
+  SECRETS_SEAL_FORMAT?: string
   /**
    * Model API keys (Anthropic, OpenAI, AI Gateway, custom provider) reach the VM as placeholders and
    * the egress proxy swaps the real key in (forwardURL path). Unset or `on` (default): every account;
@@ -140,9 +163,10 @@ export type Env = {
   /** Operator routes (/v1/internal/*): kill switch, drain, bindings. Secret, >= 32 chars; unset = no routes. */
   OPERATOR_TOKEN?: string
   /**
-   * Auth's bearer for POST /v1/internal/org-members/removed only (PropelAuth offboarding and
-   * Orca-side removals). Secret, >= 32 chars; lets auth push removals without holding the
-   * operator token. The operator token is still accepted on that route.
+   * Auth's bearer for its own pushes only: POST /v1/internal/org-members/removed (PropelAuth
+   * offboarding and Orca-side removals), POST /v1/internal/members/role-changed (a role changed in
+   * Orca or by a customer's identity provider) and deleting a team. Secret, >= 32 chars; lets auth
+   * push without holding the operator token. The operator token is still accepted on those routes.
    */
   MEMBER_REMOVED_TOKEN?: string
   /** `true` refuses every create/resume/rollover (static kill switch; the D1 flag is the runtime one). */

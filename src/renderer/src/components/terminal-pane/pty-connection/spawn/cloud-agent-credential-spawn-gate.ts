@@ -6,6 +6,7 @@ import {
   cloudAgentLaunchNeedsHold,
   holdCloudAgentLaunch
 } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import { isOrcaCloudEnvironmentForLaunch } from '@/lib/orca-cloud/orca-cloud-environment-id'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { agentSignInGateRequest } from './agent-sign-in-spawn-gate'
@@ -23,23 +24,32 @@ export function installCloudAgentCredentialGate(session: ConnectPanePtySession):
   session.startFreshSpawn = (startupOverride, options) => {
     const request = agentSignInGateRequest(session, startupOverride)
     // Ready (or covered by a key): no hold, no delay; the launch starts as it always did.
-    if (
-      !request ||
-      !isOrcaCloudEnvironment(request.environmentId) ||
-      cloudAgentLaunchNeedsHold(request.agent) === false
-    ) {
+    if (!request || cloudAgentLaunchNeedsHold(request.agent) === false) {
       return start(startupOverride, options)
     }
-    const held = holdCloudAgentLaunch({
-      paneKey: request.key,
-      agent: request.agent,
-      prompt: request.prompt
-    }).then((outcome) => {
+    // FAIL-CLOSED (#568): the catalog flag can lag a fresh pairing, so without it main is asked
+    // before the agent may start; until it answers, nothing is spawned.
+    const cloud = isOrcaCloudEnvironment(request.environmentId)
+      ? Promise.resolve(true)
+      : isOrcaCloudEnvironmentForLaunch(request.environmentId)
+    const held = cloud.then((isCloud) => {
       if (session.disposed) {
         return null
       }
-      // Cancel opens a plain shell, like cancelling the per-host sign-in.
-      return outcome === 'cancel' ? start(null, options) : start(startupOverride, options)
+      if (!isCloud) {
+        return start(startupOverride, options)
+      }
+      return holdCloudAgentLaunch({
+        paneKey: request.key,
+        agent: request.agent,
+        prompt: request.prompt
+      }).then((outcome) => {
+        if (session.disposed) {
+          return null
+        }
+        // Cancel opens a plain shell, like cancelling the per-host sign-in.
+        return outcome === 'cancel' ? start(null, options) : start(startupOverride, options)
+      })
     })
     // A remount while held waits for this launch instead of starting a second agent.
     const tracked = held.finally(() => {

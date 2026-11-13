@@ -2,15 +2,28 @@
 //   GET    /v1/secrets?scope=org|personal|repo[&repo=owner/name]   -> {secrets: [metadata]}
 //   PUT    /v1/secrets/:scope/:NAME[?repo=owner/name] {value}       -> {secret: metadata}
 //   DELETE /v1/secrets/:scope/:NAME[?repo=owner/name]               -> {deleted: true}
+//   GET    /v1/secrets/activity?view=personal                       -> {events, nextCursor} (secret-events.ts)
 // Values are write-only: no route returns them, only a last-4 hint for long values. Org secrets
 // (and repo secrets of an org account) need owner/admin of that org to write; any member may list
 // names. Personal secrets belong to the user alone. Values are never logged.
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { Env } from './env'
-import { createKeyring, type Keyring, type SecretBinding } from './secrets-crypto'
+import { createKeyring, type Keyring, type SealFormat, type SecretBinding } from './secrets-crypto'
+import { createKekUnwrapper, SecretsKmsError } from './secrets-kms'
+import { AUTH_IAT_BACKDATE_MS } from './member-changes'
 import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
 import type { SandboxRow } from './store'
+import { secretLog } from './secret-log'
+import {
+  activityAccounts,
+  activityLimit,
+  actorOf,
+  deleteEventStatement,
+  listSecretEvents,
+  writeEventStatement,
+  type SecretActor
+} from './secret-events'
 
 export type SecretScope = 'org' | 'personal' | 'repo'
 export type SecretKind = 'env' | 'agent_key'
@@ -122,8 +135,28 @@ export function checkValue(name: string, value: string): void {
   }
 }
 
+/**
+ * SEC-6b: the last 4 characters of values of 16+ characters, stored in plaintext beside the ciphertext.
+ * Kept deliberately: owners and admins use it to tell which key is saved (as GitHub, Stripe and AWS
+ * consoles do), it reveals at most 4 characters of a value with at least 12 more, and it is useless for
+ * calling a provider. Shorter values get no hint. Only people who can write a scope see its hints: team
+ * members get `hint: null` for Shared and team Repository secrets (`hintVisible`). Encrypting it under
+ * the row's DEK would add nothing against someone holding the DB and the KEK, who can open the value.
+ */
 function hintFor(value: string): string | null {
   return value.length >= 16 ? value.slice(-4) : null
+}
+
+/** Whether `caller` may see last-4 hints in `scope`: the same people who may write it. */
+export function hintVisible(caller: SandboxCaller, scope: SecretScope): boolean {
+  switch (scope) {
+    case 'personal':
+      return true
+    case 'org':
+      return isOrgAdmin(caller)
+    case 'repo':
+      return !caller.orgId || isOrgAdmin(caller)
+  }
 }
 
 const REPO_PART = /^[A-Za-z0-9_.-]{1,100}$/
@@ -155,12 +188,18 @@ function repoOwner(accountId: string, repo: string): string {
   return `${accountId}#${repo}`
 }
 
-/** The owners whose secrets a sandbox session receives. */
-export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url'>) {
+/**
+ * The owners whose secrets a sandbox session receives.
+ * SEC-5: a workspace shared with teammates runs their shells too, so anything in its env is theirs to
+ * read (and a placeholder is theirs to spend). It gets the team's and the repository's secrets only,
+ * never its owner's personal ones, the same rule as personal accounts (D13). Fails closed: only a row
+ * known to be private counts as unshared.
+ */
+export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'visibility'>) {
   const repo = normalizeRepo(row.repo_url)
   return {
     org: ORG_ACCOUNT.test(row.account_id) ? row.account_id : null,
-    personal: personalOwner(row.user_id, row.account_id.startsWith('dev:')),
+    personal: row.visibility === 'private' ? personalOwner(row.user_id, row.account_id.startsWith('dev:')) : null,
     repo: repo ? repoOwner(row.account_id, repo) : null
   }
 }
@@ -246,7 +285,9 @@ export async function putSecret(
   db: D1Database,
   keyring: Keyring,
   input: { scope: SecretScope; ownerId: string; name: string; value: string; updatedBy: string },
-  now: number
+  now: number,
+  /** Who to record in the activity log (SEC-4); every API write passes one. */
+  actor?: SecretActor
 ): Promise<SecretView> {
   checkName(input.name)
   checkValue(input.name, input.value)
@@ -265,7 +306,7 @@ export async function putSecret(
   }
   const sealed = await keyring.seal({ scope: input.scope, ownerId: input.ownerId, name: input.name }, input.value)
   const hint = hintFor(input.value)
-  await db
+  const upsert = db
     .prepare(
       `INSERT INTO secrets (scope, owner_id, name, kek_id, wrapped_dek, ciphertext, hint, created_at, updated_at, updated_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -274,16 +315,30 @@ export async function putSecret(
          updated_by = excluded.updated_by`
     )
     .bind(input.scope, input.ownerId, input.name, sealed.kekId, sealed.wrappedDek, sealed.ciphertext, hint, now, now, input.updatedBy)
-    .run()
+  if (actor) {
+    // The activity record first (it reads whether the row exists), in the same transaction as the write.
+    await db.batch([writeEventStatement(db, input, actor, now), upsert])
+  } else {
+    await upsert.run()
+  }
   return view({ scope: input.scope, owner_id: input.ownerId, name: input.name, hint, updated_at: now, updated_by: input.updatedBy })
 }
 
-export async function deleteSecret(db: D1Database, scope: SecretScope, ownerId: string, name: string): Promise<boolean> {
-  const result = await db
-    .prepare('DELETE FROM secrets WHERE scope = ? AND owner_id = ? AND name = ?')
-    .bind(scope, ownerId, name)
-    .run()
-  return result.meta.changes === 1
+export async function deleteSecret(
+  db: D1Database,
+  scope: SecretScope,
+  ownerId: string,
+  name: string,
+  actor?: SecretActor,
+  now: number = Date.now()
+): Promise<boolean> {
+  const remove = db.prepare('DELETE FROM secrets WHERE scope = ? AND owner_id = ? AND name = ?').bind(scope, ownerId, name)
+  if (!actor) {
+    return (await remove.run()).meta.changes === 1
+  }
+  // The record is written only if the row exists, in the same transaction as the delete.
+  const [, result] = await db.batch([deleteEventStatement(db, { scope, ownerId, name }, actor, now), remove])
+  return result?.meta.changes === 1
 }
 
 /**
@@ -303,15 +358,21 @@ export type ResolvedSecrets = { env: Record<string, string>; scopes: Record<stri
 export async function resolveSandboxSecrets(
   db: D1Database,
   keyring: Keyring,
-  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
+  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility'>
 ): Promise<ResolvedSecrets> {
   const owners = ownersForSandbox(row)
-  const pairs: [SecretScope, string][] = [['personal', owners.personal]]
+  const pairs: [SecretScope, string][] = []
+  if (owners.personal) {
+    pairs.push(['personal', owners.personal])
+  }
   if (owners.org) {
     pairs.push(['org', owners.org])
   }
   if (owners.repo) {
     pairs.push(['repo', owners.repo])
+  }
+  if (pairs.length === 0) {
+    return { env: {}, scopes: {}, skipped: 0 }
   }
   const where = pairs.map(() => '(scope = ? AND owner_id = ?)').join(' OR ')
   const { results } = await db
@@ -342,13 +403,13 @@ export async function resolveSandboxSecrets(
     } catch {
       skipped++
       // Name and scope only: never the value or ciphertext.
-      console.log(JSON.stringify({ event: 'secret_unreadable', sandboxId: row.id, scope: record.scope, name: record.name }))
+      secretLog('secret_unreadable', { sandboxId: row.id, scope: record.scope, name: record.name })
       continue
     }
     bytes += record.name.length + value.length
     if (bytes > MAX_INJECTED_BYTES) {
       skipped++
-      console.log(JSON.stringify({ event: 'secret_injection_capped', sandboxId: row.id, name: record.name }))
+      secretLog('secret_injection_capped', { sandboxId: row.id, name: record.name }, [value])
       continue
     }
     env[record.name] = value
@@ -373,15 +434,26 @@ export const PRECEDENCE: Record<SecretKind, SecretScope[]> = {
   agent_key: ['org', 'repo', 'personal']
 }
 
-/** What a session of this caller (in `repo`) would receive, by name and winning scope; no values. */
-export async function effectiveSecrets(db: D1Database, caller: SandboxCaller, repoParam: string | null): Promise<EffectiveSecret[]> {
-  const pairs: [SecretScope, string][] = [['personal', personalOwner(caller.userId, caller.dev === true)]]
+/**
+ * What a session of this caller (in `repo`) would receive, by name and winning scope; no values.
+ * `shared`: a workspace shared with teammates, which gets no personal secrets (SEC-5, ownersForSandbox).
+ */
+export async function effectiveSecrets(
+  db: D1Database,
+  caller: SandboxCaller,
+  repoParam: string | null,
+  options: { shared?: boolean } = {}
+): Promise<EffectiveSecret[]> {
+  const pairs: [SecretScope, string][] = options.shared ? [] : [['personal', personalOwner(caller.userId, caller.dev === true)]]
   if (caller.orgId) {
     pairs.push(['org', caller.accountId])
   }
   const repo = normalizeRepo(repoParam)
   if (repo) {
     pairs.push(['repo', repoOwner(caller.accountId, repo)])
+  }
+  if (pairs.length === 0) {
+    return []
   }
   const where = pairs.map(() => '(scope = ? AND owner_id = ?)').join(' OR ')
   const { results } = await db
@@ -398,33 +470,110 @@ export async function effectiveSecrets(db: D1Database, caller: SandboxCaller, re
       const kind = kindOf(name)
       const rank = RANK[kind]
       const [winner, ...rest] = records.sort((a, b) => rank[b.scope] - rank[a.scope])
+      const hint = (record: SecretRecord) => (hintVisible(caller, record.scope) ? record.hint : null)
       return {
         name,
         kind,
         scope: winner!.scope,
-        hint: winner!.hint,
+        hint: hint(winner!),
         updatedAt: winner!.updated_at,
-        shadowed: rest.map((record) => ({ scope: record.scope, hint: record.hint }))
+        shadowed: rest.map((record) => ({ scope: record.scope, hint: hint(record) }))
       }
     })
 }
 
-let cachedKeyring: { source: string; keyring: Promise<Keyring> } | null = null
+let cachedKeyring: { source: string; keyring: Promise<Keyring>; failedAt?: number } | null = null
+/** How long a failed KMS unwrap is remembered, so an outage is not one KMS round trip per request. */
+export const KMS_RETRY_AFTER_MS = 10_000
 
-/** The Worker's keyring, or null when SECRETS_KEK is not configured. */
-export function keyringFor(env: Env): Promise<Keyring> | null {
+function parseKeyMap(json: string | undefined): Record<string, string> {
+  return json ? (JSON.parse(json) as Record<string, string>) : {}
+}
+
+/**
+ * SECRETS_KEK_SOURCE=kms: every KEK comes out of Cloud KMS (src/secrets-kms.ts), once per isolate.
+ * SECRETS_KEK is never read on this path, so a KMS failure cannot fall back to a plaintext key.
+ */
+function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | undefined): Promise<Keyring> {
+  const activeId = env.SECRETS_KEK_ID ?? 'k1'
+  const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${sealFormat}`
+  const cached = cachedKeyring
+  if (cached?.source === source && (cached.failedAt === undefined || Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS)) {
+    return cached.keyring
+  }
+  const load = async (): Promise<Keyring> => {
+    if (!env.SECRETS_KMS_KEY || !env.SECRETS_KMS_SERVICE_ACCOUNT || !env.SECRETS_KEK_WRAPPED) {
+      throw new SecretsKmsError('config')
+    }
+    let retiredWrapped: Record<string, string>
+    try {
+      retiredWrapped = parseKeyMap(env.SECRETS_KEK_RETIRED_WRAPPED)
+    } catch {
+      throw new SecretsKmsError('config')
+    }
+    const unwrap = createKekUnwrapper({ keyName: env.SECRETS_KMS_KEY, serviceAccountJson: env.SECRETS_KMS_SERVICE_ACCOUNT, fetch: fetcher })
+    const active = await unwrap(env.SECRETS_KEK_WRAPPED, activeId)
+    const retired: Record<string, string> = {}
+    for (const [id, wrapped] of Object.entries(retiredWrapped)) {
+      if (typeof wrapped !== 'string') {
+        throw new SecretsKmsError('config')
+      }
+      retired[id] = await unwrap(wrapped, id)
+    }
+    try {
+      return await createKeyring({ id: activeId, key: active }, retired, { sealFormat })
+    } catch {
+      // KMS returned something that is not a 32-byte key, or an id is malformed.
+      throw new SecretsKmsError('invalid')
+    }
+  }
+  const entry: NonNullable<typeof cachedKeyring> = { source, keyring: load() }
+  entry.keyring.catch((error: unknown) => {
+    entry.failedAt = Date.now()
+    const kms = error instanceof SecretsKmsError ? error : null
+    // Reason and HTTP status only: never a response body, a token or a key.
+    secretLog('secrets_kms_unavailable', { reason: kms?.reason ?? 'error', ...(kms?.status ? { status: kms.status } : {}) })
+  })
+  cachedKeyring = entry
+  return entry.keyring
+}
+
+/**
+ * The Worker's keyring, or null when the secret store is not configured. With SECRETS_KEK_SOURCE=kms
+ * the promise rejects with SecretsKmsError while KMS cannot hand over the keys.
+ */
+export function keyringFor(env: Env, fetcher?: typeof fetch): Promise<Keyring> | null {
+  // Anything but the exact opt-in stays v1, the format every deployed version reads.
+  const sealFormat = env.SECRETS_SEAL_FORMAT === 'v2' ? 'v2' : 'v1'
+  if (env.SECRETS_KEK_SOURCE === 'kms') {
+    return kmsKeyring(env, sealFormat, fetcher)
+  }
   if (!env.SECRETS_KEK) {
     return null
   }
-  const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}`
+  const source = `${env.SECRETS_KEK_ID ?? 'k1'}\n${env.SECRETS_KEK}\n${env.SECRETS_KEK_RETIRED ?? ''}\n${sealFormat}`
   if (cachedKeyring?.source !== source) {
-    const retired = env.SECRETS_KEK_RETIRED ? (JSON.parse(env.SECRETS_KEK_RETIRED) as Record<string, string>) : {}
     cachedKeyring = {
       source,
-      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, retired)
+      keyring: createKeyring({ id: env.SECRETS_KEK_ID ?? 'k1', key: env.SECRETS_KEK }, parseKeyMap(env.SECRETS_KEK_RETIRED), { sealFormat })
     }
   }
   return cachedKeyring.keyring
+}
+
+/**
+ * SEC-6a: admin-only writes (Shared, and a team's Repository secrets) need a token minted within the
+ * last minute. Auth's role-changed push already makes older tokens stale at once (index.ts,
+ * tokenMintedBeforeMemberChange); this bounds a demoted admin to under a minute even if that push is
+ * late or lost. The desktop re-mints and retries once on `stale_token` (hosted-sandbox-request.ts).
+ */
+export const ADMIN_WRITE_TOKEN_MAX_AGE_MS = 60_000
+
+function tooOldForAdminWrite(caller: SandboxCaller, scope: SecretScope, now: number): boolean {
+  if (scope === 'personal' || !caller.orgId || !isOrgAdmin(caller) || caller.tokenIssuedAt === undefined) {
+    return false
+  }
+  return now - (caller.tokenIssuedAt + AUTH_IAT_BACKDATE_MS) > ADMIN_WRITE_TOKEN_MAX_AGE_MS
 }
 
 const ScopeSchema = z.enum(['org', 'personal', 'repo'])
@@ -453,13 +602,20 @@ export async function handleSecretsRoute(
   onChange: (change: SecretChange) => void = () => {}
 ): Promise<Response> {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
+  // Same shape as index.ts ORG-TOKEN-STALE, so the desktop re-mints and retries once.
+  const staleToken = () => json({ error: 'unauthorized', reason: 'stale_token' }, 401)
   const repoQuery = url.searchParams.get('repo')
   if (url.pathname === '/v1/secrets/effective') {
     if (request.method !== 'GET') {
       return json({ error: 'not_found' }, 404)
     }
+    const workspace = url.searchParams.get('workspace') ?? 'private'
+    if (workspace !== 'private' && workspace !== 'shared') {
+      return json({ error: 'invalid_request', reason: 'invalid_workspace' }, 400)
+    }
     const admin = isOrgAdmin(caller)
     return json({
+      workspace,
       caller: {
         userId: caller.userId,
         orgId: caller.orgId ?? null,
@@ -467,14 +623,40 @@ export async function handleSecretsRoute(
         canWrite: { personal: true, org: Boolean(caller.orgId) && admin, repo: !caller.orgId || admin }
       },
       precedence: PRECEDENCE,
-      secrets: await effectiveSecrets(db, caller, repoQuery)
+      secrets: await effectiveSecrets(db, caller, repoQuery, { shared: workspace === 'shared' })
     })
   }
+  if (url.pathname === '/v1/secrets/activity') {
+    if (request.method !== 'GET') {
+      return json({ error: 'not_found' }, 404)
+    }
+    // Personal only: the team's secret events are read through the unified Enterprise audit log
+    // (GET /v1/audit-log), which gates them on the plan's audit_log entitlement and owner/admin.
+    const view = url.searchParams.get('view') ?? 'personal'
+    if (view !== 'personal') {
+      return json({ error: 'invalid_request', reason: 'invalid_view' }, 400)
+    }
+    const allowed = activityAccounts(caller, view, personalOwner(caller.userId, caller.dev === true))
+    if ('error' in allowed) {
+      return json({ error: 'forbidden', reason: allowed.error }, 403)
+    }
+    return json(
+      await listSecretEvents(db, allowed.accounts, {
+        now,
+        cursor: url.searchParams.get('cursor'),
+        limit: activityLimit(url.searchParams.get('limit'))
+      })
+    )
+  }
+  const actor = actorOf(caller)
   const batchMatch = /^\/v1\/secrets\/([a-z]+)\/batch$/.exec(url.pathname)
   if (batchMatch) {
     const scope = ScopeSchema.safeParse(batchMatch[1])
     if (!scope.success || request.method !== 'POST') {
       return json({ error: 'not_found' }, 404)
+    }
+    if (tooOldForAdminWrite(caller, scope.data, now)) {
+      return staleToken()
     }
     const owner = ownerFor(caller, scope.data, repoQuery, true)
     const body = BatchSchema.safeParse(await readJson(request))
@@ -496,19 +678,19 @@ export async function handleSecretsRoute(
     }
     for (const [name, value] of Object.entries(body.data.set ?? {})) {
       await attempt(name, async () => {
-        written.push(await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value, updatedBy: caller.userId }, now))
+        written.push(await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value, updatedBy: caller.userId }, now, actor))
       })
     }
     for (const name of body.data.delete ?? []) {
       await attempt(name, async () => {
         checkName(name)
-        if (await deleteSecret(db, scope.data, owner, name)) {
+        if (await deleteSecret(db, scope.data, owner, name, actor, now)) {
           deleted.push(name)
         }
       })
     }
     // Names only.
-    console.log(JSON.stringify({ event: 'secrets_batch', scope: scope.data, written: written.map((s) => s.name), deleted, failed: errors.length, by: caller.userId }))
+    secretLog('secrets_batch', { scope: scope.data, written: written.map((s) => s.name), deleted, failed: errors.length, by: caller.userId }, Object.values(body.data.set ?? {}))
     if (written.length > 0 || deleted.length > 0) {
       onChange({ scope: scope.data, ownerId: owner })
     }
@@ -529,11 +711,15 @@ export async function handleSecretsRoute(
       return json({ error: 'invalid_request', reason: 'invalid_scope' }, 400)
     }
     const owner = ownerFor(caller, scope.data, repoParam, false)
-    return json({ secrets: await listSecrets(db, scope.data, owner) })
+    const secrets = await listSecrets(db, scope.data, owner)
+    return json({ secrets: hintVisible(caller, scope.data) ? secrets : secrets.map((secret) => ({ ...secret, hint: null })) })
   }
   const scope = ScopeSchema.safeParse(scopeSegment)
   if (!scope.success || !name) {
     return json({ error: 'not_found' }, 404)
+  }
+  if ((request.method === 'PUT' || request.method === 'DELETE') && tooOldForAdminWrite(caller, scope.data, now)) {
+    return staleToken()
   }
   if (request.method === 'PUT') {
     const owner = ownerFor(caller, scope.data, repoParam, true)
@@ -541,18 +727,18 @@ export async function handleSecretsRoute(
     if (!body.success) {
       return json({ error: 'invalid_request' }, 400)
     }
-    const secret = await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value: body.data.value, updatedBy: caller.userId }, now)
-    console.log(JSON.stringify({ event: 'secret_written', scope: scope.data, name, by: caller.userId }))
+    const secret = await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value: body.data.value, updatedBy: caller.userId }, now, actor)
+    secretLog('secret_written', { scope: scope.data, name, by: caller.userId }, [body.data.value])
     onChange({ scope: scope.data, ownerId: owner })
     return json({ secret })
   }
   if (request.method === 'DELETE') {
     const owner = ownerFor(caller, scope.data, repoParam, true)
     checkName(name)
-    if (!(await deleteSecret(db, scope.data, owner, name))) {
+    if (!(await deleteSecret(db, scope.data, owner, name, actor, now))) {
       return json({ error: 'not_found' }, 404)
     }
-    console.log(JSON.stringify({ event: 'secret_deleted', scope: scope.data, name, by: caller.userId }))
+    secretLog('secret_deleted', { scope: scope.data, name, by: caller.userId })
     onChange({ scope: scope.data, ownerId: owner })
     return json({ deleted: true })
   }

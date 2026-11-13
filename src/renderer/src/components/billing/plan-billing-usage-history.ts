@@ -3,6 +3,7 @@
 import type { Translate } from '@/i18n/use-translate'
 import type { OrcaBillingUsageHistory, OrcaBillingUsageTop } from '../../../../shared/orca-billing'
 import { formatHours, formatHoursUsed } from './plan-billing-format'
+import { formatWorkspaceNumber } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 const HOUR = 3600
 
@@ -47,6 +48,30 @@ export type UsageNames = {
   selfId: string | null
 }
 
+/** V3-06: at most this many named rows; billing sends more so deleted ones don't crowd out live ones. */
+export const USAGE_NAMED_ROWS = 5
+
+/**
+ * V3-06b: workspace names for Top workspaces by sandbox id. Two workspaces with the same title would
+ * read alike, so duplicates get their number ("orca · W-512"); unique titles stay as they are.
+ */
+export function usageWorkspaceNames(
+  workspaces: readonly { id: string; title: string; number?: number | null }[]
+): Map<string, string> {
+  const counts = new Map<string, number>()
+  for (const workspace of workspaces) {
+    counts.set(workspace.title, (counts.get(workspace.title) ?? 0) + 1)
+  }
+  return new Map(
+    workspaces.map((workspace) => [
+      workspace.id,
+      (counts.get(workspace.title) ?? 0) > 1 && workspace.number
+        ? `${workspace.title} · ${formatWorkspaceNumber(workspace.number)}`
+        : workspace.title
+    ])
+  )
+}
+
 function share(seconds: number, total: number): number {
   return total > 0 ? Math.min(100, (seconds / total) * 100) : 0
 }
@@ -80,8 +105,12 @@ function rows(
       })
     }
   }
-  // Named rows lead (they're what someone acts on); the merged unknowns always come after them.
+  // Named rows lead (they're what someone acts on), the busiest few by name; the rest join the
+  // others line. The merged unknowns and the others line are buckets: always after the names.
   list.sort((a, b) => b.seconds - a.seconds)
+  for (const extra of list.splice(USAGE_NAMED_ROWS)) {
+    others = { count: others.count + 1, seconds: others.seconds + extra.seconds }
+  }
   if (unknown.count > 0) {
     list.push({
       key: 'unknown',
@@ -146,9 +175,9 @@ export function topWorkspaceRows(
     history.totalSeconds,
     (id) => names.workspaces.get(id) ?? null,
     (count) =>
-      t('auto.components.billing.usage.deletedWorkspaces', '{{count}} deleted workspaces', {
+      t('auto.components.billing.usage.deletedWorkspaces2', '{{count}} deleted workspaces', {
         count,
-        defaultValue_one: 'Deleted workspace'
+        defaultValue_one: '{{count}} deleted workspace'
       }),
     (count) =>
       t('auto.components.billing.usage.otherWorkspaces', '{{count}} other workspaces', {

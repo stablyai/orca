@@ -15,20 +15,23 @@ import type {
 } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
+import { isOrcaCloudEnvironmentForLaunch } from './orca-cloud-environment-id'
 import {
   cloudAgentLaunchDecision,
   cloudTabHoldKey,
   holdCloudAgentLaunch,
   takeCloudAgentHoldStartedByPerson
 } from './cloud-agent-launch-hold'
+import { forgetHeldCloudLaunch, rememberHeldCloudLaunch } from './cloud-held-launch-memory'
 
-type CreateHostTerminal = (
+export type CreateHostTerminal = (
   args: CreateWebRuntimeSessionTerminalOnHostArgs
 ) => Promise<CreatedWebRuntimeSessionTerminal>
 
 /** A fresh Claude/Codex launch on an Orca Cloud host: the only creates the account hold applies to. */
-function heldAgent(args: CreateWebRuntimeSessionTerminalOnHostArgs): 'claude' | 'codex' | null {
+async function heldAgent(
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
+): Promise<'claude' | 'codex' | null> {
   const agent = args.launchAgent ?? args.agent
   if (agent !== 'claude' && agent !== 'codex') {
     return null
@@ -37,7 +40,10 @@ function heldAgent(args: CreateWebRuntimeSessionTerminalOnHostArgs): 'claude' | 
   if (args.agentSessionKind === 'resume' || args.providerSession) {
     return null
   }
-  return args.environmentId && isOrcaCloudEnvironmentId(args.environmentId) ? agent : null
+  // FAIL-CLOSED (#568): asks main when the catalog flag isn't here yet (a fresh pairing).
+  return args.environmentId && (await isOrcaCloudEnvironmentForLaunch(args.environmentId))
+    ? agent
+    : null
 }
 
 /** The plain shell a held launch waits in: the same place, no agent, no startup. */
@@ -57,28 +63,66 @@ function placeholderArgs(
 
 /**
  * Creates the host terminal at once unless it launches Claude/Codex on Orca Cloud and the account
- * hold applies; then it holds in a plain shell first. Never throws past `create`; a failed
- * placeholder creates the terminal as before rather than block on a broken host.
+ * hold applies; then it holds in a plain shell first. Never throws past `create`. FAIL-CLOSED
+ * (#568): when the placeholder can't be created, the agent is not launched unheld either; the
+ * failed create is returned as is.
  */
 export async function createWithCloudAgentHold(
   args: CreateWebRuntimeSessionTerminalOnHostArgs,
   create: CreateHostTerminal
 ): Promise<CreatedWebRuntimeSessionTerminal> {
-  const agent = heldAgent(args)
+  const agent = await heldAgent(args)
   if (!agent || (await cloudAgentLaunchDecision(agent)) !== 'hold') {
     return await create(args)
   }
-  const placeholder = await create(placeholderArgs(args)).catch(() => null)
-  if (placeholder?.outcome.status !== 'created' || !placeholder.hostTabId) {
-    return await create(args)
+  const placeholder = await create(placeholderArgs(args))
+  if (placeholder.outcome.status !== 'created' || !placeholder.hostTabId) {
+    return placeholder
   }
   const tabId = toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(placeholder.hostTabId))
+  // V3-01: the hold is in memory; this record lets a restart put it back in the same placeholder.
+  if (args.environmentId) {
+    rememberHeldCloudLaunch({
+      environmentId: args.environmentId,
+      worktreeId: args.worktreeId,
+      tabId,
+      agent,
+      prompt: args.prompt?.trim() || null,
+      cwd: args.cwd?.trim() || null,
+      targetGroupId: args.targetGroupId ?? null,
+      createdAt: Date.now()
+    })
+  }
+  return (await settleHeldPlaceholder({ args, tabId, agent, create, decided: true })) ?? placeholder
+}
+
+/**
+ * Holds a launch in its placeholder tab until the strip releases it, then starts the agent in its
+ * own tab and closes the placeholder. Cancel leaves the shell (returns null). The record of the held
+ * placeholder is forgotten once the hold settles either way.
+ */
+export async function settleHeldPlaceholder({
+  args,
+  tabId,
+  agent,
+  create,
+  decided = false,
+  restored = false
+}: {
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
+  tabId: string
+  agent: 'claude' | 'codex'
+  create: CreateHostTerminal
+  decided?: boolean
+  restored?: boolean
+}): Promise<CreatedWebRuntimeSessionTerminal | null> {
   const outcome = await holdCloudAgentLaunch({
     paneKey: cloudTabHoldKey(tabId),
     agent,
     prompt: args.prompt?.trim() || null,
-    decided: true
-  })
+    decided,
+    restored
+  }).finally(() => forgetHeldCloudLaunch(tabId))
   if (outcome === 'cancel') {
     // NOACCT-MISLABEL: the confirmation answers the person's own Cancel, while the shell is still
     // there. A hold that ended because its tab or workspace went away (deleted, archived, closed)
@@ -92,7 +136,7 @@ export async function createWithCloudAgentHold(
         )
       )
     }
-    return placeholder
+    return null
   }
   // Started by the person's click in the held pane: bring the agent's tab forward so they see their
   // queued prompt run. A Renew's auto-start (maybe on a background tab) never steals focus.

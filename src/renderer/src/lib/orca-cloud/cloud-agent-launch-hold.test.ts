@@ -79,16 +79,35 @@ describe('cloud agent launch hold', () => {
     expect(cloudAgentLaunchNeedsHold('claude')).toBe(true)
   })
 
-  it('holds an expired launch until Renew fixes the account, then every held pane goes', async () => {
+  it('CHAT-RENEW-INPLACE (B): a renewal never launches; every held pane waits for its own Start', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
-    const first = holdCloudAgentLaunch({ paneKey: 'tab:a', agent: 'claude', prompt: 'fix it' })
-    const second = holdCloudAgentLaunch({ paneKey: 'tab:b', agent: 'claude', prompt: null })
+    let firstOutcome = 'pending'
+    let secondOutcome = 'pending'
+    void holdCloudAgentLaunch({ paneKey: 'tab:a', agent: 'claude', prompt: 'fix it' }).then(
+      (o) => (firstOutcome = o)
+    )
+    void holdCloudAgentLaunch({ paneKey: 'tab:b', agent: 'claude', prompt: null }).then(
+      (o) => (secondOutcome = o)
+    )
     await vi.waitFor(() => expect(readCloudAgentHold('tab:b')).not.toBeNull())
     expect(readCloudAgentHold('tab:a')).toMatchObject({ prompt: 'fix it' })
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
-    await expect(first).resolves.toBe('proceed')
-    await expect(second).resolves.toBe('proceed')
-    expect(readCloudAgentHold('tab:a')).toBeNull()
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    for (const key of ['tab:a', 'tab:b']) {
+      expect(readCloudAgentHold(key)).toMatchObject({
+        reason: 'awaitingStart',
+        awaiting: 'renewed'
+      })
+    }
+    expect([firstOutcome, secondOutcome]).toEqual(['pending', 'pending'])
+    // Start in one tab launches that one; the other keeps waiting.
+    releaseCloudAgentHold('tab:a', 'proceed')
+    await vi.waitFor(() => expect(firstOutcome).toBe('proceed'))
+    expect(secondOutcome).toBe('pending')
+    expect(readCloudAgentHold('tab:b')).toMatchObject({ awaiting: 'renewed' })
+    releaseCloudAgentHold('tab:b', 'cancel')
   })
 
   it('cancel releases only that pane', async () => {

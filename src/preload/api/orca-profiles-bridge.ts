@@ -67,12 +67,17 @@ export const orcaProfilesApi = {
     )
   },
   findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
-  connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
+  connectCurrent: (args) => ipcRenderer.invoke('orcaProfiles:connectCurrent', args),
   signInProgress: () => ipcRenderer.invoke('orcaProfiles:signInProgress'),
   cancelSignIn: () => ipcRenderer.invoke('orcaProfiles:cancelSignIn'),
   refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
   signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
   selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),
+  accountMfa: () => ipcRenderer.invoke('orcaProfiles:accountMfa'),
+  teamMfaPolicy: (args) => ipcRenderer.invoke('orcaProfiles:teamMfaPolicy', args),
+  teamMfaPolicySet: (args) => ipcRenderer.invoke('orcaProfiles:teamMfaPolicySet', args),
+  teamMfaPending: (args) => ipcRenderer.invoke('orcaProfiles:teamMfaPending', args),
+  teamMfaRemind: (args) => ipcRenderer.invoke('orcaProfiles:teamMfaRemind', args),
   orgMembersList: (args) => ipcRenderer.invoke('orcaProfiles:orgMembersList', args),
   orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
   orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
@@ -83,6 +88,11 @@ export const orcaProfilesApi = {
   orgCreate: (args) => ipcRenderer.invoke('orcaProfiles:orgCreate', args),
   orgDeleteCheck: (args) => ipcRenderer.invoke('orcaProfiles:orgDeleteCheck', args),
   orgDelete: (args) => ipcRenderer.invoke('orcaProfiles:orgDelete', args),
+  orgEnterprise: (args) => ipcRenderer.invoke('orcaProfiles:orgEnterprise', args),
+  orgSsoSetupLink: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoSetupLink', args),
+  orgSsoDomainAdd: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoDomainAdd', args),
+  orgSsoDomainVerify: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoDomainVerify', args),
+  orgSsoDomainRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgSsoDomainRemove', args),
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void): (() => void) => {
     const listener = (_event: unknown, payload: OrcaBillingReturn): void => callback(payload)
     ipcRenderer.on(ORCA_BILLING_RETURN_CHANNEL, listener)

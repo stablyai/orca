@@ -87,7 +87,7 @@ export const DEFAULT_PLANS: PlanCatalog = {
   enterprise: {
     label: 'Enterprise',
     priceLabel: 'Custom',
-    contactUrl: 'https://onorca.dev/contact-sales'
+    contactUrl: 'https://orca.dev/enterprise'
   }
 }
 

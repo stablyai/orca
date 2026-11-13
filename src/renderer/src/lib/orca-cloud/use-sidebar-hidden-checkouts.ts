@@ -13,22 +13,45 @@ import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime
 import type { Repo } from '../../../../shared/repo-types'
 
 type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
-  Partial<Pick<AppState, 'orcaProfileAuthStatus' | 'cloudAccountIdByEnvironmentId'>>
+  Partial<
+    Pick<
+      AppState,
+      'orcaProfileAuthStatus' | 'cloudAccountIdByEnvironmentId' | 'pendingWorktreeCreations'
+    >
+  >
 
 /**
- * Every Orca Cloud server, `+host` when the active team owns it and `-host` otherwise (another
- * team's, or one whose team is not known yet). Newline-joined so the selector compares by value.
+ * Every Orca Cloud server this desktop runs, `+host` when the active team owns it and `-host`
+ * otherwise (another team's, or one whose team is not known yet). Newline-joined so the selector
+ * compares by value.
+ *
+ * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) of the active account is left out: its owner is
+ * never in `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), and its
+ * primary checkout IS the workspace's row, so either treatment would hide a workspace this desktop
+ * just paired with, a GitHub-only create included. A paired server stamped with ANOTHER account
+ * (PAIRED-ACCOUNT-FILTER) is `-host`, like another team's owned sandbox; one saved before pairings
+ * were stamped stays visible until the prune stamps it from the active team's list.
  */
 export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
   const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
   const owners = state.cloudAccountIdByEnvironmentId ?? {}
-  return (state.runtimeEnvironments ?? [])
+  // GH-CREATE-NO-ROW: a GitHub-only create's pending row stands for its server's rows until the
+  // hand-off removes it; both change in one store update, so the row never shows twice.
+  const handingOff = Object.values(state.pendingWorktreeCreations ?? {}).flatMap((entry) =>
+    entry.request.githubSource && entry.pairingHostId ? [`-${entry.pairingHostId}`] : []
+  )
+  const scoped = (state.runtimeEnvironments ?? [])
     .filter((environment) => isOrcaCloudRuntimeEnvironment(environment))
-    .map((environment) => {
+    .flatMap((environment) => {
+      const hostId = toRuntimeExecutionHostId(environment.id)
+      if (environment.orcaCloudPaired === true) {
+        const account = environment.orcaCloudPairedAccountId
+        return account && account !== active ? [`-${hostId}`] : []
+      }
       const inTeam = active !== null && owners[environment.id] === active
-      return `${inTeam ? '+' : '-'}${toRuntimeExecutionHostId(environment.id)}`
+      return [`${inTeam ? '+' : '-'}${hostId}`]
     })
-    .join('\n')
+  return [...scoped, ...handingOff].join('\n')
 }
 
 export function parseOrcaCloudHostScopeKey(key: string): {

@@ -1,3 +1,4 @@
+import { installDevTokenClaimsProbe } from './dev-token-claims-probe'
 import { cloudDevSigningAllowed, withCloudBuildDefaults } from '../cloud-build-defaults'
 import {
   findCloudRuntimeBySandboxId,
@@ -132,9 +133,11 @@ export function installHostedSandbox(
   // A cloud list refresh or a not-found status read asks for the prune now (LC-2).
   setCloudGonePruneRunner(() => accountBackfill.run({ force: true }))
   installLocalCommands(userDataPath)
+  installDevTokenClaimsProbe(() => config.getAccessToken(), app.isPackaged)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
-    getAccessToken: config.getAccessToken
+    getAccessToken: config.getAccessToken,
+    fetch: config.fetch
   })
   const agentConfigSync = installCloudAgentConfigSync(userDataPath)
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
@@ -245,14 +248,11 @@ export function installHostedSandbox(
       usageRefresh.noteStarted()
     },
     onStopped: (environmentId) => registry.stopEnvironment(environmentId),
-    onWake: ({ workspaceId, phase, startedAt, message }) =>
+    onWake: (event) =>
       workspaces.emitWakeProgress({
-        workspaceId,
-        phase,
-        startedAt,
-        message,
+        ...event,
         // Later phases inherit the source recorded at `waking`.
-        source: phase === 'waking' ? workspaces.takeWakeSource(workspaceId) : 'open'
+        source: event.phase === 'waking' ? workspaces.takeWakeSource(event.workspaceId) : 'open'
       })
   })
   installed = { registry }

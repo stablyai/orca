@@ -22,8 +22,10 @@ vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecyc
 vi.mock('@/runtime/hosted-terminals/placement/web-session-terminal-placement', () => ({
   webTerminalPlacementParentTabId: (id: string) => id
 }))
+// FAIL-CLOSED (#568): the hold asks the async launch check (store flag, then main's records).
 vi.mock('./orca-cloud-environment-id', () => ({
-  isOrcaCloudEnvironmentId: () => host.cloud
+  isOrcaCloudEnvironmentId: () => host.cloud,
+  isOrcaCloudEnvironmentForLaunch: async () => host.cloud
 }))
 vi.mock('sonner', () => ({ toast: vi.fn() }))
 
@@ -217,7 +219,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     expect(readCloudAgentHold(key)).toBeNull()
   })
 
-  it('expired: holds, then starts on Renew', async () => {
+  it('expired: holds; Renew turns it to "renewed · Start", and Start launches it (B)', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
     const create = hostCreate()
     const args = { ...CREATE_AGENT, prompt: 'fix the bug' }
@@ -229,9 +231,14 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
       prompt: 'fix the bug'
     })
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await flush()
+    // A renewal never launches by itself (team-lead, B): it waits for Start.
+    expect(readCloudAgentHold(key)).toMatchObject({ reason: 'awaitingStart', awaiting: 'renewed' })
+    expect(create).toHaveBeenCalledOnce()
+    releaseCloudAgentHold(key, 'proceed')
     await expect(result).resolves.toBe(AGENT)
-    // Renew's auto-start: the original args, no focus taken (the tab may be in the background).
-    expect(create).toHaveBeenLastCalledWith(args)
+    // The person's Start: the original args, with its tab brought forward.
+    expect(create).toHaveBeenLastCalledWith({ ...args, activate: true })
   })
 
   it('cancel leaves the plain shell and never starts the agent', async () => {
@@ -245,12 +252,25 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     expect(host.close).not.toHaveBeenCalled()
   })
 
-  it('a host that cannot open the placeholder creates as before rather than blocking', async () => {
+  it('FAIL-CLOSED: a host that cannot open the placeholder never gets the agent unheld', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    const failed = { outcome: { status: 'failed' as const, message: 'x' } }
     const create = vi.fn(async (args: { launchAgent?: string }) =>
-      args.launchAgent ? AGENT : { outcome: { status: 'failed' as const, message: 'x' } }
+      args.launchAgent ? AGENT : failed
     )
-    await expect(createWithCloudAgentHold(CREATE_AGENT, create)).resolves.toBe(AGENT)
+    await expect(createWithCloudAgentHold(CREATE_AGENT, create)).resolves.toBe(failed)
+    expect(create).toHaveBeenCalledOnce()
+    expect(create.mock.calls[0][0]).not.toHaveProperty('launchAgent')
+  })
+
+  it('FAIL-CLOSED: a paired-from-birth launch with no Claude set up never launches Claude', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    const create = hostCreate()
+    void createWithCloudAgentHold({ ...CREATE_AGENT, environmentId: 'env-paired' }, create)
+    await flush()
+    expect(create).toHaveBeenCalledOnce()
+    expect(create.mock.calls[0][0]).not.toHaveProperty('launchAgent')
+    expect(readCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')))).not.toBeNull()
   })
 })
 

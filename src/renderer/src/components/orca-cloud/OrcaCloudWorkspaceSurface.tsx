@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { cloudWorkspaceAnnouncement } from '@/lib/orca-cloud/cloud-workspace-name-copy'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { returnFocusToWorkspace } from './cloud-focus-return'
 import {
@@ -13,26 +13,24 @@ import {
 } from './cloud-cover-focus'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
+import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import {
-  WAKE_STALE_MS,
-  isWakeActive,
-  isWakeFailedFresh
-} from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import {
+  cloudWorkspaceTarget,
   dismissCloudOom,
   dismissCloudWake,
   useIsCloudWorkspace
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { CloudOfflineSnapshot } from '../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import { CloudArchivedWorkspaceView, type ArchiveLoad } from './CloudArchivedWorkspaceView'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
+import { useWakeOverlay } from './use-wake-overlay'
+import { PairedCloudWorkspaceSurface, useIsPairedCloudRow } from './PairedCloudWorkspaceSurface'
 import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
 import { CloudSetupNoticesDock } from './CloudSetupNotices'
 import { useConfirmedRestart } from './use-cloud-panel-actions'
 import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
-import { useCloudOfflineData } from './offline/use-cloud-offline-data'
+import { useAsleepCopyData } from './offline/CloudSleepCopyState'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import {
   useIsWorktreeGoingToSleep,
@@ -46,12 +44,6 @@ import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buff
 import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from './cloud-workspace-actions'
 import { keepWorkspaceAwakeDuringSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 
-/** A wake that settles faster than this never shows the overlay (no skeleton flash). */
-const SHOW_DELAY_MS = 300
-/** Once shown, the overlay stays at least this long so it never blinks. */
-const MIN_HOLD_MS = 600
-const FADE_MS = 200
-
 /**
  * The Orca Cloud layer over the active workspace, one mount for all of it: the archived view,
  * the "Waking…" overlay, the asleep (cached, read-only) view, and the not-responding / out-of-
@@ -64,8 +56,12 @@ export function OrcaCloudWorkspaceSurface({
   worktreeId: string | null
 }): React.JSX.Element | null {
   const isCloud = useIsCloudWorkspace(worktreeId)
+  const isPaired = useIsPairedCloudRow(worktreeId)
   if (!worktreeId || !isCloud) {
-    return null
+    // A PAIRED row (no runtime record here) gets its own waking, asleep and saving layers.
+    return worktreeId && isPaired ? (
+      <PairedCloudWorkspaceSurface key={worktreeId} workspaceId={worktreeId} />
+    ) : null
   }
   // Keyed: switching worktrees resets every piece of per-workspace state.
   return <CloudSurface key={worktreeId} workspaceId={worktreeId} />
@@ -81,7 +77,7 @@ function useArchiveLoad(workspaceId: string, enabled: boolean): [ArchiveLoad, ()
     let cancelled = false
     setLoad({ status: 'loading' })
     void window.api.orcaCloudWorkspace
-      .getArchive({ workspaceId })
+      .getArchive(cloudWorkspaceTarget(workspaceId))
       .then((result) => {
         if (!cancelled) {
           setLoad(
@@ -104,76 +100,6 @@ function useArchiveLoad(workspaceId: string, enabled: boolean): [ArchiveLoad, ()
     }
   }, [workspaceId, enabled, attempt])
   return [load, useCallback(() => setAttempt((n) => n + 1), [])]
-}
-
-/**
- * The wake the overlay shows: shown after SHOW_DELAY_MS, held at least MIN_HOLD_MS, faded out
- * after. A wake that stops reporting turns into a failure instead of quietly vanishing.
- */
-function useWakeOverlay(
-  wake: CloudWakeProgressEvent | undefined,
-  now: number,
-  stalledMessage: string,
-  /** Typing is already held for this wake: show its pill now, not after the show delay. */
-  immediate = false
-): { wake: CloudWakeProgressEvent | null; leaving: boolean } {
-  const reducedMotion = usePrefersReducedMotion()
-  const effective: CloudWakeProgressEvent | null = !wake
-    ? null
-    : isWakeActive(wake, now)
-      ? wake
-      : isWakeFailedFresh(wake, now)
-        ? wake
-        : (wake.phase === 'waking' || wake.phase === 'connecting') && now - wake.at >= WAKE_STALE_MS
-          ? { ...wake, phase: 'failed', message: stalledMessage }
-          : null
-  const failed = effective?.phase === 'failed'
-  const [shown, setShown] = useState<{ wake: CloudWakeProgressEvent; at: number } | null>(null)
-  const [leaving, setLeaving] = useState(false)
-  const effectiveKey = effective ? `${effective.startedAt}:${effective.phase}` : null
-  const latest = useRef(effective)
-  latest.current = effective
-
-  useEffect(() => {
-    if (effective) {
-      setLeaving(false)
-      if (shown) {
-        setShown({ wake: effective, at: shown.at })
-        return undefined
-      }
-      // Failures show at once (and wakes the person is already typing into, and a wake that
-      // started earlier, e.g. on hover, and has already outlasted the delay); others only if they
-      // outlast the show delay.
-      if (failed || immediate || Date.now() - effective.startedAt >= SHOW_DELAY_MS) {
-        setShown({ wake: effective, at: Date.now() })
-        return undefined
-      }
-      const timer = setTimeout(() => {
-        if (latest.current) {
-          setShown({ wake: latest.current, at: Date.now() })
-        }
-      }, SHOW_DELAY_MS)
-      return () => clearTimeout(timer)
-    }
-    if (!shown) {
-      return undefined
-    }
-    const hold = Math.max(0, shown.at + MIN_HOLD_MS - Date.now())
-    const fade = reducedMotion ? 0 : FADE_MS
-    const startFade = setTimeout(() => setLeaving(fade > 0), hold)
-    const hide = setTimeout(() => {
-      setLeaving(false)
-      setShown(null)
-    }, hold + fade)
-    return () => {
-      clearTimeout(startFade)
-      clearTimeout(hide)
-    }
-    // `shown` is read, not tracked: a re-run per show would restart the hold.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveKey, reducedMotion, immediate])
-
-  return { wake: shown?.wake ?? null, leaving }
 }
 
 function emptySnapshot(workspaceId: string): CloudOfflineSnapshot {
@@ -210,7 +136,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   // Past main's last reopen check Keep awake can't work: Wake to continue (an honest wake) instead.
   const suspendCommitted = useIsWorktreeSuspendCommitted(workspaceId)
   const [archiveLoad, retryArchive] = useArchiveLoad(workspaceId, archived)
-  const offline = useCloudOfflineData(workspaceId, (maybeAsleep || viewOnly) && !archived)
+  const offline = useAsleepCopyData(workspaceId, (maybeAsleep || viewOnly) && !archived)
   const asleep = (Boolean(offline.snapshot?.asleep) && maybeAsleep) || viewOnly
   const wakeInFlight =
     wakeInput.waking ||
@@ -299,20 +225,21 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
 
   // One persistent, initially empty live region for this surface: phase changes only. A failed
   // wake is announced by its own alert card, so not here too.
-  const label = name || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
   const announcement =
     layer === 'waking' && overlay.wake && overlay.wake.phase !== 'failed'
-      ? overlay.wake.source === 'restart'
-        ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name: label })
-        : overlay.wake.source === 'unarchive'
-          ? t('orcaCloudWorkspace.announce.unarchivingNamed', 'Unarchiving {{name}}.', {
-              name: label
-            })
-          : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: label })
+      ? cloudWorkspaceAnnouncement(
+          overlay.wake.source === 'restart'
+            ? 'restarting'
+            : overlay.wake.source === 'unarchive'
+              ? 'unarchiving'
+              : 'waking',
+          name,
+          t
+        )
       : layer === 'archived'
-        ? t('orcaCloudWorkspace.announce.archived', '{{name}} is archived.', { name: label })
+        ? cloudWorkspaceAnnouncement('archived', name, t)
         : layer === 'asleep' && !goingToSleep
-          ? t('orcaCloudWorkspace.announce.asleep', '{{name}} is asleep.', { name: label })
+          ? cloudWorkspaceAnnouncement('asleep', name, t)
           : ''
 
   const notices: React.ReactNode[] = []
@@ -399,6 +326,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
                 workspaceName={name}
                 now={Math.max(now, slowNow)}
                 goingToSleep={goingToSleep}
+                copySave={offline.copySave}
                 onKeepAwake={
                   suspendCommitted ? undefined : () => keepWorkspaceAwakeDuringSleep(workspaceId)
                 }

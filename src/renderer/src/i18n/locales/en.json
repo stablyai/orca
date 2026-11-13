@@ -1478,6 +1478,230 @@
       "title2": "Account & billing",
       "accountOnly": "Account",
       "accountOnlyDescription": "Your Orca account and what’s included with it."
+    },
+    "enterprise": {
+      "audit": {
+        "actor": {
+          "system": "Orca",
+          "youViaAgent": "Your agent",
+          "personViaAgent": "<person></person>’s agent",
+          "youViaRoutine": "Your routine",
+          "personViaRoutine": "<person></person>’s routine"
+        },
+        "filter": {
+          "categoryLabel": "Filter by activity",
+          "allActivity": "All activity",
+          "actorLabel": "Filter by person",
+          "everyone": "Everyone"
+        },
+        "title": "Audit log",
+        "description": "Member, key, secret, workspace and settings changes across your team. Only owners and admins can see it.",
+        "export": "Export CSV",
+        "upsellTitle": "Audit log is part of {{plan}}",
+        "upsellBody": "Orca records your team’s changes on every plan, so your full history is here from the day you upgrade.",
+        "loading": "Loading the audit log",
+        "exportTruncated": "The file has the newest 5,000 events. Filter by activity or person to export the rest.",
+        "emptyFilteredTitle": "Nothing matches",
+        "emptyTitle": "Nothing recorded yet",
+        "emptyFilteredBody": "No recorded change matches these filters.",
+        "emptyBody": "Changes to members, API keys, secrets, workspaces and settings will show up here.",
+        "clearFilters": "Clear filters",
+        "showMore": "Show more",
+        "category": {
+          "members": "Members",
+          "security": "Security",
+          "apiKeys": "API keys",
+          "apps": "Connected apps",
+          "workspaces": "Workspaces",
+          "secrets": "Secrets",
+          "routines": "Routines",
+          "settings": "Settings",
+          "billing": "Billing",
+          "other": "Other"
+        },
+        "action": {
+          "keyCreateNamed": "Created API key “{{name}}”",
+          "keyRevokeNamed": "Revoked API key “{{name}}”",
+          "workspaceToken": "Gave an agent access to the Orca API",
+          "wsCreateNamed": "Started workspace “{{name}}”",
+          "wsDestroyNamed": "Deleted workspace “{{name}}”",
+          "wsSleepNamed": "Put workspace “{{name}}” to sleep",
+          "wsWakeNamed": "Woke workspace “{{name}}”",
+          "wsArchiveNamed": "Archived workspace “{{name}}”",
+          "wsUnarchive": "Restored a workspace",
+          "wsUnarchiveNamed": "Restored workspace “{{name}}”",
+          "wsRename": "Renamed a workspace",
+          "wsRenameNamed": "Renamed a workspace to “{{name}}”",
+          "wsShare": "Shared a link to a workspace port",
+          "wsShareNamed": "Shared a link to a port on workspace “{{name}}”",
+          "wsUnshare": "Turned off a workspace share link",
+          "wsUnshareNamed": "Turned off a share link on workspace “{{name}}”",
+          "wsAttachment": "Sent a file to an agent",
+          "sessionCreate": "Started an agent",
+          "sessionCancel": "Stopped an agent",
+          "sessionRename": "Renamed an agent session",
+          "sshAdd": "Added an SSH key to a workspace",
+          "sshAddNamed": "Added an SSH key to workspace “{{name}}”",
+          "sshRemove": "Removed an SSH key from a workspace",
+          "sshRemoveNamed": "Removed an SSH key from workspace “{{name}}”",
+          "projectCreateNamed": "Created project “{{name}}”",
+          "mcpAuthorize": "Connected an app",
+          "mcpRevoke": "Disconnected an app",
+          "mcpCodeReplay": "Blocked a reused app sign-in code and disconnected the app",
+          "mcpRefreshReplay": "Blocked a reused app token and disconnected the app",
+          "secretCreate": "Added a secret",
+          "secretCreateNamed": "Added secret {{name}}",
+          "secretUpdate": "Changed a secret",
+          "secretUpdateNamed": "Changed secret {{name}}",
+          "secretDelete": "Deleted a secret",
+          "secretDeleteNamed": "Deleted secret {{name}}",
+          "memberInvite": "Invited a teammate",
+          "memberInviteNamed": "Invited {{name}}",
+          "inviteRevoke": "Canceled an invite",
+          "inviteRevokeNamed": "Canceled the invite for {{name}}",
+          "memberRemove": "Removed a teammate",
+          "memberRemoveNamed": "Removed {{name}} from the team",
+          "memberLeft": "Left the team",
+          "roleChange": "Changed a teammate’s role",
+          "roleChangeNamed": "Changed the role of {{name}}",
+          "roleSync": "Updated a teammate’s API keys to match their role",
+          "teamCreate": "Created the team",
+          "teamRename": "Renamed the team",
+          "teamRenameNamed": "Renamed the team to “{{name}}”",
+          "routineCreate": "Created a routine",
+          "routineUpdate": "Edited a routine",
+          "routineDelete": "Deleted a routine",
+          "routineDisable": "Turned off a routine",
+          "routineRun": "Ran a routine",
+          "routineRunStart": "A routine run started",
+          "routineRunFinish": "A routine run finished",
+          "routineWebhook": "Replaced a routine’s webhook URL",
+          "memberJoined": "Joined the team",
+          "teamDelete": "Deleted the team",
+          "planStarted": "Plan started",
+          "planChanged": "Plan changed",
+          "planCanceled": "Plan ended",
+          "cancelScheduled": "Plan set to end at the next renewal",
+          "cancelReverted": "Plan set to renew again",
+          "seatsChanged": "Seats changed",
+          "overageOn": "Turned on overage",
+          "overageOff": "Turned off overage",
+          "planStartedDetail": "Plan started ({{plan}}, {{interval}})",
+          "planChangedDetail": "Plan changed to {{plan}}, {{interval}}",
+          "cancelScheduledOn": "Plan set to end on {{date}}",
+          "seatsChangedDetail": "Seats changed from {{from}} to {{to}}",
+          "spendCapChanged2": "Changed the monthly spend cap",
+          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}"
+        },
+        "interval": {
+          "month": "monthly",
+          "year": "annual"
+        }
+      },
+      "sso": {
+        "upsellTitle": "Single sign-on is part of {{plan}}",
+        "upsellBody": "Sign in with your identity provider over SAML, and add or remove teammates with SCIM.",
+        "managedTitle": "Single sign-on is set up with us",
+        "managedBody": "To set up or change single sign-on, contact us.",
+        "domains": {
+          "invalid": "Enter a domain like example.com.",
+          "public": "That domain belongs to an email provider. Use a domain your company owns.",
+          "tooMany": "A team can have up to 10 domains.",
+          "notFound": "That domain is no longer on the list.",
+          "taken": "Another team has already verified that domain. Contact us if it should be yours.",
+          "recordNotFound": "We couldn’t find the record yet. DNS changes can take a few minutes; try again shortly.",
+          "dnsUnavailable": "We couldn’t look up the record. Try again in a moment.",
+          "copy": "Copy {{label}}",
+          "verified": "Verified",
+          "pending": "Not verified",
+          "recordMissing": "Record missing",
+          "check": "Check record",
+          "remove": "Remove",
+          "pendingBody": "Add this TXT record at your DNS provider to show the domain is yours.",
+          "recordMissingBody": "The TXT record is gone. Sign-in still works; add the record back to keep the domain verified.",
+          "recordName": "Name",
+          "recordValue": "Value",
+          "title": "Email domains",
+          "body": "People who sign in with SSO using an email at one of these domains are sent to your identity provider.",
+          "none": "No domains yet.",
+          "inputLabel": "Domain to add",
+          "add": "Add domain",
+          "placeholder": "example.com"
+        },
+        "status": {
+          "on": "On",
+          "onWith": "Your team signs in with {{idp}}.",
+          "onBody": "Your team signs in with your identity provider.",
+          "testing": "Testing",
+          "testingBody": "Your connection is set up but not live. Finish testing it on the setup page to turn it on.",
+          "offBody": "Connect your identity provider over SAML or OIDC so your team signs in with it."
+        },
+        "title": "Single sign-on",
+        "connection": "Identity provider",
+        "manage": "Manage",
+        "setUp": "Set up SSO",
+        "linkWarning": "The setup link works without signing in and expires in 1 hour. Only share it with the person who manages your identity provider.",
+        "ownersOnly": "Only a team owner can change single sign-on.",
+        "lapsed": "Single sign-on stays on, but your plan no longer includes changing it. Contact us to make changes.",
+        "require": "Require SSO",
+        "requiredBody": "Every member signs in with SSO. Other sign-in methods are turned off for your team.",
+        "requiredOwnersBody": "Members sign in with SSO. Owners can still sign in another way until one owner has signed in with SSO.",
+        "requireOffBody": "Once SSO is on, every member must sign in with it. This can’t be turned off separately.",
+        "requiredValue": "Required",
+        "notRequiredValue": "Not yet",
+        "lapsedTitle": "Need to change single sign-on?",
+        "lapsedBody": "Talk to us about your plan.",
+        "loading": "Loading single sign-on",
+        "loadFailed": "Couldn’t load single sign-on",
+        "retry": "Try again",
+        "upsellBodySso": "Sign in with your identity provider over SAML or OIDC, and require it for everyone on your team.",
+        "error": {
+          "signIn": "Sign in to Orca again to see this.",
+          "forbidden": "Only a team owner or admin can see this.",
+          "rateLimited": "Too many requests. Try again shortly.",
+          "unsupported": "Single sign-on settings aren’t available here yet.",
+          "unavailable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+          "recentSignIn": "For your team’s safety, sign out and sign in to Orca again, then open the setup page within 10 minutes.",
+          "notEntitled": "Your team’s plan doesn’t include changing single sign-on."
+        },
+        "sessionsEndOn": "Sign-ins made before SSO was turned on end on {{date}} at {{time}}. Members then sign in again with SSO."
+      },
+      "title": "Enterprise",
+      "searchDescription": "Single sign-on and directory sync, and the audit log of changes across your team.",
+      "keywordAudit": "audit log",
+      "keywordActivity": "activity",
+      "keywordSso": "sso",
+      "keywordSaml": "saml",
+      "keywordScim": "scim",
+      "keywordCompliance": "compliance",
+      "description": "Single sign-on, sign-in policies and the audit log for your team.",
+      "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
+      "bannerBody": "Talk to us about moving your team to {{plan}}.",
+      "contactUs": "Contact us",
+      "scim": {
+        "status": {
+          "active": "Active",
+          "activeBody": "Your identity provider adds, updates and removes teammates.",
+          "waiting": "Waiting for first sync",
+          "waitingBody": "Directory sync is on. Nothing has arrived from your identity provider yet.",
+          "notEnabled": "Not turned on",
+          "notEnabledBody": "Ask us to turn directory sync on for your team. Then connect your identity provider here.",
+          "needsSso": "Needs SSO",
+          "needsSsoBody": "Turn on single sign-on first. Directory sync uses the same identity provider."
+        },
+        "change": {
+          "added": "A teammate was added",
+          "removed": "A teammate was removed",
+          "role": "A role changed",
+          "group": "A group changed"
+        },
+        "title": "Directory sync",
+        "connection": "SCIM provisioning",
+        "open": "Open directory sync setup",
+        "keyNote": "The setup page shows the SCIM address and key to enter in your identity provider. Orca never shows or stores the key.",
+        "lastChange": "Last change received",
+        "lastChangeSummary": "{{what}} · {{when}}"
+      }
     }
   },
   "menu": {
@@ -1850,7 +2074,9 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInDidNotFinish": "Sign-in didn’t finish. Try again."
+            "signInDidNotFinish": "Sign-in didn’t finish. Try again.",
+            "ssoRequired": "Your team requires single sign-on",
+            "ssoRequiredBody": "Sign in again and choose Sign in with SSO."
           }
         },
         "runtime": {
@@ -2434,7 +2660,6 @@
         "backgroundFailedCloud": "A new cloud workspace couldn’t start. Open it in the sidebar to continue."
       },
       "orcaCloudSession": {
-        "seePlans": "See plans",
         "workspaceGone": "That workspace is no longer in Orca.",
         "thisWorkspaceLower": "this workspace",
         "sandboxRestartSoonDetail": "Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.",
@@ -2470,6 +2695,9 @@
         "workspaceActions": {
           "unavailable": "Orca Cloud is unavailable.",
           "archiveSleepFailed": "It’s still running. Your files are safe."
+        },
+        "pairedWake": {
+          "notPaired2": "This workspace is no longer linked to this computer. Use Open cloud workspace… to link it again."
         }
       },
       "cli": {
@@ -7540,7 +7768,8 @@
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
-          "moveToThisComputer": "Move to this computer"
+          "moveToThisComputer": "Move to this computer",
+          "deleteCloudWorkspace": "Delete workspace…"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -9013,19 +9242,26 @@
             "adminOnly": "Only team owners and admins can change this."
           },
           "audit": {
-            "actionNamed": "{{action}} “{{name}}”",
-            "viaAgent": "Agent in a cloud workspace",
             "youViaKey": "You via API key",
             "personViaKey": "<person></person> via API key",
             "youViaMcp": "You via MCP",
             "personViaMcp": "<person></person> via MCP",
             "you": "You",
-            "title": "Recent activity",
-            "description": "Key, workspace and settings changes across your team. Visible to admins only.",
-            "hide": "Hide",
-            "show": "Show activity",
-            "loading": "Loading activity",
-            "empty": "Nothing has happened yet."
+            "action": {
+              "keyCreate": "Created API key",
+              "keyRevoke": "Revoked API key",
+              "settings": "Changed agent access",
+              "wsCreate": "Started a workspace",
+              "wsDestroy": "Deleted a workspace",
+              "wsSleep": "Put a workspace to sleep",
+              "wsWake": "Woke a workspace",
+              "wsArchive": "Archived a workspace",
+              "wsMessage": "Messaged an agent",
+              "projectCreate": "Created a project",
+              "projectUpdate": "Edited a project",
+              "projectDelete": "Deleted a project",
+              "approval": "Made an app approval code"
+            }
           },
           "pageErrorDetail": "Keys, connected apps and team settings are unavailable until Orca Cloud answers.",
           "retry": "Try again",
@@ -9099,7 +9335,8 @@
             "rateLimited": "Too many requests. Try again in a minute.",
             "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
             "invalidResponse": "Orca Cloud sent an answer this version of Orca does not understand. Update Orca and try again.",
-            "server": "Orca Cloud had a problem and nothing was changed. Try again in a moment."
+            "server": "Orca Cloud had a problem and nothing was changed. Try again in a moment.",
+            "planRequired": "Your team’s plan doesn’t include this."
           },
           "scope": {
             "workspacesRead": "List and inspect workspaces",
@@ -9121,7 +9358,6 @@
           "keywordToken": "token",
           "keywordMcp": "mcp",
           "keywordCli": "cli",
-          "keywordAudit": "audit log",
           "keywordCloud": "cloud",
           "sectionDescription": "For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets."
         },
@@ -13930,6 +14166,15 @@
           "keywordSignOut": "sign out",
           "keywordRelay": "relay",
           "keywordCloud": "cloud",
+          "mfa": {
+            "title": "Two-factor authentication",
+            "on": "On",
+            "off": "Off",
+            "onDescription": "Signing in asks for a code from your authenticator app. Keep your backup codes somewhere safe.",
+            "offDescription": "Add an authenticator app so a stolen password is not enough to sign in. You get backup codes too.",
+            "manage": "Manage in browser",
+            "setUp": "Set up in browser"
+          },
           "github": {
             "disconnectTitle": "Disconnect GitHub?",
             "disconnectBody": "Commits in cloud workspaces will use Orca Cloud's name again.",
@@ -20978,7 +21223,8 @@
           "noTabGroup": "Can’t run “{{action}}” — no tab group is available.",
           "noMovableChat": "Can’t run “{{action}}” — no movable chat is active.",
           "clientUnsupported": "Can’t run “{{action}}” — this client and runtime do not support it.",
-          "notCloudWorkspace": "Can’t run “{{action}}” — the active workspace isn’t a cloud workspace."
+          "notCloudWorkspace": "Can’t run “{{action}}” — the active workspace isn’t a cloud workspace.",
+          "noOrcaCloud": "Can’t run “{{action}}” — sign in to Orca Cloud first."
         }
       },
       "plugins": {
@@ -21050,7 +21296,7 @@
         "openAlreadySubscribed": "This account already has a plan. Use Manage billing to change it.",
         "openNoAccount": "There is no billing account yet. Choose a plan first.",
         "openUnconfigured": "Billing is unavailable in this build.",
-        "openFailed": "Could not reach billing. Try again.",
+        "openFailed": "Couldn’t reach billing. Try again.",
         "endsOn": "Plan ends {{value0}}",
         "renewsOn": "Renews {{value0}}",
         "continueInBrowser": "Continue in your browser. This updates when you come back.",
@@ -21090,7 +21336,6 @@
           "notFound": "That member or invite no longer exists.",
           "failed": "Could not update the team. Try again.",
           "actionsFor": "Actions for {{value0}}",
-          "billing": "Billing",
           "celebrateBody2": "{{value0}} plan · {{value1}} active. Agents keep running in the cloud when you step away.",
           "celebrateTitle2": "Welcome to Orca Cloud",
           "createBody": "You’re on a personal account. A team shares one Orca Cloud plan: invite people, manage seats and billing in one place. You’ll be its owner.",
@@ -21104,15 +21349,7 @@
           "description": "Members, invites, roles, seats and your Orca Cloud plan.",
           "dismiss": "Dismiss",
           "enterEmail": "Enter a teammate’s email",
-          "inviteAddsMany3": "{{value0}} of these add a seat each when accepted: about {{value1}} each now (prorated), then {{value2}} each.",
-          "inviteAddsOne2": "When {{value0}} accepts, they add a seat: about {{value1}} prorated, then {{value2}}.",
-          "inviteAddsUnpriced": "Each accepted invite above your paid seats adds a seat, charged now and prorated.",
-          "inviteCoveredMany": "Covered: these use seats you already paid for this period.",
-          "inviteCoveredOne": "Covered: uses a seat you already paid for this period.",
-          "inviteCoveredPart": "The first {{value0}} use seats already paid.",
-          "inviteHint": "Paste a list: commas, spaces and new lines all work. Invites don’t take a seat until accepted.",
           "inviteLabel": "Invite teammates",
-          "inviteNoPlan": "Invites are free. Seats are billed once your team picks a plan.",
           "invitePlaceholder2": "alex@company.com, sam@company.com",
           "inviteSentBody": "They join, and take a seat, when they accept.",
           "inviteSentMany": "{{value0}} invites sent",
@@ -21120,12 +21357,9 @@
           "inviteTeammates": "Invite teammates",
           "lastOwner": "Make someone else an owner before you leave.",
           "leave": "Leave team…",
-          "leaveConfirmBody": "You lose access to the team’s cloud workspaces and secrets right away. An owner or admin can invite you back.",
           "leaveConfirmTitle": "Leave {{value0}}?",
           "leaveCta": "Leave team",
           "leaveLastOwner": "You’re the only owner. Make someone else an owner first.",
-          "leaveNeedsOwner": "Make someone else an owner first",
-          "leaveTitle": "Leave {{value0}}",
           "leftToast": "You left {{value0}}",
           "loadFailed2": "Couldn’t load your team. Check your connection.",
           "loadFailedTitle": "Couldn’t load team",
@@ -21135,6 +21369,10 @@
           "makeOwnerTitle": "Make {{value0}} an owner?",
           "members": "Members",
           "membersList": "Team members and invites",
+          "mfaOn": "MFA on",
+          "mfaOff": "MFA off",
+          "mfaPending": "MFA pending",
+          "mfaPendingBy": "MFA due {{value0}}",
           "nextInvoice": "Next invoice (est.)",
           "nextInvoiceOn": "{{value0}} · {{value1}}",
           "notAnEmail": "Not an email address",
@@ -21152,7 +21390,6 @@
           "roleAdminHint": "Manages members and billing",
           "roleMemberHint": "Uses Orca Cloud with the team",
           "roleOwnerHint": "Everything, including billing and other owners",
-          "seatRules": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal, and re-adding someone this period is free.",
           "seatsDropOn": "Drops to {{value0}} on {{value1}}",
           "seatsInUse": "{{value0}} in use",
           "seatsPaid": "Seats paid",
@@ -21167,17 +21404,11 @@
           "thisTeam": "this team",
           "undo": "Undo",
           "unsupported2": "This isn’t available yet. Ask an owner or admin to do it for you.",
-          "usage": "Usage & plan",
-          "youAreAdmin": "You’re an admin",
-          "youAreMember": "You’re a member",
-          "youAreOwner": "You’re an owner",
           "yourTeams": "Or open a team you’re in",
-          "ssoBody": "SAML SSO and SCIM user provisioning are part of {{value0}}.",
           "ssoTitle": "Single sign-on and provisioning",
           "createdNotSwitched": "{{value0}} was created, but Orca couldn’t switch to it.",
           "invitedCount_one": "{{count}} invited",
           "invitedCount_other": "{{count}} invited",
-          "invitePaymentFailed2": "New seats are charged once the failed payment is fixed.",
           "memberCount_one": "{{count}} member",
           "memberCount_other": "{{count}} members",
           "seatCount_one": "{{count}} seat",
@@ -21194,11 +21425,8 @@
           "nowAdmin": "{{value0}} is now an admin",
           "nowMember": "{{value0}} is now a member",
           "nowOwner": "{{value0}} is now an owner",
-          "perSeatPerMonth": "{{value0}} per seat per month",
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
           "nameTaken": "That team name is taken. Try another.",
-          "totalPerMonth": "{{total}} per month",
-          "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
           "viewProfile": "View profile",
           "seatsOnPlanBilling": "Seats and invoices are in",
@@ -21220,7 +21448,13 @@
             "failed": "Couldn’t delete the team. Try again.",
             "deletedToast2": "{{value0}} was deleted"
           },
-          "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team."
+          "leaveLastOwnerOrDelete": "You’re the only owner. Make someone else an owner first, or delete the team.",
+          "perSeat": "Per seat",
+          "perSeatMonthValue": "{{value0}}/mo",
+          "seatRulesShort": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.",
+          "inviteSeatRule": "Each invite uses a seat once accepted.",
+          "enterpriseRowTitle": "Single sign-on, directory sync and the audit log",
+          "openEnterpriseSettings": "Open Enterprise settings"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21257,7 +21491,6 @@
           "seatsFollow2": "Seats follow your team: new members add a seat now; removed seats drop off at renewal.",
           "loadFailedTitle": "Plans didn’t load",
           "savePercent": "Save {{value0}}%",
-          "seatsPeriod": "{{value0}} · {{value1}}",
           "was": "Was",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
           "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
@@ -21285,6 +21518,7 @@
           "featureOverageNoRate": "Optional overage up to a monthly spend cap you set"
         },
         "capLabel2": "Monthly spend cap",
+        "capNotSaved": "Couldn’t save",
         "capSaved": "Saved",
         "checkout": {
           "attention2": "Stripe needs one more step",
@@ -21332,7 +21566,6 @@
         "upgrade": {
           "askOwner": "Ask an owner or admin to upgrade.",
           "bodyNoPrice": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop.",
-          "cta": "See plans",
           "menuItem": "Upgrade to Orca Cloud",
           "title": "Upgrade to use Orca Cloud",
           "body3": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month."
@@ -21424,8 +21657,8 @@
           "dayLine": "{{date}} · {{hours}}",
           "formerMembers_one": "Former member",
           "formerMembers_other": "{{count}} former members",
-          "deletedWorkspaces_one": "Deleted workspace",
-          "deletedWorkspaces_other": "{{count}} deleted workspaces"
+          "deletedWorkspaces2_one": "{{count}} deleted workspace",
+          "deletedWorkspaces2_other": "{{count}} deleted workspaces"
         },
         "usageAlertsNoteLevels": "Owners and admins are alerted in Orca at {{levels}} of your team’s sandbox hours.",
         "usageAlertsNoteGeneric": "Owners and admins are alerted in Orca as your team’s sandbox hours run low.",
@@ -21446,9 +21679,6 @@
       "cloudWorkspaces": {
         "archive": "Archive",
         "archived": "Archived",
-        "byAnyone": "By anyone",
-        "byMe": "By me",
-        "byMember": "By {{value0}}",
         "cancel": "Cancel",
         "chatGone": "That chat is no longer open in this workspace. Showing the workspace instead.",
         "chatLinkCopied": "Chat link copied",
@@ -21457,8 +21687,6 @@
         "copyLink": "Copy link",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
-        "emptyFilteredBody": "Try another owner or repository.",
-        "emptyFilteredTitle": "Nothing matches these filters",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
@@ -21474,13 +21702,8 @@
         "errorUnknownInline": "Something went wrong. Nothing was changed.",
         "errorUnreachable": "Orca Cloud isn't reachable right now. Nothing was changed. Try again.",
         "errorUnreachableInline": "Orca Cloud isn't reachable right now. Nothing was changed.",
-        "filterByOwner": "Filter by owner",
-        "filterByRepository": "Filter by repository",
         "goToChat": "Go to {{value0}}'s chat",
         "goToTeammateChat": "Go to a teammate's chat",
-        "heading": "Cloud workspaces",
-        "inAnyRepo": "In any repo",
-        "inRepo": "In {{value0}}",
         "justNow": "just now",
         "linkNotFound": "This link points to a private workspace, another team, or a workspace that was deleted.",
         "loading": "Loading cloud workspaces",
@@ -21493,16 +21716,10 @@
         "memberViewing": "{{value0}} is viewing",
         "memberYou": "{{value0}} (you)",
         "moreMembers": "{{count}} more",
-        "move": "Move",
-        "moveToSection": "Move to section",
-        "newSection": "New section",
-        "newSectionEllipsis": "New section…",
         "noAccess": "You don't have access to this workspace. Ask its owner to share it with the team.",
-        "noSection": "No section",
         "nowPrivate": "Now private. Teammates’ devices were disconnected.",
         "open": "Open",
         "openFailed": "Couldn't open the workspace. Your files are safe. Try again.",
-        "openedFromLink": "Opened from link: {{title}}",
         "opening": "Opening",
         "ownerChanged": "Owner changed",
         "private": "Private",
@@ -21524,10 +21741,6 @@
         "sandboxHoursTitle": "Sandbox hours",
         "scopeMine": "Mine",
         "scopeTeam": "Team",
-        "sectionCount_one": "{{count}} workspace",
-        "sectionCount_other": "{{count}} workspaces",
-        "sectionName": "Section name",
-        "sectionNamePlaceholder": "e.g. Payments",
         "serverNotSaved": "Couldn't add the workspace to this computer. Your files are safe. Try again.",
         "shareWithTeam": "Share with team",
         "sharedWithTeam": "Shared with team",
@@ -21550,21 +21763,15 @@
         "youAreViewing": "You are viewing",
         "view": "View",
         "viewAsleep": "View read-only copy",
-        "routines": "Routines",
         "archiveConfirmTitle": "Archive {{name}}?",
         "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
         "showCloudWorkspaces": "Show cloud workspaces",
         "deleteConfirmTitle": "Delete {{name}}?",
         "sleep": "Sleep",
         "deleteWorkspace": "Delete…",
-        "showRunningOnly": "Show running only",
-        "running": "Running",
-        "showRoutineRuns": "Show routine runs",
-        "routineRuns": "Routine runs",
         "routineRun": "Routine run",
         "routineRunTooltip": "Started by a routine. It's deleted when the run ends.",
         "routineRunOf": "Routine · {{name}}",
-        "routineRunsHidden": "Routine runs · {{count}}",
         "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
@@ -21572,27 +21779,13 @@
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
         "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "viewOwnerProfile": "View {{name}}'s profile",
-        "pinned": "Pinned",
-        "sectionActions": "Actions for section {{name}}",
-        "moveSectionUp": "Move section up",
-        "moveSectionDown": "Move section down",
         "linkCopiedShort": "Link copied",
         "copyLinkTo": "Copy link to {{number}}",
-        "unpin": "Unpin",
-        "pin": "Pin",
-        "moveUp": "Move up",
-        "moveDown": "Move down",
+        "copyLinkHint": "Teammates with access can open this workspace",
         "linkNoAccess": "You don't have access to {{number}}.",
         "linkOtherTeam2": "{{number}} is in {{team}}.",
         "linkSwitchTeam": "Switch and open",
         "prefsSaveFailed": "Couldn't save that change, so your other devices won't show it. Try again.",
-        "movedTo": "Moved {{name}} to position {{position}} in {{group}}",
-        "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
-        "pinnedName": "Pinned {{name}}",
-        "unpinnedName": "Unpinned {{name}}",
-        "otherWorkspaces": "Other workspaces",
-        "listMetaCount_one": "{{count}} workspace",
-        "listMetaCount_other": "{{count}} workspaces",
         "restartElsewhere": "Restart it from the computer that created it.",
         "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
         "shareFailed": "Couldn’t change who can open it. Try again.",
@@ -21601,11 +21794,11 @@
         "copyLinkToChat": "Copy link to this chat",
         "linkToNumber": "Link to {{number}}",
         "archiveConfirmStops": "{{owner}}'s agents in this workspace will stop.",
-        "archivedCount": "Archived ({{count}})",
         "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
-        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again."
+        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
+        "sharedPersonalSecretsNote": "Your personal cloud secrets aren’t used in shared workspaces. Shared and repository secrets still are."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -21682,6 +21875,52 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "Create"
+      },
+      "teamMfa": {
+        "dueNow": "Due now",
+        "daysLeft_one": "{{count}} day left",
+        "daysLeft_other": "{{count}} days left",
+        "graceNow": "Immediately",
+        "grace7": "In 7 days",
+        "grace14": "In 14 days",
+        "grace30": "In 30 days",
+        "bannerTitle": "{{value0}} requires two-factor authentication. {{value1}}.",
+        "bannerBody": "Set it up by {{value0}}. After that you can’t use this team’s workspaces until you do.",
+        "bannerBlockedTitle": "{{value0}} requires two-factor authentication",
+        "soonTitleNow": "{{value0}} requires MFA now",
+        "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
+        "soonTitle_other": "{{value0}} requires MFA in {{count}} days",
+        "toast": "{{value0}} requires MFA from {{value1}}.",
+        "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account isn’t affected.",
+        "setUp": "Set up MFA",
+        "blockedTitle": "Set up two-factor authentication to use {{value0}}",
+        "blockedBody": "{{value0}} has required it for all members since {{value1}}. Your workspaces and files are safe, and open again as soon as you add an authenticator app.",
+        "recheck": "I’ve set it up",
+        "stillMissing": "Your account still has no two-factor authentication. Finish the setup in your browser, then try again.",
+        "usePersonal": "Use my personal account for now",
+        "rowTitle": "Require two-factor authentication",
+        "rowOff": "Members without it lose access to this team’s workspaces after the date you pick, until they set it up. They get an email now and reminders before the date.",
+        "rowEnforced": "Required since {{value0}}. Members without it can’t use this team until they set it up.",
+        "rowScheduled": "Required from {{value0}}. {{value1}}.",
+        "graceLabel": "When to start requiring it",
+        "require": "Require MFA",
+        "turnOff": "Stop requiring",
+        "ownMfaTitle": "Set up two-factor authentication on your own account first",
+        "ownMfaBody": "Only someone who already has it can change this, so nobody locks the team out.",
+        "nowWarning_one": "{{count}} member doesn’t have it yet and will lose access to this team right away.",
+        "nowWarning_other": "{{count}} members don’t have it yet and will lose access to this team right away.",
+        "allSet": "Every member has it set up.",
+        "pendingCount_one": "{{count}} member still needs it",
+        "pendingCount_other": "{{count}} members still need it",
+        "remindAll": "Remind everyone",
+        "pendingList": "Members without MFA",
+        "memberBlocked": "No access",
+        "memberPending": "Pending",
+        "remindOne": "Remind",
+        "reminded_one": "Reminder sent to {{count}} member.",
+        "reminded_other": "Reminder sent to {{count}} members.",
+        "remindedNoEmail": "Reminder recorded, but email delivery is off on this server, so nothing was sent.",
+        "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces."
       }
     },
     "i18n": {
@@ -23875,7 +24114,6 @@
         "switchTeam": "Switch team",
         "switchFirst": "Switch to {{team}} first",
         "switchTeamFirst": "Switch to a team first",
-        "linkCopied": "Setup link copied. Open it in the browser you use for Orca.",
         "error": {
           "timedOut": "Setup didn’t finish in your browser. Your prompt is still here.",
           "checkoutCanceled": "Checkout canceled. Nothing was charged.",
@@ -23911,12 +24149,11 @@
       },
       "cloudOnly": {
         "needsRepository": "Orca Cloud needs a GitHub repository.",
-        "chooseRepository": "Choose repository",
         "addRepository": "Add a GitHub repository",
         "moreAccess": "Give Orca Cloud access to more repositories…",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
-        "starting": "Starting {{repo}} in Orca Cloud…",
-        "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
+        "agentNotStarted": "{{agent}} didn’t start because the workspace was still getting ready. Start it from the workspace.",
+        "theAgent": "The agent",
         "showMore": "Show more repositories…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer.",
         "headingShort": "GitHub",
@@ -23925,7 +24162,14 @@
         "rowPublic": "{{repo}}, cloud only",
         "privateLabel": "Private",
         "menuGroup": "Orca Cloud",
-        "addRepositoryMenu": "Add a GitHub repository…"
+        "addRepositoryMenu": "Add a GitHub repository…",
+        "waitingForGitHubAccess": "Waiting for GitHub access…",
+        "noNewRepositoryYet": "No new repository yet.",
+        "checkAgain": "Check again",
+        "reposUnavailable": "Couldn’t load GitHub repositories.",
+        "retryRepos": "Retry",
+        "reposLoading": "Loading…",
+        "openLater2": "Your cloud workspace started, but this computer couldn’t open it yet. Try again, or open it later from Open cloud workspace…"
       },
       "agentLabel": "Agent"
     },
@@ -24206,7 +24450,14 @@
         "noGit": "No source control state was saved.",
         "terminalN": "Terminal {{n}}",
         "keepAwake": "Keep awake",
-        "savingCopy": "Saving a read-only copy of chats, terminals and changes…"
+        "copySaving": {
+          "title": "Saving a read-only copy…",
+          "body": "Terminals, chats and changes will be readable here in a moment.",
+          "state": "Going to sleep · Saving a read-only copy…",
+          "row": "Going to sleep · Saving copy…"
+        },
+        "copyFailed": "Couldn’t save a read-only copy. Your files are safe in the workspace.",
+        "copyFailedWake": "Wake"
       },
       "read": {
         "wakeToContinue": "Wake to continue",
@@ -24312,16 +24563,49 @@
         "planBody": "Agents keep running while your laptop sleeps.",
         "trialBody": "Agents keep running while your laptop sleeps. No card needed.",
         "try": "Try Orca Cloud"
+      },
+      "cloudSignIn": {
+        "title": "Cloud workspaces",
+        "body": "Sign in to see your team’s cloud workspaces.",
+        "again": "Sign in again",
+        "action": "Sign in",
+        "bodyAgain": "Your sign-in ended. Sign in again to see your team’s cloud workspaces."
       }
     },
     "cloudWorkspaces": {
       "newCloudWorkspace": "New cloud workspace",
-      "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
-      "emptyMineYoursTitle": "You don’t have any cloud workspaces yet.",
-      "emptyFirstTitle": "Start your first cloud workspace",
-      "emptyAllArchivedTitle": "All your cloud workspaces are archived",
-      "showArchivedCount": "Show archived ({{count}})",
-      "emptyAllArchivedBody": "Unarchive one to keep working, or start a new one."
+      "picker": {
+        "title": "Open cloud workspace",
+        "description": "Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.",
+        "teammateTitle": "{{name}}’s cloud workspaces",
+        "teammateDescription": "The ones they own or started that you can see.",
+        "runningTitle": "Your running cloud workspaces",
+        "runningDescription": "Put one to sleep or delete it to free a running slot, then try again.",
+        "teamTitle": "Your team’s cloud workspaces",
+        "teamDescription": "Delete these, archived ones too, before deleting the team.",
+        "search": "Search cloud workspaces",
+        "searchPlaceholder": "Search by title, repository, owner or W-number…",
+        "inSidebarNote_one": "{{count}} more is already in your sidebar.",
+        "inSidebarNote_other": "{{count}} more are already in your sidebar.",
+        "emptySearchTitle": "Nothing matches your search",
+        "emptySearchBody": "Try a title, repository, branch, owner or W-number.",
+        "emptyRunningTitle": "None of yours are running",
+        "emptyRunningBody": "Teammates’ running workspaces can count toward the limit too. Try again in a moment.",
+        "emptyTeammateTitle": "{{name}} has no cloud workspaces you can see",
+        "emptyTeammateBody": "Private workspaces only show to their owner.",
+        "menuItem": "Open cloud workspace…",
+        "paletteDescription": "Open a cloud workspace that isn’t in your sidebar yet.",
+        "verbs": {
+          "cloudWorkspace": "cloud workspace",
+          "sharedWorkspace": "shared workspace",
+          "teammate": "teammate",
+          "orcaCloud": "orca cloud"
+        },
+        "emptyNothingElseTitle": "Nothing else to open",
+        "emptyNothingElseBody": "Every cloud workspace you can open is already in your sidebar.",
+        "emptyNoneTitle": "No cloud workspaces yet",
+        "emptyNoneBody": "Start one and it shows up in your sidebar."
+      }
     },
     "worktreeCreation": {
       "pendingNativeChat": {
@@ -24335,7 +24619,9 @@
         "offStatus2": "Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.",
         "turnOff": "Turn off overage",
         "memberOn5": "Overage is on, up to your {{cap}} spend cap.",
-        "memberOff5": "Off until an owner or admin turns it on."
+        "memberOff5": "Off until an owner or admin turns it on.",
+        "turnOffFailed": "Couldn’t turn off overage.",
+        "turnOnFailed": "Couldn’t turn on overage."
       },
       "overageUsed": "{{value0}} of {{value1}} used",
       "capZero2": "Set a spend cap above $0, or turn overage off."
@@ -27350,7 +27636,6 @@
     "pasteBody": "Sign in on the page, then paste the code it shows.",
     "deviceBody": "Open the page and enter this code.",
     "openPage": "Open sign-in page",
-    "copyLink": "Copy link",
     "copyCode": "Copy code",
     "openPageShort": "Open page",
     "sending": "Starting {{agent}} and sending",
@@ -27579,7 +27864,8 @@
       "vmLost": "Orca lost contact with the build sandbox.",
       "canceled": "The build was canceled.",
       "unknownPlain": "Something went wrong during the build.",
-      "saveEnvironmentFailed": "Saving the environment failed."
+      "saveEnvironmentFailed": "Saving the environment failed.",
+      "secretLeftOnDisk": "The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again."
     },
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",
@@ -27672,7 +27958,6 @@
       "untracked": "Untracked",
       "unknown": "Changed"
     },
-    "thisWorkspaceTitle": "This workspace",
     "overlay": {
       "restarting": "Restarting…",
       "waking": "Waking…",
@@ -27688,14 +27973,21 @@
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
       "clearPendingKeys": "Discard waiting keys",
-      "unarchivingNow": "Unarchiving…"
+      "unarchivingNow": "Unarchiving…",
+      "billingPayment": "Your team’s last payment failed.",
+      "failedTitleUnnamed": "Couldn’t wake this workspace"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
       "asleep": "{{name}} is asleep.",
-      "unarchivingNamed": "Unarchiving {{name}}."
+      "unarchivingNamed": "Unarchiving {{name}}.",
+      "wakingUnnamed": "Waking this workspace.",
+      "restartingUnnamed": "Restarting this workspace.",
+      "unarchivingUnnamed": "Unarchiving this workspace.",
+      "archivedUnnamed": "This workspace is archived.",
+      "asleepUnnamed": "This workspace is asleep."
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
@@ -27748,7 +28040,6 @@
     "ago": "{{ago}} ago",
     "wake": "Wake",
     "error": {
-      "seePlans": "See plans",
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
     },
@@ -27761,7 +28052,7 @@
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
-      "noCopy": "Asleep · nothing cached yet"
+      "noCopy": "Asleep · no read-only copy"
     },
     "bytes": {
       "gb": "{{value}} GB",
@@ -27797,7 +28088,6 @@
     "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
     "tryAgain": "Try again",
     "sleep": "Sleep",
-    "thisWorkspace": "This workspace",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
     "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
     "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe.",
@@ -27831,8 +28121,7 @@
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
-      "recentCommits": "Recent commits",
-      "goingToSleep": "Going to sleep… The read-only copy shows here when it’s done."
+      "recentCommits": "Recent commits"
     },
     "terminal": {
       "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept.",
@@ -27852,6 +28141,17 @@
       "definition": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
       "archivedUntil": "A read-only snapshot of its files, chats and terminal history. Unarchive before {{date}} to open terminals and agents again; after that it’s deleted.",
       "archived": "A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted."
+    },
+    "primaryDelete": {
+      "noSandbox2": "Orca couldn't find this workspace's sandbox. Find it in Open cloud workspace… to delete it."
+    },
+    "opensAndWakes": "Opens and wakes when you select it.",
+    "sleepFailedUnnamed": "Couldn’t put this workspace to sleep",
+    "cloudWorkspaceTitle": "Cloud workspace",
+    "notPaired": {
+      "title": "{{name}} isn’t linked to this computer",
+      "body": "Open it again to link it. Your files and chats are saved.",
+      "titleUnnamed": "This workspace isn’t linked to this computer"
     }
   },
   "cloudAgentSetup": {
@@ -27978,7 +28278,12 @@
       "value": "Value",
       "shadowed": "Overrides",
       "overrides": "Overrides {{scopes}}",
-      "description": "What a new cloud workspace gets, and which scope each value comes from."
+      "description": "What a new cloud workspace gets, and which scope each value comes from.",
+      "workspaceLabel": "Workspace",
+      "workspacePrivate": "Not shared",
+      "workspaceShared": "Shared with your team",
+      "sharedNote": "Workspaces shared with your team don’t get personal secrets, so only shared and repository values are listed.",
+      "privateNote": "Personal values apply only to workspaces you haven’t shared. Once you share one, it gets only shared and repository values."
     },
     "repo": {
       "label": "Repository",
@@ -28001,9 +28306,9 @@
     },
     "setUpAgent": "Set up an agent",
     "personal": {
-      "description": "Only you get these, in every Orca Cloud workspace you start.",
       "emptyTitle": "No personal secrets yet",
-      "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables."
+      "emptyDetail": "Add one or paste a .env file. New terminals and agents in your cloud workspaces get them as environment variables.",
+      "descriptionUnshared": "Only you get these, in cloud workspaces you haven’t shared. Shared workspaces don’t get them."
     },
     "org": {
       "description": "Everyone on your team gets these in their Orca Cloud workspaces.",
@@ -28232,7 +28537,22 @@
   "orcaCloud": {
     "agentHold": {
       "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
-      "expired": "{{agent}} sign-in expired"
+      "expired": "{{agent}} sign-in expired",
+      "notStarted": "{{agent}} hasn’t started. Open the workspace to start it.",
+      "setUpNotStarted": "{{agent}} is set up. Open the workspace to start it.",
+      "notStartedRow": "{{agent}} hasn’t started"
+    },
+    "chatSend": {
+      "renewAbove": "Renew {{agent}} sign-in above to send"
+    },
+    "chatSignIn": {
+      "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
+    },
+    "chatHold": {
+      "notSetUp": "Set up {{agent}} above to start",
+      "expired": "Renew {{agent}} sign-in above to start",
+      "signIn": "Sign in to {{agent}} above to start",
+      "awaitingStart": "Start {{agent}} above to begin"
     },
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
@@ -28270,7 +28590,26 @@
       "label": "Workspace setup",
       "installFailed": "Couldn’t open GitHub. Check your connection and try again.",
       "pushReady": "Orca Cloud can push to {{repo}} now.",
-      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace."
+      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace.",
+      "fetchFailed": "This workspace can’t reach {{repo}} on GitHub right now.",
+      "fetchFailedNoRepo": "This workspace can’t reach its Git remote right now.",
+      "checking": "Checking…",
+      "checkAgain": "Check again",
+      "fetchFailedMeaning": "Pulls and pushes won’t work until it can.",
+      "toolMissing": "{{command}} isn’t installed in this sandbox, but {{reason}} needs it.",
+      "toolMissingNoReason": "{{command}} isn’t installed in this sandbox.",
+      "toolMissingMeaning": "Install it from a terminal here, or add it to your project’s setup script so new workspaces have it.",
+      "diskLow": "Only {{free}} GB of disk space is free in this sandbox.",
+      "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
+      "diskLowMeaning": "Large dependency installs may run out of space.",
+      "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
+      "copied": "Copied",
+      "copyRequest": "Copy request for an owner",
+      "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
+      "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
+      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "pushRequestCopyFailed": "Couldn’t copy it."
     },
     "toast": {
       "dismiss": "Dismiss"
@@ -28330,14 +28669,11 @@
       "add": "Add",
       "addMine": "Add mine",
       "missing": "Missing",
-      "askOwner": "Ask {{owner}}, an owner or an admin to add it.",
       "valueLabel": "Value for {{name}}",
       "valuePlaceholder": "Value",
       "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
       "cancel": "Cancel",
       "save": "Save",
-      "guestOwner": "In a shared workspace, Personal values come from its owner, {{owner}}, not from you.",
-      "guest": "In a shared workspace, Personal values come from its owner, not from you.",
       "empty": "No variables from Cloud secrets yet.",
       "overrides": "overrides {{scopes}}"
     },
@@ -28380,7 +28716,8 @@
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
+      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.",
+      "cloudEnvShared": "From Cloud secrets: Repository, then Shared. Shared workspaces don’t get personal values, including the owner’s."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
@@ -28493,7 +28830,8 @@
       "codeLabel": "Code from claude.ai",
       "deviceStep": "Enter this code on auth.openai.com. The sign-in is saved on {{host}}.",
       "codePlaceholder": "Paste the code"
-    }
+    },
+    "recipeEnvNarrowed": "This recipe's create script gets only the variables its <code>passEnv</code> allows."
   },
   "cloudSecretsAsk": {
     "scopeLabel": "Scope for {{name}}",
@@ -28525,7 +28863,8 @@
     "loading": "Loading secrets…",
     "nothingMissing": "Nothing is missing.",
     "dialogTitle": "Add missing secrets",
-    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds."
+    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds.",
+    "sharedMemberFooter": "This workspace is shared, so it doesn’t get personal secrets. Ask an owner or admin to add the missing values to this repository or the team."
   },
   "cloudAgents": {
     "source": {
@@ -28571,7 +28910,10 @@
     "unseenIn": "In {{workspace}}. The request waits up to 15 minutes.",
     "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
     "openWorkspace": "Open",
-    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}."
+    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.",
+    "sharedNoScope": "This workspace is shared, so it doesn’t get personal secrets.",
+    "sharedAskAdmin": "Ask an owner or admin to add {{name}} to this repository’s secrets.",
+    "sharedRepoOnly": "This workspace is shared, so it only gets repository and shared values."
   },
   "agentApiKeys": {
     "cloud": {
@@ -28821,6 +29163,10 @@
     "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
+    "renewInSettings": "Renew in Settings",
+    "finishRenewing": "Finish renewing",
+    "expiredHeldDetail": "Renew to start {{agent}}.",
+    "expiredHeldAnnounce": "Your {{agent}} sign-in expired. Renew to start {{agent}}.",
     "rowNeedsSignIn": "Needs sign-in",
     "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",
@@ -28840,9 +29186,7 @@
     "useMySignIn": "Use my {{agent}} sign-in",
     "signIn": "Sign in",
     "expired": "Your {{agent}} sign-in expired",
-    "expiredDetail": "Sign in once to fix every workspace",
     "renew": "Renew",
-    "expiredAnnounce": "Your {{agent}} sign-in expired. Renew it once to fix every workspace.",
     "waiting": "Approve on {{site}}",
     "openAgain": "Open again",
     "waitingAnnounce": "Waiting for you to approve in your browser.",
@@ -28867,7 +29211,6 @@
     "failed": "{{agent}} couldn’t finish signing in",
     "queuedPrefix": "Queued:",
     "pasteInstead": "Paste a code instead",
-    "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open",
     "cancelledToast": "The agent didn’t start. The shell is still open.",
     "runningExpiredDetail": "Renew to keep working. Your conversation is kept.",
@@ -28876,6 +29219,13 @@
     "renewed": "{{agent}} sign-in renewed",
     "renewedResume": "Restart {{agent}} to pick up where you left off.",
     "renewedFresh": "Starts a new conversation.",
+    "awaitingCoveredTitle": "{{agent}} is set up",
+    "awaitingUnreadTitle": "{{agent}} hasn’t started",
+    "awaitingUnreadDetail": "Orca couldn’t check your sign-in after restarting. Start {{agent}} to try.",
+    "awaitingCoveredPromptDetail": "Orca restarted before {{agent}} started. Your first prompt is kept.",
+    "awaitingCoveredDetail": "Orca restarted before {{agent}} started.",
+    "renewedChat": "Your next message uses it.",
+    "renewedChatAnnounce": "{{agent}} sign-in renewed. Your next message uses it.",
     "restart": "Restart",
     "dismiss": "Dismiss",
     "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it.",
@@ -28929,7 +29279,6 @@
       "title": "Checking your Orca Cloud account…"
     },
     "continueInBrowser": "Continue in browser",
-    "copyLink": "Copy link",
     "done": {
       "lead": "Starting your cloud workspace…",
       "title": "All set",
@@ -29241,8 +29590,8 @@
     "billingBlock": {
       "plan": {
         "title": "Choose a plan",
-        "body": "Your team needs a plan to start cloud workspaces.",
-        "ask": "Ask an owner or admin to choose a plan."
+        "ask": "Ask an owner or admin to choose a plan.",
+        "body2": "Your team’s plan has ended."
       },
       "hours": {
         "title": "Out of sandbox hours",
@@ -29265,6 +29614,20 @@
       "raiseCapAndContinue": "Raise spend cap and continue",
       "backToDraft": "Back to draft",
       "saveFailed": "Couldn’t save that. Try again, or change it in Plan & billing."
+    },
+    "cloneAccess": {
+      "reachableTitle": "Couldn’t clone {{repo}}",
+      "reachableBody": "GitHub refused the clone, but Orca can reach this repository now. Try again. The sandbox was deleted.",
+      "title": "Orca can’t access {{repo}}",
+      "askOwnerBody": "Ask an owner of {{owner}} to give Orca access. Orca tries again once they do. The sandbox was deleted.",
+      "body": "The Orca GitHub App on {{owner}} doesn’t include this repository. Give Orca access, and Orca tries again. The sandbox was deleted.",
+      "chooseAnother": "Choose another repository",
+      "copyRequest": "Copy request for an owner",
+      "waiting": "Waiting for GitHub…",
+      "giveAccess": "Give Orca access",
+      "requestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
+      "requestCopyFailed": "Couldn’t copy it.",
+      "copied": "Copied"
     }
   },
   "renderer": {
@@ -29294,5 +29657,12 @@
   "cloudAgentConfig": {
     "title": "Skills, agents & memory",
     "autoSyncHint": "Copies your Claude and Codex skills, commands, subagents, output styles and memory you’ve turned on into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten."
+  },
+  "openExternal": {
+    "copyLink": "Copy link",
+    "moreOptions": "More link options",
+    "copyLinkFailed": "Couldn’t copy the link.",
+    "linkCopied": "Link copied",
+    "signInLinkHint": "Open it in any browser on this computer."
   }
 }

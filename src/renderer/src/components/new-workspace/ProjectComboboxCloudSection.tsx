@@ -1,18 +1,23 @@
 // The Project picker's "GitHub" section (cloud-start D4, PROJ-MENU): repositories Orca
 // Cloud can reach with no clone on this computer, plus a way to give it access to more. Shown only
 // while Orca Cloud is the Run on target.
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { Check, ChevronDown, Cloud, Github, Lock, Plus } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
+import {
+  ProjectComboboxCloudUnavailable,
+  type CloudReposRetry
+} from './ProjectComboboxCloudUnavailable'
 
 // Row keys share one namespace with project option ids, and GitHub projects are keyed
 // `github:<owner>/<repo>`; this prefix must never collide with a project id.
 export const CLOUD_REPO_KEY_PREFIX = 'cloud-only-repo:'
 export const CLOUD_REPO_MORE_KEY = 'cloud-only-repo-more-access'
 export const CLOUD_REPO_SHOW_MORE_KEY = 'cloud-only-repo-show-more'
+export const CLOUD_REPO_RETRY_KEY = 'cloud-only-repo-retry'
 
 /** Runs `open` each time `signal` is bumped (never on mount), with the latest closure. */
 export function useOpenOnSignal(signal: number, open: () => void): void {
@@ -40,11 +45,19 @@ export function commitCloudRow(
   key: string,
   rows: {
     cloudRepos: readonly OrcaCloudGitHubRepository[] | null
+    cloudReposRetry?: CloudReposRetry | null
     onShowMoreCloudRepos?: (() => void) | null
     onMoreCloudAccess?: () => void
     onCloudRepoSelected?: (fullName: string) => void
   }
 ): 'kept-open' | 'handled' | null {
+  if (key === CLOUD_REPO_RETRY_KEY) {
+    // Loading… can't be pressed again; either way the list stays open for the answer.
+    if (!rows.cloudReposRetry?.retrying) {
+      rows.cloudReposRetry?.retry()
+    }
+    return 'kept-open'
+  }
   if (key === CLOUD_REPO_SHOW_MORE_KEY) {
     rows.onShowMoreCloudRepos?.()
     return 'kept-open'
@@ -60,16 +73,48 @@ export function commitCloudRow(
   return null
 }
 
+type CloudRowsInput = Parameters<typeof commitCloudRow>[1] & {
+  cloudReposRetry?: CloudReposRetry | null
+}
+
+/** The picker's cloud rows as one memoized handle: their keys, commit, and the filtered list. */
+export function useCloudRows(input: CloudRowsInput): {
+  keys: (query: string) => string[]
+  commit: (key: string) => ReturnType<typeof commitCloudRow>
+  matches: (query: string) => OrcaCloudGitHubRepository[]
+} {
+  const { cloudRepos, cloudReposRetry, onShowMoreCloudRepos, onMoreCloudAccess } = input
+  const { onCloudRepoSelected } = input
+  return useMemo(() => {
+    const rows = { cloudRepos, cloudReposRetry, onShowMoreCloudRepos }
+    const all = { ...rows, onMoreCloudAccess, onCloudRepoSelected }
+    return {
+      keys: (query) =>
+        cloudRowKeys(
+          cloudRepos,
+          query,
+          onShowMoreCloudRepos ?? null,
+          onMoreCloudAccess,
+          cloudReposRetry ?? null
+        ),
+      commit: (key) => commitCloudRow(key, all),
+      matches: (query) => (cloudRepos ? filterCloudRepos(cloudRepos, query) : [])
+    }
+  }, [cloudRepos, cloudReposRetry, onCloudRepoSelected, onMoreCloudAccess, onShowMoreCloudRepos])
+}
+
 /** Case-insensitive substring match; the list is short and names are owner/repo. */
 /** The cloud-only rows' keys, in list order, for the shared keyboard cursor. */
 export function cloudRowKeys(
   cloudRepos: readonly OrcaCloudGitHubRepository[] | null,
   query: string,
   onShowMoreCloudRepos: (() => void) | null,
-  onMoreCloudAccess: (() => void) | undefined
+  onMoreCloudAccess: (() => void) | undefined,
+  retry: CloudReposRetry | null = null
 ): string[] {
   if (!cloudRepos) {
-    return []
+    // The arrow keys land on Retry like on any row (design-squad).
+    return retry ? [CLOUD_REPO_RETRY_KEY] : []
   }
   return [
     ...filterCloudRepos(cloudRepos, query).map((repo) => cloudRepoKey(repo.fullName)),
@@ -94,9 +139,11 @@ export function ProjectComboboxCloudSection({
   onArm,
   onCommit,
   showMoreAccess,
-  showMoreRepos = false
+  showMoreRepos = false,
+  retry = null
 }: {
-  repos: readonly OrcaCloudGitHubRepository[]
+  /** Null while not listed (Orca Cloud not picked, still loading, or the read failed). */
+  repos: readonly OrcaCloudGitHubRepository[] | null
   value: string | null
   armedKey: string | null
   armedId: string
@@ -105,8 +152,21 @@ export function ProjectComboboxCloudSection({
   showMoreAccess: boolean
   /** GitHub has more pages than are listed. */
   showMoreRepos?: boolean
+  /** GH-LIST-MISSING: the read failed; the section says so with Retry instead of hiding. */
+  retry?: CloudReposRetry | null
 }): React.JSX.Element | null {
   const t = useTranslate()
+  if (!repos) {
+    return (
+      <ProjectComboboxCloudUnavailable
+        retry={retry}
+        armed={armedKey === CLOUD_REPO_RETRY_KEY}
+        armedId={armedId}
+        onArm={() => onArm(CLOUD_REPO_RETRY_KEY)}
+        onCommit={() => onCommit(CLOUD_REPO_RETRY_KEY)}
+      />
+    )
+  }
   if (repos.length === 0 && !showMoreAccess) {
     return null
   }

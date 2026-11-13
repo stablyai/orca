@@ -1,4 +1,14 @@
 import type {
+  OrcaTeamMfaPendingResult,
+  OrcaTeamMfaPolicyArgs,
+  OrcaTeamMfaPolicyResult,
+  OrcaTeamMfaPolicySetArgs,
+  OrcaTeamMfaPolicySetResult,
+  OrcaTeamMfaRemindArgs,
+  OrcaTeamMfaRemindResult
+} from '../../shared/orca-team-mfa-policy'
+import type { OrcaAccountMfaResult } from '../../shared/orca-account-mfa'
+import type {
   CloudSetupGetResult,
   CloudSetupLinkResult,
   CloudSetupStartArgs,
@@ -10,6 +20,13 @@ import type {
   OrcaProfileOrgDeleteCheckResult,
   OrcaProfileOrgDeleteResult
 } from '../../shared/orca-org-delete'
+import type {
+  OrcaProfileOrgEnterpriseArgs,
+  OrcaProfileOrgEnterpriseDomainArgs,
+  OrcaProfileOrgEnterpriseResult,
+  OrcaProfileOrgSsoDomainResult,
+  OrcaProfileOrgSsoSetupLinkResult
+} from '../../shared/orca-org-enterprise'
 import type {
   OrcaProfileOrgCreateArgs,
   OrcaProfileOrgCreateResult,
@@ -73,7 +90,8 @@ export type OrcaProfileApi = {
   findProjectProfiles: (
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
-  connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+  /** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+  connectCurrent: (args?: { openBrowser?: boolean }) => Promise<ConnectCurrentOrcaProfileResult>
   signInProgress: () => Promise<OrcaCloudSignInProgress | null>
   onSignInProgressChanged: (
     /** `end` says why a sign-in stopped when the UI should tell the user (it timed out). */
@@ -83,6 +101,13 @@ export type OrcaProfileApi = {
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
+  /** The signed-in person's own two-factor state and where to manage it. */
+  accountMfa: () => Promise<OrcaAccountMfaResult>
+  /** The team's "require MFA" policy and the person's own state in it. */
+  teamMfaPolicy: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPolicyResult>
+  teamMfaPolicySet: (args: OrcaTeamMfaPolicySetArgs) => Promise<OrcaTeamMfaPolicySetResult>
+  teamMfaPending: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPendingResult>
+  teamMfaRemind: (args: OrcaTeamMfaRemindArgs) => Promise<OrcaTeamMfaRemindResult>
   orgMembersList: (args: OrcaProfileOrgMembersListArgs) => Promise<OrcaProfileOrgMembersListResult>
   orgMemberInvite: (
     args: OrcaProfileOrgMemberInviteArgs
@@ -108,6 +133,21 @@ export type OrcaProfileApi = {
   orgDeleteCheck: (args: OrcaProfileOrgDeleteCheckArgs) => Promise<OrcaProfileOrgDeleteCheckResult>
   /** Deletes the team for everyone; `confirmName` is the name exactly as typed. */
   orgDelete: (args: OrcaProfileOrgDeleteArgs) => Promise<OrcaProfileOrgDeleteResult>
+  /** Settings › Enterprise for the team: single sign-on and directory sync, as auth reports them. */
+  orgEnterprise: (args: OrcaProfileOrgEnterpriseArgs) => Promise<OrcaProfileOrgEnterpriseResult>
+  /** A fresh single sign-on setup link (owners, just after signing in). Never stored. */
+  orgSsoSetupLink: (args: OrcaProfileOrgEnterpriseArgs) => Promise<OrcaProfileOrgSsoSetupLinkResult>
+  /** Starts verifying an email domain: answers the DNS record to publish. */
+  orgSsoDomainAdd: (
+    args: OrcaProfileOrgEnterpriseDomainArgs
+  ) => Promise<OrcaProfileOrgSsoDomainResult>
+  /** Checks the domain's DNS record. */
+  orgSsoDomainVerify: (
+    args: OrcaProfileOrgEnterpriseDomainArgs
+  ) => Promise<OrcaProfileOrgSsoDomainResult>
+  orgSsoDomainRemove: (
+    args: OrcaProfileOrgEnterpriseDomainArgs
+  ) => Promise<OrcaProfileOrgSsoDomainResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
   /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */

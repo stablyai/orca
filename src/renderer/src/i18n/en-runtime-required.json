@@ -261,8 +261,8 @@
         "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
         "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used",
         "usage": {
-          "deletedWorkspaces_one": "Deleted workspace",
-          "deletedWorkspaces_other": "{{count}} deleted workspaces",
+          "deletedWorkspaces2_one": "{{count}} deleted workspace",
+          "deletedWorkspaces2_other": "{{count}} deleted workspaces",
           "formerMembers_one": "Former member",
           "formerMembers_other": "{{count}} former members",
           "otherMembers_one": "{{count}} other",
@@ -293,12 +293,8 @@
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
         "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
-        "listMetaCount_one": "{{count}} workspace",
-        "listMetaCount_other": "{{count}} workspaces",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
-        "rowSandboxHours_other": "{{hours}} sandbox hours",
-        "sectionCount_one": "{{count}} workspace",
-        "sectionCount_other": "{{count}} workspaces"
+        "rowSandboxHours_other": "{{hours}} sandbox hours"
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
@@ -1366,6 +1362,18 @@
         "unavailableCount_one": "{{count}} unavailable",
         "unavailableCount_other": "{{count}} unavailable"
       },
+      "teamMfa": {
+        "daysLeft_one": "{{count}} day left",
+        "daysLeft_other": "{{count}} days left",
+        "nowWarning_one": "{{count}} member doesn’t have it yet and will lose access to this team right away.",
+        "nowWarning_other": "{{count}} members don’t have it yet and will lose access to this team right away.",
+        "pendingCount_one": "{{count}} member still needs it",
+        "pendingCount_other": "{{count}} members still need it",
+        "reminded_one": "Reminder sent to {{count}} member.",
+        "reminded_other": "Reminder sent to {{count}} members.",
+        "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
+        "soonTitle_other": "{{value0}} requires MFA in {{count}} days"
+      },
       "teammates": {
         "daySandboxHours_one": "{{hours}} sandbox hour",
         "daySandboxHours_other": "{{hours}} sandbox hours"
@@ -1833,6 +1841,12 @@
     }
   },
   "components": {
+    "cloudWorkspaces": {
+      "picker": {
+        "inSidebarNote_one": "{{count}} more is already in your sidebar.",
+        "inSidebarNote_other": "{{count}} more are already in your sidebar."
+      }
+    },
     "confirmation": {
       "itemList": {
         "showMore_one": "Show {{count}} more",

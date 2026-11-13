@@ -60,10 +60,11 @@ describe('catalog', () => {
     changed.plans[0]!.versions[0]!.entitlements.sandbox_hours_monthly = { value: 80, perSeat: true }
     await expect(applyCatalog(h.env.BILLING_DB, changed, Date.now())).rejects.toThrow(/already applied with different content/)
     // A new version is how a plan changes.
-    changed.plans[0]!.versions = [repoCatalog().plans[0]!.versions[0]!, { ...changed.plans[0]!.versions[0]!, version: 2 }]
-    changed.plans[0]!.currentVersion = 2
+    const original = repoCatalog().plans[0]!.versions
+    changed.plans[0]!.versions = [...original, { ...changed.plans[0]!.versions[0]!, version: 3 }]
+    changed.plans[0]!.currentVersion = 3
     expect(await applyCatalog(h.env.BILLING_DB, changed, Date.now())).toBe(2)
-    expect((await loadCatalog(h.env.BILLING_DB)).plans.get('team')!.currentVersion).toBe(2)
+    expect((await loadCatalog(h.env.BILLING_DB)).plans.get('team')!.currentVersion).toBe(3)
   })
 
   it('rejects unknown keys, bad values, per-seat on a flat key, and a self-serve plan without a policy', () => {
@@ -81,9 +82,23 @@ describe('catalog', () => {
     expect(() => parseCatalogFile(noPolicy)).toThrow(/needs a full policy/)
   })
 
+  it('takes an https: or mailto: supportUrl on a plan, nothing else', () => {
+    const withSupport = (url: string) => {
+      const file = repoCatalog()
+      ;(file.plans[0] as { supportUrl?: string }).supportUrl = url
+      return file
+    }
+    expect(() => parseCatalogFile(withSupport('https://orca.dev/support'))).not.toThrow()
+    expect(() => parseCatalogFile(withSupport('mailto:support@orca.dev'))).not.toThrow()
+    for (const bad of ['javascript:alert(1)', 'http://orca.dev/support', 'mailto:nobody']) {
+      expect(() => parseCatalogFile(withSupport(bad))).toThrow()
+    }
+  })
+
   it('generates parameterized SQL only (the apply script inlines nothing it did not validate)', async () => {
     const statements = await catalogStatements(parseCatalogFile(repoCatalog()), [], 1)
-    expect(statements.length).toBe(6)
+    // 3 plan rows + every version (Team has 2).
+    expect(statements.length).toBe(3 + parseCatalogFile(repoCatalog()).plans.reduce((n, plan) => n + plan.versions.length, 0))
     for (const statement of statements) {
       expect(statement.sql).not.toContain("'team'")
     }
@@ -111,7 +126,14 @@ describe('aggregation', () => {
       maxConcurrentSandboxes: 3,
       maxConcurrentSandboxesPerMember: 5,
       machineSizes: ['standard', 'large'],
-      overageAllowed: true
+      overageAllowed: true,
+      features: { audit_log: false, sso: false, scim: false, mfa_enforcement: false }
+    })
+    expect(aggregateGrants([{ key: 'audit_log', value: false, perSeat: false, seats: null }, { key: 'audit_log', value: true, perSeat: false, seats: null }]).features).toEqual({
+      audit_log: true,
+      sso: false,
+      scim: false,
+      mfa_enforcement: false
     })
   })
 })
@@ -121,11 +143,11 @@ describe('subscription grants (ENTITLEMENTS_MODE=on)', () => {
     const { h, auth, customer } = await team()
     await subscribe(h, customer, 2)
     expect(grantRows(h)).toEqual([
-      { entitlement_key: 'machine_sizes', value_json: '["standard","large"]', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
-      { entitlement_key: 'max_concurrent_sandboxes', value_json: '3', per_seat: 1, seat_quantity: 2, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
-      { entitlement_key: 'max_concurrent_sandboxes_per_member', value_json: '3', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
-      { entitlement_key: 'overage_allowed', value_json: 'true', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
-      { entitlement_key: 'sandbox_hours_monthly', value_json: '60', per_seat: 1, seat_quantity: 2, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 }
+      { entitlement_key: 'machine_sizes', value_json: '["standard","large"]', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 2 },
+      { entitlement_key: 'max_concurrent_sandboxes', value_json: '3', per_seat: 1, seat_quantity: 2, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 2 },
+      { entitlement_key: 'max_concurrent_sandboxes_per_member', value_json: '3', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 2 },
+      { entitlement_key: 'overage_allowed', value_json: 'true', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 2 },
+      { entitlement_key: 'sandbox_hours_monthly', value_json: '60', per_seat: 1, seat_quantity: 2, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 2 }
     ])
     const view = await h.call('GET', '/v1/billing/entitlements', { headers: auth })
     expect(view.body).toMatchObject({
@@ -214,8 +236,8 @@ describe('subscription grants (ENTITLEMENTS_MODE=on)', () => {
     await subscribe(h, customer, 1)
     const changed = repoCatalog()
     const team2 = changed.plans[0]!
-    team2.versions.push({ ...team2.versions[0]!, version: 2, entitlements: { ...team2.versions[0]!.entitlements, sandbox_hours_monthly: { value: 40, perSeat: true } } })
-    team2.currentVersion = 2
+    team2.versions.push({ ...team2.versions[0]!, version: 3, entitlements: { ...team2.versions[0]!.entitlements, sandbox_hours_monthly: { value: 40, perSeat: true } } })
+    team2.currentVersion = 3
     await applyCatalog(h.env.BILLING_DB, changed, Date.now())
     const existing = await computeEntitlement(h.env, 'org:o1', Date.now())
     expect(existing.includedSeconds).toBe(60 * HOUR)

@@ -109,6 +109,11 @@ export async function resumeEphemeralVmWorkspace(
   }
   // Opening takes over a wake started on intent: its progress and any failure now show.
   claimPredictiveWake(worktreeId)
+  // A PAIRED cloud workspace has no VM record here: the control plane wakes it (PAIRED-WAKE).
+  if (worktreeId in getCloudWorkspaceSnapshot().paired) {
+    const { wakePairedCloudWorkspaceIfAsleep } = await import('@/lib/orca-cloud/paired-cloud-wake')
+    return wakePairedCloudWorkspaceIfAsleep(worktreeId)
+  }
   // An archived Orca Cloud workspace opens its read-only archive view; only Unarchive wakes it.
   // A cold start or a stale read must not wake it, so a cloud workspace re-reads its status first.
   const cloud = getCloudWorkspaceSnapshot()

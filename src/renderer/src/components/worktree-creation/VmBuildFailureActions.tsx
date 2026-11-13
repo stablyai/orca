@@ -3,6 +3,7 @@ import {
   Bot,
   ChevronDown,
   CreditCard,
+  ExternalLink,
   Github,
   Loader2,
   LifeBuoy,
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { Translate } from '@/i18n/use-translate'
 import type { VmBuildFailure } from './vm-build-failure'
+import { cloneFailedActions, type CloneAccessHandlers } from './clone-access-actions'
 
 export type VmBuildFailureActions = {
   onFixWithAgent: () => void
@@ -40,6 +42,10 @@ export type VmBuildFailureActions = {
   onContactSupport: () => void
   onConnectGitHub: () => void
   onPushToGitHub: () => void
+  /** CLONE-ACCESS-ERROR: back to the draft with the Project picker open. */
+  onChooseAnotherRepo?: () => void
+  /** CLONE-ACCESS-ERROR: what GitHub says about Orca's access to the refused repository. */
+  cloneAccess?: CloneAccessHandlers
 }
 
 type Action = {
@@ -52,6 +58,8 @@ type Action = {
   pending?: boolean
   /** Outline even when first: a way around the problem, not its fix. */
   secondary?: boolean
+  /** A More-menu row that leaves Orca for the browser: marked like the Help menu's. */
+  external?: boolean
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -103,7 +111,7 @@ function failureActions(
             primary: [
               {
                 key: 'plans',
-                label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
+                label: t('auto.components.billing.comparePlans', 'Compare plans'),
                 onClick: actions.onSeePlans
               },
               // Paying elsewhere (another device, the portal) is picked up by trying again.
@@ -225,7 +233,8 @@ function failureActions(
               'Contact support'
             ),
             icon: <LifeBuoy />,
-            onClick: actions.onContactSupport
+            onClick: actions.onContactSupport,
+            external: true
           }
         ]
       }
@@ -268,10 +277,11 @@ function failureActions(
         ],
         more: []
       }
+    case 'cloneFailed':
+      return { primary: cloneFailedActions(failure.reason, actions, tryAgain, t), more: [] }
     case 'unavailable':
     case 'network':
     case 'create':
-    case 'cloneFailed':
       return { primary: [tryAgain], more: [] }
   }
 }
@@ -343,6 +353,9 @@ export function FailureActionRow({
               >
                 {action.icon}
                 {action.label}
+                {action.external ? (
+                  <ExternalLink aria-hidden className="ml-auto size-3 text-muted-foreground" />
+                ) : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

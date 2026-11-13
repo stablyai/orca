@@ -1,4 +1,5 @@
 import React from 'react'
+import { LoaderCircle } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -7,7 +8,7 @@ import { CloudWorkspaceMarkSlot } from '@/components/orca-cloud/CloudWorkspaceMa
 import { cloudStateLabel } from '@/components/orca-cloud/cloud-state-copy'
 import { useCloudWorkspaceView } from '@/components/orca-cloud/use-cloud-workspace-view'
 import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
+import { useIsWorktreeGoingToSleep, useSleepCopySave } from '@/lib/worktree-sleep-view'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { selectEphemeralVmWorkspaceState } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
@@ -80,29 +81,50 @@ export function WorktreeCardHostMark({
 
 const PROBLEM: ReadonlySet<CloudDotState> = new Set(['failed', 'wakeFailed'])
 
-/** Line 2 names a cloud or VM row's state when it is not running ("Asleep · branch"). */
-export function WorktreeCardHostStateWord({
-  worktreeId
-}: {
+/**
+ * The state line 2 names for a cloud or VM row when it is not running ("Asleep · branch"), or
+ * null. The card's facts read it too (`host.stateWord`), so line 2 exists only when it has a word.
+ */
+export function useHostStateWord(
   worktreeId: string
-}): React.JSX.Element | null {
-  const cloud = useCloudWorkspaceView(worktreeId)
+): { state: CloudDotState | null; going: boolean } | null {
+  const cloud = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   const vmDot = useAppStore((state) =>
     state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]
       ? vmStateToDot(selectEphemeralVmWorkspaceState(state, worktreeId))
       : null
   )
   const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
-  const t = useTranslate()
+  // SLEEP-IN-PROGRESS: still saving its read-only copy after the sleep call returned.
+  const savingCopy = useSleepCopySave(worktreeId)?.state === 'saving'
   const state = cloud.isCloud ? cloud.state : vmDot
   // Sleep chosen and not ended: "Going to sleep…" until the sleep ends, driven by the same flag as
   // the view, so the row never says Asleep (the record flips to suspended first) before the view
   // does. A failure still names itself.
-  const going = cloud.isCloud && goingToSleep && !(state && PROBLEM.has(state))
+  // Saving is only news while it is asleep: woken meanwhile, the row just says what it is.
+  const going =
+    cloud.isCloud &&
+    (goingToSleep || (savingCopy && state === 'sleeping')) &&
+    !(state && PROBLEM.has(state))
   // Unknown is not a state to name (the panel shows a placeholder until the first read).
   if (!going && (!state || state === 'running' || state === 'unknown')) {
     return null
   }
+  return { state, going }
+}
+
+/** Line 2 names a cloud or VM row's state when it is not running ("Asleep · branch"). */
+export function WorktreeCardHostStateWord({
+  worktreeId
+}: {
+  worktreeId: string
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const word = useHostStateWord(worktreeId)
+  if (!word) {
+    return null
+  }
+  const { state, going } = word
   return (
     <>
       <span
@@ -112,9 +134,17 @@ export function WorktreeCardHostStateWord({
           state && PROBLEM.has(state) ? 'text-destructive' : 'text-muted-foreground'
         )}
       >
-        {going || !state
-          ? t('orcaCloudWorkspace.state.goingToSleep', 'Going to sleep…')
-          : cloudStateLabel(state, t)}
+        {going || !state ? (
+          <span className="inline-flex items-center gap-1">
+            <LoaderCircle
+              className="size-2.5 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            {t('components.orcaCloud.offline.copySaving.row', 'Going to sleep · Saving copy…')}
+          </span>
+        ) : (
+          cloudStateLabel(state, t)
+        )}
       </span>
       {/* Its own element so CSS hides it when nothing follows on line 2 ("Couldn't start ·"
           alone reads as cut off), whatever does or doesn't render after it. */}

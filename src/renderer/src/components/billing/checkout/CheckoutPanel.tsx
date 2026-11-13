@@ -22,7 +22,7 @@ export type CheckoutPanelProps = {
   onReopen: () => void
   onKeepWaiting: () => void
   onBack: () => void
-  /** Where "Contact us" goes when billing can't sell the plan (the catalog's Enterprise contact). */
+  /** Where "Contact us" goes when billing can't sell the plan (the plan's supportUrl, else Enterprise's contact). */
   contactUrl?: string | null
   onContact?: (url: string) => void
 }
@@ -217,7 +217,7 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
           : t('auto.components.billing.checkout.openFailed', 'Checkout didn’t open')
       body =
         openFailureCopy(phase.result, t) ??
-        t('auto.components.billing.openFailed', 'Could not reach billing. Try again.')
+        t('auto.components.billing.openFailed', 'Couldn’t reach billing. Try again.')
       break
   }
 

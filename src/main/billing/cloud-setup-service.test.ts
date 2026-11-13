@@ -5,7 +5,8 @@ vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: 
 import {
   createSetupSessionRequest,
   getSetupSessionRequest,
-  setupDeviceLabel
+  setupDeviceLabel,
+  cloudSetupDeviceLabel
 } from './cloud-setup-service'
 import { cloudSetupStartArgsFromUnknown } from '../ipc/profiles/orca-profile-billing-handlers'
 
@@ -91,6 +92,26 @@ describe('cloud setup service', () => {
     expect(setupDeviceLabel('')).toBe('this computer')
   })
 
+  it('names the Mac by its Computer Name, apostrophe included, and falls back to the hostname', async () => {
+    const named =
+      (name: string, final = true) =>
+      async () => ({ name, final })
+    expect(
+      await cloudSetupDeviceLabel({ platform: 'darwin', detect: named("m4air's MacBook Air") })
+    ).toBe("m4air's MacBook Air")
+    // scutil timed out or failed: the cleaned hostname, as before.
+    expect(
+      await cloudSetupDeviceLabel({
+        platform: 'darwin',
+        detect: named('m4airs-MacBook-Air', false)
+      })
+    ).toBe(setupDeviceLabel())
+    // Off macOS the hostname is the name.
+    expect(await cloudSetupDeviceLabel({ platform: 'linux', detect: named('ignored') })).toBe(
+      setupDeviceLabel()
+    )
+  })
+
   it('validates start args from the renderer', () => {
     expect(cloudSetupStartArgsFromUnknown({ needs: ['team', 'plan'], chooseTeam: true })).toEqual({
       needs: ['team', 'plan'],
@@ -100,5 +121,11 @@ describe('cloud setup service', () => {
       cloudSetupStartArgsFromUnknown({ needs: ['team'], repo: 'https://gitlab.com/a/b' })
     ).toThrow()
     expect(() => cloudSetupStartArgsFromUnknown({ needs: ['bogus'] })).toThrow()
+    // COPY-LINK-FIRST-CLICK: Copy link starts setup without the browser.
+    expect(cloudSetupStartArgsFromUnknown({ needs: ['plan'], openBrowser: false })).toEqual({
+      needs: ['plan'],
+      openBrowser: false
+    })
+    expect(() => cloudSetupStartArgsFromUnknown({ needs: ['plan'], openBrowser: 'no' })).toThrow()
   })
 })

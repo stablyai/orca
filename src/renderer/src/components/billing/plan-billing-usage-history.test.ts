@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import {
+  USAGE_NAMED_ROWS,
+  usageWorkspaceNames,
   topMemberRows,
   topWorkspaceRows,
   usageBarPercent,
@@ -104,5 +106,58 @@ describe('top workspaces and members', () => {
     expect(usageTotalLine(HOUR, translate)).toBe('1 sandbox hour')
     expect(usageTotalLine(0.26 * HOUR, translate)).toBe('0.3 sandbox hours')
     expect(usageWindowTotalLine(48 * HOUR, translate)).toBe('48 sandbox hours in 30 days')
+  })
+})
+
+describe('V3-06: at most five named workspaces, then the buckets', () => {
+  it('names the 5 busiest live ones, then deleted, then the other live ones folded in', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    const history = {
+      ...sampleUsageHistory,
+      totalSeconds: 40 * HOUR,
+      sandboxes: {
+        top: [
+          { id: 'gone', seconds: 9 * HOUR },
+          ...ids.map((id, index) => ({ id, seconds: (7 - index) * HOUR }))
+        ],
+        otherCount: 10,
+        otherSeconds: 3 * HOUR
+      }
+    }
+    const names = {
+      ...sampleUsageNames,
+      workspaces: new Map(ids.map((id) => [id, id.toUpperCase()]))
+    }
+    const rows = topWorkspaceRows(history, names, translate)!
+    expect(rows.map((row) => row.label)).toEqual([
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+      '1 deleted workspace',
+      '12 other workspaces'
+    ])
+    // The deleted bucket is the biggest but still sits after the names.
+    expect(rows[5]!.seconds).toBe(9 * HOUR)
+    // F (2 h) and G (1 h) joined the 3 h of others.
+    expect(rows[6]!.seconds).toBe(6 * HOUR)
+    expect(USAGE_NAMED_ROWS).toBe(5)
+  })
+})
+
+describe('V3-06b: workspaces with the same title', () => {
+  it('adds the workspace number only to titles that repeat', () => {
+    const names = usageWorkspaceNames([
+      { id: 's1', title: 'orca', number: 512 },
+      { id: 's2', title: 'orca', number: 498 },
+      { id: 's3', title: 'Hello-World', number: 7 },
+      { id: 's4', title: 'orca', number: null }
+    ])
+    expect(names.get('s1')).toBe('orca · W-512')
+    expect(names.get('s2')).toBe('orca · W-498')
+    expect(names.get('s3')).toBe('Hello-World')
+    // No number from an older control plane: the title stays as is.
+    expect(names.get('s4')).toBe('orca')
   })
 })

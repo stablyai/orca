@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSetupScriptAsleepCloud } from './use-setup-script-asleep-cloud'
+import { useIsCloudRepoHost, useSetupScriptAsleepCloud } from './use-setup-script-asleep-cloud'
 import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { useCloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-store'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
@@ -79,12 +79,14 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   // its own notice, and while a create is setting up, starting or stopped on a check the card would
   // flip between states under the start screen (JA-12, PC-7).
   const cloudWorkspace = useIsCloudWorkspace(activeWorktreeId)
+  const cloudRepo = useIsCloudRepoHost(activeRepo)
   const creationShown = useAppStore(selectWorktreeCreationSurfaceShown)
   const cloudSetupOpen = useCloudSetupPageRequest() !== null
   const isDismissed =
     provisionedByEnvironmentBuild ||
     asleepCloud ||
     cloudWorkspace ||
+    cloudRepo ||
     creationShown ||
     cloudSetupOpen ||
     (activeRepoHostIdentity

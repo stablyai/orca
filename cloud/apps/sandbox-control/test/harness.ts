@@ -1,5 +1,6 @@
 import { SignJWT, exportJWK, generateKeyPair } from 'jose'
-import type { EntitlementClient, StartDecision, UsageAnswer, UsageSegment } from '../src/entitlements'
+import { AUTH_IAT_BACKDATE_MS } from '../src/member-changes'
+import { BillingUnavailableError, type EntitlementClient, type PlanFeatures, type StartDecision, type UsageAnswer, type UsageSegment } from '../src/entitlements'
 import type { Env } from '../src/env'
 import { handleRequest, type Deps } from '../src/index'
 import { reconcile } from '../src/reconcile'
@@ -22,7 +23,9 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     down: false,
     checks: [] as { accountId: string; runningSandboxes: number }[],
     requests: [] as Parameters<EntitlementClient['checkStart']>[0][],
-    usage: [] as UsageSegment[]
+    usage: [] as UsageSegment[],
+    /** Plan features billing reports (the audit log's Enterprise gate): off unless a test turns one on. */
+    features: { auditLog: false } as PlanFeatures
   }
   const entitlements: EntitlementClient = {
     async checkStart(request) {
@@ -39,6 +42,12 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     },
     async listSuspensions() {
       return billing.suspensions
+    },
+    async features() {
+      if (billing.down) {
+        throw new BillingUnavailableError('billing down')
+      }
+      return billing.features
     }
   }
   const env: Env = {
@@ -58,13 +67,15 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
   const deps: Deps = { provider: vercel, entitlements, now: clock, publicRepoCheck: async () => true, ...extraDeps }
 
   async function token(sub: string, org?: string, purpose = 'sandbox', extra: Record<string, string> = {}) {
-    const iat = Math.floor(now / 1000)
+    // Like Orca auth (service-tokens.ts): iat backdated 30 s for clock skew, exp 5 min from minting.
+    const minted = Math.floor(now / 1000)
+    const iat = minted - AUTH_IAT_BACKDATE_MS / 1000
     return new SignJWT({ sub, ...(org ? { org } : {}), purpose, ...extra })
       .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
       .setIssuer('https://login.onorca.dev')
       .setAudience('orca-sandbox')
       .setIssuedAt(iat)
-      .setExpirationTime(iat + 300)
+      .setExpirationTime(minted + 300)
       .sign(privateKey)
   }
 

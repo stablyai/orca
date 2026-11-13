@@ -1,12 +1,23 @@
 // Account-level Orca Cloud calls for the window: product config (measured timings), GitHub connect,
 // repository access (cloud-start N2) and the repositories the account's GitHub installations reach.
-import { randomBytes } from 'node:crypto'
 import { ipcMain, shell } from 'electron'
 import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
-import { githubRepoSlug, lookupGitHubRepoIds, type GitHubRepoIds } from './github-repo-ids'
+import {
+  githubRepoSlug,
+  lookupGitHubInstallRights,
+  lookupGitHubRepoIds,
+  type GitHubRepoIds
+} from './github-repo-ids'
+import type { GitHubInstallRights } from '../../shared/hosted-sandbox/cloud-workspace-api'
+import {
+  CLOUD_CREATE_IDEMPOTENCY_KEY,
+  CLOUD_CREATE_PROVISION_ID,
+  createCloudWorkspaceFromGitHub
+} from './cloud-create-from-github'
+import { activeProvisionControllers } from '../ipc/provision-controllers'
 import {
   HOSTED_GITHUB_USER_CHANNELS,
   registerHostedGitHubUserHandlers
@@ -19,6 +30,7 @@ export const HOSTED_ACCOUNT_CHANNELS = [
   CH.getConfig,
   CH.connectGitHub,
   CH.getRepoAccess,
+  CH.gitHubInstallRights,
   CH.listGitHubRepositories,
   CH.createFromGitHub,
   ...HOSTED_GITHUB_USER_CHANNELS
@@ -47,13 +59,20 @@ export function registerHostedAccountHandlers(
     | 'githubRepoAccess'
     | 'githubRepositories'
     | 'create'
+    | 'bootPlan'
+    | 'cloneStatus'
+    | 'destroy'
     | 'githubUser'
     | 'connectGitHubUser'
     | 'disconnectGitHubUser'
   >,
-  options: { repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null> } = {}
+  options: {
+    repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null>
+    installRights?: (repoUrl: string) => Promise<GitHubInstallRights | null>
+  } = {}
 ): void {
   const repoIds = options.repoIds ?? lookupGitHubRepoIds
+  const installRights = options.installRights ?? lookupGitHubInstallRights
   registerHostedGitHubUserHandlers(client)
   // The Worker re-measures every 5 minutes; match it so each new build sheet sees a fresh median.
   let config: { at: number; value: Promise<HostedSandboxConfigResponse | null> } | null = null
@@ -75,19 +94,23 @@ export function registerHostedAccountHandlers(
     return config.value
   })
 
+  // A fresh single-use install page; only ever a GitHub page, whatever the response says.
+  const mintInstallUrl = async (args: RepoArgs): Promise<string> => {
+    const target = repoTarget(args)
+    const ids = target ? await repoIds(target.repo) : null
+    const { installUrl } = await client.connectGitHub(
+      undefined,
+      target ? { ...target, ...ids } : undefined
+    )
+    if (new URL(installUrl).origin !== 'https://github.com') {
+      throw new Error('Unexpected GitHub connect URL.')
+    }
+    return installUrl
+  }
+
   ipcMain.handle(CH.connectGitHub, async (_event, args?: RepoArgs) => {
     try {
-      const target = repoTarget(args)
-      const ids = target ? await repoIds(target.repo) : null
-      const { installUrl } = await client.connectGitHub(
-        undefined,
-        target ? { ...target, ...ids } : undefined
-      )
-      // Only ever hand the browser a GitHub page, whatever the response says.
-      if (new URL(installUrl).origin !== 'https://github.com') {
-        return { ok: false, code: 'failed', message: 'Unexpected GitHub connect URL.' }
-      }
-      await shell.openExternal(installUrl)
+      await shell.openExternal(await mintInstallUrl(args))
       return { ok: true, value: null }
     } catch (error) {
       return failure(error)
@@ -116,6 +139,15 @@ export function registerHostedAccountHandlers(
     }
   })
 
+  // Read with the person's own gh login; the control plane never sees a user token.
+  ipcMain.handle(CH.gitHubInstallRights, async (_event, args?: RepoArgs) => {
+    const target = repoTarget(args)
+    if (!target) {
+      return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+    }
+    return { ok: true, value: await installRights(target.repo).catch(() => null) }
+  })
+
   ipcMain.handle(CH.listGitHubRepositories, async (_event, args?: { cursor?: unknown }) => {
     try {
       const cursor = typeof args?.cursor === 'string' ? args.cursor : null
@@ -126,24 +158,50 @@ export function registerHostedAccountHandlers(
   })
 
   // D4: a repository the account's GitHub installations reach, with no clone here. The sandbox
-  // clones it; nothing touches this computer's disk. The id reads like the phone's: <repo>-<hex>.
-  ipcMain.handle(CH.createFromGitHub, async (_event, args?: { repoUrl?: unknown }) => {
+  // clones it; nothing touches this computer's disk. With a provision id the window shows the build
+  // sheet: progress streams on the build log channel and Cancel aborts it (GH-CREATE-SHEET).
+  ipcMain.handle(CH.createFromGitHub, async (event, args?: CreateFromGitHubArgs) => {
     const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
     if (!slug) {
       return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
     }
-    const name = (slug.split('/').pop() ?? 'workspace')
-      .replace(/[^A-Za-z0-9_.-]/g, '-')
-      .slice(0, 48)
+    // The name typed in the composer, as the owned create sends it; else lists show the repo name.
+    const title = typeof args?.title === 'string' ? args.title.trim().slice(0, 120) : ''
+    const provisionId = matching(args?.provisionId, CLOUD_CREATE_PROVISION_ID)
+    const idempotencyKey = matching(args?.idempotencyKey, CLOUD_CREATE_IDEMPOTENCY_KEY)
+    const controller = provisionId ? new AbortController() : null
+    if (provisionId && controller) {
+      activeProvisionControllers.set(provisionId, controller)
+    }
     try {
-      const ready = await client.create({
-        workspaceId: `${name}-${randomBytes(4).toString('hex')}`,
-        machineSize: 'standard',
-        repo: { url: `https://github.com/${slug}.git` }
-      })
-      return { ok: true, value: { sandboxId: ready.sandbox.id } }
-    } catch (error) {
-      return failure(error)
+      return await createCloudWorkspaceFromGitHub(
+        client,
+        { slug, title, provisionId, idempotencyKey },
+        {
+          ...(controller ? { signal: controller.signal } : {}),
+          onLog: (chunk) => {
+            if (provisionId && !event.sender.isDestroyed()) {
+              event.sender.send('ephemeralVm:provisionEvent', {
+                provisionId,
+                stream: 'stderr',
+                chunk
+              })
+            }
+          }
+        }
+      )
+    } finally {
+      if (provisionId && activeProvisionControllers.get(provisionId) === controller) {
+        activeProvisionControllers.delete(provisionId)
+      }
     }
   })
+}
+
+type CreateFromGitHubArgs =
+  | { repoUrl?: unknown; title?: unknown; provisionId?: unknown; idempotencyKey?: unknown }
+  | undefined
+
+function matching(value: unknown, pattern: RegExp): string | null {
+  return typeof value === 'string' && pattern.test(value) ? value : null
 }

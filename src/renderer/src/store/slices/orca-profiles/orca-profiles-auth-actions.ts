@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isSignInNoticeVisible } from '@/lib/orca-cloud/sign-in-notice-visibility'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../../../shared/orca-org-enterprise'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,
@@ -16,7 +17,10 @@ export type OrcaProfilesAuthActions = {
     orgId?: string
     name?: string
   }) => Promise<CreateCloudLinkedOrcaProfileResult | null>
-  connectCurrentOrcaProfile: () => Promise<ConnectCurrentOrcaProfileResult | null>
+  /** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+  connectCurrentOrcaProfile: (args?: {
+    openBrowser?: boolean
+  }) => Promise<ConnectCurrentOrcaProfileResult | null>
   refreshCurrentOrcaProfileAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult | null>
   signOutCurrentOrcaProfile: () => Promise<SignOutCurrentOrcaProfileResult | null>
   selectOrcaProfileOrg: (orgId: string | null) => Promise<SelectOrcaProfileOrgResult | null>
@@ -74,11 +78,11 @@ export const createOrcaProfilesAuthActions: StateCreator<
       }
     },
 
-    connectCurrentOrcaProfile: async () => {
+    connectCurrentOrcaProfile: async (args) => {
       const attempt = ++nextConnectAttempt
       try {
         // Pending PKCE must not block retry; newer linked waits supersede older callbacks.
-        const result = await window.api.orcaProfiles.connectCurrent()
+        const result = await window.api.orcaProfiles.connectCurrent(args)
         if (attempt < appliedConnectAttempt) {
           return result
         }
@@ -116,6 +120,25 @@ export const createOrcaProfilesAuthActions: StateCreator<
               'auto.store.slices.orca.profiles.signInDidNotFinish',
               'Sign-in didn’t finish. Try again.'
             )
+          )
+        } else if (
+          result.status === 'failed' &&
+          !alreadyConnected &&
+          result.auth.state !== 'connected' &&
+          result.error === ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR
+        ) {
+          // Not a failure to report as one: say what to do.
+          toast.error(
+            translate(
+              'auto.store.slices.orca.profiles.ssoRequired',
+              'Your team requires single sign-on'
+            ),
+            {
+              description: translate(
+                'auto.store.slices.orca.profiles.ssoRequiredBody',
+                'Sign in again and choose Sign in with SSO.'
+              )
+            }
           )
         } else if (
           result.status === 'failed' &&

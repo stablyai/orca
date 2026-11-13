@@ -29,4 +29,30 @@ describe('normalizeRoster', () => {
     ])
     expect('pictureUrl' in roster.members[4]!).toBe(false)
   })
+
+  it('keeps a known MFA status and drops anything else', () => {
+    const roster = normalizeRoster({
+      viewerRole: 'owner',
+      canManageMembers: true,
+      pendingInvites: [],
+      members: [
+        { userId: 'a', email: 'a@x.dev', role: 'owner', mfa: 'on' },
+        { userId: 'b', email: 'b@x.dev', role: 'member', mfa: 'off', mfaDeadline: 5 },
+        { userId: 'c', email: 'c@x.dev', role: 'member', mfa: 'pending', mfaDeadline: 1_800_000 },
+        { userId: 'd', email: 'd@x.dev', role: 'member', mfa: 'pending', mfaDeadline: 'soon' },
+        { userId: 'e', email: 'e@x.dev', role: 'member', mfa: true },
+        { userId: 'f', email: 'f@x.dev', role: 'member' }
+      ]
+    })
+    expect(roster.members.map((m) => [m.mfa, m.mfaDeadline])).toEqual([
+      ['on', undefined],
+      // A deadline only means something while the member is pending.
+      ['off', undefined],
+      ['pending', 1_800_000],
+      ['pending', undefined],
+      [undefined, undefined],
+      [undefined, undefined]
+    ])
+    expect('mfa' in roster.members[5]!).toBe(false)
+  })
 })

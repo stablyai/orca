@@ -1,4 +1,7 @@
 import { Fragment } from 'react'
+import { CloudStructuredChatBanners } from '../../../agent-sign-in-strip/CloudStructuredChatBanners'
+import { structuredCloudHoldKey } from '@/lib/orca-cloud/cloud-structured-launch-hold'
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { MessageSquarePlus, SquareSplitVertical } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -142,20 +145,36 @@ export function nativeChatPaneHeader(
   worktreeId: string | null,
   colorScheme: React.CSSProperties['colorScheme'],
   handOff?: NativeChatHandOff
-): React.JSX.Element | null {
-  return view.isVisible && worktreeId && view.groupId && !view.contextMenuActions ? (
-    <NativeChatPaneHeader
+): React.JSX.Element {
+  // CHAT-BANNERS: the chat's Orca Cloud strip sits under the header, whether or not it shows.
+  const banners = (
+    <CloudStructuredChatBanners
       tabId={view.tabId}
-      worktreeId={worktreeId}
-      groupId={view.groupId}
-      nativeChat={{ sessionId: view.sessionId, agent: view.agent }}
-      focused={view.isFocusedGroup}
-      colorScheme={colorScheme}
-      handOff={
-        handOff?.available
-          ? { open: handOff.open, disabled: handOff.preparing || handOff.dialog !== null }
-          : undefined
-      }
+      paneKey={structuredCloudHoldKey(view.sessionId)}
+      statusKey={structuredAgentSessionPaneKey(view.tabId, view.sessionId)}
+      agent={view.agent}
     />
-  ) : null
+  )
+  const header =
+    view.isVisible && worktreeId && view.groupId && !view.contextMenuActions ? (
+      <NativeChatPaneHeader
+        tabId={view.tabId}
+        worktreeId={worktreeId}
+        groupId={view.groupId}
+        nativeChat={{ sessionId: view.sessionId, agent: view.agent }}
+        focused={view.isFocusedGroup}
+        colorScheme={colorScheme}
+        handOff={
+          handOff?.available
+            ? { open: handOff.open, disabled: handOff.preparing || handOff.dialog !== null }
+            : undefined
+        }
+      />
+    ) : null
+  return (
+    <>
+      {header}
+      {banners}
+    </>
+  )
 }

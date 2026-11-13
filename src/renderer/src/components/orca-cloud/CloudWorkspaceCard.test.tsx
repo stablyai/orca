@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
+import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { setCloudCardDetailsOpen } from './use-cloud-workspace-card-state'
 import { cloudCardSideOffset } from './CloudWorkspaceMark'
 
@@ -78,6 +79,34 @@ describe('calm cloud workspace card', () => {
     const { container } = render(card('sleeping'))
     expect(container.querySelector('[data-cloud-card-usage]')).toBeNull()
     expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toContain('Wake')
+  })
+
+  it('PAIRED-CHROME: an asleep paired row (no Wake yet) says opening it wakes it', () => {
+    const { container } = render(card('sleeping', { actions: { onSleep: noop } }))
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).not.toContain(
+      'Wake'
+    )
+    expect(container.querySelector('[data-cloud-card-wake-hint]')?.textContent).toBe(
+      'Opens and wakes when you select it.'
+    )
+  })
+
+  it('ARCHIVED-DEAD-ACTIONS: a paired card has no "On this computer" row; an owned one does', () => {
+    seedCloudWorkspaceSnapshot({ paired: { ws: 'env-paired' }, idsLoaded: true })
+    expect(
+      render(card('running')).container.querySelector('[data-cloud-card-on-computer]')
+    ).toBeNull()
+    cleanup()
+    seedCloudWorkspaceSnapshot({ ids: new Set(['ws']), idsLoaded: true })
+    expect(
+      render(card('running')).container.querySelector('[data-cloud-card-on-computer]')
+    ).not.toBeNull()
+    seedCloudWorkspaceSnapshot({})
+  })
+
+  it('an asleep owned row offers Wake, no hint', () => {
+    const { container } = render(card('sleeping'))
+    expect(container.querySelector('[data-cloud-card-wake-hint]')).toBeNull()
   })
 
   it('the usage line discloses Details, remembered for the session', () => {

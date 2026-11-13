@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { ManifestSchema, VM_SCRIPTS, buildGoldenImage, provisionEnv, resolveReleaseBundle, type BuildInputs } from './golden-image'
-import { renderVmScriptsModule } from './generate-vm-scripts'
+import { ManifestSchema, VM_SCRIPTS, buildGoldenImage, provisionEnv, resolveReleaseBundle, vmScriptsHash, type BuildInputs } from './golden-image'
+import { nextVmScriptsStamp, parseVmScriptsStamp, renderVmScriptsModule } from './generate-vm-scripts'
+import { VM_SCRIPT_SOURCES, VM_SCRIPTS_HASH, VM_SCRIPTS_STAMP } from './vm-scripts.generated'
 import { ORCA_CLOUD_IMAGE_AGENTS, type OrcaCloudImageAgent } from '../../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
 
 const manifest: BuildInputs['manifest'] = {
@@ -24,6 +25,7 @@ function inputs(overrides: Partial<BuildInputs> = {}): BuildInputs {
     manifest,
     provisionScript: 'echo provision',
     vmScripts: Object.fromEntries(VM_SCRIPTS.map((name) => [name, `#!/bin/sh\n# ${name}\n`])) as BuildInputs['vmScripts'],
+    vmScriptsStamp: 1,
     buildId: 'b1',
     ...overrides
   }
@@ -159,6 +161,30 @@ describe('Worker-embedded image scripts', () => {
   it('match image/ (run image/generate-vm-scripts.ts after editing a script)', () => {
     const generated = readFileSync(fileURLToPath(new URL('./vm-scripts.generated.ts', import.meta.url).href), 'utf8')
     expect(generated).toBe(renderVmScriptsModule())
+  })
+
+  it('stamps the embedded scripts with their hash and a monotonic stamp', () => {
+    const generated = readFileSync(fileURLToPath(new URL('./vm-scripts.generated.ts', import.meta.url).href), 'utf8')
+    expect(parseVmScriptsStamp(generated)).toEqual({ hash: VM_SCRIPTS_HASH, stamp: VM_SCRIPTS_STAMP })
+    expect(vmScriptsHash(VM_SCRIPT_SOURCES)).toBe(VM_SCRIPTS_HASH)
+    expect(provisionEnv(inputs({ vmScriptsStamp: 42 })).ORCA_VM_SCRIPTS_STAMP).toBe('42')
+  })
+
+  it('keeps the stamp while the scripts are unchanged and moves it forward when one changes', () => {
+    const previous = { hash: 'aaaaaaaa', stamp: 1_800_000_000 }
+    expect(nextVmScriptsStamp(previous, 'aaaaaaaa', 1_900_000_000_000)).toBe(1_800_000_000)
+    // A change: the clock in seconds, or previous + 1 when the clock is behind the last stamp.
+    expect(nextVmScriptsStamp(previous, 'bbbbbbbb', 1_900_000_000_500)).toBe(1_900_000_000)
+    expect(nextVmScriptsStamp(previous, 'bbbbbbbb', 1_000_000_000_000)).toBe(1_800_000_001)
+    expect(nextVmScriptsStamp(null, 'bbbbbbbb', 1_900_000_000_000)).toBe(1_900_000_000)
+    // Through the generator: unchanged sources keep the committed stamp; a different hash bumps it.
+    const current = { hash: VM_SCRIPTS_HASH, stamp: VM_SCRIPTS_STAMP }
+    expect(parseVmScriptsStamp(renderVmScriptsModule(current, 0))?.stamp).toBe(VM_SCRIPTS_STAMP)
+    expect(parseVmScriptsStamp(renderVmScriptsModule({ ...current, hash: '00000000' }, 0))?.stamp).toBe(VM_SCRIPTS_STAMP + 1)
+  })
+
+  it('a changed script changes the hash the stamp follows', () => {
+    expect(vmScriptsHash({ ...VM_SCRIPT_SOURCES, git: `${VM_SCRIPT_SOURCES.git}\n# changed\n` })).not.toBe(VM_SCRIPTS_HASH)
   })
 
   it('installs every VM script and makes zsh read the session env hook once', () => {

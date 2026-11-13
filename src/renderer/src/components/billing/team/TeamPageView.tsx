@@ -1,10 +1,9 @@
-import { useEffect, useId, useRef } from 'react'
-import { ExternalLink, LogOut, RefreshCw } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { KeyRound, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { OrcaBillingStatusResult } from '../../../../../shared/orca-billing'
 import type {
@@ -16,14 +15,19 @@ import { TeamMark } from './TeamAvatar'
 import { TeamCreateView, type TeamCreateViewProps } from './TeamCreateView'
 import { TeamInviteComposer, type InviteBatchOutcome } from './TeamInviteComposer'
 import { TeamMemberList, type TeamRowState } from './TeamMemberList'
-import { TeamBillingBlock, TeamCheckoutCelebration } from './TeamPlanSummary'
+import { PaymentIssueNotice } from '../PaymentIssueNotice'
+import { TeamCheckoutCelebration, TeamUpgradeCard } from './TeamPlanSummary'
 import { memberCountLabel } from './team-copy'
+import { leaveBlockedReason } from './team-leave'
 import { otherOwnerCount, teamRows } from './team-roster-rows'
+import { isActivePlan } from './team-seat-math'
 import type { TeamPageArrival } from './team-page-store'
 
 export type TeamPageViewProps = {
   /** The active team, or null on a personal account. */
   org: { orgId: string; name: string } | null
+  /** The team's MFA requirement for this person: the countdown banner or the setup screen. */
+  mfaNotice?: React.ReactNode
   viewerUserId: string | null
   roster: OrcaProfileOrgMembersListResult | null
   billing: OrcaBillingStatusResult | null
@@ -49,46 +53,12 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
-  /** Opens the Enterprise contact page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
-  onContactSales: (url: string) => void
   /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
   inline?: { onOpenPlanBilling: () => void }
   /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
   dangerZone?: React.ReactNode
-}
-
-function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
-  switch (role) {
-    case 'owner':
-      return t('auto.components.billing.team.youAreOwner', 'You’re an owner')
-    case 'admin':
-      return t('auto.components.billing.team.youAreAdmin', 'You’re an admin')
-    case 'member':
-      return t('auto.components.billing.team.youAreMember', 'You’re a member')
-  }
-}
-
-/** Mirrors the plan card (title + badge, three stats, a two-line note) so loading doesn't jump. */
-function PlanSkeleton(): React.JSX.Element {
-  return (
-    <div aria-hidden className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-4 w-12" />
-        <Skeleton shape="circle" className="h-5 w-14" />
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        {[0, 1, 2].map((index) => (
-          <div key={index} className="space-y-1.5">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-        ))}
-      </div>
-      <Skeleton className="h-3 w-11/12" />
-      <Skeleton className="h-3 w-2/3" />
-    </div>
-  )
+  /** Opens Settings › Enterprise (SSO, SCIM, audit log). Shown to owners and admins only. */
+  onOpenEnterprise?: () => void
 }
 
 function SkeletonRows(): React.JSX.Element {
@@ -114,7 +84,6 @@ function SkeletonRows(): React.JSX.Element {
 export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
   const t = useTranslate()
   const inviteInput = useRef<HTMLInputElement>(null)
-  const ssoTitleId = useId()
   const hasRoster = props.roster !== null
   const inline = props.inline ?? null
   useEffect(() => {
@@ -127,7 +96,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       document.querySelector<HTMLElement>('[data-team-page-heading]')?.focus()
     }
   }, [hasRoster, inline])
-  const leaveTitleId = useId()
 
   if (!props.org) {
     return (
@@ -141,16 +109,20 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   const roster = props.roster?.status === 'ok' ? props.roster.roster : null
   const entitlement = props.billing?.status === 'ok' ? props.billing.entitlement : null
-  const enterprise = entitlement?.offers?.enterprise ?? null
   const rows = roster ? teamRows(roster, props.viewerUserId) : []
   const selfRow = rows.find((row) => row.self)
   const viewerRole = roster?.viewerRole ?? 'member'
+  // Matches who sees Settings › Enterprise: team owners and admins (Enterprise or not).
+  const showEnterprise =
+    Boolean(props.onOpenEnterprise) &&
+    (roster?.viewerRole === 'owner' || roster?.viewerRole === 'admin')
   const canLeave =
     Boolean(selfRow) &&
     (viewerRole !== 'owner' || (roster ? otherOwnerCount(roster, props.viewerUserId) > 0 : false))
 
   return (
     <div className="space-y-6">
+      {props.mfaNotice ?? null}
       <header className="flex items-center gap-3">
         <TeamMark name={props.org.name} />
         <div className="min-w-0 flex-1">
@@ -169,8 +141,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                     ? t('auto.components.billing.team.invitedCount', '{{count}} invited', {
                         count: roster.pendingInvites.length
                       })
-                    : null,
-                  viewerRoleSentence(viewerRole, t)
+                    : null
                 ]
                   .filter(Boolean)
                   .join(' · ')
@@ -210,15 +181,16 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
           </button>
         </p>
       ) : entitlement ? (
-        <TeamBillingBlock
-          entitlement={entitlement}
-          members={roster?.members.length ?? 0}
-          busy={props.billingBusy}
-          onManageBilling={props.onManageBilling}
-          onSeePlans={props.onSeePlans}
-        />
-      ) : props.billing === null ? (
-        <PlanSkeleton />
+        <>
+          <PaymentIssueNotice
+            entitlement={entitlement}
+            busy={props.billingBusy}
+            onUpdatePayment={props.onManageBilling}
+          />
+          {isActivePlan(entitlement) ? null : (
+            <TeamUpgradeCard entitlement={entitlement} onSeePlans={props.onSeePlans} />
+          )}
+        </>
       ) : null}
 
       {props.roster === null ? (
@@ -236,10 +208,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       {roster?.canManageMembers ? (
         <TeamInviteComposer
           viewerRole={viewerRole}
-          entitlement={entitlement}
-          members={roster.members.length}
-          pendingInvites={roster.pendingInvites.length}
-          now={props.now}
           onInvite={props.onInvite}
           inputRef={inviteInput}
         />
@@ -269,6 +237,10 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             viewerRole={viewerRole}
             rowStates={props.rowStates}
             canLeave={canLeave}
+            leaveBlockedReason={leaveBlockedReason(
+              { canLeave, canDeleteTeam: Boolean(props.dangerZone) },
+              t
+            )}
             now={props.now}
             // Promoting to owner hands over billing control, so it always confirms first.
             onChangeRole={(member, role) =>
@@ -312,82 +284,31 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {(roster?.canManageMembers && enterprise) || selfRow ? (
+      {showEnterprise || props.dangerZone ? (
         <div className="divide-y divide-border/60 rounded-xl border border-border">
-          {roster?.canManageMembers && enterprise ? (
-            <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-[14rem] flex-1 space-y-0.5">
-                <h3 id={ssoTitleId} className="text-sm font-medium">
-                  {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
-                </h3>
-                <p className="text-xs text-muted-foreground text-pretty">
-                  {t(
-                    'auto.components.billing.team.ssoBody',
-                    'SAML SSO and SCIM user provisioning are part of {{value0}}.',
-                    { value0: enterprise.label }
-                  )}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => props.onContactSales(enterprise.contactUrl)}
-              >
-                {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
-                <ExternalLink />
-              </Button>
-            </section>
-          ) : null}
-          {selfRow ? (
+          {showEnterprise ? (
+            // One quiet pointer to Settings › Enterprise, which owns SSO, SCIM and the audit log
+            // (and shows the upsell to teams without Enterprise). Same audience as that section.
             <section
-              aria-labelledby={leaveTitleId}
+              aria-labelledby="team-enterprise-title"
               className="flex flex-wrap items-center gap-3 p-4"
             >
-              <div className="min-w-[14rem] flex-1 space-y-0.5">
-                <h3 id={leaveTitleId} className="text-sm font-medium">
-                  {t('auto.components.billing.team.leaveTitle', 'Leave {{value0}}', {
-                    value0: props.org.name
-                  })}
-                </h3>
-                <p className="text-xs text-muted-foreground text-pretty">
-                  {canLeave
-                    ? t(
-                        'auto.components.billing.team.leaveBody2',
-                        'You lose access to the team’s cloud workspaces and secrets. An owner or admin can invite you back.'
-                      )
-                    : props.dangerZone
-                      ? t(
-                          'auto.components.billing.team.leaveLastOwnerOrDelete',
-                          'You’re the only owner. Make someone else an owner first, or delete the team.'
-                        )
-                      : t(
-                          'auto.components.billing.team.leaveLastOwner',
-                          'You’re the only owner. Make someone else an owner first.'
-                        )}
-                </p>
-              </div>
-              <SettingsDisabledControlTooltip
-                reason={
-                  canLeave
-                    ? undefined
-                    : t(
-                        'auto.components.billing.team.leaveNeedsOwner',
-                        'Make someone else an owner first'
-                      )
-                }
+              <h3
+                id="team-enterprise-title"
+                className="flex min-w-[14rem] flex-1 items-center gap-2 text-sm font-medium"
               >
-                <Button
-                  type="button"
-                  variant="destructive-chip"
-                  size="sm"
-                  disabled={!canLeave}
-                  onClick={props.onLeave}
-                >
-                  <LogOut />
-                  {t('auto.components.billing.team.leaveCta', 'Leave team')}
-                </Button>
-              </SettingsDisabledControlTooltip>
+                <KeyRound aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                {t(
+                  'auto.components.billing.team.enterpriseRowTitle',
+                  'Single sign-on, directory sync and the audit log'
+                )}
+              </h3>
+              <Button type="button" variant="outline" size="sm" onClick={props.onOpenEnterprise}>
+                {t(
+                  'auto.components.billing.team.openEnterpriseSettings',
+                  'Open Enterprise settings'
+                )}
+              </Button>
             </section>
           ) : null}
           {props.dangerZone}

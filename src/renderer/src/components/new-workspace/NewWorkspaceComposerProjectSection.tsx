@@ -1,4 +1,5 @@
 import { OrcaCloudNeedsRepoLine } from './run-on/OrcaCloudNeedsRepoLine'
+import { GitHubHandoffLine } from './run-on/GitHubHandoffLine'
 import { ORCA_CLOUD_NEEDS_REPO_ID } from './run-on/cloud-start-view'
 import React, { useMemo } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
@@ -113,8 +114,6 @@ export function NewWorkspaceComposerProjectSection({
       ? cloudStart?.cloudOnly
       : undefined
   const t = useTranslate()
-  // RR-c1: "Choose repository" opens the Project picker at its GitHub repositories.
-  const [repoPickerSignal, setRepoPickerSignal] = React.useState(0)
   // RR-c1: each stopped Create moves focus to Project (quietly), where the error is.
   const needsRepo = cloudStart?.needsGitHubRepo ?? null
   const addProjectLabel = t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')
@@ -226,6 +225,11 @@ export function NewWorkspaceComposerProjectSection({
               }}
               onMoreCloudAccess={cloudOnly?.moreAccess}
               onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
+              cloudReposRetry={
+                cloudOnly?.retryRepos
+                  ? { retry: cloudOnly.retryRepos, retrying: cloudOnly.retryingRepos }
+                  : null
+              }
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
@@ -235,17 +239,21 @@ export function NewWorkspaceComposerProjectSection({
               describedBy={
                 !projectError && needsRepo ? ORCA_CLOUD_NEEDS_REPO_ID : projectDescriptionId
               }
-              openSignal={repoPickerSignal}
               focusSignal={needsRepo?.attempt ?? 0}
+              openSignal={cloudStart?.openRepoPickerSignal ?? 0}
             />
             {projectError ? (
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
+            ) : cloudOnly && cloudOnly.githubHandoff !== 'idle' ? (
+              <GitHubHandoffLine
+                phase={cloudOnly.githubHandoff}
+                onCheckAgain={cloudOnly.checkGitHubAgain}
+              />
             ) : needsRepo ? (
               <OrcaCloudNeedsRepoLine
                 hasRepos={needsRepo.hasRepos}
-                onChooseRepository={() => setRepoPickerSignal((signal) => signal + 1)}
                 onAddRepository={onAddProject}
               />
             ) : projectOptions.length === 0 ? (

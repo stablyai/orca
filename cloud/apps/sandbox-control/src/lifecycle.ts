@@ -24,6 +24,7 @@ import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } fro
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
+import type { SecretsKmsReason } from './secrets-kms'
 import { captureReadSnapshot, deleteReadSnapshot } from './read-snapshots'
 import {
   ORCAD_PORT,
@@ -89,6 +90,8 @@ export type LifecycleDeps = {
    * egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout);
    * egressPlaceholdersOff: per-account kill switch that wins over both.
    */
+  /** Set while the KMS-held keys cannot be fetched: a session start fails instead of running without its secrets. */
+  secretsUnavailable?: SecretsKmsReason
   secrets?: {
     keyring: Keyring
     egressPlaceholders: boolean | ReadonlySet<string>

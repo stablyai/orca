@@ -69,6 +69,8 @@ export function CloudStripPasteForm({
         value={code}
         onChange={(event) => setCode(event.target.value)}
         onPaste={(event) => {
+          // Stays in this field: never bubbles to the pane's terminal paste handling.
+          event.stopPropagation()
           if (!setupCode) {
             return
           }

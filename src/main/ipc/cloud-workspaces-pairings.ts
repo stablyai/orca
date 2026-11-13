@@ -2,7 +2,6 @@
 // by Open), the file that binds them to their sandboxes, and the prune that drops a pairing once its
 // sandbox is gone (LC-1). Split from cloud-workspaces.ts, which registers the IPC handlers.
 import { readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { app } from 'electron'
 import { z } from 'zod'
 import type { CloudWorkspacesService } from '../cloud-workspaces/cloud-workspaces-service'
@@ -27,6 +26,12 @@ import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
 import { retireGoneCloudSandbox } from '../hosted-sandbox/cloud-sandbox-gone-retire'
+import {
+  cloudPairingBindingsPath,
+  isCloudPairingForActiveAccount,
+  noteCloudPairingBindings,
+  setCloudPairingActiveAccountReader
+} from '../cloud-workspaces/cloud-paired-environment-ids'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
@@ -70,7 +75,7 @@ async function retireOwnedRecords(
   }
 }
 
-const bindingsFile = () => join(app.getPath('userData'), 'cloud-workspaces-environments.json')
+const bindingsFile = () => cloudPairingBindingsPath(app.getPath('userData'))
 
 type Binding = { environmentId: string; grantId: string | null; accountId?: string | null }
 
@@ -90,10 +95,18 @@ async function readBindings(): Promise<Record<string, Binding>> {
     const parsed = z
       .record(Id, StoredBinding)
       .safeParse(JSON.parse(await readFile(bindingsFile(), 'utf8')))
-    return parsed.success ? parsed.data : {}
+    return notePaired(parsed.success ? parsed.data : {})
   } catch {
-    return {}
+    return notePaired({})
   }
+}
+
+/** Keeps the catalog's paired-server mark current (PAIRED-AWARE); republishes it when it changes. */
+function notePaired(bindings: Record<string, Binding>): Record<string, Binding> {
+  if (noteCloudPairingBindings(bindings)) {
+    publishRuntimeEnvironmentCatalogChanged()
+  }
+  return bindings
 }
 
 // Read-modify-write updates run one at a time so two quick pairings cannot drop each other.
@@ -108,13 +121,30 @@ function updateBindings(
     .then(async () => {
       const file = bindingsFile()
       const temp = `${file}.${process.pid}.tmp`
-      await writeFile(temp, JSON.stringify(change(await readBindings())), { mode: 0o600 })
+      const next = change(await readBindings())
+      await writeFile(temp, JSON.stringify(next), { mode: 0o600 })
       await rename(temp, file)
+      notePaired(next)
     })
   return bindingsWrite
 }
 
 let pairings: CloudWorkspacesPairings | null = null
+
+/** The active Orca account, the id bindings are stamped with ("org:<id>" or "user:<id>"). */
+function activeAccountId(): string | null {
+  return orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud)
+}
+
+/** The bindings a window may resolve: the active account's, plus unstamped ones (PAIRED-ACCOUNT-FILTER). */
+export async function readActiveAccountBindings(): Promise<Record<string, Binding>> {
+  const bindings = await readBindings()
+  return Object.fromEntries(
+    Object.entries(bindings).filter(([, binding]) =>
+      isCloudPairingForActiveAccount(binding.accountId ?? null)
+    )
+  )
+}
 export const STARTUP_PRUNE_DELAY_MS = 15_000
 
 /** One fetch of a sandbox: not found (deleted, or never visible) or destroyed means gone. */
@@ -138,9 +168,12 @@ export function createCloudWorkspacesPairings(
   if (pairings) {
     return pairings
   }
+  // Load the paired-server mark for the runtime catalog now, not at the first prune (PAIRED-AWARE).
+  void readBindings()
+  // Only the active account's pairings resolve to a sandbox (PAIRED-ACCOUNT-FILTER).
+  setCloudPairingActiveAccountReader(activeAccountId)
   const prune = createCloudPairingPrune({
-    activeAccountId: () =>
-      orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud),
+    activeAccountId,
     readBindings,
     updateBindings,
     listVisible: async () => {

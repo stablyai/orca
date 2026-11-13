@@ -30,7 +30,7 @@ function Page({ phase }: { phase: CheckoutPanelProps['phase'] }): React.JSX.Elem
             onReopen={() => {}}
             onKeepWaiting={() => {}}
             onBack={() => {}}
-            contactUrl="https://onorca.dev/contact-sales"
+            contactUrl="https://orca.dev/enterprise"
             onContact={() => {}}
           />
         }

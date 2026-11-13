@@ -108,6 +108,10 @@ describe('orca cloud agents service', () => {
     await tick()
     child.emit(`Opening browser\n${AUTHORIZE}\n`)
     expect(service.setups().claude).toMatchObject({ phase: 'browser', canReopen: true })
+    // "Copy link": the same page reopen opens, without opening it.
+    expect(service.signInLink('claude')).toBe(AUTHORIZE)
+    expect(service.signInLink('codex')).toBeNull()
+    expect(openExternal).not.toHaveBeenCalled()
     expect(await service.reopen('claude')).toBe(true)
     expect(openExternal).toHaveBeenCalledWith(AUTHORIZE)
     child.emit(`Your OAuth token (valid for 1 year):\n\n${TOKEN}\n\nStore this token`)

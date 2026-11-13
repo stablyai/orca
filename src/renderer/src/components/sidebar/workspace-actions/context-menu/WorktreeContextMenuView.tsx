@@ -14,7 +14,7 @@ import {
   CloudCopyWorkspaceLinkItem,
   CloudWorkspaceMenuItems
 } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
-import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useIsCloudHostRow, usePrimeCloudRowBindings } from '@/lib/orca-cloud/cloud-host-rows'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
 import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
@@ -82,7 +82,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   } = model
   const t = useTranslate()
   usePrimeCloudEnvironmentIds()
-  const isCloud = useIsCloudWorkspace(worktree.id)
+  usePrimeCloudRowBindings()
+  // Paired rows too (PAIRED-CHROME): a workspace opened here but created elsewhere is still cloud.
+  const isCloud = useIsCloudHostRow(worktree)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}

@@ -3,7 +3,10 @@
 // setup stops only that setup: the launch stays held on "Set up once", and a setup finished from
 // anywhere (here or Settings) turns the strip into "Start". Cancel with no setup running gives up
 // the held launch and opens a plain shell, like cancelling any held launch (RR-a).
-import { releaseCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import {
+  releaseCloudAgentHold,
+  startCloudAgentHold
+} from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
   reloadOrcaCloudAgentAccounts,
   runOrcaCloudAgentSetups,
@@ -11,6 +14,7 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import type { CloudStripActions } from './CloudAgentSignInStrip'
+import { requireLink } from '@/components/open-external/copy-external-link'
 
 export function cloudSetupStripActions(args: {
   agent: HostAgentSignInAgent
@@ -20,9 +24,14 @@ export function cloudSetupStripActions(args: {
   copyText: (text: string) => void
   openLink: (url: string) => void
   useApiKey: () => void
+  /**
+   * CHAT-CANCEL-ERROR: a structured chat has no plain shell to fall back to, so Cancel only stops a
+   * running setup and the chat stays held on its strip. Closing the chat gives the launch up.
+   */
+  keepHoldOnCancel?: boolean
 }): CloudStripActions {
   const { agent, holdKey } = args
-  const api = window.api.orcaCloudAgents
+  const api = window.api?.orcaCloudAgents
   return {
     primary: (action) => {
       if (action.kind === 'setUpOnce') {
@@ -33,7 +42,8 @@ export function cloudSetupStripActions(args: {
         args.copyText(action.code)
         args.openLink(action.url)
       } else if (action.kind === 'start') {
-        releaseCloudAgentHold(holdKey, 'proceed')
+        // HELD-STALE-COVERED: Start reads the account again; a revoked sign-in shows Renew instead.
+        void startCloudAgentHold(holdKey)
       }
     },
     submitCode: (token) => {
@@ -46,6 +56,11 @@ export function cloudSetupStripActions(args: {
       // The CLI's answer comes back as a setup update (checking, then saved or rejected).
       void api?.submitClaudeCode({ code }).catch(() => undefined)
     },
+    // "Copy link" beside "Open again": the provider page main would reopen, minted the same way.
+    linkFor: (action) =>
+      action.kind === 'reopenSetup' && api
+        ? () => api.signInLink({ agent }).then(requireLink)
+        : null,
     useCode: () => undefined,
     pasteCode: () => void api?.usePaste(),
     useApiKey: args.useApiKey,
@@ -53,6 +68,9 @@ export function cloudSetupStripActions(args: {
       if (args.setupRunning) {
         // Only the sign-in is abandoned; the person may still set up (here or in Settings) and start.
         stopOrcaCloudAgentSetups(agent)
+        return
+      }
+      if (args.keepHoldOnCancel) {
         return
       }
       releaseCloudAgentHold(holdKey, 'cancel')

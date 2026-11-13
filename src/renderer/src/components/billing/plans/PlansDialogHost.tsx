@@ -14,7 +14,7 @@ import { PlansDialogContent } from './PlansDialogContent'
 import { closePlansPage, usePlansPageState } from './plans-page-store'
 import { useOrgSeatCount } from './use-org-seat-count'
 import { usePlanCatalog } from './use-plan-catalog'
-import { resolvePlansModel } from './plans-model'
+import { planContactUrl, resolvePlansModel } from './plans-model'
 
 /**
  * The plans page. A dialog because choosing a plan is a decision step in front of Checkout;
@@ -119,9 +119,7 @@ export function PlansDialogHost(): React.JSX.Element {
                   }
                   checkout.reopen()
                 }}
-                contactUrl={
-                  plans.state === 'ready' ? (plans.model.enterprise?.contactUrl ?? null) : null
-                }
+                contactUrl={plans.state === 'ready' ? planContactUrl(plans.model) : null}
                 onContact={(url) => void window.api.shell.openUrl(url)}
                 onKeepWaiting={checkout.keepWaiting}
                 onBack={() => {

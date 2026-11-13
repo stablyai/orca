@@ -53,6 +53,8 @@ export type CloudWorkspacesApi = {
   localWorkspaces: () => Promise<LocalCloudWorkspace[]>
   /** Owner or team admin, from the team list: sleep or delete a workspace this desktop doesn't run. */
   sleep: (id: string) => Promise<CloudWorkspacesResult<void>>
+  /** A paired workspace's wake (this desktop has no VM record to resume); billing refusals come back as errors. */
+  wake: (id: string) => Promise<CloudWorkspacesResult<void>>
   destroy: (id: string) => Promise<CloudWorkspacesResult<void>>
   /** "I just sent a message here" (opens my git-as-sender window on the control plane). */
   noteSent: (id: string) => Promise<void>

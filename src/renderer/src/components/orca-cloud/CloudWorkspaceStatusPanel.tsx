@@ -2,18 +2,7 @@
 // name and state, one usage line, at most one attention row, "On this computer ›", and one footer
 // action beside ⋯. Details and the sync settings are one step away, never on the first view.
 import React, { useEffect, useId, useState } from 'react'
-import {
-  ChevronLeft,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Loader2,
-  Moon,
-  Play,
-  RotateCw,
-  ArchiveRestore
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ChevronLeft, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cloudWorkspaceMoved } from '@/lib/orca-cloud/orca-cloud-move-store'
@@ -40,9 +29,12 @@ import { cloudStateLabel } from './cloud-state-copy'
 import { CloudWorkspaceSyncSection } from './CloudWorkspaceSyncSection'
 import { CloudWorkspaceCardDetails, MeterSkeleton } from './CloudWorkspaceCardDetails'
 import { CloudWorkspaceCardMenu } from './CloudWorkspaceCardMenu'
+import { CloudCardPrimaryAction as PrimaryAction } from './cloud-card-primary-action'
+import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import {
   cloudCardAttentionLabel,
+  cloudCardAttentionTone,
   cloudCardOnComputerStatus,
   cloudCardPrimary,
   cloudCardStateDetail,
@@ -57,31 +49,17 @@ import {
 } from './use-cloud-workspace-card-state'
 
 export type CloudPanelActions = {
-  onWake: () => void
-  onRestart: () => void
-  onArchive: () => void
-  onUnarchive: () => void
+  /** Wake, Restart, Archive and Unarchive are absent on a paired row until main can run them for it. */
+  onWake?: () => void
+  onRestart?: () => void
+  onArchive?: () => void
+  onUnarchive?: () => void
   /** Put a running sandbox to sleep (frees one of the team's running slots). */
   onSleep?: () => void
   /** "Move to this computer"; absent where the move isn't offered (fixtures, older bridges). */
   onMoveToComputer?: () => void
   /** Delete the workspace (the sidebar's own delete flow and confirmation). */
   onDelete?: () => void
-}
-
-type Pending = 'restart' | 'archive' | 'unarchive' | undefined
-
-/** Pending buttons stay focused and announced: aria-disabled + aria-busy, never `disabled`. */
-function busyProps(isBusy: boolean, anyBusy: boolean, onClick: () => void) {
-  return {
-    'aria-disabled': anyBusy || undefined,
-    'aria-busy': isBusy || undefined,
-    onClick: () => {
-      if (!anyBusy) {
-        onClick()
-      }
-    }
-  }
 }
 
 const ROW =
@@ -107,7 +85,7 @@ export function CloudWorkspaceStatusPanel({
   workspaceId: string
   state: CloudDotState
   entry: CloudStatusEntry | undefined
-  pending: Pending
+  pending: 'restart' | 'archive' | 'unarchive' | undefined
   actions: CloudPanelActions
   className?: string
   /** Fixtures: the workspace name and attention row without the app's stores. */
@@ -149,6 +127,7 @@ export function CloudWorkspaceStatusPanel({
   const anyBusy = pending !== undefined
   const live = state === 'running' || state === 'unresponsive'
   const canArchive = state === 'running' || state === 'sleeping' || state === 'unresponsive'
+  const paired = useCloudWorkspace((s) => isPairedCloudStatusRow(s, workspaceId))
   const canRestart = live || state === 'failed' || state === 'wakeFailed'
   const attention = attentionOverride === undefined ? liveAttention : attentionOverride
   const name = nameOverride ?? storeName
@@ -300,11 +279,11 @@ export function CloudWorkspaceStatusPanel({
       {attention ? (
         <button
           type="button"
-          className={cn(ROW, 'font-medium text-status-warning-text')}
+          className={cn(ROW, 'font-medium', cloudCardAttentionTone(attention).text)}
           onClick={() => openCloudCardAttention(workspaceId, attention)}
           data-cloud-card-attention={attention.kind}
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-status-warning" aria-hidden />
+          <span className={cloudCardAttentionTone(attention).dot} aria-hidden />
           <span className="min-w-0 flex-1 truncate">{cloudCardAttentionLabel(attention, t)}</span>
           <ChevronRight aria-hidden className="size-3.5 shrink-0" />
         </button>
@@ -330,7 +309,9 @@ export function CloudWorkspaceStatusPanel({
         </p>
       ) : null}
 
-      {state === 'archived' ? null : (
+      {/* ARCHIVED-DEAD-ACTIONS: .context sync and mirroring run for this desktop's own cloud
+          workspaces only, so a paired card doesn't offer them. */}
+      {state === 'archived' || paired ? null : (
         <OnComputerRow view={sync} onOpen={() => setLayer('onComputer')} />
       )}
 
@@ -375,54 +356,4 @@ function OnComputerRow({
       <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
     </button>
   )
-}
-
-function PrimaryAction({
-  primary,
-  pending,
-  restarting,
-  anyBusy,
-  actions
-}: {
-  primary: ReturnType<typeof cloudCardPrimary>
-  pending: Pending
-  restarting: boolean
-  anyBusy: boolean
-  actions: CloudPanelActions
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  switch (primary) {
-    case 'sleep':
-      return actions.onSleep ? (
-        <Button size="xs" variant="outline" {...busyProps(false, anyBusy, actions.onSleep)}>
-          <Moon />
-          {t('orcaCloudWorkspace.sleep', 'Sleep')}
-        </Button>
-      ) : null
-    case 'wake':
-      return (
-        <Button size="xs" {...busyProps(false, anyBusy, actions.onWake)}>
-          <Play />
-          {t('orcaCloudWorkspace.wake', 'Wake')}
-        </Button>
-      )
-    case 'unarchive':
-      return (
-        <Button size="xs" {...busyProps(pending === 'unarchive', anyBusy, actions.onUnarchive)}>
-          {pending === 'unarchive' ? <Loader2 className="animate-spin" /> : <ArchiveRestore />}
-          {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
-        </Button>
-      )
-    case 'restart':
-      return (
-        <Button size="xs" {...busyProps(restarting, anyBusy, actions.onRestart)}>
-          {restarting ? <Loader2 className="animate-spin" /> : <RotateCw />}
-          {restarting
-            ? t('orcaCloudWorkspace.restarting', 'Restarting…')
-            : t('orcaCloudWorkspace.restart', 'Restart')}
-        </Button>
-      )
-    case null:
-      return null
-  }
 }

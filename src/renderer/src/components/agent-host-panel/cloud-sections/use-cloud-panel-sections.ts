@@ -24,15 +24,10 @@ export type CloudPanelSectionsData = {
   /** Shared with teammates (D13), and whose workspace it is; null when unknown. */
   sharing: CloudWorkspaceSharing | null
   /**
-   * The caller's Personal values are left out: a teammate in a shared workspace, or a workspace whose
-   * sharing couldn't be read (D13 fails closed: it may be someone else's shared workspace).
+   * Personal values are left out: a shared workspace gets nobody's Personal secrets, not even its
+   * owner's (SEC-5), and one whose sharing couldn't be read fails closed the same way (D13).
    */
   withoutPersonal: boolean
-}
-
-/** A teammate's view of someone else's shared workspace: only their non-Personal values apply. */
-export function isGuestInSharedWorkspace(data: Pick<CloudPanelSectionsData, 'sharing'>): boolean {
-  return data.sharing !== null && data.sharing.shared && !data.sharing.isOwner
 }
 
 export function cloudPanelSectionsData(args: {
@@ -44,7 +39,7 @@ export function cloudPanelSectionsData(args: {
   /** The workspace's sharing read failed; treat it as possibly someone else's shared workspace. */
   sharingUnknown?: boolean
 }): CloudPanelSectionsData {
-  const withoutPersonal = args.sharingUnknown === true || isGuestInSharedWorkspace(args)
+  const withoutPersonal = args.sharingUnknown === true || args.sharing?.shared === true
   const effective = withoutPersonal ? withoutCallerPersonal(args.effective) : args.effective
   return {
     withoutPersonal,
@@ -88,12 +83,22 @@ export function useCloudPanelSections(args: {
     }
     let cancelled = false
     void (async () => {
-      const [effective, list, sharing] = await Promise.all([
-        secrets.effective(repoKey ? { repo: repoKey } : {}).catch(() => null),
-        window.api.orcaCloudEnvironments?.list().catch(() => null) ?? Promise.resolve(null),
-        runtimeEnvironmentId
-          ? secrets.workspaceSharing({ runtimeEnvironmentId }).catch(() => null)
-          : Promise.resolve(null)
+      const listing =
+        window.api.orcaCloudEnvironments?.list().catch(() => null) ?? Promise.resolve(null)
+      const sharing = runtimeEnvironmentId
+        ? await secrets.workspaceSharing({ runtimeEnvironmentId }).catch(() => null)
+        : null
+      // SEC-5: a shared workspace (or one whose sharing can't be read) gets no Personal values, so ask
+      // the control plane for exactly what such a workspace receives.
+      const shared = runtimeEnvironmentId !== null && !(sharing?.ok && !sharing.value.shared)
+      const [effective, list] = await Promise.all([
+        secrets
+          .effective({
+            ...(repoKey ? { repo: repoKey } : {}),
+            ...(shared ? { workspace: 'shared' as const } : {})
+          })
+          .catch(() => null),
+        listing
       ])
       if (cancelled) {
         return

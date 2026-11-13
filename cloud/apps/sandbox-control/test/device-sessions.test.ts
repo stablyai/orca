@@ -15,6 +15,8 @@ const OP = 'o'.repeat(40)
 async function setup() {
   vi.spyOn(console, 'log').mockImplementation(() => {})
   const h = await createHarness({ OPERATOR_TOKEN: OP })
+  // On Enterprise, so a refused audit read below is refused for the role, not the plan.
+  h.billing.features = { auditLog: true }
   const key = await deviceKey()
   const enroll = (bearer?: string, publicKeyB64 = key.publicKeyB64) =>
     h.call('POST', '/v1/device-sessions', { body: { label: 'Neil’s iPhone', platform: 'ios', publicKeyB64 }, bearer })
@@ -183,6 +185,14 @@ describe('device sessions', () => {
     // A token minted after the change carries the live role again.
     const fresh = await h.token('ada', 'acme', 'sandbox', { orgRole: 'member' })
     expect((await enroll(fresh)).status).toBe(200)
+  })
+
+  it('a token minted seconds after a role change (auth backdates iat 30 s) can enroll a phone', async () => {
+    const { h, enroll } = await setup()
+    await h.call('POST', '/v1/internal/members/role-changed', { bearer: OP, body: { accountId: 'org:acme', userId: 'ada', role: 'member' } })
+    h.advance(5_000)
+    // Its iat is 25 s before the change, but it was minted after it: fresh, so the desktop's one re-mint works.
+    expect((await enroll(await h.token('ada', 'acme', 'sandbox', { orgRole: 'member' }))).status).toBe(200)
   })
 
   it('a desktop token from before a removal cannot enroll a new phone', async () => {

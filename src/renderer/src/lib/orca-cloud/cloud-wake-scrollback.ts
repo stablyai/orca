@@ -39,7 +39,6 @@ type PendingHistory = {
 type PreReplaySnapshot = { ptyId: string; at: number; aboveScreen: string; screen: string }
 const preReplay = new Map<string, PreReplaySnapshot>()
 /** The host's subscribe/recovery replay keeps this many rows of history. */
-const HOST_REPLAY_ROWS = 1000
 /** A sleep that follows a resubscribe within this long uses what the pane held before it. */
 const PRE_REPLAY_MAX_AGE_MS = 10 * 60_000
 
@@ -219,7 +218,8 @@ export function noteBeforeCloudReplay(
     return null
   }
   const normal = terminal.buffer?.normal
-  if (!normal || normal.length - terminal.rows <= HOST_REPLAY_ROWS) {
+  // Any scrollback: a pane woken from sleep can hold output the host never had (V3-02), at any depth.
+  if (!normal || normal.baseY <= 0) {
     return null
   }
   return (async () => {

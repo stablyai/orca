@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { EmptyState, ErrorState } from './CloudWorkspacesStates'
+import { ErrorState, PickerEmptyState } from './CloudWorkspacesStates'
 import {
-  INITIAL_CLOUD_WORKSPACE_FILTERS as DEFAULTS,
-  shouldShowCloudHomeFilters
-} from './CloudWorkspacesToolbar'
+  closeCloudWorkspacePicker,
+  getCloudWorkspacePickerRequest
+} from './cloud-workspace-picker-store'
 
 afterEach(cleanup)
 
@@ -43,44 +43,43 @@ it('at the running-sandbox limit offers Show cloud workspaces instead of a retry
   expect(screen.getByRole('button', { name: 'Show cloud workspaces' })).toBeTruthy()
 })
 
-it('an empty list invites the first cloud workspace, with one button (JA-30)', () => {
-  render(<EmptyState scope="team" archived={false} filtered={false} />)
-  expect(screen.getByText('Start your first cloud workspace')).toBeTruthy()
+it('at the running limit, Show cloud workspaces opens the picker on your running ones', () => {
+  render(
+    <ErrorState
+      error="entitlement_denied"
+      reason="member_concurrency_limit"
+      retrying={false}
+      onRetry={vi.fn()}
+      onSignIn={vi.fn()}
+    />
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Show cloud workspaces' }))
+  expect(getCloudWorkspacePickerRequest()?.focus).toEqual({ kind: 'running' })
+  closeCloudWorkspacePicker()
+})
+
+it('with none at all, says so and offers New cloud workspace as the primary action', () => {
+  const onCreate = vi.fn()
+  render(<PickerEmptyState reason={{ kind: 'none' }} onCreate={onCreate} />)
+  expect(screen.getByText('No cloud workspaces yet')).toBeTruthy()
+  expect(screen.getByText('Start one and it shows up in your sidebar.')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'New cloud workspace' }))
+  expect(onCreate).toHaveBeenCalledTimes(1)
+})
+
+it('with everything in the sidebar, says there is nothing else and keeps a secondary New', () => {
+  render(<PickerEmptyState reason={{ kind: 'all-in-sidebar' }} onCreate={vi.fn()} />)
+  expect(screen.getByText('Nothing else to open')).toBeTruthy()
   expect(
-    screen.getByText(
-      'It runs in a sandbox, so your agents keep working even when this computer is off.'
-    )
+    screen.getByText('Every cloud workspace you can open is already in your sidebar.')
   ).toBeTruthy()
-  expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['New cloud workspace'])
+  expect(
+    screen.getByRole('button', { name: 'New cloud workspace' }).getAttribute('data-variant')
+  ).toBe('outline')
 })
 
-it('an empty Mine list on a team says yours is empty, with the same button', () => {
-  render(<EmptyState scope="mine" archived={false} filtered={false} hasOrg />)
-  expect(screen.getByText('You don’t have any cloud workspaces yet.')).toBeTruthy()
-  expect(screen.queryByText('Start your first cloud workspace')).toBeNull()
-  expect(screen.getByRole('button', { name: 'New cloud workspace' })).toBeTruthy()
-  cleanup()
-  // No team: Mine is the only list, so it is the first-run invitation.
-  render(<EmptyState scope="mine" archived={false} filtered={false} hasOrg={false} />)
-  expect(screen.getByText('Start your first cloud workspace')).toBeTruthy()
-})
-
-it('filtered and archived empty lists keep their own copy and offer no create button', () => {
-  render(<EmptyState scope="team" archived={false} filtered />)
-  expect(screen.getByText('Nothing matches these filters')).toBeTruthy()
+it('a search with no match keeps its own copy and offers no create button', () => {
+  render(<PickerEmptyState reason={{ kind: 'search' }} onCreate={vi.fn()} />)
+  expect(screen.getByText('Nothing matches your search')).toBeTruthy()
   expect(screen.queryByRole('button')).toBeNull()
-})
-
-it('shows the filters from 5 workspaces, or whenever a filter is on so it can be undone', () => {
-  expect(shouldShowCloudHomeFilters(0, DEFAULTS, true)).toBe(false)
-  expect(shouldShowCloudHomeFilters(4, DEFAULTS, true)).toBe(false)
-  expect(shouldShowCloudHomeFilters(5, DEFAULTS, true)).toBe(true)
-  // The Archived switch alone doesn't bring the full row (ARCHIVE-REACH): the list's size does.
-  expect(shouldShowCloudHomeFilters(2, { ...DEFAULTS, archived: true }, true)).toBe(false)
-  expect(shouldShowCloudHomeFilters(5, { ...DEFAULTS, archived: true }, true)).toBe(true)
-  expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, scope: 'mine' }, true)).toBe(true)
-  expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, repo: 'https://x/y' }, true)).toBe(true)
-  expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, running: true }, true)).toBe(true)
-  // Without a team there is no Team/Mine choice: Mine is not a filter there.
-  expect(shouldShowCloudHomeFilters(1, { ...DEFAULTS, scope: 'mine' }, false)).toBe(false)
 })

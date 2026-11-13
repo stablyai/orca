@@ -16,12 +16,14 @@ import { profileReaderKey, profileReadPins } from '../cloud-workspaces/cloud-rea
 import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
 import { requestCloudGonePrune } from '../hosted-sandbox/cloud-gone-prune-request'
 import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
+import { wakePairedSandbox } from '../cloud-workspaces/cloud-paired-wake'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
 import {
   CloudEnvironmentId as EnvironmentId,
   createCloudWorkspacesPairings,
+  readActiveAccountBindings,
   STARTUP_PRUNE_DELAY_MS
 } from './cloud-workspaces-pairings'
 
@@ -147,7 +149,7 @@ const INVALID = { ok: false as const, error: 'invalid_request' }
 export function registerCloudWorkspacesHandlers(
   options: { removedServerStore?: RemovedServerStore } = {}
 ): void {
-  const { prune, readBindings, updateBindings, settleDeleted } = createCloudWorkspacesPairings(
+  const { prune, updateBindings, settleDeleted } = createCloudWorkspacesPairings(
     getService,
     options.removedServerStore
   )
@@ -226,6 +228,11 @@ export function registerCloudWorkspacesHandlers(
         ? s.revokeGrant(parsed.data.id, parsed.data.grantId)
         : INVALID
   })
+  handle('cloudWorkspaces:wake', async (args) => {
+    const parsed = z.object({ id: Id }).safeParse(args)
+    const s = await getService()
+    return !s ? NOT_CONFIGURED : parsed.success ? wakePairedSandbox(s, parsed.data.id) : INVALID
+  })
   handle('cloudWorkspaces:sleep', async (args) => {
     const parsed = z.object({ id: Id }).safeParse(args)
     const s = await getService()
@@ -248,7 +255,8 @@ export function registerCloudWorkspacesHandlers(
     'cloudWorkspaces:localWorkspaces',
     async () => (await getService())?.localWorkspaces() ?? []
   )
-  handle('cloudWorkspaces:environmentBindings', () => readBindings())
+  // A window resolves only the active account's pairings (PAIRED-ACCOUNT-FILTER).
+  handle('cloudWorkspaces:environmentBindings', () => readActiveAccountBindings())
   handle('cloudWorkspaces:bindEnvironment', async (args) => {
     const parsed = z
       .object({

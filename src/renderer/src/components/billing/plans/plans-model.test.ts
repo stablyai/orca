@@ -5,7 +5,12 @@ import {
   sampleCatalog,
   sampleCatalogResult
 } from './plan-catalog-fixtures'
-import { plansModelFromCatalog, plansModelFromOffers, resolvePlansModel } from './plans-model'
+import {
+  planContactUrl,
+  plansModelFromCatalog,
+  plansModelFromOffers,
+  resolvePlansModel
+} from './plans-model'
 
 const billing = { status: 'ok' as const, entitlement: sampleTeam }
 
@@ -25,6 +30,8 @@ describe('plans model', () => {
     })
     expect(model?.team.features.map((feature) => feature.id)).toEqual([
       'included_hours_per_seat',
+      'sandbox_spec',
+      'ready_in_seconds',
       'agents_keep_running',
       'idle_sleep',
       'overage_optional'
@@ -84,5 +91,16 @@ describe('plans model', () => {
     expect(resolvePlansModel({ status: 'unsupported' }, { status: 'failed', error: 'x' })).toEqual({
       state: 'failed'
     })
+  })
+
+  it("sends Contact us to the plan's supportUrl, else Enterprise's contact", () => {
+    const model = plansModelFromCatalog(sampleCatalog)!
+    expect(planContactUrl(model)).toBe('https://orca.dev/enterprise')
+    expect(planContactUrl({ ...model, team: { ...model.team, supportUrl: null } })).toBe(
+      model.enterprise!.contactUrl
+    )
+    expect(
+      planContactUrl({ ...model, team: { ...model.team, supportUrl: null }, enterprise: null })
+    ).toBeNull()
   })
 })

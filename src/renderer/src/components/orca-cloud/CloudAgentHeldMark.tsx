@@ -1,5 +1,6 @@
 import React from 'react'
-import { KeyRound } from 'lucide-react'
+import { CirclePlay, KeyRound } from 'lucide-react'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,10 +15,12 @@ import {
 export function useWorktreeCloudAgentHold(worktreeId: string): CloudAgentHold | null {
   const holds = useCloudAgentHolds()
   const tabIds = useAppStore((state) => state.tabsByWorktree[worktreeId])
-  if (holds.length === 0 || !tabIds?.length) {
+  // A structured chat's hold is keyed by its own tab (CHAT-BANNERS).
+  const chatTabs = useAppStore((state) => state.unifiedTabsByWorktree[worktreeId])
+  if (holds.length === 0 || (!tabIds?.length && !chatTabs?.length)) {
     return null
   }
-  const ids = new Set(tabIds.map((tab) => tab.id))
+  const ids = new Set([...(tabIds ?? []), ...(chatTabs ?? [])].map((tab) => tab.id))
   return holds.find((hold) => ids.has(cloudAgentHoldTabId(hold.paneKey))) ?? null
 }
 
@@ -37,10 +40,25 @@ export function CloudAgentHeldMark({
     return null
   }
   const agent = agentName(hold.agent, t)
-  const label =
-    hold.reason === 'accountExpired'
+  const waiting = hold.reason === 'awaitingStart'
+  const label = waiting
+    ? hold.awaiting === 'setUp'
+      ? t(
+          'orcaCloud.agentHold.setUpNotStarted',
+          '{{agent}} is set up. Open the workspace to start it.',
+          { agent }
+        )
+      : t(
+          'orcaCloud.agentHold.notStarted',
+          '{{agent}} hasn’t started. Open the workspace to start it.',
+          {
+            agent
+          }
+        )
+    : hold.reason === 'accountExpired'
       ? t('orcaCloud.agentHold.expired', '{{agent}} sign-in expired', { agent })
       : t('orcaCloud.agentHold.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })
+  const Icon = waiting ? CirclePlay : KeyRound
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -48,9 +66,13 @@ export function CloudAgentHeldMark({
           role="img"
           aria-label={label}
           data-cloud-agent-held={hold.reason}
-          className="inline-flex size-3.5 shrink-0 items-center justify-center text-status-warning-text"
+          className={cn(
+            'inline-flex size-3.5 shrink-0 items-center justify-center',
+            // V3-01: a restored launch waiting for Start is no alarm: muted, not the amber key.
+            waiting ? 'text-muted-foreground' : 'text-status-warning-text'
+          )}
         >
-          <KeyRound className="size-3" aria-hidden />
+          <Icon className="size-3" aria-hidden />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={6}>

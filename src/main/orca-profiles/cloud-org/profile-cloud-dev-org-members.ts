@@ -32,7 +32,8 @@ function devSelf(): OrcaOrgMember {
     userId: cleanEnvString(process.env.ORCA_CLOUD_DEV_USER_ID, 'dev-user'),
     email: cleanEnvString(process.env.ORCA_CLOUD_DEV_EMAIL, 'dev@orca.local'),
     displayName: cleanEnvString(process.env.ORCA_CLOUD_DEV_DISPLAY_NAME, 'Orca Dev'),
-    role: 'owner'
+    role: 'owner',
+    mfa: 'on'
   }
 }
 
@@ -44,10 +45,17 @@ function seedDevRoster(): DevOrgRoster {
         userId: 'dev-teammate-1',
         email: 'teammate@orca.local',
         displayName: 'Dev Teammate',
-        role: 'admin'
+        role: 'admin',
+        mfa: 'off'
       },
       // Null user IDs exercise members who have not signed in yet.
-      { userId: null, email: 'invited-member@orca.local', displayName: undefined, role: 'member' }
+      {
+        userId: null,
+        email: 'invited-member@orca.local',
+        displayName: undefined,
+        role: 'member',
+        mfa: 'off'
+      }
     ],
     pendingInvites: [{ email: 'pending@orca.local', role: 'member', createdAt: Date.now() }]
   }

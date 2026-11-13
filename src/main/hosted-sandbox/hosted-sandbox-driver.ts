@@ -11,6 +11,7 @@ import {
   EnvironmentProviderError,
   isEnvironmentProviderError,
   type EnvironmentProviderCallContext,
+  type EnvironmentCreateSpec,
   type EnvironmentHandle,
   type EnvironmentStatus
 } from '../environment-providers/environment-provider-driver'
@@ -24,6 +25,7 @@ import type {
 } from './hosted-environment-provider'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { takeSuspendReason } from './idle-sleep-requests'
+import { reclaimCancelledCreate } from './hosted-sandbox-create-reclaim'
 
 export const HOSTED_SANDBOX_DRIVER_ID = 'orca-cloud'
 
@@ -61,35 +63,7 @@ export function createHostedSandboxDriver(
     capabilities: HOSTED_SANDBOX_CAPABILITIES,
 
     async create(spec, ctx) {
-      const machineSize = toMachineSize(spec.machineSize)
-      ctx?.onProgress?.({ phase: 'provisioning' })
-      // Names the repository step before the create answers (no relabel mid-run). Best effort: an
-      // older control plane answers 404 and the step is named when the create answers.
-      if (spec.repo) {
-        void client
-          .bootPlan(spec.repo.url, ctx?.signal)
-          .then((plan) =>
-            ctx?.onProgress?.({ phase: plan === 'update' ? 'plan-update' : 'plan-clone' })
-          )
-          .catch(() => undefined)
-      }
-      const ready = await client.create(
-        {
-          workspaceId: spec.workspaceId,
-          machineSize,
-          // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
-          ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
-          ...(spec.region ? { region: spec.region } : {}),
-          ...(spec.repo ? { repo: spec.repo } : {})
-        },
-        ctx?.signal,
-        spec.idempotencyKey
-      )
-      if (ready.clone) {
-        await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
-      }
-      ctx?.onProgress?.({ phase: 'connecting' })
-      return toReady(ready)
+      return toReady(await createSandboxWithProgress(client, spec, ctx))
     },
 
     async resume(handle, ctx) {
@@ -147,6 +121,60 @@ export function createHostedSandboxDriver(
       return toReady(ready)
     }
   }
+}
+
+/**
+ * One create with the build sheet's progress: the boot plan names the repository step, then the
+ * create, then git's clone or update until it is done. Shared by the owned create (the recipe) and
+ * the GitHub-only create (GH-CREATE-SHEET), so both sheets read the same phases.
+ */
+export async function createSandboxWithProgress(
+  client: Pick<HostedSandboxControlPlaneClient, 'create' | 'bootPlan' | 'cloneStatus' | 'destroy'>,
+  spec: EnvironmentCreateSpec,
+  ctx?: EnvironmentProviderCallContext
+): Promise<HostedSandboxReadyResponse> {
+  const machineSize = toMachineSize(spec.machineSize)
+  ctx?.onProgress?.({ phase: 'provisioning' })
+  // Names the repository step before the create answers (no relabel mid-run). Best effort: an
+  // older control plane answers 404 and the step is named when the create answers.
+  if (spec.repo) {
+    void client
+      .bootPlan(spec.repo.url, ctx?.signal)
+      .then((plan) =>
+        ctx?.onProgress?.({ phase: plan === 'update' ? 'plan-update' : 'plan-clone' })
+      )
+      .catch(() => undefined)
+  }
+  const body = {
+    workspaceId: spec.workspaceId,
+    machineSize,
+    // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
+    ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
+    ...(spec.region ? { region: spec.region } : {}),
+    ...(spec.repo ? { repo: spec.repo } : {})
+  }
+  let ready: HostedSandboxReadyResponse
+  try {
+    ready = await client.create(body, ctx?.signal, spec.idempotencyKey)
+  } catch (error) {
+    // GH-CREATE-CANCEL: cancelled in flight, the control plane may still have made it: find it by
+    // its key and delete it before reporting the cancel.
+    if (ctx?.signal?.aborted && spec.idempotencyKey) {
+      await reclaimCancelledCreate(client, body, spec.idempotencyKey)
+    }
+    throw error
+  }
+  if (ready.clone) {
+    // A cancelled, failed or stalled clone deletes the sandbox itself.
+    await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
+  }
+  if (ctx?.signal?.aborted) {
+    // Cancelled just as it answered: nothing will use it, so it must not keep running (and billing).
+    await client.destroy(ready.sandbox.id).catch(() => undefined)
+    throw new EnvironmentProviderError('aborted', 'Cancelled.')
+  }
+  ctx?.onProgress?.({ phase: 'connecting' })
+  return ready
 }
 
 /** A clone whose progress has not moved this long is stuck (git's own silent stretches are ~20 s). */

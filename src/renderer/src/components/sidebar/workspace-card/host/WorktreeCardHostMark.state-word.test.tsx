@@ -27,7 +27,9 @@ vi.mock('@/store', () => ({
 import { WorktreeCardHostStateWord } from './WorktreeCardHostMark'
 import {
   clearWorktreeGoingToSleep,
+  markSleepCopySaving,
   markWorktreeGoingToSleep,
+  noteSleepCopyRead,
   resetWorktreeSleepViewForTests
 } from '@/lib/worktree-sleep-view'
 
@@ -46,14 +48,26 @@ describe('the sidebar row state word', () => {
     const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
     expect(word(container)).toBeNull()
     act(() => markWorktreeGoingToSleep('ws'))
-    expect(word(container)?.textContent).toBe('Going to sleep…')
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
     expect(word(container)?.getAttribute('data-host-state-word')).toBe('goingToSleep')
     // The suspended record lands before the sleep ends: the row keeps "Going to sleep…" until the
     // view flips too (same flag), never Asleep ahead of it.
     view.state = 'sleeping'
     rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
-    expect(word(container)?.textContent).toBe('Going to sleep…')
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
     act(() => clearWorktreeGoingToSleep('ws'))
+    expect(word(container)?.textContent).toBe('Asleep')
+  })
+
+  it('SLEEP-IN-PROGRESS: keeps saying it is saving after the sleep returns, until the copy is read', () => {
+    const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
+    view.state = 'sleeping'
+    act(() => markSleepCopySaving('ws', 1_000))
+    rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
+    act(() => noteSleepCopyRead('ws', 999))
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
+    act(() => noteSleepCopyRead('ws', 1_000))
     expect(word(container)?.textContent).toBe('Asleep')
   })
 

@@ -2,12 +2,20 @@ import React, { useEffect, useRef } from 'react'
 import { AlertTriangle, Cloud, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CloudNotPairedCard } from './CloudNotPairedCard'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { TERMINAL_CONTENT_INSET_PX, useTerminalContentInset } from './use-terminal-content-inset'
+import { useBillingSummary } from '@/components/billing/billing-summary-store'
+import { cloudWakeBillingCopy } from './cloud-wake-billing'
+import {
+  cloudWakeFailedTitle,
+  cloudWorkspaceAnnouncement
+} from '@/lib/orca-cloud/cloud-workspace-name-copy'
+import { CloudWakeBillingFixButton } from './CloudWakeBillingFixButton'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
@@ -101,6 +109,10 @@ export function CloudWakingOverlay({
   const t = useTranslate()
   const failed = wake.phase === 'failed'
   const unknownServer = failed && isUnknownServerWakeFailure(wake.message)
+  const { canManageBilling } = useBillingSummary()
+  // The plan refused it: say why, offer the fix to someone who can make it, no Restart (it fails too).
+  const billing = cloudWakeBillingCopy(wake, canManageBilling, t)
+  const billingFix = billing?.fix ?? null
   const now = useNow(1_000, !failed && !leaving)
   const seconds = wakeElapsedSeconds(wake.startedAt, Math.max(now, wake.at))
   const slow = !failed && seconds >= WAKE_SLOW_S
@@ -117,7 +129,6 @@ export function CloudWakingOverlay({
       rootRef.current?.focus()
     }
   }, [failed, autoFocus])
-  const name = workspaceName || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
   // Once the sandbox is up the pill says so; the clock still counts from the wake's start.
   const title =
     wake.phase === 'connecting'
@@ -160,13 +171,15 @@ export function CloudWakingOverlay({
       aria-label={
         failed
           ? undefined
-          : wake.source === 'restart'
-            ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name })
-            : wake.source === 'unarchive'
-              ? t('orcaCloudWorkspace.announce.unarchivingNamed', 'Unarchiving {{name}}.', {
-                  name
-                })
-              : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })
+          : cloudWorkspaceAnnouncement(
+              wake.source === 'restart'
+                ? 'restarting'
+                : wake.source === 'unarchive'
+                  ? 'unarchiving'
+                  : 'waking',
+              workspaceName,
+              t
+            )
       }
     >
       {passThrough ? null : <TerminalSkeleton still={failed} />}
@@ -189,7 +202,9 @@ export function CloudWakingOverlay({
         }
         data-cloud-waking-anchor={passThrough ? 'terminal' : undefined}
       >
-        {failed ? (
+        {failed && wake.notPaired ? (
+          <CloudNotPairedCard name={workspaceName} autoFocus={autoFocus} onDismiss={onDismiss} />
+        ) : failed ? (
           <div
             role="alert"
             className="flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-xs"
@@ -211,11 +226,11 @@ export function CloudWakingOverlay({
                           'components.cloudRemoteDesktop.wakeFailedTitle',
                           'Couldn’t wake the sandbox.'
                         )
-                      : t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
-                          name
-                        })}
+                      : cloudWakeFailedTitle(workspaceName, t)}
                 </div>
-                {wake.message && !unknownServer ? (
+                {billing ? (
+                  <p className="break-words text-xs text-foreground">{billing.body}</p>
+                ) : wake.message && !unknownServer ? (
                   <p className="break-words text-xs text-foreground">{wake.message}</p>
                 ) : null}
                 <p className="text-xs text-muted-foreground">
@@ -238,14 +253,20 @@ export function CloudWakingOverlay({
               </Button>
             </div>
             <div className="flex justify-end gap-2">
-              {terminalStalled ? null : (
+              {terminalStalled || billing ? null : (
                 <Button size="sm" variant="ghost" onClick={onRestart}>
                   {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
                 </Button>
               )}
-              <Button ref={retryRef} size="sm" onClick={onRetry}>
+              <Button
+                ref={retryRef}
+                size="sm"
+                variant={billingFix ? 'ghost' : 'default'}
+                onClick={onRetry}
+              >
                 {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
               </Button>
+              {billingFix ? <CloudWakeBillingFixButton fix={billingFix} onRetry={onRetry} /> : null}
             </div>
           </div>
         ) : (

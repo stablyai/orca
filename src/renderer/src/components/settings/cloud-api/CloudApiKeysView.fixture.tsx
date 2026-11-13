@@ -1,7 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type {
   CloudApiGrant,
-  CloudApiAuditPage,
   CloudApiKeyList,
   CloudApiMe,
   CloudApiSettings
@@ -65,34 +64,6 @@ const KEYS: CloudApiKeyList = {
 }
 
 const SETTINGS: CloudApiSettings = { settings: { vmCliEnabled: true }, canEdit: true }
-const AUDIT: CloudApiAuditPage = {
-  nextBefore: null,
-  entries: [
-    {
-      id: 'a1',
-      actor: { type: 'user', id: 'u_7f3k', userId: 'u_7f3k', userName: null },
-      action: 'api_key.create',
-      target: { type: 'api_key', id: 'key_ci' },
-      detail: { name: 'GitHub Actions deploy' },
-      createdAt: NOW - 3 * DAY
-    },
-    {
-      id: 'a2',
-      actor: { type: 'api_key', id: 'key_dash', userId: 'u_grace', userName: 'Grace Hopper' },
-      action: 'workspace.create',
-      target: { type: 'workspace', id: 'sbx_7Hq2' },
-      createdAt: NOW - 5 * MIN
-    },
-    {
-      id: 'a3',
-      actor: { type: 'workspace_token', id: 'key_ws', userId: 'u_ada' },
-      action: 'workspace.message',
-      target: { type: 'workspace', id: 'sbx_7Hq2' },
-      createdAt: NOW - 2 * MIN
-    }
-  ]
-}
-
 const GRANTS: CloudApiGrant[] = [
   {
     id: 'fam_claude',
@@ -126,13 +97,11 @@ const base: CloudApiKeysViewProps = {
   viewer: ADMIN,
   keys: { status: 'ok', data: KEYS },
   settings: { status: 'ok', data: SETTINGS },
-  audit: { status: 'ok', data: AUDIT },
   now: NOW,
   onRefresh: () => {},
   onCreate: async () => ({ ok: false, error: 'server' }),
   onRevoke: async () => null,
   onToggleVmCli: async () => null,
-  onLoadAudit: () => {},
   onCreateApproval: async () => ({ ok: false, error: 'server' }),
   grants: { status: 'ok', data: [] },
   onRevokeGrant: async () => null,
@@ -155,11 +124,6 @@ export const disconnectAppConfirm = defineFixture({
   )
 })
 
-export const listWithActivity = defineFixture({
-  width: 760,
-  render: () => <CloudApiKeysView {...base} initial={{ auditOpen: true }} />
-})
-
 export const empty = defineFixture({
   width: 760,
   render: () => (
@@ -180,7 +144,6 @@ export const loading = defineFixture({
       keys={{ status: 'loading' }}
       grants={{ status: 'loading' }}
       settings={{ status: 'loading' }}
-      audit={null}
     />
   )
 })
@@ -196,7 +159,6 @@ export const error = defineFixture({
       }}
       settings={{ status: 'error', message: 'Couldn’t reach Orca Cloud.' }}
       grants={{ status: 'error', message: 'Couldn’t reach Orca Cloud.' }}
-      audit={null}
     />
   )
 })
@@ -212,7 +174,6 @@ export const memberView = defineFixture({
         data: { availableScopes: MEMBER.scopes, keys: [{ ...KEYS.keys[0]!, createdBy: 'u_linus' }] }
       }}
       settings={{ status: 'ok', data: { settings: { vmCliEnabled: false }, canEdit: false } }}
-      audit={null}
     />
   )
 })
@@ -229,7 +190,6 @@ export const createDialogMemberCustom = defineFixture({
       {...base}
       viewer={MEMBER}
       keys={{ status: 'ok', data: { availableScopes: MEMBER.scopes, keys: [] } }}
-      audit={null}
       initial={{ create: true }}
     />
   ),

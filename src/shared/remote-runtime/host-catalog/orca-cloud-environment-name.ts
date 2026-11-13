@@ -24,7 +24,12 @@ export function legacyOrcaCloudEnvironmentName(name: string, runtimeId: string):
 export function isOrcaCloudRuntimeEnvironment(environment: {
   name?: string | null
   source?: RuntimeEnvironmentSource
+  /** A paired Orca Cloud workspace's server (main marks it from the pairing bindings). */
+  orcaCloudPaired?: boolean
 }): boolean {
+  if (environment.orcaCloudPaired === true) {
+    return true
+  }
   return (
     environment.source === 'ephemeral-vm' &&
     ORCA_CLOUD_ENVIRONMENT_NAME.test(environment.name?.trim() ?? '')
@@ -35,6 +40,7 @@ export function isOrcaCloudRuntimeEnvironment(environment: {
 export function runtimeEnvironmentDisplayName(environment: {
   name: string
   source?: RuntimeEnvironmentSource
+  orcaCloudPaired?: boolean
 }): string {
   return isOrcaCloudRuntimeEnvironment(environment) ? ORCA_CLOUD_HOST_LABEL : environment.name
 }

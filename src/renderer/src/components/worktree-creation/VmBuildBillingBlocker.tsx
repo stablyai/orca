@@ -22,7 +22,8 @@ export type BillingBlockerPhase =
   /** A fix in the browser (portal): re-check on return, or with Check again. */
   | { kind: 'browser'; checking: boolean; stillBlocked: boolean }
 
-function blockerCopy(
+/** The blocker's words per refusal; also the waking card's, so a refused wake says the same. */
+export function blockerCopy(
   kind: BillingBlockKind,
   t: Translate
 ): { title: string; body: string; ask: string } {
@@ -31,8 +32,9 @@ function blockerCopy(
       return {
         title: t('worktreeCreation.billingBlock.plan.title', 'Choose a plan'),
         body: t(
-          'worktreeCreation.billingBlock.plan.body',
-          'Your team needs a plan to start cloud workspaces.'
+          // Only teams that had Orca Cloud reach the sheet; a never-planned team gets setup.
+          'worktreeCreation.billingBlock.plan.body2',
+          'Your team’s plan has ended.'
         ),
         ask: t('worktreeCreation.billingBlock.plan.ask', 'Ask an owner or admin to choose a plan.')
       }

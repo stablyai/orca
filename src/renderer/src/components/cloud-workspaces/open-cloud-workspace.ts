@@ -11,8 +11,6 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { cloudWorkspaceShareLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { cloudWorkspaceIdentity, rememberCloudWorkspaces } from './cloud-workspace-identity'
 import {
   getWorktreeExecutionHostId,
   toRuntimeExecutionHostId
@@ -22,7 +20,7 @@ import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
 
 /** On success, the worktree that was revealed (null when its projects are still syncing). */
 export type OpenOutcome =
-  | { ok: true; worktreeId: string | null }
+  | { ok: true; worktreeId: string | null; hostId?: string }
   /** `unknownServerError`: the wake failed on the server for no known reason (shared copy). */
   | { ok: false; message: string; unknownServerError?: boolean }
 
@@ -46,7 +44,7 @@ export function cloudWorkspaceTitle(
     : (repoName ?? w.workspaceId)
 }
 
-function firstWorktreeOnHost(hostId: string): string | null {
+export function firstWorktreeOnHost(hostId: string): string | null {
   const state = useAppStore.getState()
   for (const [repoId, worktrees] of Object.entries(selectWorktreesByRepo(state))) {
     const repo = state.repos.find((r) => r.id === repoId)
@@ -66,7 +64,20 @@ function isPairingRejected(error: unknown): boolean {
   return error instanceof Error && /\b(unauthori[sz]ed|device_revoked)\b/i.test(error.message)
 }
 
-async function connectAndReveal(environmentId: string, name: string): Promise<OpenOutcome> {
+export type OpenCloudWorkspaceOptions = {
+  /**
+   * The server this open connects to, before any of its rows load. A GitHub-only create's sheet
+   * hides that server's rows until it hands off to them, so its pending row never doubles up.
+   */
+  onHost?: (hostId: string) => void
+}
+
+async function connectAndReveal(
+  environmentId: string,
+  name: string,
+  options: OpenCloudWorkspaceOptions = {}
+): Promise<OpenOutcome> {
+  options.onHost?.(toRuntimeExecutionHostId(environmentId))
   const environments = await window.api.runtimeEnvironments.list()
   useAppStore.getState().setRuntimeEnvironments(environments)
   const environment = environments.find((e) => e.id === environmentId)
@@ -106,7 +117,7 @@ async function connectAndReveal(environmentId: string, name: string): Promise<Op
       )
     )
   }
-  return { ok: true, worktreeId }
+  return { ok: true, worktreeId, hostId }
 }
 
 /** Drops this device's previous pairing so re-pairing does not leave a dead server and grant. */
@@ -127,15 +138,45 @@ async function forgetPairing(
   }
 }
 
-async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<OpenOutcome> {
+/** Wakes a sleeping workspace before connecting to it; the failed outcome when it was refused. */
+async function wakeIfAsleep(workspace: CloudWorkspace): Promise<OpenOutcome | null> {
+  if (workspace.status !== 'suspended' && workspace.status !== 'suspending') {
+    return null
+  }
+  const woke = await window.api.cloudWorkspaces.wake(workspace.id)
+  if (woke.ok) {
+    return null
+  }
+  const owner = {
+    self: workspace.access === 'owner',
+    name: workspace.memberNames?.[workspace.ownerUserId] ?? null
+  }
+  return {
+    ok: false,
+    message: describeError(woke.error, woke.reason, translate, owner),
+    unknownServerError: isUnknownServerFailure(woke.error, woke.status)
+  }
+}
+
+async function pairAndReveal(
+  workspace: CloudWorkspace,
+  name: string,
+  options: OpenCloudWorkspaceOptions
+): Promise<OpenOutcome> {
   const api = window.api.cloudWorkspaces
   const binding = (await api.environmentBindings())[workspace.id]
   if (binding) {
     const environments = await window.api.runtimeEnvironments.list()
     const saved = environments.some((e) => e.id === binding.environmentId)
     if (saved) {
+      // PAIRED-WAKE: an existing pairing connects straight to the VM, which a sleeping one can't
+      // answer; wake it first (billing refusals read like a teammate's grant refusal below).
+      const refused = await wakeIfAsleep(workspace)
+      if (refused) {
+        return refused
+      }
       try {
-        return await connectAndReveal(binding.environmentId, name)
+        return await connectAndReveal(binding.environmentId, name, options)
       } catch (error) {
         // Only a rejected pairing is fixed by pairing again; anything else is surfaced as is.
         if (!isPairingRejected(error)) {
@@ -187,10 +228,13 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
   }
   // Messages to this workspace now carry the sender line if it is shared with the team.
   void refreshCloudMessageSenders().catch(() => undefined)
-  return await connectAndReveal(added.environment.id, name)
+  return await connectAndReveal(added.environment.id, name, options)
 }
 
-async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
+async function openOnce(
+  workspace: CloudWorkspace,
+  options: OpenCloudWorkspaceOptions
+): Promise<OpenOutcome> {
   const name = cloudWorkspaceTitle(workspace)
   try {
     if (workspace.access === 'owner') {
@@ -218,7 +262,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
         )
       }
     }
-    return await pairAndReveal(workspace, name)
+    return await pairAndReveal(workspace, name, options)
   } catch (error) {
     // Raw transport/RPC messages are not user copy; keep them for diagnostics only.
     console.warn('[cloud-workspaces] open failed', error)
@@ -236,50 +280,18 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
 // instead of minting parallel grants.
 const opening = new Map<string, Promise<OpenOutcome>>()
 
-export function openCloudWorkspace(workspace: CloudWorkspace): Promise<OpenOutcome> {
+export function openCloudWorkspace(
+  workspace: CloudWorkspace,
+  options: OpenCloudWorkspaceOptions = {}
+): Promise<OpenOutcome> {
   const existing = opening.get(workspace.id)
   if (existing) {
     return existing
   }
-  const attempt = openOnce(workspace).finally(() => opening.delete(workspace.id))
+  const attempt = openOnce(workspace, options).finally(() => opening.delete(workspace.id))
   opening.set(workspace.id, attempt)
   return attempt
 }
 
-/** The org slug + W-number link when the control plane gave one, else the sandbox id form. */
-async function shareLinkFor(id: string, chatId?: string | null): Promise<string> {
-  let link = cloudWorkspaceIdentity(id)?.link ?? null
-  if (!link) {
-    const fetched = await window.api.cloudWorkspaces.get(id).catch(() => null)
-    if (fetched?.ok) {
-      rememberCloudWorkspaces([fetched.value])
-      link = fetched.value.link ?? null
-    }
-  }
-  return cloudWorkspaceShareLink({ id, ...(link ? { link } : {}) }, chatId)
-}
-
-export async function copyCloudWorkspaceLink(
-  id: string,
-  chatId?: string | null,
-  options: { quiet?: boolean } = {}
-): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(await shareLinkFor(id, chatId))
-  } catch (error) {
-    console.warn('[cloud-workspaces] copy link failed', error)
-    toast.error(
-      translate('auto.components.cloudWorkspaces.copyFailed', "Couldn't copy the link. Try again.")
-    )
-    return false
-  }
-  if (options.quiet) {
-    return true
-  }
-  toast.success(
-    chatId
-      ? translate('auto.components.cloudWorkspaces.chatLinkCopied', 'Chat link copied')
-      : translate('auto.components.cloudWorkspaces.workspaceLinkCopied', 'Workspace link copied')
-  )
-  return true
-}
+// Copy link lives beside it; re-exported so callers keep one import.
+export { copyCloudWorkspaceLink, shareLinkFor } from './cloud-workspace-share-link'

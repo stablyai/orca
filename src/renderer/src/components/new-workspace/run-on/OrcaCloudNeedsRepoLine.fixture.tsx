@@ -10,7 +10,7 @@ export const withGitHubRepositories = defineFixture({
   width: 260,
   render: () => (
     <Column>
-      <OrcaCloudNeedsRepoLine hasRepos onChooseRepository={() => {}} onAddRepository={() => {}} />
+      <OrcaCloudNeedsRepoLine hasRepos onAddRepository={() => {}} />
     </Column>
   )
 })
@@ -18,17 +18,13 @@ export const noGitHubRepositories = defineFixture({
   width: 260,
   render: () => (
     <Column>
-      <OrcaCloudNeedsRepoLine
-        hasRepos={false}
-        onChooseRepository={() => {}}
-        onAddRepository={() => {}}
-      />
+      <OrcaCloudNeedsRepoLine hasRepos={false} onAddRepository={() => {}} />
     </Column>
   )
 })
-// Keyboard: the link shows its focus ring.
+// Keyboard: the Add link shows its focus ring.
 export const focused = defineFixture({
-  ...withGitHubRepositories,
+  ...noGitHubRepositories,
   interact: async (frame: HTMLElement) => {
     frame.querySelector<HTMLButtonElement>('button')?.focus()
     await new Promise((resolve) => setTimeout(resolve, 100))

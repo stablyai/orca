@@ -4,6 +4,8 @@ import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
+import { recordBillingStatus } from '../billing/billing-summary-store'
+import { sampleTeam } from '../billing/plan-billing-fixtures'
 
 const noop = (): void => {}
 
@@ -120,6 +122,63 @@ export const wakeFailedServerError = defineFixture({
           message: 'Orca Cloud request failed (HTTP 502).'
         })}
         workspaceName="fix-auth-redirect"
+        autoFocus={false}
+        onRetry={noop}
+        onRestart={noop}
+        onDismiss={noop}
+      />
+    </Pane>
+  )
+})
+
+function stubBillingRole(canManageBilling: boolean): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture entitlement overrides only the role the card reads.
+  const result = { status: 'ok', entitlement: { ...sampleTeam, canManageBilling } } as never
+  window.api.orcaProfiles.billingStatus = () => Promise.resolve(result)
+  recordBillingStatus(result)
+}
+
+// The plan refused the wake: the card says why in plain words (never "entitlement_denied"), offers
+// plans only where buying fixes it and only to an owner or admin, and drops Restart (it fails too).
+function wakeRefused(reason: string | null, canManageBilling = true) {
+  return defineFixture({
+    width: 640,
+    setup: () => stubBillingRole(canManageBilling),
+    render: () => (
+      <Pane>
+        <CloudWakingOverlay
+          wake={startedAgo(4_000, {
+            phase: 'failed',
+            message: 'entitlement_denied',
+            billingDenial: { reason }
+          })}
+          workspaceName="fix-auth-redirect"
+          autoFocus={false}
+          onRetry={noop}
+          onRestart={noop}
+          onDismiss={noop}
+        />
+      </Pane>
+    )
+  })
+}
+
+export const wakeRefusedPlanEnded = wakeRefused('subscription_inactive')
+export const wakeRefusedHoursUsed = wakeRefused('included_hours_exhausted')
+export const wakeRefusedSpendCap = wakeRefused('overage_cap_reached')
+export const wakeRefusedPayment = wakeRefused('payment_past_due')
+export const wakeRefusedTeamLimit = wakeRefused('concurrency_limit')
+export const wakeRefusedPlanEndedMember = wakeRefused('subscription_inactive', false)
+
+// No workspace name: its own sentence ("Couldn’t wake this workspace"), never "This workspace"
+// spliced into the template.
+export const wakeFailedUnnamed = defineFixture({
+  width: 640,
+  render: () => (
+    <Pane>
+      <CloudWakingOverlay
+        wake={startedAgo(26_000, { phase: 'failed' })}
+        workspaceName={null}
         autoFocus={false}
         onRetry={noop}
         onRestart={noop}

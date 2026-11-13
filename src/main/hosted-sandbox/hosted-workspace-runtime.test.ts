@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { CloudOomEvent } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedWorkspaceStatus } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { HostedSandboxViewSchema } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { noteCloudPairingBindings } from '../cloud-workspaces/cloud-paired-environment-ids'
 import { createOomTracker, withGitSetup } from './hosted-workspace-runtime'
+import { findCloudSandbox } from './cloud-workspace-target'
 
 function status(checkedAt: number, uptimeSeconds: number, oomKills: number): HostedWorkspaceStatus {
   return {
@@ -103,5 +108,32 @@ describe('GIT-SETUP on the status read', () => {
     }
     expect(HostedSandboxViewSchema.safeParse({ ...view, gitSetup: 'failed' }).success).toBe(true)
     expect(HostedSandboxViewSchema.safeParse({ ...view, gitSetup: 'other' }).success).toBe(false)
+  })
+})
+
+describe('findCloudSandbox (PAIRED-STATUS)', () => {
+  it('answers for a paired server only while it is bound to a sandbox', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-paired-status-'))
+    try {
+      noteCloudPairingBindings({ sbx_paired: { environmentId: 'env-gh' } })
+      expect(
+        findCloudSandbox(userDataPath, { workspaceId: 'row', environmentId: 'env-gh' })
+      ).toEqual({
+        sandboxId: 'sbx_paired',
+        owned: null
+      })
+      // No server named, or one that is not bound: not cloud (a window can't name any sandbox).
+      expect(findCloudSandbox(userDataPath, { workspaceId: 'row' })).toBeNull()
+      expect(
+        findCloudSandbox(userDataPath, { workspaceId: 'row', environmentId: 'env-other' })
+      ).toBeNull()
+      noteCloudPairingBindings({})
+      expect(
+        findCloudSandbox(userDataPath, { workspaceId: 'row', environmentId: 'env-gh' })
+      ).toBeNull()
+    } finally {
+      noteCloudPairingBindings({})
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
   })
 })

@@ -30,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import type { GitHubCreateSource } from '@/lib/orca-cloud/github-create-source'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
@@ -66,6 +67,11 @@ export type WorktreeCreationRequest = {
     /** Set for the built-in hosted provider, whose build sheet speaks in plain language. */
     provider?: 'orca-cloud'
   }
+  /**
+   * Orca Cloud from a GitHub repository with no clone here (D4, GH-CREATE-SHEET): the sandbox clones
+   * it and this computer pairs to it. Same build sheet; Retry and Back to draft use this.
+   */
+  githubSource?: GitHubCreateSource
   // Capture local/runtime progress routing at submit so focus changes cannot alter Retry behavior.
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
   name: string
@@ -189,6 +195,8 @@ export type PendingWorktreeCreation = {
   resumedAt?: number
   /** VM creates: the provisioned VM's runtime environment, known once it answers. */
   vmEnvironmentId?: string
+  /** GitHub-only Orca Cloud create: the server it is pairing to; its rows wait for the hand-off. */
+  pairingHostId?: string
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
   /** Phases entered so far with their start times, so the chat checklist can time each step. */

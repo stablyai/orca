@@ -6,7 +6,12 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { wakeCloudWorkspace } from '../cloud-workspace-actions'
 import { useCloudOfflineData } from './use-cloud-offline-data'
-import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
+import { useIsWorktreeGoingToSleep, useSleepCopySave } from '@/lib/worktree-sleep-view'
+import {
+  CloudSleepCopyFailed,
+  CloudSleepCopySaving,
+  useSleepCopyProgress
+} from './CloudSleepCopyState'
 import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 
 const RELATIVE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000
@@ -50,22 +55,26 @@ export function CloudAsleepFilesPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const goingToSleep = useIsWorktreeGoingToSleep(workspaceId)
-  const { snapshot } = useCloudOfflineData(workspaceId, !goingToSleep)
+  const copyState = useSleepCopySave(workspaceId)?.state ?? null
+  const { snapshot } = useCloudOfflineData(workspaceId, !goingToSleep, {
+    saving: copyState === 'saving'
+  })
+  const copySave = useSleepCopyProgress(workspaceId, snapshot?.capturedAt)
   const now = useNow(30_000)
   const git = snapshot?.git ?? null
-  if (goingToSleep) {
+  if (goingToSleep || copySave === 'saving') {
     // Sleep was just chosen: its copy is being saved, and nothing here should wake it (RA-13b).
+    // Never "Files aren't available" yet: that is only the answer once the copy is in.
     return (
-      <div
-        className="flex h-full min-h-0 flex-col px-3 py-3 text-xs text-muted-foreground"
-        data-cloud-asleep-files="going-to-sleep"
-      >
-        <p role="status">
-          {t(
-            'orcaCloudWorkspace.files.goingToSleep',
-            'Going to sleep… The read-only copy shows here when it’s done.'
-          )}
-        </p>
+      <div className="flex h-full min-h-0 flex-col px-3 py-3" data-cloud-asleep-files="saving">
+        <CloudSleepCopySaving />
+      </div>
+    )
+  }
+  if (copySave === 'failed' && !archived) {
+    return (
+      <div className="flex h-full min-h-0 flex-col px-3 py-3" data-cloud-asleep-files="failed">
+        <CloudSleepCopyFailed onWake={() => void wakeCloudWorkspace(workspaceId)} />
       </div>
     )
   }

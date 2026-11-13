@@ -1,11 +1,9 @@
 import { LandingCloudCard } from './landing/LandingCloudCard'
-import {
-  CloudWorkspacesHome,
-  useCloudWorkspacesPresent
-} from './cloud-workspaces/CloudWorkspacesHome'
-import { useCloudWorkspaceHighlight } from './cloud-workspaces/cloud-workspace-links'
+import { LandingCloudSignInCard, useSignedOutOfOrcaCloud } from './landing/LandingCloudSignInCard'
+import { LandingAddProjectMenu } from './landing/LandingAddProjectMenu'
+import { useCloudWorkspacesPresent } from './cloud-workspaces/use-cloud-workspaces'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, Star, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../lib/class-names'
 import { useAppStore } from '../store/index'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -23,7 +21,7 @@ import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import {
-  LandingActions,
+  LANDING_ACTION_BUTTON_CLASS,
   LandingBrand,
   LandingShortcutList,
   type LandingShortcutItem
@@ -221,10 +219,13 @@ function PreflightBanner({
 
 export default function Landing(): React.JSX.Element {
   const t = useTranslate()
-  const cloudHighlightId = useCloudWorkspaceHighlight()
-  const cloudListPresent = useCloudWorkspacesPresent()
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
+  const cloudPresent = useCloudWorkspacesPresent()
+  const signedOutOfCloud = useSignedOutOfOrcaCloud()
+  const reconnectRequired = useAppStore(
+    (s) => s.orcaProfileAuthStatus?.state === 'reconnect-required'
+  )
 
   const createActionLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo))
@@ -259,52 +260,47 @@ export default function Landing(): React.JSX.Element {
   ])
 
   return (
-    <div className="scrollbar-sleek absolute inset-0 flex flex-col items-center overflow-y-auto bg-background">
-      {/* Centered when alone. With the cloud list below, the list is the page (JA-30): no wordmark
-          or "select a workspace" line, just the primary actions as a top row aligned with it. */}
-      <div
-        className={cn('flex w-full flex-col items-center', cloudListPresent ? 'pt-8' : 'my-auto')}
-      >
-        <div className={cn('w-full px-6', cloudListPresent ? '@container max-w-3xl' : 'max-w-lg')}>
-          <div
-            className={cn(
-              'flex flex-col',
-              cloudListPresent ? 'items-start gap-3 pb-4' : 'items-center gap-4 py-8'
-            )}
-          >
-            {!cloudListPresent && <LandingBrand compact={false} />}
+    <div className="absolute inset-0 flex items-center justify-center bg-background">
+      <div className="w-full max-w-lg px-6">
+        <div className="flex flex-col items-center gap-4 py-8">
+          <LandingBrand />
 
-            {preflightIssues.length > 0 && (
-              <PreflightBanner issues={preflightIssues} repos={repos} />
-            )}
+          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
 
-            {/* With the cloud list showing, only the no-project hint stays: the list is what to pick. */}
-            {(!cloudListPresent || !hasProjects) && (
-              <p className="text-sm text-muted-foreground text-center">
-                {hasProjects
-                  ? t(
-                      'auto.components.Landing.9c00bd4adf',
-                      'Select a workspace from the sidebar to begin.'
-                    )
-                  : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
-              </p>
-            )}
+          <p className="text-sm text-muted-foreground text-center">
+            {hasProjects
+              ? t(
+                  'auto.components.Landing.9c00bd4adf',
+                  'Select a workspace from the sidebar to begin.'
+                )
+              : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
+          </p>
 
-            <LandingActions
-              overCloudList={cloudListPresent}
-              addProjectLabel={t('auto.components.Landing.f9eaa9e12d', 'Add project')}
-              createLabel={createActionLabel}
-              onAddProject={() => openModal('add-repo')}
-              onCreate={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-            />
+          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+            <LandingAddProjectMenu>
+              <button className={LANDING_ACTION_BUTTON_CLASS}>
+                <FolderPlus className="size-3.5" />
+                {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              </button>
+            </LandingAddProjectMenu>
 
-            {hasProjects ? <LandingCloudCard cloudWorkspacesPresent={cloudListPresent} /> : null}
-
-            {!cloudListPresent && <LandingShortcutList shortcuts={shortcuts} />}
+            <button
+              className={LANDING_ACTION_BUTTON_CLASS}
+              onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+            >
+              <GitBranchPlus className="size-3.5" />
+              {createActionLabel}
+            </button>
           </div>
-        </div>
-        <div className="w-full max-w-3xl px-6 pb-20 empty:hidden">
-          <CloudWorkspacesHome highlightId={cloudHighlightId} />
+
+          {/* V3-08: signed out, the team's cloud workspaces can't be opened; say so here. */}
+          {hasProjects && signedOutOfCloud ? (
+            <LandingCloudSignInCard reconnect={reconnectRequired} />
+          ) : hasProjects ? (
+            <LandingCloudCard cloudWorkspacesPresent={cloudPresent} />
+          ) : null}
+
+          <LandingShortcutList shortcuts={shortcuts} />
         </div>
       </div>
 

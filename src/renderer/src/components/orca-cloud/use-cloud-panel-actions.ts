@@ -7,6 +7,9 @@ import { openMoveToThisComputer } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import type { CloudPanelActions } from './CloudWorkspaceStatusPanel'
+import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
+import { usePairedCloudAccess } from '@/components/cloud-workspaces/cloud-workspace-identity'
 import {
   runArchiveCloudWorkspace,
   runRestartCloudWorkspace,
@@ -32,8 +35,18 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
   const confirm = useContext(ConfirmationDialogContext)
   const agentsRunning = useWorktreeActivityStatus(workspaceId) === 'working'
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
-  return useMemo(
-    () => ({
+  // PAIRED rows: Wake and Restart (PAIRED-WAKE), Archive and Unarchive (PAIRED-ARCHIVE) reach the
+  // bound sandbox. Only its creator can archive one, so a teammate's paired row known not to be
+  // theirs offers neither. Move here stays off: it moves through this desktop's own runtime record
+  // and synced copy (cloud-transfer), which a paired workspace doesn't have on this computer.
+  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, workspaceId))
+  const pairedEnvironmentId = useCloudWorkspace((state) =>
+    paired ? (state.paired[workspaceId] ?? null) : null
+  )
+  const access = usePairedCloudAccess(pairedEnvironmentId)
+  const canArchivePaired = access === null || access === 'owner'
+  return useMemo(() => {
+    const all: CloudPanelActions = {
       onWake: () => {
         close()
         void wakeCloudWorkspace(workspaceId)
@@ -59,7 +72,13 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
         close()
         runWorktreeDelete(workspaceId)
       }
-    }),
-    [workspaceId, close, agentsRunning, confirm, name]
-  )
+    }
+    if (!paired) {
+      return all
+    }
+    const { onWake, onRestart, onSleep, onDelete, onArchive, onUnarchive } = all
+    return canArchivePaired
+      ? { onWake, onRestart, onSleep, onDelete, onArchive, onUnarchive }
+      : { onWake, onRestart, onSleep, onDelete }
+  }, [workspaceId, close, agentsRunning, confirm, name, paired, canArchivePaired])
 }

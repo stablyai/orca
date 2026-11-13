@@ -1,5 +1,10 @@
 import { toast } from 'sonner'
 import { toastCloudSleepFailure } from '@/lib/orca-cloud/cloud-sleep-failure-toast'
+import {
+  isPairedCloudSleepTarget,
+  sleepPairedCloudSandboxes
+} from '@/lib/orca-cloud/paired-cloud-sleep'
+import { isPairedCloudWorkspace } from '@/lib/orca-cloud/paired-cloud-wake'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -8,11 +13,14 @@ import { workspaceSleepTarget } from './workspace-sleep-target'
 import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
 import {
+  clearSleepCopySave,
   clearWorktreeGoingToSleep,
   clearWorktreeKeptAwake,
+  markSleepCopySaving,
   markWorktreeGoingToSleep,
   releaseWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
+import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { holdActiveCloudSleepView } from './workspace-sleep-view-hold'
 
 /** One per host asked to stop the workspace's chats. */
@@ -79,7 +87,14 @@ export async function runSleepWorktrees(
   worktreeIds: readonly string[]
 ): Promise<WorkspaceSleepResult[]> {
   // Intent (hover, focus) must not wake what was just put to sleep.
+  const pressedAt = Date.now()
+  const ownedCloud = getCloudWorkspaceSnapshot().ids
   for (const id of worktreeIds) {
+    if (ownedCloud.has(id) || isPairedCloudWorkspace(id)) {
+      // Saving its read-only copy until the asleep view reads one back (SLEEP-IN-PROGRESS); a
+      // PAIRED one's is the sealed snapshot its sandbox hands the control plane as it sleeps.
+      markSleepCopySaving(id, pressedAt)
+    }
     notePredictiveWakeSlept(id)
     // "Going to sleep…" from the click on: main first saves the copy the asleep view shows.
     markWorktreeGoingToSleep(id)
@@ -95,16 +110,23 @@ export async function runSleepWorktrees(
   for (const id of unsleptWorktreeIds) {
     releaseWorktreeSleepView(id)
   }
+  // Awake after all (refused, or its machine kept running): no copy is coming.
+  for (const id of [...unsleptWorktreeIds, ...vmStillRunningIds]) {
+    clearSleepCopySave(id)
+  }
+  // A paired cloud workspace's sandbox sleeps through the control plane (PAIRED-SLEEP).
+  const unslept = new Set(unsleptWorktreeIds)
+  const pairedStillRunning = await sleepPairedCloudSandboxes(
+    worktreeIds.filter((id) => !unslept.has(id))
+  )
+  const stillRunningIds = [...vmStillRunningIds, ...pairedStillRunning]
+  // The paired sandbox kept running: no sealed copy is coming either.
+  for (const id of pairedStillRunning) {
+    clearSleepCopySave(id)
+  }
   // An Orca Cloud sandbox left running gets the cloud copy (sandbox hours, Try again) instead.
-  const cloudToasted = toastCloudSleepFailure(
-    vmStillRunningIds,
-    (ids) => void runSleepWorktrees(ids)
-  )
-  toastSleepFailures(
-    new Set(worktreeIds).size,
-    errors,
-    vmStillRunningIds.length > 0 && !cloudToasted
-  )
+  const cloudToasted = toastCloudSleepFailure(stillRunningIds, (ids) => void runSleepWorktrees(ids))
+  toastSleepFailures(new Set(worktreeIds).size, errors, stillRunningIds.length > 0 && !cloudToasted)
   // A slept Orca Cloud sandbox won't restart, so its restart warning no longer applies.
   for (const result of results) {
     if (result.completed) {
@@ -166,6 +188,45 @@ export type WorktreeSleepOutcome = {
 }
 
 /** The sleep without the toast, for callers that report failures themselves. */
+/** PAIRED-ARCHIVE-STALL: how long a PAIRED workspace's host-side Sleep may take before it is left behind. */
+export const PAIRED_HOST_SLEEP_TIMEOUT_MS = 30_000
+
+/**
+ * A paired workspace's host-side Sleep (its terminals, over the paired connection) can hang when that
+ * connection is slow or reconnecting; then neither the control-plane suspend (what stops billing) nor
+ * an Archive waiting on this Sleep ever ran (n40b). With a paired target in the batch, the host step
+ * is bounded: past the timeout a paired target gets no outcome (its sandbox is still put to sleep by
+ * the control plane next), and any other target reports the timeout as a failure.
+ */
+async function boundPairedHostSleep(
+  worktreeIds: readonly string[],
+  call: Promise<WorkspaceSleepOutcome[]>
+): Promise<WorkspaceSleepOutcome[]> {
+  if (!worktreeIds.some((id) => isPairedCloudSleepTarget(id))) {
+    return call
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), PAIRED_HOST_SLEEP_TIMEOUT_MS)
+  })
+  const outcome = await Promise.race([call, timedOut])
+  clearTimeout(timer)
+  if (outcome) {
+    return outcome
+  }
+  console.error(
+    '[sleep-worktree] host-side sleep timed out; paired sandboxes sleep via the control plane'
+  )
+  return worktreeIds
+    .filter((id) => !isPairedCloudSleepTarget(id))
+    .map((worktreeId) => ({
+      worktreeId,
+      failure: 'The host did not finish putting this workspace to sleep in time.',
+      chatFailed: false,
+      receipts: []
+    }))
+}
+
 export async function sleepWorktreesReportingFailures(
   requestedWorktreeIds: readonly string[],
   // Why: only the user's Sleep hides its chats; a project move pauses through this core too.
@@ -197,16 +258,19 @@ export async function sleepWorktreesReportingFailures(
   })
   const outcomes =
     targets.length > 0
-      ? await window.api.worktrees
-          .sleep({ targets, markChatsAsleep: options.markChatsAsleep === true })
-          .catch((error: unknown): WorkspaceSleepOutcome[] =>
-            targets.map(({ worktreeId }) => ({
-              worktreeId,
-              failure: error instanceof Error ? error.message : String(error),
-              chatFailed: false,
-              receipts: []
-            }))
-          )
+      ? await boundPairedHostSleep(
+          targets.map(({ worktreeId }) => worktreeId),
+          window.api.worktrees
+            .sleep({ targets, markChatsAsleep: options.markChatsAsleep === true })
+            .catch((error: unknown): WorkspaceSleepOutcome[] =>
+              targets.map(({ worktreeId }) => ({
+                worktreeId,
+                failure: error instanceof Error ? error.message : String(error),
+                chatFailed: false,
+                receipts: []
+              }))
+            )
+        )
       : []
   const results: WorkspaceSleepResult[] = []
   const vmStillRunningIds: string[] = []

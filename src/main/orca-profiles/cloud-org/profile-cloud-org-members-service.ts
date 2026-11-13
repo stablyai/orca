@@ -21,6 +21,7 @@ import {
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { OrcaCloudRequestError } from '../cloud-auth/profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from '../cloud-session/profile-cloud-session-refresh'
+import { bumpOrcaCloudTokenEpoch } from '../cloud-token-epoch'
 import {
   changeOrcaCloudOrgMemberRole,
   createOrcaCloudOrg,
@@ -200,11 +201,14 @@ export async function changeOrcaProfileOrgMemberRole(
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
-  return mapMutationResult(
+  const result = mapMutationResult(
     await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
       changeOrcaCloudOrgMemberRole(configState.config, session, args)
     )
   )
+  // Why: the member may be this user; a cached sandbox token would keep the old role.
+  bumpOrcaCloudTokenEpoch()
+  return result
 }
 
 export async function removeOrcaProfileOrgMember(
@@ -219,11 +223,14 @@ export async function removeOrcaProfileOrgMember(
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
-  return mapMutationResult(
+  const result = mapMutationResult(
     await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
       removeOrcaCloudOrgMember(configState.config, session, args)
     )
   )
+  // Why: the member may be this user; a cached sandbox token would keep the old role.
+  bumpOrcaCloudTokenEpoch()
+  return result
 }
 
 /** Revoke then re-send so the provider emails a fresh link; the role is kept. */

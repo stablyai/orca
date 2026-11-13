@@ -47,8 +47,8 @@ import { WorkerEntrypoint } from 'cloudflare:workers'
 import type { RunnerBuild } from './build-runner'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { cachedCreateTiming } from './create-timing'
-import { creatorLeftAccount } from './member-changes'
-import { authenticateDesktop } from './auth'
+import { creatorLeftAccount, tokenMintedBeforeMemberChange } from './member-changes'
+import { authenticateDesktop, OrgMismatchError } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
 import { handleMcpRoutes, isMcpPath, oauthApprovalsApi, oauthGrantsApi } from './mcp'
@@ -119,6 +119,7 @@ import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
+import { SecretsKmsError } from './secrets-kms'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
 import { handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
@@ -156,7 +157,8 @@ import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
-import { audit } from './api/audit'
+import { audit, auditSession } from './api/audit'
+import { ALL_EVENT_FAMILIES, AUTH_EVENT_FAMILIES, AuditIngestError, AuditIngestSchema, BILLING_EVENT_FAMILIES, ingestAuditEvents } from './api/audit-ingest'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSlept, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
@@ -849,6 +851,11 @@ async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise
     life: resolved,
     waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
     readJson: () => readJson(request, MAX_API_JSON_BYTES),
+    // Works without provider config too: reading the log needs billing, not a sandbox provider.
+    features: (accountId) => {
+      const client = resolved?.entitlements ?? deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env))
+      return client.features?.(accountId) ?? Promise.resolve({ auditLog: false })
+    },
     extensions: [oauthApprovalsApi, oauthGrantsApi, routines, ...(deps.apiExtensions ?? [])]
   }
 }
@@ -875,7 +882,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     provider,
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
     github: deps.github ?? githubMinter(env),
-    secrets: await secretsDeps(env),
+    ...(await secretsState(env)),
     memberIdentity: await memberIdentityFor(env, deps),
     now: deps.now ?? Date.now,
     sleep: deps.sleep,
@@ -1109,17 +1116,22 @@ export function secretsEgressMode(env: Pick<Env, 'SECRETS_EGRESS_PLACEHOLDERS' |
   return { egressPlaceholders, egressPlaceholdersOff: off }
 }
 
-async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
+async function secretsState(env: Env): Promise<Pick<LifecycleDeps, 'secrets' | 'secretsUnavailable'>> {
   const keyring = keyringFor(env)
   if (!keyring) {
-    return undefined
+    return {}
   }
   try {
-    return { keyring: await keyring, ...secretsEgressMode(env), accountProviders: providerEnabled(env) }
-  } catch {
+    return { secrets: { keyring: await keyring, ...secretsEgressMode(env), accountProviders: providerEnabled(env) } }
+  } catch (error) {
+    if (error instanceof SecretsKmsError) {
+      // KMS holds the keys and is not handing them over. Routes that need no secrets keep working;
+      // a session start and the secrets routes answer 503 (keyringFor logged the reason).
+      return { secretsUnavailable: error.reason }
+    }
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
-    return undefined
+    return {}
   }
 }
 
@@ -1162,6 +1174,29 @@ async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): P
 }
 
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
+  try {
+    return await routeRequest(request, env, deps)
+  } catch (error) {
+    // A stale-org token anywhere in routing (ORG-TOKEN-STALE): the desktop re-mints once and retries.
+    if (error instanceof OrgMismatchError) {
+      return orgMismatchResponse()
+    }
+    throw error
+  }
+}
+
+function orgMismatchResponse(): Response {
+  return json(
+    {
+      error: 'org_mismatch',
+      reason: 'org_mismatch',
+      message: 'Orca Cloud signed you in for a different team. Try again.'
+    },
+    409
+  )
+}
+
+async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Response> {
   const url = new URL(request.url)
   try {
     const shared = await shareGateway(request, url, env, deps)
@@ -1220,14 +1255,34 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed
-      // push and deleting a team. Never the operator routes.
+      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed and
+      // role-changed pushes and deleting a team. Never the other operator routes.
       const teamDelete = teamDeleteRoute(url.pathname, request.method)
-      const authOnly =
-        ((url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') || teamDelete !== null) &&
-        (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
-      if (!authOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
+      // Append-only events from auth for the team audit log (api/audit-ingest.ts).
+      const auditIngest = url.pathname === '/v1/internal/audit-events' && request.method === 'POST'
+      const memberPush =
+        request.method === 'POST' && (url.pathname === '/v1/internal/org-members/removed' || url.pathname === '/v1/internal/members/role-changed')
+      const authOnly = (memberPush || teamDelete !== null || auditIngest) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      // Billing's bearer (CONTROL_PLANE_TOKEN) reaches this one route, for billing events only.
+      const billingOnly = !authOnly && auditIngest && (await isOperator(request, env.CONTROL_PLANE_TOKEN))
+      if (!authOnly && !billingOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
+      }
+      if (auditIngest) {
+        // Append-only, and needs no sandbox provider: events from auth and billing for the team audit log.
+        const body = AuditIngestSchema.safeParse(await readJson(request, MAX_API_JSON_BYTES))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        try {
+          const families = authOnly ? AUTH_EVENT_FAMILIES : billingOnly ? BILLING_EVENT_FAMILIES : ALL_EVENT_FAMILIES
+          return json(await ingestAuditEvents(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)(), families))
+        } catch (error) {
+          if (error instanceof AuditIngestError) {
+            return fail('invalid_request', 400, error.message)
+          }
+          throw error
+        }
       }
       if (teamDelete) {
         if (teamDelete.action === 'delete-check') {
@@ -1279,14 +1334,15 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
           return fail('invalid_request', 400)
         }
         // Same cleanup as /v1/internal/members/removed: keys, phones, workspace grants and routines.
-        const removal = await removeMember(life, body.data.accountId, body.data.userId, life.now(), body.data.changedAt)
+        const removal = await removeMember(life, body.data.accountId, body.data.userId, life.now(), body.data.changedAt, body.data.actorUserId)
         return json({ revoked: removal.grantsRevoked, queued: removal.grantsQueued, ...removal })
       }
       return (
         (await handleOperator(request, url.pathname, {
           life,
           github: deps.github ?? githubMinter(env),
-          readJson: () => readJson(request)
+          readJson: () => readJson(request),
+          keyring: () => keyringFor(env)
         })) ?? fail('not_found', 404)
       )
     }
@@ -1396,6 +1452,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
       }
+      if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
+        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        return fail('unauthorized', 401, 'stale_token')
+      }
       if (request.method !== 'GET') {
         return fail('not_found', 404)
       }
@@ -1420,6 +1480,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
+      }
+      if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
+        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        return fail('unauthorized', 401, 'stale_token')
       }
       if (url.pathname === '/v1/github/installations' && request.method === 'GET') {
         const rows = await listAccountInstallations(env.SANDBOX_DB, caller.accountId)
@@ -1495,7 +1559,14 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (caller.deviceSessionId) {
         return fail('forbidden', 403, 'device_session')
       }
-      const secrets = await secretsDeps(env)
+      if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
+        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        return fail('unauthorized', 401, 'stale_token')
+      }
+      const { secrets, secretsUnavailable } = await secretsState(env)
+      if (secretsUnavailable) {
+        return secretsUnavailableResponse()
+      }
       if (!secrets) {
         return fail('not_configured', 503)
       }
@@ -1641,6 +1712,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (request.method !== 'POST') {
         return fail('not_found', 404)
       }
+      if (await tokenMintedBeforeMemberChange(life.db, caller)) {
+        // ORG-TOKEN-STALE: never create (and bill) with a token minted before a role change.
+        return fail('unauthorized', 401, 'stale_token')
+      }
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
       const raw = await readJson(request)
       const body = CreateRequestSchema.safeParse(raw)
@@ -1663,6 +1738,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
               deferMemberGit: true
             })
             await recordOwnerDeviceForCreate(life, ready)
+            await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop' } }, life.now())
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
@@ -1714,6 +1790,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
             .bind(life.now(), row.id),
           life.db.prepare('DELETE FROM workspace_presence WHERE sandbox_id = ?').bind(row.id)
         ])
+        // The name goes with the row's history: the workspace can no longer be looked up.
+        await auditSession(life.db, caller, { action: 'workspace.destroy', targetType: 'workspace', targetId: row.id, detail: { name: row.name ?? null } }, life.now())
         return json({ sandbox: view(destroyed) })
       }
       case 'POST suspend': {
@@ -1767,12 +1845,15 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         if (!body.success) {
           return fail('invalid_request', 400)
         }
-        return json({ sandbox: view(await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))) })
+        const archived = await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))
+        await auditSession(life.db, caller, { action: 'workspace.archive', targetType: 'workspace', targetId: row.id }, life.now())
+        return json({ sandbox: view(archived) })
       }
       case 'GET archive':
         return json({ archive: await readArchive(env.SANDBOX_DB, row.id) })
       case 'POST unarchive': {
         const ready = await unarchiveSandbox(life, row)
+        await auditSession(life.db, caller, { action: 'workspace.unarchive', targetType: 'workspace', targetId: row.id }, life.now())
         return json(readyView(ready.row, ready.connection))
       }
       case 'POST env/refresh':
@@ -1860,7 +1941,14 @@ function repoAccessDeps(env: Env, deps: Deps): RepoAccessDeps {
     connect: githubConnect(env, deps),
     publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
     fetch: deps.githubFetch ?? fetch,
-    now: (deps.now ?? Date.now)()
+    now: (deps.now ?? Date.now)(),
+    githubUser: async (caller) => {
+      const keyring = keyringFor(env)
+      const identity = keyring
+        ? await memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), caller.accountId, caller.userId, (deps.now ?? Date.now)())
+        : null
+      return identity ? { login: identity.login, token: identity.token } : null
+    }
   }
 }
 
@@ -1956,7 +2044,9 @@ const MemberRemovedSchema = z
     accountId: z.string().min(1).max(160).regex(/^(org|dev:org):[A-Za-z0-9_.:-]+$/),
     userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/),
     /** Auth's time of the removal (ms); tokens issued up to then stop working. */
-    changedAt: z.number().int().positive().optional()
+    changedAt: z.number().int().positive().optional(),
+    /** Who removed them (the same id when they left by themselves); absent from a directory sync. */
+    actorUserId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()
   })
   .strict()
 
@@ -2246,6 +2336,13 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
   }
 }
 
+/** The KMS-held secret keys cannot be fetched right now (SECRETS_KEK_SOURCE=kms). Retryable. */
+function secretsUnavailableResponse(): Response {
+  const response = fail('secrets_unavailable', 503)
+  response.headers.set('retry-after', '30')
+  return response
+}
+
 function errorResponse(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return fail('invalid_json', 400)
@@ -2258,6 +2355,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof SecretError) {
     return fail(error.code, error.status, error.reason)
+  }
+  if (error instanceof OrgMismatchError) {
+    return orgMismatchResponse()
   }
   if (error instanceof GuardrailError) {
     if (error.code === 'concurrency_limit') {
@@ -2281,6 +2381,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)
+  }
+  if (error instanceof SecretsKmsError) {
+    return secretsUnavailableResponse()
   }
   // Provider and VM failures are summarized; their bodies never reach the desktop.
   if (error instanceof ProviderError || error instanceof VmCommandError) {

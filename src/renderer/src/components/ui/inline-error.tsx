@@ -1,5 +1,6 @@
 import React from 'react'
-import { CircleAlert, Info, RotateCw } from 'lucide-react'
+import { CircleAlert, Info, RotateCw, TriangleAlert } from 'lucide-react'
+import { BANNER_TONE } from './banner-tone'
 import { cn } from '@/lib/class-names'
 import { Button } from './button'
 
@@ -8,8 +9,9 @@ type InlineErrorProps = {
   title: React.ReactNode
   /** Optional detail or next step, shown muted under the title. */
   detail?: React.ReactNode
-  /** 'error' for failures; 'neutral' for soft states such as "status unavailable". */
-  tone?: 'error' | 'neutral'
+  /** 'error' for failures; 'warning' for a precondition the person fixes (missing access);
+   *  'neutral' for soft states such as "status unavailable". */
+  tone?: 'error' | 'warning' | 'neutral'
   /** Label for the retry action; the button only renders with onRetry. */
   retryLabel?: React.ReactNode
   onRetry?: () => void
@@ -49,8 +51,14 @@ function InlineError({
   children,
   className
 }: InlineErrorProps): React.JSX.Element {
-  const Icon = tone === 'error' ? CircleAlert : Info
+  const Icon = tone === 'error' ? CircleAlert : tone === 'warning' ? TriangleAlert : Info
   const liveRole = tone === 'error' ? 'alert' : 'status'
+  const iconTone =
+    tone === 'error'
+      ? 'text-destructive'
+      : tone === 'warning'
+        ? BANNER_TONE.warning.icon
+        : 'text-muted-foreground'
   // Why: announcing a whole card would read every button and list row along with the cause.
   const announceTextOnly = React.Children.toArray(children).length > 0
   if (layout === 'line') {
@@ -60,13 +68,7 @@ function InlineError({
         data-slot="inline-error"
         className={cn('flex items-start gap-1.5 text-xs text-muted-foreground', className)}
       >
-        <Icon
-          className={cn(
-            'mt-0.5 size-3.5 shrink-0',
-            tone === 'error' ? 'text-destructive' : 'text-muted-foreground'
-          )}
-          aria-hidden
-        />
+        <Icon className={cn('mt-0.5 size-3.5 shrink-0', iconTone)} aria-hidden />
         <span className="min-w-0">
           {title}
           {detail ? <span> {detail}</span> : null}
@@ -92,16 +94,14 @@ function InlineError({
         detail || announceTextOnly ? 'items-start' : 'items-center',
         tone === 'error'
           ? 'border-destructive/15 bg-destructive/5 dark:border-destructive/25'
-          : 'border-border bg-muted/40',
+          : tone === 'warning'
+            ? cn(BANNER_TONE.warning.surface, BANNER_TONE.warning.border)
+            : 'border-border bg-muted/40',
         className
       )}
     >
       <Icon
-        className={cn(
-          'size-4 shrink-0',
-          (detail || announceTextOnly) && 'mt-0.5',
-          tone === 'error' ? 'text-destructive' : 'text-muted-foreground'
-        )}
+        className={cn('size-4 shrink-0', (detail || announceTextOnly) && 'mt-0.5', iconTone)}
         aria-hidden
       />
       <div className="min-w-[10rem] flex-1 basis-0">

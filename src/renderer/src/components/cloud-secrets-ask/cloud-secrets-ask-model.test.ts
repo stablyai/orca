@@ -4,6 +4,7 @@ import type {
   CloudSecretsEffective
 } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {
+  askScopes,
   cloudSecretsAskData,
   environmentForRepo,
   githubRepoKey,
@@ -80,6 +81,16 @@ describe('writableScopes', () => {
     expect(writableScopes(admin, { repo: true, shared: true })).toEqual(['personal', 'repo', 'org'])
     // A secret request never offers Shared, and Repository needs a repo.
     expect(writableScopes(admin, { repo: false, shared: false })).toEqual(['personal'])
+  })
+
+  it('leaves Personal out for a shared workspace (SEC-5)', () => {
+    const repoWriter: CloudSecretsCaller = {
+      ...MEMBER,
+      canWrite: { personal: true, org: false, repo: true }
+    }
+    expect(askScopes({ caller: MEMBER, repoKey: 'github.com/a/b', shared: true })).toEqual([])
+    expect(askScopes({ caller: repoWriter, repoKey: 'github.com/a/b', shared: true })).toEqual(['repo'])
+    expect(askScopes({ caller: MEMBER, repoKey: 'github.com/a/b', shared: false })).toEqual(['personal'])
   })
 })
 

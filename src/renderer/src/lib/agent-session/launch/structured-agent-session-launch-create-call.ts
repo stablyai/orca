@@ -22,6 +22,7 @@ import { publishStructuredAgentSessionCreateHydration } from './structured-agent
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
+import { holdStructuredCloudLaunch } from '@/lib/orca-cloud/cloud-structured-launch-hold'
 import {
   StructuredAgentSessionCreateError,
   StructuredAgentSessionCreateAbandonedError,
@@ -156,6 +157,11 @@ export async function launchStructuredAgentSession(
     onHostSeed?.(hostSeed)
   }
   await requireHostPermission(intent)
+  // Orca Cloud: an agent that isn't set up (or whose sign-in expired) waits on the chat's strip.
+  if ((await holdStructuredCloudLaunch(intent)) === 'cancel' || isCancelled()) {
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    throw new StructuredAgentSessionCreateAbandonedError('Orca Cloud agent setup was cancelled.')
+  }
   if (!intent.createPrepared) {
     let supported = false
     let takesExplicitOptions = false

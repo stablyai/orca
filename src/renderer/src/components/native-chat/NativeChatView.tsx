@@ -7,6 +7,8 @@ import { NativeChatPaneFileDropSurface } from './attachments/intake/NativeChatPa
 import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visual-owner'
 import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
+import { CloudChatBannerSlot } from '../agent-sign-in-strip/CloudChatBannerSlot'
+import { CloudChatHostProvider } from '../agent-sign-in-strip/cloud-chat-sign-in-notice'
 
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
@@ -24,7 +26,9 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
               isVisible={props.isVisible}
               sessionId={props.sessionId}
             >
-              <NativeChatStructuredSession {...props} />
+              <CloudChatHostProvider target={props.target}>
+                <NativeChatStructuredSession {...props} />
+              </CloudChatHostProvider>
             </NativeChatMarkdownImageOwnerProvider>
           </NativeChatFileLinkExistenceProvider>
         </NativeChatVisualOwnerProvider>
@@ -53,39 +57,45 @@ function NativeChatBridgeView({
     terminalTabId,
     preferredPaneKey
   )
+  // CHAT-BANNERS: the pane's cloud banners show above the chat while it covers the pane.
   return (
-    <NativeChatSessionGate
-      paneKey={paneKey}
-      launchAgent={launchAgent}
-      resolvedAgent={resolvedAgent}
-      agentStatusEntry={agentStatusEntry}
-      ptyId={targetPtyId}
-    >
-      {(resolution) => (
-        <NativeChatFileLinkExistenceProvider tabId={terminalTabId}>
-          <NativeChatMarkdownImageOwnerProvider
-            sessionId={resolution.sessionId}
-            tabId={terminalTabId}
-            isVisible={isVisible}
-          >
-            <NativeChatResolvedView
-              paneKey={resolution.paneKey}
-              agent={resolution.agent}
-              sessionId={resolution.sessionId}
-              transcriptPath={resolution.transcriptPath}
-              isVisible={isVisible}
-              isFocusedGroup={isFocusedGroup}
-              targetPtyId={targetPtyId}
-              terminalTabId={terminalTabId}
-              ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
-              onSwitchToTerminal={onSwitchToTerminal}
-              readTerminalScreen={readTerminalScreen}
-              readTerminalDraft={readTerminalDraft}
-              contextMenuActions={contextMenuActions}
-            />
-          </NativeChatMarkdownImageOwnerProvider>
-        </NativeChatFileLinkExistenceProvider>
-      )}
-    </NativeChatSessionGate>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {preferredPaneKey ? <CloudChatBannerSlot paneKey={preferredPaneKey} /> : null}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <NativeChatSessionGate
+          paneKey={paneKey}
+          launchAgent={launchAgent}
+          resolvedAgent={resolvedAgent}
+          agentStatusEntry={agentStatusEntry}
+          ptyId={targetPtyId}
+        >
+          {(resolution) => (
+            <NativeChatFileLinkExistenceProvider tabId={terminalTabId}>
+              <NativeChatMarkdownImageOwnerProvider
+                sessionId={resolution.sessionId}
+                tabId={terminalTabId}
+                isVisible={isVisible}
+              >
+                <NativeChatResolvedView
+                  paneKey={resolution.paneKey}
+                  agent={resolution.agent}
+                  sessionId={resolution.sessionId}
+                  transcriptPath={resolution.transcriptPath}
+                  isVisible={isVisible}
+                  isFocusedGroup={isFocusedGroup}
+                  targetPtyId={targetPtyId}
+                  terminalTabId={terminalTabId}
+                  ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
+                  onSwitchToTerminal={onSwitchToTerminal}
+                  readTerminalScreen={readTerminalScreen}
+                  readTerminalDraft={readTerminalDraft}
+                  contextMenuActions={contextMenuActions}
+                />
+              </NativeChatMarkdownImageOwnerProvider>
+            </NativeChatFileLinkExistenceProvider>
+          )}
+        </NativeChatSessionGate>
+      </div>
+    </div>
   )
 }

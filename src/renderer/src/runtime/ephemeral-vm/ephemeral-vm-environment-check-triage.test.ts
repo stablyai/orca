@@ -1,12 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
-import { triageCloudEnvironmentChecks } from './ephemeral-vm-environment-check-triage'
+import {
+  missingToolCommand,
+  triageCloudEnvironmentChecks
+} from './ephemeral-vm-environment-check-triage'
 
 const c = (
   id: string,
   status: EnvironmentDoctorCheck['status'],
   category: EnvironmentDoctorCheck['category'] = 'tools'
 ): EnvironmentDoctorCheck => ({ id, category, status, message: id })
+const disk = (code: 'diskLow' | 'diskVeryLow'): EnvironmentDoctorCheck => ({
+  ...c('disk.free', code === 'diskLow' ? 'warn' : 'fail', 'disk'),
+  code,
+  params: { free: '0.8' }
+})
+const kinds = (checks: EnvironmentDoctorCheck[]): [string, string][] =>
+  triageCloudEnvironmentChecks(checks, { setupRunsOnCreate: true }).notices.map((notice) => [
+    notice.id,
+    notice.kind
+  ])
 
 describe('triageCloudEnvironmentChecks', () => {
   it('stops only on a sandbox nobody can work in', () => {
@@ -41,7 +54,7 @@ describe('triageCloudEnvironmentChecks', () => {
         c('setup.run', 'warn', 'setup'),
         c('setup.script', 'warn', 'setup'),
         c('git.remote', 'warn', 'git'),
-        c('disk.free', 'warn', 'disk')
+        disk('diskLow')
       ],
       { setupRunsOnCreate: false }
     )
@@ -49,7 +62,7 @@ describe('triageCloudEnvironmentChecks', () => {
     expect(notices.map((notice) => [notice.id, notice.kind])).toEqual([
       ['git.push', 'push'],
       ['setup.run', 'setup'],
-      ['disk.free', 'check']
+      ['disk.free', 'disk']
     ])
   })
 
@@ -59,5 +72,49 @@ describe('triageCloudEnvironmentChecks', () => {
       { setupRunsOnCreate: true }
     )
     expect(notices).toEqual([])
+  })
+
+  it('a failed reach of origin is its own notice, never a bare check line (ENV-ORIGIN-TOAST)', () => {
+    const { fatal, notices } = triageCloudEnvironmentChecks(
+      [c('git.fetch', 'fail', 'git'), disk('diskLow')],
+      { setupRunsOnCreate: true }
+    )
+    expect(fatal).toEqual([])
+    expect(notices.map((notice) => [notice.id, notice.kind])).toEqual([
+      ['git.fetch', 'fetch'],
+      ['disk.free', 'disk']
+    ])
+  })
+
+  it('gives low disk and a missing tool their own kinds (ENV-NOTICE-ACTIONS)', () => {
+    expect(
+      kinds([
+        disk('diskVeryLow'),
+        {
+          ...c('tool.pnpm', 'fail'),
+          code: 'toolMissing',
+          params: { command: 'pnpm', reason: 'pnpm-lock.yaml' }
+        },
+        // An older server: no code or params, the id still names the tool.
+        c('tool.cargo', 'fail')
+      ])
+    ).toEqual([
+      ['disk.free', 'disk'],
+      ['tool.pnpm', 'tool'],
+      ['tool.cargo', 'tool']
+    ])
+    expect(missingToolCommand(c('tool.cargo', 'fail'))).toBe('cargo')
+  })
+
+  it('hides what nobody can act on, and any check it has no words for, never a bare label', () => {
+    expect(
+      kinds([
+        // "Could not read free disk space."
+        c('disk.free', 'warn', 'disk'),
+        // Checks from a newer doctor this desktop doesn't know.
+        c('network.dns', 'fail', 'workspace'),
+        c('cache.stale', 'warn', 'setup')
+      ])
+    ).toEqual([])
   })
 })

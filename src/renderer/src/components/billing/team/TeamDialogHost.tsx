@@ -1,3 +1,4 @@
+import { useTeamMfaGate } from '@/components/team-mfa/TeamMfaGate'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +14,7 @@ import { TeamPageView } from './TeamPageView'
 import { createTeamFailureCopy, mutationFailureCopy } from './team-copy'
 import { clearTeamPageArrival, closeTeamPage, useTeamPageState } from './team-page-store'
 import { useOrgRoster } from './use-org-roster'
+import { leaveTeamConfirmation } from './team-leave'
 import { useTeamActions } from './use-team-actions'
 import { useTeamDelete } from './use-team-delete'
 import { TeamDeleteSection } from './TeamDeleteSection'
@@ -36,6 +38,7 @@ export function TeamPageBody({
   const cloud = authStatus?.cloud
   const orgId = cloud?.activeOrgId ?? null
   const roster = useOrgRoster(orgId)
+  const mfa = useTeamMfaGate()
   const billing = useOrcaBillingStatus(true)
   const [userRefreshing, setUserRefreshing] = useState(false)
   const [billingBusy, setBillingBusy] = useState(false)
@@ -131,17 +134,7 @@ export function TeamPageBody({
       return
     }
     const name = cloud?.activeOrgName ?? t('auto.components.billing.team.thisTeam', 'this team')
-    void confirm({
-      title: t('auto.components.billing.team.leaveConfirmTitle', 'Leave {{value0}}?', {
-        value0: name
-      }),
-      description: t(
-        'auto.components.billing.team.leaveConfirmBody',
-        'You lose access to the team’s cloud workspaces and secrets right away. An owner or admin can invite you back.'
-      ),
-      confirmLabel: t('auto.components.billing.team.leaveCta', 'Leave team'),
-      confirmVariant: 'destructive'
-    }).then((accepted) => {
+    void confirm(leaveTeamConfirmation(name, t)).then((accepted) => {
       if (!accepted) {
         return
       }
@@ -183,6 +176,7 @@ export function TeamPageBody({
     <>
       <TeamPageView
         org={org}
+        mfaNotice={mfa.blocked ?? mfa.banner}
         viewerUserId={cloud?.userId ?? null}
         roster={rosterResult}
         billing={billing.result}
@@ -240,7 +234,13 @@ export function TeamPageBody({
           openTeammateProfile(userId)
         }}
         onDismissArrival={clearTeamPageArrival}
-        onContactSales={(url) => void window.api.shell.openUrl(url)}
+        onOpenEnterprise={() => {
+          // SSO, SCIM and the audit log live in Settings › Enterprise (#614); the dialog points there.
+          closeTeamPage()
+          const store = useAppStore.getState()
+          store.openSettingsTarget({ pane: 'cloud-enterprise', repoId: null })
+          store.openSettingsPage()
+        }}
         inline={inline}
         dangerZone={
           org && teamDelete.check ? (
@@ -258,13 +258,18 @@ export function TeamPageBody({
   )
 }
 
-/** The Team page's dialog surface: top-anchored so loading and checkout arrivals never jump. */
+/**
+ * The Team page's dialog surface, centred in the window like every other dialog, whichever entry
+ * point opened it (account menu, Create a team, the post-checkout hand-off). It used to be pinned
+ * 6vh from the top (`top-[6vh] translate-y-0`), so it sat high on screen (TEAM-MODAL-CENTER).
+ */
 export function TeamDialogContent({ children }: { children: React.ReactNode }): React.JSX.Element {
   const t = useTranslate()
   return (
     <DialogContent
       scrollable
-      className="top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-2xl"
+      data-team-dialog=""
+      className="max-h-[88vh] sm:max-w-2xl"
       onOpenAutoFocus={(event) => {
         event.preventDefault()
         if (event.currentTarget instanceof HTMLElement) {

@@ -9,7 +9,9 @@ import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provid
 import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
+import { SecretsKmsError } from './secrets-kms'
 import type { SandboxRow } from './store'
+import { secretLog } from './secret-log'
 
 export type SessionSecrets = {
   env: Record<string, string>
@@ -27,7 +29,7 @@ export type ProviderEnv = { env: Record<string, string>; scopes: Record<string, 
 export async function resolvedProviderEnv(
   db: D1Database,
   keyring: Keyring,
-  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
+  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility'>
 ): Promise<ProviderEnv> {
   const { env: stored, scopes } = await resolveSandboxSecrets(db, keyring, row)
   // The proxy only needs the keys; dropping those of agents not on 'keep' happens at request time
@@ -43,7 +45,8 @@ const PROVIDER_ENV_CACHE_MS = 60_000
 const providerEnvCache = new Map<string, { at: number; value: Promise<ProviderEnv> }>()
 
 export function cachedProviderEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<ProviderEnv> {
-  const key = `${row.id}:${row.session_id ?? ''}`
+  // Visibility is part of the key: sharing a workspace stops its owner's personal keys at once (SEC-5).
+  const key = `${row.id}:${row.session_id ?? ''}:${row.visibility}`
   const hit = providerEnvCache.get(key)
   if (hit && now - hit.at < PROVIDER_ENV_CACHE_MS) {
     return hit.value
@@ -79,9 +82,12 @@ function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick
 export type { AgentMode }
 
 export async function sessionSecretEnv(
-  deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'config'>,
+  deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'secretsUnavailable' | 'config'>,
   row: SandboxRow
 ): Promise<SessionSecrets> {
+  if (deps.secretsUnavailable) {
+    throw new SecretsKmsError(deps.secretsUnavailable)
+  }
   if (!deps.secrets) {
     return EMPTY
   }
@@ -104,7 +110,7 @@ export async function sessionSecretEnv(
   const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.
-  console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
+  secretLog('session_secrets', { sandboxId: row.id, injected: Object.keys(env).length, skipped })
   if (!swap) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }

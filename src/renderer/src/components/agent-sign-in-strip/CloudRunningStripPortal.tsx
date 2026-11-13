@@ -3,7 +3,6 @@
 // running and refits below it, so its scrollback stays readable and selectable.
 import type React from 'react'
 import { useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -11,7 +10,7 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { useAgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
-import { useCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import { cloudTabHoldKey, useCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
   orcaCloudAgentAccountsLoadedAt,
   useOrcaCloudAgentAccounts
@@ -33,16 +32,17 @@ import {
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import {
   CloudAgentSignInStrip,
-  CloudStripLayer,
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
+import { CloudPaneBannerPortal } from './CloudPaneBannerPortal'
 import { startCloudPaneAgentRestart } from '@/lib/orca-cloud/cloud-pane-agent-restart'
 import {
   cloudRestartAttemptModel,
   cloudRestartFreshModel,
   cloudRunningStripModel
 } from './cloud-running-strip-model'
+import { openOrcaCloudAccountsSettings, withRenewInPlace } from './cloud-renew-in-place'
 
 const NO_ACTIONS: CloudStripActions = {
   primary: () => undefined,
@@ -51,12 +51,6 @@ const NO_ACTIONS: CloudStripActions = {
   useCode: () => undefined,
   useApiKey: () => undefined,
   cancel: () => undefined
-}
-
-function openAccounts(): void {
-  const store = useAppStore.getState()
-  store.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
-  store.openSettingsPage()
 }
 
 export function CloudRunningStripPortal({
@@ -102,7 +96,11 @@ export function CloudRunningStripPortal({
     expired,
     orcaCloudAgentAccountsLoadedAt()
   )
-  const hold = useCloudAgentHold(paneKey)
+  // DUP-EXPIRED-STRIP: a host-published launch holds its whole tab (cloudTabHoldKey); its strip
+  // is the one to show, never this one stacked beside it.
+  const paneHold = useCloudAgentHold(paneKey)
+  const tabHold = useCloudAgentHold(cloudTabHoldKey(tabId))
+  const hold = paneHold ?? tabHold
   const gate = useAgentSignInGate(paneKey)
   const held = hold !== null || gate !== null
   const attempt = cloudAgentRestartAttempt(paneKey, revision)
@@ -124,17 +122,20 @@ export function CloudRunningStripPortal({
   }
   // RA-11e: a resume that found no conversation started fresh; say so for a moment, then clear.
   if (cloud && cloudAgentRestartStartedFresh(paneKey, revision)) {
-    return createPortal(
-      <CloudStripLayer>
+    return (
+      <CloudPaneBannerPortal
+        pane={pane}
+        paneKey={paneKey}
+        portalKey={`cloud-running-strip-${pane.id}`}
+        stripLayer
+      >
         <CloudAgentSignInStrip
           model={cloudRestartFreshModel(agent ?? 'claude', t)}
           prompt={null}
           width={cloudStripWidth(pane.container.clientWidth)}
           actions={NO_ACTIONS}
         />
-      </CloudStripLayer>,
-      pane.container,
-      `cloud-running-strip-${pane.id}`
+      </CloudPaneBannerPortal>
     )
   }
   // A Restart in flight (or failed) owns the strip even while the pane has no agent status.
@@ -151,17 +152,20 @@ export function CloudRunningStripPortal({
       useApiKey: () => undefined,
       cancel: () => (attempt.phase === 'failed' ? dismissCloudAgentRestart(paneKey) : undefined)
     }
-    return createPortal(
-      <CloudStripLayer>
+    return (
+      <CloudPaneBannerPortal
+        pane={pane}
+        paneKey={paneKey}
+        portalKey={`cloud-running-strip-${pane.id}`}
+        stripLayer
+      >
         <CloudAgentSignInStrip
           model={cloudRestartAttemptModel(attempt, t)}
           prompt={null}
           width={cloudStripWidth(pane.container.clientWidth)}
           actions={attemptActions}
         />
-      </CloudStripLayer>,
-      pane.container,
-      `cloud-running-strip-${pane.id}`
+      </CloudPaneBannerPortal>
     )
   }
   if (!running) {
@@ -183,7 +187,7 @@ export function CloudRunningStripPortal({
   const actions: CloudStripActions = {
     primary: (action) => {
       if (action.kind === 'renew') {
-        openAccounts()
+        openOrcaCloudAccountsSettings()
       } else if (action.kind === 'restart' && strip.phase === 'renewed') {
         restart({ agent: strip.agent, resumable: strip.resumable })
       }
@@ -195,16 +199,32 @@ export function CloudRunningStripPortal({
     // State 2's ×; state 1 has none (Renew is the action) and Escape leaves it showing.
     cancel: () => (strip.phase === 'renewed' ? clearCloudRunningSignout(paneKey) : undefined)
   }
-  return createPortal(
-    <CloudStripLayer>
+  // CHAT-RENEW-INPLACE: "sign-in expired · Renew" renews right here; renewed keeps RA-11's Restart.
+  const model = cloudRunningStripModel(strip, t)
+  const shown =
+    strip.phase === 'expired'
+      ? withRenewInPlace({
+          agent: strip.agent,
+          setup: accounts.setups[strip.agent],
+          model,
+          actions,
+          key: paneKey,
+          t
+        })
+      : { model, actions }
+  return (
+    <CloudPaneBannerPortal
+      pane={pane}
+      paneKey={paneKey}
+      portalKey={`cloud-running-strip-${pane.id}`}
+      stripLayer
+    >
       <CloudAgentSignInStrip
-        model={cloudRunningStripModel(strip, t)}
+        model={shown.model}
         prompt={null}
         width={cloudStripWidth(pane.container.clientWidth)}
-        actions={actions}
+        actions={shown.actions}
       />
-    </CloudStripLayer>,
-    pane.container,
-    `cloud-running-strip-${pane.id}`
+    </CloudPaneBannerPortal>
   )
 }

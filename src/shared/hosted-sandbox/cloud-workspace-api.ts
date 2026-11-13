@@ -40,10 +40,14 @@ export type CloudWakeProgressEvent = {
   workspaceId: string
   phase: 'waking' | 'connecting' | 'ready' | 'failed'
   source: CloudWakeSource
+  /** Failed because this computer's pairing to it is gone: the card offers "Open cloud workspace…". */
+  notPaired?: true
   /** Epoch ms the wake began (the overlay's elapsed timer). */
   startedAt: number
   at: number
   message?: string
+  /** The plan refused it (billing's deny reason, null when unsaid): the card says why, not the code. */
+  billingDenial?: { reason: string | null }
 }
 
 export type CloudOomEvent = {
@@ -54,6 +58,12 @@ export type CloudOomEvent = {
   at: number
 }
 
+/**
+ * The person's own standing on a GitHub repository: admin on it (an owner of a personal account,
+ * or an org owner or repository admin), and whether its owner is a user or an organization.
+ */
+export type GitHubInstallRights = { admin: boolean; ownerType: 'User' | 'Organization' }
+
 /** The status panel's read plus what the desktop needs from the sandbox view alongside it. */
 export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
   /** GIT-SETUP: commits and pushes are refused in the VM until a boot installs the identities. */
@@ -62,20 +72,25 @@ export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
 
 export type CloudArchiveInfo = NonNullable<HostedArchiveResponse['archive']>
 
+/** A cloud workspace by its sidebar id; a paired one also names its server's environment. */
+export type CloudWorkspaceTarget = { workspaceId: string; environmentId?: string }
+
 export type OrcaCloudWorkspaceApi = {
-  /** Live status: state, CPU/mem/disk, uptime, cost so far, archive. Cheap; the panel polls it while open. */
-  getStatus: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
+  /**
+   * Live status: state, CPU/mem/disk, uptime, cost so far, archive. Cheap; the panel polls it while open.
+   * `environmentId` names a PAIRED workspace's server (no runtime record on this desktop): main
+   * answers for it only when that server is bound to a cloud sandbox.
+   */
+  getStatus: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
-  restart: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
+  restart: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
-  archive: (args: {
-    workspaceId: string
-    pullRequests?: HostedArchivePullRequest[]
-  }) => Promise<CloudWorkspaceResult<null>>
-  unarchive: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
-  getArchive: (args: {
-    workspaceId: string
-  }) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
+  archive: (
+    args: CloudWorkspaceTarget & { pullRequests?: HostedArchivePullRequest[] }
+  ) => Promise<CloudWorkspaceResult<null>>
+  /** A paired one also names its server (PAIRED-ARCHIVE), as for status and restart. */
+  unarchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
+  getArchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
   /** Product constants and measured timings; null when the control plane can't be reached. */
@@ -92,6 +107,8 @@ export type OrcaCloudWorkspaceApi = {
   getGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
   /** Opens GitHub's OAuth page in the browser so the person connects their own GitHub identity. */
   connectGitHubUser: () => Promise<CloudWorkspaceResult<null>>
+  /** "Copy link" for connectGitHubUser: the same GitHub OAuth page, minted but not opened. */
+  gitHubUserConnectLink: () => Promise<CloudWorkspaceResult<string>>
   /** Forgets the person's GitHub identity; cloud commits use Orca Cloud's name again. */
   disconnectGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
   /** Can Orca Cloud clone this https GitHub repository for the signed-in account (cloud-start N2)? */
@@ -99,6 +116,13 @@ export type OrcaCloudWorkspaceApi = {
     repoUrl: string
     setupSessionId?: string
   }) => Promise<CloudWorkspaceResult<HostedGithubRepoAccessResponse>>
+  /**
+   * Whether the person can install the Orca GitHub App on this repository's owner, read with their
+   * own GitHub CLI login; null when gh can't tell (not installed, signed out, slow).
+   */
+  gitHubInstallRights: (args: {
+    repoUrl: string
+  }) => Promise<CloudWorkspaceResult<GitHubInstallRights | null>>
   /** One page of the repositories the account's GitHub installations reach (cloud-start N12). */
   listGitHubRepositories: (args: {
     cursor?: string | null
@@ -109,6 +133,15 @@ export type OrcaCloudWorkspaceApi = {
    */
   createFromGitHub: (args: {
     repoUrl: string
+    /** The name typed in the composer; becomes the workspace's title (NAME-DROPPED). */
+    title?: string
+    /**
+     * The window's creation id (GH-CREATE-SHEET): progress streams as `ephemeralVm:provisionEvent`
+     * under it, and `ephemeralVm.cancelProvision` with it cancels the create.
+     */
+    provisionId?: string
+    /** One per Create press; a retry after a lost answer reuses it and gets the same sandbox. */
+    idempotencyKey?: string
   }) => Promise<CloudWorkspaceResult<{ sandboxId: string }>>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void
@@ -125,8 +158,10 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',
   getGitHubUser: 'orcaCloudWorkspace:getGitHubUser',
   connectGitHubUser: 'orcaCloudWorkspace:connectGitHubUser',
+  gitHubUserConnectLink: 'orcaCloudWorkspace:gitHubUserConnectLink',
   disconnectGitHubUser: 'orcaCloudWorkspace:disconnectGitHubUser',
   getRepoAccess: 'orcaCloudWorkspace:getRepoAccess',
+  gitHubInstallRights: 'orcaCloudWorkspace:gitHubInstallRights',
   listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',
   createFromGitHub: 'orcaCloudWorkspace:createFromGitHub',
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',

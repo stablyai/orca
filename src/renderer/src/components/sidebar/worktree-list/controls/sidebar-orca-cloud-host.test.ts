@@ -38,6 +38,11 @@ function hostOptions() {
   )
 }
 
+// The local host's label comes from process.platform ("Local Mac" on macOS, "Local Linux" on Linux): read it from the
+// built options instead of hard-coding it, so the test passes on any OS (it failed on the Linux premerge lane).
+const localLabel = (): string =>
+  hostOptions().find((host) => host.id === 'local')?.label ?? 'Local Mac'
+
 const worktrees: Worktree[] = [
   { ...worktree, id: 'wt-local', displayName: 'local work' },
   { ...worktree, id: 'wt-a', hostId: 'runtime:env-a', displayName: 'fix login' },
@@ -80,7 +85,7 @@ function groupedByHost() {
     // The Hosts filter with every host checked: the view that draws host headers.
     visibleWorkspaceHostIds: everyHost,
     defaultHostId: 'local',
-    localHostLabel: 'Local Mac',
+    localHostLabel: localLabel(),
     preferProjectGrouping: true
   })
 }
@@ -89,7 +94,7 @@ describe('Orca Cloud is one host (RA-2)', () => {
   it('collapses two sandboxes into one "Orca Cloud" section with an aggregate state', () => {
     const rows = groupedByHost()
     const hostHeaders = rows.filter((row) => row.type === 'host-header')
-    expect(hostHeaders.map((row) => row.label)).toEqual(['Local Mac', 'Orca Cloud'])
+    expect(hostHeaders.map((row) => row.label)).toEqual([localLabel(), 'Orca Cloud'])
     const cloud = hostHeaders[1]
     expect(cloud?.count).toBe(2)
     // Never one sandbox's state.
@@ -107,7 +112,7 @@ describe('Orca Cloud is one host (RA-2)', () => {
   it('lists Orca Cloud once in the Hosts filter, and checking it selects every sandbox', () => {
     const hosts = hostOptions()
     const scope = buildSidebarHostScopeOptions(hosts, t)
-    expect(scope.map((option) => option.label)).toEqual(['All hosts', 'Local Mac', 'Orca Cloud'])
+    expect(scope.map((option) => option.label)).toEqual(['All hosts', localLabel(), 'Orca Cloud'])
     const cloudRow = scope.find((option) => option.label === 'Orca Cloud')
     expect(cloudRow?.detail).toBe('1 running · 1 asleep')
     expect(

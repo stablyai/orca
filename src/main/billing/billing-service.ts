@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { app, shell } from 'electron'
 import type {
   OrcaBillingCheckoutArgs,
+  OrcaBillingLinkResult,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
@@ -18,6 +19,7 @@ import type {
 import type { OrcaPlanCatalogResult } from '../../shared/orca-billing-plans'
 import { loadPlanCatalog } from './plan-catalog-client'
 import { openResultForError } from './billing-open-result'
+import { withSetupSessionFallback } from './billing-setup-session-fallback'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
@@ -217,52 +219,57 @@ export async function getOrcaBillingTeamPlans(
   }
 }
 
-async function openHosted(
+type CreateHostedUrl = (token: string, endpoints: BillingEndpoints) => Promise<string>
+
+/** Mints a Stripe-hosted Checkout/Portal URL for the active account without opening it. */
+async function mintHosted(
   userDataPath: string,
-  createUrl: (token: string, endpoints: BillingEndpoints) => Promise<string>
-): Promise<OrcaBillingOpenResult> {
+  createUrl: CreateHostedUrl
+): Promise<OrcaBillingLinkResult> {
   const ready = prepare(userDataPath)
   if (!ready.ok) {
     return { status: ready.status }
   }
   try {
     const url = await ready.run(createUrl)
-    if (url === 'signed-out') {
-      return { status: 'signed-out' }
-    }
     // createUrl already restricted this to Stripe's hosted Checkout/Portal hosts.
+    return url === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', url }
+  } catch (error) {
+    return openResultForError(error)
+  }
+}
+
+async function openHosted(
+  userDataPath: string,
+  createUrl: CreateHostedUrl
+): Promise<OrcaBillingOpenResult> {
+  const minted = await mintHosted(userDataPath, createUrl)
+  if (minted.status !== 'ok') {
+    return minted
+  }
+  try {
     const devUrlFile = app.isPackaged
       ? ''
       : (process.env.ORCA_BILLING_DEV_OPEN_URL_FILE?.trim() ?? '')
     // Dev automation only: hand the Stripe URL to a test driver instead of the user's browser.
     await (devUrlFile
-      ? appendFile(devUrlFile, `${url}\n`, { mode: 0o600 })
-      : shell.openExternal(url))
+      ? appendFile(devUrlFile, `${minted.url}\n`, { mode: 0o600 })
+      : shell.openExternal(minted.url))
     return { status: 'opened' }
   } catch (error) {
     return openResultForError(error)
   }
 }
 
-export async function openOrcaBillingCheckout(
+export function openOrcaBillingCheckout(
   userDataPath: string,
   args: OrcaBillingCheckoutArgs
 ): Promise<OrcaBillingOpenResult> {
-  const result = await openHosted(userDataPath, (token, endpoints) =>
-    createCheckoutUrl(endpoints, token, args)
-  )
-  // A setup session for another team or user (or an expired one) must not block buying.
-  if (
-    args.setupSessionId &&
-    result.status === 'failed' &&
-    /setup_session_mismatch/.test(result.error)
-  ) {
-    const { setupSessionId: _dropped, ...plain } = args
-    return openHosted(userDataPath, (token, endpoints) =>
-      createCheckoutUrl(endpoints, token, plain)
+  return withSetupSessionFallback(args, (checkoutArgs) =>
+    openHosted(userDataPath, (token, endpoints) =>
+      createCheckoutUrl(endpoints, token, checkoutArgs)
     )
-  }
-  return result
+  )
 }
 
 export function openOrcaBillingPortal(userDataPath: string): Promise<OrcaBillingOpenResult> {

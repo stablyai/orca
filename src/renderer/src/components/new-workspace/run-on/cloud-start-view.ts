@@ -17,11 +17,13 @@ export type CloudStartView = {
    * Project on each); absent until the first.
    */
   needsGitHubRepo?: { hasRepos: boolean; attempt?: number } | null
+  /** Bumped to open the Project picker at its GitHub repositories (CLONE-ACCESS-ERROR's Choose another). */
+  openRepoPickerSignal?: number
 }
 
 /**
  * RR-c1: Orca Cloud on a plain folder, with no GitHub repository picked yet: Create waits.
- * `hasRepos` (the "Choose repository" link) whenever the Project picker can offer one: a GitHub
+ * `hasRepos` (no link; the Project picker is the way forward) whenever it can offer one: a GitHub
  * repository with no clone here, or a GitHub-backed project already added (design-squad).
  */
 export function orcaCloudNeedsGitHubRepo(args: {

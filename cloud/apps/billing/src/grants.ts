@@ -128,7 +128,10 @@ export function subscriptionProjection(catalog: Catalog, subscription: Subscript
     planVersion: version,
     entitlements: planVersion(plan, version).entitlements,
     seatQuantity: Math.max(1, subscription.seats),
-    startsAt: subscription.current_period_start,
+    // Access starts when Stripe says the subscription is live, not at the period start: a test
+    // clock (or any period anchored ahead of our clock) must not read as "not started yet". Kept
+    // stable across syncs (the first value seen), so a renewal doesn't rewrite every grant.
+    startsAt: Math.min(subscription.current_period_start, existing[0]?.starts_at ?? subscription.updated_at),
     // Cancel at period end: access lasts until the period ends, then Stripe deletes it.
     endsAt: subscription.cancel_at_period_end === 1 ? subscription.current_period_end : null
   }
@@ -390,6 +393,49 @@ export async function putManualGrant(
     now: args.now,
     actor: args.actor
   })
+}
+
+/**
+ * Ops: put a team on a contact-sales plan (Enterprise). The plan's current version is projected
+ * as a manual grant that names the real plan and version, so the audit row and /v1/entitlements
+ * show e.g. enterprise@2. `sourceId` is `plan:<planId>:<ticket>`. Sandbox hours and limits still
+ * come from the team's subscription: manual grants add to one, they do not replace it.
+ */
+export async function grantContactSalesPlan(
+  db: D1Database,
+  catalog: Catalog,
+  args: { subjectId: string; planId: string; sourceId: string; startsAt: number; endsAt: number | null; actor: string; now: number }
+): Promise<{ changed: boolean; planVersion: number }> {
+  const plan = catalog.plans.get(args.planId)
+  if (!plan || plan.kind !== 'contact_sales') {
+    throw new Error(`not_a_contact_sales_plan:${args.planId}`)
+  }
+  const entitlements: Partial<Record<EntitlementKey, { value: unknown; perSeat: boolean }>> = {}
+  for (const [key, entry] of Object.entries(planVersion(plan, plan.currentVersion).entitlements)) {
+    if (entry) {
+      entitlements[key as EntitlementKey] = parseEntitlementValue(key, entry)
+    }
+  }
+  const { changed } = await applyProjection(db, {
+    subjectId: args.subjectId,
+    source: 'manual',
+    sourceId: args.sourceId,
+    projection: {
+      state: 'active',
+      holdReason: null,
+      heldSince: null,
+      planId: plan.id,
+      planVersion: plan.currentVersion,
+      entitlements,
+      seatQuantity: null,
+      startsAt: args.startsAt,
+      endsAt: args.endsAt
+    },
+    syncedAt: args.now,
+    now: args.now,
+    actor: args.actor
+  })
+  return { changed, planVersion: plan.currentVersion }
 }
 
 export async function revokeManualGrant(

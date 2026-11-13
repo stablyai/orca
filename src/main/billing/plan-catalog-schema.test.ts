@@ -33,7 +33,7 @@ const enterprise = {
   version: 1,
   entitlements: {},
   features: [{ id: 'byoc', params: {}, text: 'Run sandboxes in your own cloud' }],
-  contactUrl: 'https://onorca.dev/contact-sales',
+  contactUrl: 'https://orca.dev/enterprise',
   priceLabel: 'Custom'
 }
 
@@ -55,7 +55,8 @@ describe('parsePlanCatalog', () => {
       overage: { centsPerHour: 100, defaultSpendCapCents: 2500, maxSpendCapCents: 500000 },
       seats: { min: 1, max: 500 },
       includedHoursPerSeat: 60,
-      checkoutAvailable: true
+      checkoutAvailable: true,
+      supportUrl: null
     })
     expect(catalog?.plans[1]).toEqual({
       kind: 'contact_sales',
@@ -63,8 +64,9 @@ describe('parsePlanCatalog', () => {
       name: 'Enterprise',
       version: 1,
       features: enterprise.features,
-      contactUrl: 'https://onorca.dev/contact-sales',
-      priceLabel: 'Custom'
+      contactUrl: 'https://orca.dev/enterprise',
+      priceLabel: 'Custom',
+      supportUrl: null
     })
   })
 
@@ -115,5 +117,18 @@ describe('parsePlanCatalog', () => {
     })
     const plan = catalog?.plans[0]
     expect(plan && 'contactUrl' in plan ? plan.contactUrl : 'missing').toBeNull()
+  })
+
+  it('keeps an https supportUrl and drops any other scheme (shell:openUrl opens https only)', () => {
+    const read = (supportUrl: unknown) =>
+      parsePlanCatalog({
+        schemaVersion: 1,
+        catalogVersion: 'c',
+        plans: [{ ...enterprise, supportUrl }]
+      })?.plans[0]?.supportUrl
+    expect(read('https://orca.dev/enterprise')).toBe('https://orca.dev/enterprise')
+    expect(read('mailto:help@orca.dev')).toBeNull()
+    expect(read('javascript:alert(1)')).toBeNull()
+    expect(read(undefined)).toBeNull()
   })
 })

@@ -10,7 +10,7 @@
 // Snapshots only boot in the region they were taken in, so every region Orca creates in (the default
 // plus its fallbacks) runs this state machine on its own rows: one active image per region.
 import { RUNTIME_BUNDLE_UPLOAD_SCRIPT, runtimeBundleUrl } from './runtime-bundles'
-import { MANIFEST, PROVISION_SCRIPT, SOURCE_BUILD_SCRIPT, VM_SCRIPT_SOURCES } from '../image/vm-scripts.generated'
+import { MANIFEST, PROVISION_SCRIPT, SOURCE_BUILD_SCRIPT, VM_SCRIPT_SOURCES, VM_SCRIPTS_HASH, VM_SCRIPTS_STAMP } from '../image/vm-scripts.generated'
 import { VM_SCRIPTS, provisionEnv, resolveReleaseBundle, utf8Base64, type GoldenImageManifest } from '../image/golden-image'
 import { parseGitSource, resolveSourceHead, type AppRequest, type GitSource, type SourceHead } from './golden-source'
 import type { GoldenImageProviderApi } from './golden-image-provider'
@@ -208,7 +208,7 @@ async function startSourceBuild(deps: GoldenImageDeps, git: GitSource, head: Sou
       tags: { orcaGoldenImage: id, orcaEnv: deps.config.environment }
     })
     const env = {
-      ...provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: id }),
+      ...provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, vmScriptsStamp: VM_SCRIPTS_STAMP, buildId: id }),
       ORCA_SRC_REPO: git.repoUrl,
       ORCA_SRC_SHA: head.sha,
       // 1 h, read-only, this repo only; the script uses it for one fetch and unsets it.
@@ -268,8 +268,8 @@ async function startRefresh(deps: GoldenImageDeps, active: GoldenRow): Promise<G
       snapshotExpirationMs: 86_400_000
     })
     // A refresh also rolls out the control plane's current VM entry points (grant/revoke, start
-    // script fixes) without waiting for the next release build.
-    await installEntryPoints(deps, box.session.id)
+    // script fixes) without waiting for the next release build; never older ones than the image has.
+    await ensureEntryPoints(deps, box.session.id)
     await finishBuild(deps, id, name, box.session.id)
     return 'refresh-started'
   } catch (error) {
@@ -297,7 +297,7 @@ async function startRelease(deps: GoldenImageDeps, release: { tag: string; bundl
     const commandId = await provider.startCommand(box.session.id, {
       command: 'bash',
       args: ['-c', PROVISION_SCRIPT],
-      env: provisionEnv({ manifest, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: id }),
+      env: provisionEnv({ manifest, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, vmScriptsStamp: VM_SCRIPTS_STAMP, buildId: id }),
       timeoutMs: 30 * 60_000
     })
     await update(db, id, { session_id: box.session.id, command_id: commandId }, now)
@@ -349,30 +349,51 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
 /** Rewrites /opt/orca/bin/<entry point> from VM_SCRIPT_SOURCES (same bytes a release build installs). */
 /** Stable fingerprint of the control plane's VM entry points (FNV-1a over names and bytes). */
 export function entryPointsVersion(): string {
-  let hash = 0x811c9dc5
-  for (const name of VM_SCRIPTS) {
-    for (const char of `${name}\u0000${VM_SCRIPT_SOURCES[name]}\u0000`) {
-      hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0
-    }
+  // vmScriptsHash(VM_SCRIPT_SOURCES), computed by the generator.
+  return VM_SCRIPTS_HASH
+}
+
+// One round trip: the image's scripts stamp (missing = 0: images from before stamps) and whether
+// this Worker's entry points are already installed.
+const ENTRY_POINTS_PROBE = [
+  'stamp="$(cat /opt/orca/bin/.scripts-stamp 2>/dev/null || true)"',
+  'echo "stamp=${stamp:-0}"',
+  `if [ -e /opt/orca/bin/.entry-points-${VM_SCRIPTS_HASH} ]; then echo marker=1; else echo marker=0; fi`
+].join('\n')
+
+function parseEntryPointsProbe(stdout: string): { stamp: number; marker: boolean } | null {
+  const marker = /^marker=([01])$/m.exec(stdout)?.[1]
+  if (marker === undefined) {
+    return null
   }
-  return hash.toString(16).padStart(8, '0')
+  const stamp = /^stamp=(\d+)$/m.exec(stdout)?.[1]
+  return { stamp: stamp ? Number(stamp) : 0, marker: marker === '1' }
 }
 
 /**
  * Sandboxes booted from an older image get the control plane's current entry points (grant, revoke,
  * member identities, sender-aware git) once per boot: a marker check, and an install only if stale.
+ * Never a downgrade: an image whose scripts stamp is newer than this Worker's keeps its own scripts
+ * (a Worker deployed behind its golden would otherwise replace them with older copies).
  */
 export async function ensureEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
   const probe = await deps.provider
-    .runCommand(sessionId, { command: 'test', args: ['-e', `/opt/orca/bin/.entry-points-${entryPointsVersion()}`], timeoutMs: 15_000 })
+    .runCommand(sessionId, { command: 'bash', args: ['-c', ENTRY_POINTS_PROBE], timeoutMs: 15_000 })
     .catch(() => null)
-  if (probe?.exitCode !== 0) {
-    await installEntryPoints(deps, sessionId)
+  // An unreadable probe installs, as before stamps existed.
+  const image = probe?.exitCode === 0 ? parseEntryPointsProbe(probe.stdout) : null
+  if (image?.marker) {
+    return
   }
+  if (image && image.stamp > VM_SCRIPTS_STAMP) {
+    console.log(JSON.stringify({ event: 'entry_points_skip_older_worker', image: image.stamp, worker: VM_SCRIPTS_STAMP }))
+    return
+  }
+  await installEntryPoints(deps, sessionId)
 }
 
 export async function installEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
-  const env = provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: 'sync' })
+  const env = provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, vmScriptsStamp: VM_SCRIPTS_STAMP, buildId: 'sync' })
   const scriptEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('ORCA_VM_SCRIPT_')))
   const install = [
     'set -euo pipefail',
@@ -384,6 +405,8 @@ export async function installEntryPoints(deps: { provider: Pick<SandboxProviderA
     'done',
     // Marks this set of entry points as installed (ensureEntryPoints skips the install next time).
     `sudo rm -f /opt/orca/bin/.entry-points-* && sudo touch /opt/orca/bin/.entry-points-${entryPointsVersion()}`,
+    // Records which scripts the image now carries (an older Worker never reinstalls over them).
+    `echo ${VM_SCRIPTS_STAMP} | sudo tee /opt/orca/bin/.scripts-stamp >/dev/null`,
     'echo synced'
   ].join('\n')
   const result = await deps.provider.runCommand(sessionId, { command: 'bash', args: ['-c', install], env: scriptEnv, timeoutMs: 60_000 })

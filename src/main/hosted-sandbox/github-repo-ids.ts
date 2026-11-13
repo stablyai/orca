@@ -3,6 +3,7 @@
 // private repository's id isn't readable anonymously, and the control plane never sees a user token.
 // Best effort: no gh, not signed in, or slow means the plain install page instead.
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
+import type { GitHubInstallRights } from '../../shared/hosted-sandbox/cloud-workspace-api'
 
 export type GitHubRepoIds = { repoId: number; ownerId: number }
 
@@ -59,4 +60,55 @@ export function lookupGitHubRepoIds(repoUrl: string): Promise<GitHubRepoIds | nu
     cache.set(key, settled)
   }
   return entry
+}
+
+// Rights can change (an org adds an owner), so hits expire like the repo-access answer.
+const RIGHTS_CACHE_MS = 5 * 60_000
+const rightsCache = new Map<string, { at: number; value: Promise<GitHubInstallRights | null> }>()
+
+/** `.permissions.admin, .owner.type` from `gh api repos/<slug>`; null when gh couldn't tell. */
+export function parseGitHubInstallRights(stdout: string): GitHubInstallRights | null {
+  const [admin, ownerType] = stdout.trim().split(/\s+/)
+  if (admin !== 'true' && admin !== 'false') {
+    return null
+  }
+  return ownerType === 'User' || ownerType === 'Organization'
+    ? { admin: admin === 'true', ownerType }
+    : null
+}
+
+/**
+ * Can the person install the Orca GitHub App on this repository's owner? GitHub lets an owner of a
+ * personal account, an org owner, or a repository admin install it; anyone else (octocat's public
+ * Hello-World, say) can't, and an org member's attempt becomes a request for an owner.
+ */
+export function lookupGitHubInstallRights(
+  repoUrl: string,
+  now = Date.now()
+): Promise<GitHubInstallRights | null> {
+  const slug = githubRepoSlug(repoUrl)
+  if (!slug) {
+    return Promise.resolve(null)
+  }
+  const key = slug.toLowerCase()
+  const cached = rightsCache.get(key)
+  if (cached && now - cached.at < RIGHTS_CACHE_MS) {
+    return cached.value
+  }
+  const value = Promise.race([
+    ghExecFileAsync(['api', `repos/${slug}`, '--jq', '.permissions.admin, .owner.type'], {
+      host: 'github.com',
+      idempotent: true
+    }).then(({ stdout }) => parseGitHubInstallRights(stdout)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), LOOKUP_TIMEOUT_MS))
+  ]).catch(() => null)
+  const entry = { at: now, value }
+  // Misses aren't kept: a later gh sign-in is picked up on the next ask.
+  void value.then((rights) => {
+    if (!rights && rightsCache.get(key) === entry) {
+      rightsCache.delete(key)
+    }
+  })
+  rightsCache.set(key, entry)
+  return value
 }

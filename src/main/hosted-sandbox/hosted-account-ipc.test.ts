@@ -38,7 +38,13 @@ const REPO = 'https://github.com/acme/web'
 const githubUser = {
   githubUser: async () => ({ connected: false as const }),
   connectGitHubUser: async () => ({ authorizeUrl: 'https://github.com/login/oauth/authorize' }),
-  disconnectGitHubUser: async () => ({ connected: false as const })
+  disconnectGitHubUser: async () => ({ connected: false as const }),
+  // The GitHub-only create's progress (GH-CREATE-SHEET): an older control plane has no boot plan.
+  bootPlan: async (): Promise<'clone' | 'update'> => {
+    throw new Error('not_found')
+  },
+  cloneStatus: async () => ({ state: 'done' as const }),
+  destroy: async (id: string) => ({ id, status: 'destroyed' as const })
 }
 const unusedCreate = async (): Promise<never> => {
   throw new Error('not called')
@@ -72,15 +78,55 @@ it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anyt
     ok: true,
     value: { sandboxId: 'sbx_1' }
   })
-  expect(create).toHaveBeenLastCalledWith({
-    workspaceId: expect.stringMatching(/^web-[0-9a-f]{8}$/),
-    machineSize: 'standard',
-    repo: { url: 'https://github.com/acme/web.git' }
-  })
+  expect(create).toHaveBeenLastCalledWith(
+    {
+      workspaceId: expect.stringMatching(/^web-[0-9a-f]{8}$/),
+      machineSize: 'standard',
+      repo: { url: 'https://github.com/acme/web.git' }
+    },
+    undefined,
+    undefined
+  )
   expect(
     await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: 'https://gitlab.com/acme/web' })
   ).toMatchObject({ ok: false })
   expect(create).toHaveBeenCalledTimes(1)
+})
+
+it('a GitHub-only create keeps the typed name as the workspace title (NAME-DROPPED)', async () => {
+  const create = vi.fn(async (body: { workspaceId: string; title?: string }) => ({
+    sandbox: {
+      id: 'sbx_2',
+      workspaceId: body.workspaceId,
+      status: 'running' as const,
+      machineSize: 'standard' as const,
+      region: 'iad1',
+      session: null,
+      createdAt: 1
+    },
+    connection: { type: 'orca-server' as const, pairingCode: 'code', projectRoot: '/work' }
+  }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create,
+      ...githubUser
+    },
+    { repoIds: async () => null }
+  )
+  await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: '  ik-paired  ' })
+  expect(create.mock.lastCall?.[0]).toEqual(expect.objectContaining({ title: 'ik-paired' }))
+  // No name typed: no title (lists fall back to the repository's name), never an empty one.
+  await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: '   ' })
+  expect(create.mock.lastCall?.[0]).toEqual(
+    expect.not.objectContaining({ title: expect.anything() })
+  )
+  // The control plane caps titles at 120.
+  await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO, title: 'x'.repeat(200) })
+  expect(create.mock.lastCall?.[0]).toEqual(expect.objectContaining({ title: 'x'.repeat(120) }))
 })
 const SESSION = 'cs_abcdefghijklmnopqrstuv'
 
@@ -172,4 +218,31 @@ it('reads the config once, and again after a failed read', async () => {
   await handlers.get(CH.getConfig)?.()
   await handlers.get(CH.getConfig)?.()
   expect(config).toHaveBeenCalledTimes(2)
+})
+
+it("reads the person's install rights with their gh login, for GitHub repositories only", async () => {
+  const installRights = vi.fn(async () => ({ admin: false, ownerType: 'User' as const }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess: async () => ({ access: 'public', owner: 'octocat', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate,
+      ...githubUser
+    },
+    { repoIds: async () => null, installRights }
+  )
+  const rights = handlers.get(CH.gitHubInstallRights)
+  expect(await rights?.({}, { repoUrl: 'https://github.com/octocat/Hello-World.git' })).toEqual({
+    ok: true,
+    value: { admin: false, ownerType: 'User' }
+  })
+  expect(installRights).toHaveBeenCalledWith('https://github.com/octocat/Hello-World')
+  expect(await rights?.({}, { repoUrl: 'https://gitlab.com/acme/web' })).toMatchObject({
+    ok: false
+  })
+  // gh failing reads as "can't tell", never as an error the notice has to handle.
+  installRights.mockRejectedValueOnce(new Error('gh: not logged in'))
+  expect(await rights?.({}, { repoUrl: REPO })).toEqual({ ok: true, value: null })
 })

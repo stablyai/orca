@@ -25,10 +25,10 @@
   "triggers": { "crons": ["*/10 * * * *"] },
   "vars": {
     "BILLING_ENV": "dev",
-    // Plans & entitlements rollout (env.ts): 'shadow' serves the legacy terms and records every
-    // disagreement of the grant resolver in entitlement_shadow_diffs; 'on' once a full e2e run
-    // leaves that table empty. Needs migration 0008 and `tsx scripts/catalog-apply.ts --config wrangler.dev.jsonc`.
-    "ENTITLEMENTS_MODE": "shadow",
+    // Plans & entitlements (env.ts): 'on' serves the D1 catalog + grants. Switched from 'shadow'
+    // on 2026-11-12 after the Stripe TEST e2e (7/7 billing checks) left entitlement_shadow_diffs
+    // empty. Rollback: set 'shadow' (or 'off') and redeploy; no data change needed.
+    "ENTITLEMENTS_MODE": "on",
     "STRIPE_API_VERSION": "2025-09-30.clover",
     "STRIPE_METER_EVENT_NAME": "orca_sandbox_seconds",
     // Stripe TEST MODE objects in acct_1Or7xeKb73TzRkjk (scripts/stripe-test-setup.ts).

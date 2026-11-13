@@ -43,6 +43,7 @@ type VmBuildEntry = Pick<
   | 'checkoutProgress'
   | 'worktreeId'
   | 'errorAt'
+  | 'errorCode'
   | 'provisioningLog'
   | 'provisioningLogStamps'
 >
@@ -104,7 +105,14 @@ function runningClone(
 export function deriveVmBuildSteps(
   entry: VmBuildEntry,
   now: number,
-  { cloud = false }: { cloud?: boolean } = {}
+  {
+    cloud = false,
+    checks: withChecks = true
+  }: {
+    cloud?: boolean
+    /** False for a GitHub-only Orca Cloud create: it is paired, so no environment checks run. */
+    checks?: boolean
+  } = {}
 ): VmBuildStep[] {
   const check = entry.environmentCheck
   const failed = entry.status === 'error'
@@ -122,7 +130,10 @@ export function deriveVmBuildSteps(
     (cloud ? orcaCloudPlannedRepoMode(entry.provisioningLog ?? '') : null) ??
     undefined
   const afterClone = clone?.endedAt ?? check?.startedAt ?? createAt
-  const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined
+  // A clone that failed (CLONE-ACCESS-ERROR: GitHub refused it) means the sandbox started, even
+  // when no clone line made it into the log: the steps tell the same story as the card.
+  const cloneRefused = failed && cloud && entry.errorCode === 'cloudCloneFailed'
+  const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined || cloneRefused
 
   const provision = provisionDone
     ? step(
@@ -141,7 +152,12 @@ export function deriveVmBuildSteps(
     ? null
     : cloneAt === undefined
       ? {
-          ...step('clone', provisionDone ? 'done' : 'pending', null, undefined),
+          ...step(
+            'clone',
+            cloneRefused ? 'failed' : provisionDone ? 'done' : 'pending',
+            null,
+            undefined
+          ),
           ...(cloneMode ? { cloneMode } : {})
         }
       : clone?.ended || check || workspacePhase
@@ -177,5 +193,7 @@ export function deriveVmBuildSteps(
             percent: getVisibleCheckoutProgress(entry)?.percent ?? null
           })
 
-  return cloneStep ? [provision, cloneStep, checks, create] : [provision, checks, create]
+  return [provision, cloneStep, withChecks ? checks : null, create].filter(
+    (candidate): candidate is VmBuildStep => candidate !== null
+  )
 }

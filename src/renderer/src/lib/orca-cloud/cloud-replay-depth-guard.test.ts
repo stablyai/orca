@@ -69,6 +69,97 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     expect(after.filter((row) => row === '05000 line')).toHaveLength(1)
   })
 
+  // V3-02: asleep, woken, then the app restarted. Everything above the divider lived only in this
+  // pane; the host's (new) terminal has just what came after the wake.
+  it('keeps the output from before a sleep when the host replay after a restart has none of it', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const divider = '── Slept 10:46–10:52 AM · processes stopped ──'
+    const postWake = ['$ seq 5001 5003', '5001', '5002', '5003', 'N02W-POSTWAKE']
+    await write(terminal, `${[...lines(1, 300), divider, ...postWake].join('\r\n')}\r\n$ `)
+
+    const kept = await shallowReplay(terminal, `${postWake.join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after).toContain(divider)
+    expect(after.filter((row) => row === 'N02W-POSTWAKE')).toHaveLength(1)
+    expect(after.indexOf(divider)).toBeLessThan(after.indexOf('5001'))
+  })
+
+  it('keeps the output from before a sleep when the restarted host shows only a fresh prompt', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const divider = '── Slept 10:46–10:52 AM · processes stopped ──'
+    await write(terminal, `${[...lines(1, 40), divider].join('\r\n')}\r\n$ `)
+
+    const kept = await shallowReplay(terminal, '$ ')
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.at(-2)).toBe(divider)
+    expect(after.at(-1)).toBe('$')
+  })
+
+  it('two sleeps before the restart: keeps everything up to the last divider, nothing doubled', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const first = '── Slept 9:00–9:30 AM · processes stopped ──'
+    const second = '── Slept 10:46–10:52 AM · processes stopped ──'
+    const postWake = ['$ echo after-second', 'after-second']
+    await write(
+      terminal,
+      `${[...lines(1, 50), first, ...lines(51, 80), second, ...postWake].join('\r\n')}\r\n$ `
+    )
+
+    const kept = await shallowReplay(terminal, `${postWake.join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row === first)).toHaveLength(1)
+    expect(after.filter((row) => row === second)).toHaveLength(1)
+    expect(after.filter((row) => row === '00080 line')).toHaveLength(1)
+    expect(after.filter((row) => row === 'after-second')).toHaveLength(1)
+    expect(after.indexOf(first)).toBeLessThan(after.indexOf(second))
+  })
+
+  // V3-02 follow-up (n33 baseline): the host restored the pre-sleep history into the woken
+  // terminal, so its replay already holds 1–2000; only the divider was lost.
+  it('the host restored the pre-sleep history: the divider goes back in place, nothing doubled', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const divider = '── Slept 11:08 AM · processes stopped ──'
+    const preSleep = [...lines(1, 300), '$ sleep 900']
+    const postWake = ['$ seq 5001 5003', '5001', '5002', '5003', 'N02W-POSTWAKE']
+    await write(terminal, `${[...preSleep, divider, ...postWake].join('\r\n')}\r\n$ `)
+
+    const kept = await shallowReplay(terminal, `${[...preSleep, ...postWake].join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row === '00001 line')).toHaveLength(1)
+    expect(after.filter((row) => row === '00300 line')).toHaveLength(1)
+    expect(after.filter((row) => row === divider)).toHaveLength(1)
+    expect(after.filter((row) => row === 'N02W-POSTWAKE')).toHaveLength(1)
+    expect(after.indexOf('00300 line')).toBeLessThan(after.indexOf(divider))
+    expect(after.indexOf(divider)).toBeLessThan(after.indexOf('5001'))
+  })
+
+  it('the host restored only the newest pre-sleep lines: older ones come from the pane, once each', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const divider = '── Slept 11:08 AM · processes stopped ──'
+    await write(terminal, `${[...lines(1, 300), divider].join('\r\n')}\r\n$ `)
+
+    const kept = await shallowReplay(terminal, `${lines(201, 300).join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row.endsWith(' line'))).toHaveLength(300)
+    expect(after.filter((row) => row === '00250 line')).toHaveLength(1)
+    expect(after.indexOf('00300 line')).toBeLessThan(after.indexOf(divider))
+  })
+
   it('leaves the replay alone when it does not overlap what the pane held', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
     await write(terminal, `${lines(1, 3000).join('\r\n')}\r\n$ `)
@@ -83,6 +174,8 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     const before = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].join('\r\n')
     expect(mergeDeeperHistory(before, ['tail-of-d', 'e', 'f', 'g'].join('\r\n'))).toBe(before)
     expect(mergeDeeperHistory(before, ['x', 'y', 'z', 'w'].join('\r\n'))).toBeNull()
-    expect(mergeDeeperHistory(['a', 'b'].join('\r\n'), ['a', 'b', 'c', 'd'].join('\r\n'))).toBeNull()
+    expect(
+      mergeDeeperHistory(['a', 'b'].join('\r\n'), ['a', 'b', 'c', 'd'].join('\r\n'))
+    ).toBeNull()
   })
 })

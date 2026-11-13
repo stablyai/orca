@@ -18,6 +18,22 @@ const base = {
 }
 
 describe('deriveVmBuildSteps', () => {
+  it('a clone GitHub refused marks the clone failed, not the sandbox start (CLONE-ACCESS-ERROR)', () => {
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        status: 'error',
+        errorCode: 'cloudCloneFailed',
+        errorAt: 3000,
+        provisioningLog: 'Orca Cloud: repo_unreachable'
+      },
+      4000,
+      { cloud: true }
+    )
+    expect(steps.find((step) => step.id === 'provision')?.state).toBe('done')
+    expect(steps.find((step) => step.id === 'clone')?.state).toBe('failed')
+  })
+
   it('keeps the sheet moving through fetch and checkout instead of stalling on checks', () => {
     const steps = deriveVmBuildSteps(
       {
@@ -408,5 +424,30 @@ describe('Orca Cloud clone step', () => {
     const t: Translate = (_key, fallback) => fallback
     expect(humanizeOrcaCloudLogLine('[orca-cloud] cloning', t)).toBe('Cloning the repository…')
     expect(humanizeOrcaCloudLogLine('[orca-cloud] clone-progress 40 download', t)).toBeNull()
+  })
+})
+
+describe('GitHub-only Orca Cloud create (GH-CREATE-SHEET)', () => {
+  it('has no environment checks step: start, clone, then open', () => {
+    const log = '[orca-cloud] provisioning\n[orca-cloud] cloning\n[orca-cloud] connecting'
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        phase: 'creating',
+        phaseLog: [
+          { phase: 'provisioning-vm', at: 1000 },
+          { phase: 'creating', at: 6000 }
+        ],
+        provisioningLog: log,
+        provisioningLogStamps: [1000, 3000, 5000]
+      },
+      7000,
+      { cloud: true, checks: false }
+    )
+    expect(steps.map((step) => [step.id, step.state])).toEqual([
+      ['provision', 'done'],
+      ['clone', 'done'],
+      ['create', 'running']
+    ])
   })
 })

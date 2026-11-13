@@ -1,6 +1,7 @@
 import { isValidOrgName, ORCA_ORG_NAME_MAX_LENGTH } from '../../../shared/orca-org-management'
 import type { OrcaProfileOrgCreateResult } from '../../../shared/orca-org-management'
 import { ipcMain } from 'electron'
+import { registerOrcaProfileOrgEnterpriseHandlers } from './orca-profile-org-enterprise-handlers'
 import type {
   OrcaOrgRole,
   OrcaProfileOrgInviteRevokeArgs,
@@ -11,6 +12,22 @@ import type {
   OrcaProfileOrgMembersListArgs,
   OrcaProfileOrgMembersListResult
 } from '../../../shared/orca-profiles'
+import type { OrcaAccountMfaResult } from '../../../shared/orca-account-mfa'
+import { getOrcaProfileAccountMfa } from '../../orca-profiles/cloud-mfa/profile-cloud-mfa-service'
+import {
+  ORCA_TEAM_MFA_GRACE_CHOICES,
+  type OrcaTeamMfaGrace,
+  type OrcaTeamMfaPendingResult,
+  type OrcaTeamMfaPolicyResult,
+  type OrcaTeamMfaPolicySetResult,
+  type OrcaTeamMfaRemindResult
+} from '../../../shared/orca-team-mfa-policy'
+import {
+  getOrcaTeamMfaPolicy,
+  listOrcaTeamMfaPending,
+  remindOrcaTeamMfa,
+  setOrcaTeamMfaPolicy
+} from '../../orca-profiles/cloud-mfa/profile-cloud-team-mfa-service'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import {
   changeOrcaProfileOrgMemberRole,
@@ -109,6 +126,9 @@ function orgDeleteConfirmNameFromUnknown(value: unknown): string {
 }
 
 export function registerOrcaProfileOrgMemberHandlers(): void {
+  // Settings › Enterprise (single sign-on, directory sync) for the same team.
+  registerOrcaProfileOrgEnterpriseHandlers()
+
   ipcMain.handle(
     'orcaProfiles:orgDeleteCheck',
     async (_event, rawArgs: unknown): Promise<OrcaProfileOrgDeleteCheckResult> =>
@@ -142,6 +162,48 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
     'orcaProfiles:orgCreate',
     async (_event, rawArgs: unknown): Promise<OrcaProfileOrgCreateResult> =>
       createOrcaProfileOrg(getProfileUserDataPath(), { name: orgCreateNameFromUnknown(rawArgs) })
+  )
+
+  ipcMain.handle('orcaProfiles:accountMfa', async (): Promise<OrcaAccountMfaResult> =>
+    getOrcaProfileAccountMfa(getProfileUserDataPath())
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaPolicy',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPolicyResult> =>
+      getOrcaTeamMfaPolicy(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaPolicySet',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPolicySetResult> => {
+      const { orgId, record } = orgMembersScopedArgs(rawArgs)
+      // Only the fixed choices cross to the server; anything else is refused here.
+      const enforce: OrcaTeamMfaGrace | 'off' | undefined =
+        record.enforce === 'off'
+          ? 'off'
+          : ORCA_TEAM_MFA_GRACE_CHOICES.find((choice) => choice === record.enforce)
+      if (enforce === undefined) {
+        return { status: 'failed', error: 'invalid_enforce' }
+      }
+      return setOrcaTeamMfaPolicy(getProfileUserDataPath(), { orgId, enforce })
+    }
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaPending',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaPendingResult> =>
+      listOrcaTeamMfaPending(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:teamMfaRemind',
+    async (_event, rawArgs: unknown): Promise<OrcaTeamMfaRemindResult> => {
+      const { orgId, record } = orgMembersScopedArgs(rawArgs)
+      const userId =
+        typeof record.userId === 'string' && record.userId.length <= 128 ? record.userId : undefined
+      return remindOrcaTeamMfa(getProfileUserDataPath(), { orgId, ...(userId ? { userId } : {}) })
+    }
   )
 
   ipcMain.handle(

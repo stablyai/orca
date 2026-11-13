@@ -1,4 +1,8 @@
+import { useEffect } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useTranslate } from '@/i18n/use-translate'
 import { Dialog } from '@/components/ui/dialog'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
 import type { OrcaOrgMembersRoster } from '../../../../../shared/orca-profiles'
@@ -6,6 +10,7 @@ import { sampleTeam } from '../plan-billing-fixtures'
 import { TeamDialogContent } from './TeamDialogHost'
 import { TeamPageView, type TeamPageViewProps } from './TeamPageView'
 import { TeamDeleteSection, type TeamDeleteCheck } from './TeamDeleteSection'
+import { leaveTeamConfirmation } from './team-leave'
 
 // Fixtures render offline: a self-contained stand-in for a provider profile picture.
 const ADA_PICTURE =
@@ -85,7 +90,7 @@ const base: TeamPageViewProps = {
   onManageBilling: noop,
   onCreateWorkspace: noop,
   onDismissArrival: noop,
-  onContactSales: noop
+  onOpenEnterprise: noop
 }
 
 function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {
@@ -99,6 +104,21 @@ function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {
 }
 
 export const ownerOnTeam = defineFixture({ width, render: () => <Page /> })
+
+/** TEAM-MODAL-CENTER: in a tall window the dialog sits in the middle, not pinned near the top. */
+export const centeredInWindow = defineFixture({
+  width,
+  render: () => (
+    <div className="h-[1000px]">
+      <Page
+        roster={{
+          status: 'ok',
+          roster: { ...roster, members: roster.members.slice(0, 2), pendingInvites: [] }
+        }}
+      />
+    </div>
+  )
+})
 
 export const justUpgraded = defineFixture({
   width,
@@ -122,6 +142,37 @@ export const memberReadOnly = defineFixture({
       billing={{ status: 'ok', entitlement: { ...noPlan, canManageBilling: false } }}
     />
   )
+})
+
+// What the server sends an owner or admin: every member carries an MFA status.
+const rosterWithMfa: OrcaOrgMembersRoster = {
+  ...roster,
+  members: [
+    { ...roster.members[0]!, mfa: 'on' },
+    { ...roster.members[1]!, mfa: 'off' },
+    { ...roster.members[2]!, mfa: 'pending', mfaDeadline: NOW + 6 * DAY },
+    { ...roster.members[3]!, mfa: 'off' }
+  ]
+}
+
+export const ownerSeesMfaColumn = defineFixture({
+  width,
+  render: () => <Page roster={{ status: 'ok', roster: rosterWithMfa }} />
+})
+
+export const adminSeesMfaColumn = defineFixture({
+  width,
+  render: () => (
+    <Page
+      viewerUserId="u-ada"
+      roster={{ status: 'ok', roster: { ...rosterWithMfa, viewerRole: 'admin' } }}
+    />
+  )
+})
+
+export const mfaColumnNarrow = defineFixture({
+  width: 640,
+  render: () => <Page roster={{ status: 'ok', roster: rosterWithMfa }} />
 })
 
 export const rowBusyAndError = defineFixture({
@@ -225,27 +276,30 @@ export const createTeamUnsupported = defineFixture({
   )
 })
 
-/** Pasted list mid-composition: valid chips, one invalid, and the seat impact line. */
+/** Types into the invite field; the trailing separator commits the chips. */
+async function typeInvites(text: string): Promise<void> {
+  // The dialog portals to <body>, outside the fixture frame.
+  const input = document.querySelector<HTMLInputElement>('input[inputmode="email"]')
+  if (!input) {
+    return
+  }
+  input.focus()
+  // React listens for native input events.
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setValue?.call(input, text)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+
+/** Pasted list: the chips, one invalid entry, and the seat rule (no counts or prices). */
 export const invitePasted = defineFixture({
   width,
   render: () => <Page billing={{ status: 'ok', entitlement: { ...team, seats: 4 } }} />,
-  interact: async () => {
-    // The dialog portals to <body>, outside the fixture frame.
-    const input = document.querySelector<HTMLInputElement>('input[inputmode="email"]')
-    if (!input) {
-      return
-    }
-    input.focus()
-    // React listens for native input events; the trailing separator commits the chips.
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    setValue?.call(input, 'jordan@acme.dev, kim@acme.dev, not-an-email ')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
+  interact: () => typeInvites('jordan@acme.dev, kim@acme.dev, not-an-email ')
 })
 
-/** Short roster so the Enterprise SSO row and Leave sit inside the frame. */
-export const ssoAndLeave = defineFixture({
+/** Short roster so the Enterprise row sits inside the frame. */
+export const ssoRow = defineFixture({
   width,
   render: () => (
     <Page
@@ -261,7 +315,41 @@ export const ssoAndLeave = defineFixture({
   )
 })
 
-// TEAM-DELETE: Settings › Team (inline), owner. The danger zone sits after "Leave <team>".
+/** The only owner opens the ⋯ on their own row: Leave is off and says what to do instead. */
+export const lastOwnerLeaveBlocked = defineFixture({
+  width,
+  render: () => <Page />,
+  interact: async () => {
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-team-row="member:u-neil"] button[aria-haspopup="menu"]'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+})
+
+/** Choosing "Leave team…" from the ⋯ menu on your own row. */
+function OpenLeaveConfirm(): null {
+  const t = useTranslate()
+  const confirm = useConfirmationDialog()
+  useEffect(() => {
+    void confirm(leaveTeamConfirmation('Orca Staging Eval Team', t))
+  }, [confirm, t])
+  return null
+}
+
+export const leaveConfirm = defineFixture({
+  width: 560,
+  render: () => (
+    <div className="h-[300px]">
+      <ConfirmationDialogProvider>
+        <OpenLeaveConfirm />
+      </ConfirmationDialogProvider>
+    </div>
+  )
+})
+
+// TEAM-DELETE: Settings › Team (inline), owner. The danger zone sits in the bottom card.
 function DeletePage({ check }: { check: TeamDeleteCheck }): React.JSX.Element {
   // Settings › Team renders the page inline, not in the dialog, so the whole page shows.
   return (

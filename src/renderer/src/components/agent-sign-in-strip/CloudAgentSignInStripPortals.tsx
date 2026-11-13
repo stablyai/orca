@@ -2,40 +2,25 @@
 // private launch hold waits, or #40228's per-workspace gate while the Orca-account path is paused or
 // never offered. It overlays the top 56 px of the pane while the agent hasn't started, so the
 // terminal's size never changes. SSH, WSL and paired hosts keep #40228's card.
-import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import React, { useEffect, useSyncExternalStore } from 'react'
-import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
-import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import {
   readAgentSignInGate,
-  subscribeAgentSignInGates,
-  useAgentSignInGate
+  subscribeAgentSignInGates
 } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
 import { abandonAgentSignIn } from '@/lib/agent-sign-in/agent-sign-in-gate'
 import {
-  cloudAgentHoldReason,
-  cloudAgentStripReason,
   cloudTabHoldKey,
   readCloudAgentHold,
-  releaseCloudAgentHold,
-  useCloudAgentHold
+  releaseCloudAgentHold
 } from '@/lib/orca-cloud/cloud-agent-launch-hold'
-import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import type { TerminalPaneController } from '../terminal-pane/controller/use-terminal-pane-controller'
-import { agentSignInCardActions } from '../agent-sign-in/AgentSignInPanePortals'
-import {
-  CloudAgentSignInStrip,
-  CloudStripLayer,
-  cloudStripWidth,
-  type CloudStripActions
-} from './CloudAgentSignInStrip'
-import { cloudAgentStripModel } from './cloud-agent-strip-model'
-import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
-import { cloudSetupStripActions } from './cloud-setup-strip-actions'
+import { CloudAgentSignInStrip, cloudStripWidth } from './CloudAgentSignInStrip'
+import { CloudPaneBannerPortal } from './CloudPaneBannerPortal'
+import { useCloudHeldStrip } from './use-cloud-held-strip'
 import { CloudRunningStripPortal } from './CloudRunningStripPortal'
 
 const ABANDON_CHECK_MS = 1_000
@@ -74,12 +59,6 @@ export function useCloudGatePaneKeys(controller: TerminalPaneController): Readon
   return new Set(joined ? joined.split('\u0000') : [])
 }
 
-function openSettings(pane: 'cloud-secrets', sectionId?: string): void {
-  const store = useAppStore.getState()
-  store.openSettingsTarget({ pane, repoId: null, ...(sectionId ? { sectionId } : {}) })
-  store.openSettingsPage()
-}
-
 function CloudStripPortal({
   pane,
   tabId,
@@ -90,19 +69,10 @@ function CloudStripPortal({
   /** A host-published launch holds its whole tab (RA-1); its first pane shows the strip. */
   first: boolean
 }): React.JSX.Element | null {
-  const t = useTranslate()
   const paneKey = makePaneKey(tabId, pane.leafId)
-  const paneHold = useCloudAgentHold(paneKey)
-  const tabHold = useCloudAgentHold(first ? cloudTabHoldKey(tabId) : '')
-  const hold = paneHold ?? tabHold
-  // Releases and abandons go to whichever key holds; #40228's gate is always per pane.
-  const key = paneHold || !tabHold ? paneKey : cloudTabHoldKey(tabId)
-  const gate = useAgentSignInGate(paneKey)
-  const cloudGate = gate && isOrcaCloudEnvironmentId(gate.environmentId) ? gate : null
-  const accounts = useOrcaCloudAgentAccounts(hold !== null || cloudGate !== null)
+  const { key, active, strip } = useCloudHeldStrip(paneKey, first ? cloudTabHoldKey(tabId) : null)
   // The first render's class; the strip then follows its own live width (RA-1).
   const width = cloudStripWidth(pane.container.clientWidth)
-  const active = hold !== null || cloudGate !== null
   useEffect(() => {
     if (!active) {
       return
@@ -124,93 +94,18 @@ function CloudStripPortal({
       }, ABANDON_CHECK_MS)
     }
   }, [active, key, paneKey, pane.container, tabId])
-  if (!hold && !cloudGate) {
+  if (!strip) {
     return null
   }
-  const agent = hold?.agent ?? cloudGate?.agent ?? 'claude'
-  const reason = hold
-    ? 'accountExpired'
-    : (cloudAgentStripReason(agent, accounts) ?? 'paused') === 'notOffered'
-      ? 'notOffered'
-      : 'paused'
-  const gateActions = agentSignInCardActions(paneKey)
-  // PC-3b: a launch held because the agent isn't set up runs the one-time setup in the pane.
-  const setupHold = hold?.reason === 'notSetUp'
-  const setup = accounts.setups[agent]
-  const model = setupHold
-    ? cloudAgentSetupStripModel({
-        agent,
-        setup,
-        ready: accounts.load.kind === 'ready' && cloudAgentHoldReason(agent, accounts) === null,
-        t
-      })
-    : cloudAgentStripModel({
-        agent,
-        reason,
-        view: hold ? null : (cloudGate?.view ?? null),
-        hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
-        t
-      })
-  const holdActions: CloudStripActions | null = setupHold
-    ? cloudSetupStripActions({
-        agent,
-        holdKey: key,
-        setupRunning: setup.phase !== 'idle' && setup.phase !== 'saved' && setup.phase !== 'failed',
-        copyText: gateActions.copyText,
-        openLink: gateActions.openLink,
-        useApiKey: () => openSettings('cloud-secrets')
-      })
-    : null
-  const actions: CloudStripActions = holdActions ?? {
-    primary: (action) => {
-      // RA-11's restart belongs to the running-pane strip; a held launch never offers it.
-      if (
-        action.kind === 'restart' ||
-        action.kind === 'setUpOnce' ||
-        action.kind === 'reopenSetup' ||
-        action.kind === 'start'
-      ) {
-        return
-      }
-      switch (action.kind) {
-        case 'renew':
-          openOrcaCloudSignInSheet()
-          return
-        case 'signIn':
-          gateActions.signIn()
-          return
-        case 'openAgain':
-          gateActions.openLink(action.url)
-          return
-        case 'copyAndOpen':
-          gateActions.copyText(action.code)
-          gateActions.openLink(action.url)
-          return
-        case 'retry':
-          gateActions.retry()
-          return
-        case 'useDeviceCode':
-        case 'submitCode':
-          gateActions.useCode()
-      }
-    },
-    submitCode: gateActions.submitCode,
-    pasteCode: gateActions.useCode,
-    useCode: gateActions.useCode,
-    useApiKey: () => openSettings('cloud-secrets'),
-    cancel: () => (hold ? releaseCloudAgentHold(key, 'cancel') : gateActions.cancel())
-  }
-  return createPortal(
-    <CloudStripLayer>
-      <CloudAgentSignInStrip
-        model={model}
-        prompt={hold?.prompt ?? cloudGate?.prompt ?? null}
-        width={width}
-        actions={actions}
-      />
-    </CloudStripLayer>,
-    pane.container,
-    `cloud-sign-in-strip-${pane.id}`
+  return (
+    <CloudPaneBannerPortal
+      pane={pane}
+      paneKey={paneKey}
+      portalKey={`cloud-sign-in-strip-${pane.id}`}
+      stripLayer
+    >
+      <CloudAgentSignInStrip {...strip} width={width} />
+    </CloudPaneBannerPortal>
   )
 }
 

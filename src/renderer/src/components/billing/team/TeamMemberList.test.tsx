@@ -44,3 +44,113 @@ it('marks a busy row with aria-busy and a spinner, without dimming it', () => {
   expect(busy.querySelector('.animate-spin')).not.toBeNull()
   expect(idle.querySelector('.animate-spin')).toBeNull()
 })
+
+it('offers Leave from the ⋯ on your own row only', () => {
+  const { container } = render(
+    <TeamMemberList
+      rows={teamRows({ ...roster, viewerRole: 'member', canManageMembers: false }, 'u-grace')}
+      viewerRole="member"
+      rowStates={{}}
+      canLeave
+      now={Date.UTC(2026, 10, 18)}
+      onChangeRole={noop}
+      onMakeOwner={noop}
+      onRemove={noop}
+      onResend={noop}
+      onRevoke={noop}
+      onLeave={noop}
+    />
+  )
+  const self = container.querySelector('[data-team-row="member:u-grace"]')!
+  const other = container.querySelector('[data-team-row="member:u-neil"]')!
+  expect(self.querySelector('button[aria-label^="Actions for"]')).not.toBeNull()
+  // A plain member has nothing to do on someone else's row.
+  expect(other.querySelector('button[aria-label^="Actions for"]')).toBeNull()
+})
+
+function renderList(
+  listRoster: OrcaOrgMembersRoster,
+  viewerUserId: string
+): ReturnType<typeof render> {
+  return render(
+    <TeamMemberList
+      rows={teamRows(listRoster, viewerUserId)}
+      viewerRole={listRoster.viewerRole}
+      rowStates={{}}
+      canLeave
+      now={Date.UTC(2026, 10, 18)}
+      onChangeRole={noop}
+      onMakeOwner={noop}
+      onRemove={noop}
+      onResend={noop}
+      onRevoke={noop}
+      onLeave={noop}
+    />
+  )
+}
+
+const rosterWithMfa: OrcaOrgMembersRoster = {
+  ...roster,
+  members: [
+    { ...roster.members[0]!, mfa: 'on' },
+    { ...roster.members[1]!, mfa: 'pending', mfaDeadline: Date.UTC(2026, 10, 24, 12) }
+  ],
+  pendingInvites: [{ email: 'alex@acme.dev', role: 'member', createdAt: Date.UTC(2026, 10, 17) }]
+}
+
+it.each(['owner', 'admin'] as const)('shows the MFA column to an %s', (viewerRole) => {
+  const { container } = renderList({ ...rosterWithMfa, viewerRole }, 'u-neil')
+  const cell = (key: string): Element =>
+    container.querySelector(`[data-team-row="${key}"] [data-team-mfa]`)!
+  expect(cell('member:u-neil').textContent).toBe('MFA on')
+  expect(cell('member:u-grace').textContent).toBe('MFA due Nov 24')
+  // A small muted badge, not bare text.
+  expect(cell('member:u-neil').querySelector('[data-slot="badge"]')).not.toBeNull()
+  // Invites keep an empty cell so the role column stays aligned.
+  expect(cell('invite:alex@acme.dev').textContent).toBe('')
+})
+
+it('hides the MFA column from a plain member, even if a roster carried the status', () => {
+  const { container } = renderList(
+    { ...rosterWithMfa, viewerRole: 'member', canManageMembers: false },
+    'u-grace'
+  )
+  expect(container.querySelector('[data-team-mfa]')).toBeNull()
+  expect(container.textContent).not.toContain('MFA')
+})
+
+it('shows no MFA column when the server sent no status', () => {
+  const { container } = renderList(roster, 'u-neil')
+  expect(container.querySelector('[data-team-mfa]')).toBeNull()
+})
+
+it('leaves the cell blank, not "off", for a member with no status', () => {
+  const { container } = renderList(
+    {
+      ...roster,
+      members: [{ ...roster.members[0]!, mfa: 'off' }, roster.members[1]!]
+    },
+    'u-neil'
+  )
+  const cell = (key: string): Element =>
+    container.querySelector(`[data-team-row="${key}"] [data-team-mfa]`)!
+  expect(cell('member:u-neil').textContent).toBe('MFA off')
+  expect(cell('member:u-grace').textContent).toBe('')
+})
+
+it('shows no MFA badge for a member who has not signed in yet', () => {
+  const { container } = renderList(
+    {
+      ...roster,
+      members: [
+        { ...roster.members[0]!, mfa: 'on' },
+        { userId: null, email: 'linus@acme.dev', role: 'member', mfa: 'off' }
+      ]
+    },
+    'u-neil'
+  )
+  const pending = container.querySelector(
+    '[data-team-row="member:linus@acme.dev"] [data-team-mfa]'
+  )!
+  expect(pending.textContent).toBe('')
+})

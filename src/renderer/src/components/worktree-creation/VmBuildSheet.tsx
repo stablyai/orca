@@ -1,5 +1,5 @@
 import React from 'react'
-import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
+import { openCloudWorkspacePicker } from '../cloud-workspaces/cloud-workspace-picker-store'
 import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Cloud, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -40,6 +40,7 @@ import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
+  ORCA_SUPPORT_URL,
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
 import {
@@ -55,7 +56,6 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
 const NO_STAMPS: readonly number[] = []
-const SUPPORT_URL = 'https://github.com/stablyai/orca/issues/new'
 
 // Lazy: the agent-launch graph is heavy and only needed once the user asks for it.
 function startFixWithAgent(args: {
@@ -123,7 +123,7 @@ export function VmBuildSheet({
   /** Leaves the build; when a VM is still up the caller confirms before it is deleted. */
   onDismiss: () => void
   /** Leaves a refused build for the composer with its prompt; `local` runs it on this computer. */
-  onReturnToComposer: (options: { local: boolean }) => void
+  onReturnToComposer: (options: { local: boolean; pickRepo?: boolean }) => void
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
@@ -162,7 +162,8 @@ export function VmBuildSheet({
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
   const canManageBilling =
     billing.result?.status !== 'ok' || billing.result.entitlement.canManageBilling
-  const derived = deriveVmBuildSteps(entry, now, { cloud }).map((step) =>
+  const github = entry.request.githubSource
+  const derived = deriveVmBuildSteps(entry, now, { cloud, checks: !github }).map((step) =>
     nothingStarted(failure) && step.state === 'failed'
       ? { ...step, state: 'pending' as const, elapsedMs: null }
       : step
@@ -190,7 +191,7 @@ export function VmBuildSheet({
   const sourceRepo = useAppStore((state) =>
     recipe ? state.repos.find((repo) => repo.id === recipe.sourceRepoId) : undefined
   )
-  const repoName = orcaCloudRepoName(sourceRepo)
+  const repoName = github?.fullName ?? orcaCloudRepoName(sourceRepo)
   const [connectingGitHub, setConnectingGitHub] = React.useState(false)
   const connectGitHub = (): void => {
     setConnectingGitHub(true)
@@ -322,7 +323,7 @@ export function VmBuildSheet({
                   : Boolean(entry.request.ephemeralVmRuntimeId)
               }
               firstErrorLine={firstErrorLine}
-              canFixWithAgent={Boolean(recipe)}
+              canFixWithAgent={Boolean(recipe) && !github}
               canManageBilling={canManageBilling}
               signingIn={signingIn}
               connectingGitHub={connectingGitHub}
@@ -373,11 +374,12 @@ export function VmBuildSheet({
                   store.openSettingsPage()
                 },
                 onSignIn: signIn,
-                // Your workspaces on Home, where you can put one to sleep or delete it.
-                onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
-                onContactSupport: () => openAppHttpLink(SUPPORT_URL),
+                // Your running workspaces, where you can put one to sleep or delete it.
+                onShowWorkspaces: () => openCloudWorkspacePicker({ kind: 'running' }),
+                onContactSupport: () => openAppHttpLink(ORCA_SUPPORT_URL),
                 onConnectGitHub: connectGitHub,
-                onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
+                onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL),
+                onChooseAnotherRepo: () => onReturnToComposer({ local: false, pickRepo: true })
               }}
             />
           </div>
