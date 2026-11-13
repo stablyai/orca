@@ -1,6 +1,8 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
+import { DEFAULT_TERMINAL_THEMES } from '../../../../shared/terminal-themes/defaults'
+import { DEFAULT_TERMINAL_THEME_DARK } from '../../../../shared/terminal-themes/terminal-theme-selection'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -36,12 +38,22 @@ export const PANE_TERMINAL_VT_EXTENSIONS = { colorSchemeQuery: false } as const
 
 export function buildDefaultTerminalOptions(): ITerminalOptions {
   const cursorStyle: TerminalCursorStyle = 'block'
+  // Seed fg/bg before applyTerminalAppearance so early OSC 10/11 probes cannot hang (#32242, #39529).
+  const seededTheme = DEFAULT_TERMINAL_THEMES[DEFAULT_TERMINAL_THEME_DARK]
 
   return {
     allowProposedApi: true,
     cursorBlink: true,
     cursorStyle,
     cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
+    theme: {
+      foreground: seededTheme.foreground,
+      background: seededTheme.background,
+      cursor: seededTheme.cursor,
+      cursorAccent: seededTheme.cursorAccent,
+      selectionBackground: seededTheme.selectionBackground,
+      selectionForeground: seededTheme.selectionForeground
+    },
     fontSize: 14,
     // Cross-platform fallback chain; keep in sync with FALLBACK_FONTS in layout-serialization.ts.
     fontFamily:

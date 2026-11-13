@@ -8,6 +8,7 @@ import {
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers
 } from '../../emulation/terminal-capability-replies'
+import { resolveTerminalOscColorQueryFallback } from '../../emulation/terminal-osc-color-query-fallback'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../../shared/program-status/protocol'
 import { readCachedRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
@@ -34,6 +35,8 @@ export function installPaneCapabilityReplies(session: ConnectPanePtySession): vo
       resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
       terminalRendersInlineImages(session.pane.terminal),
     skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
+    // Always answer from the composed appearance when the live theme object lost fg/bg (#32242, #39529).
+    colorQueryFallback: () => resolveTerminalOscColorQueryFallback(useAppStore.getState().settings),
     answerProgramStatusQueries: () =>
       !session.runtimeEnvironmentId ||
       readCachedRuntimeEnvironmentCapability(

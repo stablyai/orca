@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerminalOscColorQuery } from './terminal-osc-color-reply'
+import {
+  mergeTerminalOscColorQueryReplyColors,
+  parseTerminalOscColorQuery,
+  terminalOscColorQueryReplies
+} from './terminal-osc-color-reply'
 
 describe('parseTerminalOscColorQuery', () => {
   it('matches exact OSC color queries terminated by ST or BEL', () => {
@@ -41,5 +45,24 @@ describe('parseTerminalOscColorQuery', () => {
     expect(parseTerminalOscColorQuery('\x1b]10;?;#123456\x1b\\', 0)).toEqual({ kind: 'none' })
     expect(parseTerminalOscColorQuery('\x1b]10;?;?;?\x1b\\', 0)).toEqual({ kind: 'none' })
     expect(parseTerminalOscColorQuery('\x1b]11;?;?\x1b\\', 0)).toEqual({ kind: 'none' })
+  })
+})
+
+describe('terminalOscColorQueryReplies fallback', () => {
+  it('fills a missing background from the composed appearance fallback', () => {
+    expect(
+      terminalOscColorQueryReplies({ foreground: '#2e3434' }, [11], {
+        foreground: '#2e3434',
+        background: '#ffffff'
+      })
+    ).toEqual(['\x1b]11;rgb:ffff/ffff/ffff\x1b\\'])
+  })
+
+  it('still returns null when neither the theme nor the fallback can answer', () => {
+    expect(terminalOscColorQueryReplies({ foreground: '#2e3434' }, [11])).toBeNull()
+    expect(mergeTerminalOscColorQueryReplyColors({ foreground: '#abc' }, null)).toEqual({
+      foreground: '#abc',
+      background: undefined
+    })
   })
 })

@@ -4,6 +4,7 @@ import {
   sendTerminalOscColorQueryReplies as sendTerminalOscColorQueryRepliesForColors,
   terminalOscColorQueryReplies,
   terminalOscColorQuerySlotsForBody,
+  type TerminalOscColorQueryReplyColors,
   type TerminalOscColorQuerySlot
 } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
@@ -25,6 +26,12 @@ type TerminalCapabilityRepliesDeps = {
   sixelSupported?: () => boolean
   /** Resolve lazily because agent registration may follow handler installation; suppress jcode’s self-theming query burst before replies can land as composer text. */
   skipOscColorQueryReplies?: () => boolean
+  /**
+   * Composed appearance fg/bg used when `terminal.options.theme` lost those slots
+   * (pre-applyTerminalAppearance race, or value-gated theme writes that preserve TUI mutations).
+   * Without a fallback, OSC 10/11 queries answer nothing and TUIs pin dark (#32242, #39529).
+   */
+  colorQueryFallback?: () => TerminalOscColorQueryReplyColors | null | undefined
   /** False while the pane's execution host cannot read OSC 7501 (see PROGRAM_STATUS_RUNTIME_CAPABILITY). */
   answerProgramStatusQueries?: () => boolean
 }
@@ -83,17 +90,24 @@ function disposeAll(disposables: IDisposable[]): void {
 export function sendTerminalOscColorQueryReplies(
   data: string,
   terminal: Pick<Terminal, 'options'>,
-  sendInput: (data: string) => boolean | void
+  sendInput: (data: string) => boolean | void,
+  fallback?: TerminalOscColorQueryReplyColors | null
 ): boolean {
-  return sendTerminalOscColorQueryRepliesForColors(data, terminal.options.theme ?? {}, sendInput)
+  return sendTerminalOscColorQueryRepliesForColors(
+    data,
+    terminal.options.theme ?? {},
+    sendInput,
+    fallback
+  )
 }
 
 function sendTerminalOscColorQueryRepliesForSlots(
   slots: readonly TerminalOscColorQuerySlot[],
   terminal: Pick<Terminal, 'options'>,
-  sendInput: (data: string) => boolean | void
+  sendInput: (data: string) => boolean | void,
+  fallback?: TerminalOscColorQueryReplyColors | null
 ): boolean {
-  const replies = terminalOscColorQueryReplies(terminal.options.theme ?? {}, slots)
+  const replies = terminalOscColorQueryReplies(terminal.options.theme ?? {}, slots, fallback)
   if (!replies) {
     return false
   }
@@ -188,7 +202,12 @@ export function installTerminalCapabilityReplyHandlers(
         if (deps.isReplaying() || deps.skipOscColorQueryReplies?.() === true) {
           return true
         }
-        return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+        return sendTerminalOscColorQueryRepliesForSlots(
+          slots,
+          deps.terminal,
+          deps.sendInput,
+          deps.colorQueryFallback?.()
+        )
       })
     ),
     deps.parser.registerOscHandler(
@@ -201,7 +220,12 @@ export function installTerminalCapabilityReplyHandlers(
         if (deps.isReplaying() || deps.skipOscColorQueryReplies?.() === true) {
           return true
         }
-        return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+        return sendTerminalOscColorQueryRepliesForSlots(
+          slots,
+          deps.terminal,
+          deps.sendInput,
+          deps.colorQueryFallback?.()
+        )
       })
     ),
     installProgramStatusQueryResponder({
