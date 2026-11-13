@@ -4,6 +4,7 @@ import { EMPTY_PENDING_VM_CHECKOUT_INDEX } from '../../../../shared/pending-vm-c
 import { withOrcaCloudHosts } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   parseOrcaCloudHostScopeKey,
+  selectOrcaCloudHiddenHostIds,
   selectOrcaCloudHostScopeKey,
   withoutHiddenHostRepos
 } from './use-sidebar-hidden-checkouts'
@@ -149,5 +150,37 @@ describe('GH-CREATE-NO-ROW hand-off', () => {
     ]
     expect(hidden(pairing())).toEqual([])
     expect(hidden(pairing('runtime:p'))).toEqual(['runtime:p'])
+  })
+})
+
+describe('hidden cloud hosts for Run on and the reconnect banner (STALE-RUN-TARGET)', () => {
+  const state = (activeOrgId: string) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only these fields.
+    return {
+      runtimeEnvironments: [
+        {
+          id: 'pick',
+          name: 'endpass-pick (cloud)',
+          orcaCloudPaired: true,
+          orcaCloudPairedAccountId: 'org:eval'
+        }
+      ],
+      cloudAccountIdByEnvironmentId: {},
+      orcaProfileAuthStatus: { cloud: { userId: 'u1', activeOrgId } }
+    } as unknown as Pick<AppState, 'runtimeEnvironments'>
+  }
+
+  it("names another team's paired workspace, the same host the sidebar hides", () => {
+    expect([...selectOrcaCloudHiddenHostIds(state('noplan'))]).toEqual(['runtime:pick'])
+  })
+
+  it("keeps the active team's paired workspace", () => {
+    expect(selectOrcaCloudHiddenHostIds(state('eval')).size).toBe(0)
+  })
+
+  it('answers the same set while nothing changed, so store subscribers do not re-render', () => {
+    expect(selectOrcaCloudHiddenHostIds(state('noplan'))).toBe(
+      selectOrcaCloudHiddenHostIds(state('noplan'))
+    )
   })
 })

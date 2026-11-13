@@ -14,6 +14,7 @@ import type { ComposerDecisions } from './composer-decisions'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectAllKnownWorkspaceStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
+import { selectOrcaCloudHiddenHostIds } from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 
 export type ComposerStateInput = {
   initialRepoId?: string
@@ -129,6 +130,9 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const eligibleRepos = useMemo(() => getNewWorkspaceDialogEligibleRepos(repos), [repos])
 
+  // STALE-RUN-TARGET: another team's cloud workspace isn't a place to run (same rule as the sidebar).
+  const hiddenCloudHostIds = useAppStore(selectOrcaCloudHiddenHostIds)
+
   const hostOptions = useMemo(
     () =>
       buildExecutionHostRegistry({
@@ -140,8 +144,9 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
         runtimeEnvironments,
         runtimeStatusByEnvironmentId,
         hostLabelOverrides: getHostDisplayLabelOverrides(settings)
-      }),
+      }).filter((host) => !hiddenCloudHostIds.has(host.id)),
     [
+      hiddenCloudHostIds,
       repos,
       settings,
       sshConnectionStates,

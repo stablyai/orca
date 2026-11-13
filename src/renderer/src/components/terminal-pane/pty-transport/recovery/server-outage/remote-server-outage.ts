@@ -6,6 +6,7 @@ import { tailscaleHostOfEndpoint } from '../../../../../../../shared/remote-runt
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RemoteRuntimeRecoveryCause } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
+import { selectOrcaCloudHiddenHostIds } from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 
 /** Read shared server reconnection once so individual panes do not announce the same outage. */
 export function selectRetryingOutageEnvironmentId(
@@ -13,7 +14,12 @@ export function selectRetryingOutageEnvironmentId(
   worktreeId: string | null | undefined
 ): string | null {
   const environmentId = selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
-  if (!environmentId) {
+  // STALE-RUN-TARGET: another team's cloud workspace is out of scope here (same rule as the
+  // sidebar), so its dropped connection is not announced; it is checked again on its own team.
+  if (
+    !environmentId ||
+    selectOrcaCloudHiddenHostIds(state).has(toRuntimeExecutionHostId(environmentId))
+  ) {
     return null
   }
   // Only reconnecting proves transport loss; checking or failed probes over a live socket do not.

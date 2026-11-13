@@ -73,6 +73,21 @@ export function parseOrcaCloudHostScopeKey(key: string): {
   return { primaryHostIds, pairedHostIds, hiddenHostIds }
 }
 
+let hiddenCache: { key: string; ids: ReadonlySet<string> } | null = null
+
+/**
+ * STALE-RUN-TARGET: the Orca Cloud hosts the sidebar scopes out (another team's sandbox, owned or
+ * PAIRED). Run on and the reconnect banner use the same rule, so a team switch never leaves another
+ * team's workspace listed as a place to run, or announced as reconnecting, where it can't be used.
+ */
+export function selectOrcaCloudHiddenHostIds(state: CloudScopeState): ReadonlySet<string> {
+  const key = selectOrcaCloudHostScopeKey(state)
+  if (hiddenCache?.key !== key) {
+    hiddenCache = { key, ids: parseOrcaCloudHostScopeKey(key).hiddenHostIds }
+  }
+  return hiddenCache.ids
+}
+
 /**
  * What sidebar lists hide: VM checkouts whose create is in progress, an Orca Cloud clone beside its
  * listed workspace, and every row of another team's sandbox.
