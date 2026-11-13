@@ -167,44 +167,63 @@ describe('DesktopScriptProviderClient repeated subtree reads', () => {
     ])
   })
 
-  it('keeps an elided root resolvable while forgetting the children it replaced', async () => {
+  it('keeps an elided root readable under cache pressure and forgets its replaced children', async () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
+    const outside = Array.from({ length: 1198 }, (_, index) => ({
+      index: index + 2,
+      runtimeId: [10, index]
+    }))
     mockBridgeResponse({
       ok: true,
       snapshot: bridgeSnapshot(
-        ['0 frame Mail', '\t1 panel Pane', '\t\t2 button A'],
-        [
-          { index: 0, runtimeId: [0] },
-          { index: 1, runtimeId: [0, 0] },
-          { index: 2, runtimeId: [1, 0] }
-        ]
+        ['0 frame Mail', '\t1 panel Pane', ...outside.map(({ index }) => `\t${index} list Other`)],
+        [{ index: 0, runtimeId: [0] }, { index: 1, runtimeId: [1] }, ...outside]
       )
     })
     await client.snapshot({ app: 'Mail' })
 
-    // The provider elides the empty pane, so each read starts at its recreated child: index 3, then 4.
-    let sentRoot: unknown
-    for (const generation of [1, 2]) {
-      mockBridgeResponse(
-        {
-          ok: true,
-          snapshot: bridgeSnapshot(['0 button A'], [{ index: 0, runtimeId: [1, generation] }])
-        },
-        (operation) => {
-          sentRoot = operation.root
-        }
+    const expanded = Array.from({ length: 1199 }, (_, index) => ({
+      index: index + 1,
+      runtimeId: [20, index]
+    }))
+    mockBridgeResponse({
+      ok: true,
+      snapshot: bridgeSnapshot(
+        ['0 list Other', ...expanded.map(({ index }) => `\t${index} button Other`)],
+        [{ index: 0, runtimeId: [10, 0] }, ...expanded]
       )
-      await client.snapshot({ app: 'Mail', rootElementIndex: 1 })
-    }
+    })
+    await client.snapshot({ app: 'Mail', rootElementIndex: 2 })
 
-    expect(sentRoot).toMatchObject({ runtimeId: [0, 0] })
+    mockBridgeResponse({
+      ok: true,
+      snapshot: bridgeSnapshot(
+        ['0 list Items', '\t1 button A', '\t2 button B'],
+        [
+          { index: 0, runtimeId: [30, 0] },
+          { index: 1, runtimeId: [30, 1] },
+          { index: 2, runtimeId: [30, 2] }
+        ]
+      )
+    })
+    await client.snapshot({ app: 'Mail', rootElementIndex: 1 })
+
+    mockBridgeResponse({
+      ok: true,
+      snapshot: bridgeSnapshot(['0 panel Pane'], [{ index: 0, runtimeId: [1] }])
+    })
+    const repeated = await client.snapshot({ app: 'Mail', rootElementIndex: 1 })
+    expect(repeated.snapshot.treeText.split('\n')[4]).toBe('1 panel Pane')
+
     mockBridgeResponse({ ok: true, capabilities: sampleCapabilities() })
     mockBridgeResponse({
       ok: true,
       snapshot: bridgeSnapshot(['0 frame Mail'], [{ index: 0, runtimeId: [0] }])
     })
-    await expect(client.action('click', { app: 'Mail', elementIndex: 3 })).rejects.toMatchObject({
-      code: 'element_not_found'
-    })
+    await expect(client.action('click', { app: 'Mail', elementIndex: 2399 })).rejects.toMatchObject(
+      {
+        code: 'element_not_found'
+      }
+    )
   })
 })

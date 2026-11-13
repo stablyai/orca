@@ -61,78 +61,126 @@ function indexSubtreeSnapshot(
   rootElementIndex: number
 ): { shown: BridgeSnapshot; cached: BridgeSnapshot } {
   const baseElements = base.elements ?? []
-  const baseByIdentity = new Map<string, BridgeElement[]>()
+  const baseByRuntimeId = new Map<string, BridgeElement | Map<string, BridgeElement[]>>()
   let nextIndex = base.nextElementIndex ?? 0
-  for (const element of baseElements) {
+  let requestedRoot: BridgeElement | undefined
+  // Build backwards so duplicate candidates pop in their original order.
+  for (let position = baseElements.length - 1; position >= 0; position--) {
+    const element = baseElements[position]
     nextIndex = Math.max(nextIndex, element.index + 1)
-    const key = elementIdentityKey(element)
-    const candidates = key === null ? undefined : baseByIdentity.get(key)
+    if (element.index === rootElementIndex) {
+      requestedRoot = element
+    }
+    const key = runtimeIdKey(element)
+    if (key === null) {
+      continue
+    }
+    const known = baseByRuntimeId.get(key)
+    if (!known) {
+      baseByRuntimeId.set(key, element)
+      continue
+    }
+    const signatures =
+      known instanceof Map ? known : new Map([[elementSignatureKey(known), [known]]])
+    const signature = elementSignatureKey(element)
+    const candidates = signatures.get(signature)
     if (candidates) {
       candidates.push(element)
-    } else if (key !== null) {
-      baseByIdentity.set(key, [element])
+    } else {
+      signatures.set(signature, [element])
+    }
+    if (signatures !== known) {
+      baseByRuntimeId.set(key, signatures)
     }
   }
-  // Pop the earliest matching candidate without rescanning duplicate runtime ids.
-  for (const candidates of baseByIdentity.values()) {
-    candidates.reverse()
-  }
-  const requestedRoot = baseElements.find((element) => element.index === rootElementIndex)
   const requestedRootKey = requestedRoot ? runtimeIdKey(requestedRoot) : null
-  const indexes = new Map<number, number>()
+  const indexes: number[] = []
   const claimed = new Set<number>()
-  for (const [position, element] of (subtree.elements ?? []).entries()) {
+  const subtreeElements = subtree.elements ?? []
+  const walked: BridgeElement[] = []
+  walked.length = subtreeElements.length
+  const subtreeReadRoots = new Map<number, number>()
+  for (let position = 0; position < subtreeElements.length; position++) {
+    const element = subtreeElements[position]
     const key = runtimeIdKey(element)
     // Why: the provider resolved the rendered root from the requested handle, so it is that element
     // even if its name changed; Windows resolves index 0 only as the window, never by runtime id.
     const isRequestedRoot = position === 0 && key !== null && key === requestedRootKey
-    const identityKey = isRequestedRoot ? null : elementIdentityKey(element)
-    const candidates = identityKey === null ? undefined : baseByIdentity.get(identityKey)
-    let known = isRequestedRoot ? requestedRoot : candidates?.pop()
-    while (known && claimed.has(known.index)) {
-      known = candidates?.pop()
+    let known = isRequestedRoot ? requestedRoot : undefined
+    if (!isRequestedRoot) {
+      const candidate = key === null ? undefined : baseByRuntimeId.get(key)
+      if (candidate instanceof Map) {
+        const candidates = candidate.get(elementSignatureKey(element))
+        known = candidates?.pop()
+        while (known && claimed.has(known.index)) {
+          known = candidates?.pop()
+        }
+      } else if (
+        candidate &&
+        !claimed.has(candidate.index) &&
+        sameElementSignature(candidate, element)
+      ) {
+        known = candidate
+      }
     }
     const index = known?.index ?? nextIndex++
     claimed.add(index)
-    indexes.set(element.index, index)
+    indexes[element.index] = index
+    walked[position] = { ...element, index }
+    if (index !== rootElementIndex) {
+      subtreeReadRoots.set(index, rootElementIndex)
+    }
   }
-  const walked = (subtree.elements ?? []).map((element) => ({
-    ...element,
-    index: indexes.get(element.index) ?? element.index
-  }))
   const focusedElementId =
     subtree.focusedElementId === null || subtree.focusedElementId === undefined
       ? subtree.focusedElementId
-      : (indexes.get(subtree.focusedElementId) ?? null)
+      : (indexes[subtree.focusedElementId] ?? null)
+  const indexLookup = { get: (index: number) => indexes[index] }
   const shown: BridgeSnapshot = {
     ...subtree,
-    treeLines: subtree.treeLines?.map((line) => renumberComputerTreeLine(line, indexes)),
+    treeLines: subtree.treeLines?.map((line) => renumberComputerTreeLine(line, indexLookup)),
     focusedElementId,
     elements: walked,
     rootElementIndex
   }
-  const baseReadRoots = base.subtreeReadRoots ?? new Map<number, number>()
-  const kept = baseElements.filter(
-    (element) =>
-      !claimed.has(element.index) && baseReadRoots.get(element.index) !== rootElementIndex
+  const baseReadRoots = base.subtreeReadRoots
+  const elidedRoot = requestedRoot && !claimed.has(rootElementIndex) ? requestedRoot : undefined
+  const retentionBudget = Math.max(
+    0,
+    MAX_CACHED_SUBTREE_SNAPSHOT_ELEMENTS - walked.length - (elidedRoot ? 1 : 0)
   )
-  // The cache is ordered by when a read last returned each element, so the oldest go first.
-  const retained = kept.slice(
-    Math.max(0, kept.length + walked.length - MAX_CACHED_SUBTREE_SNAPSHOT_ELEMENTS)
-  )
-  const subtreeReadRoots = new Map<number, number>()
-  for (const element of [...retained, ...walked]) {
-    const readRoot =
-      claimed.has(element.index) && element.index !== rootElementIndex
-        ? rootElementIndex
-        : baseReadRoots.get(element.index)
-    if (readRoot !== undefined) {
-      subtreeReadRoots.set(element.index, readRoot)
+  const retained: BridgeElement[] = []
+  // Start at the newest cached elements and stop once the remaining budget is full.
+  for (
+    let position = baseElements.length - 1;
+    position >= 0 && retained.length < retentionBudget;
+    position--
+  ) {
+    const element = baseElements[position]
+    const readRoot = baseReadRoots?.get(element.index)
+    if (
+      element.index !== rootElementIndex &&
+      !claimed.has(element.index) &&
+      readRoot !== rootElementIndex
+    ) {
+      retained.push(element)
+      if (readRoot !== undefined) {
+        subtreeReadRoots.set(element.index, readRoot)
+      }
     }
+  }
+  retained.reverse()
+  const elements = retained.concat(walked)
+  if (elidedRoot) {
+    elements.push(elidedRoot)
+  }
+  const requestedReadRoot = baseReadRoots?.get(rootElementIndex)
+  if (requestedReadRoot !== undefined) {
+    subtreeReadRoots.set(rootElementIndex, requestedReadRoot)
   }
   const cached: BridgeSnapshot = {
     ...shown,
-    elements: [...retained, ...walked],
+    elements,
     subtreeReadRoots,
     nextElementIndex: nextIndex
   }
@@ -145,15 +193,24 @@ function runtimeIdKey(element: BridgeElement): string | null {
     : null
 }
 
-// Linux runtime ids are tree positions; require the resolver's signature as well.
-function elementIdentityKey(element: BridgeElement): string | null {
-  return !Array.isArray(element.runtimeId) || element.runtimeId.length === 0
-    ? null
-    : JSON.stringify([
-        element.runtimeId,
-        element.controlType ?? '',
-        element.name ?? '',
-        element.automationId ?? '',
-        element.actions ?? []
-      ])
+// Mirrors the Linux resolver's same_element_signature check.
+function sameElementSignature(left: BridgeElement, right: BridgeElement): boolean {
+  const leftActions = left.actions ?? []
+  const rightActions = right.actions ?? []
+  return (
+    (left.controlType ?? '') === (right.controlType ?? '') &&
+    (left.name ?? '') === (right.name ?? '') &&
+    (left.automationId ?? '') === (right.automationId ?? '') &&
+    leftActions.length === rightActions.length &&
+    leftActions.every((action, position) => action === rightActions[position])
+  )
+}
+
+function elementSignatureKey(element: BridgeElement): string {
+  return JSON.stringify([
+    element.controlType ?? '',
+    element.name ?? '',
+    element.automationId ?? '',
+    element.actions ?? []
+  ])
 }
