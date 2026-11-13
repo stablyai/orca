@@ -4,8 +4,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 async function loadModules() {
   const { mainProcessState: state } = await import('../main-process-state')
   const { markHostShuttingDown } = await import('../quit/host-shutdown-state')
-  const { beginChatJournalStartup } = await import('./chat-journal-startup')
-  return { state, markHostShuttingDown, beginChatJournalStartup }
+  const { beginChatJournalStartup, chatJournalHostServing } = await import('./chat-journal-startup')
+  return { state, markHostShuttingDown, beginChatJournalStartup, chatJournalHostServing }
 }
 
 function desktopStartup(state: Awaited<ReturnType<typeof loadModules>>['state']) {
@@ -45,4 +45,23 @@ it('does not open saved chats when the fence settles after shutdown committed', 
   await new Promise((resolve) => setImmediate(resolve))
 
   expect(opened).toHaveLength(0)
+})
+
+it('admits CI-line watches on desktop only after the first-window fence settles', async () => {
+  const { state, beginChatJournalStartup, chatJournalHostServing } = await loadModules()
+  const { fence, runtime } = desktopStartup(state)
+  const admitted: unknown[] = []
+  const previous = state.runtime
+  // SAFETY: the serving milestone only calls this one runtime method; the rest of the runtime is unused here.
+  state.runtime = {
+    startPullRequestWatches: (options?: unknown) => admitted.push(options)
+  } as unknown as typeof state.runtime
+
+  beginChatJournalStartup(runtime, false)
+  chatJournalHostServing()
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(admitted).toHaveLength(0)
+  fence.resolve()
+  await vi.waitFor(() => expect(admitted).toEqual([{ admit: true }]))
+  state.runtime = previous
 })

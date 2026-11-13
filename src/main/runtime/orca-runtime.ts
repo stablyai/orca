@@ -259,8 +259,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Startup settled; opening still waits for a launch-capable client. */
   noteAgentLaunchStartupSettled(): void {
     this.agentLaunchRecordWarmup.startupSettled()
-    // Idempotent: the host's serving milestone already admitted watches; this only retries a failed start.
-    this.startPullRequestWatches({ admit: true })
+    // Retry only: watches are admitted by the host's serving milestone, which this timer can precede.
+    this.startPullRequestWatches()
   }
 
   /** Warm up before the first client launch so that launch does not open the record. */

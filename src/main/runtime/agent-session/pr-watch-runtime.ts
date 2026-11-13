@@ -73,7 +73,16 @@ export function startPRWatchRuntime(
       logger: deps.logger
     })
     running = service
-    await service.start()
+    try {
+      await service.start()
+    } catch (error) {
+      // A partly started service holds its outcome observer and job hooks; release them before a retry.
+      if (running === service) {
+        service.stop()
+        running = null
+      }
+      throw error
+    }
   })().catch((error: unknown) => {
     // A stopped run's failure must not clear a newer run's start.
     if (startedIn === generation) {
