@@ -169,9 +169,12 @@ describe('the chat strip and the session list read the same host child records',
     const parentRow = () => server.getStatusSnapshot().find((row) => row.structuredHost)
     const summaryRows = () => rows(summaries.at(-1)?.children)
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
+    // The summary publishes after its own journal read, independently of the strip and of `settle`.
     const both = async (expected: Row[]) => {
-      await vi.waitFor(() => expect(stripRows()).toEqual(expected))
-      expect(summaryRows()).toEqual(expected)
+      await vi.waitFor(() => {
+        expect(stripRows()).toEqual(expected)
+        expect(summaryRows()).toEqual(expected)
+      })
       const sources = collectRuntimeWorktreeAgentSources({
         hookSnapshots: server.getStatusSnapshot(),
         readStructuredSummary: host.readStatusSummary,
@@ -309,7 +312,7 @@ describe('the chat strip and the session list read the same host child records',
     })
     expect(parentRow()).toMatchObject({ state: 'done' })
     // Finished child records remain until the user's next turn; exited command records are removed immediately.
-    expect(summaries.at(-1)).not.toHaveProperty('children')
+    await vi.waitFor(() => expect(summaries.at(-1)).not.toHaveProperty('children'))
     await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
     const stored = () => rows(server.getStructuredChildWorkViews(parentSubject(summaries)))
     expect(stored()).toEqual([
@@ -359,7 +362,7 @@ describe('the chat strip and the session list read the same host child records',
     })
     await vi.waitFor(() => expect(stored()).toEqual([]))
     await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
-    expect(summaries.at(-1)).not.toHaveProperty('children')
+    await vi.waitFor(() => expect(summaries.at(-1)).not.toHaveProperty('children'))
 
     // The reviewer's next run is still going when the provider exits: it settles with an outcome
     // nobody reported, and leaves both lists.
@@ -367,7 +370,7 @@ describe('the chat strip and the session list read the same host child records',
     await both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     connections[0]?.onExit?.(new Error('scripted provider exit'))
     await settle()
-    expect(summaries.at(-1)).not.toHaveProperty('children')
+    await vi.waitFor(() => expect(summaries.at(-1)).not.toHaveProperty('children'))
     await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
     expect(stored()).toEqual([
       {
