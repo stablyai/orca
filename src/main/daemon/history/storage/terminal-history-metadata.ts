@@ -1,8 +1,14 @@
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, promises as fsPromises, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
+import { provesTerminalHistoryPathAbsent } from './terminal-history-session-files'
 import { getHistorySessionDirName } from './history-paths'
 import { isValidTerminalHistorySize } from '../restoration/terminal-history-dimensions'
-import { readTerminalHistoryJson } from './terminal-history-file-reader'
+import {
+  readTerminalHistoryJson,
+  readTerminalHistoryJsonAsync,
+  readTerminalHistoryTextAsync
+} from './terminal-history-file-reader'
 import { TERMINAL_HISTORY_META_MAX_BYTES } from './terminal-history-file-limits'
 import {
   isTerminalHistoryCwdObservation,
@@ -10,7 +16,8 @@ import {
 } from './terminal-history-cwd-observation'
 import {
   PRIVATE_FILE_MODE,
-  tightenPathMode
+  tightenPathMode,
+  tightenPathModeAsync
 } from '../../endpoint/publication/daemon-private-file-modes'
 
 export type SessionMeta = {
@@ -41,25 +48,41 @@ export function readTerminalHistoryMetaInDir(dir: string): SessionMetaRead {
     return { status: 'missing' }
   }
   try {
-    const meta = readTerminalHistoryJson<unknown>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
-    if (!isSessionMeta(meta)) {
-      return { status: 'unreadable' }
-    }
-    // A malformed note is ignored; the rest of the metadata still holds the session.
-    if (
-      meta.cwdObservation !== undefined &&
-      !isTerminalHistoryCwdObservation(meta.cwdObservation)
-    ) {
-      delete meta.cwdObservation
-    }
-    return { status: 'readable', meta }
+    return validatedMetaRead(
+      readTerminalHistoryJson<unknown>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
+    )
   } catch (err) {
     // Concurrent cleanup or quarantine can remove metadata between the existence check and read.
-    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+    if (errnoCodeOrUnknown(err) === 'ENOENT') {
       return { status: 'missing' }
     }
     return { status: 'unreadable' }
   }
+}
+
+/** Bounded and awaited: only a confirmed missing file is missing; any other failure is unreadable. */
+export async function readTerminalHistoryMetaInDirAsync(dir: string): Promise<SessionMetaRead> {
+  let meta: unknown
+  try {
+    meta = await readTerminalHistoryJsonAsync<unknown>(
+      join(dir, 'meta.json'),
+      TERMINAL_HISTORY_META_MAX_BYTES
+    )
+  } catch (error) {
+    return provesTerminalHistoryPathAbsent(error) ? { status: 'missing' } : { status: 'unreadable' }
+  }
+  return validatedMetaRead(meta)
+}
+
+function validatedMetaRead(meta: unknown): SessionMetaRead {
+  if (!isSessionMeta(meta)) {
+    return { status: 'unreadable' }
+  }
+  // A malformed note is ignored; the rest of the metadata still holds the session.
+  if (meta.cwdObservation !== undefined && !isTerminalHistoryCwdObservation(meta.cwdObservation)) {
+    delete meta.cwdObservation
+  }
+  return { status: 'readable', meta }
 }
 
 export function readTerminalHistoryMetaFromDir(dir: string): SessionMeta | null {
@@ -115,41 +138,78 @@ export function updateTerminalHistoryMeta(dir: string, updates: Partial<SessionM
 export type TerminalHistoryMetaReplacement = 'replaced' | 'unavailable' | 'unrepresentable'
 
 /**
- * Replaces existing valid metadata in one synchronous turn under its owner: private temporary
- * file, owner check, rename, then readback. A failure leaves the published metadata in place.
+ * Replaces existing valid metadata under its owner: bounded read, private temporary file, owner
+ * check, rename, bounded readback. The caller owns every issued step through settlement, cleanup
+ * included; a failure leaves the published metadata in place and never unlinks it.
  */
 export function replaceTerminalHistoryMetaOwned(
   dir: string,
   next: (current: SessionMeta) => SessionMeta,
   isOwner: () => boolean
-): TerminalHistoryMetaReplacement {
+): Promise<TerminalHistoryMetaReplacement> {
+  return publishTerminalHistoryMetaOwned(dir, (current) => current && next(current), isOwner)
+}
+
+/** A new hold's metadata, only where none exists; metadata that appeared meanwhile stays. */
+export function createTerminalHistoryMetaOwned(
+  dir: string,
+  meta: SessionMeta,
+  isOwner: () => boolean
+): Promise<TerminalHistoryMetaReplacement> {
+  return publishTerminalHistoryMetaOwned(dir, (current) => (current ? null : meta), isOwner, true)
+}
+
+async function publishTerminalHistoryMetaOwned(
+  dir: string,
+  next: (current: SessionMeta | null) => SessionMeta | null,
+  isOwner: () => boolean,
+  create = false
+): Promise<TerminalHistoryMetaReplacement> {
   const metaPath = join(dir, 'meta.json')
   const tmpPath = `${metaPath}.tmp`
-  let current: unknown
+  let current: SessionMeta | null = null
   try {
-    current = readTerminalHistoryJson<unknown>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
-  } catch {
+    const read = await readTerminalHistoryJsonAsync<unknown>(
+      metaPath,
+      TERMINAL_HISTORY_META_MAX_BYTES
+    )
+    if (!isSessionMeta(read)) {
+      return 'unavailable'
+    }
+    current = read
+  } catch (error) {
+    if (!create || !provesTerminalHistoryPathAbsent(error)) {
+      return 'unavailable'
+    }
+  }
+  const value = next(current)
+  if (!value || !isOwner()) {
     return 'unavailable'
   }
-  if (!isSessionMeta(current) || !isOwner()) {
-    return 'unavailable'
-  }
-  const data = JSON.stringify(next(current), null, 2)
+  const data = JSON.stringify(value, null, 2)
   if (Buffer.byteLength(data, 'utf8') > TERMINAL_HISTORY_META_MAX_BYTES) {
     return 'unrepresentable'
   }
+  // Only a temporary file this call issued is its to remove.
+  let issued = false
   try {
-    writeFileSync(tmpPath, data, { mode: PRIVATE_FILE_MODE })
-    tightenPathMode(tmpPath, PRIVATE_FILE_MODE)
+    if (!isOwner()) {
+      return 'unavailable'
+    }
+    issued = true
+    await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
+    await tightenPathModeAsync(tmpPath, PRIVATE_FILE_MODE)
     if (!isOwner()) {
       throw new Error('terminal_history_owner_changed')
     }
-    renameSync(tmpPath, metaPath)
-    return readFileSync(metaPath, 'utf8') === data ? 'replaced' : 'unavailable'
+    await fsPromises.rename(tmpPath, metaPath)
+    issued = false
+    const readback = await readTerminalHistoryTextAsync(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
+    return readback === data ? 'replaced' : 'unavailable'
   } catch {
-    try {
-      unlinkSync(tmpPath)
-    } catch {}
+    if (issued) {
+      await fsPromises.unlink(tmpPath).catch(() => {})
+    }
     return 'unavailable'
   }
 }

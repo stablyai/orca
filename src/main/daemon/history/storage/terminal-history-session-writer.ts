@@ -17,16 +17,23 @@ import type { SessionMeta } from './terminal-history-metadata'
 import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recovery-quarantine'
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
-import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
+import {
+  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_META_MAX_BYTES
+} from './terminal-history-file-limits'
+import { readTerminalHistoryJsonAsync } from './terminal-history-file-reader'
 import {
   serializeTerminalCheckpointStrict,
   serializeTerminalCheckpointWithinLimit
 } from '../restoration/terminal-checkpoint-serializer'
 import {
   PRIVATE_FILE_MODE,
-  tightenPathMode
+  tightenPathModeAsync
 } from '../../endpoint/publication/daemon-private-file-modes'
-import { tightenTerminalHistorySessionDirMode } from './terminal-history-session-files'
+import {
+  tightenTerminalHistorySessionDirMode,
+  tightenTerminalHistorySessionDirModeAsync
+} from './terminal-history-session-files'
 
 // Bound replay work and disk use; a full log requests a checkpoint before accepting more output.
 const LOG_MAX_BYTES = 5 * 1024 * 1024
@@ -42,14 +49,34 @@ export class TerminalHistorySessionWriter {
     fresh: boolean,
     private readonly checkpointMaxBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
     // Checked synchronously before each file mutation: a successor shares these paths.
-    private readonly isAdmitted: () => boolean = () => true
+    private readonly isAdmitted: () => boolean = () => true,
+    // A host writer's known log state; its awaited mode repair already ran in openHost.
+    hostLog?: { generation: number; bytes: number }
   ) {
     this.checkpointPath = join(dir, 'checkpoint.json')
     this.logPath = join(dir, 'output.log')
-    this.logGeneration = fresh ? 0 : null
-    this.logBytes = fresh ? 0 : null
-    // Warm attach must tighten files created with older, umask-derived permissions.
-    tightenTerminalHistorySessionDirMode(dir)
+    this.logGeneration = hostLog?.generation ?? (fresh ? 0 : null)
+    this.logBytes = hostLog?.bytes ?? (fresh ? 0 : null)
+    if (!hostLog) {
+      // Warm attach must tighten files created with older, umask-derived permissions.
+      tightenTerminalHistorySessionDirMode(dir)
+    }
+  }
+
+  /** The daemon host's writer: modes repaired without blocking, log state supplied by its caller. */
+  static async openHost(
+    dir: string,
+    log: { generation: number; bytes: number },
+    isAdmitted: () => boolean
+  ): Promise<TerminalHistorySessionWriter> {
+    await tightenTerminalHistorySessionDirModeAsync(dir)
+    return new TerminalHistorySessionWriter(
+      dir,
+      false,
+      TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+      isAdmitted,
+      log
+    )
   }
 
   /** Complete frames in the current generation; a failed append or reset leaves this unchanged. */
@@ -116,7 +143,8 @@ export class TerminalHistorySessionWriter {
 
   /**
    * A host publication: the whole image or nothing, never row-trimmed. An explicit generation
-   * supersedes every predecessor generation the caller validated.
+   * supersedes every predecessor generation the caller validated. Host writers open with their
+   * log state known, so nothing here resolves it synchronously.
    */
   async checkpointStrict(
     snapshot: TerminalSnapshot,
@@ -126,12 +154,12 @@ export class TerminalHistorySessionWriter {
     | { result: 'too-large' }
     | { result: 'retryable'; error: Error }
   > {
-    this.resolveLogState()
     const generation = opts.generation ?? (this.logGeneration ?? 0) + 1
+    const cwd = snapshot.cwd ?? (await this.readMetaCwd())
     const data = serializeTerminalCheckpointStrict(
       snapshot,
       {
-        cwd: snapshot.cwd ?? this.readMeta()?.cwd ?? null,
+        cwd,
         generation,
         pendingOutputSeq: opts.pendingOutputSeq,
         checkpointedAt: new Date().toISOString()
@@ -157,11 +185,22 @@ export class TerminalHistorySessionWriter {
     const tmpPath = `${this.checkpointPath}.tmp`
     // Create temporary files privately before publishing the checkpoint.
     this.assertAdmitted()
-    await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
-    // Creation mode does not tighten a temporary file left by an earlier crash.
-    this.assertAdmitted()
-    tightenPathMode(tmpPath, PRIVATE_FILE_MODE)
-    await fsPromises.rename(tmpPath, this.checkpointPath)
+    // Only a temporary file this publication issued is its to remove.
+    let issued = true
+    try {
+      await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
+      // Creation mode does not tighten a temporary file left by an earlier crash.
+      this.assertAdmitted()
+      await tightenPathModeAsync(tmpPath, PRIVATE_FILE_MODE)
+      this.assertAdmitted()
+      await fsPromises.rename(tmpPath, this.checkpointPath)
+      issued = false
+    } catch (error) {
+      if (issued) {
+        await fsPromises.unlink(tmpPath).catch(() => {})
+      }
+      throw error
+    }
     this.assertAdmitted()
     await fsPromises.writeFile(this.logPath, encodeLogHeader(generation), {
       mode: PRIVATE_FILE_MODE
@@ -169,7 +208,7 @@ export class TerminalHistorySessionWriter {
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
     this.assertAdmitted()
-    clearTerminalHistoryRecoveryProtection(this.dir)
+    await clearTerminalHistoryRecoveryProtection(this.dir)
   }
 
   get admitted(): boolean {
@@ -216,6 +255,24 @@ export class TerminalHistorySessionWriter {
     try {
       const checkpoint = JSON.parse(readFileSync(this.checkpointPath, 'utf-8'))
       return typeof checkpoint.generation === 'number' ? checkpoint.generation : null
+    } catch {
+      return null
+    }
+  }
+
+  // Bounded and awaited for host publication; an unreadable or foreign file has no folder.
+  private async readMetaCwd(): Promise<string | null> {
+    try {
+      const meta = await readTerminalHistoryJsonAsync<unknown>(
+        join(this.dir, 'meta.json'),
+        TERMINAL_HISTORY_META_MAX_BYTES
+      )
+      return typeof meta === 'object' &&
+        meta !== null &&
+        'cwd' in meta &&
+        typeof meta.cwd === 'string'
+        ? meta.cwd
+        : null
     } catch {
       return null
     }

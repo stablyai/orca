@@ -1,5 +1,6 @@
 import type { FlushHistoryUnavailableReason } from '../../protocol/daemon-history-protocol'
 import { LOG_HEADER_BYTES } from '../storage/terminal-history-log'
+import { replaceTerminalHistoryMetaOwned } from '../storage/terminal-history-metadata'
 import type { TerminalJournalPhysicalFinal } from './terminal-session-journal-contract'
 import { TerminalSessionJournalOperations } from './terminal-session-journal-operations'
 import { verifyFinalCheckpoint, verifyFinalRaw } from './terminal-journal-final-verification'
@@ -122,8 +123,26 @@ export abstract class TerminalSessionJournalSleep extends TerminalSessionJournal
     operation.finalCut = { record: this.queue.intake, ...final }
   }
 
+  /**
+   * The drained end: an authorized Sleep publishes F instead. Otherwise only this same open
+   * journal, with no Sleep keeping its history restorable, ends it cleanly.
+   */
+  protected async publishEnd(exitCode: number | null): Promise<void> {
+    if ((await this.completeSleepFinal()) || !this.writer || this.state !== 'open') {
+      return
+    }
+    const ended = await replaceTerminalHistoryMetaOwned(
+      this.dir,
+      (meta) => ({ ...meta, endedAt: new Date().toISOString(), exitCode }),
+      () => this.ownsDirectory() && this.sleepFinal === null
+    )
+    if (ended !== 'replaced') {
+      throw new Error('terminal_history_end_failed')
+    }
+  }
+
   /** At the drained end of an authorized Sleep, publish F. True when the clean end is skipped. */
-  protected async completeSleepFinal(): Promise<boolean> {
+  private async completeSleepFinal(): Promise<boolean> {
     const operation = this.sleepFinal
     if (!operation) {
       return false
@@ -132,11 +151,23 @@ export abstract class TerminalSessionJournalSleep extends TerminalSessionJournal
     if (operation.state !== 'final' || !final) {
       return true
     }
+    // F: exactly this Sleep's physical final cut, drained, on the open current journal.
+    const isFinal = (): boolean =>
+      this.sleepFinal === operation &&
+      operation.state === 'final' &&
+      operation.finalCut === final &&
+      this.queue.committed === final.record &&
+      this.ownsDirectory()
     try {
       const { terminalOwner } = await final.settled
       // The receipt's revision is read once the captured parser fence has settled.
       const appliedRevision = this.appliedRevision
-      const published = await this.publishFinal(operation, terminalOwner)
+      const published = await this.publishFinal(operation, terminalOwner, isFinal)
+      if (!isFinal()) {
+        // A lost F earns no receipt; a gap that falsified it has normally ended this Sleep already.
+        this.failOperation(operation, { phase: 'exited', reason: 'gap' })
+        return true
+      }
       if ('reason' in published) {
         this.failOperation(operation, published)
       } else {
@@ -152,15 +183,19 @@ export abstract class TerminalSessionJournalSleep extends TerminalSessionJournal
     return true
   }
 
+  // Runs to its actual settlement under the replay lease and the pump; F is rechecked at each step.
   private async publishFinal(
     operation: TerminalJournalOperation,
-    terminalOwner: TerminalJournalOperation['cut']['terminalOwner']
+    terminalOwner: TerminalJournalOperation['cut']['terminalOwner'],
+    isFinal: () => boolean
   ): Promise<FinalPublication> {
+    const lost = { phase: 'exited', reason: 'gap' } as const
+    const unwritten = { phase: 'exited', reason: 'write_failed' } as const
     const release = await this.host.acquireReplay(FINAL_PUBLICATION_PRIORITY)
     try {
       const writer = this.writer
-      if (this.state !== 'open' || !writer || this.queue.committed !== operation.finalCut?.record) {
-        return { phase: 'exited', reason: 'gap' }
+      if (!writer || !isFinal()) {
+        return lost
       }
       const position = {
         generation: writer.committedLog?.generation ?? 0,
@@ -173,6 +208,9 @@ export abstract class TerminalSessionJournalSleep extends TerminalSessionJournal
       if (!snapshot) {
         return { phase: 'exited', reason: 'unreadable' }
       }
+      if (!isFinal()) {
+        return lost
+      }
       // The final Sleep probe is the folder at F, whatever the replayed output reported last.
       const image = {
         ...snapshot,
@@ -182,21 +220,27 @@ export abstract class TerminalSessionJournalSleep extends TerminalSessionJournal
       const strict = await writer.checkpointStrict(image, { pendingOutputSeq: this.seq })
       if (strict.result === 'committed') {
         this.committedLogBytes = writer.committedLog?.bytes ?? LOG_HEADER_BYTES
-        return verifyFinalCheckpoint(this.dir, strict.data, strict.generation)
+        if (!isFinal()) {
+          return lost
+        }
+        return (await verifyFinalCheckpoint(this.dir, strict.data, strict.generation))
           ? { generation: strict.generation, logBytes: LOG_HEADER_BYTES, backing: 'checkpoint' }
-          : { phase: 'exited', reason: 'write_failed' }
+          : unwritten
       }
       if (strict.result === 'retryable') {
-        return { phase: 'exited', reason: 'write_failed' }
+        return unwritten
       }
       // Too large for one strict image: the verified complete raw source through F is the backing.
       const note = operation.observation ? { cwd: operation.observation, ...position } : undefined
-      if (note && this.publishNote(note) !== 'replaced') {
-        return { phase: 'exited', reason: 'write_failed' }
+      if (note && (await this.publishNote(note, isFinal)) !== 'replaced') {
+        return isFinal() ? unwritten : lost
       }
-      return verifyFinalRaw(this.dir, position, note)
+      if (!isFinal()) {
+        return lost
+      }
+      return (await verifyFinalRaw(this.dir, position, note))
         ? { ...position, backing: 'raw' }
-        : { phase: 'exited', reason: 'write_failed' }
+        : unwritten
     } finally {
       release()
     }

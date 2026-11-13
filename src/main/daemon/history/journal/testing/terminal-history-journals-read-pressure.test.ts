@@ -5,12 +5,29 @@ import { join } from 'node:path'
 import { TerminalHistoryJournals } from '../terminal-history-journals'
 import type { TerminalSessionJournal } from '../terminal-session-journal'
 import type { TerminalHistoryReads } from '../terminal-history-read-admission'
+import type * as FileReaderModule from '../../storage/terminal-history-file-reader'
 import { gateAppends, gateReconstruction } from './terminal-history-read-fixture'
+
+const sourceRead = vi.hoisted(() => ({ during: async (): Promise<void> => {} }))
+// A reader's issued source file read can still be in flight when its terminal exits.
+vi.mock('../../storage/terminal-history-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileReaderModule>()
+  return {
+    ...actual,
+    readTerminalHistoryBufferAsync: async (
+      ...args: Parameters<typeof actual.readTerminalHistoryBufferAsync>
+    ) => {
+      await sourceRead.during()
+      return actual.readTerminalHistoryBufferAsync(...args)
+    }
+  }
+})
 
 const roots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
+  sourceRead.during = async () => {}
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -111,4 +128,37 @@ describe('host-wide read pressure', () => {
     expect(await readThrough(journals.reads, writers[7]!)).toContain('WRITER7_119_')
     expect(await readThrough(journals.reads, reader)).toContain('READER_069_')
   }, 120_000)
+
+  // A same-ID start prepares over the predecessor's files only once a read it issued has ended.
+  it('keeps an exited journal unsettled until its acquired read actually ends', async () => {
+    const { journals, open } = await openHost()
+    const sessionId = 'read-across-exit'
+    const old = await open(sessionId)
+    old.record({ kind: 'output', data: 'OLD_ROW\r\n' })
+    expect(await old.flush()).toBe(true)
+    const reading = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    sourceRead.during = async () => {
+      reading.resolve()
+      await release.promise
+    }
+    const read = readThrough(journals.reads, old)
+    // Sync point only: the read holds its replay lease and its source read is issued.
+    await reading.promise
+    sourceRead.during = async () => {}
+    let settled = false
+    void old.settled.then(() => {
+      settled = true
+    })
+    old.finish(0)
+    // The final pump, its clean end included, has finished.
+    await old.flush()
+
+    expect(settled).toBe(false)
+    release.resolve()
+    expect(await read).toContain('OLD_ROW')
+    await old.settled
+    const hold = await journals.prepareHold(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+    expect(hold.preservesRecovery).toBe(false)
+  }, 30_000)
 })

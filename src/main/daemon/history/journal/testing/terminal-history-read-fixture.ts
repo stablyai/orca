@@ -136,3 +136,18 @@ export function gateAppends() {
     }
   }
 }
+
+/** Holds renames onto matching paths until released; each held rename then really happens. */
+export function gateRenames(matches: (target: string) => boolean) {
+  const reached = Promise.withResolvers<void>()
+  const gate = Promise.withResolvers<void>()
+  const rename = fsPromises.rename
+  vi.spyOn(fsPromises, 'rename').mockImplementation(async (from, to) => {
+    if (matches(String(to))) {
+      reached.resolve()
+      await gate.promise
+    }
+    return rename(from, to)
+  })
+  return { reached: reached.promise, open: () => gate.resolve() }
+}

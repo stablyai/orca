@@ -1,6 +1,6 @@
 // History contains terminal content and runtime files contain auth tokens; pin modes instead of trusting umask.
 
-import { chmodSync, existsSync, mkdirSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, promises as fsPromises } from 'node:fs'
 
 export const PRIVATE_DIR_MODE = 0o700
 export const PRIVATE_FILE_MODE = 0o600
@@ -28,4 +28,21 @@ export function tightenPathMode(path: string, mode: number): void {
 export function ensurePrivateDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: PRIVATE_DIR_MODE })
   tightenPathMode(dir, PRIVATE_DIR_MODE)
+}
+
+/** The awaited form for runtime work; a missing path or refused chmod leaves the mode as found. */
+export async function tightenPathModeAsync(path: string, mode: number): Promise<void> {
+  if (!supportsPosixFileModes()) {
+    return
+  }
+  try {
+    await fsPromises.chmod(path, mode)
+  } catch {
+    // Read-only volumes, foreign ownership, exotic filesystems: leave the mode as found.
+  }
+}
+
+export async function ensurePrivateDirAsync(dir: string): Promise<void> {
+  await fsPromises.mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE })
+  await tightenPathModeAsync(dir, PRIVATE_DIR_MODE)
 }

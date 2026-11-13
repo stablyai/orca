@@ -1,12 +1,12 @@
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalJournalPush } from './terminal-session-journal-backlog'
-import { updateTerminalHistoryMeta } from '../storage/terminal-history-metadata'
 import { hasReplayableTerminalHistorySessionFiles } from '../storage/terminal-history-session-files'
 import {
   openTerminalJournalOrigin,
   publishTerminalJournalSeedOrigin
 } from './terminal-session-journal-source'
 import { TerminalSessionJournalSleep } from './terminal-session-journal-sleep'
+import { TerminalJournalReadLeases } from './terminal-journal-read-leases'
 import type { TerminalJournalPhysicalFinal } from './terminal-session-journal-contract'
 
 export type { TerminalHistoryCut } from './terminal-session-journal-contract'
@@ -35,6 +35,10 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
   private exitCode: number | null = null
   private readonly settledSignal = Promise.withResolvers<void>()
   private isSettled = false
+  private readonly readLeases = new TerminalJournalReadLeases(
+    () => this.retired,
+    () => this.retired && this.settle()
+  )
 
   get settled(): Promise<void> {
     return this.settledSignal.promise
@@ -160,7 +164,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
       )
       .finally(() => {
         this.pumping = null
-        if (this.state === 'open' && (this.ending ? !this.finalized : this.queue.length > 0)) {
+        if (this.state === 'open' && (this.ending ? !this.finalized : this.hasPumpWork())) {
           // Output that arrived during this append waits for its own window unless forced.
           if (this.urgent) {
             this.kick()
@@ -174,12 +178,19 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
     this.pumping = run
   }
 
+  // An operation admitted during any pump await still needs its backing or its publication.
+  private hasPumpWork(): boolean {
+    return this.queue.length > 0 || this.needsEmptyBacking || this.coveredAdmitted()
+  }
+
   private async pump(): Promise<void> {
     if (this.state === 'open' && !this.writer) {
       await this.openOrigin()
+      await this.publishCovered()
     }
     if (this.needsEmptyBacking && this.state === 'open' && this.writer) {
       await this.appendEmptyBacking()
+      await this.publishCovered()
     }
     let first = true
     while (
@@ -198,23 +209,20 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
         this.seq += 1
         this.committedLogBytes = this.writer.committedLog?.bytes ?? 0
         this.host.charge(this, -this.queue.commit(batch.records, batch.headOffset))
-        this.publishIfCovered()
+        await this.publishCovered()
         continue
       }
       await this.fold()
+      await this.publishCovered()
     }
+    // A quiet cut that settled backing already covers publishes without waiting for output.
+    await this.publishCovered()
     if (!this.ending || this.state !== 'open' || this.queue.length > 0) {
       return
     }
     this.finalized = true
     // An authorized Sleep keeps its history restorable and publishes its final cut instead.
-    if ((await this.completeSleepFinal()) || !this.writer || this.state !== 'open') {
-      return
-    }
-    updateTerminalHistoryMeta(this.dir, {
-      endedAt: new Date().toISOString(),
-      exitCode: this.exitCode
-    })
+    await this.publishEnd(this.exitCode)
   }
 
   /** Affirmative backing for an operation over an empty origin: one ordinary empty batch. */
@@ -229,7 +237,6 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
     }
     this.seq += 1
     this.committedLogBytes = writer.committedLog?.bytes ?? 0
-    this.publishIfCovered()
   }
 
   // An explicit new physical origin: predecessor files are superseded only by a seeded origin.
@@ -239,26 +246,37 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
       this.gap('unseeded_recovery_preserved')
       return
     }
+    // Origin steps run only before a writer exists; the writer then lives while this journal does.
+    const isOrigin = (): boolean => !this.writer && this.ownsDirectory()
+    const isAdmitted = (): boolean => this.ownsDirectory()
     if (
       !seeded ||
       this.originRecords === 0 ||
-      !hasReplayableTerminalHistorySessionFiles(this.dir)
+      !(await hasReplayableTerminalHistorySessionFiles(this.dir))
     ) {
-      this.writer = openTerminalJournalOrigin(this.dir, this.origin, () => this.ownsDirectory())
+      const writer = await openTerminalJournalOrigin(this.dir, this.origin, isOrigin, isAdmitted)
+      if (!isOrigin()) {
+        return
+      }
+      this.writer = writer
       this.committedLogBytes = 0
       return
     }
     // Predecessor files stay the sole recovery until the seed's checkpoint is durable.
     const release = await this.host.acquireReplay(JOURNAL_FOLD_PRIORITY)
     try {
-      if (this.state !== 'open') {
+      if (!isOrigin()) {
         return
       }
       const seed = this.queue.snapshot().slice(0, this.originRecords)
-      const writer = await publishTerminalJournalSeedOrigin(this.dir, this.origin, seed, () =>
-        this.ownsDirectory()
+      const writer = await publishTerminalJournalSeedOrigin(
+        this.dir,
+        this.origin,
+        seed,
+        isOrigin,
+        isAdmitted
       )
-      if (this.state !== 'open') {
+      if (!isOrigin()) {
         return
       }
       this.writer = writer
@@ -266,7 +284,6 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
       this.markApplied()
       this.foldGeneration += 1
       this.host.charge(this, -this.queue.commit(this.originRecords, 0))
-      this.publishIfCovered()
     } finally {
       release()
     }
@@ -305,14 +322,25 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
       this.markApplied()
       this.host.charge(this, -this.queue.commit(covered, 0))
       this.settleFoldedNote(cut.cwdNote)
-      this.publishIfCovered()
     } finally {
       release()
     }
   }
 
+  /** A reader's replay lease; its issued reads hold back this journal's settlement. */
+  override acquireRead(signal?: AbortSignal): Promise<() => void> {
+    return this.readLeases.acquire(() => super.acquireRead(signal))
+  }
+
+  // Ending, drained and pumped out: what remains is any acquired read's actual I/O.
+  private get retired(): boolean {
+    return (
+      this.isSettled || (this.ending && !this.pumping && (this.finalized || this.state !== 'open'))
+    )
+  }
+
   private settle(): void {
-    if (this.isSettled || this.pumping) {
+    if (this.isSettled || this.pumping || this.readLeases.active) {
       return
     }
     this.isSettled = true

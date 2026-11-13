@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { promises as fsPromises } from 'node:fs'
 import { isTerminalOscLinkRanges } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import { readTerminalHistoryJsonAsync } from '../storage/terminal-history-file-reader'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from '../storage/terminal-history-file-limits'
@@ -15,7 +15,10 @@ export type TerminalHistoryCheckpointRead =
 export async function readTerminalHistoryCheckpoint(
   path: string
 ): Promise<TerminalHistoryCheckpointRead> {
-  if (!existsSync(path)) {
+  // Any failed probe reads as missing, as an existence check would; legacy readers rely on it.
+  try {
+    await fsPromises.stat(path)
+  } catch {
     return { status: 'missing' }
   }
   try {

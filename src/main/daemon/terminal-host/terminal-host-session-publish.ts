@@ -55,16 +55,17 @@ export async function spawnAndPublishSession(
     rows: size.rows,
     ...(opts.spawnAdmission ? { deadlineAt: opts.spawnAdmission.deadlineAt } : {})
   })
-  // A start that never produced a process restores the ID's prior clean-ended truth.
-  const rollbackHold = (): void => {
+  // A start that never produced a process restores the ID's prior clean-ended truth. Awaited
+  // inside this creation, so a same-ID successor starts only after the restore has landed.
+  const rollbackHold = async (): Promise<void> => {
     if (historyHold) {
-      deps.historyJournals?.rollbackHold(historyHold)
+      await deps.historyJournals?.rollbackHold(historyHold)
     }
   }
   try {
     deps.assertCreateAllowed()
   } catch (error) {
-    rollbackHold()
+    await rollbackHold()
     throw error
   }
   const lower = Promise.withResolvers<PtyCreationDisposition>()
@@ -116,7 +117,7 @@ export async function spawnAndPublishSession(
       lower.resolve({ kind: 'unknown' })
     }
     if (noFork) {
-      rollbackHold()
+      await rollbackHold()
     } else if (historyHold) {
       // A process may exist: its conservative disk truth stays, only the bookkeeping ends.
       deps.historyJournals?.retireHold(historyHold)

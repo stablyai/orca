@@ -1,5 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, promises as fsPromises, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
+import { TerminalHistoryJournals } from '../../history/journal/terminal-history-journals'
+import { getHistorySessionDirName } from '../../history/storage/history-paths'
+import {
+  newTerminalHistoryMeta,
+  writeTerminalHistoryMeta
+} from '../../history/storage/terminal-history-metadata'
 
 import { TerminalHost } from '../terminal-host'
 
@@ -77,6 +86,71 @@ describe('concurrent createOrAttach across the async spawn', () => {
 
     releaseSpawn()
     await stuck
+    await host.dispose()
+  })
+})
+
+const historyRoots: string[] = []
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  for (const root of historyRoots.splice(0)) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+describe('a start that never produced a process', () => {
+  // Its history hold is rolled back inside the failed creation, so the failure's answer, and any
+  // same-ID start waiting behind it, find the clean-ended predecessor already restored.
+  it.each([
+    ['its process never forked', false],
+    ['it was canceled after its hold was written', true]
+  ])('answers only once the predecessor is restored when %s', async (_, cancelAfterHold) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-hold-rollback-'))
+    historyRoots.push(root)
+    const sessionId = 'hold-rollback'
+    const dir = join(root, getHistorySessionDirName(sessionId))
+    mkdirSync(dir, { recursive: true })
+    const ended = {
+      ...newTerminalHistoryMeta({ cwd: '/tmp', cols: 80, rows: 24 }, null),
+      endedAt: '2026-11-01T11:00:00.000Z',
+      exitCode: 0
+    }
+    writeTerminalHistoryMeta(dir, ended)
+    const savedMeta = () => JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'))
+    let canceled = false
+    if (cancelAfterHold) {
+      const rename = fsPromises.rename
+      vi.spyOn(fsPromises, 'rename').mockImplementation(async (from, to) => {
+        await rename(from, to)
+        canceled = true
+      })
+    }
+    let fail = !cancelAfterHold
+    const host = new TerminalHost({
+      historyJournals: new TerminalHistoryJournals(root),
+      spawnSubprocess: async (opts) => {
+        if (fail) {
+          opts.onCreationDisposition?.({ kind: 'no-fork' })
+          throw new Error('spawn failed')
+        }
+        return mockSubprocess()
+      }
+    })
+
+    const answered = await host
+      .createOrAttach({ ...createOptions(sessionId), isCanceled: () => canceled })
+      .then(
+        () => 'started',
+        () => savedMeta()
+      )
+    expect(answered).toEqual(ended)
+
+    vi.restoreAllMocks()
+    canceled = false
+    fail = false
+    await host.createOrAttach(createOptions(sessionId))
+    expect(savedMeta()).toMatchObject({ endedAt: null, exitCode: null })
     await host.dispose()
   })
 })

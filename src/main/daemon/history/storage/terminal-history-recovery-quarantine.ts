@@ -1,11 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  promises as fsPromises,
+  readdirSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
   ensurePrivateDir,
   PRIVATE_FILE_MODE
 } from '../../endpoint/publication/daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
+import { terminalHistoryPathMayExist } from './terminal-history-session-files'
 
 const QUARANTINE_DIR_NAME = '.recovery-quarantine'
 const RECOVERY_PROTECTION_MARKER = '.unreadable-recovery'
@@ -64,12 +72,19 @@ export function hasTerminalHistoryRecoveryProtection(basePath: string, sessionId
   return existsSync(join(basePath, getHistorySessionDirName(sessionId), RECOVERY_PROTECTION_MARKER))
 }
 
-export function clearTerminalHistoryRecoveryProtection(dir: string): void {
-  try {
-    unlinkSync(join(dir, RECOVERY_PROTECTION_MARKER))
-  } catch {
-    // Leave undeletable markers in place so recovery remains blocked.
-  }
+/** A daemon hold's check: a marker that cannot be confirmed missing still protects recovery. */
+export function mayHaveTerminalHistoryRecoveryProtection(
+  basePath: string,
+  sessionId: string
+): Promise<boolean> {
+  return terminalHistoryPathMayExist(
+    join(basePath, getHistorySessionDirName(sessionId), RECOVERY_PROTECTION_MARKER)
+  )
+}
+
+export async function clearTerminalHistoryRecoveryProtection(dir: string): Promise<void> {
+  // Leave undeletable markers in place so recovery remains blocked.
+  await fsPromises.unlink(join(dir, RECOVERY_PROTECTION_MARKER)).catch(() => {})
 }
 
 export function fingerprintTerminalHistorySession(

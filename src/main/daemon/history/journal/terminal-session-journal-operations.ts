@@ -75,21 +75,27 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
     if (this.queue.length === 0 && this.committedLogBytes === 0 && this.foldGeneration === 0) {
       this.needsEmptyBacking = true
     }
-    this.publishIfCovered()
+    // The pump publishes C, even for a quiet cut that settled backing already covers.
     this.kick()
     return operation
   }
 
-  /** After a commit, fold or origin: publishes C once whole records with real backing cover it. */
-  protected publishIfCovered(): void {
+  /** Whether whole records with real backing now cover the admitted cut C. */
+  protected coveredAdmitted(): boolean {
+    const operation = this.operation
+    return (
+      operation?.state === 'admitted' &&
+      this.writer !== null &&
+      this.queue.committed >= operation.cut.record &&
+      (this.committedLogBytes > LOG_HEADER_BYTES || this.foldGeneration > 0)
+    )
+  }
+
+  /** Pump only, after each step that can cover C: publishes it once, before C can be passed. */
+  protected async publishCovered(): Promise<void> {
     const operation = this.operation
     const writer = this.writer
-    if (
-      operation?.state !== 'admitted' ||
-      !writer ||
-      this.queue.committed < operation.cut.record ||
-      (this.committedLogBytes <= LOG_HEADER_BYTES && this.foldGeneration === 0)
-    ) {
+    if (!operation || !writer || !this.coveredAdmitted()) {
       return
     }
     const position = {
@@ -99,7 +105,20 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
     const note = operation.note
     // Unless a fold already carried it into its checkpoint, this note publishes here.
     if (note && this.cwdNote === note) {
-      const replaced = this.publishNote({ cwd: note.cwd, ...position })
+      // Exactly this operation, note and covered prefix, on the open current journal.
+      const current = (): boolean =>
+        this.operation === operation &&
+        operation.state === 'admitted' &&
+        this.cwdNote === note &&
+        this.writer === writer &&
+        this.committedLogBytes === position.logBytes &&
+        (writer.committedLog?.generation ?? 0) === position.generation &&
+        this.ownsDirectory()
+      const replaced = await this.publishNote({ cwd: note.cwd, ...position }, current)
+      if (!current()) {
+        // A gap already ended this operation; its late file result changes nothing newer.
+        return
+      }
       if (replaced !== 'replaced') {
         // The last acknowledged folder stays effective; this one was never saved.
         this.cwdNote = operation.previousNote
@@ -147,11 +166,14 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
     }
   }
 
-  protected publishNote(note: TerminalHistoryCwdObservation): TerminalHistoryMetaReplacement {
+  protected publishNote(
+    note: TerminalHistoryCwdObservation,
+    isOwner: () => boolean
+  ): Promise<TerminalHistoryMetaReplacement> {
     return replaceTerminalHistoryMetaOwned(
       this.dir,
       (meta) => ({ ...meta, cwdObservation: note }),
-      () => this.ownsDirectory()
+      isOwner
     )
   }
 

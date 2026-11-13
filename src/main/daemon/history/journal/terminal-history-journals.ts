@@ -1,16 +1,21 @@
-import { existsSync, statSync, unlinkSync } from 'node:fs'
+import { promises as fsPromises } from 'node:fs'
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
-import { ensurePrivateDir } from '../../endpoint/publication/daemon-private-file-modes'
+import { ensurePrivateDirAsync } from '../../endpoint/publication/daemon-private-file-modes'
 import { DAEMON_HISTORY_RESIZE_MODEL } from '../../protocol/daemon-history-replay-pty'
 import { TerminalHistoryUnavailableError } from '../../protocol/daemon-history-protocol'
 import { getHistorySessionDirName } from '../storage/history-paths'
 import { LOG_HEADER_BYTES } from '../storage/terminal-history-log'
-import { hasTerminalHistoryRecoveryProtection } from '../storage/terminal-history-recovery-quarantine'
+import { mayHaveTerminalHistoryRecoveryProtection } from '../storage/terminal-history-recovery-quarantine'
 import {
+  provesTerminalHistoryPathAbsent,
+  terminalHistoryPathMayExist
+} from '../storage/terminal-history-session-files'
+import {
+  createTerminalHistoryMetaOwned,
   newTerminalHistoryMeta,
-  readTerminalHistoryMeta,
-  writeTerminalHistoryMeta,
+  readTerminalHistoryMetaInDirAsync,
+  replaceTerminalHistoryMetaOwned,
   type SessionMeta
 } from '../storage/terminal-history-metadata'
 import { TerminalSessionJournal } from './terminal-session-journal'
@@ -48,7 +53,8 @@ export class TerminalHistoryJournals {
 
   /**
    * Before any fresh physical spawn: wait for the predecessor's actual I/O, then make the shared
-   * root's metadata hold the ID for prior-stable readers. Throws rather than start unmarked.
+   * root's metadata hold the ID for prior-stable readers. Throws rather than start unmarked. The
+   * caller's pending creation owns every step, so its file work is exclusive for this ID.
    */
   async prepareHold(
     sessionId: string,
@@ -75,24 +81,39 @@ export class TerminalHistoryJournals {
     }
     const dir = join(this.root, getHistorySessionDirName(sessionId))
     try {
-      if (hasTerminalHistoryRecoveryProtection(this.root, sessionId)) {
+      if (await mayHaveTerminalHistoryRecoveryProtection(this.root, sessionId)) {
         return { sessionId, preservesRecovery: true }
       }
-      const meta = readTerminalHistoryMeta(this.root, sessionId)
+      const meta = await readTerminalHistoryMetaInDirAsync(dir)
       if (meta.status === 'unreadable') {
         return { sessionId, preservesRecovery: true }
       }
       if (meta.status === 'readable') {
-        const preservesRecovery = meta.meta.endedAt === null && hasReplayableFiles(dir)
+        const preservesRecovery = meta.meta.endedAt === null && (await hasReplayableFiles(dir))
         if (meta.meta.endedAt === null && meta.meta.exitCode === null) {
           return { sessionId, preservesRecovery }
         }
-        // Only the hold fields change; recovery geometry stays with its checkpoint.
-        writeTerminalHistoryMeta(dir, { ...meta.meta, endedAt: null, exitCode: null })
-        return this.track({ sessionId, preservesRecovery, replaced: meta.meta })
+        // Only the hold fields change; geometry and the saved folder stay as they are.
+        const prior: { meta?: SessionMeta } = {}
+        const held = await replaceTerminalHistoryMetaOwned(
+          dir,
+          (current) => {
+            prior.meta = current
+            return { ...current, endedAt: null, exitCode: null }
+          },
+          () => true
+        )
+        // A hold that may have landed unverified stays on disk, untracked: nothing starts.
+        if (held !== 'replaced' || !prior.meta) {
+          throw new Error('terminal_history_hold_unpublished')
+        }
+        return this.track({ sessionId, preservesRecovery, replaced: prior.meta })
       }
-      ensurePrivateDir(dir)
-      writeTerminalHistoryMeta(dir, newTerminalHistoryMeta(opts, DAEMON_HISTORY_RESIZE_MODEL))
+      await ensurePrivateDirAsync(dir)
+      const fresh = newTerminalHistoryMeta(opts, DAEMON_HISTORY_RESIZE_MODEL)
+      if ((await createTerminalHistoryMetaOwned(dir, fresh, () => true)) !== 'replaced') {
+        throw new Error('terminal_history_hold_unpublished')
+      }
       return this.track({ sessionId, preservesRecovery: false, replaced: null })
     } catch (error) {
       this.logger?.log('terminal-history-hold-failed', {
@@ -102,18 +123,31 @@ export class TerminalHistoryJournals {
     }
   }
 
-  /** No process started: put back what the hold replaced, unless a later hold took the ID. */
-  rollbackHold(hold: TerminalHistoryHold): void {
+  /**
+   * No process started: put back what the hold replaced, unless a later hold took the ID. The
+   * caller's pending creation, not this map entry, fences the ID until the restore has landed.
+   */
+  async rollbackHold(hold: TerminalHistoryHold): Promise<void> {
     if (this.holds.get(hold.sessionId) !== hold) {
       return
     }
     this.holds.delete(hold.sessionId)
     const dir = join(this.root, getHistorySessionDirName(hold.sessionId))
+    const replaced = hold.replaced
     try {
-      if (hold.replaced) {
-        writeTerminalHistoryMeta(dir, hold.replaced)
+      // Restored by atomic replacement, which never recreates metadata removed meanwhile.
+      if (replaced) {
+        if (
+          (await replaceTerminalHistoryMetaOwned(
+            dir,
+            () => replaced,
+            () => true
+          )) !== 'replaced'
+        ) {
+          throw new Error('terminal_history_hold_restore_failed')
+        }
       } else {
-        unlinkSync(join(dir, 'meta.json'))
+        await fsPromises.unlink(join(dir, 'meta.json'))
       }
     } catch (error) {
       this.logger?.log('terminal-history-hold-rollback-failed', {
@@ -208,13 +242,17 @@ export class TerminalHistoryJournals {
   }
 }
 
-function hasReplayableFiles(dir: string): boolean {
-  if (existsSync(join(dir, 'checkpoint.json')) || existsSync(join(dir, 'scrollback.bin'))) {
+// Only a confirmed missing file is absent; one that cannot be read may still be recovery.
+async function hasReplayableFiles(dir: string): Promise<boolean> {
+  if (
+    (await terminalHistoryPathMayExist(join(dir, 'checkpoint.json'))) ||
+    (await terminalHistoryPathMayExist(join(dir, 'scrollback.bin')))
+  ) {
     return true
   }
   try {
-    return statSync(join(dir, 'output.log')).size > LOG_HEADER_BYTES
-  } catch {
-    return false
+    return (await fsPromises.stat(join(dir, 'output.log'))).size > LOG_HEADER_BYTES
+  } catch (error) {
+    return !provesTerminalHistoryPathAbsent(error)
   }
 }

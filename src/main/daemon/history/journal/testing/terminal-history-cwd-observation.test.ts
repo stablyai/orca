@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  promises as fsPromises,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HistoryReader } from '../../restoration/history-reader'
@@ -14,12 +22,36 @@ import {
 import { publishTerminalJournalSeedOrigin } from '../terminal-session-journal-source'
 import type { TerminalSessionJournal } from '../terminal-session-journal'
 import type { TerminalJournalOperation } from '../terminal-journal-operation'
-import { gateAppends, openReads, removeReadFixtureRoots } from './terminal-history-read-fixture'
+import type * as FileReaderModule from '../../storage/terminal-history-file-reader'
+import {
+  gateAppends,
+  gateRenames,
+  openReads,
+  removeReadFixtureRoots
+} from './terminal-history-read-fixture'
+
+const readback = vi.hoisted(() => ({
+  alter: null as ((path: string, bytes: Buffer) => Buffer) | null
+}))
+// A final readback may find other bytes than its publication wrote.
+vi.mock('../../storage/terminal-history-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileReaderModule>()
+  return {
+    ...actual,
+    readTerminalHistoryBufferAsync: async (
+      ...args: Parameters<typeof actual.readTerminalHistoryBufferAsync>
+    ) => {
+      const bytes = await actual.readTerminalHistoryBufferAsync(...args)
+      return readback.alter ? readback.alter(args[0], bytes) : bytes
+    }
+  }
+})
 
 const roots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
+  readback.alter = null
   removeReadFixtureRoots()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -113,6 +145,23 @@ describe('ordered saved folder note', () => {
     const restored = await restoreFromDisk(journal, 'note-empty')
     expect(restored?.cwd).toBe('/tmp/silent-b')
     expect([restored?.cols, restored?.rows]).toEqual([80, 24])
+  })
+
+  // A quiet terminal's quit commit or Sleep must not wait for output that may never come.
+  it('publishes cuts that settled backing already covers, again, with no further output', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('note-quiet')
+    await prime(journal)
+    record(journal, `${osc7('/tmp/folder-a')}QUIET_ROW\r\n`)
+    expect(await journal.flush()).toBe(true)
+
+    expect(await admit(journal, 'commit', '/tmp/folder-b').publication.promise).not.toBeNull()
+    expect(await admit(journal, 'commit').publication.promise).not.toBeNull()
+    const sleep = admit(journal, 'sleep', '/tmp/folder-c')
+    expect(await journal.preflightSleep(sleep)).toBe(true)
+    const restored = await restoreFromDisk(journal, 'note-quiet')
+    expect(restored?.cwd).toBe('/tmp/folder-c')
+    expect(restored?.snapshotAnsi).toContain('QUIET_ROW')
   })
 
   it('keeps a WSL folder literal, drvfs and long UNC spellings included', async () => {
@@ -225,6 +274,7 @@ describe('one admitted operation and its source lineage', () => {
       dir,
       { cwd: '/tmp', cols: 80, rows: 24, wslDistro: undefined },
       [{ kind: 'output', data: 'SEED_ROW\r\n' }],
+      () => true,
       () => true
     )
 
@@ -237,7 +287,7 @@ describe('one admitted operation and its source lineage', () => {
     expect(restored?.cwd).toBe('/tmp')
   })
 
-  it('keeps the published metadata when its owner changes before the rename', () => {
+  it('keeps the published metadata when its owner changes before the rename', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-meta-owner-'))
     roots.push(root)
     writeTerminalHistoryMeta(
@@ -247,7 +297,7 @@ describe('one admitted operation and its source lineage', () => {
     const before = readFileSync(join(root, 'meta.json'), 'utf8')
     let checks = 0
 
-    const result = replaceTerminalHistoryMetaOwned(
+    const result = await replaceTerminalHistoryMetaOwned(
       root,
       (meta) => ({ ...meta, cwdObservation: { cwd: '/tmp/b', generation: 0, logBytes: 18 } }),
       () => (checks += 1) === 1
@@ -256,6 +306,47 @@ describe('one admitted operation and its source lineage', () => {
     expect(result).toBe('unavailable')
     expect(readFileSync(join(root, 'meta.json'), 'utf8')).toBe(before)
     expect(readdirSync(root)).toEqual(['meta.json'])
+  })
+
+  // A history lost while its note's rename is in flight: no receipt, no kill, a whole prefix.
+  it('earns no Sleep receipt when the history gaps during its note rename', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('note-gap-rename')
+    await prime(journal)
+    record(journal, `${osc7('/tmp/folder-a')}GAP_ROW\r\n`)
+    expect(await journal.flush()).toBe(true)
+    const renaming = gateRenames((target) => target.endsWith('meta.json'))
+    const sleep = admit(journal, 'sleep', '/tmp/folder-b')
+    const preflight = journal.preflightSleep(sleep)
+    await renaming.reached
+    journal.gap('storage_failed')
+    renaming.open()
+
+    expect(await preflight).toBe(false)
+    expect(await sleep.outcome.promise).toEqual({ phase: 'preflight', reason: 'gap' })
+    // The late note is a true observation at its committed prefix, never a receipt.
+    const restored = await restoreFromDisk(journal, 'note-gap-rename')
+    expect(restored?.snapshotAnsi).toContain('GAP_ROW')
+    expect(restored?.cwd).toBe('/tmp/folder-b')
+  })
+
+  // Windows refuses a rename over a file in use; the saved folder must survive that refusal.
+  it('keeps the saved metadata and leaves no stray file when the note cannot replace it', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('note-rename-refused')
+    await prime(journal)
+    record(journal, `${osc7('/tmp/folder-a')}ROW\r\n`)
+    expect(await admit(journal, 'commit', '/tmp/folder-b').publication.promise).not.toBeNull()
+    const saved = readFileSync(join(journal.dir, 'meta.json'), 'utf8')
+    vi.spyOn(fsPromises, 'rename').mockRejectedValueOnce(
+      Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+    )
+    const refused = admit(journal, 'commit', '/tmp/folder-c')
+
+    expect(await refused.outcome.promise).toEqual({ phase: 'preflight', reason: 'write_failed' })
+    expect(readFileSync(join(journal.dir, 'meta.json'), 'utf8')).toBe(saved)
+    expect(readdirSync(journal.dir)).not.toContain('meta.json.tmp')
+    expect((await restoreFromDisk(journal, 'note-rename-refused'))?.cwd).toBe('/tmp/folder-b')
   })
 })
 
@@ -423,6 +514,24 @@ describe('Sleep preflight and final cut', () => {
     expect(restored?.cwd).toBe('/tmp/folder-b')
     expect(restored?.snapshotAnsi).toContain('BEFORE_SLEEP')
     expect(restored?.snapshotAnsi).toContain('DURING_TERMINATION')
+  })
+
+  // A final receipt rests on the bytes actually read back, never on the publication's claim.
+  it('gives no final receipt when the published checkpoint does not read back whole', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('sleep-final-readback')
+    await prime(journal)
+    record(journal, 'BEFORE_SLEEP\r\n')
+    const sleep = admit(journal, 'sleep', '/tmp/folder-b')
+    expect(await journal.preflightSleep(sleep)).toBe(true)
+    journal.authorizeSleep(sleep)
+    readback.alter = (path, bytes) =>
+      path.endsWith('checkpoint.json') ? bytes.subarray(0, -1) : bytes
+    journal.finish(0, physicalExit(7))
+
+    expect(await sleep.outcome.promise).toEqual({ phase: 'exited', reason: 'write_failed' })
+    await journal.settled
+    expect(JSON.parse(readFileSync(join(journal.dir, 'meta.json'), 'utf8')).endedAt).toBeNull()
   })
 
   it('gives no receipt or clean end when only a disposal, not a physical exit, ends it', async () => {

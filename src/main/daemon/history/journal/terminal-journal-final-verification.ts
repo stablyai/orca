@@ -1,23 +1,37 @@
 import { createHash } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from '../storage/terminal-history-log'
-import { readTerminalHistoryMetaInDir } from '../storage/terminal-history-metadata'
+import { readTerminalHistoryMetaInDirAsync } from '../storage/terminal-history-metadata'
 import type { TerminalHistoryCwdObservation } from '../storage/terminal-history-cwd-observation'
-import { readTerminalHistoryLogHeaderGeneration } from '../storage/terminal-history-session-files'
+import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file-reader'
+import {
+  TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
+  TERMINAL_HISTORY_LOG_MAX_BYTES
+} from '../storage/terminal-history-file-limits'
+import { readTerminalHistoryLogHeader } from '../storage/terminal-history-session-files'
 import type { TerminalJournalPosition } from './terminal-journal-operation'
 
 /** The published checkpoint bytes themselves, its fresh matching header and restorable meta. */
-export function verifyFinalCheckpoint(dir: string, data: string, generation: number): boolean {
+export async function verifyFinalCheckpoint(
+  dir: string,
+  data: string,
+  generation: number
+): Promise<boolean> {
   try {
     const digest = (value: string | Buffer): string =>
       createHash('sha256').update(value).digest('hex')
-    const logPath = join(dir, 'output.log')
+    const published = await readTerminalHistoryBufferAsync(
+      join(dir, 'checkpoint.json'),
+      TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+    )
+    if (digest(published) !== digest(data)) {
+      return false
+    }
+    const header = await readTerminalHistoryLogHeader(join(dir, 'output.log'))
     return (
-      digest(readFileSync(join(dir, 'checkpoint.json'))) === digest(data) &&
-      readTerminalHistoryLogHeaderGeneration(logPath) === generation &&
-      statSync(logPath).size === LOG_HEADER_BYTES &&
-      restorableMeta(dir, undefined)
+      header?.generation === generation &&
+      header.bytes === LOG_HEADER_BYTES &&
+      (await restorableMeta(dir, undefined))
     )
   } catch {
     return false
@@ -25,28 +39,34 @@ export function verifyFinalCheckpoint(dir: string, data: string, generation: num
 }
 
 /** The complete framed log through F, untruncated, with its final note and restorable meta. */
-export function verifyFinalRaw(
+export async function verifyFinalRaw(
   dir: string,
   position: TerminalJournalPosition,
   note: TerminalHistoryCwdObservation | undefined
-): boolean {
+): Promise<boolean> {
   try {
-    const logPath = join(dir, 'output.log')
-    const log = decodeTerminalHistoryLog(readFileSync(logPath))
+    const bytes = await readTerminalHistoryBufferAsync(
+      join(dir, 'output.log'),
+      TERMINAL_HISTORY_LOG_MAX_BYTES
+    )
+    const log = decodeTerminalHistoryLog(bytes)
     return (
-      statSync(logPath).size === position.logBytes &&
+      bytes.length === position.logBytes &&
       log !== null &&
       !log.truncatedTail &&
       log.generation === position.generation &&
-      restorableMeta(dir, note)
+      (await restorableMeta(dir, note))
     )
   } catch {
     return false
   }
 }
 
-function restorableMeta(dir: string, note: TerminalHistoryCwdObservation | undefined): boolean {
-  const read = readTerminalHistoryMetaInDir(dir)
+async function restorableMeta(
+  dir: string,
+  note: TerminalHistoryCwdObservation | undefined
+): Promise<boolean> {
+  const read = await readTerminalHistoryMetaInDirAsync(dir)
   if (read.status !== 'readable' || read.meta.endedAt !== null) {
     return false
   }

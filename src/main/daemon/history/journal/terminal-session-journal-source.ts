@@ -1,4 +1,4 @@
-import { unlinkSync } from 'node:fs'
+import { promises as fsPromises } from 'node:fs'
 import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
 import { join } from 'node:path'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
@@ -11,8 +11,14 @@ import type { TerminalCheckpointFile } from '../../protocol/daemon-checkpoint-fi
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from '../storage/terminal-history-log'
-import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file-reader'
-import { TERMINAL_HISTORY_LOG_MAX_BYTES } from '../storage/terminal-history-file-limits'
+import {
+  readTerminalHistoryBufferAsync,
+  readTerminalHistoryJsonAsync
+} from '../storage/terminal-history-file-reader'
+import {
+  TERMINAL_HISTORY_LOG_MAX_BYTES,
+  TERMINAL_HISTORY_META_MAX_BYTES
+} from '../storage/terminal-history-file-limits'
 import { readTerminalHistoryCheckpoint } from '../restoration/terminal-history-checkpoint-reader'
 import { replayTerminalHistory } from '../restoration/terminal-history-replay'
 import type { ReplayRecordSource } from '../restoration/cold-restore-replay-writer'
@@ -22,16 +28,16 @@ import { TerminalHistorySessionWriter } from '../storage/terminal-history-sessio
 import {
   clearLegacyTerminalHistoryScrollback,
   hasReplayableTerminalHistorySessionFiles,
-  readTerminalHistoryLogHeaderGeneration
+  readTerminalHistoryLogHeader
 } from '../storage/terminal-history-session-files'
 import {
   newTerminalHistoryMeta,
-  readTerminalHistoryMetaFromDir,
   replaceTerminalHistoryMetaOwned
 } from '../storage/terminal-history-metadata'
 import {
   cwdObservationRecordIndex,
-  isTerminalHistoryCwdObservation
+  isTerminalHistoryCwdObservation,
+  type TerminalHistoryCwdObservation
 } from '../storage/terminal-history-cwd-observation'
 import { TerminalHistoryUnavailableError } from '../../protocol/daemon-history-protocol'
 import type { TerminalJournalCwdNote } from './terminal-session-journal-contract'
@@ -144,33 +150,36 @@ function journalCwdNoteIndex(
 /**
  * An explicit new physical origin. Obsolete replay files go first, under the predecessor's own
  * metadata, so a failed or interrupted reset never pairs old bytes with new geometry; fresh
- * metadata without a note follows, then the generation-0 writer.
+ * metadata without a note follows, then the generation-0 writer. `isOwner` is checked before each
+ * destructive step; the writer keeps `isAdmitted` for its lifetime.
  */
-export function openTerminalJournalOrigin(
+export async function openTerminalJournalOrigin(
   dir: string,
   origin: { cwd: string; cols: number; rows: number },
-  isOwner: () => boolean
-): TerminalHistorySessionWriter {
+  isOwner: () => boolean,
+  isAdmitted: () => boolean
+): Promise<TerminalHistorySessionWriter> {
   for (const name of ['checkpoint.json', 'scrollback.bin', 'output.log']) {
+    assertOriginOwner(isOwner)
     try {
-      unlinkSync(join(dir, name))
+      await fsPromises.unlink(join(dir, name))
     } catch (error) {
       if (errnoCodeOrUnknown(error) !== 'ENOENT') {
         throw new Error('terminal_history_origin_reset_failed')
       }
     }
   }
-  if (hasReplayableTerminalHistorySessionFiles(dir)) {
+  if (await hasReplayableTerminalHistorySessionFiles(dir)) {
     throw new Error('terminal_history_origin_reset_failed')
   }
   const fresh = newTerminalHistoryMeta(
     { cwd: origin.cwd, cols: origin.cols, rows: origin.rows },
     DAEMON_HISTORY_RESIZE_MODEL
   )
-  if (replaceTerminalHistoryMetaOwned(dir, () => fresh, isOwner) !== 'replaced') {
+  if ((await replaceTerminalHistoryMetaOwned(dir, () => fresh, isOwner)) !== 'replaced') {
     throw new Error('terminal_history_origin_meta_failed')
   }
-  return new TerminalHistorySessionWriter(dir, true)
+  return TerminalHistorySessionWriter.openHost(dir, { generation: 0, bytes: 0 }, isAdmitted)
 }
 
 /**
@@ -181,10 +190,12 @@ export async function publishTerminalJournalSeedOrigin(
   dir: string,
   origin: { cwd: string; cols: number; rows: number; wslDistro: string | undefined },
   seed: readonly PendingOutputRecord[],
-  isOwner: () => boolean
+  isOwner: () => boolean,
+  isAdmitted: () => boolean
 ): Promise<TerminalHistorySessionWriter> {
   // Above every readable predecessor generation, so no predecessor log or note can match it.
-  const generation = (await readTerminalJournalLineageGeneration(dir)) + 1
+  const lineage = await readTerminalJournalLineage(dir)
+  const generation = lineage.generation + 1
   if (generation > 0xffffffff) {
     throw new Error('terminal_history_generation_exhausted')
   }
@@ -199,7 +210,7 @@ export async function publishTerminalJournalSeedOrigin(
   if (!snapshot) {
     throw new Error('terminal_history_seed_replay_failed')
   }
-  const writer = new TerminalHistorySessionWriter(dir, false, undefined, isOwner)
+  const writer = await TerminalHistorySessionWriter.openHost(dir, lineage.log, isAdmitted)
   const result = await writer.checkpointStrict(
     { ...snapshot, cwd: snapshot.cwd ?? origin.cwd },
     { pendingOutputSeq: 0, generation }
@@ -210,37 +221,74 @@ export async function publishTerminalJournalSeedOrigin(
   if (result.result !== 'committed') {
     throw result.error
   }
-  clearLegacyTerminalHistoryScrollback(dir)
+  assertOriginOwner(isOwner)
+  await clearLegacyTerminalHistoryScrollback(dir)
   const fresh = newTerminalHistoryMeta(
     { cwd: origin.cwd, cols: origin.cols, rows: origin.rows },
     DAEMON_HISTORY_RESIZE_MODEL
   )
-  if (replaceTerminalHistoryMetaOwned(dir, () => fresh, isOwner) !== 'replaced') {
+  if ((await replaceTerminalHistoryMetaOwned(dir, () => fresh, isOwner)) !== 'replaced') {
     throw new Error('terminal_history_origin_meta_failed')
   }
   return writer
 }
 
+function assertOriginOwner(isOwner: () => boolean): void {
+  if (!isOwner()) {
+    throw new Error('terminal_history_admission_closed')
+  }
+}
+
 /**
  * The highest generation the predecessor's checkpoint, log header or note can claim. A readable
- * checkpoint covers a torn or older header; required lineage nobody can read is unavailable.
+ * checkpoint covers a torn or older header; required lineage nobody can read is unavailable. The
+ * log state is what a writer would resolve from these files before its strict replacement.
  */
-async function readTerminalJournalLineageGeneration(dir: string): Promise<number> {
+async function readTerminalJournalLineage(
+  dir: string
+): Promise<{ generation: number; log: { generation: number; bytes: number } }> {
   const generations = [0]
   const checkpoint = await readTerminalHistoryCheckpoint(join(dir, 'checkpoint.json'))
-  if (checkpoint.status === 'readable' && typeof checkpoint.checkpoint.generation === 'number') {
-    generations.push(checkpoint.checkpoint.generation)
+  const checkpointGeneration =
+    checkpoint.status === 'readable' && typeof checkpoint.checkpoint.generation === 'number'
+      ? checkpoint.checkpoint.generation
+      : null
+  if (checkpointGeneration !== null) {
+    generations.push(checkpointGeneration)
   }
-  const header = readTerminalHistoryLogHeaderGeneration(join(dir, 'output.log'))
-  if (header !== null) {
-    generations.push(header)
+  const header = await readTerminalHistoryLogHeader(join(dir, 'output.log'))
+  if (header && header.generation !== null) {
+    generations.push(header.generation)
   }
-  if (checkpoint.status === 'unreadable' && header === null) {
+  if (checkpoint.status === 'unreadable' && (!header || header.generation === null)) {
     throw new TerminalHistoryUnavailableError()
   }
-  const meta = readTerminalHistoryMetaFromDir(dir)
-  if (isTerminalHistoryCwdObservation(meta?.cwdObservation)) {
-    generations.push(meta.cwdObservation.generation)
+  const note = await readSavedCwdObservation(dir)
+  if (note) {
+    generations.push(note.generation)
   }
-  return Math.max(...generations)
+  return {
+    generation: Math.max(...generations),
+    log:
+      header && header.generation !== null
+        ? { generation: header.generation, bytes: header.bytes }
+        : { generation: checkpointGeneration ?? 0, bytes: 0 }
+  }
+}
+
+async function readSavedCwdObservation(dir: string): Promise<TerminalHistoryCwdObservation | null> {
+  try {
+    const meta = await readTerminalHistoryJsonAsync<unknown>(
+      join(dir, 'meta.json'),
+      TERMINAL_HISTORY_META_MAX_BYTES
+    )
+    return typeof meta === 'object' &&
+      meta !== null &&
+      'cwdObservation' in meta &&
+      isTerminalHistoryCwdObservation(meta.cwdObservation)
+      ? meta.cwdObservation
+      : null
+  } catch {
+    return null
+  }
 }
