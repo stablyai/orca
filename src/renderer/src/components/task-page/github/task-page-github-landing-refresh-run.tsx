@@ -72,18 +72,13 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
     return
   }
   // Clear retry keys on early returns because no promise handler will run to release Retry.
-  if (taskSource !== 'github' || githubMode !== 'items') {
+  // An empty selection is unreachable (the multi-combobox forbids it) but still settles here.
+  if (taskSource !== 'github' || githubMode !== 'items' || selectedRepos.length === 0) {
     setRetryingSourceKeys(new Set())
     setTasksRefreshing(false)
     setTasksFiltering(false)
     return
   }
-  if (selectedRepos.length === 0) {
-    setRetryingSourceKeys(new Set())
-    setTasksRefreshing(false)
-    setTasksFiltering(false)
-    return
-  } // unreachable — multi-combobox forbids empty
 
   // Why: strip repo:owner/name qualifiers before fan-out — cross-repo they'd pin every fetch to one repo. See stripRepoQualifiers.
   const q = stripRepoQualifiers(appliedTaskSearch.trim())
@@ -165,7 +160,12 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   setTasksError(null)
   setFailedCount(0) // reset so a prior failure banner doesn't linger
   setGithubUnavailable(false)
-  setTasksLoading(targetPage > 0 ? cachedTargetPage === null : anyUncached)
+  const landingNeedsNetwork = targetPage > 0 ? cachedTargetPage === null : anyUncached
+  setTasksLoading(landingNeedsNetwork)
+  if (!landingNeedsNetwork) {
+    // Why: every selected repo already cached this exact query, so its rows stay visible while the refetch runs.
+    setTasksFiltering(false)
+  }
   model.setLandingRequestKey(taskPageGitHubLandingRequestKey(model))
 
   const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
