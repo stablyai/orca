@@ -565,6 +565,38 @@ describe('telling the previous owner', () => {
     expect((await t.h.call('GET', '/v1/team/notices', { bearer: 'not-a-token' })).status).toBe(401)
   })
 
+  it('a notice lasts 90 days, read or not, and the next hand-off in the team clears expired ones', async () => {
+    const t = await setup()
+    await t.transfer(t.admin, 'mia')
+    const count = () => (t.h.raw.prepare('SELECT COUNT(*) AS n FROM owner_transfer_notices').get() as { n: number }).n
+    // Sign-in tokens live minutes, so each look below is a fresh one.
+    const fresh = (user: string) => t.h.token(user, 'acme', 'sandbox', { orgRole: 'member' })
+    t.h.advance(90 * 24 * 60 * 60_000 - 60_000)
+    expect((await notices(t.h, await fresh('mallory'))).body.notices).toHaveLength(1)
+    t.h.advance(120_000)
+    // Past 90 days it is no longer served, though the row is still there until the next write.
+    expect((await notices(t.h, await fresh('mallory'))).body.notices).toEqual([])
+    expect(count()).toBe(1)
+    // Mia hands it on: her notice is written, Mallory's expired one is deleted.
+    expect((await t.transfer(await fresh('mia'), 'ada')).status).toBe(200)
+    expect(t.h.raw.prepare('SELECT user_id FROM owner_transfer_notices').all()).toEqual([{ user_id: 'mia' }])
+  })
+
+  it('removing a member keeps their notice; deleting the team removes every notice of that team only', async () => {
+    const t = await setup()
+    await t.transfer(t.admin, 'mia')
+    const count = (account: string) => (t.h.raw.prepare('SELECT COUNT(*) AS n FROM owner_transfer_notices WHERE account_id = ?').get(account) as { n: number }).n
+    t.h.raw.prepare("INSERT INTO owner_transfer_notices (id, account_id, user_id, sandbox_id, actor_user_id, new_owner_user_id, created_at) VALUES ('otn_other', 'org:globex', 'zed', 'sbx_x', 'a', 'b', ?)").run(t.h.now())
+    expect((await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: AUTH_TOKEN, body: { accountId: 'org:acme', userId: 'mallory' } })).status).toBe(200)
+    expect(count('org:acme')).toBe(1)
+    // A team can only be deleted once it has no workspaces.
+    expect((await t.h.call('DELETE', `/v1/sandboxes/${t.id}`, { bearer: t.mia })).status).toBe(200)
+    const purged = await t.h.call('POST', '/v1/internal/accounts/org:acme/secrets/purge', { bearer: AUTH_TOKEN, body: {} })
+    expect(purged.status).toBe(200)
+    expect(count('org:acme')).toBe(0)
+    expect(count('org:globex')).toBe(1)
+  })
+
   it('a previous owner who has left the team cannot be reached: said so to the admin and in the audit log', async () => {
     // Auth: Mia (the new owner) is in the team; Mallory (the previous owner) no longer is.
     const t = await setup({ teamMembership: async (_account, userId) => ({ member: userId !== 'mallory' }) })

@@ -2236,7 +2236,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     return fail('not_found', 404)
   }
   if (url.pathname === '/v1/team/notices') {
-    return request.method === 'GET' ? json(await listNotices(db, caller)) : fail('not_found', 404)
+    return request.method === 'GET' ? json(await listNotices(db, caller, now)) : fail('not_found', 404)
   }
   const noticeDismiss = /^\/v1\/team\/notices\/([A-Za-z0-9_]{1,64})\/dismiss$/.exec(url.pathname)
   if (noticeDismiss) {
