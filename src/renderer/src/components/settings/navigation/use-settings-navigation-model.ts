@@ -22,7 +22,7 @@ import { buildSettingsSearchResults } from './settings-search-results'
 import { getGeneralWorkspaceSearchDescriptors } from '../general/general-search'
 import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
 import { GENERAL_SUB_PAGE_ENTRY_ANCHORS } from '../general/general-setting-anchors'
-import { getGeneralSubPageTitle, type GeneralSubPage } from '../general/general-sub-pages'
+import { getGeneralSubPageTitle } from '../general/general-sub-pages'
 import { translate } from '@/i18n/i18n'
 
 export function useSettingsNavigationModel(
@@ -141,7 +141,7 @@ export function useSettingsNavigationModel(
       ...[...getGeneralWorkspaceSearchDescriptors(), ...getGeneralEditorSearchDescriptors()].map(
         (descriptor) => [descriptor.entry.title, descriptor.sectionId] as const
       ),
-      ...(Object.entries(GENERAL_SUB_PAGE_ENTRY_ANCHORS) as [GeneralSubPage, string][]).map(
+      ...GENERAL_SUB_PAGE_ENTRY_ANCHORS.map(
         ([page, anchor]) => [getGeneralSubPageTitle(page, translate), anchor] as const
       )
     ])

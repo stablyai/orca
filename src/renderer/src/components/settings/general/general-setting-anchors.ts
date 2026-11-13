@@ -30,12 +30,12 @@ export const GENERAL_SETTING_ANCHORS = {
 } as const
 
 // A search result for a General sub-page opens that page at this row.
-export const GENERAL_SUB_PAGE_ENTRY_ANCHORS: Readonly<Record<GeneralSubPage, string>> = {
-  folder: GENERAL_SETTING_ANCHORS.folder,
-  worktrees: GENERAL_SETTING_ANCHORS.worktrees,
-  'open-in': GENERAL_SETTING_ANCHORS.openIn,
-  editor: GENERAL_SETTING_ANCHORS.autoSaveDelay
-}
+export const GENERAL_SUB_PAGE_ENTRY_ANCHORS: readonly (readonly [GeneralSubPage, string])[] = [
+  ['folder', GENERAL_SETTING_ANCHORS.folder],
+  ['worktrees', GENERAL_SETTING_ANCHORS.worktrees],
+  ['open-in', GENERAL_SETTING_ANCHORS.openIn],
+  ['editor', GENERAL_SETTING_ANCHORS.autoSaveDelay]
+]
 
 export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | null>> = {
   [GENERAL_SETTING_ANCHORS.folder]: 'folder',

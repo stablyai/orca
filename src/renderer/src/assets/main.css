@@ -2173,7 +2173,7 @@ html.native-shell .app-layout {
 }
 
 /* Search and deep-link target: a tint out to the enclosing card's edges that fades.
-   The bleed vars are measured per target, since settings cards pad differently. */
+   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
 .settings-target-highlight {
   --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
   background: var(--settings-target-tint);
