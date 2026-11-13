@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { toastCloudSleepFailure } from '@/lib/orca-cloud/cloud-sleep-failure-toast'
 import { sleepPairedCloudSandboxes } from '@/lib/orca-cloud/paired-cloud-sleep'
+import { isPairedCloudWorkspace } from '@/lib/orca-cloud/paired-cloud-wake'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -86,8 +87,9 @@ export async function runSleepWorktrees(
   const pressedAt = Date.now()
   const ownedCloud = getCloudWorkspaceSnapshot().ids
   for (const id of worktreeIds) {
-    if (ownedCloud.has(id)) {
-      // Saving its read-only copy until the asleep view reads one back (SLEEP-IN-PROGRESS).
+    if (ownedCloud.has(id) || isPairedCloudWorkspace(id)) {
+      // Saving its read-only copy until the asleep view reads one back (SLEEP-IN-PROGRESS); a
+      // PAIRED one's is the sealed snapshot its sandbox hands the control plane as it sleeps.
       markSleepCopySaving(id, pressedAt)
     }
     notePredictiveWakeSlept(id)
@@ -115,6 +117,10 @@ export async function runSleepWorktrees(
     worktreeIds.filter((id) => !unslept.has(id))
   )
   const stillRunningIds = [...vmStillRunningIds, ...pairedStillRunning]
+  // The paired sandbox kept running: no sealed copy is coming either.
+  for (const id of pairedStillRunning) {
+    clearSleepCopySave(id)
+  }
   // An Orca Cloud sandbox left running gets the cloud copy (sandbox hours, Try again) instead.
   const cloudToasted = toastCloudSleepFailure(stillRunningIds, (ids) => void runSleepWorktrees(ids))
   toastSleepFailures(new Set(worktreeIds).size, errors, stillRunningIds.length > 0 && !cloudToasted)

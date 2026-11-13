@@ -14,6 +14,7 @@ import { CloudWorkspaceHeader } from '../CloudWorkspaceHeader'
 import { asOfParts } from './cloud-read-snapshot-format'
 import { CloudReadPrLink } from './CloudReadPrLink'
 import { CloudReadSessions } from './CloudReadSessions'
+import { CloudSleepCopyFailed, CloudSleepCopySaving } from '../offline/CloudSleepCopyState'
 
 export type CloudReadViewState =
   | { kind: 'loading' }
@@ -44,6 +45,11 @@ export type CloudReadSnapshotViewProps = {
   headingRef?: React.Ref<HTMLHeadingElement>
   /** Linux names the keyring to set up; defaults to this renderer's platform. */
   linux?: boolean
+  /**
+   * SLEEP-IN-PROGRESS (paired): Sleep was pressed here and its sealed copy is still being saved, or
+   * never arrived. Either replaces the copy and every empty state; saving has no Wake yet.
+   */
+  copySave?: 'saving' | 'failed' | null
 }
 
 export type CloudReadWake =
@@ -140,6 +146,10 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
     ? t('orcaCloudWorkspace.state.waking', 'Waking')
     : t('components.orcaCloud.read.asleep', 'Asleep')
   const linux = props.linux ?? isLinuxUserAgent()
+  const saving = props.copySave === 'saving'
+  const copyFailed = !saving && props.copySave === 'failed'
+  // The copy's own lines (and its empty states) only once a copy is known to be in.
+  const body = saving || copyFailed ? null : state.kind
   return (
     <section
       className="flex min-h-0 w-full flex-col gap-5"
@@ -151,39 +161,47 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
         title={props.title}
         state={waking ? 'waking' : 'sleeping'}
         stateLine={
-          asOf
-            ? t('components.orcaCloud.read.stateAsOf', '{{state}} · As of {{when}}', {
-                state: lifecycle,
-                when: asOf.relative
-              })
-            : lifecycle
+          saving
+            ? t(
+                'components.orcaCloud.offline.copySaving.state',
+                'Going to sleep · Saving a read-only copy…'
+              )
+            : asOf && !copyFailed
+              ? t('components.orcaCloud.read.stateAsOf', '{{state}} · As of {{when}}', {
+                  state: lifecycle,
+                  when: asOf.relative
+                })
+              : lifecycle
         }
         stateTitle={asOf?.absolute}
         note={
-          state.kind === 'ready'
+          body === 'ready'
             ? t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
             : undefined
         }
         headingRef={props.headingRef}
         action={
-          <Button
-            size="sm"
-            onClick={waking ? undefined : props.onWake}
-            aria-disabled={waking ? true : undefined}
-            aria-busy={waking ? true : undefined}
-            className="aria-disabled:pointer-events-none"
-          >
-            {waking ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : <Play />}
-            {waking ? (
-              <span className="tabular-nums">
-                {t('components.orcaCloud.read.wakingElapsed', 'Waking… {{elapsed}}', {
-                  elapsed: formatElapsedTime(elapsedMs)
-                })}
-              </span>
-            ) : (
-              t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')
-            )}
-          </Button>
+          // Still saving its copy: not asleep yet, so no Wake to continue beside the spinner.
+          saving ? undefined : (
+            <Button
+              size="sm"
+              onClick={waking ? undefined : props.onWake}
+              aria-disabled={waking ? true : undefined}
+              aria-busy={waking ? true : undefined}
+              className="aria-disabled:pointer-events-none"
+            >
+              {waking ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : <Play />}
+              {waking ? (
+                <span className="tabular-nums">
+                  {t('components.orcaCloud.read.wakingElapsed', 'Waking… {{elapsed}}', {
+                    elapsed: formatElapsedTime(elapsedMs)
+                  })}
+                </span>
+              ) : (
+                t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')
+              )}
+            </Button>
+          )
         }
       />
       {/* Announced once when the wake crosses the slow mark (the text changes only then). */}
@@ -218,9 +236,13 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           onRetry={props.onWake}
         />
       ) : null}
-      {state.kind === 'loading' ? <LoadingBody /> : null}
-      {state.kind === 'ready' ? <ReadyBody snapshot={state.snapshot} now={now} /> : null}
-      {state.kind === 'no_snapshot' ? (
+      {saving ? <CloudSleepCopySaving /> : null}
+      {copyFailed ? <CloudSleepCopyFailed /> : null}
+      {body === 'loading' ? <LoadingBody /> : null}
+      {state.kind === 'ready' && body === 'ready' ? (
+        <ReadyBody snapshot={state.snapshot} now={now} />
+      ) : null}
+      {body === 'no_snapshot' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -229,7 +251,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           )}
         />
       ) : null}
-      {state.kind === 'not_sealed_for_key' ? (
+      {body === 'not_sealed_for_key' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -238,7 +260,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           )}
         />
       ) : null}
-      {state.kind === 'stale' ? (
+      {body === 'stale' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -247,7 +269,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           )}
         />
       ) : null}
-      {state.kind === 'unverified' ? (
+      {body === 'unverified' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -256,7 +278,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           )}
         />
       ) : null}
-      {state.kind === 'signer_changed' ? (
+      {body === 'signer_changed' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -265,7 +287,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           )}
         />
       ) : null}
-      {state.kind === 'not_found' ? (
+      {body === 'not_found' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -274,7 +296,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           )}
         />
       ) : null}
-      {state.kind === 'unavailable' ? (
+      {body === 'unavailable' ? (
         <InlineError
           tone="neutral"
           title={t(
@@ -291,7 +313,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           }
         />
       ) : null}
-      {state.kind === 'error' ? (
+      {state.kind === 'error' && body === 'error' ? (
         <InlineError
           title={state.message}
           retryLabel={t('components.orcaCloud.read.tryAgain', 'Try again')}
