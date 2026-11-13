@@ -34,6 +34,10 @@ vi.mock('../providers/muse/muse-usage-fetcher', () => ({
   fetchMuseRateLimits: vi.fn()
 }))
 
+vi.mock('../providers/kiro/kiro-fetcher', () => ({
+  fetchKiroRateLimits: vi.fn()
+}))
+
 vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))

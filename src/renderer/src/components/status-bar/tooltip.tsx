@@ -6,7 +6,7 @@ import {
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, useIntlLocale } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderDisplayName,
@@ -100,6 +100,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'zcode') {
     return <AgentIcon agent="zcode" size={13} />
+  }
+  if (provider === 'kiro') {
+    return <AgentIcon agent="kiro" size={13} />
   }
   if (provider === 'muse') {
     return <AgentIcon agent="muse" size={13} />
@@ -234,6 +237,7 @@ export function ProviderPanel({
   embedded?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const windowSections = p ? getWindowSections(p, t) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
@@ -315,6 +319,18 @@ export function ProviderPanel({
             {name}
           </div>
           <div className={faintClass}>{updatedAgo}</div>
+          {p.usageAmount ? (
+            <div className={mutedClass}>
+              {t(
+                'auto.components.status.bar.tooltip.kiroCreditUsage',
+                '{{used}} / {{limit}} credits',
+                {
+                  used: p.usageAmount.used.toLocaleString(locale),
+                  limit: p.usageAmount.limit.toLocaleString(locale)
+                }
+              )}
+            </div>
+          ) : null}
           {resetCreditCount !== null && resetCreditCount !== undefined ? (
             <div className={mutedClass}>
               {t(

@@ -859,6 +859,14 @@
           "imported_other": "Imported {{value0}} themes",
           "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new theme and try again.",
           "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "appearance": {
+          "search": {
+            "kiroUsageTitle": "Kiro usage",
+            "kiroUsageDescription": "Show Kiro monthly credit usage in the status bar.",
+            "kiro": "kiro",
+            "credits": "credits"
+          }
         }
       },
       "sidebar": {
@@ -1180,7 +1188,8 @@
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
-            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
+            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
+            "kiroUsageMenu": "Kiro Usage"
           },
           "WorkspaceSpaceManagerPanel": {
             "removedFromSpace_one": "{{count}} workspace removed from Space.",
@@ -1202,7 +1211,8 @@
           },
           "tooltip": {
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available"
+            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "kiroCreditUsage": "{{used}} / {{limit}} credits"
           },
           "workspaceSpaceDecision": {
             "activeAgents_one": "{{count}} active agent",
@@ -2459,6 +2469,11 @@
         "passphraseRequired": "Cannot parse privateKey: Encrypted private OpenSSH key detected, but no passphrase given",
         "permissionDenied": "Permission denied",
         "permissionDeniedPublickey": "Permission denied (publickey)"
+      }
+    },
+    "appearance": {
+      "statusBar": {
+        "kiroToggleDescription": "Show Kiro monthly credit usage from the Kiro CLI."
       }
     }
   },

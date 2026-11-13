@@ -62,6 +62,7 @@ export type ZcodePlanResolvedConfig = {
 export type GeminiCliOAuthEnabledResolver = () => boolean
 
 export type AntigravityUsageEnabledResolver = () => boolean
+export type KiroUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
@@ -111,6 +112,7 @@ export type InternalRateLimitState = {
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
   muse: ProviderRateLimits | null
+  kiro: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

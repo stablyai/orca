@@ -35,7 +35,12 @@ export type OwnerUsageState =
 export type OwnerUsageFailureReason = 'unreachable' | 'usage-not-published'
 
 type UsageProviderKey = {
-  [K in keyof RateLimitState]-?: RateLimitState[K] extends ProviderRateLimits | null ? K : never
+  [K in keyof RateLimitState]-?: Exclude<
+    RateLimitState[K],
+    undefined
+  > extends ProviderRateLimits | null
+    ? K
+    : never
 }[keyof RateLimitState]
 
 // Why a Record: a new provider is a compile error here, not a silent leak of local numbers.
@@ -50,6 +55,7 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   grok: 'grok',
   cursor: 'cursor',
   zcode: 'zcode',
+  kiro: 'kiro',
   muse: 'muse'
 }
 
@@ -134,6 +140,7 @@ const NOT_SET_UP_NEEDS_REASON: ReadonlySet<UsageProviderKey> = new Set([
   'zcode',
   'cursor',
   'antigravity',
+  'kiro',
   'muse'
 ])
 
@@ -204,7 +211,7 @@ function addNotSetUpPlaceholders(
     ...mapProviders((key) => {
       const ownerNotSetUp = describePlaceholder(local, remote, key, ownerLabel)
       if (!ownerNotSetUp) {
-        return remote[key]
+        return remote[key] ?? null
       }
       return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp), {
         ownerNotSetUp
@@ -253,7 +260,7 @@ export function resolveOwnerUsageRateLimits(
           !isProviderConfigured(provider) &&
           !hasUsageData(provider))
       ) {
-        return provider
+        return provider ?? null
       }
       return stamp(key)
     })

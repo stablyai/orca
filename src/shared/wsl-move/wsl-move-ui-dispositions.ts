@@ -189,6 +189,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_kimiStatusBarDefaultAdded',
   '_minimaxStatusBarDefaultAdded',
   '_museStatusBarDefaultAdded',
+  '_kiroStatusBarDefaultAdded',
   '_portsStatusBarDefaultAdded',
   '_sortBySmartMigrated',
   '_workspaceStatusesDefaultOrderMigrated',

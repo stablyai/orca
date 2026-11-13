@@ -18,6 +18,7 @@ import {
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
   type MuseUsageEnabledResolver,
+  type KiroUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   DEFAULT_POLL_MS
@@ -40,7 +41,8 @@ export abstract class RateLimitServiceState {
     grok: null,
     cursor: null,
     zcode: null,
-    muse: null
+    muse: null,
+    kiro: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
@@ -61,7 +63,8 @@ export abstract class RateLimitServiceState {
     antigravity: 0,
     cursor: 0,
     zcode: 0,
-    muse: 0
+    muse: 0,
+    kiro: 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -75,7 +78,8 @@ export abstract class RateLimitServiceState {
     antigravity: 0,
     cursor: 0,
     zcode: 0,
-    muse: 0
+    muse: 0,
+    kiro: 0
   }
   protected mainWindow: BrowserWindow | null = null
   /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */
@@ -126,6 +130,7 @@ export abstract class RateLimitServiceState {
   protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
   protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null
   protected antigravityAccounts: AntigravityAccountUsage[] = []
+  protected kiroUsageEnabledResolver: KiroUsageEnabledResolver | null = null
   protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccount[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null

@@ -29,6 +29,7 @@ const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   grok: 'Grok',
   zcode: 'ZCode',
   cursor: 'Cursor',
+  kiro: 'Kiro',
   muse: 'Muse'
 } satisfies Record<ProviderRateLimits['provider'], string>
 
