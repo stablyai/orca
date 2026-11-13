@@ -1,4 +1,4 @@
-import { AutomationCanonicalLaunchSetup } from '../rpc-contract/automation-params'
+import { AutomationCanonicalLaunchSetup } from '../rpc-contract/automations/automation-params'
 import { automationCanonicalDefinition } from '../automations/launch/automation-launch-setup'
 import { assertAutomationExtraAgentArgs } from '../automations/launch/automation-extra-agent-args-record'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'

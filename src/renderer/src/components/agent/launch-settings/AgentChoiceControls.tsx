@@ -22,7 +22,7 @@ import {
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
-import { legacyAgentModelIds } from '../../../../../shared/legacy-agent-models'
+import { classifyAgentModels } from '../../../../../shared/legacy-agent-models'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -102,10 +102,12 @@ export function AgentChoiceFields({
         })
       : undefined
   const effort = menu?.descriptors.find(({ id }) => id === 'effort')
-  const listedModels = live
-    ? (menu?.rows ?? agentPickerModels(live)).filter((row) => !('hidden' in row && row.hidden))
-    : (catalog?.models ?? [])
-  const legacyModels = legacyAgentModelIds(agent, listedModels)
+  const inventory = live ? (menu?.rows ?? agentPickerModels(live)) : (catalog?.models ?? [])
+  const classes = classifyAgentModels(agent, inventory)
+  // A hidden row stays listed while it is the saved choice.
+  const listedModels = inventory.filter(
+    ({ id }) => !classes.hidden.has(id) || id === selected?.model
+  )
   const unlistedModel =
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
       ? selected.model
@@ -153,7 +155,7 @@ export function AgentChoiceFields({
             ...listedModels.map(({ id, label }) => ({
               value: id,
               label,
-              legacy: legacyModels.has(id)
+              legacy: classes.legacy.has(id)
             })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
           ]}

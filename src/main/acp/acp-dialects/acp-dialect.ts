@@ -185,6 +185,8 @@ export type AcpDialect = {
     text(value: string): string
     reply(text: string): AcpModelCommandReply
   }
+  /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
+  linksFileMentions?: true
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */

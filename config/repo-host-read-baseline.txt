@@ -2,7 +2,7 @@
 # This is a RATCHET: counts may only go DOWN. Resolve the host instead (see fix text).
 # A lower bound: destructured and differently named rows are not counted.
 # Prune after a fix: pnpm check:repo-host-read-ratchet --prune
-1 src/main/github/account-binding-required-host.ts
+1 src/main/github/accounts/account-binding-required-host.ts
 3 src/main/ipc/ephemeral-vm-recipe-context.ts
 2 src/main/ipc/filesystem/filesystem-source-control-ai-targets.ts
 1 src/main/ipc/folder-repo-git-upgrade.ts
@@ -46,8 +46,8 @@
 1 src/main/workspaces/space-analysis/workspace-space-worktree-row.ts
 1 src/shared/endpoint-catalog-adoption.ts
 1 src/shared/folder-workspaces/folder-workspace-execution-host.ts
-1 src/shared/github/github-cache-key.ts
+1 src/shared/github/cache/github-cache-key.ts
 1 src/shared/new-workspace-dialog-repo.ts
 1 src/shared/sidebar-list/workspace-review-facts.ts
 1 src/shared/workspace-session/workspace-session-terminal-buffers.ts
-1 src/shared/worktree/ownership.ts
+1 src/shared/worktree/visibility/ownership.ts

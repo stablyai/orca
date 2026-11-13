@@ -1,8 +1,8 @@
 import { isAbsolute, resolve } from 'node:path'
-import type { HandlerContext } from '../dispatch'
-import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime/types'
-import { writeStdoutLine } from '../stdout-line'
+import { writeStdoutLine } from '../output/stdout-line'
 
 /** One `{ ok, result }` object on stdout for --json; plain text otherwise. */
 export function printPluginResult(ctx: HandlerContext, result: unknown, text: string): void {

@@ -21,10 +21,10 @@ import type {
   WorkspaceLineageEdge,
   WorktreeLineage
 } from '../worktree/lineage-types'
-import { folderLineageEdgeOf } from '../worktree/folder-lineage-parents'
-import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
+import { folderLineageEdgeOf } from '../worktree/lineage/folder-lineage-parents'
+import { isCrossStoreWorkspaceLineage } from '../worktree/lineage/cross-store-lineage-records'
 import type { Worktree } from '../worktree/types'
-import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
+import { getWorkspaceRowKindFacts } from '../worktree/visibility/workspace-kinds'
 import { SMART_TIERS } from './sort-stamps'
 
 /** A row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */
@@ -71,6 +71,9 @@ export const WorkspaceRowSchema = z.object({
   workspaceLineage: WorkspaceLineageEdgeSchema,
   isPinned: z.boolean(),
   isArchived: z.boolean(),
+  removing: z.literal(true).optional(),
+  removalRecorded: z.literal(true).optional(),
+  removalError: z.string().optional(),
   isUnread: z.boolean(),
   workspaceStatus: z.string(),
   comment: z.string(),
@@ -144,6 +147,9 @@ function toWorkspaceRow(
     ...(workspaceLineage !== undefined ? { workspaceLineage } : {}),
     isPinned: worktree.isPinned,
     isArchived: worktree.isArchived,
+    ...(worktree.removing ? { removing: true } : {}),
+    ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
+    ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
     isUnread: worktree.isUnread,
     workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     comment: worktree.comment,

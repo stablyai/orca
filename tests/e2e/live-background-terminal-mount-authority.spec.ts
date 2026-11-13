@@ -13,7 +13,7 @@ import {
   installTerminalPtyWriteSpy,
   readTerminalPtyWriteEntries
 } from './helpers/terminal-pty-write-spy'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type {
   RuntimeStatus,
   RuntimeTerminalCreate,

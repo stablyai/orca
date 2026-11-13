@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -13,7 +14,7 @@ import {
 import {
   lineageStoreKeyOfRow,
   OWN_LINEAGE_STORE_KEY
-} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+} from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
@@ -59,7 +60,7 @@ export function worktreeParentPlacementFor({
   const isCrossStoreParent = crossStoreParentEligibility(child, parentIdentities)
   const closesLoop = closesResolvedLoop(child, worktrees, parentIdentities)
   return (candidate) => {
-    if (closesLoop(candidate)) {
+    if (isWorktreeRetiredByRemoval(candidate) || closesLoop(candidate)) {
       return null
     }
     if (
@@ -126,6 +127,7 @@ function crossStoreParentEligibility(
       store !== undefined &&
       store !== childStore &&
       !candidate.isArchived &&
+      !isWorktreeRetiredByRemoval(candidate) &&
       Boolean(candidate.instanceId) &&
       getWorktreeHostIdentity(candidate) !== currentParent
     )
@@ -179,6 +181,7 @@ export function isEligibleWorktreeParent({
     childHostId !== null &&
     getWorktreeOwnerHostId(candidateParent, repoMap) === childHostId &&
     !candidateParent.isArchived &&
+    !isWorktreeRetiredByRemoval(candidateParent) &&
     canAssignWorktreeParent({
       child,
       candidateParent,

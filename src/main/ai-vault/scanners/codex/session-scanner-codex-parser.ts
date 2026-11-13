@@ -1,9 +1,9 @@
 import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   isZstdTranscriptPath,
   zstdTranscriptStream
-} from '../../../native-chat/transcript-zstd-decompression'
+} from '../../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import { createInterface } from 'node:readline'
 import type {
   AiVaultSession,

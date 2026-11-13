@@ -3,19 +3,19 @@ import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
-import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage-row-identity'
+import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage/lineage-row-identity'
 import {
   supportsCrossStoreLineage,
   WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalParentSelector } from '../workspace-selection/caller-folder-workspace'
-import { getOptionalStringFlag } from '../flags'
+import { getOptionalStringFlag } from '../arguments/flags'
 import { mayNameFolderWorkspace } from '../workspace-selection/folder-workspace-selector'
 import { isLocalEnvironmentSelector, LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import { describeClientEnvironment, environmentLabel } from './workspace-address'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 

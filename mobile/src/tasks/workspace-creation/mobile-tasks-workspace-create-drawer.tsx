@@ -1,3 +1,4 @@
+import { branchRefLabel } from '../../../../src/shared/git/refs/branch-ref-label'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text } from 'react-native'
@@ -146,12 +147,14 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                   key="startFrom"
                   title={translate('tasks.workspaceCreateDrawer.startFrom', 'Start from')}
                   value={
-                    workspaceBaseBranch?.refName ??
+                    (workspaceBaseBranch ? branchRefLabel(workspaceBaseBranch.refName) : null) ??
                     translate('tasks.workspaceCreateDrawer.defaultBranch', 'Default branch')
                   }
                   navigates
                   onPress={() => {
-                    setWorkspaceBaseBranchQuery(workspaceBaseBranch?.refName ?? '')
+                    setWorkspaceBaseBranchQuery(
+                      workspaceBaseBranch ? branchRefLabel(workspaceBaseBranch.refName) : ''
+                    )
                     setShowWorkspaceBaseBranchPicker(true)
                   }}
                 />

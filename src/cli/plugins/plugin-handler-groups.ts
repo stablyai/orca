@@ -1,4 +1,4 @@
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 // Authoring runs offline; runtime commands reach the Orca host. Split so authoring never loads the RPC graph.
 export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [

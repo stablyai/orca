@@ -1,5 +1,5 @@
 import { webContents } from 'electron'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
 import {
   focusGuardUnavailableError,

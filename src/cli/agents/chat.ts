@@ -1,6 +1,6 @@
-import type { CommandHandler } from '../dispatch'
-import { getPresentStringFlag, getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getPresentStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 

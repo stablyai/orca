@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 import { LINEAR_MCP_COMMAND_SPECS } from './linear-mcp'
 
 export const LINEAR_COMMAND_SPECS: CommandSpec[] = [

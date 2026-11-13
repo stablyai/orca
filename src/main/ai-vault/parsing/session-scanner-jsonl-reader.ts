@@ -3,11 +3,11 @@ import {
   waitForAiVaultScan
 } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import type { Hash } from 'node:crypto'
-import { openTranscriptReadStream } from '../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   isZstdTranscriptPath,
   zstdTranscriptStream
-} from '../../native-chat/transcript-zstd-decompression'
+} from '../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord

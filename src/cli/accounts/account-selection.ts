@@ -1,5 +1,5 @@
-import type { HandlerContext } from '../dispatch'
-import { printResult } from '../command-result-output'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type {

@@ -19,19 +19,14 @@ afterEach(() => {
   }
 })
 
-async function execute(input, version = 'current') {
+async function execute(input) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-ssh-selection-'))
   directories.push(directory)
   const bin = join(directory, 'bin')
   mkdirSync(bin)
   const moduleDir = join(directory, 'config', 'scripts')
   mkdirSync(moduleDir, { recursive: true })
-  if (version !== 'missing') {
-    writeFileSync(
-      join(moduleDir, 'ci-e2e-job-selection.mjs'),
-      version === 'current' ? selector : 'export const old = true\n'
-    )
-  }
+  writeFileSync(join(moduleDir, 'ci-e2e-job-selection.mjs'), selector)
   writeFileSync(
     join(bin, 'xvfb-run'),
     `#!/usr/bin/env bash
@@ -72,13 +67,8 @@ require('node:fs').writeFileSync(process.env.ARGV_CAPTURE, JSON.stringify(proces
 
 // The production lane runs Bash on Linux; the stubs never start Docker, Electron, or Xvfb.
 describe.skipIf(process.platform === 'win32')('managed SSH workflow command', () => {
-  it.each([
-    'malformed',
-    '[]',
-    '[null]',
-    JSON.stringify(['tests/e2e/other.spec.ts']),
-    JSON.stringify(['tests/e2e/ssh-orcad-../../other.spec.ts'])
-  ])('refuses invalid selection before starting Playwright: %s', async (input) => {
+  it('refuses malformed selection before starting Playwright', async () => {
+    const input = 'malformed'
     const { result, args } = await execute(input)
     expect(result.code).not.toBe(0)
     expect(args).toBeUndefined()

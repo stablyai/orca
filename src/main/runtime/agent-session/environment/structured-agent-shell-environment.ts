@@ -2,7 +2,7 @@ import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog
 import {
   loginShellEnvironmentRevision,
   resolveLoginShellEnvironment
-} from '../../../startup/login-shell-environment'
+} from '../../../startup/shell-environment/login-shell-environment'
 import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   cachedPersistedWindowsPathSegments,

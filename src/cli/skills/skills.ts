@@ -1,5 +1,5 @@
-import type { CommandHandler } from '../dispatch'
-import { writeStdoutLine } from '../stdout-line'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { writeStdoutLine } from '../output/stdout-line'
 import { loadCanonicalGuides } from './bundled-skill-guide-table'
 import { SKILL_GUIDE_GET_HANDLER } from './skill-guide-get'
 import { createSkillMutationHandler } from './bundled-skill-install-command'

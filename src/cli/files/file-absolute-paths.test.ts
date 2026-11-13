@@ -14,7 +14,7 @@ vi.mock('../runtime/client', () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures } from '../test-fixtures'
+import { buildWorktree, okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('absolute file CLI paths', () => {
   beforeEach(() => {

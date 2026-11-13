@@ -1,7 +1,7 @@
 import {
   pickApprovedSetupHashes,
   type ApprovedSetupHashes
-} from '../../../../../../shared/worktree/approved-setup-hashes'
+} from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import './launch-work-item-direct-preflight'

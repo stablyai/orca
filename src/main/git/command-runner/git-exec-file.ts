@@ -3,11 +3,11 @@ import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
+import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-race'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
-import type { GitExecOptions } from './git-exec-options'
+import type { GitBufferExecOptions, GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
@@ -20,7 +20,7 @@ import {
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
-import { acquireGitAdmission } from './admission/git-subprocess-admission'
+import { acquireGitAdmission, releaseGitAdmissionAfter } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
@@ -30,6 +30,7 @@ import { createAbortError } from './process-capture/abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
+import { trackGitRefMutation } from './git-ref-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
 import { gitRunsIn } from './host-routing/git-runs-in'
 
@@ -74,6 +75,7 @@ async function gitExecFileAsyncUnlocked(
             cwd: options.cwd,
             wslDistro: options.wslDistro,
             tier: options.admissionTier,
+            admissionClass: options.admissionClass,
             signal: options.admissionSignal ?? options.signal
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
@@ -162,13 +164,17 @@ async function gitExecFileAsyncUnlocked(
           throw createAbortError()
         }
         return await runCapturedCommand()
+      } catch (error) {
+        return await retryGitFetchRefRace(
+          args,
+          error,
+          runCapturedCommand,
+          () => terminationState.current,
+          options.signal,
+          options.canStart
+        )
       } finally {
-        const termination = terminationState.current
-        if (termination) {
-          void termination.then(grant.release)
-        } else {
-          grant.release()
-        }
+        releaseGitAdmissionAfter(terminationState.current, grant)
       }
     }
   )
@@ -184,12 +190,10 @@ function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unkn
   return error
 }
 
-export function gitExecFileAsync(
-  args: string[],
-  callerOptions: GitExecOptions
-): Promise<{ stdout: string; stderr: string }> {
+export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) {
   const options = routeLocalGitOptions(callerOptions)
   const releaseMutation = trackGitWorktreeMutation(args, options)
+  const releaseRefMutation = trackGitRefMutation(args)
   const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
   // Missing folders start no child and must not record a git.exec span.
@@ -209,26 +213,17 @@ export function gitExecFileAsync(
     // A timed-out caller can settle before its child exits.
     if (terminationState.current) {
       void terminationState.current.then(releaseMutation)
+      void terminationState.current.then(releaseRefMutation)
     } else {
       releaseMutation()
+      releaseRefMutation()
     }
   })
 }
 
 async function gitExecFileAsyncBufferInSpan(
   args: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    timeout?: number
-    timeoutMsForTest?: number
-    env?: NodeJS.ProcessEnv
-    wslDistro?: string
-    preferWslDirectGit?: boolean
-    admissionTier?: GitAdmissionTier
-    signal?: AbortSignal
-    stdin?: string
-  }
+  options: GitBufferExecOptions
 ): Promise<{ stdout: Buffer }> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
@@ -281,11 +276,7 @@ async function gitExecFileAsyncBufferInSpan(
       }
       return { stdout: readCapturedGitBuffer(stdout, resolved) }
     } finally {
-      if (termination) {
-        void termination.then(grant.release)
-      } else {
-        grant.release()
-      }
+      releaseGitAdmissionAfter(termination, grant)
     }
   })
 }

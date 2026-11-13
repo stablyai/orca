@@ -7,7 +7,7 @@ import {
   resumeInvocationFromOptions,
   sessionFileResumeTargetMatches,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 // Chats and terminals share Copilot's session store; `--resume` also takes ID prefixes.
 const COPILOT_SESSION_HISTORY: StructuredAgentSessionHistory = {

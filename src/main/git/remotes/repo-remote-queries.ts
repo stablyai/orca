@@ -1,3 +1,4 @@
+import { snapshotRemoteNames } from '../refs/snapshot/branch-ref-snapshot'
 import { parseGitRevListAheadBehindCounts } from '../../../shared/git/refs/git-rev-list-output'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 import { getRemoteFileTarget } from './repo-remote-file-target'
@@ -72,18 +73,13 @@ export async function getRecentDriftSubjects(
   }
 }
 
-function parseRemoteCount(stdout: string): number {
-  return stdout.split('\n').filter((line) => line.trim().length > 0).length
-}
-
 /** Count configured remotes; zero means either none or unavailable. */
 export async function getRemoteCount(
   path: string,
   options: LocalGitExecOptions = {}
 ): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
-    return parseRemoteCount(stdout)
+    return (await snapshotRemoteNames(path, options)).length
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })
     return 0
@@ -118,11 +114,7 @@ export async function getDefaultRemote(
   try {
     let remotes = knownRemoteNames
     if (remotes === undefined) {
-      const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
-      remotes = stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
+      remotes = await snapshotRemoteNames(path, options)
     }
     if (remotes.includes('origin')) {
       return 'origin'
