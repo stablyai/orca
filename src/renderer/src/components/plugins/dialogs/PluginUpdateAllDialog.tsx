@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugin-host-api'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

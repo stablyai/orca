@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
-import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
+import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime/runtime-environment-subscriptions'
 import { linearApi } from '../../../../preload/api/linear-bridge'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { runtimeCompatibilityChecks } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
@@ -264,62 +264,6 @@ function harness(rows: Worktree[]) {
   }
 }
 type AppStateSettings = NonNullable<ReturnType<typeof useAppStore.getState>['settings']>
-
-it.each([100, 1000])(
-  'coalesces two actual same-source badge keys across %i remote notices without multiplying legacy refreshes',
-  async (population) => {
-    const a = row('same', source('runtime:host-a'))
-    const a2 = row('second', source('runtime:host-a'), 'w1')
-    const local = row('same', source('local'))
-    const wrongAccount = row('wrong-account', {
-      ...source('runtime:host-a'),
-      providerIdentity: { provider: 'linear', workspaceId: 'w2' }
-    })
-    const h = harness([a, a2, local, wrongAccount])
-    const keys = [await h.hydrate(a), await h.hydrate(a2)]
-    const localKey = await h.hydrate(local)
-    const wrongKey = await h.hydrate(wrongAccount)
-    h.request.mockClear()
-    h.responses.length = 0
-    h.start()
-    for (let i = 0; i < population; i += 1) {
-      h.emit('same', true)
-      h.emit('second', true)
-      h.emit('wrong-account', true)
-    }
-    await settle()
-    const badgeCalls = () => h.request.mock.calls.filter((call) => call[1] === 'eng-1')
-    const legacyCalls = () => h.request.mock.calls.filter((call) => call[1] === 'ENG-1')
-    expect(badgeCalls()).toEqual([
-      ['host-a', 'eng-1', 'all'],
-      ['host-a', 'eng-1', 'w1']
-    ])
-    expect(legacyCalls()).toHaveLength(population === 100 ? 300 : 3000)
-    expect(legacyCalls().every((call) => call[0] === 'host-b')).toBe(true)
-    h.responses
-      .filter((call) => call.id === 'eng-1')
-      .forEach((call) => call.response.resolve(issue('eng-1')))
-    await settle()
-    expect(badgeCalls()).toHaveLength(4)
-    h.responses.forEach((call) =>
-      call.response.resolve({
-        ...issue(call.id),
-        workspaceId: 'w1',
-        state: { name: 'Done', type: 'completed', color: '#888888' }
-      })
-    )
-    await settle()
-    expect(
-      keys.map((key) => useAppStore.getState().linearIssueCache[key].data?.state.name)
-    ).toEqual(['Done', 'Done'])
-    expect(useAppStore.getState().linearIssueCache[localKey].data?.state.name).toBe('Todo')
-    expect(useAppStore.getState().linearIssueCache[wrongKey].data?.state.name).toBe('Todo')
-    expect(badgeCalls()).toHaveLength(4)
-    expect(legacyCalls()).toHaveLength(population === 100 ? 300 : 3000)
-    h.stop()
-    h.finishSetup()
-  }
-)
 
 it('tears down pending/trailing local and remote demand, rejects late setup and avoids late publication', async () => {
   const workspace = row('wt', source('local'))

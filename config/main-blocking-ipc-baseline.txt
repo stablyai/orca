@@ -6,4 +6,4 @@
 1 src/preload/api/app-bridge.ts
 1 src/preload/api/native-chat-bridge.ts
 1 src/preload/api/settings-bridge.ts
-1 src/preload/native-chat-visual-guest-theme.ts
+1 src/preload/native-chat/native-chat-visual-guest-theme.ts
