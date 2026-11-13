@@ -24,7 +24,8 @@ import { cloudSetupStripActions } from './cloud-setup-strip-actions'
 import {
   cloudRenewInPlaceActions,
   cloudRenewInPlaceModel,
-  openOrcaCloudAccountsSettings
+  openOrcaCloudAccountsSettings,
+  renewInPlaceRunning
 } from './cloud-renew-in-place'
 
 export type CloudHeldStrip = {
@@ -176,7 +177,9 @@ export function useCloudHeldStrip(
       : gateOrRecovery)
   // A held chat's strip has nothing to cancel unless a setup is running: no × (Escape is a no-op).
   const shownModel =
-    chat && hold && !((setupHold || renewing) && setupRunning) ? { ...model, noClose: true } : model
+    chat && hold && !((setupHold && setupRunning) || (renewing && renewInPlaceRunning(setup)))
+      ? { ...model, noClose: true }
+      : model
   return {
     key,
     active,
