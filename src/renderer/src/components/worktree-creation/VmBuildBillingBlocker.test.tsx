@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  OrcaBillingDenyReason,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
@@ -47,7 +48,7 @@ function renderBlocker(
     canManageBilling?: boolean
     capCents?: number
     offers?: boolean
-    reason?: string | null
+    reason?: OrcaBillingDenyReason | null
   } = {}
 ): {
   onContinue: ReturnType<typeof vi.fn>
@@ -64,7 +65,7 @@ function renderBlocker(
         ...sampleTeam,
         offers: offers ? sampleTeam.offers : null,
         overage: { ...sampleTeam.overage, spendCapCents: capCents },
-        ...(reason !== undefined ? { reason: reason as never } : {})
+        ...(reason !== undefined ? { reason } : {})
       }}
       onContinue={onContinue}
       onBackToDraft={onBackToDraft}

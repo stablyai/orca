@@ -48,7 +48,10 @@ function planBlockBody(
         'worktreeCreation.billingBlock.plan.bodyNoPlan',
         'Your team doesn’t have a plan yet.'
       )
+    case null:
+    case undefined:
     default:
+      // Missing (older service) or a reason this build doesn't know.
       return t(
         'worktreeCreation.billingBlock.plan.bodyNeedsPlan',
         'Your team needs a plan to use Orca Cloud.'
