@@ -34,15 +34,14 @@ export function WorkspaceCleanupConfirmStopAgents({
               <Bot className="size-4" />
             </div>
             <div className="min-w-0">
-              <DialogTitle>
-                {count === 1
-                  ? t(
-                      'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
-                      'Stop this agent?'
-                    )
-                  : t('components.workspace.cleanup.stopAgents.titleMany', 'Stop these agents?')}
-              </DialogTitle>
+              <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
               <DialogDescription className="mt-1.5">
+                <span className="block">
+                  {t('components.workspace.cleanup.browse.workspaceCount', '{{count}} workspaces', {
+                    count,
+                    defaultValue_one: '{{count}} workspace'
+                  })}
+                </span>
                 {count === 1
                   ? t(
                       'components.workspace.cleanup.stopAgents.descriptionOne',
@@ -97,9 +96,7 @@ export function WorkspaceCleanupConfirmStopAgents({
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
             <Trash2 className="size-4" />
-            {count === 1
-              ? t('components.workspace.cleanup.stopAgents.confirmOne', 'Stop agent and delete')
-              : t('components.workspace.cleanup.stopAgents.confirm', 'Stop agents and delete')}
+            {t('common.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </div>

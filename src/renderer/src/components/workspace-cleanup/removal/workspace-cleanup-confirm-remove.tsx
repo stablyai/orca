@@ -84,13 +84,17 @@ export function WorkspaceCleanupConfirmRemove({
                     'Deleting {{count}} workspaces',
                     { count, defaultValue_one: 'Deleting {{count}} workspace' }
                   )
-                : t(
-                    'components.workspace.cleanup.confirm.deleteTitle',
-                    'Delete {{count}} workspaces?',
-                    { count, defaultValue_one: 'Delete {{count}} workspace?' }
-                  )}
+                : t('common.delete', 'Delete')}
             </DialogTitle>
             <DialogDescription className="mt-1.5 text-xs leading-5">
+              {!deleting && (
+                <span className="block">
+                  {t('components.workspace.cleanup.browse.workspaceCount', '{{count}} workspaces', {
+                    count,
+                    defaultValue_one: '{{count}} workspace'
+                  })}
+                </span>
+              )}
               {deleting
                 ? t(
                     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1d3503357d',
@@ -176,11 +180,7 @@ export function WorkspaceCleanupConfirmRemove({
         {!deleting ? (
           <Button variant="destructive" onClick={onConfirm} disabled={count === 0}>
             <Trash2 className="size-4" />
-            {t(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.deleteButtonCount',
-              'Delete {{value0}}',
-              { value0: count }
-            )}
+            {t('common.delete', 'Delete')}
           </Button>
         ) : null}
       </DialogFooter>
