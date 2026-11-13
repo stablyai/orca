@@ -247,13 +247,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isForegroundCandidate: (terminal) => this.isMailboxForegroundCandidate(terminal),
     needsForegroundEvaluation: (ptyId) => this.needsMailboxForegroundEvaluation(ptyId),
     onDeliveryDecision: (ptyId, decision) => this.armDeliveryRecheck(ptyId, decision),
-    isAgentSettledForDelivery: (ptyId, foreground) =>
-      this.isAgentSettledForDelivery(ptyId, foreground),
+    isAgentSettledForDelivery: (ptyId, foreground, stagedText) =>
+      this.isAgentSettledForDelivery(ptyId, foreground, stagedText),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    resolveSubmitTarget: (ptyId, foreground) =>
-      this.resolveOrchestrationPointerSubmitTarget(ptyId, foreground),
+    resolveSubmitTarget: (ptyId, foreground, stagedText) =>
+      this.resolveOrchestrationPointerSubmitTarget(ptyId, foreground, stagedText),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveTerminal: (ptyId) => this.deliverPendingMessagesForPty(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>

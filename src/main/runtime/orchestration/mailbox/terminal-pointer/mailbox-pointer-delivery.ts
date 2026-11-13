@@ -201,7 +201,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   isForegroundHeld(ptyId: string): boolean {
     const hold = this.state.foreground.foregroundHold(ptyId)
     if (hold && hold !== this.deps.resolveSubmitTarget(ptyId)?.processIncarnation) {
-      this.state.retirePty(ptyId)
+      this.state.foreground.retirePty(ptyId)
       return false
     }
     return !!hold

@@ -1,3 +1,4 @@
+import { readRuntimeFixture } from '../../../terminal/wait/agent-transcript-replay-test-harness'
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -229,14 +230,19 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     db.close()
   })
 
-  it.each(['plain', 'title-setting'])(
-    'delivers after a silent foreground return in a %s shell and refreshes its receipt',
-    async (shellKind) => {
+  it.each([
+    { shellKind: 'plain', launchAgent: null, longHold: false },
+    { shellKind: 'title-setting', launchAgent: null, longHold: false },
+    { shellKind: 'title-setting', launchAgent: 'claude' as const, longHold: true },
+    { shellKind: 'title-setting', launchAgent: null, longHold: true }
+  ])(
+    'delivers after a silent foreground return ($shellKind, launch=$launchAgent, expired=$longHold)',
+    async ({ shellKind, launchAgent, longHold }) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-silent-mail-return-')
       const receivedAt = Date.now()
       const { runtime } = createRuntime(db, {
-        launchAgent: null,
+        launchAgent,
         getAgentStatusSnapshot: () => [
           {
             paneKey: PANE_KEY,
@@ -250,37 +256,51 @@ describe('mailbox delivery into a pane awaiting the user', () => {
         ]
       })
       let shell = false
-      const write = vi.fn((_ptyId: string, _data: string) => true)
+      let inspections = 0
+      let echoSequence = 3
+      const write = vi.fn((_ptyId: string, data: string) => {
+        if (longHold) {
+          const composer =
+            data === '\r'
+              ? readRuntimeFixture('claude-2-1-316-default-unlabelled-empty').replaceAll(
+                  '\x1b]0;✳ Claude Code\x07',
+                  ''
+                )
+              : `\x1b[2J\x1b[H\x1b[?25h${'─'.repeat(40)}\r\n❯ ${data.trim()}\r\n${'─'.repeat(40)}\x1b[2;${data.trim().length + 3}H`
+          runtime.onPtyData(PTY_ID, composer, echoSequence++)
+        }
+        return true
+      })
       runtime.setPtyController({
         write,
         writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
+        getSize: () => ({ cols: 200, rows: 30 }),
         getForegroundProcess: async () => 'zsh',
         confirmShellForeground: async () => shell,
         supportsForegroundObservation: () => true,
-        inspectProcess: async () => ({
-          foregroundProcess: shell ? 'zsh' : 'claude',
-          hasChildProcesses: !shell,
-          foregroundObservation: {
-            ptyId: PTY_ID,
-            ptyIncarnationId: 'mailbox-incarnation',
-            authorityGeneration: 'test',
-            observationEpoch: 1,
-            capturedAgeMs: 0,
-            verdict: 'observed',
-            source: 'pty-master',
-            foregroundKind: shell ? 'shell' : 'non-shell',
-            processName: shell ? 'zsh' : 'claude'
+        inspectProcess: async () => {
+          inspections++
+          return {
+            foregroundProcess: shell ? 'zsh' : 'claude',
+            hasChildProcesses: !shell,
+            foregroundObservation: {
+              ptyId: PTY_ID,
+              ptyIncarnationId: 'mailbox-incarnation',
+              authorityGeneration: 'test',
+              observationEpoch: 1,
+              capturedAgeMs: 0,
+              verdict: 'observed',
+              source: 'pty-master',
+              foregroundKind: shell ? 'shell' : 'non-shell',
+              processName: shell ? 'zsh' : 'claude'
+            }
           }
-        })
+        }
       })
       const run = createBoundRun(db, 'Silent foreground return')
       await runtime.listTerminals()
-      runtime.onPtyData(
-        PTY_ID,
-        '\x1b]0;✳ Claude Code\x07\x1b[?2004h╭──────╮\r\n│ ❯  │\r\n╰──────╯',
-        1
-      )
+      runtime.onPtyData(PTY_ID, readRuntimeFixture('claude-2-1-316-default-unlabelled-empty'), 1)
       await vi.advanceTimersByTimeAsync(1000)
       shell = true
       if (shellKind === 'title-setting') {
@@ -299,9 +319,14 @@ describe('mailbox delivery into a pane awaiting the user', () => {
         delivered_at: null,
         pointer_enter_pending: 0
       })
-      // Only the physical foreground changes: no new observation or send can release the hold.
+      if (longHold) {
+        await vi.advanceTimersByTimeAsync(31 * 60 * 1000)
+        expect(write).not.toHaveBeenCalled()
+        expect(runtime.mailTerminal?.lastAgentStatus).toBeNull()
+      }
+      // Only the physical foreground changes; the hook timestamp remains expired and untouched.
       shell = false
-      await vi.advanceTimersByTimeAsync(12000)
+      await vi.advanceTimersByTimeAsync(longHold ? 65000 : 12000)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),
         '\r'
@@ -311,8 +336,13 @@ describe('mailbox delivery into a pane awaiting the user', () => {
         delivered_at: expect.any(String),
         pointer_enter_pending: 0
       })
-      await vi.advanceTimersByTimeAsync(20000)
+      const completedInspections = inspections
+      await vi.advanceTimersByTimeAsync(65000)
       expect(write).toHaveBeenCalledTimes(2)
+      expect(inspections).toBe(completedInspections)
+      if (longHold) {
+        expect(runtime.mailTerminal?.lastAgentStatus).toBeNull()
+      }
 
       shell = true
       const second = insertDirectRunMessage(db, run.id, 'Fresh receipt')

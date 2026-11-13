@@ -59,6 +59,15 @@ function isHeldRestoredPermission(row: AgentStatusIpcPayload, join: HookRowJoin)
 
 /** The freshest live hook row for a terminal, joined on any of its handles or pane keys. */
 export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatusIpcPayload | null {
+  return selectExplicitAgentRow(args, true)
+}
+
+/** Historical live rows identify the intended agent, without renewing their status evidence. */
+export function selectExplicitAgentIdentityRow(args: HookRowJoin): AgentStatusIpcPayload | null {
+  return selectExplicitAgentRow(args, false)
+}
+
+function selectExplicitAgentRow(args: HookRowJoin, fresh: boolean): AgentStatusIpcPayload | null {
   const now = Date.now()
   const handles = new Set(args.handles)
   const paneKeys = new Set(args.paneKeys)
@@ -70,8 +79,8 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (
       !row.state ||
       typeof row.receivedAt !== 'number' ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS ||
-      !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
+      (fresh && now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) ||
+      !(isLiveObservation(row) || (fresh && isHeldRestoredPermission(row, args)))
     ) {
       continue
     }

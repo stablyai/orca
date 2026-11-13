@@ -9,7 +9,7 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
-import { terminalDeliveryRefusal } from './terminal-delivery-refusal'
+import { mailboxDeliveryTuiVerdict, terminalDeliveryRefusal } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
@@ -22,14 +22,13 @@ import {
   type MailboxDeliveryDecision
 } from '../../orchestration/mailbox/notifications/mailbox-delivery-recheck'
 import type { MailboxForeground } from './launched-agent-foreground'
-import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import {
   isMailboxTerminalTakingInput,
   type OrchestrationMailboxTerminal
 } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { selectExplicitAgentIdentityRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 
@@ -128,31 +127,35 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   protected isMailboxForegroundCandidate(terminal: OrchestrationMailboxTerminal): boolean {
-    if (terminal.lastAgentStatus !== null || !terminal.lastAgentStatusObservedLive) {
-      return false
-    }
-    const row = this.mailDeliveryHookRow(terminal.ptyId)
-    return !!row && (row.state === 'done' || row.state === 'working')
+    return (
+      terminal.lastAgentStatus === null &&
+      terminal.lastAgentStatusObservedLive &&
+      isTuiAgent(this.mailDeliveryAgent(terminal.ptyId))
+    )
   }
 
   protected mailboxTerminalAdmission(
     terminal: OrchestrationMailboxTerminal,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ): OrchestrationMailboxTerminal {
-    if (terminal.lastAgentStatus !== null || foreground !== 'agent') {
-      return terminal
-    }
-    const row = this.mailDeliveryHookRow(terminal.ptyId)
-    return row
-      ? { ...terminal, lastAgentStatus: mapExplicitAgentStateToRuntimeTerminalStatus(row.state) }
+    return terminal.lastAgentStatus === null &&
+      foreground === 'agent' &&
+      terminal.lastAgentStatusObservedLive &&
+      this.deliveryRefusal(terminal.ptyId, foreground, stagedText) === null
+      ? { ...terminal, lastAgentStatus: 'idle' }
       : terminal
   }
 
   /** Pointer plus Enter takes the waits' readiness ranking, plus a working verdict: agents queue or
    *  steer text sent mid-turn, so only dialogs, drafts and unsettled terminals hold mail. Callers
    *  separately require live status evidence. */
-  protected isAgentSettledForDelivery(ptyId: string, foreground?: MailboxForeground): boolean {
-    return this.deliveryRefusal(ptyId, foreground) === null
+  protected isAgentSettledForDelivery(
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string
+  ): boolean {
+    return this.deliveryRefusal(ptyId, foreground, stagedText) === null
   }
 
   /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
@@ -175,26 +178,27 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     ) {
       return null
     }
+    const agentName = tuiAgentDisplayName(this.mailDeliveryAgent(ptyId) ?? '') ?? 'The agent'
+    const refusal = this.deliveryRefusal(ptyId, foreground?.foreground)
     if (
       foreground &&
       !this.orchestrationMailboxPointerDelivery.applyForeground(
         ptyId,
         foreground,
-        foreground.foreground
+        foreground.foreground,
+        refusal === null
       )
     ) {
       if (!followup) {
         return this.readTerminalMailHold(terminalHandle, true)
       }
       this.armDeliveryRecheck(ptyId, { foreground: true })
-      return { kind: 'not-live', agentName: this.mailDeliveryAgentName(ptyId) }
+      return { kind: 'not-live', agentName }
     }
     this.armDeliveryRecheck(
       ptyId,
       foreground?.foreground === 'shell' ? { foreground: true } : undefined
     )
-    const agentName = this.mailDeliveryAgentName(ptyId)
-    const refusal = this.deliveryRefusal(ptyId, foreground?.foreground)
     if (refusal === 'no-terminal') {
       return null
     }
@@ -212,67 +216,68 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
 
   private deliveryRefusal(
     ptyId: string,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ): MailboxDeliveryHold | 'no-terminal' | null {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return 'no-terminal'
     }
-    const hold = this.ptyDeliveryHold(ptyId)
+    const hold = this.ptyDeliveryHold(ptyId, stagedText)
     if (hold) {
       return { kind: hold }
     }
-    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty, foreground)
     return terminalDeliveryRefusal({
-      verdict,
-      recognizedAgent: !!this.mailDeliveryAgent(ptyId),
-      readScreenInputVeto
+      ...this.deliveryTuiVerdict(pty, foreground, stagedText),
+      recognizedAgent: !!this.mailDeliveryAgent(ptyId)
     })
   }
 
-  private mailDeliveryHookRow(ptyId: string) {
+  private mailDeliveryHookAgent(ptyId: string) {
     const join = this.readHookRowJoinForPty(ptyId)
-    const row = join ? selectFreshExplicitAgentStatusRow(join) : null
+    const row = join ? selectExplicitAgentIdentityRow(join) : null
     const floor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
-    return row && (floor === undefined || row.receivedAt > floor) ? row : null
+    return row && (floor === undefined || row.receivedAt > floor) ? row.agentType : null
   }
 
   private mailDeliveryAgent(ptyId: string) {
-    return this.getPaneTerminalAgent(ptyId) ?? this.mailDeliveryHookRow(ptyId)?.agentType ?? null
+    return this.getPaneTerminalAgent(ptyId) ?? this.mailDeliveryHookAgent(ptyId) ?? null
   }
 
-  private mailDeliveryAgentName(ptyId: string): string {
-    const agent = this.mailDeliveryAgent(ptyId)
-    return (isTuiAgent(agent) && tuiAgentDisplayName(agent)) || 'The agent'
-  }
-
-  private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord, foreground?: MailboxForeground) {
+  private deliveryTuiVerdict(
+    pty: RuntimePtyWorktreeRecord,
+    foreground?: MailboxForeground,
+    stagedText?: string
+  ) {
     const agent = this.mailDeliveryAgent(pty.ptyId)
-    const source = {
-      ...this.tuiIdleEvidenceSource,
-      getPaneAgent: () => (isTuiAgent(agent) ? agent : null)
-    }
-    const raw = this.getOrchestrationMailboxTerminal(pty.ptyId)
-    const terminal = raw && this.mailboxTerminalAdmission(raw, foreground)
-    const record = { ...pty, lastAgentStatus: terminal?.lastAgentStatus ?? pty.lastAgentStatus }
-    const evidence = ptyTuiIdleEvidence(source, record, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    return mailboxDeliveryTuiVerdict(
+      { ...this.tuiIdleEvidenceSource, getPaneAgent: () => (isTuiAgent(agent) ? agent : null) },
+      pty,
+      () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+      pty.lastAgentStatus === null && foreground === 'agent',
+      () =>
+        readTerminalComposerTypedText(
+          this.readWholeScreenModel(pty.ptyId)?.emulator.getCursorLineContext()
+        ),
+      stagedText
     )
-    // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
-    // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
-    const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
-    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
-  private ptyDeliveryHold(ptyId: string): 'prompt' | 'draft' | 'restoring' | null {
+  private ptyDeliveryHold(
+    ptyId: string,
+    stagedText?: string
+  ): 'prompt' | 'draft' | 'restoring' | null {
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return 'prompt'
     }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
-    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    const context = state?.emulator.getCursorLineContext()
+    const ownPointer =
+      stagedText !== undefined && readTerminalComposerTypedText(context) === stagedText
+    const draft = !!context && !ownPointer && this.hasComposerDraft(ptyId, context)
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's

@@ -81,6 +81,18 @@ class MailboxRuntime extends OrcaRuntimeService {
     this.armDeliveryRecheck(ptyId)
   }
 
+  setMailScreenRestoring(restoring: boolean): void {
+    if (restoring) {
+      this.headlessHydrationState.set(PTY_ID, 'pending')
+    } else {
+      this.headlessHydrationState.delete(PTY_ID)
+    }
+  }
+
+  get mailTerminal() {
+    return this.getOrchestrationMailboxTerminal(PTY_ID)
+  }
+
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
   }

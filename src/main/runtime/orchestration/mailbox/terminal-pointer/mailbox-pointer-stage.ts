@@ -68,6 +68,12 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   ) {
     return
   }
+  const pointerText = formatMessagePointer(
+    args.messages.length,
+    args.mailboxHandle,
+    args.deps.getCliCommand(expectedTarget.terminal.handle),
+    args.heldDeliveryId
+  )
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
   flight.stagedMessageIds = args.messages.map((message) => message.id)
@@ -94,7 +100,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       preserveAmbiguousWrite()
       return
     }
-    finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement)
+    finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement, pointerText)
   }
   const preserveAmbiguousWrite = (): void => {
     if (!args.state.isCurrentFlight(ptyId, flight)) {
@@ -104,15 +110,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.settle(ptyId, flight)
   }
   try {
-    const writeResult = args.deps.writePty(
-      ptyId,
-      formatMessagePointer(
-        args.messages.length,
-        args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminal.handle),
-        args.heldDeliveryId
-      )
-    )
+    const writeResult = args.deps.writePty(ptyId, pointerText)
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return
@@ -128,7 +126,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
   ptyId: string,
   flight: OrchestrationMailboxDeliveryFlight,
   expectedTarget: OrchestrationMailboxPointerSubmitTarget,
-  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>
+  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>,
+  pointerText: string
 ): void {
   let delayedSettle = false
   try {
@@ -153,6 +152,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           readForeground: args.deps.readForeground,
+          isAgentSettledForDelivery: args.deps.isAgentSettledForDelivery,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
           settle: args.settle,
@@ -165,7 +165,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           newestSequence: args.newestSequence,
           ptyId,
           flight,
-          expectedTarget
+          expectedTarget,
+          stagedText: pointerText.trim()
         }
       )
     flight.submitEnter = submitEnter

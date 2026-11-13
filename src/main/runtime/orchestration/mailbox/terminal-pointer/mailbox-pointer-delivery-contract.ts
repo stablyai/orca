@@ -26,13 +26,18 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getDb: () => OrchestrationDb | null
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
-  isAgentSettledForDelivery: (ptyId: string, foreground?: MailboxForeground) => boolean
+  isAgentSettledForDelivery: (
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string
+  ) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   resolveSubmitTarget: (
     ptyId: string,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
   readForeground: (ptyId: string) => Promise<MailboxForeground>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>

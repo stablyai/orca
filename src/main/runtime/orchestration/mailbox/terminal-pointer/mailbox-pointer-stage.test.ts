@@ -163,6 +163,68 @@ describe('retiring a pty mid-delivery', () => {
     }
   })
 
+  it('preserves staged and parked obligations when an obsolete hold is queried before retirement', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    let incarnation = 'inc-1'
+    let resolveOldAbsence: (() => void) | undefined
+    let firstAbsence = true
+    const deps = {
+      ...pointerDeps(db, writePty),
+      mailboxOwner: { resolve: (_terminal: unknown, handle: string) => handle },
+      isLeafPtyProvenAbsent: () => {
+        if (firstAbsence) {
+          firstAbsence = false
+          return new Promise<boolean>((resolve) => {
+            resolveOldAbsence = () => resolve(false)
+          })
+        }
+        return Promise.resolve(false)
+      },
+      resolveSubmitTarget: () => ({ terminal: TERMINAL, processIncarnation: incarnation })
+    }
+    const delivery = new OrchestrationMailboxPointerDelivery(deps as never)
+    try {
+      const first = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'staged' })
+      const second = db.insertMessage({ from: 'a', to: 'run:run-2', subject: 'parked' })
+      delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1' })
+      await vi.advanceTimersByTimeAsync(0)
+      delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-2' })
+      expect(writePty).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(resolveOldAbsence).toBeTypeOf('function')
+      const proof = delivery.captureForegroundObservation('pty-1')
+      delivery.applyForeground('pty-1', proof, 'shell')
+      incarnation = 'inc-2'
+      expect(delivery.isForegroundHeld('pty-1')).toBe(false)
+      delivery.retirePty('pty-1')
+      expect(db.getMessageById(first.id)).toMatchObject({
+        read: 0,
+        delivered_at: null,
+        pointer_enter_pending: 0
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(deps.redriveMailbox).toHaveBeenCalledWith('run:run-1', undefined)
+      expect(deps.redriveMailbox).toHaveBeenCalledWith('run:run-2', undefined)
+      delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-2' })
+      await vi.advanceTimersByTimeAsync(0)
+      resolveOldAbsence?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(writePty).toHaveBeenCalledTimes(3)
+      expect(db.getMessageById(second.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String),
+        pointer_enter_pending: 0
+      })
+      expect(db.getMessageById(first.id)?.pointer_enter_pending).toBe(0)
+    } finally {
+      delivery.retirePty('pty-1')
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+
   it('releases a pointer whose Enter never fired', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')

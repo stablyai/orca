@@ -6,17 +6,20 @@ import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/rout
 export abstract class RuntimeMailboxDeliveryServices {
   protected abstract resolveOrchestrationPointerSubmitTarget(
     ptyId: string,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ): OrchestrationMailboxPointerSubmitTarget | null
 
   protected abstract isAgentSettledForDelivery(
     ptyId: string,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ): boolean
   protected abstract isMailboxForegroundCandidate(terminal: OrchestrationMailboxTerminal): boolean
   protected abstract mailboxTerminalAdmission(
     terminal: OrchestrationMailboxTerminal,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ): OrchestrationMailboxTerminal
   protected abstract deliverPendingMessagesForPty(ptyId: string): void
   protected abstract needsMailboxForegroundEvaluation(ptyId: string): boolean

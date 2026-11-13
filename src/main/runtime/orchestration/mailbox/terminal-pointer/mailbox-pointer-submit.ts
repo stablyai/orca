@@ -22,8 +22,14 @@ type PointerSubmitDependencies = {
   getDb: () => OrchestrationDb | null
   resolveSubmitTarget: (
     ptyId: string,
-    foreground?: MailboxForeground
+    foreground?: MailboxForeground,
+    stagedText?: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
+  isAgentSettledForDelivery?: (
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string
+  ) => boolean
   readForeground: (ptyId: string) => Promise<MailboxForeground>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
@@ -47,6 +53,7 @@ export function submitOrchestrationMailboxPointer(
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
     expectedTarget: OrchestrationMailboxPointerSubmitTarget
+    stagedText?: string
     foregroundFollowup?: boolean
   }
 ): void {
@@ -79,7 +86,7 @@ export function submitOrchestrationMailboxPointer(
         finalizeReservation = false
         return
       }
-      const target = deps.resolveSubmitTarget(input.ptyId, foreground.foreground)
+      const target = deps.resolveSubmitTarget(input.ptyId, foreground.foreground, input.stagedText)
       const terminal =
         target?.terminal.handle === input.expectedTarget.terminal.handle &&
         target.processIncarnation === input.expectedTarget.processIncarnation
@@ -88,10 +95,18 @@ export function submitOrchestrationMailboxPointer(
       const sameMailbox =
         terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
+      const settled =
+        deps.isAgentSettledForDelivery?.(input.ptyId, foreground.foreground, input.stagedText) !==
+        false
       if (!terminal || !sameMailbox) {
         clearAndRedrive = true
       } else if (
-        !deps.state.foreground.applyForeground(input.ptyId, foreground, foreground.foreground)
+        !deps.state.foreground.applyForeground(
+          input.ptyId,
+          foreground,
+          foreground.foreground,
+          queueSafe && settled && !deps.isPtyAwaitingUserInput(input.ptyId)
+        )
       ) {
         if (!input.foregroundFollowup) {
           submitOrchestrationMailboxPointer(deps, { ...input, foregroundFollowup: true })
@@ -107,12 +122,14 @@ export function submitOrchestrationMailboxPointer(
         redriveClearedPointer = false
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
+        (queueSafe && !settled) ||
         deps.isPtyAwaitingUserInput(input.ptyId)
       ) {
         // A neutral title can outlive the foreground check, and an open dialog would take the
         // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
+        deps.onDeliveryDecision?.(input.ptyId, { foreground: true })
         preserveFlight = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true

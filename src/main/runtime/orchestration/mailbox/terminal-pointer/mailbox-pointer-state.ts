@@ -215,16 +215,16 @@ export class OrchestrationMailboxPointerState {
     }
     const flight = this.flightsByPtyId.get(ptyId)
     this.flightsByPtyId.delete(ptyId)
+    const releasedMailboxes = new Set(this.parkedDeliveriesByPtyId.get(ptyId)?.keys())
     this.parkedDeliveriesByPtyId.delete(ptyId)
-    const releasedMailboxes: string[] = []
     for (const mailboxHandle of this.watermarkMailboxesByPtyId.get(ptyId) ?? []) {
       const owner = this.watermarkByMailbox.get(mailboxHandle)
       if (owner?.ptyId === ptyId && this.clearWatermark(mailboxHandle, owner.sequence, ptyId)) {
-        releasedMailboxes.push(mailboxHandle)
+        releasedMailboxes.add(mailboxHandle)
       }
     }
     this.watermarkMailboxesByPtyId.delete(ptyId)
-    return { flight, releasedMailboxes }
+    return { flight, releasedMailboxes: [...releasedMailboxes] }
   }
 
   private removeWatermarkPtyIndex(mailbox: string, ptyId: string): void {

@@ -76,7 +76,8 @@ export class MailboxForegroundEvidence {
   applyForeground(
     ptyId: string,
     proof: OrchestrationMailboxForegroundObservation | undefined,
-    foreground: MailboxForeground = 'shell'
+    foreground: MailboxForeground = 'shell',
+    admitted = false
   ): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (
@@ -93,7 +94,7 @@ export class MailboxForegroundEvidence {
     if (foreground === 'shell') {
       observation.held = true
       observation.contradiction++
-    } else if (foreground !== 'unknown') {
+    } else if (foreground === 'agent' && admitted) {
       observation.held = false
     }
     if (wasHeld && !observation.held) {

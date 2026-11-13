@@ -4,6 +4,7 @@ import type {
 } from './mailbox-pointer-delivery-contract'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxPointerDelivery } from './mailbox-pointer-delivery'
+import { isMailboxTerminalTakingInput } from '../routing/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 
 type ForegroundMailboxBatch = Map<string, ReadonlySet<string> | undefined>
@@ -34,11 +35,18 @@ export class MailboxForegroundDelivery {
       .probeForeground(ptyId, target.processIncarnation)
       .then((foreground) => {
         this.mailboxesByPty.delete(ptyId)
-        const current = deps.resolveSubmitTarget(ptyId)
+        const current = deps.resolveSubmitTarget(ptyId, foreground.foreground)
         if (current?.processIncarnation !== target.processIncarnation) {
           return
         }
-        const applied = delivery.applyForeground(ptyId, foreground, foreground.foreground)
+        const applied = delivery.applyForeground(
+          ptyId,
+          foreground,
+          foreground.foreground,
+          foreground.foreground === 'agent' &&
+            isMailboxTerminalTakingInput(current.terminal) &&
+            deps.isAgentSettledForDelivery(ptyId, foreground.foreground)
+        )
         if (applied && delivery.isForegroundHeld(ptyId)) {
           return
         }

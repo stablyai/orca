@@ -1,5 +1,71 @@
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
-import { isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
+import {
+  evaluateTuiIdle,
+  hasQuietReadyScreen,
+  isTuiIdleReadyVerdict,
+  type TuiIdleVerdict
+} from './tui-idle-evidence'
+import { ptyTuiIdleEvidence, type TuiIdleEvidenceSource } from './tui-idle-evidence-source'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+
+export function mailboxDeliveryTuiVerdict(
+  source: TuiIdleEvidenceSource,
+  pty: RuntimePtyWorktreeRecord,
+  readWaitText: () => string,
+  recovering: boolean,
+  readComposerText: () => string | null,
+  stagedText?: string
+) {
+  const admissionSource = source
+  const screen = recovering ? source.readScreenLines(pty.ptyId) : null
+  if (recovering) {
+    // An execution identity cannot renew an old hook's readiness or a tail's composer.
+    source = {
+      ...source,
+      getAdoptedPtyIdleStatus: () => null,
+      getFirstPartyAgentStatus: () => null,
+      getHookTurn: undefined,
+      readScreenLines: () => screen
+    }
+  }
+  const evidence = ptyTuiIdleEvidence(
+    source,
+    recovering ? { ...pty, lastOscTitle: null } : pty,
+    recovering ? () => screen?.join('\n') ?? '' : readWaitText
+  )
+  let verdict: TuiIdleVerdict =
+    recovering && screen === null
+      ? { kind: 'pending', quietForeground: 'closed' }
+      : evaluateTuiIdle({
+          ...evidence,
+          readPositiveBodyEvidence: () =>
+            evidence.readPositiveBodyEvidence() ||
+            (recovering &&
+              evidence.readAgentRuleVerdict() === null &&
+              hasQuietReadyScreen(
+                evidence.record,
+                null,
+                () => {
+                  const text = readComposerText()
+                  return text === '' || text === stagedText
+                },
+                source.quiescenceMs
+              )),
+          // A current screen can veto recovery; old blocked tail text cannot veto ordinary delivery.
+          readTailBlockedReason: recovering ? evidence.readTailBlockedReason : () => null
+        })
+  const screenReady = isTuiIdleReadyVerdict(verdict)
+  if (recovering && screenReady) {
+    const current = ptyTuiIdleEvidence(admissionSource, pty, readWaitText)
+    verdict = evaluateTuiIdle({
+      ...current,
+      readPositiveBodyEvidence: () => screenReady,
+      readTailBlockedReason: evidence.readTailBlockedReason,
+      readScreenInputVeto: evidence.readScreenInputVeto
+    })
+  }
+  return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
+}
 
 /** Why pointer plus Enter would not be typed into a settled-looking worker terminal now (dialogs and
  *  drafts are checked first); null means it would. Takes the waits' readiness ranking plus a working
