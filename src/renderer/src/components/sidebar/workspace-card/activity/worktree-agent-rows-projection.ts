@@ -112,6 +112,7 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       representedTabs,
       workspaceOwner?.hostId,
       workspaceOwner?.worktree.runtimeOwnerEnvironmentId,
+      workspaceOwner?.worktree.hostId,
       ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : [])
     ]
     if (

@@ -4,7 +4,27 @@ import type { Worktree } from '../worktree/types'
 import { buildWorktreeLineageRanges } from './worktree-lineage-range'
 
 function row(id: string, overrides: Partial<Worktree> = {}): Worktree {
-  return { id, repoId: 'repo', hostId: 'local', ...overrides } as Worktree
+  return {
+    id,
+    repoId: 'repo',
+    hostId: 'local',
+    path: `/tmp/${id}`,
+    head: 'abc123',
+    branch: `refs/heads/${id}`,
+    isBare: false,
+    isMainWorktree: false,
+    displayName: id,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    ...overrides
+  }
 }
 
 /** One section: a parent at depth 0 with two children at depth 1. */

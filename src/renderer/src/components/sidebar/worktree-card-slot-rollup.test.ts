@@ -1,7 +1,7 @@
 import { buildWorktreeOccurrencePlan } from '../../../../shared/worktree-occurrence-plan'
-import { appendWorktreeRows } from '../../../../shared/sidebar-list/row-builders'
+import { appendWorktreeRows } from '../../../../shared/sidebar-list/sections/row-builders'
 import type { Row } from '../../../../shared/sidebar-list/row-types'
-import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/sections/group-keys'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'

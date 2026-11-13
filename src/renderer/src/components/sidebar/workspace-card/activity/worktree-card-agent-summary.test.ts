@@ -7,8 +7,26 @@ function row(paneKey: string, state: 'done' | 'working' | 'waiting'): DashboardA
     paneKey,
     agentType: 'codex',
     state,
-    entry: { state }
-  } as unknown as DashboardAgentRow
+    startedAt: 1,
+    entry: {
+      paneKey,
+      state,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: []
+    },
+    tab: {
+      id: 'tab',
+      ptyId: null,
+      worktreeId: 'wt',
+      title: 'Codex',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+  }
 }
 
 describe('buildSummaryAgentGroups', () => {

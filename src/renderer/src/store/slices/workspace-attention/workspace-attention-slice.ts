@@ -233,6 +233,11 @@ export const createWorkspaceAttentionSlice: StateCreator<
       const state = get()
       // One index per action: a lookup per pane is O(tabs × panes) for a workspace with many tabs.
       const tabsById = new Map((state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab]))
+      const stampedHosts = new Map(
+        (state.unifiedTabsByWorktree[worktreeId] ?? [])
+          .filter((tab) => tab.contentType === 'terminal')
+          .map((tab) => [tab.entityId, tab.executionHostId])
+      )
       const hostPaneKeys = [...paneKeys].filter((paneKey) => {
         const retained = state.retainedAgentsByPaneKey[paneKey]
         const entry = state.agentStatusByPaneKey[paneKey] ?? retained?.entry
@@ -242,7 +247,13 @@ export const createWorkspaceAttentionSlice: StateCreator<
           state,
           worktreeId,
           executionHostId,
-          getAgentPaneExecutionHost(state, paneKey, entry, tab?.ptyId ?? retained?.tab.ptyId)
+          getAgentPaneExecutionHost(
+            state,
+            paneKey,
+            entry,
+            tab?.ptyId ?? retained?.tab.ptyId,
+            tabId ? stampedHosts.get(tabId) : undefined
+          )
         )
       })
       if (hostPaneKeys.length > 0) {

@@ -139,6 +139,19 @@ describe('explicit workspace and agent reads', () => {
           ptyIdsByLeafId: {}
         }
       },
+      agentStatusByPaneKey: {
+        [remote.paneKey]: {
+          paneKey: remote.paneKey,
+          tabId: 'remote',
+          prompt: 'Remote result',
+          worktreeId: WS_A,
+          state: 'done',
+          agentType: 'claude',
+          updatedAt: 900,
+          stateStartedAt: 900,
+          stateHistory: []
+        }
+      },
       unreadTerminalTabs: { local: 'terminal-bell', remote: 'terminal-bell' },
       unreadTerminalPanes: { [local.paneKey]: 'terminal-bell', [remote.paneKey]: 'terminal-bell' },
       unreadAgentCompletionPanes: {

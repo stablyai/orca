@@ -123,6 +123,52 @@ describe('web settings preload API', () => {
     expect(api.getSync()?.worktreeCardDetailsRow).toBe(false)
   })
 
+  it('keeps the active host details-row preference when a previous host update replies late', async () => {
+    let answer!: (response: RuntimeRpcResponse<unknown>) => void
+    let started!: () => void
+    const updateStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'settings.update') {
+            return new Promise((resolve) => {
+              answer = resolve
+              started()
+            })
+          }
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: { worktreeCardDetailsRow: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const api = globals.window.api.settings
+    await api.get()
+    const pending = api.set({ worktreeCardDetailsRow: true })
+    await updateStarted
+    webRuntimeState.activeEnvironment = { ...webRuntimeState.activeEnvironment!, id: 'host-B' }
+    await api.get()
+    answer({
+      id: 'late',
+      ok: true,
+      result: { settings: { worktreeCardDetailsRow: true } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await pending
+    expect(api.getSync()?.worktreeCardDetailsRow).toBe(false)
+  })
+
   it('does not write a details-row preference to a host selected during a capability check', async () => {
     let answer!: (response: RuntimeRpcResponse<unknown>) => void
     let started!: () => void

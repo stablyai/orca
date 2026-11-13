@@ -252,6 +252,9 @@ export async function syncRuntimeBackedSettings(
         delete runtimeSettings.worktreeVisibilityDefaults
         // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
         delete runtimeSettings.voice
+        if (requireActiveEnvironmentOrNull()?.id !== requestedEnvironment.id) {
+          delete runtimeSettings.worktreeCardDetailsRow
+        }
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
         if (

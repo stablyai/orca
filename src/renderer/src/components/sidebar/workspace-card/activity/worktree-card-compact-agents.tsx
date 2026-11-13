@@ -86,6 +86,13 @@ export function CompactAgentSummaryButton({
     agents,
     unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
   )
+  const unreadCount = groups.find((group) => group.unread)?.agents.length ?? 0
+  const unreadSummary =
+    unreadCount > 0
+      ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
+          count: unreadCount
+        })
+      : ''
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
@@ -127,7 +134,10 @@ export function CompactAgentSummaryButton({
           : t(
               'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
               'Expand {{value0}}. {{value1}}',
-              { value0: summary, value1: agentIdentitySummary }
+              {
+                value0: summary,
+                value1: [agentIdentitySummary, unreadSummary].filter(Boolean).join('; ')
+              }
             )
       }
       aria-expanded={expanded}

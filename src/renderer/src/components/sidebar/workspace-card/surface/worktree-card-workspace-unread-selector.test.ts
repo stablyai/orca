@@ -3,7 +3,8 @@ import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type * as WorkspaceLiveMarkers from '@/store/slices/workspace-attention/workspace-live-markers'
-import type { Worktree } from '../../../../../../shared/worktree/types'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createWorkspaceUnreadSelector } from './worktree-card-workspace-unread-selector'
 
 const walks = vi.hoisted(() => ({ count: 0 }))
@@ -18,16 +19,23 @@ vi.mock('@/store/slices/workspace-attention/workspace-live-markers', async (impo
   }
 })
 
-const worktree = { id: 'w1', repoId: 'repo', hostId: 'local', isUnread: true } as Worktree
+const worktree = makeWorktree({ id: 'w1', repoId: 'repo', hostId: 'local', isUnread: true })
 type StatusEntry = AppState['agentStatusByPaneKey'][string]
-const entry = (paneKey: string) => ({ paneKey }) as unknown as StatusEntry
+const entry = (paneKey: string): StatusEntry => ({
+  paneKey,
+  state: 'working',
+  prompt: '',
+  updatedAt: 1,
+  stateStartedAt: 1,
+  stateHistory: []
+})
 
 function baseState(): AppState {
   return {
     ...useAppStore.getInitialState(),
     tabsByWorktree: {
-      w1: [{ id: 'tab1', worktreeId: 'w1' }]
-    } as unknown as AppState['tabsByWorktree'],
+      w1: [makeTab({ id: 'tab1', worktreeId: 'w1' })]
+    },
     agentStatusByPaneKey: {}
   }
 }

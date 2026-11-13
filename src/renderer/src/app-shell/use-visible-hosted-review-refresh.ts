@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { onRuntimeEnvironmentRevisionsChanged } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useAppStore } from '@/store/index'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
@@ -48,10 +49,12 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
     const unsubscribe = useAppStore.subscribe((state, previous) => {
       update(visibleHostedReviewRefreshInputsChanged(state, previous))
     })
+    const stopRevisionChanges = onRuntimeEnvironmentRevisionsChanged(() => update(true))
     visibilityChanged()
     document.addEventListener('visibilitychange', visibilityChanged)
     return () => {
       unsubscribe()
+      stopRevisionChanges()
       document.removeEventListener('visibilitychange', visibilityChanged)
       scheduler.dispose()
     }

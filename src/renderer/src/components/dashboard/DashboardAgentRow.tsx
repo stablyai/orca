@@ -215,11 +215,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
-  const dotTooltipLabel = agentStateProgressLabel(
+  const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
     stateDotTooltipLabel(agent, dotState, now)
   )
+  const dotTooltipLabel =
+    isUnvisited && dotState === 'done'
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: dotStatusLabel })
+      : dotStatusLabel
   // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
