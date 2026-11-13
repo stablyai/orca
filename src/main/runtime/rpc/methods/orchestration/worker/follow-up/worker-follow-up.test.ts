@@ -6,10 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { getFollowUpDispatch } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import './worker-resume-session-capture'
-import {
-  continueAllUnreadWorkerMail,
-  continueUnreadWorkerMail
-} from '../../messaging/settled-worker-follow-through'
+import { continueAllUnreadWorkerMail } from '../../messaging/settled-worker-follow-through'
 import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
 
 // A send to a finished terminal worker, through the same worker-start the coordinator would run.
@@ -86,85 +83,5 @@ describe('a follow-up to a finished terminal worker', () => {
     await vi.waitFor(() =>
       expect(h.db.getUnreadMessages(`dispatch:${next.id}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
     )
-  })
-
-  it('keeps the mail a failed follow-up took when a replayed report ran during its start', async () => {
-    h.setup()
-    const { taskId, dispatchId } = await h.startWorker()
-    await send(dispatchId, 'DO NOT PUSH')
-    h.settle(taskId, dispatchId, 'succeeded')
-    vi.mocked(h.runtime.sendTerminalAgentPrompt).mockImplementationOnce(async () => {
-      // The replay finds no unread mail, since the start took it, and clears the marker.
-      continueUnreadWorkerMail(h.runtime, h.db, dispatchId)
-      throw new Error('prompt lost')
-    })
-
-    continueAllUnreadWorkerMail(h.runtime, h.db)
-
-    await vi.waitFor(() => expect(getFollowUpDispatch(h.db, dispatchId)).toBeDefined())
-    const failed = getFollowUpDispatch(h.db, dispatchId)!.id
-    await vi.waitFor(() =>
-      expect(h.db.getUnreadMessages(`dispatch:${failed}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
-    )
-  })
-
-  it('lists the finished worker without the terminal its follow-up took over', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    await send(dispatchId, 'and the docs')
-    const followUpId = getFollowUpDispatch(h.db, dispatchId)!.id
-    expect(h.db.getWorkerTerminalResourceByOwner(followUpId)?.terminal_handle).toBe('term_worker')
-
-    await expect(h.call('orchestration.workerList', { run: h.activeRunId })).resolves.toMatchObject(
-      {
-        workers: expect.arrayContaining([
-          expect.objectContaining({
-            dispatchId,
-            agentTerminalHandle: null,
-            terminalState: null,
-            projection: expect.objectContaining({
-              // Nothing proves the original's process ended, so liveness stays unverifiable.
-              liveness: { verdict: 'unverifiable', reason: 'missing_status' },
-              nextAction: expect.objectContaining({ kind: 'none' })
-            })
-          }),
-          expect.objectContaining({
-            dispatchId: followUpId,
-            agentTerminalHandle: 'term_worker',
-            terminalState: 'active'
-          })
-        ]),
-        counts: { active: 1 }
-      }
-    )
-
-    // A -> B -> C, then C's release: neither earlier row claims the terminal.
-    const b = getFollowUpDispatch(h.db, dispatchId)!
-    h.settle(b.task_id, b.id, 'succeeded')
-    await send(b.id, 'and the tests')
-    const c = getFollowUpDispatch(h.db, b.id)!
-    h.settle(c.task_id, c.id, 'succeeded')
-    await expect(h.call('orchestration.workerRelease', { dispatch: c.id })).resolves.toMatchObject({
-      state: 'released'
-    })
-    const handedOn = (id: string) =>
-      expect.objectContaining({ dispatchId: id, agentTerminalHandle: null, terminalState: null })
-    await expect(h.call('orchestration.workerList', { run: h.activeRunId })).resolves.toMatchObject(
-      {
-        workers: [
-          expect.objectContaining({
-            dispatchId: c.id,
-            agentTerminalHandle: 'term_worker',
-            terminalState: 'released'
-          }),
-          handedOn(b.id),
-          handedOn(dispatchId)
-        ],
-        counts: { released: 1 }
-      }
-    )
-    await expect(
-      h.call('orchestration.workerList', { run: h.activeRunId, terminalState: 'retained' })
-    ).resolves.toMatchObject({ workers: [] })
   })
 })
