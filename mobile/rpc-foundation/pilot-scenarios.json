@@ -3440,7 +3440,7 @@
       "id": "sc-base-ref-default",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3505,7 +3505,7 @@
       "id": "sc-base-ref-worktree-hit",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3550,7 +3550,7 @@
       "id": "sc-base-ref-repo-fallback",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3596,7 +3596,7 @@
       "id": "sc-base-ref-unavailable",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3651,7 +3651,7 @@
       "id": "sc-history-loaded",
       "operation": "source-control.git-history",
       "family": "git.history-read",
-      "sites": ["mobile/src/source-control/mobile-git-history.ts"],
+      "sites": ["mobile/src/source-control/history/mobile-git-history.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3698,7 +3698,7 @@
       "id": "sc-commit-message-generated",
       "operation": "source-control.commit-message",
       "family": "git.commit-message-ai",
-      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "sites": ["mobile/src/source-control/commits/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3730,7 +3730,7 @@
       "id": "sc-commit-message-canceled",
       "operation": "source-control.commit-message",
       "family": "git.commit-message-ai",
-      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "sites": ["mobile/src/source-control/commits/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3780,7 +3780,7 @@
       "id": "sc-commit-message-cancel-rejected",
       "operation": "source-control.commit-message",
       "family": "git.commit-message-ai",
-      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "sites": ["mobile/src/source-control/commits/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3806,7 +3806,7 @@
       "id": "sc-pr-link-set",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3838,7 +3838,7 @@
       "id": "sc-pr-link-hosted-review",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3886,7 +3886,7 @@
       "id": "sc-pr-link-read",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3933,7 +3933,9 @@
       "id": "sc-review-status-normalized",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -3982,7 +3984,9 @@
       "id": "sc-review-status-entries-not-array",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4011,7 +4015,9 @@
       "id": "sc-review-commit",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4041,7 +4047,9 @@
       "id": "sc-review-commit-inner-failure",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4071,7 +4079,9 @@
       "id": "sc-review-commit-refused-empty-message",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4101,7 +4111,9 @@
       "id": "sc-review-commit-rejected",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4128,7 +4140,9 @@
       "id": "sc-prerequisite-push",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4167,7 +4181,9 @@
       "id": "sc-prerequisite-publish",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4249,7 +4265,9 @@
       "id": "sc-prerequisite-force-with-lease",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4287,7 +4305,9 @@
       "id": "sc-prerequisite-skipped",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4306,7 +4326,7 @@
       "id": "sc-eligibility-fetched",
       "operation": "source-control.hosted-review-eligibility",
       "family": "hostedReview.eligibility",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4349,7 +4369,7 @@
       "id": "sc-prefill-unavailable-on-refusal",
       "operation": "source-control.hosted-review-eligibility",
       "family": "hostedReview.eligibility",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4383,7 +4403,7 @@
       "id": "sc-prefill-unavailable-on-rejection",
       "operation": "source-control.hosted-review-eligibility",
       "family": "hostedReview.eligibility",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4415,8 +4435,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4493,8 +4513,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4549,8 +4569,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4607,8 +4627,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4647,8 +4667,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4684,8 +4704,8 @@
       "operation": "source-control.create-intent",
       "family": "hostedReview.create-intent",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
-        "mobile/src/source-control/mobile-hosted-review-create-intent.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent-runner.ts",
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4960,8 +4980,8 @@
       "operation": "source-control.create-intent",
       "family": "hostedReview.create-intent",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
-        "mobile/src/source-control/mobile-hosted-review-create-intent.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent-runner.ts",
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent.ts"
       ],
       "schedules": [],
       "steps": [
@@ -21386,7 +21406,7 @@
       "id": "sc-changes-loaded",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
+      "sites": ["mobile/src/source-control/changes/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21497,7 +21517,7 @@
       "id": "sc-changes-return-from-memory",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
+      "sites": ["mobile/src/source-control/changes/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21655,7 +21675,7 @@
       "id": "sc-changes-write-reads-live",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
+      "sites": ["mobile/src/source-control/changes/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21809,7 +21829,7 @@
       "id": "sc-history-branch-commits",
       "operation": "source-control.history-branch-commits",
       "family": "git.history-branch-commits",
-      "sites": ["mobile/src/source-control/MobileGitHistoryList.tsx"],
+      "sites": ["mobile/src/source-control/history/MobileGitHistoryList.tsx"],
       "schedules": [],
       "steps": [
         {
