@@ -7,6 +7,7 @@ import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktre
 import { getCloudWorkspaceSnapshot } from './orca-cloud-workspace-store'
 import { isCloudPrimaryRowNow, resolveCloudRowSandboxId } from './cloud-host-rows'
 import { refreshCloudWorktreeBindings } from '@/components/cloud-workspaces/cloud-workspace-identity'
+import { notePairedCloudSlept } from './paired-cloud-wake'
 
 type Row = { id: string; hostId?: string | null; isMainWorktree?: boolean }
 
@@ -42,6 +43,9 @@ export async function sleepPairedCloudSandboxes(worktreeIds: readonly string[]):
     const result = sandboxId ? await api.sleep(sandboxId).catch(() => null) : null
     if (!result?.ok) {
       stillRunning.push(id)
+    } else {
+      // The row says Asleep (not Active) now, and opening it wakes it (n38 GATE).
+      notePairedCloudSlept(id)
     }
   }
   return stillRunning

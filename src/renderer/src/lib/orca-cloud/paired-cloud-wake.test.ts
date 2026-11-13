@@ -12,7 +12,11 @@ vi.mock('@/components/billing/billing-summary-store', () => ({
 vi.mock('@/lib/worktree-sleep-view', () => ({ isWorktreeSleepViewHeld: () => false }))
 
 import { isPredictiveWakeCandidate } from './install-cloud-predictive-wake'
-import { wakePairedCloudWorkspace, wakePairedCloudWorkspaceIfAsleep } from './paired-cloud-wake'
+import {
+  notePairedCloudSlept,
+  wakePairedCloudWorkspace,
+  wakePairedCloudWorkspaceIfAsleep
+} from './paired-cloud-wake'
 import { getCloudWorkspaceSnapshot, seedCloudWorkspaceSnapshot } from './orca-cloud-workspace-store'
 import { resetCloudWorkspaceIdentityForTests } from '@/components/cloud-workspaces/cloud-workspace-identity'
 
@@ -134,5 +138,45 @@ describe('opening a paired workspace (n38 gate: Sleep, then open the row, and it
       ok: false,
       reason: 'Sandbox hours used up'
     })
+  })
+})
+
+describe('the first open right after Sleep (n38 GATE: it sat in "Reconnecting…" instead of waking)', () => {
+  it('a cached "ready" from before the Sleep does not stop the wake: the open reads status fresh', async () => {
+    // The cache still says running (read moments before Sleep); the server says asleep.
+    seedCloudWorkspaceSnapshot({
+      paired: { [ROW]: 'env-gh' },
+      status: {
+        [ROW]: { status: { ...asleep, state: 'ready' }, loading: false, error: null, fetchedAt: 1 }
+      }
+    })
+    const getStatus = vi.fn(async () => ({ ok: true as const, value: asleep }))
+    window.api.orcaCloudWorkspace.getStatus = getStatus
+    expect(await wakePairedCloudWorkspaceIfAsleep(ROW)).toEqual({ ok: true })
+    expect(getStatus).toHaveBeenCalled()
+    expect(wake).toHaveBeenCalledWith('sbx_gh')
+  })
+
+  it('slept from here and the status read fails: the open still wakes it', async () => {
+    seedCloudWorkspaceSnapshot({ paired: { [ROW]: 'env-gh' } })
+    window.api.orcaCloudWorkspace.getStatus = async () => ({
+      ok: false as const,
+      code: 'unavailable' as const,
+      message: 'down'
+    })
+    notePairedCloudSlept(ROW)
+    expect(await wakePairedCloudWorkspaceIfAsleep(ROW)).toEqual({ ok: true })
+    expect(wake).toHaveBeenCalledWith('sbx_gh')
+  })
+
+  it('never slept here and the read fails: it does not guess, nothing wakes', async () => {
+    seedCloudWorkspaceSnapshot({ paired: { ['other-row']: 'env-gh' } })
+    window.api.orcaCloudWorkspace.getStatus = async () => ({
+      ok: false as const,
+      code: 'unavailable' as const,
+      message: 'down'
+    })
+    expect(await wakePairedCloudWorkspaceIfAsleep('other-row')).toEqual({ ok: true })
+    expect(wake).not.toHaveBeenCalled()
   })
 })
