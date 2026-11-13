@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
@@ -9,7 +9,7 @@ import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
 import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
-import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   writeRefused,

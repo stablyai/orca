@@ -8,7 +8,7 @@ import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { managedOrcadSlot } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import {
   orcadSlotDir,

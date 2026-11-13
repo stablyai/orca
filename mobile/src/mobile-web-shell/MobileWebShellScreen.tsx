@@ -38,7 +38,7 @@ import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
-import { nativeStackReturn } from './native-stack-return'
+import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './ShellWaitingFrame'
@@ -171,6 +171,22 @@ export function MobileWebShellScreen({
     }
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
+    // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
+    const paneKey = hrefQuery(href).get('paneKey')
+    const session = rootState && paneKey ? nativeSessionReturn(rootState, href) : null
+    if (session && paneKey) {
+      const { target, source, count, routeKey } = session
+      if (count > 0) {
+        navigation.dispatch({ type: 'POP', payload: { count }, target, source })
+      }
+      navigation.dispatch({
+        type: 'SET_PARAMS',
+        target,
+        source: routeKey,
+        payload: { params: { paneKey } }
+      })
+      return
+    }
     const onStack = rootState ? nativeStackReturn(rootState, href) : null
     if (onStack === 'current') {
       return

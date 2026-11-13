@@ -25,7 +25,7 @@ import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktr
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
-import { runAfterFirstWindowShown } from './first-window-deferral'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 

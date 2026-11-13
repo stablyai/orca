@@ -15,8 +15,8 @@ import {
   wslGatedReaddir,
   wslGatedReadFile,
   wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from '../../parsing/session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'

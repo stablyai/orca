@@ -117,13 +117,14 @@ export function QuickCommandsSheet({
     // Why: quick commands sync with desktop, so an accidental one-tap delete
     // removes shared data rather than only dismissing a local row.
     Alert.alert(
-      t('session.quickCommandsSheet.deleteConfirmTitle', 'Delete "{{label}}"?', {
-        label: command.label || t('session.quickCommandsSheet.untitled', 'Untitled')
-      }),
-      t(
-        'session.quickCommandsSheet.deleteConfirmMessage',
-        'This quick command will be removed from your saved list.'
-      ),
+      t('common.delete', 'Delete'),
+      [
+        command.label || t('session.quickCommandsSheet.untitled', 'Untitled'),
+        t(
+          'session.quickCommandsSheet.deleteConfirmMessage',
+          'This quick command will be removed from your saved list.'
+        )
+      ].join('\n'),
       [
         { text: t('common.cancel', 'Cancel'), style: 'cancel' },
         {

@@ -36,6 +36,18 @@ export type ResolvedWorkspaceCleanupPolicy = {
   inactiveActionSupported: boolean
 }
 
+export const WORKSPACE_CLEANUP_RULE_KEYS = [
+  'merged',
+  'unchanged',
+  'inactive',
+  'automationRuns',
+  'orchestrationWorkers'
+] as const satisfies readonly Exclude<keyof WorkspaceCleanupRules, 'keepWhen'>[]
+
+export function hasEnabledWorkspaceCleanupRule(rules: WorkspaceCleanupRules): boolean {
+  return WORKSPACE_CLEANUP_RULE_KEYS.some((key) => rules[key].enabled)
+}
+
 // Flip when workspace archiving exists.
 const WORKSPACE_ARCHIVE_SUPPORTED = false
 

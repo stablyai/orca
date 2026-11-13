@@ -9,8 +9,8 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'skills/bundled-skill-install/bundled-skill-local-host',
   'skills/bundled-skill-install/bundled-skill-installation',
   'filesystem/macos-tree-clone',
-  'orcad/orcad-stale-lock-reclaim',
-  'orcad/orcad-host-identity-reset',
+  'orcad/instance-lock/orcad-stale-lock-reclaim',
+  'orcad/profile-state/orcad-host-identity-reset',
   'plugins/plugin-artifact-validation',
   'plugins/plugin-content-hash',
   'plugins/plugin-catalog-release-entry',
@@ -27,5 +27,5 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
+  'startup/network-compatibility/http1-compatibility-marker'
 ] as const

@@ -38,13 +38,13 @@ export function buildPrimaryCommitMessageAgentSpecs({
       binary: 'claude',
       // Claude -p accepts large prompts on stdin when no positional prompt is supplied.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, userArgs }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, toolFree, userArgs }) => [
         '-p',
         '--output-format',
         'text',
         '--model',
         model,
-        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy }),
+        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy, toolFree }),
         ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
         ...claudeBackgroundArgs(strictMcp, userArgs)
       ],

@@ -11,6 +11,7 @@ import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle
 import { restoreJournal } from '../../agent-session-journal/replay/journal-open'
 import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
 import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
+import { journalItemExecutionFence } from '../../agent-session-journal/projection/journal-item-provenance'
 import type Database from '../../../sqlite/sync-database'
 import {
   latestNativeChatUsageLimitCut,
@@ -168,18 +169,25 @@ export function usageLimitContinueChain(
   return chain
 }
 
-/** A cut as the host's sweep reads it: with the chain that led to it. */
-export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number }
+/** A cut as the host's sweep reads it: with the chain that led to it and the runtime fence that
+ *  ran its turn, which names the account it hit. */
+export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number; fence?: number }
 
 export function hostUsageLimitCut(
   snapshot: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly ChainSubmission[]
   },
-  cut: NativeChatUsageLimitCut | null
+  cut: NativeChatUsageLimitCut | null,
+  fenceOf: (itemId: string) => number | undefined
 ): HostUsageLimitCut | null {
+  const fence = cut ? fenceOf(cut.turnItemId) : undefined
   return cut
-    ? { ...cut, chain: usageLimitContinueChain(snapshot.items, snapshot.submissions, cut) }
+    ? {
+        ...cut,
+        chain: usageLimitContinueChain(snapshot.items, snapshot.submissions, cut),
+        ...(fence === undefined ? {} : { fence })
+      }
     : null
 }
 
@@ -189,14 +197,13 @@ export function readSavedUsageLimitCut(
   id: string
 ): HostUsageLimitCut | null {
   const load = restoreJournal(db, id)
-  const snapshot =
-    load && !load.newer && !load.damage
-      ? renderJournalStatus(load.state, journalInputOrder(load.state))
-      : null
-  return snapshot
-    ? hostUsageLimitCut(
-        snapshot,
-        latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
-      )
-    : null
+  if (!load || load.newer || load.damage) {
+    return null
+  }
+  const snapshot = renderJournalStatus(load.state, journalInputOrder(load.state))
+  return hostUsageLimitCut(
+    snapshot,
+    latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
+    (itemId) => journalItemExecutionFence(load.state, itemId)
+  )
 }

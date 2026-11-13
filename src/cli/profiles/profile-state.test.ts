@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessHostModule from '@orca/process-host'
-import * as http1Marker from '../../main/startup/http1-compatibility-marker'
+import * as http1Marker from '../../main/startup/network-compatibility/http1-compatibility-marker'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly

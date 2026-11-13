@@ -1,4 +1,4 @@
-import { initializeMainProcessI18nAndMenu } from './main-process-i18n-menu'
+import { initializeMainProcessI18nAndMenu } from './main-window/main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
@@ -6,7 +6,7 @@ import { releaseDesktopActivationAfter } from './serve-launch/serve-desktop-acti
 import {
   initializeMainProcessRuntimeLaunch,
   type MainProcessRuntimeLaunchOptions
-} from './main-process-runtime-launch'
+} from './runtime-startup/main-process-runtime-launch'
 
 export async function initializeMainProcessReady(
   launchOptions: MainProcessRuntimeLaunchOptions
