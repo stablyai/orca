@@ -42,7 +42,18 @@ export function subscribeEditorRuntimeFileWatch(
         }
       },
       () => {
-        if (isCurrent() && !readySeen) {
+        if (!isCurrent()) {
+          return
+        }
+        // Resync missed changes only once the host watcher is installed, or writes before install are lost.
+        if (resync) {
+          onPayload({
+            worktreePath: target.worktreePath,
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            resync: true
+          })
+        }
+        if (!readySeen) {
           readySeen = true
           onFirstReady?.()
         }
@@ -54,14 +65,6 @@ export function subscribeEditorRuntimeFileWatch(
           return
         }
         unsubscribe = stop
-        // A restored stream cannot replay file changes missed while contact was lost.
-        if (resync) {
-          onPayload({
-            worktreePath: target.worktreePath,
-            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
-            resync: true
-          })
-        }
       })
       .catch((error: unknown) => {
         if (isCurrent()) {
