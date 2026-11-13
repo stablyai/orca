@@ -1,5 +1,5 @@
 import React from 'react'
-import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
+import { openCloudWorkspacePicker } from '../cloud-workspaces/cloud-workspace-picker-store'
 import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Cloud, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -374,8 +374,8 @@ export function VmBuildSheet({
                   store.openSettingsPage()
                 },
                 onSignIn: signIn,
-                // Your workspaces on Home, where you can put one to sleep or delete it.
-                onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
+                // Your running workspaces, where you can put one to sleep or delete it.
+                onShowWorkspaces: () => openCloudWorkspacePicker({ kind: 'running' }),
                 onContactSupport: () => openAppHttpLink(ORCA_SUPPORT_URL),
                 onConnectGitHub: connectGitHub,
                 onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

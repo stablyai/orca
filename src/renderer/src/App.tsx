@@ -15,6 +15,7 @@ import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretReque
 import { LocalCommandApprovalDialogHost } from './components/local-commands/LocalCommandApprovalDialog'
 import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
 import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
+import { CloudWorkspacePickerDialog } from './components/cloud-workspaces/CloudWorkspacePicker'
 import { PokesNotifier } from './components/teammates/PokesNotifier'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
@@ -137,6 +138,7 @@ function App(): React.JSX.Element {
             <LocalCommandApprovalDialogHost />
             <TeamDialogHost />
             <TeammateProfileDialog />
+            <CloudWorkspacePickerDialog />
             <PokesNotifier />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>

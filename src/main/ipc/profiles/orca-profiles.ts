@@ -45,6 +45,7 @@ import {
   selectCurrentOrcaProfileOrg,
   signOutCurrentOrcaProfile
 } from '../../orca-profiles/cloud-auth/profile-cloud-service'
+import { connectCurrentArgsFromUnknown } from '../../orca-profiles/cloud-auth/profile-cloud-pkce'
 import { refreshCurrentOrcaProfileAuth } from '../../orca-profiles/cloud-auth/profile-cloud-capability-refresh'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
 import { registerOrcaProfileBillingHandlers } from './orca-profile-billing-handlers'
@@ -258,8 +259,9 @@ export function registerOrcaProfileHandlers(
 
   ipcMain.handle(
     'orcaProfiles:connectCurrent',
-    async (): Promise<ConnectCurrentOrcaProfileResult> => {
-      const result = await connectCurrentOrcaProfile(getProfileUserDataPath())
+    async (_event, args?: unknown): Promise<ConnectCurrentOrcaProfileResult> => {
+      const connect = connectCurrentArgsFromUnknown(args)
+      const result = await connectCurrentOrcaProfile(getProfileUserDataPath(), connect)
       if (result.status === 'connected') {
         options.onAuthMutation?.()
       }

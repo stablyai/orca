@@ -32,7 +32,7 @@ export function createHostedEnvironmentService(
           ? createHostedEnvironmentClient({
               baseUrl: config.controlPlaneUrl,
               getAccessToken: config.getAccessToken,
-              fetch: fetchImpl
+              fetch: fetchImpl ?? config.fetch
             })
           : null
       }

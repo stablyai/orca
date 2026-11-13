@@ -47,8 +47,11 @@ export type EphemeralVmApi = {
       diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
     }[]
   >
-  /** Names (never values) of this computer's env that recipe create scripts receive. */
-  forwardedEnvSummary: () => Promise<RecipeForwardedEnvSummary>
+  /**
+   * Names (never values) of this computer's env that recipe scripts receive. Given a recipe host's
+   * environmentId, main applies that recipe's passEnv; otherwise the whole env.
+   */
+  forwardedEnvSummary: (args?: { environmentId?: string }) => Promise<RecipeForwardedEnvSummary>
   /** Credential-like variable names (never values) recipe scripts would inherit from Orca. */
   listCredentialEnvNames: () => Promise<string[]>
   doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>

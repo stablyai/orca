@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/orca-profiles'
 import { getOrcaProfileDirectory } from '../profile-storage-paths'
 import { allowsPlaintextOrcaCloudSession } from '../cloud-auth/profile-cloud-auth-config'
+import { forgetOrcaCloudMemberships, noteOrcaCloudMemberships } from '../cloud-token-epoch'
 
 export type OrcaCloudSession = {
   accessToken: string
@@ -156,6 +157,8 @@ export function saveOrcaCloudSession(
   options: { spentOnFailure?: boolean } = {}
 ): OrcaCloudSessionPersistence {
   const key = orcaCloudSessionKey(profileId, userDataPath)
+  // Why: a role or membership change must drop cached sandbox tokens minted under the old role.
+  noteOrcaCloudMemberships(key, session.organizations)
   try {
     const persistence = writeOrcaCloudSession(profileId, userDataPath, session)
     unsavedRotations.delete(key)
@@ -271,6 +274,7 @@ export function clearOrcaCloudSession(profileId: string, userDataPath: string): 
   const key = orcaCloudSessionKey(profileId, userDataPath)
   unsavedRotations.delete(key)
   memorySessions.delete(key)
+  forgetOrcaCloudMemberships(key)
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }
 

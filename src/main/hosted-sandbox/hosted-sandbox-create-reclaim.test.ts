@@ -1,0 +1,105 @@
+// GH-CREATE-CANCEL: a create cancelled in flight never leaves a sandbox running, for the owned
+// create and the GitHub-only create alike (both use createSandboxWithProgress).
+import { describe, expect, it, vi } from 'vitest'
+import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { HostedEntitlementDeniedError } from './hosted-environment-provider'
+import { reclaimCancelledCreate } from './hosted-sandbox-create-reclaim'
+import { createSandboxWithProgress } from './hosted-sandbox-driver'
+
+const READY = {
+  sandbox: {
+    id: 'sbx_1',
+    workspaceId: 'web-1',
+    status: 'running' as const,
+    machineSize: 'standard' as const,
+    region: 'iad1',
+    session: null,
+    createdAt: 1
+  },
+  connection: { type: 'orca-server' as const, pairingCode: 'code', projectRoot: '/work' }
+}
+const BODY = { workspaceId: 'web-1', machineSize: 'standard' as const }
+const quiet = { waitMs: 0, log: () => {} }
+
+function client() {
+  return {
+    create: vi.fn(async () => READY),
+    bootPlan: vi.fn(async () => 'clone' as const),
+    cloneStatus: vi.fn(async () => ({ state: 'done' as const })),
+    destroy: vi.fn(async (id: string) => ({ id, status: 'destroyed' as const }))
+  }
+}
+
+describe('reclaimCancelledCreate', () => {
+  it('replays the create by its key and deletes the sandbox it gets back', async () => {
+    const api = client()
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
+    expect(api.create).toHaveBeenCalledWith(BODY, undefined, 'create:k1')
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+  })
+
+  it('waits while the first create is still in progress (409), then deletes', async () => {
+    const api = client()
+    api.create
+      .mockRejectedValueOnce(new EnvironmentProviderError('conflict', 'idempotency_in_progress'))
+      .mockRejectedValueOnce(new EnvironmentProviderError('unavailable', 'try later'))
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
+    expect(api.create).toHaveBeenCalledTimes(3)
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+  })
+
+  it('a refused replay means the cancelled create made nothing either', async () => {
+    const api = client()
+    api.create.mockRejectedValueOnce(new HostedEntitlementDeniedError('denied', 'no_subscription'))
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
+    expect(api.destroy).not.toHaveBeenCalled()
+  })
+
+  it('gives up (false) when it can never tell', async () => {
+    const api = client()
+    api.create.mockRejectedValue(new EnvironmentProviderError('unavailable', 'down'))
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', { ...quiet, attempts: 3 })).toBe(
+      false
+    )
+  })
+})
+
+describe('createSandboxWithProgress cancel', () => {
+  const spec = { workspaceId: 'web-1', machineSize: 'standard', idempotencyKey: 'create:k1' }
+
+  it('cancelled while the create was in flight: reclaims by key, then reports the cancel', async () => {
+    const api = client()
+    const controller = new AbortController()
+    api.create.mockImplementationOnce(async () => {
+      controller.abort()
+      throw new EnvironmentProviderError('aborted', 'Cancelled.')
+    })
+    await expect(
+      createSandboxWithProgress(api, spec, { signal: controller.signal })
+    ).rejects.toMatchObject({ code: 'aborted' })
+    // The replay (no signal, same key) found the sandbox and deleted it.
+    expect(api.create).toHaveBeenLastCalledWith(expect.anything(), undefined, 'create:k1')
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+  })
+
+  it('cancelled just as the create answered: deletes the sandbox and reports the cancel', async () => {
+    const api = client()
+    const controller = new AbortController()
+    api.create.mockImplementationOnce(async () => {
+      controller.abort()
+      return READY
+    })
+    await expect(
+      createSandboxWithProgress(api, spec, { signal: controller.signal })
+    ).rejects.toMatchObject({ code: 'aborted' })
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+    expect(api.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('not cancelled: no replay, no delete', async () => {
+    const api = client()
+    await expect(createSandboxWithProgress(api, spec, {})).resolves.toBe(READY)
+    expect(api.create).toHaveBeenCalledTimes(1)
+    expect(api.destroy).not.toHaveBeenCalled()
+  })
+})

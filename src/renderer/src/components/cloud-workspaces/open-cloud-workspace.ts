@@ -11,8 +11,6 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { cloudWorkspaceShareLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { cloudWorkspaceIdentity, rememberCloudWorkspaces } from './cloud-workspace-identity'
 import {
   getWorktreeExecutionHostId,
   toRuntimeExecutionHostId
@@ -66,7 +64,20 @@ function isPairingRejected(error: unknown): boolean {
   return error instanceof Error && /\b(unauthori[sz]ed|device_revoked)\b/i.test(error.message)
 }
 
-async function connectAndReveal(environmentId: string, name: string): Promise<OpenOutcome> {
+export type OpenCloudWorkspaceOptions = {
+  /**
+   * The server this open connects to, before any of its rows load. A GitHub-only create's sheet
+   * hides that server's rows until it hands off to them, so its pending row never doubles up.
+   */
+  onHost?: (hostId: string) => void
+}
+
+async function connectAndReveal(
+  environmentId: string,
+  name: string,
+  options: OpenCloudWorkspaceOptions = {}
+): Promise<OpenOutcome> {
+  options.onHost?.(toRuntimeExecutionHostId(environmentId))
   const environments = await window.api.runtimeEnvironments.list()
   useAppStore.getState().setRuntimeEnvironments(environments)
   const environment = environments.find((e) => e.id === environmentId)
@@ -147,7 +158,11 @@ async function wakeIfAsleep(workspace: CloudWorkspace): Promise<OpenOutcome | nu
   }
 }
 
-async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<OpenOutcome> {
+async function pairAndReveal(
+  workspace: CloudWorkspace,
+  name: string,
+  options: OpenCloudWorkspaceOptions
+): Promise<OpenOutcome> {
   const api = window.api.cloudWorkspaces
   const binding = (await api.environmentBindings())[workspace.id]
   if (binding) {
@@ -161,7 +176,7 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
         return refused
       }
       try {
-        return await connectAndReveal(binding.environmentId, name)
+        return await connectAndReveal(binding.environmentId, name, options)
       } catch (error) {
         // Only a rejected pairing is fixed by pairing again; anything else is surfaced as is.
         if (!isPairingRejected(error)) {
@@ -213,10 +228,13 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
   }
   // Messages to this workspace now carry the sender line if it is shared with the team.
   void refreshCloudMessageSenders().catch(() => undefined)
-  return await connectAndReveal(added.environment.id, name)
+  return await connectAndReveal(added.environment.id, name, options)
 }
 
-async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
+async function openOnce(
+  workspace: CloudWorkspace,
+  options: OpenCloudWorkspaceOptions
+): Promise<OpenOutcome> {
   const name = cloudWorkspaceTitle(workspace)
   try {
     if (workspace.access === 'owner') {
@@ -244,7 +262,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
         )
       }
     }
-    return await pairAndReveal(workspace, name)
+    return await pairAndReveal(workspace, name, options)
   } catch (error) {
     // Raw transport/RPC messages are not user copy; keep them for diagnostics only.
     console.warn('[cloud-workspaces] open failed', error)
@@ -262,75 +280,18 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
 // instead of minting parallel grants.
 const opening = new Map<string, Promise<OpenOutcome>>()
 
-export function openCloudWorkspace(workspace: CloudWorkspace): Promise<OpenOutcome> {
+export function openCloudWorkspace(
+  workspace: CloudWorkspace,
+  options: OpenCloudWorkspaceOptions = {}
+): Promise<OpenOutcome> {
   const existing = opening.get(workspace.id)
   if (existing) {
     return existing
   }
-  const attempt = openOnce(workspace).finally(() => opening.delete(workspace.id))
+  const attempt = openOnce(workspace, options).finally(() => opening.delete(workspace.id))
   opening.set(workspace.id, attempt)
   return attempt
 }
 
-// How long Copy link waits on the control plane before settling for the sandbox-id link.
-const LINK_LOOKUP_MS = 3_000
-
-async function lookUpLink(id: string): Promise<string | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    const fetched = await Promise.race([
-      window.api.cloudWorkspaces.get(id),
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), LINK_LOOKUP_MS)
-      })
-    ])
-    if (!fetched?.ok) {
-      return null
-    }
-    rememberCloudWorkspaces([fetched.value])
-    return fetched.value.link ?? null
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-/**
- * The org slug + W-number link when the control plane gave one, else the sandbox id form, which
- * opens for anyone with access. Never rejects: a device that didn't create the workspace (paired,
- * offline, signed out) still gets a working link.
- */
-export async function shareLinkFor(id: string, chatId?: string | null): Promise<string> {
-  const link = cloudWorkspaceIdentity(id)?.link ?? (await lookUpLink(id))
-  return cloudWorkspaceShareLink({ id, ...(link ? { link } : {}) }, chatId)
-}
-
-export async function copyCloudWorkspaceLink(
-  id: string,
-  chatId?: string | null,
-  options: { quiet?: boolean } = {}
-): Promise<boolean> {
-  const link = await shareLinkFor(id, chatId)
-  try {
-    // Why: main-process clipboard, like every other renderer copy. navigator.clipboard needs a
-    // focused document with live user activation; after the link lookup (or from the menu or a
-    // shortcut) Electron rejects it with "Document is not focused".
-    await window.api.ui.writeClipboardText(link)
-  } catch (error) {
-    console.warn('[cloud-workspaces] copy link failed', error)
-    toast.error(
-      translate('auto.components.cloudWorkspaces.copyFailed', "Couldn't copy the link. Try again.")
-    )
-    return false
-  }
-  if (options.quiet) {
-    return true
-  }
-  toast.success(
-    chatId
-      ? translate('auto.components.cloudWorkspaces.chatLinkCopied', 'Chat link copied')
-      : translate('auto.components.cloudWorkspaces.workspaceLinkCopied', 'Workspace link copied')
-  )
-  return true
-}
+// Copy link lives beside it; re-exported so callers keep one import.
+export { copyCloudWorkspaceLink, shareLinkFor } from './cloud-workspace-share-link'

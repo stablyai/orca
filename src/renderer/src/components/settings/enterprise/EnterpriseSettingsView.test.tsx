@@ -222,8 +222,8 @@ describe('without the Enterprise plan', () => {
     expect(contact).toHaveLength(1)
     fireEvent.click(contact[0]!)
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
-    // The Copy link chevron sits beside it (the open-in-browser rule).
-    expect(screen.getAllByRole('button', { name: 'More link options' })).toHaveLength(1)
+    // Contact sales is not a sign-in page: a plain button, no Copy link chevron (AUTH-ONLY-COPY-LINK).
+    expect(screen.queryAllByRole('button', { name: 'More link options' })).toHaveLength(0)
   })
 
   it('a team missing only the audit log keeps the button on that block, with no banner', () => {
@@ -348,9 +348,95 @@ describe('copy', () => {
       'routine.run',
       'routine.run.start',
       'routine.run.finish',
-      'routine.rotate_webhook'
+      'routine.rotate_webhook',
+      // Sent by auth and billing (AUDIT-AUTH-EVENTS).
+      'member.invited',
+      'member.invite_revoked',
+      'member.joined',
+      'team.created',
+      'team.renamed',
+      'team.deleted',
+      'billing.plan_started',
+      'billing.plan_changed',
+      'billing.plan_canceled',
+      'billing.cancel_scheduled',
+      'billing.cancel_reverted',
+      'billing.seats_changed',
+      'billing.overage_enabled',
+      'billing.overage_disabled',
+      'billing.spend_cap_changed'
     ]
     expect(recorded.filter((action) => !isKnownAuditAction(action))).toEqual([])
+  })
+
+  it('words the events auth and billing send', () => {
+    const base: CloudAuditEvent = {
+      id: 'a',
+      at: FIXTURE_NOW,
+      category: 'members',
+      action: 'member.invited',
+      actor: { kind: 'person', userId: 'u_ada', name: 'Ada Lovelace', via: null },
+      target: { type: 'invite', id: null, label: 'new@acme.dev' },
+      detail: { role: 'member' }
+    }
+    const say = (action: string, target: CloudAuditEvent['target'] = null): string =>
+      auditEventSentence({ ...base, action, target })
+    expect(auditEventSentence(base)).toBe('Invited new@acme.dev')
+    expect(say('member.invite_revoked', base.target)).toBe('Canceled the invite for new@acme.dev')
+    expect(say('member.joined', { type: 'member', id: 'u_x', label: 'Bo' })).toBe('Joined the team')
+    expect(say('team.renamed', { type: 'team', id: null, label: 'Acme Labs' })).toBe(
+      'Renamed the team to “Acme Labs”'
+    )
+    expect(say('team.deleted', { type: 'team', id: null, label: 'Acme Labs' })).toBe(
+      'Deleted the team'
+    )
+  })
+
+  it('puts what billing recorded into the sentence, and falls back when it recorded nothing', () => {
+    const say = (action: string, detail: Record<string, unknown> | null): string =>
+      auditEventSentence(
+        {
+          id: 'b',
+          at: FIXTURE_NOW,
+          category: 'billing',
+          action,
+          actor: { kind: 'system', userId: null, name: null, via: null },
+          target: { type: 'plan', id: null },
+          detail
+        },
+        undefined,
+        'en-US'
+      )
+    expect(say('billing.plan_started', { plan: 'team', interval: 'month', seats: 2 })).toBe(
+      'Plan started (Team, monthly)'
+    )
+    expect(say('billing.plan_started', null)).toBe('Plan started')
+    expect(say('billing.plan_changed', { plan: 'team', interval: 'year' })).toBe(
+      'Plan changed to Team, annual'
+    )
+    expect(say('billing.plan_changed', { plan: 'team' })).toBe('Plan changed')
+    expect(say('billing.seats_changed', { seats: 5, previousSeats: 3 })).toBe(
+      'Seats changed from 3 to 5'
+    )
+    expect(say('billing.seats_changed', { seats: 5 })).toBe('Seats changed')
+    expect(say('billing.plan_canceled', { plan: 'team' })).toBe('Plan ended')
+    expect(say('billing.cancel_scheduled', { endsAt: Date.UTC(2026, 11, 2, 12) })).toBe(
+      'Plan set to end on Dec 2, 2026'
+    )
+    expect(say('billing.cancel_scheduled', null)).toBe('Plan set to end at the next renewal')
+    expect(say('billing.cancel_reverted', null)).toBe('Plan set to renew again')
+    expect(
+      say('billing.spend_cap_changed', { spendCapCents: 5000, previousSpendCapCents: null })
+    ).toBe('Changed the monthly spend cap to $50')
+    expect(say('billing.spend_cap_changed', { spendCapCents: 1250 })).toBe(
+      'Changed the monthly spend cap to $12.50'
+    )
+    // Back to the plan's default cap: no amount to show.
+    expect(say('billing.spend_cap_changed', { previousSpendCapCents: 5000 })).toBe(
+      'Changed the monthly spend cap'
+    )
+    expect(say('billing.overage_enabled', null)).toBe('Turned on overage')
+    expect(say('billing.overage_disabled', null)).toBe('Turned off overage')
   })
 
   it('falls back to the plain sentence when the target has no name', () => {

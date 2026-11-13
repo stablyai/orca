@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { registerSignInNotice } from '@/lib/orca-cloud/sign-in-notice-visibility'
 import { Button } from './ui/button'
 import { OpenExternalSplitButton } from './open-external/OpenExternalSplitButton'
+import { mintFirstClickLink, signInLinkHint } from './orca-sign-in-link'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -12,7 +13,9 @@ import { useAppStore } from '../store/index'
 async function copySignInLink(link: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(link)
-    toast.success(translate('auto.components.OrcaSignInProgress.copied', 'Sign-in link copied'))
+    toast.success(translate('auto.components.OrcaSignInProgress.copied', 'Sign-in link copied'), {
+      description: signInLinkHint()
+    })
   } catch (error) {
     console.warn('Could not copy the Orca sign-in link:', error)
     toast.error(
@@ -49,6 +52,7 @@ export function OrcaSignInButton({
         groupClassName={props.className}
         className="flex-1"
         link={link}
+        copyHint={signInLinkHint()}
         onClick={onClick}
       >
         {t('auto.components.OrcaSignInProgress.reopenBrowser', 'Reopen browser')}
@@ -56,10 +60,19 @@ export function OrcaSignInButton({
       </OpenExternalSplitButton>
     )
   }
+  // COPY-LINK-FIRST-CLICK: Copy link starts the same sign-in without opening the browser and
+  // copies its link (the button then reads "Reopen browser" over that pending sign-in).
   return (
-    <Button {...props} type="button" onClick={onClick}>
+    <OpenExternalSplitButton
+      {...props}
+      groupClassName={props.className}
+      className="flex-1"
+      link={() => mintFirstClickLink(() => void connect({ openBrowser: false }))}
+      copyHint={signInLinkHint()}
+      onClick={onClick}
+    >
       {children}
-    </Button>
+    </OpenExternalSplitButton>
   )
 }
 

@@ -1,5 +1,6 @@
 // Recipe scripts run locally and inherit Orca's environment. These helpers let a recipe opt into a
 // narrower environment (`passEnv`) and let the UI name the credential-like variables a recipe sees.
+import { AGENT_CREDENTIAL_NAMES } from './agent-credentials/agent-credential-names'
 
 /** Variables every recipe keeps even with `passEnv`, so shells and provider CLIs still start. */
 export const RECIPE_BASE_ENV_NAMES: readonly string[] = [
@@ -63,6 +64,36 @@ export function isCredentialLikeEnvName(name: string): boolean {
   )
 }
 
+const AGENT_CREDENTIAL_NAME_SET = new Set(Object.values(AGENT_CREDENTIAL_NAMES).flat())
+const CREDENTIAL_SEGMENTS = new Set([
+  'KEY',
+  'KEYS',
+  'APIKEY',
+  'TOKEN',
+  'TOKENS',
+  'SECRET',
+  'SECRETS',
+  'CREDENTIAL',
+  'CREDENTIALS',
+  'PAT'
+])
+const CREDENTIAL_SUBSTRINGS = /PASSWORD|PASSWD|SECRET|TOKEN|PRIVATE_KEY|API_?KEY/
+
+/** The host panel's classifier: agent credential names, plus key/token/secret-shaped segments. */
+export function looksLikeCredentialEnvName(name: string): boolean {
+  const upper = name.toUpperCase()
+  return (
+    AGENT_CREDENTIAL_NAME_SET.has(upper) ||
+    CREDENTIAL_SUBSTRINGS.test(upper) ||
+    upper.split(/[_\-.]/).some((segment) => CREDENTIAL_SEGMENTS.has(segment))
+  )
+}
+
+/** The one rule every recipe env warning uses, so the host panel and Settings name the same variables. */
+export function isRecipeCredentialEnvName(name: string): boolean {
+  return looksLikeCredentialEnvName(name) || isCredentialLikeEnvName(name)
+}
+
 /** `passEnv` entries are exact names or a prefix ending in `*` (e.g. `AWS_*`). */
 export function isRecipeEnvNamePassed(
   name: string,
@@ -104,7 +135,7 @@ export function buildRecipeInheritedEnv(
 /** Sorted credential-like names with a non-empty value in `source`. Never returns values. */
 export function listCredentialLikeEnvNames(source: NodeJS.ProcessEnv): string[] {
   return Object.entries(source)
-    .filter(([name, value]) => Boolean(value) && isCredentialLikeEnvName(name))
+    .filter(([name, value]) => Boolean(value) && isRecipeCredentialEnvName(name))
     .map(([name]) => name)
     .sort((a, b) => a.localeCompare(b))
 }

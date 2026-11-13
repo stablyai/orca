@@ -7,6 +7,7 @@ import type {
 import { availabilityRetryDelay } from '@/lib/availability-retry'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
+import { useAppStore } from '@/store'
 
 /** Presence is live; the list re-reads on this beat while visible (and on focus). */
 const POLL_MS = 8_000
@@ -82,6 +83,12 @@ export function useCloudWorkspacesAvailable(): boolean | null {
     },
     () => availableValue
   )
+}
+
+/** Signed in to Orca and this build has a control plane: cloud workspaces can be listed and opened. */
+export function useCloudWorkspacesPresent(): boolean {
+  const signedIn = useAppStore((s) => Boolean(s.orcaProfileAuthStatus?.cloud))
+  return useCloudWorkspacesAvailable() === true && signedIn
 }
 
 /**
