@@ -1,11 +1,16 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { giveMacMainExecutableUniqueUuid } = require('./macos-executable-uuid.cjs')
+const {
+  assertMacExecutableUuid,
+  giveMacExecutableUniqueUuid,
+  rewriteMachOUuids
+} = require('./macos-executable-uuid.cjs')
 
 const ARM64 = 0x0100000c
 const X86_64 = 0x01000007
@@ -45,50 +50,50 @@ function fatBinary(slices) {
   return Buffer.concat(parts)
 }
 
-function withApp(executable, run) {
-  const app = join(mkdtempSync(join(tmpdir(), 'orca-exe-uuid-')), 'Orca.app')
-  try {
-    mkdirSync(join(app, 'Contents', 'MacOS'), { recursive: true })
-    const path = join(app, 'Contents', 'MacOS', 'Orca')
-    writeFileSync(path, executable)
-    run(app, path)
-  } finally {
-    rmSync(join(app, '..'), { recursive: true, force: true })
-  }
-}
-
 const uuidAt = (buffer, offset) => buffer.subarray(offset, offset + 16).toString('hex')
 
-describe('giveMacMainExecutableUniqueUuid', () => {
+describe('rewriteMachOUuids', () => {
   it('replaces the stock UUID of a thin executable and nothing else', () => {
     const original = thinSlice(ARM64)
-    withApp(original, (app, path) => {
-      giveMacMainExecutableUniqueUuid(app, 'com.stablyai.orca', 'Orca')
-      const rewritten = readFileSync(path)
-      expect(uuidAt(rewritten, 56)).toBe('e64304103b228bd69677b18884034a30')
-      expect(Buffer.concat([rewritten.subarray(0, 56), rewritten.subarray(72)])).toEqual(
-        Buffer.concat([original.subarray(0, 56), original.subarray(72)])
-      )
-    })
+    const rewritten = Buffer.from(original)
+    rewriteMachOUuids(rewritten, 'com.stablyai.orca', 'Orca')
+    expect(uuidAt(rewritten, 56)).toBe('e64304103b228bd69677b18884034a30')
+    expect(Buffer.concat([rewritten.subarray(0, 56), rewritten.subarray(72)])).toEqual(
+      Buffer.concat([original.subarray(0, 56), original.subarray(72)])
+    )
   })
 
   it('gives every slice of a universal executable its own stable UUID', () => {
-    withApp(fatBinary([thinSlice(X86_64), thinSlice(ARM64)]), (app, path) => {
-      giveMacMainExecutableUniqueUuid(app, 'com.stablyai.orca', 'Orca')
-      giveMacMainExecutableUniqueUuid(app, 'com.stablyai.orca', 'Orca')
-      const rewritten = readFileSync(path)
-      expect(uuidAt(rewritten, 4096 + 56)).toBe('016ee6813dc381c7a6da12dc23b89dd9')
-      expect(uuidAt(rewritten, 8192 + 56)).toBe('e64304103b228bd69677b18884034a30')
-    })
+    const binary = fatBinary([thinSlice(X86_64), thinSlice(ARM64)])
+    rewriteMachOUuids(binary, 'com.stablyai.orca', 'Orca')
+    rewriteMachOUuids(binary, 'com.stablyai.orca', 'Orca')
+    expect(uuidAt(binary, 4096 + 56)).toBe('016ee6813dc381c7a6da12dc23b89dd9')
+    expect(uuidAt(binary, 8192 + 56)).toBe('e64304103b228bd69677b18884034a30')
   })
 
   it('refuses an executable without LC_UUID', () => {
     const slice = thinSlice(ARM64)
     slice.writeUInt32LE(0x1a, 48)
-    withApp(slice, (app) => {
-      expect(() => giveMacMainExecutableUniqueUuid(app, 'com.stablyai.orca', 'Orca')).toThrow(
-        'has no LC_UUID'
+    expect(() => rewriteMachOUuids(slice, 'com.stablyai.orca', 'Orca')).toThrow('has no LC_UUID')
+  })
+})
+
+describe.runIf(process.platform === 'darwin')('giveMacExecutableUniqueUuid', () => {
+  it('leaves a signed, runnable universal executable that passes the release check', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-exe-uuid-'))
+    try {
+      const executable = join(dir, 'Orca')
+      // A real platform-signed fat binary: rewriting it without re-signing gets it killed at exec.
+      copyFileSync('/usr/bin/true', executable)
+      expect(() => assertMacExecutableUuid(executable, 'com.stablyai.orca')).toThrow(
+        'expected 016EE681-3DC3-81C7-A6DA-12DC23B89DD9'
       )
-    })
+      giveMacExecutableUniqueUuid(executable, 'com.stablyai.orca')
+      execFileSync(executable)
+      execFileSync('codesign', ['--verify', '--strict', executable])
+      assertMacExecutableUuid(executable, 'com.stablyai.orca')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

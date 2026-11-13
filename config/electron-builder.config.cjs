@@ -6,7 +6,7 @@ const {
   applyMacHelperFolderUsageDescriptions
 } = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
 const {
-  giveMacMainExecutableUniqueUuid
+  giveMacExecutableUniqueUuid
 } = require('./scripts/desktop-distribution/macos/macos-executable-uuid.cjs')
 const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
@@ -429,10 +429,15 @@ module.exports = {
         context.packager.appInfo.productFilename
       )
       // Before signing, so the signature seals the rewritten executable.
-      giveMacMainExecutableUniqueUuid(
-        join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
-        context.packager.appInfo.id,
-        context.packager.appInfo.productFilename
+      giveMacExecutableUniqueUuid(
+        join(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          'Contents',
+          'MacOS',
+          context.packager.appInfo.productFilename
+        ),
+        context.packager.appInfo.id
       )
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
       const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)

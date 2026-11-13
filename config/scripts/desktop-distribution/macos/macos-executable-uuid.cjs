@@ -1,7 +1,9 @@
-// macOS Local Network privacy keys apps by main executable UUID; stock Electron's is shared by every app on that version (TN3179).
+// macOS Local Network privacy maps a process to its app by executable UUID; stock Electron's and Node's are shared by every app shipping that build (TN3179).
+const { execFileSync } = require('node:child_process')
 const { createHash } = require('node:crypto')
-const { readFileSync, writeFileSync } = require('node:fs')
-const { join } = require('node:path')
+const { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
+const { tmpdir } = require('node:os')
+const { basename, join } = require('node:path')
 
 const MH_MAGIC = 0xfeedface
 const MH_MAGIC_64 = 0xfeedfacf
@@ -40,10 +42,9 @@ function sliceOffsets(buffer) {
   return offsets
 }
 
-/** Rewrites LC_UUID in every slice in place; uuidFor(cpuType) returns the new 16 bytes. */
-function rewriteMachOUuids(buffer, uuidFor) {
-  const changes = []
-  for (const offset of sliceOffsets(buffer)) {
+/** Where each slice's LC_UUID payload sits. */
+function machOUuidSlots(buffer) {
+  return sliceOffsets(buffer).map((offset) => {
     const magic = buffer.readUInt32LE(offset)
     if (magic !== MH_MAGIC && magic !== MH_MAGIC_64) {
       throw new Error(
@@ -53,35 +54,62 @@ function rewriteMachOUuids(buffer, uuidFor) {
     const cpuType = buffer.readUInt32LE(offset + 4)
     const commandCount = buffer.readUInt32LE(offset + 16)
     let command = offset + (magic === MH_MAGIC_64 ? 32 : 28)
-    let uuidOffset = -1
     for (let i = 0; i < commandCount; i++) {
       if (buffer.readUInt32LE(command) === LC_UUID) {
-        uuidOffset = command + 8
-        break
+        return { cpuType, uuidOffset: command + 8 }
       }
       command += buffer.readUInt32LE(command + 4)
     }
-    if (uuidOffset < 0) {
-      throw new Error(`Mach-O slice for CPU type ${cpuType} has no LC_UUID`)
-    }
+    throw new Error(`Mach-O slice for CPU type ${cpuType} has no LC_UUID`)
+  })
+}
+
+/** Rewrites LC_UUID in every slice of `buffer` in place. */
+function rewriteMachOUuids(buffer, appId, executableName) {
+  return machOUuidSlots(buffer).map(({ cpuType, uuidOffset }) => {
     const before = formatUuid(buffer.subarray(uuidOffset, uuidOffset + 16))
-    const next = uuidFor(cpuType)
+    const next = deriveExecutableUuid(appId, executableName, cpuType)
     next.copy(buffer, uuidOffset)
-    changes.push({ cpuType, before, after: formatUuid(next) })
-  }
-  return changes
+    return { cpuType, before, after: formatUuid(next) }
+  })
 }
 
-function giveMacMainExecutableUniqueUuid(appPath, appId, executableName) {
-  const executable = join(appPath, 'Contents', 'MacOS', executableName)
+/** Gives the executable its own UUID, then re-signs it ad hoc; real signing replaces that later. */
+function giveMacExecutableUniqueUuid(executable, appId) {
+  const name = basename(executable)
   const buffer = readFileSync(executable)
-  const changes = rewriteMachOUuids(buffer, (cpuType) =>
-    deriveExecutableUuid(appId, executableName, cpuType)
-  )
-  writeFileSync(executable, buffer)
+  const changes = rewriteMachOUuids(buffer, appId, name)
+  // The edit breaks Electron's linker ad hoc signature and arm64 kills unsigned code, but identity-less builds skip app signing.
+  // Signed outside the bundle: in place, codesign would treat it as the bundle and require its unsigned siblings be signed.
+  const staging = mkdtempSync(join(tmpdir(), 'orca-executable-uuid-'))
+  try {
+    const staged = join(staging, name)
+    writeFileSync(staged, buffer, { mode: 0o755 })
+    execFileSync('codesign', ['--force', '--sign', '-', '--identifier', appId, staged], {
+      stdio: 'inherit'
+    })
+    copyFileSync(staged, executable)
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
   for (const { cpuType, before, after } of changes) {
-    console.log(`[macos-executable-uuid] ${executableName} cpu ${cpuType}: ${before} -> ${after}`)
+    console.log(`[macos-executable-uuid] ${name} cpu ${cpuType}: ${before} -> ${after}`)
   }
 }
 
-module.exports = { giveMacMainExecutableUniqueUuid, rewriteMachOUuids }
+/** Fails when a shipped executable lost its own UUID, e.g. the hook was skipped or signing rewrote it. */
+function assertMacExecutableUuid(executable, appId) {
+  const name = basename(executable)
+  const buffer = readFileSync(executable)
+  for (const { cpuType, uuidOffset } of machOUuidSlots(buffer)) {
+    const actual = formatUuid(buffer.subarray(uuidOffset, uuidOffset + 16))
+    const expected = formatUuid(deriveExecutableUuid(appId, name, cpuType))
+    if (actual !== expected) {
+      throw new Error(
+        `[macos-executable-uuid] ${executable} cpu ${cpuType} has UUID ${actual}, expected ${expected}`
+      )
+    }
+  }
+}
+
+module.exports = { assertMacExecutableUuid, giveMacExecutableUniqueUuid, rewriteMachOUuids }
