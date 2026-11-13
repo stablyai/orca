@@ -48,7 +48,8 @@ public enum ForegroundEffect: Equatable, Sendable {
     public static func ofAction(_ action: String, target chain: @autoclosure () -> [Node]) -> ForegroundEffect? {
         switch action {
         case "AXShowMenu": return .showsMenu
-        case "AXPress", "AXPick": return ofPress(chain())
+        // Why: the same presses a click tries, so a secondary action can't run what a click refuses.
+        case "AXPress", "AXConfirm", "AXOpen", "AXPick": return ofPress(chain())
         default: return nil
         }
     }

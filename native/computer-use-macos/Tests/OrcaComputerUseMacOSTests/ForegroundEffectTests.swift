@@ -32,5 +32,6 @@ final class ForegroundEffectTests: XCTestCase {
         XCTAssertNil(ForegroundEffect.ofClick(button: .left, control: false, target: plainButton))
         XCTAssertEqual(ForegroundEffect.ofAction("AXShowMenu", target: plainButton), .showsMenu)
         XCTAssertNil(ForegroundEffect.ofAction("AXScrollToVisible", target: [Node(role: "AXPopUpButton")]))
+        XCTAssertEqual(ForegroundEffect.ofAction("AXConfirm", target: [Node(role: "AXButton", labels: ["Open\u{2026}"])]), .opensDialog)
     }
 }
