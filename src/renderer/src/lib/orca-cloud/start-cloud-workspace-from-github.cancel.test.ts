@@ -10,7 +10,16 @@ type OpenOutcome = { ok: true; worktreeId: string | null; hostId?: string }
 
 const mocks = vi.hoisted(() => ({
   open: vi.fn<(workspace: unknown, options?: OpenOptions) => Promise<OpenOutcome>>(),
-  launch: vi.fn()
+  launch: vi.fn(),
+  cleanupDone: vi.fn(),
+  cleanupFailed: vi.fn<(creationId: string, tryAgain: () => void) => void>()
+}))
+
+vi.mock('@/lib/orca-cloud-session-toasts', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  showOrcaCloudCleanupStartedToast: vi.fn(),
+  showOrcaCloudCleanupDoneToast: mocks.cleanupDone,
+  showOrcaCloudCleanupFailedToast: mocks.cleanupFailed
 }))
 
 vi.mock('@/components/cloud-workspaces/open-cloud-workspace', () => ({
@@ -24,7 +33,10 @@ import { startCloudWorkspaceFromGitHub } from './start-cloud-workspace-from-gith
 import { resetGitHubCreateKeysForTest } from './github-cloud-create-key'
 
 const createFromGitHub = vi.fn<(args: unknown) => Promise<unknown>>()
-const destroy = vi.fn(async () => ({ ok: true, value: undefined }))
+const destroy = vi.fn(
+  async (_id: string) => ({ ok: true, value: undefined }) as { ok: boolean; value?: undefined }
+)
+const retryCancelledCreate = vi.fn(async (_args: { provisionId: string }) => true)
 
 beforeEach(() => {
   resetGitHubCreateKeysForTest()
@@ -34,7 +46,7 @@ beforeEach(() => {
   Object.assign(window, {
     api: {
       ...window.api,
-      orcaCloudWorkspace: { createFromGitHub },
+      orcaCloudWorkspace: { createFromGitHub, retryCancelledCreate },
       cloudWorkspaces: {
         get: vi.fn(async (id: string) => ({ ok: true, value: { id } })),
         destroy,
@@ -97,6 +109,72 @@ describe('Cancel leaves no workspace (GH-CREATE-CANCEL)', () => {
     expect(await startCloudWorkspaceFromGitHub(REQUEST)).toBe(false)
     expect(window.api.ephemeralVm.cancelProvision).toHaveBeenCalled()
     expect(mocks.open).not.toHaveBeenCalled()
+  })
+})
+
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+describe('EP-5: Cancel says "Sandbox deleted" only once the control plane confirmed it', () => {
+  // Earlier tests' cleanups can still finish late: every check is scoped to this test's creation.
+  let id = ''
+  // As in the app: the cancel lands while the create's steps are already tracked (a tick in).
+  const cancelHere = async (): Promise<void> => {
+    await Promise.resolve()
+    id = creationId()
+    cancel()
+  }
+
+  it('cancelled in flight and main reclaimed it: Sandbox deleted', async () => {
+    createFromGitHub.mockImplementationOnce(async () => {
+      await cancelHere()
+      return { ok: false, code: 'failed', message: 'Cancelled.' }
+    })
+    await startCloudWorkspaceFromGitHub(REQUEST)
+    await settle()
+    expect(mocks.cleanupDone).toHaveBeenCalledWith(id)
+    expect(mocks.cleanupFailed).not.toHaveBeenCalledWith(id, expect.anything())
+  })
+
+  it('cancelled in flight and main could not confirm the delete: not deleted; Try again retries it', async () => {
+    createFromGitHub.mockImplementationOnce(async () => {
+      await cancelHere()
+      return {
+        ok: false,
+        code: 'failed',
+        message: 'Cancelled.',
+        reason: 'cancelCleanupUnconfirmed'
+      }
+    })
+    await startCloudWorkspaceFromGitHub(REQUEST)
+    await settle()
+    expect(mocks.cleanupDone).not.toHaveBeenCalledWith(id)
+    const failed = mocks.cleanupFailed.mock.calls.filter(([c]) => c === id)
+    expect(failed).toHaveLength(1)
+    failed[0]![1]()
+    await settle()
+    expect(retryCancelledCreate).toHaveBeenCalledWith({ provisionId: id })
+    expect(mocks.cleanupDone).toHaveBeenCalledWith(id)
+  })
+
+  it('cancelled after it started and the delete failed: not deleted; Try again deletes it again', async () => {
+    createFromGitHub.mockImplementationOnce(async () => {
+      await cancelHere()
+      return { ok: true, value: { sandboxId: 'sbx_1' } }
+    })
+    destroy.mockResolvedValueOnce({ ok: false })
+    await startCloudWorkspaceFromGitHub(REQUEST)
+    await settle()
+    expect(mocks.cleanupDone).not.toHaveBeenCalledWith(id)
+    const failed = mocks.cleanupFailed.mock.calls.filter(([c]) => c === id)
+    expect(failed).toHaveLength(1)
+    failed[0]![1]()
+    await settle()
+    expect(destroy).toHaveBeenCalledTimes(2)
+    expect(mocks.cleanupDone).toHaveBeenCalledWith(id)
   })
 })
 

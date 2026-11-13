@@ -30,35 +30,50 @@ type Cleanup = {
 // A provision that never settles must not leave "Deleting the sandbox…" spinning forever.
 const CLEANUP_TIMEOUT_MS = 3 * 60_000
 
-// Orca Cloud creates still running, by creation id; after a cancel each ends once its own cleanup has.
-const inFlight = new Map<string, Set<Promise<unknown>>>()
+// Orca Cloud creates still running, by creation id, as "left nothing running" outcomes; after a
+// cancel each ends once its own cleanup has.
+const inFlight = new Map<string, Set<CleanupStep>>()
 const cleanups = new Map<string, Cleanup>()
+// EP-5: a step that couldn't confirm its sandbox deleted leaves its own Try again here.
+const retries = new Map<string, () => Promise<boolean>>()
 
 export function isOrcaCloudCreateRequest(request: WorktreeCreationRequest): boolean {
   return request.ephemeralVmRecipe?.recipeId === ORCA_CLOUD_RECIPE_ID
 }
 
-/** A create run a cancel must wait for: it may still bring the sandbox up or tear it down. */
-export function trackOrcaCloudCreateStep<T>(creationId: string, step: Promise<T>): Promise<T> {
+/**
+ * A create run a cancel must wait for: it may still bring the sandbox up or tear it down.
+ * `leftNothingRunning` reads its result (EP-5): false when it couldn't confirm its sandbox deleted,
+ * so the cancel never says "Sandbox deleted" for it. A rejected step counts as not confirmed.
+ */
+export function trackOrcaCloudCreateStep<T>(
+  creationId: string,
+  step: Promise<T>,
+  leftNothingRunning: (value: T) => boolean = () => true
+): Promise<T> {
   const steps = inFlight.get(creationId) ?? new Set()
   inFlight.set(creationId, steps)
-  steps.add(step)
+  const outcome = step.then(leftNothingRunning)
+  // Read by a cancel's cleanup if there is one; never an unhandled rejection otherwise.
+  outcome.catch(() => undefined)
+  steps.add(outcome)
   const settled = (): void => {
-    steps.delete(step)
+    steps.delete(outcome)
     if (steps.size === 0 && inFlight.get(creationId) === steps) {
       inFlight.delete(creationId)
     }
   }
-  step.then(settled, settled)
+  outcome.then(settled, settled)
   const cleanup = cleanups.get(creationId)
   if (cleanup) {
-    waitForStep(
-      creationId,
-      cleanup,
-      step.then(() => true)
-    )
+    waitForStep(creationId, cleanup, outcome)
   }
   return step
+}
+
+/** EP-5: how Try again deletes what a step of this create couldn't confirm deleted. */
+export function setOrcaCloudCancelRetry(creationId: string, retry: () => Promise<boolean>): void {
+  retries.set(creationId, retry)
 }
 
 /** The user canceled an Orca Cloud create; `steps` are the cleanups the cancel itself started. */
@@ -76,11 +91,7 @@ export function beginOrcaCloudCancelCleanup(
   cleanups.set(creationId, cleanup)
   showOrcaCloudCleanupStartedToast(creationId)
   for (const step of inFlight.get(creationId) ?? []) {
-    waitForStep(
-      creationId,
-      cleanup,
-      step.then(() => true)
-    )
+    waitForStep(creationId, cleanup, step)
   }
   for (const step of steps) {
     waitForStep(creationId, cleanup, step)
@@ -120,6 +131,7 @@ function finish(creationId: string, cleanup: Cleanup, timedOut: boolean): void {
     if (failed) {
       showOrcaCloudCleanupFailedToast(creationId, () => retryCleanup(creationId, cleanup.scope))
     } else {
+      retries.delete(creationId)
       showOrcaCloudCleanupDoneToast(creationId)
     }
   })
@@ -166,7 +178,19 @@ function retryCleanup(creationId: string, scope: OrcaCloudCancelScope): void {
   if (cleanups.has(creationId)) {
     return
   }
-  const step = leftoverRuntimeIds(scope, { timedOut: false, failedOnly: true }).then((ids) =>
+  const retry = retries.get(creationId)
+  // A create with no runtime records (GitHub-only) retries its own delete instead.
+  const own = retry
+    ? retry()
+        .catch(() => false)
+        .then((ok) => {
+          if (ok && retries.get(creationId) === retry) {
+            retries.delete(creationId)
+          }
+          return ok
+        })
+    : Promise.resolve(true)
+  const records = leftoverRuntimeIds(scope, { timedOut: false, failedOnly: true }).then((ids) =>
     ids === null
       ? false
       : Promise.all(
@@ -178,5 +202,5 @@ function retryCleanup(creationId: string, scope: OrcaCloudCancelScope): void {
           )
         ).then((results) => results.every(Boolean))
   )
-  beginOrcaCloudCancelCleanup(creationId, [step], scope, true)
+  beginOrcaCloudCancelCleanup(creationId, [own, records], scope, true)
 }

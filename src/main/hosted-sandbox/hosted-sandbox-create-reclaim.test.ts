@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { HostedEntitlementDeniedError } from './hosted-environment-provider'
 import { reclaimCancelledCreate } from './hosted-sandbox-create-reclaim'
-import { createSandboxWithProgress } from './hosted-sandbox-driver'
+import { CANCEL_CLEANUP_UNCONFIRMED, createSandboxWithProgress } from './hosted-sandbox-driver'
 
 const READY = {
   sandbox: {
@@ -26,7 +26,8 @@ function client() {
     create: vi.fn(async () => READY),
     bootPlan: vi.fn(async () => 'clone' as const),
     cloneStatus: vi.fn(async () => ({ state: 'done' as const })),
-    destroy: vi.fn(async (id: string) => ({ id, status: 'destroyed' as const }))
+    destroy: vi.fn(async (id: string) => ({ id, status: 'destroyed' as const })),
+    list: vi.fn(async (): Promise<(typeof READY)['sandbox'][]> => [])
   }
 }
 
@@ -53,6 +54,40 @@ describe('reclaimCancelledCreate', () => {
     api.create.mockRejectedValueOnce(new HostedEntitlementDeniedError('denied', 'no_subscription'))
     expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
     expect(api.destroy).not.toHaveBeenCalled()
+  })
+
+  it('EP-5: while the first create still runs (409), deletes the sandbox it is making by workspace id', async () => {
+    const api = client()
+    api.create.mockRejectedValue(
+      new EnvironmentProviderError('conflict', 'idempotency_in_progress')
+    )
+    api.list.mockResolvedValue([
+      { ...READY.sandbox, id: 'sbx_other', workspaceId: 'other-1' },
+      { ...READY.sandbox, status: 'creating' as never }
+    ])
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
+    expect(api.destroy).toHaveBeenCalledTimes(1)
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
+    expect(api.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('EP-5: a delete the control plane does not answer with destroyed is not confirmed', async () => {
+    const api = client()
+    api.destroy.mockImplementation(async (id: string) => ({ id, status: 'destroying' as never }))
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', { ...quiet, attempts: 2 })).toBe(
+      false
+    )
+  })
+
+  it('EP-5: 409 with nothing listed yet keeps replaying until the create answers', async () => {
+    const api = client()
+    api.create.mockRejectedValueOnce(
+      new EnvironmentProviderError('conflict', 'idempotency_in_progress')
+    )
+    expect(await reclaimCancelledCreate(api, BODY, 'create:k1', quiet)).toBe(true)
+    expect(api.list).toHaveBeenCalledTimes(1)
+    expect(api.create).toHaveBeenCalledTimes(2)
+    expect(api.destroy).toHaveBeenCalledWith('sbx_1')
   })
 
   it('gives up (false) when it can never tell', async () => {
@@ -94,6 +129,42 @@ describe('createSandboxWithProgress cancel', () => {
     ).rejects.toMatchObject({ code: 'aborted' })
     expect(api.destroy).toHaveBeenCalledWith('sbx_1')
     expect(api.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('EP-5: a cancel whose sandbox could not be confirmed deleted says so (reason), not a plain cancel', async () => {
+    const api = client()
+    const controller = new AbortController()
+    api.create.mockImplementation(async (_body, signal) => {
+      if (signal) {
+        controller.abort()
+        throw new EnvironmentProviderError('aborted', 'Cancelled.')
+      }
+      throw new EnvironmentProviderError('unavailable', 'down')
+    })
+    vi.useFakeTimers()
+    try {
+      const outcome = expect(
+        createSandboxWithProgress(api, spec, { signal: controller.signal })
+      ).rejects.toMatchObject({ code: 'aborted', reason: CANCEL_CLEANUP_UNCONFIRMED })
+      // Every replay (2 min of them) fails: the retry waits run out.
+      await vi.runAllTimersAsync()
+      await outcome
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('EP-5: cancelled as it answered and the delete failed: not confirmed', async () => {
+    const api = client()
+    const controller = new AbortController()
+    api.create.mockImplementationOnce(async () => {
+      controller.abort()
+      return READY
+    })
+    api.destroy.mockRejectedValueOnce(new EnvironmentProviderError('unavailable', 'down'))
+    await expect(
+      createSandboxWithProgress(api, spec, { signal: controller.signal })
+    ).rejects.toMatchObject({ code: 'aborted', reason: CANCEL_CLEANUP_UNCONFIRMED })
   })
 
   it('not cancelled: no replay, no delete', async () => {

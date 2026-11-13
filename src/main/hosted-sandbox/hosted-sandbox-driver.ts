@@ -1,5 +1,6 @@
 // Orca Cloud workspaces: an EnvironmentProviderDriver that talks only to Orca's control plane.
 // Which provider runs the VM (Vercel today) is a control-plane detail the desktop never sees.
+import { CANCEL_CLEANUP_UNCONFIRMED } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import {
   HOSTED_SANDBOX_MACHINE_SIZES,
   ORCA_CLOUD_IDLE_SLEEP_MINUTES,
@@ -128,12 +129,31 @@ export function createHostedSandboxDriver(
  * create, then git's clone or update until it is done. Shared by the owned create (the recipe) and
  * the GitHub-only create (GH-CREATE-SHEET), so both sheets read the same phases.
  */
+export { CANCEL_CLEANUP_UNCONFIRMED }
+
+/** The create body for `spec`; a replay must send exactly this (the server keys replays by body). */
+export function hostedCreateBody(
+  spec: EnvironmentCreateSpec
+): Parameters<HostedSandboxControlPlaneClient['create']>[0] {
+  return {
+    workspaceId: spec.workspaceId,
+    machineSize: toMachineSize(spec.machineSize),
+    // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
+    ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
+    ...(spec.region ? { region: spec.region } : {}),
+    ...(spec.repo ? { repo: spec.repo } : {})
+  }
+}
+
 export async function createSandboxWithProgress(
-  client: Pick<HostedSandboxControlPlaneClient, 'create' | 'bootPlan' | 'cloneStatus' | 'destroy'>,
+  client: Pick<
+    HostedSandboxControlPlaneClient,
+    'create' | 'bootPlan' | 'cloneStatus' | 'destroy' | 'list'
+  >,
   spec: EnvironmentCreateSpec,
   ctx?: EnvironmentProviderCallContext
 ): Promise<HostedSandboxReadyResponse> {
-  const machineSize = toMachineSize(spec.machineSize)
+  const body = hostedCreateBody(spec)
   ctx?.onProgress?.({ phase: 'provisioning' })
   // Names the repository step before the create answers (no relabel mid-run). Best effort: an
   // older control plane answers 404 and the step is named when the create answers.
@@ -145,14 +165,6 @@ export async function createSandboxWithProgress(
       )
       .catch(() => undefined)
   }
-  const body = {
-    workspaceId: spec.workspaceId,
-    machineSize,
-    // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
-    ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
-    ...(spec.region ? { region: spec.region } : {}),
-    ...(spec.repo ? { repo: spec.repo } : {})
-  }
   let ready: HostedSandboxReadyResponse
   try {
     ready = await client.create(body, ctx?.signal, spec.idempotencyKey)
@@ -160,7 +172,10 @@ export async function createSandboxWithProgress(
     // GH-CREATE-CANCEL: cancelled in flight, the control plane may still have made it: find it by
     // its key and delete it before reporting the cancel.
     if (ctx?.signal?.aborted && spec.idempotencyKey) {
-      await reclaimCancelledCreate(client, body, spec.idempotencyKey)
+      // EP-5: the cancel may report "deleted" only when the control plane confirmed it.
+      if (!(await reclaimCancelledCreate(client, body, spec.idempotencyKey))) {
+        throw new EnvironmentProviderError('aborted', 'Cancelled.', CANCEL_CLEANUP_UNCONFIRMED)
+      }
     }
     throw error
   }
@@ -170,8 +185,15 @@ export async function createSandboxWithProgress(
   }
   if (ctx?.signal?.aborted) {
     // Cancelled just as it answered: nothing will use it, so it must not keep running (and billing).
-    await client.destroy(ready.sandbox.id).catch(() => undefined)
-    throw new EnvironmentProviderError('aborted', 'Cancelled.')
+    const gone = await client
+      .destroy(ready.sandbox.id)
+      .then((sandbox) => sandbox.status === 'destroyed')
+      .catch(() => false)
+    throw new EnvironmentProviderError(
+      'aborted',
+      'Cancelled.',
+      gone ? null : CANCEL_CLEANUP_UNCONFIRMED
+    )
   }
   ctx?.onProgress?.({ phase: 'connecting' })
   return ready

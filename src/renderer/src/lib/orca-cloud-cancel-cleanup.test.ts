@@ -7,7 +7,11 @@ const toasts = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/orca-cloud-session-toasts', () => toasts)
 
-import { beginOrcaCloudCancelCleanup, trackOrcaCloudCreateStep } from './orca-cloud-cancel-cleanup'
+import {
+  beginOrcaCloudCancelCleanup,
+  setOrcaCloudCancelRetry,
+  trackOrcaCloudCreateStep
+} from './orca-cloud-cancel-cleanup'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -130,5 +134,63 @@ describe('Orca Cloud cancel cleanup', () => {
     await flush()
     expect(cleanupCalls).toEqual(['mine'])
     expect(toasts.showOrcaCloudCleanupStartedToast).toHaveBeenCalledTimes(2)
+  })
+
+  it('EP-5: a create step whose result says its sandbox was not confirmed deleted fails the cancel', async () => {
+    const run = deferred<{ ok: boolean; reason?: string }>()
+    void trackOrcaCloudCreateStep(
+      'c-ep5',
+      run.promise,
+      (result) => result.ok || result.reason !== 'unconfirmed'
+    )
+    beginOrcaCloudCancelCleanup('c-ep5', [], { createStartedAt: 0, canceledAt: 1000 })
+    run.resolve({ ok: false, reason: 'unconfirmed' })
+    await flush()
+    expect(toasts.showOrcaCloudCleanupDoneToast).not.toHaveBeenCalled()
+    expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledWith(
+      'c-ep5',
+      expect.any(Function)
+    )
+  })
+
+  it('EP-5: a plain cancelled create (nothing left running) still reads as deleted', async () => {
+    const run = deferred<{ ok: boolean; reason?: string }>()
+    void trackOrcaCloudCreateStep(
+      'c-ep5b',
+      run.promise,
+      (result) => result.ok || result.reason !== 'unconfirmed'
+    )
+    beginOrcaCloudCancelCleanup('c-ep5b', [], { createStartedAt: 0, canceledAt: 1000 })
+    run.resolve({ ok: false, reason: null as never })
+    await flush()
+    expect(toasts.showOrcaCloudCleanupDoneToast).toHaveBeenCalledWith('c-ep5b')
+  })
+
+  it("EP-5: Try again runs the create's own retry (no runtime records) and reads deleted only if it confirms", async () => {
+    const retry = vi
+      .fn<() => Promise<boolean>>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+    setOrcaCloudCancelRetry('c-ep5c', retry)
+    beginOrcaCloudCancelCleanup('c-ep5c', [Promise.resolve(false)], {
+      createStartedAt: 0,
+      canceledAt: 1000
+    })
+    await flush()
+    const tryAgain = () => toasts.showOrcaCloudCleanupFailedToast.mock.calls.at(-1)![1]()
+    expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledTimes(1)
+
+    tryAgain()
+    await flush()
+    await flush()
+    expect(retry).toHaveBeenCalledTimes(1)
+    expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledTimes(2)
+    expect(toasts.showOrcaCloudCleanupDoneToast).not.toHaveBeenCalled()
+
+    tryAgain()
+    await flush()
+    await flush()
+    expect(retry).toHaveBeenCalledTimes(2)
+    expect(toasts.showOrcaCloudCleanupDoneToast).toHaveBeenCalledWith('c-ep5c')
   })
 })
