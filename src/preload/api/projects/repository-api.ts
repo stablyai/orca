@@ -81,6 +81,7 @@ export type RepositoryApi = {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>
