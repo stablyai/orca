@@ -43,7 +43,7 @@ export function extractPiToolFields(
 ): ToolSnapshot {
   // Custom modals carry neither approvals nor structured questions.
   if (
-    agentKind === 'pi' &&
+    (agentKind === 'pi' || agentKind === 'gentle-shell') &&
     (hookPayload.ui_prompt_active === true ||
       eventName === 'ui_prompt_start' ||
       eventName === 'ui_prompt_end')
