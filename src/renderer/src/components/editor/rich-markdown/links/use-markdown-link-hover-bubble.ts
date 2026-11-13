@@ -289,13 +289,12 @@ export function useMarkdownLinkHoverBubble({
     containerElement.addEventListener('pointerout', onPointerOut)
     containerElement.addEventListener('pointerdown', onPointerDown, true)
     return () => {
-      clearOpenTimer()
-      clearCloseTimer()
+      cancelHoverBubble()
       containerElement.removeEventListener('pointerover', onPointerOver)
       containerElement.removeEventListener('pointerout', onPointerOut)
       containerElement.removeEventListener('pointerdown', onPointerDown, true)
     }
-  }, [clearCloseTimer, clearOpenTimer, containerElement, scheduleClose])
+  }, [cancelHoverBubble, clearCloseTimer, clearOpenTimer, containerElement, scheduleClose])
 
   const onBubblePointerEnter = useCallback<React.PointerEventHandler<HTMLDivElement>>(() => {
     clearCloseTimer()

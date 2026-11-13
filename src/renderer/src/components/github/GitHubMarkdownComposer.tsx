@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useEditor, type Editor } from '@tiptap/react'
 
 import Placeholder from '@tiptap/extension-placeholder'
@@ -35,13 +35,7 @@ import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
-import {
-  handleGitHubComposerLinkAuxClick,
-  handleGitHubComposerLinkDomClick,
-  handleGitHubComposerLinkMouseDown,
-  handleGitHubComposerLinkMouseUp,
-  handleGitHubComposerProseMirrorClick
-} from './github-markdown-composer-link-events'
+import { createGitHubComposerLinkEventHandlers } from './github-markdown-composer-link-events'
 import { useGitHubImagePaste } from './use-github-image-paste'
 import type { GitHubImageUploadAddress } from './github-image-upload'
 
@@ -109,10 +103,12 @@ export function GitHubMarkdownComposer({
     insertImageUrl
   } = useImageInput(editorRef, disabledRef, () => setActiveTab('write'))
 
-  onChangeRef.current = onChange
-  onSubmitShortcutRef.current = onSubmitShortcut
-  disabledRef.current = disabled
-  isEditingLinkRef.current = isEditingLink
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange
+    onSubmitShortcutRef.current = onSubmitShortcut
+    disabledRef.current = disabled
+    isEditingLinkRef.current = isEditingLink
+  }, [disabled, isEditingLink, onChange, onSubmitShortcut])
 
   const extensions = useMemo(
     () => [
@@ -127,7 +123,6 @@ export function GitHubMarkdownComposer({
   )
 
   const cancelHoverBubbleRef = useRef<() => void>(() => {})
-  const handledPointerUpLinkClickRef = useRef(false)
   const closeLinkBubble = useCallback(() => {
     cancelHoverBubbleRef.current()
     setIsEditingLink(false)
@@ -155,6 +150,8 @@ export function GitHubMarkdownComposer({
     setIsEditingLink(true)
   }, [])
 
+  const [linkEvents] = useState(() => createGitHubComposerLinkEventHandlers(closeLinkBubble))
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions,
@@ -164,25 +161,9 @@ export function GitHubMarkdownComposer({
     editorProps: {
       handleDOMEvents: {
         paste: images.handlePaste,
-        mousedown: (view, event) =>
-          handleGitHubComposerLinkMouseDown(view, event, handledPointerUpLinkClickRef),
-        mouseup: handleGitHubComposerLinkMouseUp,
-        auxclick: (view, event) => handleGitHubComposerLinkAuxClick(view, event, closeLinkBubble),
-        click: (view, event) =>
-          handleGitHubComposerLinkDomClick(
-            view,
-            event,
-            handledPointerUpLinkClickRef,
-            closeLinkBubble
-          )
+        ...linkEvents.domEvents
       },
-      handleClick: (view, _pos, event) =>
-        handleGitHubComposerProseMirrorClick(
-          view,
-          event,
-          handledPointerUpLinkClickRef,
-          closeLinkBubble
-        ),
+      handleClick: linkEvents.handleProseMirrorClick,
       transformPastedHTML: images.transformPastedHTML,
       attributes: {
         class: cn('rich-markdown-editor github-markdown-composer-editor', minHeightClassName),

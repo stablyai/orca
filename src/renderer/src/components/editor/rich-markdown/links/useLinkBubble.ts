@@ -1,6 +1,7 @@
 import type React from 'react'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { Editor } from '@tiptap/react'
+import type { EditorEvents } from '@tiptap/core'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
 import { copyRichMarkdownLink } from './rich-markdown-link-clipboard'
 import {
@@ -106,6 +107,23 @@ export function useLinkBubble(
         resolveRichMarkdownHoveredLinkBubble(editor, linkElement, point),
       setLinkBubble
     })
+
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
+    const dismissStaleBubble = ({ transaction }: EditorEvents['transaction']): void => {
+      if (transaction.docChanged) {
+        cancelHoverBubble()
+        setLinkBubble(null)
+        setIsEditingLink(false)
+      }
+    }
+    editor.on('transaction', dismissStaleBubble)
+    return () => {
+      editor.off('transaction', dismissStaleBubble)
+    }
+  }, [cancelHoverBubble, editor, setIsEditingLink, setLinkBubble])
 
   const startLinkEdit = useCallback(() => {
     if (!editor) {

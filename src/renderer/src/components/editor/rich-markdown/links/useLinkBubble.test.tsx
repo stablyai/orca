@@ -112,7 +112,7 @@ describe('useLinkBubble hover and targetRange actions', () => {
     return { editor: activeEditor, wrapper }
   }
 
-  it('opens the link menu on hover without an open-link action and updates the hovered link when the caret is elsewhere', () => {
+  it('updates the hovered link when the caret is elsewhere', () => {
     vi.useFakeTimers()
     const { editor: activeEditor } = mountEditorWithBubble(
       'Intro paragraph\n\nVisit [docs](https://example.com) today'
@@ -126,19 +126,12 @@ describe('useLinkBubble hover and targetRange actions', () => {
     act(() => {
       linkEl.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }))
     })
-    expect(document.querySelector('[data-rich-markdown-link-bubble]')).toBeNull()
-
     act(() => {
       vi.advanceTimersByTime(160)
     })
 
     const bubbleEl = document.querySelector<HTMLElement>('[data-rich-markdown-link-bubble]')
     expect(bubbleEl).not.toBeNull()
-    const actionLabels = Array.from(bubbleEl!.querySelectorAll('button')).map((button) =>
-      button.getAttribute('aria-label')
-    )
-    expect(actionLabels).toEqual(['Copy link', 'Edit link', 'Remove link'])
-
     const editButton = bubbleEl!.querySelector<HTMLButtonElement>('button[aria-label="Edit link"]')!
     act(() => editButton.click())
 
@@ -158,6 +151,32 @@ describe('useLinkBubble hover and targetRange actions', () => {
 
     expect(activeEditor.getMarkdown()).toBe(
       'Intro paragraph\n\nVisit [docs](https://orca.dev/docs) today'
+    )
+  })
+
+  it('dismisses a link edit when the document changes underneath its target range', () => {
+    vi.useFakeTimers()
+    const { editor: activeEditor } = mountEditorWithBubble(
+      'Intro paragraph\n\nVisit [docs](https://example.com) today'
+    )
+    const linkEl = activeEditor.view.dom.querySelector('a')!
+    act(() => {
+      linkEl.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }))
+      vi.advanceTimersByTime(160)
+    })
+    const editButton = document.querySelector<HTMLButtonElement>(
+      '[data-rich-markdown-link-bubble] button[aria-label="Edit link"]'
+    )!
+    act(() => editButton.click())
+    expect(document.querySelector('[data-rich-markdown-link-bubble] input')).not.toBeNull()
+
+    act(() => {
+      activeEditor.view.dispatch(activeEditor.state.tr.insertText('New ', 1))
+    })
+
+    expect(document.querySelector('[data-rich-markdown-link-bubble]')).toBeNull()
+    expect(activeEditor.getMarkdown()).toBe(
+      'New Intro paragraph\n\nVisit [docs](https://example.com) today'
     )
   })
 

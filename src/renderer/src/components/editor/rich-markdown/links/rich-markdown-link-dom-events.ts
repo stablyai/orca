@@ -157,51 +157,65 @@ export function createRichMarkdownLinkDomEventHandlers({
   }
   handleProseMirrorClick: (view: EditorView, pos: number, event: MouseEvent) => boolean
 } {
-  let handledPointerUpLinkClick = false
+  return createMarkdownLinkDomEventHandlers({
+    isMac,
+    isMiddleClickable: (view, event) =>
+      isRichMarkdownActionableLinkTarget(view, event, htmlSuperscriptLinkContext),
+    handleClick,
+    handleAuxClick: (view, event) => {
+      const handled = handleRichMarkdownEditorAuxClick({
+        event,
+        filePath,
+        htmlSuperscriptLinkContext,
+        view,
+        worktreeId,
+        worktreeRoot
+      })
+      if (handled) {
+        onDismissLinkBubble()
+      }
+      return handled
+    }
+  })
+}
+
+export function createMarkdownLinkDomEventHandlers({
+  isMac,
+  isMiddleClickable,
+  handleClick,
+  handleAuxClick
+}: {
+  isMac: boolean
+  isMiddleClickable: (view: EditorView, event: MouseEvent) => boolean
+  handleClick: (view: EditorView, pos: number, event: MouseEvent) => boolean
+  handleAuxClick: (view: EditorView, event: MouseEvent) => boolean
+}) {
+  let pointerUpClickResult: boolean | null = null
+  const preventMiddleClickDefault = (view: EditorView, event: MouseEvent): boolean => {
+    if (event.button !== 1 || !isMiddleClickable(view, event)) {
+      return false
+    }
+    event.preventDefault()
+    return true
+  }
 
   return {
     domEvents: {
-      mousedown: (view, event) => {
-        handledPointerUpLinkClick = false
-        if (
-          event.button === 1 &&
-          isRichMarkdownActionableLinkTarget(view, event, htmlSuperscriptLinkContext)
-        ) {
-          event.preventDefault()
-          return true
-        }
-        return false
+      mousedown: (view: EditorView, event: MouseEvent) => {
+        pointerUpClickResult = null
+        return preventMiddleClickDefault(view, event)
       },
-      mouseup: (view, event) => {
-        if (
-          event.button === 1 &&
-          isRichMarkdownActionableLinkTarget(view, event, htmlSuperscriptLinkContext)
-        ) {
-          event.preventDefault()
-          return true
-        }
-        return false
-      },
-      auxclick: (view, event) => {
-        const handled = handleRichMarkdownEditorAuxClick({
-          event,
-          filePath,
-          htmlSuperscriptLinkContext,
-          view,
-          worktreeId,
-          worktreeRoot
-        })
-        if (handled) {
-          onDismissLinkBubble()
-        }
-        return handled
-      },
+      mouseup: preventMiddleClickDefault,
+      auxclick: handleAuxClick,
       // ProseMirror skips handleClick for Shift gestures and synthetic/keyboard clicks without mousedown.
-      click: (view, event) => {
-        if (handledPointerUpLinkClick) {
-          handledPointerUpLinkClick = false
-          event.preventDefault()
-          return true
+      click: (view: EditorView, event: MouseEvent) => {
+        if (pointerUpClickResult !== null) {
+          const handled = pointerUpClickResult
+          pointerUpClickResult = null
+          if (handled) {
+            event.preventDefault()
+          }
+          return handled
         }
         if (event.defaultPrevented || event.button !== 0) {
           return false
@@ -221,15 +235,12 @@ export function createRichMarkdownLinkDomEventHandlers({
         return true
       }
     },
-    handleProseMirrorClick: (view, pos, event) => {
+    handleProseMirrorClick: (view: EditorView, pos: number, event: MouseEvent) => {
       if (event.shiftKey) {
         return false
       }
-      const handled = handleClick(view, pos, event)
-      if (handled) {
-        handledPointerUpLinkClick = true
-      }
-      return handled
+      pointerUpClickResult = handleClick(view, pos, event)
+      return pointerUpClickResult
     }
   }
 }

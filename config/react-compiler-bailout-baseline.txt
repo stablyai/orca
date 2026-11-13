@@ -182,7 +182,7 @@
 1 src/renderer/src/components/github-project/useProjectPickerBrowse.ts
 3 src/renderer/src/components/github-project/useProjectViewTable.ts
 1 src/renderer/src/components/github/CommentReactions.tsx
-7 src/renderer/src/components/github/GitHubMarkdownComposer.tsx
+4 src/renderer/src/components/github/GitHubMarkdownComposer.tsx
 2 src/renderer/src/components/github/github-duplicate-issue-candidates.ts
 1 src/renderer/src/components/github/github-rate-limit-display.tsx
 2 src/renderer/src/components/github/use-github-image-uploads.ts
