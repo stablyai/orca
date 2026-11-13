@@ -86,7 +86,7 @@ export function ConversationCommentCard({
           {comment.author}
         </span>
         {comment.reviewState && (
-          <span className="shrink-0 text-[12px] text-muted-foreground">
+          <span className="min-w-0 truncate text-[12px] text-muted-foreground">
             {getPRReviewStateLabel(comment.reviewState, t)}
           </span>
         )}
