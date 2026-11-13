@@ -1,4 +1,4 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -117,10 +117,8 @@ test.describe('Folder setup', () => {
     const fixture = await createNestedRepoFixture()
     await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-    await openSidebarProjectDialog(orcaPage)
-    const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: /Browse folder/i }).click()
+    await openSidebarProjectMenu(orcaPage)
+    await orcaPage.getByRole('menuitem', { name: /Browse folder/i }).click()
 
     const importDialog = orcaPage.getByRole('dialog', {
       name: /Import repositories from folder/i
@@ -182,10 +180,8 @@ test.describe('Folder setup', () => {
     const fixture = await createLargeNestedRepoFixture()
     await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-    await openSidebarProjectDialog(orcaPage)
-    const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: /Browse folder/i }).click()
+    await openSidebarProjectMenu(orcaPage)
+    await orcaPage.getByRole('menuitem', { name: /Browse folder/i }).click()
 
     const importDialog = orcaPage.getByRole('dialog', {
       name: /Import repositories from folder/i
