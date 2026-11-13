@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { createVercelSandboxApi } from '../src/vercel-sandbox-api'
 import { ORCAD_PORT, START_COMMAND } from '../src/sandbox-vm-commands'
 import { ManifestSchema, VM_SCRIPTS, provisionEnv, utf8Base64, type BuildInputs } from './golden-image'
+import { VM_SCRIPTS_STAMP } from './vm-scripts.generated'
 
 const here = (path: string): string => fileURLToPath(new URL(path, import.meta.url).href)
 const args = process.argv.slice(2)
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
     manifest,
     provisionScript: readFileSync(here('./provision-golden.sh'), 'utf8'),
     vmScripts: Object.fromEntries(VM_SCRIPTS.map((n) => [n, readFileSync(here(`./vm/${n}`), 'utf8')])) as BuildInputs['vmScripts'],
+    vmScriptsStamp: VM_SCRIPTS_STAMP,
     buildId: sha.slice(0, 8)
   }
   console.log(JSON.stringify({ ref, sha, image: manifest.image, desktop: Boolean(manifest.desktop), execute: flag('--execute') }))

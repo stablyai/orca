@@ -36,6 +36,8 @@ type FakeBox = {
 export type FakeBuildCommand = { sessionId: string; env: Record<string, string>; args: string[]; exitCode: number | null; logs: string }
 
 export const READY_PATH = '/home/vercel-sandbox/.orca-sandbox/ready.json'
+/** The image's VM_SCRIPTS_STAMP (provision-golden.sh / installEntryPoints write it). */
+export const SCRIPTS_STAMP_PATH = '/opt/orca/bin/.scripts-stamp'
 
 /** Same sealing as image/vm/orca-sandbox-grant (node:crypto here; the opener under test is portable). */
 export function sealLikeVm(recipientB64: string, grantId: string, plaintext: string) {
@@ -340,7 +342,25 @@ export function createFakeVercel(now: () => number): FakeVercel {
         box.devices = box.devices.filter((d) => !ids.includes(d))
         return { exitCode: 0, stdout: `{"revoked":${before - box.devices.length}}\n`, stderr: '' }
       }
-      if (params.command === 'bash' && params.args?.join(' ').includes('echo synced')) {
+      // ensureEntryPoints' probe and installEntryPoints, against the box's /opt/orca/bin files.
+      const script = params.command === 'bash' ? (params.args?.[1] ?? '') : ''
+      if (script.includes('/opt/orca/bin/.scripts-stamp') && script.includes('echo marker=1')) {
+        const marker = /\/opt\/orca\/bin\/\.entry-points-[0-9a-f]+/.exec(script)?.[0] ?? ''
+        const stamp = box.files.get(SCRIPTS_STAMP_PATH)?.trim()
+        return { exitCode: 0, stdout: `stamp=${stamp || 0}\nmarker=${box.files.has(marker) ? 1 : 0}\n`, stderr: '' }
+      }
+      if (script.includes('echo synced')) {
+        for (const path of [...box.files.keys()].filter((p) => p.startsWith('/opt/orca/bin/.entry-points-'))) {
+          box.files.delete(path)
+        }
+        const marker = /sudo touch (\/opt\/orca\/bin\/\.entry-points-[0-9a-f]+)/.exec(script)?.[1]
+        const stamp = /echo (\d+) \| sudo tee \/opt\/orca\/bin\/\.scripts-stamp/.exec(script)?.[1]
+        if (marker) {
+          box.files.set(marker, '')
+        }
+        if (stamp) {
+          box.files.set(SCRIPTS_STAMP_PATH, `${stamp}\n`)
+        }
         return { exitCode: 0, stdout: 'synced\n', stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {

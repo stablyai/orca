@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
-import { activeGoldenSnapshots, advanceGoldenImages, currentGoldenSnapshotId, type GoldenImageDeps } from '../src/golden-images'
+import { activeGoldenSnapshots, advanceGoldenImages, currentGoldenSnapshotId, ensureEntryPoints, entryPointsVersion, type GoldenImageDeps } from '../src/golden-images'
+import { VM_SCRIPTS_STAMP } from '../image/vm-scripts.generated'
 import { createFakeD1 } from './d1-fake'
-import { createFakeVercel } from './fake-vercel'
+import { SCRIPTS_STAMP_PATH, createFakeVercel } from './fake-vercel'
 import { GOLDEN, createHarness } from './harness'
 import { touchesVm } from '../src/golden-source'
 
@@ -238,5 +239,81 @@ describe('golden image rotation', () => {
     expect(touchesVm('cloud/apps/sandbox-control/image/vm/orca-desktop-proxy')).toBe(true)
     expect(touchesVm('cloud/apps/sandbox-control/image/golden-image.test.ts')).toBe(false)
     expect(touchesVm('cloud/apps/billing/src/index.ts')).toBe(false)
+  })
+})
+
+describe('ensureEntryPoints (never installs older VM scripts than the image has)', () => {
+  async function box(files: Record<string, string> = {}) {
+    const vercel = createFakeVercel(() => 0)
+    const created = await vercel.createSandbox({
+      name: 'sbx',
+      snapshotId: GOLDEN,
+      vcpus: 2,
+      region: 'iad1',
+      timeoutMs: 60_000,
+      ports: [],
+      networkPolicy: { allow: {} },
+      snapshotExpirationMs: 0,
+      tags: {}
+    })
+    const vm = vercel.boxes.get('sbx')!
+    for (const [path, body] of Object.entries(files)) {
+      vm.files.set(path, body)
+    }
+    const installs = () => vercel.commands.filter((c) => c.command === 'bash' && c.args?.[1]?.includes('echo synced')).length
+    return { vercel, vm, sessionId: created.session.id, installs }
+  }
+  const marker = `/opt/orca/bin/.entry-points-${entryPointsVersion()}`
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('skips an image with a newer stamp and logs it (a Worker deployed behind its golden)', async () => {
+    const t = await box({ [SCRIPTS_STAMP_PATH]: `${VM_SCRIPTS_STAMP + 1}\n` })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(0)
+    expect(t.vm.files.get(SCRIPTS_STAMP_PATH)).toBe(`${VM_SCRIPTS_STAMP + 1}\n`)
+    expect(log).toHaveBeenCalledWith(JSON.stringify({ event: 'entry_points_skip_older_worker', image: VM_SCRIPTS_STAMP + 1, worker: VM_SCRIPTS_STAMP }))
+    // One probe round trip, nothing else.
+    expect(t.vercel.commands).toHaveLength(1)
+  })
+
+  it('reinstalls over an older stamp, and records the Worker stamp and marker', async () => {
+    const t = await box({ [SCRIPTS_STAMP_PATH]: `${VM_SCRIPTS_STAMP - 1}\n` })
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(1)
+    expect(t.vm.files.get(SCRIPTS_STAMP_PATH)).toBe(`${VM_SCRIPTS_STAMP}\n`)
+    expect(t.vm.files.has(marker)).toBe(true)
+  })
+
+  it('reinstalls an image without a stamp (images from before stamps still get member scripts)', async () => {
+    const t = await box()
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(1)
+    expect(t.vm.files.get(SCRIPTS_STAMP_PATH)).toBe(`${VM_SCRIPTS_STAMP}\n`)
+  })
+
+  it('installs on an equal stamp without the marker, then skips once the marker for these scripts is there', async () => {
+    const t = await box({ [SCRIPTS_STAMP_PATH]: `${VM_SCRIPTS_STAMP}\n` })
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(1)
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(1)
+  })
+
+  it('skips on the matching marker even when the image stamp is older', async () => {
+    const t = await box({ [SCRIPTS_STAMP_PATH]: '1\n', [marker]: '' })
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(0)
+  })
+
+  it('installs when the probe cannot be read (as before stamps)', async () => {
+    const t = await box({ [SCRIPTS_STAMP_PATH]: `${VM_SCRIPTS_STAMP + 1}\n` })
+    t.vercel.commandHandler = (params) =>
+      params.args?.[1]?.includes('echo marker=1') ? { exitCode: 1, stdout: '', stderr: 'boom' } : undefined
+    await ensureEntryPoints({ provider: t.vercel }, t.sessionId)
+    expect(t.installs()).toBe(1)
   })
 })
