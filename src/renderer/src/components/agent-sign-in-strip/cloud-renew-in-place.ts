@@ -21,9 +21,26 @@ import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
 import { cloudSetupStripActions } from './cloud-setup-strip-actions'
 import { agentSignInCardActions } from '../agent-sign-in/AgentSignInPanePortals'
 
-/** The renewal's own setup is under way (steps 2-4): the strip shows it instead of step 1. */
+/**
+ * The renewal's own setup is under way (steps 2-4, a failure included): the strip shows it instead
+ * of step 1, and its × stops it. The setup is per AGENT, not per surface: one started from any strip
+ * shows on every expired strip for that agent (held, terminal, chat), and × on any of them stops it
+ * for all of them.
+ */
 export function renewInPlaceRunning(setup: OrcaCloudAgentSetup): boolean {
   return setup.phase !== 'idle' && setup.phase !== 'saved'
+}
+
+/**
+ * Saved, but the account read that shows the renewal hasn't landed yet (the store re-reads on
+ * 'saved'): still "Checking the code…", never a flash of "expired · Renew" before step 5.
+ */
+const SAVED_CHECKING: OrcaCloudAgentSetup = {
+  phase: 'browser',
+  startedAt: 0,
+  canReopen: false,
+  acceptsCode: true,
+  code: 'checking'
 }
 
 /**
@@ -36,8 +53,10 @@ export function cloudRenewInPlaceModel(args: {
   setup: OrcaCloudAgentSetup
   t: Translate
 }): CloudStripModel {
-  const { expired, setup, t } = args
-  if (!renewInPlaceRunning(setup)) {
+  const { expired, t } = args
+  const saved = args.setup.phase === 'saved'
+  const setup = saved ? SAVED_CHECKING : args.setup
+  if (!saved && !renewInPlaceRunning(setup)) {
     return expired
   }
   const flow = cloudAgentSetupStripModel({ agent: args.agent, setup, ready: false, t })
@@ -73,7 +92,9 @@ export function cloudRenewInPlaceModel(args: {
       setup.phase === 'failed' && flow.primary?.action.kind === 'setUpOnce'
         ? { ...flow.primary, action: { kind: 'renew' } }
         : flow.primary,
-    ...(setup.phase === 'browser' || setup.phase === 'paste' ? { settingsLink } : {}),
+    ...(!saved && (setup.phase === 'browser' || setup.phase === 'paste') ? { settingsLink } : {}),
+    // Nothing to cancel once it's saved: the strip leaves with the account read.
+    ...(saved ? { noClose: true } : {}),
     announcement: keepsTitle ? flow.announcement : `${expired.title}. ${flow.announcement}`
   }
 }

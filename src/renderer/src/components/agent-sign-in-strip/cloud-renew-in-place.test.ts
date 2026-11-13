@@ -42,7 +42,36 @@ const model = (setup: OrcaCloudAgentSetup) =>
 describe('cloudRenewInPlaceModel (design-squad per-step copy)', () => {
   it("1 expired: the surface's own strip, [Renew], no Settings link", () => {
     expect(model({ phase: 'idle' })).toBe(EXPIRED)
-    expect(model({ phase: 'saved' })).toBe(EXPIRED)
+  })
+
+  it('saved, before the account read lands: still "Checking the code…", never a flash of Renew', () => {
+    const shown = model({ phase: 'saved' })
+    expect(shown.title).toBe('Your Claude sign-in expired')
+    expect(shown.paste).toMatchObject({ submitting: true })
+    expect(shown.paste?.setupCode?.submitLabel).toBe('Checking the code…')
+    expect(shown.primary?.action.kind).not.toBe('renew')
+    expect(shown.noClose).toBe(true)
+    expect(shown.settingsLink).toBeUndefined()
+  })
+
+  it('the setup is per agent: one renewal shows steps 2-4 on every expired surface for that agent', () => {
+    const setup: OrcaCloudAgentSetup = {
+      phase: 'browser',
+      startedAt: 0,
+      canReopen: true,
+      acceptsCode: true
+    }
+    const held = cloudRenewInPlaceModel({
+      agent: 'claude',
+      expired: { ...EXPIRED, detail: 'Renew to start Claude.' },
+      setup,
+      t
+    })
+    const chat = cloudRenewInPlaceModel({ agent: 'claude', expired: EXPIRED, setup, t })
+    for (const shown of [held, chat]) {
+      expect(shown.detail).toBe('Finish in your browser, then paste the code here.')
+      expect(shown.settingsLink).toBe('Renew in Settings')
+    }
   })
 
   it('2 browser: same title, paste code, [Finish renewing] [Open again], "Renew in Settings"', () => {
@@ -133,6 +162,21 @@ describe('cloudRenewInPlaceActions', () => {
     expect(api.reopen).toHaveBeenCalledExactlyOnceWith({ agent: 'claude' })
     built.openSettings?.()
     expect(openSettings).toHaveBeenCalledOnce()
+  })
+
+  it('× in a failed renewal also goes back to step 1 (uniform ×)', () => {
+    const { built, own } = actions({ phase: 'failed', error: 'denied' })
+    built.cancel()
+    expect(store.stop).toHaveBeenCalledExactlyOnceWith('claude')
+    expect(own.cancel).not.toHaveBeenCalled()
+  })
+
+  it("× on any surface stops the agent's one renewal for all of them", () => {
+    const setup: OrcaCloudAgentSetup = { phase: 'browser', startedAt: 0, canReopen: true }
+    actions(setup).built.cancel()
+    actions(setup).built.cancel()
+    // Every surface stops the same per-agent setup; there is no per-surface renewal.
+    expect(store.stop.mock.calls).toEqual([['claude'], ['claude']])
   })
 
   it('6: × mid-flow stops the setup (back to step 1) and never dismisses the strip', () => {

@@ -28,10 +28,11 @@ const ACTIONS: CloudStripActions = {
 }
 
 type Surface = 'held' | 'terminal' | 'chat'
-type Step = 'expired' | 'browser' | 'checking' | 'rejected' | 'renewed'
+type Step = 'expired' | 'browser' | 'checking' | 'rejected' | 'saved' | 'renewed'
 
 const SETUP: Record<Exclude<Step, 'renewed'>, OrcaCloudAgentSetup> = {
   expired: { phase: 'idle' },
+  saved: { phase: 'saved' },
   browser: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true },
   checking: {
     phase: 'browser',
@@ -134,3 +135,5 @@ export const chatRenewed = fixture('chat', 'renewed')
 /** Narrow: the code field stacks under the text, and "Renew in Settings" gets its own line. */
 export const chatBrowserNarrow = fixture('chat', 'browser', 440)
 export const terminalRejectedNarrow = fixture('terminal', 'rejected', 440)
+/** Saved, before the account read lands: still checking, no ×, never a flash of Renew. */
+export const terminalSaved = fixture('terminal', 'saved')
