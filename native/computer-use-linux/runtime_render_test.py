@@ -22,6 +22,8 @@ class FakeStateType:
     SENSITIVE = 8
     HAS_POPUP = 9
     MULTI_LINE = 10
+    VERTICAL = 11
+    HORIZONTAL = 12
 
 
 class FakeStateSet:
@@ -101,6 +103,15 @@ class FakeAccessible:
         self.name = name
         self.value = value
         self.children = list(children)
+        self.parent = None
+        for child in self.children:
+            child.parent = self
+
+    def get_parent(self):
+        return self.parent
+
+    def get_index_in_parent(self):
+        return self.parent.children.index(self)
 
     def get_child_count(self):
         return len(self.children)
@@ -161,7 +172,7 @@ class SnapshotFixture(ExitStack):
             (runtime.time, "monotonic", lambda: self.clock),
             (runtime.Atspi, "set_timeout", self.set_timeout),
             (runtime.Atspi, "Component", types.SimpleNamespace(get_extents=self.extents)),
-            (runtime.Atspi, "CoordType", types.SimpleNamespace(SCREEN=0)),
+            (runtime.Atspi, "CoordType", types.SimpleNamespace(SCREEN=0, WINDOW=1)),
             (runtime, "capture_png", self.capture),
             (runtime, "restore_window", lambda *_: self.restore()),
             (runtime, "x11_pointer_state", lambda: self.pointer),
@@ -672,6 +683,129 @@ class RuntimeRenderTest(unittest.TestCase):
                         runtime.run_operation(request)
                     self.assertEqual(effects, [])
                 keys.assert_not_called()
+
+    def test_gtk4_rectangles_come_from_window_extents_and_the_x11_client_origin(self):
+        button = FakeAccessible("push button", "Open")
+        window = FakeAccessible("frame", "Files", children=[button])
+        app = FakeAccessible("application", "Files", children=[window])
+        app.get_toolkit_name, app.get_toolkit_version = (lambda: "GTK"), (lambda: "4.14.5")
+        # Why these numbers: GTK 4 answers SCREEN with [0, 0, w, h] (agent-desktop FINDINGS L23-37).
+        extents = {(window, 0): (0, 0, 800, 600), (window, 1): (0, 0, 800, 600),
+                   (button, 0): (0, 0, 64, 44), (button, 1): (16, 299, 64, 44)}
+        for node in (window, button):
+            node.get_component_iface = lambda node=node: node
+        def get_extents(node, coord_type):
+            x, y, width, height = extents[(node, coord_type)]
+            return types.SimpleNamespace(x=x, y=y, width=width, height=height)
+        for origin, wayland in (((1000, 500), False), (None, False), (None, True)):
+            with self.subTest(origin=origin, wayland=wayland), \
+                 patch.object(runtime.Atspi, "Component", types.SimpleNamespace(get_extents=get_extents), create=True), \
+                 patch.object(runtime.Atspi, "CoordType", types.SimpleNamespace(SCREEN=0, WINDOW=1), create=True), \
+                 patch.object(runtime, "gtk4_client_origin", lambda *_: origin), \
+                 patch.object(runtime, "wayland_session", lambda: wayland):
+                placed = runtime.Placement(app, window)
+                self.assertEqual(placed.frame(button).to_json(), {"x": 16, "y": 299, "width": 64, "height": 44})
+                if origin:
+                    self.assertEqual(runtime.window_point(placed, {"index": 1}, node=button), (1048, 821))
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "GTK 4 window"):
+                        runtime.window_point(placed, {"index": 1}, node=button)
+
+    def test_background_scroll_pages_a_scroll_bar_and_hands_the_end_to_the_outer_view(self):
+        def view(name, value, high, children=()):
+            bar = FakeAccessible("scroll bar", name + " bar")
+            bar.position = value
+            bar.high = high
+            bar.get_state_set = lambda: FakeStateSet(FakeStateType.VERTICAL)
+            bar.get_value_iface = lambda: bar
+            pane = FakeAccessible("scroll pane", name, children=[bar, *children])
+            return pane, bar
+        row = FakeAccessible("list item", "Row")
+        inner, inner_bar = view("inner", 300, 300, [row])
+        outer, outer_bar = view("outer", 0, 2000, [inner])
+        writes = []
+        def set_value(bar, value):
+            writes.append((bar.name, value))
+            bar.position = value
+            return True
+        value_api = types.SimpleNamespace(get_minimum_value=lambda bar: 0, get_maximum_value=lambda bar: bar.high,
+                                          get_current_value=lambda bar: bar.position, set_current_value=set_value)
+        with SnapshotFixture(FakeAccessible("frame", "Editor", children=[outer])) as fixture, \
+             patch.object(runtime.Atspi, "Value", value_api, create=True):
+            fixture.bounds[outer] = runtime.Rect(100, 200, 300, 250)
+            element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Row")
+            result = runtime.run_operation({"tool": "scroll", "app": "Fixture", "element": element, "direction": "down",
+                                            "pages": 2, "noScreenshot": True})
+            self.assertEqual(writes, [("outer bar", 500)])
+            self.assertEqual(result["action"]["verification"], {"state": "verified", "property": "value"})
+            self.assertEqual(result["action"]["delivery"], "background")
+            runtime.run_operation({"tool": "scroll", "app": "Fixture", "element": element, "direction": "up",
+                                   "pages": 0.5, "noScreenshot": True})
+            self.assertEqual(writes[-1], ("inner bar", 300 - 0.5 * fixture.bounds[inner].height))
+
+    def test_background_scroll_pages_a_document_with_scroll_to(self):
+        items = [FakeAccessible("paragraph", f"Item {index}") for index in range(6)]
+        document = FakeAccessible("document web", "Page", children=items)
+        scrolled = []
+        offset = [0]
+        with SnapshotFixture(FakeAccessible("frame", "Browser", children=[document])) as fixture:
+            fixture.bounds[document] = runtime.Rect(0, 100, 400, 300)
+            def place():
+                for index, item in enumerate(items):
+                    fixture.bounds[item] = runtime.Rect(0, 100 + index * 120 - offset[0], 400, 120)
+            place()
+            def scroll_to(item, edge):
+                scrolled.append((item.name, edge))
+                offset[0] += fixture.bounds[item].y - 100
+                place()
+                return True
+            with patch.object(runtime.Atspi.Component, "scroll_to", scroll_to, create=True), \
+                 patch.object(runtime.Atspi, "ScrollType", types.SimpleNamespace(TOP_EDGE="top", BOTTOM_EDGE="bottom"), create=True):
+                result = runtime.run_operation({"tool": "scroll", "app": "Fixture", "x": 50, "y": 50,
+                                                "direction": "down", "pages": 1, "noScreenshot": True})
+        # Why Item 2: it spans 340-460 and the viewport ends at 400, so its hidden half leads the next page.
+        self.assertEqual(scrolled, [("Item 2", "top")])
+        self.assertEqual(result["action"]["actionName"], "scrollTo")
+
+    def test_click_without_an_action_selects_the_row_only_when_its_index_is_proven(self):
+        cases = (
+            ("Qt", "6.6", None, "selected"),
+            ("GTK", "4.14", (True, False), "selected"),
+            ("GTK", "4.14", (True, True), "refused"),
+            ("Qt", "6.6", "replaced", "stale"),
+        )
+        for toolkit, version, counted, expected in cases:
+            rows = [FakeAccessible("list item", name) for name in ("Mouse", "Keyboard")]
+            listing = FakeAccessible("list", "Devices", children=rows)
+            selected = []
+            listing.get_selection_iface = lambda: listing
+            if counted == "replaced":
+                rows[1].get_index_in_parent = lambda: 0
+            for row in rows:
+                row.get_state_set = lambda row=row: FakeStateSet(*([FakeStateType.SELECTED] if row.name in selected else []))
+            def is_child_selected(_, index):
+                answers = counted if isinstance(counted, tuple) else (True, False)
+                if not answers[index - len(rows) + 1]:
+                    raise RuntimeError("InvalidArgs")
+                return False
+            selection = types.SimpleNamespace(
+                select_child=lambda _, index: selected.append(rows[index].name) or True,
+                is_child_selected=is_child_selected)
+            with self.subTest(toolkit=toolkit, counted=counted), \
+                 SnapshotFixture(FakeAccessible("frame", "Settings", children=[listing])) as fixture, \
+                 patch.object(runtime.Atspi, "Selection", selection, create=True), \
+                 patch.object(runtime, "gtk4_client_origin", lambda *_: (0, 0)):
+                fixture.app.get_toolkit_name, fixture.app.get_toolkit_version = (lambda: toolkit), (lambda: version)
+                element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Keyboard")
+                request = {"tool": "click", "app": "Fixture", "element": element, "noScreenshot": True}
+                if expected == "selected":
+                    result = runtime.run_operation(request)
+                    self.assertEqual(selected, ["Keyboard"])
+                    self.assertEqual(result["action"]["verification"], {"state": "verified", "property": "selection"})
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "background_unavailable" if expected == "refused" else "stale element"):
+                        runtime.run_operation(request)
+                    self.assertEqual(selected, [])
 
     def test_text_entry_inserts_into_the_focused_field_of_a_background_window(self):
         cases = (
