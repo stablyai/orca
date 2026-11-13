@@ -350,6 +350,20 @@ describe('PairedServerRowsProducer', () => {
       expect(call).toHaveBeenCalledTimes(2)
     })
 
+    it("settles a reader's own read once it answers, though a change lands while it is out and nobody watches", async () => {
+      const { call, watches, producer } = attached({ on: false })
+      let answer: (response: RuntimeRpcResponse<unknown>) => void = () => {}
+      call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      let settled = false
+      void producer.refresh('box').then(() => (settled = true))
+      expect(call).toHaveBeenCalledTimes(1)
+
+      watches.get('box')?.onChange({ catalog: false })
+      answer(psReply([row('a')]))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(true)
+    })
+
     it('applies added, changed and removed rows from a delta, and skips an unchanged reply', async () => {
       const { call, watches, producer, ids, snapshotParams } = attached()
       call.mockResolvedValueOnce(

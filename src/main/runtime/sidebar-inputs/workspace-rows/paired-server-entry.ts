@@ -33,7 +33,9 @@ export type PairedServerEntry = {
   /** Every read of this server goes through it: events, the backstop, reconnects and consumer reads. */
   gate: HostReadGate
   /** Consumers waiting for the read the gate holds or has out. */
-  waiters: (() => void)[]
+  waiters: { after: number; resolve: () => void }[]
+  /** Reads started so far; a waiter settles with the first read started after it asked. */
+  readsStarted: number
 }
 
 /** A server first seen under this pairing: out of contact, nothing read yet. */
@@ -58,6 +60,7 @@ export function newPairedServerEntry(
     catalogStale: true,
     watch: null,
     waiters: [],
+    readsStarted: 0,
     gate: new HostReadGate({
       floorMs: HOST_READ_FLOOR_MS,
       read: () => reads.read(entry),
@@ -68,8 +71,11 @@ export function newPairedServerEntry(
   return entry
 }
 
-export function wakePairedServerReaders(entry: PairedServerEntry): void {
-  for (const resolve of entry.waiters.splice(0)) {
-    resolve()
+/** Settles the waiters that asked before read number `read` started (all by default). */
+export function wakePairedServerReaders(entry: PairedServerEntry, read = Infinity): void {
+  const woken = entry.waiters.filter((waiter) => waiter.after < read)
+  entry.waiters = entry.waiters.filter((waiter) => waiter.after >= read)
+  for (const waiter of woken) {
+    waiter.resolve()
   }
 }

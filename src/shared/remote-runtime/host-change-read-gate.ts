@@ -85,11 +85,6 @@ export class HostReadGate {
     this.changed()
   }
 
-  /** Nothing went stale since the last read started. */
-  get current(): boolean {
-    return !this.stale
-  }
-
   get reading(): boolean {
     return this.inFlight
   }

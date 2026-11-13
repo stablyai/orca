@@ -88,11 +88,13 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
         this.servers.set(
           host.environmentId,
           newPairedServerEntry(host, {
-            read: (entry) =>
+            read: (entry) => {
+              const read = (entry.readsStarted += 1)
               void this.fetch(hosts, entry).finally(() => {
                 entry.gate.readSettled()
-                this.settleReaders(entry)
-              }),
+                wakePairedServerReaders(entry, this.reachable(entry) ? read : Infinity)
+              })
+            },
             watching: () => this.options.hasDemand(),
             connected: (entry) => this.reachable(entry)
           })
@@ -131,8 +133,9 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     if (!entry) {
       return Promise.resolve()
     }
+    const after = entry.readsStarted
+    const settled = new Promise<void>((resolve) => entry.waiters.push({ after, resolve }))
     entry.gate.polled()
-    const settled = new Promise<void>((resolve) => entry.waiters.push(resolve))
     this.settleReaders(entry)
     return settled
   }
@@ -224,9 +227,9 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     return entry.inContact && this.servers.get(entry.environmentId) === entry
   }
 
-  // Readers wait for the read the gate holds; once none will run, they take the rows last answered.
+  // Once no read will run, waiters take the rows last answered; a read out wakes them as it settles.
   private settleReaders(entry: PairedServerEntry): void {
-    if (!entry.gate.reading && (entry.gate.current || !this.reachable(entry))) {
+    if (!entry.gate.reading && !this.reachable(entry)) {
       wakePairedServerReaders(entry)
     }
   }
