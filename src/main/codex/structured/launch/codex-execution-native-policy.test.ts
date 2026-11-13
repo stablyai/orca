@@ -1,3 +1,5 @@
+import { codexProjectConfigIsolationArgs } from '../catalog/codex-project-config-isolation'
+import { runProcess } from '@orca/process-host'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -56,20 +58,23 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
       const cwd = join(root, 'workspace')
       const home = join(root, 'account')
       await mkdir(cwd)
+      expect((await runProcess({ program: 'git', args: ['init', '--quiet', cwd] })).code).toBe(0)
       await mkdir(home)
       await writeFile(join(cwd, 'inside.txt'), 'ADMITTED-CANARY')
       await writeFile(join(root, 'outside.txt'), 'PRIVATE-CANARY')
       const marker = join(root, 'mcp-was-started')
-      await writeFile(
-        join(home, 'config.toml'),
-        `sandbox_mode = "danger-full-access"\n[features]\nmulti_agent = true\n[mcp_servers.synthetic_canary]\ncommand = "/usr/bin/touch"\nargs = ["${escapeTomlBasicString(marker)}"]\n`
-      )
+      const initialConfig = `sandbox_mode = "danger-full-access"\n[features]\nmulti_agent = true\n[mcp_servers.synthetic_canary]\ncommand = "/usr/bin/touch"\nargs = ["${escapeTomlBasicString(marker)}"]\n`
+      await writeFile(join(home, 'config.toml'), initialConfig)
       const auth = '{"OPENAI_API_KEY":"synthetic-api-key"}'
       await writeFile(join(home, 'auth.json'), auth)
       connection = await openCodexAppServerConnection(
         {
           command: process.env.ORCA_CODEX_CONTRACT_BINARY!,
-          args: [...nativeLaunch(access).args, 'app-server'],
+          args: [
+            ...nativeLaunch(access).args,
+            ...(await codexProjectConfigIsolationArgs(cwd)),
+            'app-server'
+          ],
           cwd,
           env: { HOME: root, CODEX_HOME: home, ORCA_ROUTING_PARENT_CANARY: 'PARENT-ENV-CANARY' },
           envToDelete: ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'CHATGPT_BASE_URL']
@@ -85,6 +90,7 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
         activePermissionProfile: { id: PROFILE },
         sandbox: { type: sandbox }
       })
+      expect(await readFile(join(home, 'config.toml'), 'utf8')).toBe(initialConfig)
       const config = readRecord(
         await connection.request('config/read', { cwd }, { timeoutMs: 2_000 })
       )

@@ -33,6 +33,7 @@ import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { codexExecutionLaunch } from './codex-execution-controls'
+import { codexProjectConfigIsolationArgs } from '../catalog/codex-project-config-isolation'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -139,13 +140,15 @@ export function codexStructuredLaunchPart(
       resolveEnvironment: basis.environment
     })
     const environment = await basis.environment()
-    const args = execution?.args ?? codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.nativeId ?? null
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
     const visuals = execution ? null : await basis.visuals()
     const launchDirectory = await basis.launchDirectory()
+    const args = execution
+      ? [...execution.args, ...(await codexProjectConfigIsolationArgs(launchDirectory))]
+      : codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const executable = execution
       ? await readCodexExecutionExecutable(command, prefixArgs, launchDirectory, environment)
       : undefined
