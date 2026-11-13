@@ -56,7 +56,8 @@ export function SectionHeader({
           />
           <span className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
             <span className="flex min-w-0 items-center gap-1">
-              <span className="min-w-0 truncate" title={label}>
+              {/* With a status chip, keep a few title characters readable before chip and count. */}
+              <span className={cn('truncate', status ? 'min-w-[4ch]' : 'min-w-0')} title={label}>
                 {label}
               </span>
               {/* Use title only; aria-label here would replace the parent toggle's accessible name. */}

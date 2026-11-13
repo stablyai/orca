@@ -28,7 +28,7 @@ const badgeVariants = cva(
           'h-4 border-current/30 px-1.5 py-0 align-[1px] text-3xs font-semibold tracking-wider uppercase',
         /** A merged-review state inside an uppercase section header, kept in normal case. */
         mergedState:
-          'h-4 gap-0.5 bg-callout-important/10 px-1 py-0 text-[10px] tracking-normal normal-case text-merged-state-foreground [&>svg]:text-callout-important',
+          'h-4 gap-0.5 bg-callout-important/10 px-1 py-0 text-[10px] tracking-normal normal-case text-merged-state-foreground [&>svg]:text-callout-important dark:[&>svg]:text-merged-state-foreground',
         /** A skill or file sitting inline in the chat message box, ringed while selected. */
         promptPill:
           'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring'

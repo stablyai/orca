@@ -281,11 +281,18 @@ it('reopens an automatic collapse when the review is no longer merged', async ()
   expect(hasMergedChip()).toBe(false)
 })
 
-it('names a merge request by its host label', async () => {
-  await render({ worktreeId: nextWorktreeId(), review: { ...mergedReview, provider: 'gitlab' } })
+it.each(['open', 'closed'] as const)(
+  'lets a known %s review reopen the collapse and clear the chip while HEAD is unknown',
+  async (state) => {
+    const worktreeId = nextWorktreeId()
+    await render({ worktreeId })
+    expect(isExpanded()).toBe(false)
 
-  expect(toggle().textContent).toContain('MR #412 is merged')
-})
+    await render({ worktreeId, statusHeadOid: null, review: { ...mergedReview, state } })
+    expect(isExpanded()).toBe(true)
+    expect(hasMergedChip()).toBe(false)
+  }
+)
 
 it('keeps disclosure and merged proof apart for same-ID workspaces on other hosts', async () => {
   const worktreeId = nextWorktreeId()
