@@ -1,82 +1,143 @@
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { CommunityActivity } from '../../../../shared/community-operations'
-export function CommunitySubmissionTrend({ data }: { data: CommunityActivity }): React.JSX.Element {
+import {
+  communityActivityWeeks,
+  COMMUNITY_GROUPS,
+  COMMUNITY_GROUP_COLORS
+} from './community-activity-series'
+import type { CommunityGroupMode } from './community-activity-series'
+import { CommunityChartLegend, useCommunityGroupNames } from './CommunityChartLegend'
+
+export function CommunitySubmissionTrend({
+  data,
+  mode
+}: {
+  data: CommunityActivity
+  mode: CommunityGroupMode
+}): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const buckets = new Map<string, number>()
-  for (const row of data.rows) {
-    const date = new Date(row.createdAt)
-    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
-    const key = date.toISOString().slice(0, 10)
-    buckets.set(key, (buckets.get(key) ?? 0) + 1)
-  }
-  const rows = [...buckets].sort(([a], [b]) => a.localeCompare(b))
-  const max = Math.max(1, ...rows.map(([, count]) => count))
-  const points = rows.map(
-    ([, count], i) =>
-      `${32 + (i / Math.max(1, rows.length - 1)) * 736},${180 - (count / max) * 140}`
+  const names = useCommunityGroupNames(mode)
+  const weeks = communityActivityWeeks(data, mode)
+  const max = Math.max(
+    1,
+    ...weeks.map((week) => week.groups.reduce((sum, group) => sum + group.count, 0))
   )
-  const observedReviews = data.rows.filter((row) => row.reviewed !== null)
+  const x = (i: number): number => 40 + (i / Math.max(1, weeks.length - 1)) * 700
+  const y = (count: number): number => 200 - (count / max) * 160
   return (
-    <section className="space-y-5 rounded-xl border border-border p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold">
-            {t('community.submissionTrend', 'PR submissions by week')}
-          </h3>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t(
-              'community.trendScope',
-              'This capture, grouped by UTC week. The first and last weeks can be incomplete.'
-            )}
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t('community.reviewCoverage', 'Complete review history')} · {observedReviews.length}/
-          {data.rows.length} {t('community.prsUnit', 'PRs')}
+    <section className="min-w-0 space-y-5 rounded-xl border border-border bg-card p-6 text-card-foreground">
+      <div>
+        <p className="text-2xs text-muted-foreground">
+          03 · {t('community.activityOverTime', 'Activity over time')}
         </p>
+        <h3 className="mt-2 text-base font-semibold">
+          {t('community.proposedVolume', 'How much work is being proposed?')}
+        </h3>
       </div>
-      <svg
-        viewBox="0 0 800 220"
-        className="w-full"
-        role="img"
-        aria-label={t('community.weeklyChart', 'Weekly PR submission counts')}
-      >
-        <line x1="32" x2="768" y1="180" y2="180" stroke="var(--border)" />
-        {rows.length > 1 && (
-          <>
-            <path
-              d={`M32,180 L${points.join(' L')} L768,180 Z`}
-              fill="var(--foreground)"
-              fillOpacity="0.06"
-            />
-            <polyline
-              points={points.join(' ')}
-              fill="none"
-              stroke="var(--foreground)"
-              strokeWidth="2"
-            />
-          </>
-        )}
-        {rows.map(([date, count], i) => {
-          const [cx, cy] = points[i].split(',').map(Number)
-          return (
-            <g key={date}>
-              <circle cx={cx} cy={cy} r="4" fill="var(--foreground)" />
-              <text x={cx} y={cy - 12} textAnchor="middle" className="fill-foreground text-2xs">
-                {count}
-              </text>
-              <text x={cx} y="208" textAnchor="middle" className="fill-muted-foreground text-2xs">
-                {new Date(date).toLocaleDateString(locale, {
-                  month: 'short',
-                  day: 'numeric',
-                  timeZone: 'UTC'
-                })}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          'community.localWeeks',
+          'PR submissions by week in your time zone. The first and last weeks can be incomplete.'
+        )}{' '}
+        · {Intl.DateTimeFormat(locale).resolvedOptions().timeZone}
+      </p>
+      <div className="overflow-x-auto scrollbar-sleek">
+        <svg
+          viewBox="0 0 800 240"
+          className="w-full min-w-[40rem]"
+          role="img"
+          aria-label={t('community.weeklyChart', 'Weekly PR submission counts')}
+        >
+          {[0, 0.5, 1].map((tick) => (
+            <g key={tick}>
+              <line x1="40" x2="740" y1={y(max * tick)} y2={y(max * tick)} stroke="var(--border)" />
+              <text
+                x="30"
+                y={y(max * tick)}
+                textAnchor="end"
+                dominantBaseline="middle"
+                className="fill-muted-foreground text-2xs"
+              >
+                {Math.round(max * tick)}
               </text>
             </g>
-          )
-        })}
-      </svg>
+          ))}
+          {COMMUNITY_GROUPS.map((id, groupIndex) => {
+            const upper = weeks.map(
+              (week, i) =>
+                `${x(i)},${y(week.groups.slice(0, groupIndex + 1).reduce((sum, group) => sum + group.count, 0))}`
+            )
+            const lower = weeks
+              .map(
+                (week, i) =>
+                  `${x(i)},${y(week.groups.slice(0, groupIndex).reduce((sum, group) => sum + group.count, 0))}`
+              )
+              .toReversed()
+            return (
+              <path
+                key={id}
+                d={`M${upper.join(' L')} L${lower.join(' L')} Z`}
+                fill={COMMUNITY_GROUP_COLORS[id]}
+                fillOpacity="0.85"
+              >
+                <title>{names[id]}</title>
+              </path>
+            )
+          })}
+          {weeks.map(
+            (week, i) =>
+              (i % Math.max(1, Math.ceil(weeks.length / 4)) === 0 || i === weeks.length - 1) && (
+                <text
+                  key={week.date}
+                  x={x(i)}
+                  y="228"
+                  textAnchor="middle"
+                  className="fill-muted-foreground text-2xs"
+                >
+                  {new Date(week.date).toLocaleDateString(locale, {
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </text>
+              )
+          )}
+        </svg>
+      </div>
+      <CommunityChartLegend mode={mode} />
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground">
+          {t('community.chartData', 'View chart data')}
+        </summary>
+        <div className="mt-3 overflow-auto scrollbar-sleek">
+          <table className="w-full text-left">
+            <thead>
+              <tr>
+                <th className="p-2">{t('community.week', 'Week')}</th>
+                {COMMUNITY_GROUPS.map((id) => (
+                  <th className="p-2 text-right" key={id}>
+                    {names[id]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map((week) => (
+                <tr key={week.date}>
+                  <th className="p-2 font-normal">
+                    {new Date(week.date).toLocaleDateString(locale)}
+                  </th>
+                  {week.groups.map((group) => (
+                    <td className="p-2 text-right" key={group.id}>
+                      {group.count}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </section>
   )
 }

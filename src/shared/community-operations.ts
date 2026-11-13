@@ -85,6 +85,7 @@ export type CommunityActivity = {
   rows: {
     number: number
     author: string
+    authorType?: string
     authorAssociation: string
     memberReviewed: boolean | null
     memberApproved: boolean | null

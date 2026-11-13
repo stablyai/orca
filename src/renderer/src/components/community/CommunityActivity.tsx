@@ -1,204 +1,215 @@
-import { CommunitySubmissionTrend } from './CommunitySubmissionTrend'
-import { CommunityReviewChart } from './CommunityReviewChart'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { ArrowRight, GitMerge, GitPullRequest, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { CommunitySummary } from '../../../../shared/community-operations'
 import { communityClient } from './community-client'
 import { useCommunityResource } from './use-community-resource'
-function Bars({
-  rows,
-  label
-}: {
-  rows: { name: string; count: number }[]
-  label: string
-}): React.JSX.Element {
-  const locale = useIntlLocale()
-  const max = Math.max(1, ...rows.map((row) => row.count))
-  return (
-    <div role="img" aria-label={label} className="space-y-4">
-      {rows.map((row) => (
-        <div key={row.name}>
-          <div className="mb-1.5 flex justify-between gap-4 text-xs">
-            <span>{row.name}</span>
-            <strong>{row.count.toLocaleString(locale)}</strong>
-          </div>
-          <div className="h-2 rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-foreground/70"
-              style={{ width: `${(100 * row.count) / max}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-function Ring({
-  numerator,
-  denominator,
-  label
-}: {
-  numerator: number
-  denominator: number
-  label: string
-}): React.JSX.Element {
-  const locale = useIntlLocale()
-  const t = useTranslate()
-  const rate = denominator ? numerator / denominator : 0
-  return (
-    <div className="flex items-center gap-6">
-      <div className="relative size-32 shrink-0">
-        <svg
-          viewBox="0 0 100 100"
-          role="img"
-          aria-label={`${label}: ${numerator} / ${denominator}`}
-          className="size-full -rotate-90"
-        >
-          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--muted)" strokeWidth="9" />
-          <circle
-            cx="50"
-            cy="50"
-            r="40"
-            fill="none"
-            stroke="var(--foreground)"
-            strokeWidth="9"
-            strokeDasharray={`${rate * 251.33} 251.33`}
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-2xl font-semibold">
-          {denominator ? `${Math.round(rate * 100)}%` : '—'}
-        </span>
-      </div>
-      <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {numerator.toLocaleString(locale)} / {denominator.toLocaleString(locale)}{' '}
-          {t('community.prsUnit', 'PRs')}
-        </p>
-      </div>
-    </div>
-  )
-}
-export function CommunityActivity({
-  target,
-  summary
-}: {
-  target: RuntimeClientTarget
-  summary: CommunitySummary
-}): React.JSX.Element {
+import { CommunityReviewChart } from './CommunityReviewChart'
+import { CommunityContributionChart } from './CommunityContributionChart'
+import { CommunitySubmissionTrend } from './CommunitySubmissionTrend'
+import { CommunityOutcomeFlow } from './CommunityOutcomeFlow'
+import { CommunityApprovalTrend } from './CommunityApprovalTrend'
+import { communityActivityGroups } from './community-activity-series'
+import type { CommunityGroupMode } from './community-activity-series'
+import { useCommunityNavigation } from './community-navigation'
+
+export function CommunityActivity({ target }: { target: RuntimeClientTarget }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
+  const [mode, setMode] = useState<CommunityGroupMode>('affiliation')
   const resource = useCommunityResource(
     useCallback(() => communityClient(target).activity(), [target])
   )
   const data = resource.value
-  const authors = new Map<string, number>()
-  for (const row of data?.rows ?? []) {
-    authors.set(row.author, (authors.get(row.author) ?? 0) + 1)
-  }
+  const groups = data ? communityActivityGroups(data, mode) : []
+  const community = groups.find((group) => group.id === 'community')?.rows ?? []
+  const human = groups
+    .filter((group) => group.id === 'community' || group.id === 'team')
+    .flatMap((group) => group.rows)
+  const rate = (numerator: number, denominator: number): string =>
+    denominator
+      ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(
+          numerator / denominator
+        )
+      : '—'
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">{t('community.activityTitle', 'How Orca grows')}</h2>
+      <header>
+        <h2 className="text-2xl font-semibold">
+          {t('community.activityTitle', 'Community activity')}
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {t(
-            'community.activityNote',
-            'Public PR activity and merge outcomes. A merge is not a release or a maintainer approval.'
+            'community.activityDescription',
+            'Compare who proposes changes, whose work is reviewed, and what is merged.'
           )}
         </p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {[
-          { label: t('community.openProposals', 'Open proposals'), value: summary.total },
-          { label: t('community.authors', 'Authors with open PRs'), value: summary.contributors },
-          { label: t('community.areasCount', 'Inferred areas'), value: summary.areas.length }
-        ].map((stat) => (
-          <Card key={stat.label} size="sm">
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <p className="text-3xl font-semibold">{stat.value.toLocaleString(locale)}</p>
+      </header>
+      {resource.error && (
+        <div role="alert" className="space-y-3 rounded-xl border border-border p-4">
+          <p className="text-sm">{resource.error}</p>
+          <Button variant="outline" onClick={resource.retry}>
+            {t('community.retry', 'Retry')}
+          </Button>
+        </div>
+      )}
+      {!data ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t('community.loadingActivity', 'Loading public activity…')}
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 p-4 text-xs text-muted-foreground">
+            <span>
+              {new Date(data.complete ? data.since : data.cutoff).toLocaleDateString(locale)} —{' '}
+              {new Date(data.capturedAt).toLocaleDateString(locale)} ·{' '}
+              {data.complete
+                ? t('community.completeCohort', 'Complete 90-day cohort.')
+                : t(
+                    'community.partialCohort',
+                    'The 2,000 most recent PRs are shown. Older submissions are not included.'
+                  )}
+            </span>
+            <details>
+              <summary className="cursor-pointer">
+                {t('community.groupsMethod', 'Groups and method')}
+              </summary>
+              <p className="mt-3 max-w-3xl leading-relaxed">
+                {t(
+                  'community.activityMethod',
+                  'Public GitHub affiliation and verified maintainer roles are separate groupings. Automation and unclassified authors stay visible. All panels use the same submission cohort and capture date. Review rates exclude missing review history. A merge does not establish approval or official release inclusion.'
+                )}
+              </p>
+            </details>
+          </div>
+          <dl className="grid grid-cols-3 divide-x divide-border border-b border-border pb-6 max-sm:grid-cols-1 max-sm:gap-4 max-sm:divide-x-0">
+            {[
+              {
+                label: t('community.submittedPRs', 'submitted PRs'),
+                value: data.rows.length.toLocaleString(locale),
+                note: t('community.observedCohort', 'In this captured cohort')
+              },
+              {
+                label: t('community.communityAuthored', 'Community-authored'),
+                value: rate(community.length, data.rows.length),
+                note: `${community.length} / ${data.rows.length}`
+              },
+              {
+                label: t('community.humanPRsMerged', 'Human PRs merged'),
+                value: rate(human.filter((row) => row.merged).length, human.length),
+                note: `${human.filter((row) => row.merged).length} / ${human.length}`
+              }
+            ].map((stat) => (
+              <div key={stat.label} className="px-5 first:pl-0 max-sm:px-0">
+                <dd className="text-3xl font-semibold">{stat.value}</dd>
+                <dt className="mt-2 text-sm font-medium">{stat.label}</dt>
+                <p className="mt-1 text-xs text-muted-foreground">{stat.note}</p>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      {data && <CommunityReviewChart data={data} />}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <CardContent>
-            <div className="space-y-6">
+            ))}
+          </dl>
+          <div className="grid items-start gap-5 xl:grid-cols-[2fr_1fr]">
+            <CommunityReviewChart data={data} mode={mode} onModeChange={setMode} />
+            <CommunityContributionChart data={data} mode={mode} />
+          </div>
+          <div className="grid items-start gap-5 xl:grid-cols-[2fr_1fr]">
+            <CommunitySubmissionTrend data={data} mode={mode} />
+            <section className="space-y-6 rounded-xl border border-border bg-card p-6 text-card-foreground">
+              <div>
+                <p className="text-2xs text-muted-foreground">
+                  04 · {t('community.proposalToRelease', 'From proposal to release')}
+                </p>
+                <h3 className="mt-2 text-base font-semibold">
+                  {t('community.whenCanIUse', 'When can I use a change?')}
+                </h3>
+              </div>
+              {[
+                {
+                  icon: GitPullRequest,
+                  title: t('community.proposedStage', '1. Proposed'),
+                  note: t('community.proposedNote', 'Explore the open PR')
+                },
+                {
+                  icon: GitMerge,
+                  title: t('community.mergedStage', '2. Merged into source'),
+                  note: t('community.mergedNote', 'Wait for a published release')
+                },
+                {
+                  icon: Package,
+                  title: t('community.releasedStage', '3. Released officially'),
+                  note: t('community.releasedNote', 'Find its version in Changelog')
+                }
+              ].map((stage) => (
+                <div key={stage.title} className="flex gap-3">
+                  <stage.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">{stage.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{stage.note}</p>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => useCommunityNavigation.getState().setSection('changelog')}
+              >
+                {t('community.openChangelog', 'Open Changelog')}
+                <ArrowRight className="size-4" />
+              </Button>
+            </section>
+          </div>
+          <CommunityOutcomeFlow data={data} mode={mode} />
+          <div className="grid items-start gap-5 xl:grid-cols-[2fr_1fr]">
+            <CommunityApprovalTrend data={data} mode={mode} />
+            <section className="space-y-5 rounded-xl border border-border bg-card p-6 text-card-foreground">
               <h3 className="text-base font-semibold">
-                {t('community.workAreas', 'Where proposals concentrate')}
+                {t('community.everyMeasureSource', 'Every measure needs its source.')}
               </h3>
-              <Bars
-                rows={summary.areas.slice(0, 6)}
-                label={t('community.areaChart', 'Open PRs by inferred area')}
-              />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <div className="space-y-6">
-              <h3 className="text-base font-semibold">
-                {t('community.recentOutcome', 'Recent submissions that merged')}
-              </h3>
-              {data ? (
-                <>
-                  <Ring
-                    numerator={data.rows.filter((row) => row.merged).length}
-                    denominator={data.rows.length}
-                    label={t('community.mergeRate', 'Merged into source')}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t('community.cohort', 'PRs created since')}{' '}
-                    {new Date(data.complete ? data.since : data.cutoff).toLocaleDateString(locale)}.{' '}
-                    {data.complete
-                      ? t('community.completeCohort', 'Complete 90-day cohort.')
-                      : t(
-                          'community.partialCohort',
-                          'The 2,000 most recent PRs are shown. Older submissions are not included.'
-                        )}
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {resource.error ?? t('community.loadingActivity', 'Loading public activity…')}
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t(
+                  'community.captureScope',
+                  'These charts describe the captured PRs. Newer submissions have had less time to receive reviews or merge.'
+                )}
+              </p>
+              <dl className="space-y-4 text-xs">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">
+                    {t('community.maintainerRoster', 'Maintainer roster')}
+                  </dt>
+                  <dd>
+                    {data.maintainers === null
+                      ? t('community.unavailable', 'Unavailable')
+                      : data.maintainers.length}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">
+                    {t('community.reviewCoverage', 'Complete review history')}
+                  </dt>
+                  <dd>
+                    {data.rows.filter((row) => row.reviewed !== null).length}/{data.rows.length}
+                  </dd>
+                </div>
+              </dl>
+              {data.roleError && (
+                <p role="status" className="text-xs leading-relaxed text-muted-foreground">
+                  {data.roleError}
                 </p>
               )}
-              {resource.error && (
-                <Button variant="outline" onClick={resource.retry}>
-                  {t('community.retry', 'Retry')}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      {data && (
-        <>
-          <CommunitySubmissionTrend data={data} />
-          <Card>
-            <CardContent>
-              <div className="space-y-6">
-                <h3 className="text-base font-semibold">
-                  {t('community.contributorsTitle', 'Most active authors in this cohort')}
-                </h3>
-                <Bars
-                  rows={[...authors]
-                    .sort(([, a], [, b]) => b - a)
-                    .slice(0, 10)
-                    .map(([name, count]) => ({ name: `@${name}`, count }))}
-                  label={t('community.authorsChart', 'PR submissions by author')}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          <p className="text-xs text-muted-foreground">
+              <Button variant="outline" size="sm" onClick={resource.retry}>
+                {t('community.reloadActivity', 'Reload data')}
+              </Button>
+              <a
+                className="block text-xs underline underline-offset-4"
+                href="https://github.com/stablyai/orca/pulls"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t('community.browseSourcePRs', 'Browse source PRs on GitHub')}
+              </a>
+            </section>
+          </div>
+          <p className="text-2xs text-muted-foreground">
             {t('community.captured', 'Captured')} {new Date(data.capturedAt).toLocaleString(locale)}{' '}
             · {Intl.DateTimeFormat(locale).resolvedOptions().timeZone}
           </p>

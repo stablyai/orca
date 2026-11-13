@@ -1,6 +1,6 @@
 # Orca Community previews
 
-Enable **Community previews** in Settings → Experimental. Custom builds with a recorded manifest also show Community and a clickable **Custom** badge.
+Enable **Community previews** in Settings → Experimental. Custom builds with a recorded manifest also show Community and a clickable **Custom** badge. Its menu previews included changes and opens their source or the build manager.
 
 ## Browse changes
 
@@ -8,9 +8,9 @@ Enable **Community previews** in Settings → Experimental. Custom builds with a
 
 The catalog refreshes asynchronously, with two concurrent GitHub requests, paged fetching, cached results, cancellation, and rate-limit feedback. The UI requests 12 results at a time. Choose an existing GitHub CLI account on the selected host for authenticated limits. Orca stores the account name, not another copy of its token.
 
-**Activity** shows source merge outcomes, weekly submissions in UTC, authors, and review coverage. Public repository affiliation is labeled separately from verified maintainer roles. Unknown roles, incomplete review histories, partial cohorts, and missing checks stay unknown. A merge does not prove review approval or release inclusion.
+**Activity** shows source merge outcomes, contribution share, weekly submissions in your time zone, author-group outcome flows, approval trends, and review coverage. Chart tables expose the underlying counts. Public repository affiliation is labeled separately from verified maintainer roles. Unknown roles, incomplete review histories, partial cohorts, and missing checks stay unknown. A merge does not prove review approval or release inclusion.
 
-**Changelog** shows published GitHub releases and links to their official notes.
+**Changelog** has searchable version navigation, highlight cards extracted from official release notes, linked proposal numbers when supplied, and the complete formatted source notes. Highlight icons are illustrations, not feature screenshots.
 
 ## Inspect a proposal
 

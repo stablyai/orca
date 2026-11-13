@@ -1,21 +1,47 @@
-import { useState } from 'react'
-import { FlaskConical } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import { ArrowRight, ChevronDown, GitPullRequest, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { getCustomBuildInfo } from '../../../shared/custom-build'
-import { openCommunity } from '@/components/community/community-navigation'
+import { openCommunity, useCommunityNavigation } from '@/components/community/community-navigation'
+import { communityClient, LOCAL_COMMUNITY_HOST } from '@/components/community/community-client'
+import { useCommunityResource } from '@/components/community/use-community-resource'
+
 export function CustomBuildBadge(): React.JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const build = getCustomBuildInfo()
+  const resource = useCommunityResource(
+    useCallback(
+      () => (open ? communityClient(LOCAL_COMMUNITY_HOST).features() : Promise.resolve(null)),
+      [open]
+    )
+  )
   if (!build) {
     return null
   }
+  const changes = [
+    ...build.changes.filter((change) => change.pullRequest),
+    ...build.changes.filter((change) => !change.pullRequest)
+  ].slice(0, 3)
+  const navigate = (number?: number): void => {
+    setOpen(false)
+    openCommunity(number ? 'proposals' : 'custom')
+    if (number) {
+      useCommunityNavigation.getState().open(number)
+    }
+  }
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
           size="xs"
@@ -23,38 +49,82 @@ export function CustomBuildBadge(): React.JSX.Element | null {
           aria-label={t('community.customDetails', 'Custom build details')}
         >
           {t('community.customLabel', 'Custom')}
+          <ChevronDown className="size-3" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{t('community.myCustom', 'My Custom build')}</h2>
-          <Badge variant="outline">
-            {build.profileMode === 'shared-profile'
-              ? t('community.sharedProfile', 'Shared profile')
-              : t('community.previewBuild', 'Preview')}
-          </Badge>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={8} className="w-96 max-w-[calc(100vw-2rem)]">
+        <div className="space-y-3 p-3">
+          <div className="flex items-center justify-between">
+            <Package className="size-5 text-muted-foreground" />
+            <Badge variant="outline">
+              {build.profileMode === 'shared-profile'
+                ? t('community.sharedProfile', 'Shared profile')
+                : t('community.previewBuild', 'Preview')}
+            </Badge>
+          </div>
+          <h2 className="text-lg font-semibold">{t('community.myCustom', 'My Custom build')}</h2>
+          <p className="text-xs text-muted-foreground">
+            {t('community.basedOn', 'Based on official Orca')} {build.baseVersion} ·{' '}
+            {build.changes.length} {t('community.includedChanges', 'included changes')}
+          </p>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t('community.basedOn', 'Based on official Orca')} {build.baseVersion}
-        </p>
-        <ul className="my-3 divide-y divide-border">
-          {build.changes.slice(0, 4).map((change) => (
-            <li key={change.id} className="flex items-center gap-2 py-2 text-xs">
-              <FlaskConical className="size-3 shrink-0 text-muted-foreground" />
-              {change.title}
-            </li>
-          ))}
-        </ul>
-        <Button
-          className="w-full"
-          onClick={() => {
+        <DropdownMenuSeparator />
+        {changes.map((change) => {
+          const preview = change.pullRequest
+            ? resource.value?.features[change.pullRequest.number]?.source?.imageUrls[0]
+            : null
+          return (
+            <DropdownMenuItem
+              key={change.id}
+              className="items-center whitespace-normal"
+              onSelect={() => navigate(change.pullRequest?.number)}
+            >
+              <span className="flex w-full items-center gap-3 py-2">
+                <span className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+                  {preview ? (
+                    <img
+                      src={preview}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="size-full object-contain"
+                    />
+                  ) : (
+                    <GitPullRequest className="size-4 text-muted-foreground" />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="line-clamp-2 block text-sm font-medium leading-snug">
+                    {change.title}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {change.pullRequest ? `#${change.pullRequest.number} · ` : ''}
+                    {t('community.includedInRunningBuild', 'Included in this build')}
+                  </span>
+                </span>
+              </span>
+            </DropdownMenuItem>
+          )
+        })}
+        <DropdownMenuSeparator />
+        <div className="px-3 py-2 text-xs text-muted-foreground">
+          {t('community.buildEntriesLinked', 'Included changes stay linked to their source.')}
+        </div>
+        <DropdownMenuItem asChild onSelect={() => navigate()}>
+          <Button className="w-full justify-between">
+            {t('community.manageCustom', 'Manage my Custom build')}
+            <ArrowRight className="size-4" />
+          </Button>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="mt-1 justify-center"
+          onSelect={() => {
             setOpen(false)
-            openCommunity('custom')
+            openCommunity()
           }}
         >
-          {t('community.manageCustom', 'Manage my Custom build')} · {build.changes.length}
-        </Button>
-      </PopoverContent>
-    </Popover>
+          {t('community.exploreProposals', 'Explore proposals')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

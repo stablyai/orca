@@ -18,7 +18,7 @@ const pr = z.object({
   number: z.number(),
   node_id: z.string(),
   author_association: z.string(),
-  user: z.object({ login: z.string() }).nullable(),
+  user: z.object({ login: z.string(), type: z.string().optional() }).nullable(),
   created_at: z.string(),
   state: z.string(),
   merged_at: z.string().nullable()
@@ -40,6 +40,7 @@ const activitySchema = z.object({
     z.object({
       number: z.number(),
       author: z.string(),
+      authorType: z.string().optional(),
       authorAssociation: z.string(),
       memberReviewed: z.boolean().nullable(),
       memberApproved: z.boolean().nullable(),
@@ -159,6 +160,7 @@ export class CommunityPublishedData {
         ...included.map((row) => ({
           number: row.number,
           author: row.user?.login ?? 'Deleted account',
+          authorType: row.user?.type,
           authorAssociation: row.author_association,
           memberReviewed: null,
           memberApproved: null,

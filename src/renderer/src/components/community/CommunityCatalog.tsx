@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowDown, ImageIcon } from 'lucide-react'
+import { ArrowDown, ArrowRight, ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -100,6 +100,9 @@ export function CommunityCatalog({
         >
           <ImageIcon className="size-4" />
           {t('community.images', 'Show PRs with images')}
+          <span className="text-muted-foreground">
+            · {page.summary.images.toLocaleString(locale)}
+          </span>
         </Button>
         <Select
           value={query.sort ?? 'updated'}
@@ -138,7 +141,7 @@ export function CommunityCatalog({
           <Button
             key={item.name}
             variant={query.kind === item.kind ? 'secondary' : 'outline'}
-            className="h-auto justify-start text-left"
+            className="h-auto justify-between text-left whitespace-normal"
             aria-pressed={query.kind === item.kind}
             onClick={() => onQuery({ ...query, kind: item.kind })}
           >
@@ -148,6 +151,7 @@ export function CommunityCatalog({
                 {item.count.toLocaleString(locale)}
               </span>
             </span>
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground max-sm:hidden" />
           </Button>
         ))}
       </div>
@@ -165,18 +169,22 @@ export function CommunityCatalog({
               : `${page.summary.areas.length} ${t('community.inferredAreas', 'inferred areas')}`}
           </Button>
         </div>
-        <div className={`flex flex-wrap gap-2 ${allAreas ? '' : 'max-sm:hidden'}`}>
+        <div
+          className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${allAreas ? '' : 'max-sm:hidden'}`}
+        >
           <Button
             size="sm"
+            className="h-auto justify-between"
             variant={!query.area ? 'secondary' : 'outline'}
             onClick={() => onQuery({ ...query, area: undefined })}
           >
             {t('community.allAreas', 'All areas')}
           </Button>
-          {page.summary.areas.slice(0, allAreas ? undefined : 5).map((area) => (
+          {page.summary.areas.slice(0, allAreas ? undefined : 3).map((area) => (
             <Button
               key={area.name}
               size="sm"
+              className="h-auto justify-between"
               variant={query.area === area.name ? 'secondary' : 'outline'}
               aria-pressed={query.area === area.name}
               onClick={() =>

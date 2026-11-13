@@ -275,7 +275,7 @@ export default function CommunityPage(): React.JSX.Element {
               onBrowse={() => setSection('proposals')}
             />
           ) : section === 'activity' ? (
-            <CommunityActivity target={target} summary={catalog.page.summary} />
+            <CommunityActivity target={target} />
           ) : (
             <CommunityCatalog
               page={catalog.page}
