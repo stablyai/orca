@@ -32,7 +32,7 @@ export function runLocalSourceControlPlan(
   input: LocalSourceControlPlanInput
 ): LocalProcessExecution<InternalTextGenerationResult> {
   let { plan } = input
-  const { cwd, operation } = input
+  const { cwd, operation, laneId } = input
   const distro =
     plan.promptFile || plan.taskFiles?.length ? wslDistroForCommand(cwd, input.wslDistro) : null
   const guest = distro ? prepareWslPrompt(plan, distro) : undefined
@@ -108,7 +108,7 @@ export function runLocalSourceControlPlan(
     let outputLimitExceeded = false
     let settled = false
     let canceledByUser = false
-    const laneKey = localGenerationLaneKey(operation, cwd)
+    const laneKey = localGenerationLaneKey(operation, cwd, laneId)
     let timer: ReturnType<typeof setTimeout> | null = null
     let terminal = false
     let terminationComplete: Promise<void> | null = null

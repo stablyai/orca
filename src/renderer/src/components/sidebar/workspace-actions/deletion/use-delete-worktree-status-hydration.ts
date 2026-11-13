@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
@@ -51,20 +51,24 @@ export function useDeleteWorktreeStatusHydration({
   repoMap: ReadonlyMap<string, Repo>
 }): ReadonlyMap<string, GitStatusResult['entries'] | null> {
   const repos = useAppStore((state) => state.repos)
-  const generation = isOpen ? deleteTargets.map(getWorktreeHostIdentity).join('\n') : ''
-  const generationRef = useRef(generation)
-  const [statusByIdentity, setStatusByIdentity] = useState<
-    Map<string, GitStatusResult['entries'] | null>
-  >(() => new Map())
-  const currentStatusByIdentity =
-    generationRef.current === generation ? statusByIdentity : EMPTY_STATUS_BY_IDENTITY
-
-  useEffect(() => {
-    generationRef.current = generation
-    setStatusByIdentity(new Map())
-    if (!isOpen) {
-      return
-    }
+  const generation = isOpen
+    ? deleteTargets
+        .map((target) =>
+          JSON.stringify({
+            identity: getWorktreeHostIdentity(target),
+            isMainWorktree: target.isMainWorktree,
+            isFolderWorkspace: isFolderWorkspaceDelete(repoMap, target),
+            context: resolveDeleteTargetGitContext(target, repos)
+          })
+        )
+        .sort()
+        .join('\n')
+    : ''
+  const [result, setResult] = useState<{
+    generation: string
+    statuses: Map<string, GitStatusResult['entries'] | null>
+  }>({ generation: '', statuses: new Map() })
+  const startChecks = useEffectEvent((signal: AbortSignal) => {
     const gitStatusByWorktree = useAppStore.getState().gitStatusByWorktree
     const currentState = useAppStore.getState()
     const targets = orderDeleteWorktreeStatusHydrationTargets({
@@ -75,39 +79,56 @@ export function useDeleteWorktreeStatusHydration({
       activeWorktreeId: currentState.activeWorktreeId,
       activeExecutionHostId: currentState.activeWorkspaceExecutionHostId
     })
-    const controller = new AbortController()
     for (const target of targets) {
       const identity = getWorktreeHostIdentity(target)
+      const publish = (entries: GitStatusResult['entries'] | null): void =>
+        setResult((current) => ({
+          generation,
+          statuses: new Map(current.generation === generation ? current.statuses : []).set(
+            identity,
+            entries
+          )
+        }))
       const existingStatus = target.hostId ? undefined : gitStatusByWorktree[target.id]
       if (existingStatus) {
-        setStatusByIdentity((current) => new Map(current).set(identity, existingStatus))
+        publish(existingStatus)
         continue
       }
       const gitContext = resolveDeleteTargetGitContext(target, repos)
       if (!gitContext) {
-        setStatusByIdentity((current) => new Map(current).set(identity, null))
+        publish(null)
         continue
       }
       void getRuntimeGitStatus(gitContext, {
         admissionTier: 'background',
         includeLineStats: false,
-        signal: controller.signal
+        signal
       })
         .then((status) => {
-          if (!controller.signal.aborted && generationRef.current === generation) {
-            setStatusByIdentity((current) => new Map(current).set(identity, status.entries))
+          if (!signal.aborted) {
+            publish(status.entries)
           }
         })
         .catch(() => {
-          if (!controller.signal.aborted && generationRef.current === generation) {
-            setStatusByIdentity((current) => new Map(current).set(identity, null))
+          if (!signal.aborted) {
+            publish(null)
           }
         })
     }
+  })
+
+  // Catalog refreshes replace arrays; restart only when targets or their read routes change.
+  useEffect(() => {
+    setResult({ generation, statuses: new Map() })
+    if (!isOpen) {
+      return
+    }
+    const controller = new AbortController()
+    startChecks(controller.signal)
     return () => {
       controller.abort()
     }
-  }, [deleteTargets, generation, isOpen, repoMap, repos, visibleTargets])
+  }, [generation, isOpen])
 
-  return currentStatusByIdentity
+  return result.generation === generation ? result.statuses : EMPTY_STATUS_BY_IDENTITY
 }

@@ -870,6 +870,25 @@ body[data-modal-overlay-open]
   }
 }
 
+@utility control-interaction {
+  @media (hover: hover) {
+    &:not(:disabled, [aria-disabled='true']):hover {
+      outline: 1px solid var(--ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &:not(:disabled, [aria-disabled='true']):focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  &:not(:disabled, [aria-disabled='true']):active {
+    outline: 2px solid var(--ring);
+    outline-offset: 0;
+  }
+}
+
 /* Tailwind must generate this utility; a plain class silently emits no scrollbar-none CSS. */
 @utility scrollbar-none {
   -ms-overflow-style: none;
