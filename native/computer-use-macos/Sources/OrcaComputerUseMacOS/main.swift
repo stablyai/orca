@@ -143,6 +143,12 @@ final class ElementRecord {
     }
 }
 
+/// A snapshot that read one element's subtree; its elements also keep the window's earlier ones.
+struct SnapshotScope {
+    let rootIndex: Int
+    let walkedIndexes: Set<Int>
+}
+
 struct Snapshot {
     let id: String
     let app: AppDescriptor
@@ -161,6 +167,7 @@ struct Snapshot {
     let nextFreshElementIndex: Int
     let truncated: Bool
     let maxDepthReached: Bool
+    let scope: SnapshotScope?
     /// On-screen windows of the app (menus and sheets included), so a new or closed window counts as a change.
     let appWindowIds: [CGWindowID]
 
@@ -187,6 +194,7 @@ struct Snapshot {
             nextFreshElementIndex: nextFreshElementIndex,
             truncated: truncated,
             maxDepthReached: maxDepthReached,
+            scope: scope,
             appWindowIds: appWindowIds
         )
     }
@@ -262,9 +270,10 @@ final class Provider {
         var action = try runAction()
         // Why: only --restore-window activates the app or posts to the HID tap; every other route leaves the user's desktop alone.
         action["delivery"] = isForegroundRequest(params) ? "foreground" : "background"
-        // Why: the action's currentSnapshot just cached this target's tree from before the action.
+        // Why: the action's currentSnapshot just cached this target's tree from before the action;
+        // a subtree read can't be compared with the whole-window read that follows.
         let before = action["path"] as? String == "accessibility" && action["verification"] == nil
-            ? try? cachedSnapshot(params: params)
+            ? (try? cachedSnapshot(params: params)).flatMap { $0.scope == nil ? $0 : nil }
             : nil
         do {
             let after = try observe(params: params)
@@ -315,12 +324,14 @@ final class Provider {
         }
         let namespace = snapshotNamespace(params)
         pruneSnapshotCache()
+        let subtree = try requestedSubtree(params: params, app: app)
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
-            windowId: windowId,
-            windowIndex: windowIndex,
+            windowId: subtree.map(\.base.windowId) ?? windowId,
+            windowIndex: subtree == nil ? windowIndex : nil,
             restoreWindow: params["restoreWindow"]?.bool == true,
+            subtree: subtree,
             previousSnapshot: { [snapshots] resolvedWindowId in
                 // Why: indexes carry over from this caller's own last view of exactly this window.
                 snapshots[namespacedSnapshotKey(namespace, snapshotCanonicalWindowIdKey(resolvedWindowId))]
@@ -337,6 +348,15 @@ final class Provider {
             windowIndex: windowIndex
         )
         return snapshot
+    }
+
+    /// Resolves `rootElementIndex` against this caller's last snapshot of the window, whose indexes it extends.
+    private func requestedSubtree(params: [String: JSONValue], app: AppDescriptor) throws -> (root: ElementRecord, base: Snapshot)? {
+        guard let rootIndex = try optionalInteger(params, "rootElementIndex") else { return nil }
+        guard let base = try cachedSnapshot(params: params), base.app.pid == app.pid else {
+            throw ProviderError.coded("element_not_found", "--element-index needs a get-app-state snapshot of this app/window first")
+        }
+        return (try element(base, rootIndex), base)
     }
 
     private func rememberSnapshot(
@@ -416,19 +436,30 @@ final class Provider {
         }
     }
 
-    private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
+    private func currentSnapshot(params: [String: JSONValue], needsFocus: Bool = false) throws -> Snapshot {
         pruneSnapshotCache()
         let cached = try cachedSnapshot(params: params)
+        let requestedIndexes = try requestedElementIndexes(params)
+        let observeParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
+        // Why: elements read with --element-index, focused ones included, may lie past the whole-window node limit,
+        // so only their subtree can re-find them.
+        if let scope = cached?.scope,
+           requestedIndexes.isEmpty ? needsFocus : requestedIndexes.allSatisfy(scope.walkedIndexes.contains),
+           let scoped = try? observe(params: observeParams.merging(["rootElementIndex": .number(Double(scope.rootIndex))]) { _, replacement in replacement }),
+           !requestedIndexes.isEmpty || scoped.focusedElementId != nil {
+            try validateRequestedElements(cached: cached, current: scoped, requestedIndexes: requestedIndexes)
+            return scoped
+        }
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
-        let snapshot = try observe(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
-        try validateRequestedElements(cached: cached, current: snapshot, params: params)
+        let snapshot = try observe(params: observeParams)
+        try validateRequestedElements(cached: cached, current: snapshot, requestedIndexes: requestedIndexes)
         return snapshot
     }
 
     private func currentKeyboardSnapshot(params: [String: JSONValue]) throws -> Snapshot {
         // Why: keyboard actions need fresh focused-element state, never pixels.
-        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
+        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }, needsFocus: true)
     }
 
     private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
@@ -473,17 +504,24 @@ final class Provider {
             (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[key])
     }
 
-    private func validateRequestedElements(cached: Snapshot?, current: Snapshot, params: [String: JSONValue]) throws {
-        let requestedIndexes = try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
+    private func requestedElementIndexes(_ params: [String: JSONValue]) throws -> [Int] {
+        try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
             guard params[key]?.number != nil else { return nil }
             return try optionalInteger(params, key)
         }
+    }
+
+    private func validateRequestedElements(cached: Snapshot?, current: Snapshot, requestedIndexes: [Int]) throws {
         guard !requestedIndexes.isEmpty else { return }
         guard let cached else {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
         }
         for index in requestedIndexes {
-            guard let expected = cached.elements[index], let actual = current.elements[index] else {
+            // Why: a subtree read also carries the window's earlier records, which prove nothing about the element now.
+            guard let expected = cached.elements[index],
+                  let actual = current.elements[index],
+                  current.scope?.walkedIndexes.contains(index) ?? true
+            else {
                 throw ProviderError.coded("element_not_found", "element \(index) is stale; run get-app-state again and use a fresh element index")
             }
             guard expected.signature == actual.signature else {
@@ -658,6 +696,7 @@ final class Provider {
         windowId: CGWindowID?,
         windowIndex: Int?,
         restoreWindow: Bool,
+        subtree: (root: ElementRecord, base: Snapshot)?,
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
@@ -703,11 +742,29 @@ final class Provider {
             focused: focusedElement(appElement: appElement),
             compactBrowserTabs: app.isKnownBrowser
         )
-        renderer.render(window)
+        if let subtree {
+            guard let ancestors = ancestorChain(of: subtree.root.element, in: window) else {
+                throw ProviderError.coded("element_not_found", "element \(subtree.root.index) is no longer in this window; run get-app-state again and use a fresh element index")
+            }
+            renderer.render(subtree.root.element, ancestors: ancestors)
+        } else {
+            renderer.render(window)
+        }
         if renderer.appStoppedResponding {
             throw AccessibilityMessaging.appNotResponding(app.name)
         }
-        let indexes = renderer.carryOverIndexes(from: previousSnapshot(capture.windowId))
+        let previous = subtree?.base ?? previousSnapshot(capture.windowId)
+        let indexes = renderer.carryOverIndexes(from: previous)
+        var elements = renderer.records
+        var elementOrder = indexes.order
+        if let subtree {
+            // Why: elements outside the subtree keep resolving, so the agent can still act on what the whole-window read showed.
+            // Re-reading the same subtree replaces its last walk, so rows scrolled away don't pile up.
+            let replaced = subtree.base.scope.flatMap { $0.rootIndex == subtree.root.index ? $0.walkedIndexes : nil } ?? []
+            let kept = subtree.base.elements.filter { !replaced.contains($0.key) && renderer.records[$0.key] == nil }
+            elements = kept.merging(renderer.records) { _, walked in walked }
+            elementOrder = subtree.base.elementOrder.filter { kept[$0] != nil } + indexes.order
+        }
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
@@ -725,17 +782,18 @@ final class Provider {
             windowBounds: capture.bounds,
             windowId: capture.windowId,
             windowLayer: capture.layer,
-            treeText: renderTreeText(app: app, title: title, bounds: capture.bounds, lines: renderer.lines, focused: renderer.focusedSummary),
+            treeText: renderTreeText(app: app, title: title, rootIndex: subtree?.root.index, lines: renderer.lines, focused: renderer.focusedSummary),
             focusedElementId: renderer.focusedElementId,
             screenshot: screenshot,
             screenshotStatus: screenshotStatus,
             screenshotScale: screenshotScale(screenshot: screenshot, bounds: capture.bounds),
             screenshotEngine: capture.image?.engine,
-            elements: renderer.records,
-            elementOrder: indexes.order,
+            elements: elements,
+            elementOrder: elementOrder,
             nextFreshElementIndex: indexes.nextFreshIndex,
             truncated: renderer.truncated,
             maxDepthReached: renderer.maxDepthReached,
+            scope: subtree.map { SnapshotScope(rootIndex: $0.root.index, walkedIndexes: Set(indexes.order)) },
             appWindowIds: windowCandidates.map(\.windowId).sorted()
         )
     }
@@ -751,39 +809,43 @@ final class Provider {
                 "scale": payload.scale,
             ]
         }
-        return [
-            "snapshot": [
-                "id": snapshot.id,
-                "app": [
-                    "name": snapshot.app.name,
-                    "bundleId": jsonNullable(snapshot.app.bundleId),
-                    "pid": Int(snapshot.app.pid),
-                ],
-                "window": [
-                    "id": Int(snapshot.windowId),
-                    "title": snapshot.windowTitle,
-                    "x": Int(snapshot.windowBounds.origin.x.rounded()),
-                    "y": Int(snapshot.windowBounds.origin.y.rounded()),
-                    "width": Int(snapshot.windowBounds.width.rounded()),
-                    "height": Int(snapshot.windowBounds.height.rounded()),
-                    "isMinimized": false,
-                    "isOffscreen": false,
-                    "screenIndex": jsonNullable(screenIndex(for: snapshot.windowBounds)),
-                    "platform": [
-                        "layer": snapshot.windowLayer,
-                    ],
-                ],
-                "coordinateSpace": "window",
-                "treeText": snapshot.treeText,
-                "elementCount": snapshot.elements.count,
-                "focusedElementId": snapshot.focusedElementId as Any,
-                "truncation": [
-                    "truncated": snapshot.truncated,
-                    "maxNodes": TreeRenderer.maxNodes,
-                    "maxDepth": TreeRenderer.maxDepth,
-                    "maxDepthReached": snapshot.maxDepthReached,
+        var snapshotPayload: [String: Any] = [
+            "id": snapshot.id,
+            "app": [
+                "name": snapshot.app.name,
+                "bundleId": jsonNullable(snapshot.app.bundleId),
+                "pid": Int(snapshot.app.pid),
+            ],
+            "window": [
+                "id": Int(snapshot.windowId),
+                "title": snapshot.windowTitle,
+                "x": Int(snapshot.windowBounds.origin.x.rounded()),
+                "y": Int(snapshot.windowBounds.origin.y.rounded()),
+                "width": Int(snapshot.windowBounds.width.rounded()),
+                "height": Int(snapshot.windowBounds.height.rounded()),
+                "isMinimized": false,
+                "isOffscreen": false,
+                "screenIndex": jsonNullable(screenIndex(for: snapshot.windowBounds)),
+                "platform": [
+                    "layer": snapshot.windowLayer,
                 ],
             ],
+            "coordinateSpace": "window",
+            "treeText": snapshot.treeText,
+            "elementCount": snapshot.scope?.walkedIndexes.count ?? snapshot.elements.count,
+            "focusedElementId": snapshot.focusedElementId as Any,
+            "truncation": [
+                "truncated": snapshot.truncated,
+                "maxNodes": TreeRenderer.maxNodes,
+                "maxDepth": TreeRenderer.maxDepth,
+                "maxDepthReached": snapshot.maxDepthReached,
+            ],
+        ]
+        if let scope = snapshot.scope {
+            snapshotPayload["rootElementIndex"] = scope.rootIndex
+        }
+        return [
+            "snapshot": snapshotPayload,
             "screenshot": screenshot,
             "screenshotStatus": renderScreenshotStatus(snapshot.screenshotStatus, snapshot: snapshot),
         ]
@@ -985,14 +1047,16 @@ final class Provider {
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
+        let focused = focusedRecord(snapshot)?.element
+        if let focused, let verification = try TextInput.replaceSelection(focused, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
+        let insertion = TextInput.Insertion(into: focused, text: text)
         try deliverKeys(try withTransportErrors { try BackgroundInputTransport.textEvents(text) }, snapshot: snapshot, params: params)
         return actionMetadata(
             path: "synthetic",
             actionName: "typeText",
-            verification: unverifiedAction(reason: "synthetic_input")
+            verification: insertion?.verification() ?? unverifiedAction(reason: "synthetic_input")
         )
     }
 
@@ -1027,17 +1091,19 @@ final class Provider {
     private func pasteText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         let text = try requiredString(params, "text")
-        if let focused = focusedRecord(snapshot), let verification = try TextInput.replaceSelection(focused.element, with: text) {
+        let focused = focusedRecord(snapshot)?.element
+        if let focused, let verification = try TextInput.replaceSelection(focused, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
         let pasteKeys = try Input.keyEvents("cmd+v")
+        let insertion = TextInput.Insertion(into: focused, text: text)
         try Input.withPasteboardText(text) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
         }
         return actionMetadata(
             path: "clipboard",
             actionName: "paste",
-            verification: unverifiedAction(reason: "clipboard_paste")
+            verification: insertion?.verification() ?? unverifiedAction(reason: "clipboard_paste")
         )
     }
 
@@ -1460,6 +1526,18 @@ private func pointerRecipient(
           )
     else { return .unavailable }
     return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
+}
+
+/// The element's parents from `window` down, or nil when it is no longer inside `window`.
+private func ancestorChain(of element: AXUIElement, in window: AXUIElement) -> [AXUIElement]? {
+    var chain: [AXUIElement] = []
+    var current = element
+    while !CFEqual(current, window) {
+        guard chain.count < 256, let parent = copyElement(current, kAXParentAttribute as String) else { return nil }
+        chain.append(parent)
+        current = parent
+    }
+    return chain.reversed()
 }
 
 private func containingWindow(_ element: AXUIElement) -> AXUIElement? {
@@ -2179,15 +2257,18 @@ private func mouseButton(_ raw: String?) throws -> MouseButtonSelection {
     }
 }
 
-private func renderTreeText(app: AppDescriptor, title: String, bounds: CGRect, lines: [String], focused: String?) -> String {
+private func renderTreeText(app: AppDescriptor, title: String, rootIndex: Int?, lines: [String], focused: String?) -> String {
     var output = [
         "App=\(app.bundleId ?? app.name.replacingOccurrences(of: " ", with: "_")) (pid \(app.pid))",
         "Window: \"\(sanitize(title))\", App: \(sanitize(app.name)).",
-        "",
     ]
+    if let rootIndex {
+        output.append("Showing element \(rootIndex) and its descendants.")
+    }
+    output.append("")
     output.append(contentsOf: lines)
     output.append("")
-    output.append(focused.map { "The focused UI element is \($0)." } ?? "No UI element is currently focused.")
+    output.append(focused.map { "The focused UI element is \($0)." } ?? (rootIndex == nil ? "No UI element is currently focused." : "No UI element inside this one is focused."))
     return output.joined(separator: "\n")
 }
 
@@ -2231,15 +2312,6 @@ private final class TreeRenderer {
 
     func render(_ element: AXUIElement, depth: Int = 0, ancestors: [AXUIElement] = []) {
         guard !reader.appStoppedResponding else { return }
-        guard nextIndex < Self.maxNodes else {
-            truncated = true
-            return
-        }
-        guard depth < Self.maxDepth else {
-            truncated = true
-            maxDepthReached = true
-            return
-        }
         guard !ancestors.contains(where: { CFEqual($0, element) }) else { return }
 
         let role = reader.stringAttribute(element, kAXRoleAttribute as String) ?? "AXUnknown"
@@ -2290,9 +2362,7 @@ private final class TreeRenderer {
             webAreaDepth: webAreaDepth
         )
         if SnapshotRenderHeuristics.shouldElide(node) {
-            for child in children {
-                render(child, depth: depth, ancestors: ancestors + [element])
-            }
+            renderChildren(children, depth: depth, ancestors: ancestors + [element])
             return
         }
 
@@ -2315,9 +2385,8 @@ private final class TreeRenderer {
             return
         }
         if compactBrowserTabs, let tabStripCompaction = tabStripCompaction(parent: node, children: children) {
-            for (childIndex, child) in children.enumerated() where tabStripCompaction.retainedIndexes.contains(childIndex) {
-                render(child, depth: depth + 1, ancestors: ancestors + [element])
-            }
+            let retained = children.enumerated().filter { tabStripCompaction.retainedIndexes.contains($0.offset) }.map(\.element)
+            renderChildren(retained, depth: depth + 1, ancestors: ancestors + [element])
             lines.append(
                 String(repeating: "\t", count: depth + 1) +
                     "... \(tabStripCompaction.omittedCount) inactive browser tabs omitted"
@@ -2325,11 +2394,23 @@ private final class TreeRenderer {
             return
         }
         let childLineStart = lines.count
-        for child in children {
-            render(child, depth: depth + 1, ancestors: ancestors + [element])
-        }
+        renderChildren(children, depth: depth + 1, ancestors: ancestors + [element])
         if compactBrowserTabs {
             compactRenderedBrowserTabs(parent: node, startLine: childLineStart, depth: depth + 1)
+        }
+    }
+
+    /// Stops at the node or depth limit with a note of how many children were left, so the agent can read that subtree.
+    private func renderChildren(_ children: [AXUIElement], depth: Int, ancestors: [AXUIElement]) {
+        for (position, child) in children.enumerated() {
+            // Why: browser-tab compaction drops records, so the limit counts what is kept, as on Linux and Windows.
+            guard records.count < Self.maxNodes, depth < Self.maxDepth else {
+                truncated = true
+                maxDepthReached = maxDepthReached || depth >= Self.maxDepth
+                lines.append(String(repeating: "\t", count: depth) + "... \(children.count - position) more not shown (snapshot limit)")
+                return
+            }
+            render(child, depth: depth, ancestors: ancestors)
         }
     }
 
@@ -3217,6 +3298,49 @@ private enum TextInput {
             return unverifiedAction(reason: "accessibility_action_unasserted")
         }
         return verifiedAction(property: "focusedText")
+    }
+
+    /// Text sent as keys or a paste: what the focused field should read once it lands.
+    struct Insertion {
+        let element: AXUIElement
+        let expected: String
+
+        /// Nil when the field can't prove the result: none focused, a secure field, no readable value and selection, or text a readback can't confirm.
+        init?(into element: AXUIElement?, text: String) {
+            guard let element,
+                  !AXSnapshotReader().isSecureTextElement(element),
+                  let current = rawStringAttribute(element, kAXValueAttribute as String),
+                  // Why: settle re-reads the whole value every 25 ms; a terminal's scrollback or a long document is too costly.
+                  current.utf16.count <= 64 * 1024
+            else {
+                return nil
+            }
+            let selection = TextInput.selectedTextRange(element).flatMap { range -> Range<Int>? in
+                range.location >= 0 && range.length >= 0 && range.length <= Int.max - range.location
+                    ? range.location..<(range.location + range.length) : nil
+            }
+            guard let expected = TextInsertionReadback.expectedValue(current: current, selection: selection, inserting: text) else {
+                return nil
+            }
+            self.element = element
+            self.expected = expected
+        }
+
+        /// Nil when the readback can't tell: the field stopped answering or was still changing at the cap.
+        func verification() -> [String: Any]? {
+            let outcome = TextInsertionReadback.settle(expected: expected) {
+                rawStringAttribute(element, kAXValueAttribute as String)
+            }
+            switch outcome {
+            case .landed:
+                return verifiedAction(property: "focusedText")
+            case .mismatch:
+                // Why: the field may hold part of the text, so the result never shows what it reads.
+                return unverifiedAction(reason: "text_mismatch")
+            case .undetermined:
+                return nil
+            }
+        }
     }
 
     static func selectAll(_ element: AXUIElement) -> Bool {

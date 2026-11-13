@@ -16,7 +16,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
-import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
+import { admittedStructuredSubmission } from './structured-agent-session-submission-presentation'
 
 export type StructuredAgentSessionWorkFacts = {
   item: (id: string) => AgentJournalRenderItem | null
@@ -149,12 +149,7 @@ export class StructuredAgentSessionWorkPolicy {
    *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
     this.unanswered(submission) && !this.holds(submission)
-      ? {
-          ...submission,
-          dispatchState: 'unknown',
-          recovered: true,
-          reason: submission.reason ?? DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
-        }
+      ? admittedStructuredSubmission(submission, this.generationEnded(submission))
       : submission
 
   private unanswered(submission: AgentJournalSubmission): boolean {

@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
 import { JournalEpochReplacements } from './context-epochs/journal-epoch-replacements'
-import { journalWroteBeforeOpen } from './replay/journal-cursor'
+import { journalWroteBeforeOpen, sameJournalCursor } from './replay/journal-cursor'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalWriterCommit } from './journal-writer-changes'
@@ -211,6 +211,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       if (commit.goals) {
         this.goalAttachments.adopt(commit.goals)
       }
+      const advanced = !sameJournalCursor(this.acknowledged, commit.cursor)
       this.acknowledged = { ...commit.cursor }
       if (commit.queueRevision !== undefined) {
         this.queuedMessages.adoptRevision(commit.queueRevision)
@@ -220,7 +221,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       } else if (operation.kind === 'epoch-replace') {
         this.queuedMessages.editLeases.adoptDeadline(null)
       }
-      this.listener?.(commit)
+      if (advanced || commit.inputChanged || commit.items.length > 0) {
+        this.listener?.(commit)
+      }
       return commit
     })
     return this.epochReplacements.notifyFor(operation.kind, written)

@@ -28,6 +28,7 @@ import {
   reportedCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
 import { CodexSkillReport } from '../catalog/codex-structured-skill-report'
+import { codexMessageInputOptions } from '../../../../shared/agent-session/options/codex-message-compiler'
 import { codexAcquireCatalogAccess } from '../catalog/codex-structured-acquire-catalog'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
@@ -187,6 +188,10 @@ export async function openCodexStructuredSession(
       ...(opened.effort ? { effort: opened.effort } : {}),
       ...(serviceTier ? { serviceTier } : {})
     },
+    appliedTurnInputOptions: codexMessageInputOptions(input.options ?? {}, {
+      serviceTier: CODEX_DEFAULT_SERVICE_TIER,
+      interactionMode: 'default'
+    }),
     appliedSettings: attempt.window.appliedSettings,
     ...(catalogAccess ? { catalogAccess } : {}),
     dispatchEchoes: start.dispatchEchoes,

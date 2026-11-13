@@ -86,9 +86,11 @@ export function readJournalSqlUsageLimitCut(
     const displayed = state.displayed(item.itemId)
     const limit = displayed && nativeChatUsageLimitOfRow(displayed)
     if (limit) {
+      const fence = state.itemFence(latest.item.itemId)
       return {
         turnItemId: latest.item.itemId,
         chain: readUsageLimitChain(state, latest.item.itemId),
+        ...(fence === undefined ? {} : { fence }),
         ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
         turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
       }

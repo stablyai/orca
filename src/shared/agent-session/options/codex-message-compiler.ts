@@ -16,6 +16,7 @@ export const CODEX_MESSAGE_CONTROL_KEYS = [
 /** Copied from the bound live owner once; no catalog/session objects cross the writer port. */
 export type CodexMessageCompilerInputs = {
   active: AgentSessionExecutionOptions
+  activeInput: AgentSessionExecutionOptions
   defaults: AgentSessionExecutionOptions
   models: readonly { id: string; serviceTiers?: readonly string[]; fastServiceTier?: string }[]
   listedServiceTiers: readonly string[]
@@ -74,6 +75,28 @@ export function compileCodexMessageOptions(
   return normalizeCodexMessageOptions(input, compiled)
 }
 
+/** Compare retained input choices, without reinterpreting them through a later catalog. */
+export function codexMessageInputOptions(
+  choices: Readonly<Record<string, string | undefined>>,
+  inherited: Readonly<Record<string, string>> = {},
+  applied: Readonly<Record<string, string>> = {}
+): Readonly<Record<string, string>> {
+  const next = { ...inherited }
+  for (const key of ['model', 'effort', 'personality', 'serviceTier', 'interactionMode'] as const) {
+    if (choices[key] !== undefined) {
+      next[key] = choices[key]
+    }
+  }
+  if (choices.serviceTier === undefined && choices.fastMode !== undefined) {
+    const legacy = codexServiceTierForFastMode(choices.fastMode, undefined)
+    const inheritedTier = inherited.serviceTier
+    const tier =
+      inheritedTier === 'priority' || inheritedTier === 'fast' ? inheritedTier : applied.serviceTier
+    next.serviceTier = legacy === 'fast' && (tier === 'priority' || tier === 'fast') ? tier : legacy
+  }
+  return next
+}
+
 export function structuredMessageSteeringOptionsDiffer(
   input: StructuredMessageSteeringInputs,
   options: AgentSessionExecutionOptions | undefined
@@ -82,14 +105,15 @@ export function structuredMessageSteeringOptionsDiffer(
     return false
   }
   if (input.kind === 'codex-unavailable') {
-    return options === undefined || Object.values(options).some((value) => value !== undefined)
+    return false
   }
-  const active = input.compiler.active
-  const next = {
-    ...active,
-    ...compileCodexMessageOptions(input.compiler, options ?? input.compiler.defaults)
-  }
+  const active = input.compiler.activeInput
+  const next = codexMessageInputOptions(
+    options ?? input.compiler.defaults,
+    active,
+    input.compiler.active
+  )
   return CODEX_MESSAGE_CONTROL_KEYS.some(
-    (key) => next[key] !== undefined && next[key] !== active[key]
+    (key) => active[key] !== undefined && next[key] !== undefined && next[key] !== active[key]
   )
 }

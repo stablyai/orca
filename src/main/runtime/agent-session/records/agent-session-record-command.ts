@@ -126,8 +126,8 @@ export function applyAgentSessionRecordCommand(
     case 'process':
       next = commitAgentSessionProcessIdentity({ ...command.args, record })
       break
-    case 'prove':
-      next = withAcquiredAgentSessionAccount(
+    case 'prove': {
+      const { launchedAccount: _previous, ...proved } = withAcquiredAgentSessionAccount(
         proveAgentSessionOwner({
           ...command.args,
           record,
@@ -135,7 +135,17 @@ export function applyAgentSessionRecordCommand(
         }),
         command.args.accountAcquisition
       )
+      next = command.args.launchedAccountHome
+        ? {
+            ...proved,
+            launchedAccount: {
+              fence: command.args.fence,
+              accountHome: command.args.launchedAccountHome
+            }
+          }
+        : proved
       break
+    }
     case 'evict':
       next = evictAgentSessionOwner({ ...command.args, record })
       break

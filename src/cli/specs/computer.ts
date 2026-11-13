@@ -44,8 +44,8 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'get-app-state'],
     summary: 'Capture a compact accessibility snapshot of an app',
     usage:
-      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--json]',
-    allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'query', 'max-elements']
+      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--element-index <n>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--json]',
+    allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'element-index', 'query', 'max-elements']
   },
   {
     path: ['computer', 'wait'],
@@ -121,15 +121,15 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'press-key'],
     summary: 'Press a single key such as Return or Escape',
     usage:
-      'orca computer press-key --app <app> --key <key> [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key']
+      'orca computer press-key --app <app> --key <key> [--window-id <id> | --window-index <n>] [--allow-system-shortcut] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key', 'allow-system-shortcut']
   },
   {
     path: ['computer', 'hotkey'],
     summary: 'Press a platform-aware key combination',
     usage:
-      'orca computer hotkey --app <app> --key <key-combo> [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key']
+      'orca computer hotkey --app <app> --key <key-combo> [--window-id <id> | --window-index <n>] [--allow-system-shortcut] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key', 'allow-system-shortcut']
   },
   {
     path: ['computer', 'paste-text'],

@@ -2,7 +2,10 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection-types'
-import { resolvedCodexMessageOptions } from '../../../../codex/structured/turns/codex-structured-message-options'
+import {
+  resolvedCodexMessageOptions,
+  readCodexMessageSteeringInputs
+} from '../../../../codex/structured/turns/codex-structured-message-options'
 import { optionSession } from '../../../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
 import {
@@ -36,6 +39,10 @@ async function createGoalRig(): Promise<QueuedMessageTestRig> {
     reportsModel: 'gpt-ran',
     reportsEffort: 'high'
   })
+  created.host.deps.adapter.captureMessageSteeringInputs = (input) =>
+    input.sessionId === SESSION
+      ? readCodexMessageSteeringInputs(native, input)
+      : { kind: 'codex-unavailable' }
   created.host.deps.adapter.holdsLiveProviderProcess = (sessionId, generation) =>
     sessionId === SESSION &&
     generation === native.acquisitionGeneration &&
@@ -102,4 +109,45 @@ it('holds a Plan choice until the goal turn ends', async () => {
   await rig.host.flushStreamedEvents(SESSION)
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
   expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices)
+})
+
+it('keeps an incompatible Send-now card intact until a new turn can use its choices', async () => {
+  await startGoalTurn()
+  const choices = { model: 'gpt-ran', effort: 'high', serviceTier: 'priority' }
+  const queued = rig.send('Keep my selected speed', 'queue-if-active', { carried: choices })
+  expect(await queued.result).toMatchObject({ ok: true, value: { queued: {} } })
+  const operationId = hostTestOperationId()
+  for (let press = 0; press < 2; press += 1) {
+    expect(await rig.sendNow(queued.id, operationId)).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'turnActive' } }
+    })
+  }
+  expect(await rig.handoff(queued.id)).toBeUndefined()
+  expect(
+    await rig.host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)
+      ?.journal.queuedMessages.get(queued.id)
+  ).toMatchObject({
+    state: 'waiting',
+    body: { blocks: [{ type: 'text', text: 'Keep my selected speed' }] },
+    options: choices
+  })
+
+  native.activeTurnIds = new Set()
+  rig
+    .providerEvents()
+    .appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'goal-turn', ordinal: 99 },
+      { kind: 'turn', turnId: 'goal-turn', state: 'completed' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await rig.host.flushStreamedEvents(SESSION)
+  await eventually(async () => expect((await rig.handoff(queued.id))?.handedOverAt).toBeDefined())
+  expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices)
+  expect(await rig.sendNow(queued.id, operationId)).toMatchObject({
+    ok: true,
+    value: { submission: { queuedMessageId: queued.id } }
+  })
 })

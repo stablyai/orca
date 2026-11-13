@@ -158,6 +158,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       return admission
     }
     if (event.type === 'notification') {
+      turnEnd.publishCodexTurnOpened(session, event, this.sessions)
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
       turnEnd.settleCodexSendsInEndedTurn(session, event)
       // Child records observe refused frames only after a retry reaches the journal.
@@ -338,7 +339,6 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session(sessionId: string): CodexSession {
-    return requireLiveCodexSession(this.sessions, sessionId)
-  }
+  private session = (sessionId: string): CodexSession =>
+    requireLiveCodexSession(this.sessions, sessionId)
 }

@@ -1,7 +1,7 @@
 import { pickedSkillsInText } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import type { CodexTurnHost } from './codex-structured-turn-start'
+import type { CodexTurnHost } from './codex-structured-turn-contract'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
@@ -12,6 +12,7 @@ import type { CodexSession } from '../session-lifecycle/codex-structured-session
 import { captureCodexMessageCompilerInputs } from '../catalog/codex-structured-service-tier'
 import {
   compileCodexMessageOptions,
+  codexMessageInputOptions,
   type StructuredMessageSteeringInputs
 } from '../../../../shared/agent-session/options/codex-message-compiler'
 
@@ -36,7 +37,7 @@ export async function resolvedCodexMessageOptions(
   return compileCodexMessageOptions(captureCodexMessageCompilerInputs(session), choices)
 }
 
-/** The same sparse controls as dispatch, compared under the exact acquisition that took them. */
+/** Intent belongs to this exact acquisition; catalog/readback differences are not send barriers. */
 export function readCodexAppliedInputOptions(
   session: CodexSession | undefined,
   input: {
@@ -51,19 +52,13 @@ export function readCodexAppliedInputOptions(
     session.connection.closed ||
     session.fence !== input.fence ||
     session.acquisitionGeneration !== input.acquisitionGeneration ||
-    !session.appliedTurnOptions
+    !session.appliedTurnInputOptions
   ) {
     return null
   }
-  const active = session.appliedTurnOptions
+  const active = session.appliedTurnInputOptions
   const requested = input.next ?? Object.fromEntries(session.options)
-  return {
-    active,
-    next: {
-      ...active,
-      ...compileCodexMessageOptions(captureCodexMessageCompilerInputs(session), requested)
-    }
-  }
+  return { active, next: codexMessageInputOptions(requested, active, session.appliedTurnOptions) }
 }
 
 /** An exact child-bound observation, with candidate-independent compiler inputs. */
@@ -77,7 +72,7 @@ export function readCodexMessageSteeringInputs(
     session.connection.closed ||
     session.fence !== input.fence ||
     session.acquisitionGeneration !== input.acquisitionGeneration ||
-    !session.appliedTurnOptions
+    !session.appliedTurnInputOptions
   ) {
     return { kind: 'codex-unavailable' }
   }

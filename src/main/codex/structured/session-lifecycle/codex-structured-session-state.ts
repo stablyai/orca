@@ -178,6 +178,8 @@ export type CodexSession = {
   nativeDefaults?: { personality?: string; serviceTier?: string }
   /** Acquisition facts overlaid by controls actually sent, independently of reports or saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
+  /** Saved/start input choices before protocol shaping; later catalogs cannot change eligibility. */
+  appliedTurnInputOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexAppliedSettings
   /** Optional for adapters without a host catalog store. */
   catalogAccess?: CodexSessionCatalogAccess

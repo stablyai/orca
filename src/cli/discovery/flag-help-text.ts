@@ -10,6 +10,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   action: '--action <name>       Secondary accessibility action name',
   activate: '--activate             Reveal the new worktree in the Orca app',
   app: '--app <app>            App name, bundle ID, or pid:N',
+  'allow-system-shortcut':
+    '--allow-system-shortcut Send a quit, log out or lock shortcut that is refused by default',
   direction:
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',

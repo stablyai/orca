@@ -7,6 +7,7 @@ import type {
 } from '../../shared/computer-use-runtime-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
+  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -85,11 +86,23 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerObserveFlags(flags)
     const query = getOptionalStringFlag(flags, 'query')
     const maxElements = getOptionalPositiveIntegerFlag(flags, 'max-elements')
+    const rootElementIndex = getOptionalNonNegativeIntegerFlag(flags, 'element-index')
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
-      ...observeFlags
+      ...observeFlags,
+      ...(rootElementIndex === undefined ? {} : { rootElementIndex })
     })
+    // Why: older runtimes drop the param and return the whole window, which would look like the subtree.
+    if (
+      rootElementIndex !== undefined &&
+      result.result.snapshot.rootElementIndex !== rootElementIndex
+    ) {
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        'This Orca runtime cannot read one element subtree; update Orca, or run get-app-state without --element-index'
+      )
+    }
     if (query !== undefined || maxElements !== undefined) {
       const { snapshot } = result.result
       snapshot.treeText = queryComputerTreeText(snapshot.treeText, { query, maxElements })

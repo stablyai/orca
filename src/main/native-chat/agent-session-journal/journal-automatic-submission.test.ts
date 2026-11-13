@@ -63,7 +63,13 @@ it('evaluates the first nonmail fallback itself and waits on it instead of bypas
   expect(f.card('person')?.state).toBe('waiting')
   f.selection.steering = {
     kind: 'codex',
-    compiler: { active: { model: 'different' }, defaults: {}, models: [], listedServiceTiers: [] }
+    compiler: {
+      active: { model: 'different' },
+      activeInput: { model: 'different' },
+      defaults: {},
+      models: [],
+      listedServiceTiers: []
+    }
   }
   expect((await f.claim('send', f.prepare(100, 'unavailable'))).value).toEqual({
     kind: 'claimed',

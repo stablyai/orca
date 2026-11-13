@@ -30,7 +30,8 @@ it('does no discovery on ordinary reads and drops preparation superseded by a se
         usageLimitCut: async () =>
           hostUsageLimitCut(
             snapshot,
-            latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+            latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
+            () => undefined
           )
       }
     }
@@ -133,7 +134,8 @@ it('recovers an unpinned OMP native file using the owning host directory and flo
           usageLimitCut: async () =>
             hostUsageLimitCut(
               snapshot,
-              latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+              latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
+              () => undefined
             )
         }
       }

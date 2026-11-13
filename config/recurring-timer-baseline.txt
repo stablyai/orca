@@ -49,7 +49,7 @@
 1 src/main/rate-limits/service/service-polling.ts
 1 src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
-3 src/main/runtime/mobile-cloud-relay/relay-control-liveness.ts
+3 src/main/runtime/mobile-cloud-relay/control-channel/relay-control-liveness.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-run.ts
 1 src/main/runtime/rpc/mobile/mobile-socket-wiring.ts
 1 src/main/runtime/rpc/transports/websocket/remote-runtime-server-heartbeat.ts

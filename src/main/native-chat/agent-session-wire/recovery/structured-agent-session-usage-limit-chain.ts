@@ -165,18 +165,25 @@ export function usageLimitContinueChain(
   return chain
 }
 
-/** A cut as the host's sweep reads it: with the chain that led to it. */
-export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number }
+/** A cut as the host's sweep reads it: with the chain that led to it and the runtime fence that
+ *  ran its turn, which names the account it hit. */
+export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number; fence?: number }
 
 export function hostUsageLimitCut(
   snapshot: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly ChainSubmission[]
   },
-  cut: NativeChatUsageLimitCut | null
+  cut: NativeChatUsageLimitCut | null,
+  fenceOf: (itemId: string) => number | undefined
 ): HostUsageLimitCut | null {
+  const fence = cut ? fenceOf(cut.turnItemId) : undefined
   return cut
-    ? { ...cut, chain: usageLimitContinueChain(snapshot.items, snapshot.submissions, cut) }
+    ? {
+        ...cut,
+        chain: usageLimitContinueChain(snapshot.items, snapshot.submissions, cut),
+        ...(fence === undefined ? {} : { fence })
+      }
     : null
 }
 

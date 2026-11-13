@@ -699,6 +699,26 @@ class RuntimeRenderTest(unittest.TestCase):
             indexes = [item["index"] for item in snapshot["elements"]]
             self.assertEqual(len(indexes), len(set(indexes)))
 
+    def test_cut_tree_marks_hidden_children_and_root_reads_them(self):
+        items = [FakeAccessible("button", f"A{i}") for i in range(3)]
+        root = FakeAccessible("frame", "Main", children=[
+            FakeAccessible("list", "Items", children=items), FakeAccessible("button", "After"),
+        ])
+        with SnapshotFixture(root), patch.object(runtime, "MAX_NODES", 4):
+            snapshot = runtime.make_snapshot("Fixture", False)
+            self.assertEqual(snapshot["treeLines"], [
+                "0 frame Main",
+                "\t1 list Items",
+                "\t\t2 button A0",
+                "\t\t3 button A1",
+                "\t\t... 1 more not shown (snapshot limit)",
+                "\t... 1 more not shown (snapshot limit)",
+            ])
+            items_record = next(item for item in snapshot["elements"] if item["name"] == "Items")
+            subtree = runtime.run_operation({"tool": "get_app_state", "app": "Fixture", "noScreenshot": True, "root": items_record})["snapshot"]
+            self.assertEqual(subtree["treeLines"], ["0 list Items", "\t1 button A0", "\t2 button A1", "\t3 button A2"])
+            self.assertEqual(subtree["elements"][-1]["runtimeId"], [0, 0, 2])
+
 
 
 

@@ -479,8 +479,8 @@
 1 src/main/runtime/client/navigation/desktop-chat-creation-history.ts
 9 src/main/runtime/host-instance-identity.ts
 4 src/main/runtime/hosts/platform-probe/host-descriptor.ts
-5 src/main/runtime/mobile-cloud-relay/relay-region-preference.ts
-2 src/main/runtime/mobile-cloud-relay/relay-revoke-outbox.ts
+5 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
+2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts

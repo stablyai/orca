@@ -1,13 +1,14 @@
 import type { HostUsageLimitCut } from './structured-agent-session-usage-limit-chain'
 import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 
-type Deps = {
-  logger: HostDeps['logger']
+export type UsageLimitCutReads = {
   sessions: ReadonlyMap<string, unknown>
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
   readSavedCut: (id: string) => Promise<HostUsageLimitCut | null>
   readLoadedCut: (id: string) => Promise<HostUsageLimitCut | null>
 }
+
+type Deps = UsageLimitCutReads & { logger: HostDeps['logger'] }
 
 /** The cuts of chats that aren't loaded, read from history a few per pass. */
 export class UsageLimitColdCuts {

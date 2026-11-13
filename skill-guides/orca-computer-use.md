@@ -46,6 +46,12 @@ In a large window, look for one control with `get-app-state --query <text>`: it 
 ORCA computer get-app-state --app com.apple.finder --query Downloads --json
 ```
 
+A snapshot reads at most `truncation.maxNodes` elements and `maxDepth` levels. When it stops early, `truncation.truncated` is true and each cut-off place shows a `... N more not shown (snapshot limit)` line, indented like the children it stands for. To read them, pass the parent element's index (the nearest line above with less indentation) as `get-app-state --element-index <n>`: it reads only that element and its descendants, with the full limit. Elements already shown keep their indexes and hidden ones get new ones, and you can act on them. Action results show the whole window again, so read the subtree again before acting on another hidden element.
+
+```text
+ORCA computer get-app-state --app com.apple.Safari --element-index 312 --json
+```
+
 ## Waiting
 
 Never `sleep` between actions. When the UI changes on its own after an action (a save finishes, a dialog opens, a button becomes clickable), wait for the change with `wait`. It returns as soon as the condition holds and prints the matching elements or windows; it fails with `wait_timeout` if the condition does not hold in time (default 10 s, `--timeout <ms>` up to 120000).
@@ -116,12 +122,14 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
   - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
   - `unverified (suspected noop)` means the accessibility call succeeded but the window's tree and the app's windows were unchanged about a second later. Web and Electron controls often ignore it. Do not repeat the same element click; if the effect you expect would show in the window, retry once with `click --x --y` at the control from a fresh screenshot. If the effect lives elsewhere (clipboard, another app), check there first.
   - `unverified (synthetic input)` means input was fired into the void and is unverifiable.
+  - `unverified (text mismatch)` means typed or pasted text was read back and the focused field does not hold what inserting it should produce: it may be missing, partly entered, reformatted or autocompleted, or taken by a control that does not store it (terminals and canvas editors leave their input field empty). Do not type it again blindly, or it may land twice; check a fresh screenshot or `get-app-state` first.
   - Missing verification metadata is unverified, including responses from older runtimes.
   - Never report an unverified action as success. If it could have sent, submitted, bought, or deleted something, say the effect is unproven.
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, and `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
-- Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
+- Use `type-text` only after focusing a field and confirming the app has a focused text receiver; unless the result says `verified focusedText`, inspect the returned state before assuming text landed.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
+- Shortcuts that quit or close the app, log out, lock the screen, force-quit or end the session (such as `Cmd+Q` on macOS, `Alt+F4` on Windows and Linux, `Ctrl+Q` on Linux) are refused with `system_shortcut_blocked`. The error says what the shortcut would do; reach that goal another way, such as the window's own close button or menu item. Add `--allow-system-shortcut` only when the user asked for that exact shortcut.
 - Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
 
@@ -182,6 +190,7 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 
 - `app_not_found`: run `list-apps` and retry with the bundle ID. If the target is a web app such as Gmail, choose the desktop browser app/window that contains it; do not retry `ORCA computer ... --app Gmail` unchanged because `orca computer` app selectors refer to desktop apps, not website names.
 - `app_blocked`: stop; the target is intentionally blocked from computer-use.
+- `system_shortcut_blocked`: the error message says what the shortcut would do. Reach the same goal with a semantic action, such as a button or menu item, or ask the user; retry with `--allow-system-shortcut` only when the user asked for that exact shortcut.
 - `window_not_found` / `window_stale`: run `list-windows`, choose a current selector, then rerun `get-app-state`.
 - `background_unavailable`: for a popup or `<select>`, use `set-value` on it; otherwise retry once with `--restore-window` after telling the user it will take over their screen.
 - `window_not_focused`: retry once with `--restore-window`; if the message says restore was already requested, stop retrying restore and bring the app forward manually or check permissions. For editable fields prefer `set-value`, then inspect before assuming keyboard input worked.

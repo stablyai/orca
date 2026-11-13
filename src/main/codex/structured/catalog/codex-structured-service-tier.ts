@@ -138,7 +138,8 @@ export function projectCodexSessionOptions(
 
 /** Capture only the immutable capability fields consumed by the message compiler. */
 export function captureCodexMessageCompilerInputs(
-  session: Parameters<typeof codexSessionCapabilities>[0]
+  session: Parameters<typeof codexSessionCapabilities>[0] &
+    Partial<Pick<CodexSession, 'appliedTurnInputOptions'>>
 ): CodexMessageCompilerInputs {
   const capabilities = codexSessionCapabilities(session)
   const defaults: Record<string, string> = {}
@@ -157,6 +158,7 @@ export function captureCodexMessageCompilerInputs(
   }
   return {
     active: { ...session.appliedTurnOptions },
+    activeInput: { ...session.appliedTurnInputOptions },
     defaults,
     models: capabilities.models.map((model) => ({
       id: model.id,

@@ -72,6 +72,7 @@ export function automaticSubmissionFixture(cleanups: (() => void)[]) {
       kind: 'codex',
       compiler: {
         active: { model: 'active' },
+        activeInput: { model: 'active' },
         defaults: { model: 'default' },
         models: [],
         listedServiceTiers: []

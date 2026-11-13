@@ -1,6 +1,7 @@
 export const COMPUTER_ERROR_CODES = {
   app_not_found: 'app_not_found',
   app_blocked: 'app_blocked',
+  system_shortcut_blocked: 'system_shortcut_blocked',
   window_not_found: 'window_not_found',
   window_not_focused: 'window_not_focused',
   background_unavailable: 'background_unavailable',
@@ -52,6 +53,8 @@ export type ComputerSnapshotData = {
   treeText: string
   elementCount: number
   focusedElementId: number | null
+  // Present only when treeText is the subtree of this element, read with rootElementIndex.
+  rootElementIndex?: number
   // Present only when treeText is a diff against the previous snapshot of the same window.
   treeDiff?: {
     baseSnapshotId: string
@@ -121,6 +124,8 @@ export type ComputerActionVerification =
         | 'value_mismatch'
         // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
         | 'suspected_noop'
+        // Typed or pasted text was read back and the focused field does not hold what inserting it should produce.
+        | 'text_mismatch'
       // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }

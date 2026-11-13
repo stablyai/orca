@@ -497,7 +497,8 @@ it('uses scoped failure facts for cuts and request outcomes', () => {
     turnItemId: 'turn',
     resetsAt: 999,
     turnEndedAt: 300,
-    chain: 0
+    chain: 0,
+    fence: 1
   })
   expect(readJournalSqlStatusState(context()).summary).toMatchObject({
     status: 'idle',

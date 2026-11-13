@@ -1,3 +1,4 @@
+import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { vi, type Mock } from 'vitest'
@@ -19,6 +20,7 @@ import {
 } from './structured-agent-session-host-test-data.test-fixture'
 
 export type QueuedRigProviderOptions = {
+  acquiredAccountHome?: () => AgentSessionAccountHome
   agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
   recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
@@ -91,6 +93,7 @@ export function createQueuedRigProvider(
       const thread = context?.pendingClear
         ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
         : (context?.head?.handle.nativeId ?? THREAD)
+      const accountHome = options.acquiredAccountHome?.()
       return {
         process: {
           hostId: 'local',
@@ -99,6 +102,7 @@ export function createQueuedRigProvider(
           spawnToken
         },
         acquisitionGeneration: 'generation-1',
+        ...(accountHome ? { accountHome } : {}),
         link: {
           linkId: `link-${fence}`,
           handle:
@@ -116,6 +120,7 @@ export function createQueuedRigProvider(
       kind: 'codex',
       compiler: {
         active: reported(),
+        activeInput: reported(),
         defaults: reported(),
         models: [],
         listedServiceTiers: []
