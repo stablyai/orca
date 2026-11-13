@@ -69,9 +69,10 @@ export function createTransferNotifier(env: Pick<Env, 'AUTH_INTERNAL_ORIGIN' | '
       if (!parsed.success) {
         return { emailed: false, mode: null, reason: 'unreadable_answer' }
       }
-      // "Sent" in log mode is a record, not a delivery: only a real send counts.
+      // "Sent" in log mode is a record, not a delivery, and an answer that names no mode proves
+      // nothing: only a send in a named, non-log mode counts.
       const mode = parsed.data.mode ?? null
-      return { emailed: parsed.data.sent && mode !== 'log', mode, reason: parsed.data.reason ?? null }
+      return { emailed: parsed.data.sent && mode !== null && mode !== 'log', mode, reason: parsed.data.reason ?? null }
     } catch {
       return { emailed: false, mode: null, reason: 'unreachable' }
     }

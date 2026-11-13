@@ -641,6 +641,8 @@ describe('telling the previous owner', () => {
     expect(key).not.toBe(await membershipKey(AUTH_TOKEN))
     respond = () => Response.json({ sent: true, mode: 'log' })
     expect((await createTransferNotifier(env, fetchImpl)(request)).emailed).toBe(false)
+    respond = () => Response.json({ sent: true })
+    expect((await createTransferNotifier(env, fetchImpl)(request)).emailed).toBe(false)
     respond = () => Response.json({ sent: true, mode: 'test-inbox' })
     expect((await createTransferNotifier(env, fetchImpl)(request)).emailed).toBe(true)
     for (const [answer, reason] of [
