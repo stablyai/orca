@@ -1,5 +1,9 @@
+import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
-import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import {
+  deliverablePRBranchOutcome,
+  type PRBranchReadResult
+} from '../../client/lookup/pr-branch-read-resources'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
@@ -109,7 +113,22 @@ export async function runHostedPRSnapshot(
   }
   const pending = prepared.pending()
   if (pending) {
-    const result = await pending
+    const timeout = new Error('Pull request snapshot wait timed out')
+    let result: PRBranchReadResult
+    try {
+      result = await sharedPromiseSettlementWaiters(pending).wait({
+        signal,
+        ...(acceptRevalidationOnly
+          ? { timeoutMs: Math.max(0, deadline - Date.now()), createTimeoutError: () => timeout }
+          : {}),
+        createAbortError: () => new Error('Pull request wait was cancelled')
+      })
+    } catch (error) {
+      if (error === timeout) {
+        return drainer.hostedJobs.complete(prepared, candidate, null, acceptRevalidationOnly)
+      }
+      throw error
+    }
     return drainer.hostedJobs.complete(
       prepared,
       candidate,

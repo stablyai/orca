@@ -26,6 +26,7 @@ import { outsideWslUserAct } from '../../../wsl/discovery/wsl-user-act-scope'
 
 export class PRRefreshQueueScheduler {
   private timer: ReturnType<typeof setTimeout> | null = null
+  private timerDueAt = Infinity
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -38,9 +39,15 @@ export class PRRefreshQueueScheduler {
   ) {}
 
   schedule(delay = 0): void {
+    const dueAt = Date.now() + Math.max(0, delay)
+    if (this.timer !== null && this.timerDueAt <= dueAt) {
+      return
+    }
     clearTimeout(this.timer ?? undefined)
+    this.timerDueAt = dueAt
     this.timer = setTimeout(() => {
       this.timer = null
+      this.timerDueAt = Infinity
       // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
       void outsideWslUserAct(() => this.runDrain())
     }, delay)
