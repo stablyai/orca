@@ -20,6 +20,29 @@ export function renamingAccountKey(target: Pick<RenameAccountTarget, 'provider' 
   return `${target.provider}:${target.id}`
 }
 
+export function withRenamedAccount<
+  State extends { accounts: readonly { id: string; displayName?: string }[] }
+>(
+  current: State,
+  reply: { accounts: readonly { id: string; displayName?: string }[] },
+  accountId: string
+): State {
+  const displayName = reply.accounts.find((account) => account.id === accountId)?.displayName
+  if (!current.accounts.some((account) => account.id === accountId)) {
+    return current
+  }
+  return {
+    ...current,
+    accounts: current.accounts.map((account) => {
+      if (account.id !== accountId) {
+        return account
+      }
+      const { displayName: _previous, ...rest } = account
+      return displayName ? { ...rest, displayName } : rest
+    })
+  }
+}
+
 type AccountRenameContext = {
   accountOwner: RuntimeClientTarget
   hostLabel: string
@@ -51,20 +74,23 @@ export function createAccountRenameRunner(
     const rename = { accountId: target.id, displayName }
     setPending(key, true)
     try {
-      if (target.provider === 'claude') {
-        const next = await renameClaudeProviderAccount(accountOwner, rename, hostLabel)
-        if (isCurrentAccountOwner()) {
-          context.setClaudeAccounts(next)
-        }
-      } else {
-        const next = await renameCodexProviderAccount(accountOwner, rename, hostLabel)
-        if (isCurrentAccountOwner()) {
-          context.setCodexAccounts(next)
-        }
-      }
-      // Local names live in this desktop's settings, which the status bar reads.
+      const reply =
+        target.provider === 'claude'
+          ? await renameClaudeProviderAccount(accountOwner, rename, hostLabel)
+          : await renameCodexProviderAccount(accountOwner, rename, hostLabel)
+      // Local names live in this desktop's settings; read them first so the pane's
+      // settings overlay already holds the new name when the row updates.
       if (!context.isRemoteAccountScope) {
         await context.fetchSettings()
+      }
+      // Apply only this account's name: a select or remove may have answered after the
+      // host built this reply, and its whole roster would undo that newer state.
+      if (isCurrentAccountOwner()) {
+        if (target.provider === 'claude') {
+          context.setClaudeAccounts((current) => withRenamedAccount(current, reply, target.id))
+        } else {
+          context.setCodexAccounts((current) => withRenamedAccount(current, reply, target.id))
+        }
       }
     } catch (error) {
       if (target.provider === 'claude') {
