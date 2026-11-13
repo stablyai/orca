@@ -117,6 +117,7 @@ export function renderNavigation(count = 1, addressBarValue = 'about:blank'): Na
   const lifecycle = new RemoteBrowserStreamLifecycle({
     identity: paneIdentity,
     subscribeScreencast: subscribe,
+    askJavaScriptDialog: async () => null,
     waitForViewportSize: async () => ({ width: 800, height: 600 }),
     readViewportSize: () => ({ width: 800, height: 600 }),
     syncViewport: async () => {},
