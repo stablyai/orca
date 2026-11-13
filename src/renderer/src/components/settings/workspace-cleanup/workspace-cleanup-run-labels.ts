@@ -5,7 +5,10 @@ import type {
   WorkspaceCleanupRuleReason
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import type { WorkspaceCleanupRunTrigger } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
-import { formatWorkspaceCleanupKeepCause } from '../../../../../shared/workspace-cleanup/workspace-cleanup-verdict-labels'
+import {
+  formatWorkspaceCleanupKeepCause,
+  formatWorkspaceCleanupRuleReason
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-verdict-labels'
 
 // Localized counterparts of the CLI's verdict labels; a value from a newer host falls back to the CLI's words.
 
@@ -28,8 +31,8 @@ export function formatCleanupRuleReasonBadge(
         'Orchestration worker'
       )
   }
-  // A newer host can send a reason this build has no label for.
-  return String(reason)
+  // A newer host can send a reason this build has no label for; the CLI's words beat nothing.
+  return formatWorkspaceCleanupRuleReason(reason)
 }
 
 export function formatCleanupKeepCause(

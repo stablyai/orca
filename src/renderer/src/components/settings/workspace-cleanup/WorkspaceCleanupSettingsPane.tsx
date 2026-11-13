@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -40,6 +40,8 @@ import {
 } from './workspace-cleanup-rule-change-dialog'
 import { WorkspaceCleanupActivityList } from './workspace-cleanup-activity-list'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
+import { workspaceCleanupRowKey } from './workspace-cleanup-workspace-line'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 function removalsFor(
   preview: WorkspaceCleanupPreview,
@@ -51,20 +53,18 @@ function removalsFor(
   )
 }
 
-function previewRowKey(row: WorkspaceCleanupPreviewRow): string {
-  return `${row.executionHostId ?? ''}:${row.worktreeId}`
-}
-
 /** Workspaces `next` would remove now that `current` would not. */
 function newRemovals(
   next: WorkspaceCleanupPreview,
   current: WorkspaceCleanupPreview | null
 ): WorkspaceCleanupPreviewRow[] {
   const removedNow = new Set(
-    (current?.rows ?? []).filter((row) => row.evaluation.action !== 'keep').map(previewRowKey)
+    (current?.rows ?? [])
+      .filter((row) => row.evaluation.action !== 'keep')
+      .map(workspaceCleanupRowKey)
   )
   return next.rows.filter(
-    (row) => row.evaluation.action !== 'keep' && !removedNow.has(previewRowKey(row))
+    (row) => row.evaluation.action !== 'keep' && !removedNow.has(workspaceCleanupRowKey(row))
   )
 }
 
@@ -114,13 +114,7 @@ export function WorkspaceCleanupSettingsPane({
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   // A change still previewing when the pane unmounts must not write over what came after it.
-  const mountedRef = useRef(false)
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+  const mountedRef = useMountedRef()
   // Remounts the rows after a change that was not saved, so an edited field shows the saved value.
   const [unsavedChanges, setUnsavedChanges] = useState(0)
   const search = getWorkspaceCleanupSettingsSearchParts()
@@ -198,18 +192,19 @@ export function WorkspaceCleanupSettingsPane({
     let rows: WorkspaceCleanupPreviewRow[] = []
     if (request && hasEnabledWorkspaceCleanupRule(nextRules)) {
       // Project rules can delete with every global rule off, so the current rules are always read.
-      const previews = await Promise.all([previewRules(nextRules), previewRules(latest)]).catch(
-        (error: unknown) => {
-          toast.error(
-            t(
-              'components.settings.workspaceCleanup.previewFailed',
-              "Couldn't check which workspaces this change matches."
-            ),
-            { description: errorMessage(error) }
-          )
-          return null
-        }
-      )
+      const previews = await Promise.all([
+        previewRules(nextRules, { save: true }),
+        previewRules(latest)
+      ]).catch((error: unknown) => {
+        toast.error(
+          t(
+            'components.settings.workspaceCleanup.previewFailed',
+            "Couldn't check which workspaces this change matches."
+          ),
+          { description: errorMessage(error) }
+        )
+        return null
+      })
       if (!mountedRef.current) {
         return
       }

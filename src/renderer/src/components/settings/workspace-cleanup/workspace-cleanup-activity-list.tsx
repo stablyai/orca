@@ -30,7 +30,10 @@ import { WorkspaceCleanupMetadataText } from '@/components/workspace-cleanup/can
 import type { WorkspaceCleanupKeepCause } from '../../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { formatCleanupKeepCause, formatCleanupRunTrigger } from './workspace-cleanup-run-labels'
 import { WorkspaceCleanupReasonChip } from './workspace-cleanup-reason-chip'
-import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
+import {
+  WorkspaceCleanupWorkspaceLine,
+  workspaceCleanupRowKey
+} from './workspace-cleanup-workspace-line'
 
 const KEPT_PREVIEW_COUNT = 4
 
@@ -51,10 +54,6 @@ const KEEP_CAUSE_ICONS: Partial<Record<WorkspaceCleanupKeepCause, LucideIcon>> =
   removing: Loader
 }
 const REMOVED_GRID = 'grid grid-cols-[minmax(0,1fr)_9rem_4.5rem_4rem] items-center gap-x-4'
-
-function rowKey(row: WorkspaceCleanupRunRow): string {
-  return `${row.executionHostId ?? ''}:${row.worktreeId}`
-}
 
 /** Each run's receipt, newest first; the newest opens expanded. */
 export function WorkspaceCleanupActivityList({
@@ -171,7 +170,7 @@ function ActivityRun({
                 })}
               </GroupLabel>
               {removed.map((row) => (
-                <RemovedRow key={rowKey(row)} row={row} />
+                <RemovedRow key={workspaceCleanupRowKey(row)} row={row} />
               ))}
             </>
           ) : null}
@@ -184,7 +183,7 @@ function ActivityRun({
                 })}
               </GroupLabel>
               {failed.map((row) => (
-                <div key={rowKey(row)} className="min-w-0 py-1.5">
+                <div key={workspaceCleanupRowKey(row)} className="min-w-0 py-1.5">
                   <WorkspaceCleanupWorkspaceLine workspace={row} />
                   {row.error ? <ErrorLine message={row.error} /> : null}
                 </div>
@@ -250,7 +249,7 @@ function KeptRows({
       </GroupLabel>
       {visible.map((row) => (
         <div
-          key={rowKey(row)}
+          key={workspaceCleanupRowKey(row)}
           className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] items-center gap-x-4 py-1.5"
         >
           <WorkspaceCleanupWorkspaceLine workspace={row} />

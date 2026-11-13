@@ -13,7 +13,10 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../ui/dialog'
-import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
+import {
+  WorkspaceCleanupWorkspaceLine,
+  workspaceCleanupRowKey
+} from './workspace-cleanup-workspace-line'
 import { WorkspaceCleanupReasonChip } from './workspace-cleanup-reason-chip'
 
 export type WorkspaceCleanupRuleChangeRequest = {
@@ -21,10 +24,6 @@ export type WorkspaceCleanupRuleChangeRequest = {
   kind: 'enable' | 'change'
   ruleTitle: string
   rows: WorkspaceCleanupPreviewRow[]
-}
-
-function rowKey(row: WorkspaceCleanupPreviewRow): string {
-  return `${row.executionHostId ?? ''}:${row.worktreeId}`
 }
 
 /** Shown before a rule change that would delete workspaces right now; Keep pins a workspace so it is never removed. */
@@ -48,14 +47,14 @@ export function WorkspaceCleanupRuleChangeDialog({
   }
   const rows = shownRequest?.rows ?? []
   const enabling = shownRequest?.kind !== 'change'
-  const deleted = rows.filter((row) => !kept.has(rowKey(row)))
+  const deleted = rows.filter((row) => !kept.has(workspaceCleanupRowKey(row)))
   const deletedBytes = deleted.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0)
 
   const toggleKeep = (row: WorkspaceCleanupPreviewRow): void => {
     setKept((previous) => {
       const next = new Set(previous)
-      if (!next.delete(rowKey(row))) {
-        next.add(rowKey(row))
+      if (!next.delete(workspaceCleanupRowKey(row))) {
+        next.add(workspaceCleanupRowKey(row))
       }
       return next
     })
@@ -63,7 +62,9 @@ export function WorkspaceCleanupRuleChangeDialog({
 
   const confirm = (): void => {
     setConfirming(true)
-    void onConfirm(rows.filter((row) => kept.has(rowKey(row)))).finally(() => setConfirming(false))
+    void onConfirm(rows.filter((row) => kept.has(workspaceCleanupRowKey(row)))).finally(() =>
+      setConfirming(false)
+    )
   }
 
   return (
@@ -110,10 +111,10 @@ export function WorkspaceCleanupRuleChangeDialog({
           className="max-h-72 overflow-y-auto rounded-md border border-border/70 bg-muted/35 px-3 scrollbar-sleek"
         >
           {rows.map((row, index) => {
-            const keep = kept.has(rowKey(row))
+            const keep = kept.has(workspaceCleanupRowKey(row))
             return (
               <div
-                key={rowKey(row)}
+                key={workspaceCleanupRowKey(row)}
                 role="listitem"
                 className={cn(
                   'flex min-w-0 items-center gap-3 py-2',

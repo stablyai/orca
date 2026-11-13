@@ -65,12 +65,11 @@ export function installAppLifetimeIpcEvents(): () => void {
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
   )
-  const stopCleanupRunFinished = window.api.workspaceCleanup.onRunFinished?.((run) =>
-    emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
+  unsubs.push(
+    window.api.workspaceCleanup.onRunFinished((run) =>
+      emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
+    )
   )
-  if (stopCleanupRunFinished) {
-    unsubs.push(stopCleanupRunFinished)
-  }
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
   const statusApi = window.api.runtimeEnvironments

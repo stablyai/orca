@@ -29,3 +29,10 @@ export function WorkspaceCleanupWorkspaceLine({
     </span>
   )
 }
+
+/** One key per workspace across hosts; a bare id can repeat on two hosts. */
+export function workspaceCleanupRowKey(
+  row: Pick<WorkspaceCleanupWorkspaceRef, 'executionHostId' | 'worktreeId'>
+): string {
+  return `${row.executionHostId ?? ''}:${row.worktreeId}`
+}

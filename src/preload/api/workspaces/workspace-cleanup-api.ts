@@ -29,7 +29,7 @@ export type WorkspaceCleanupApi = {
   recordRemovalSnapshotPrune?: (args: WorkspaceCleanupSnapshotPruneRecordArgs) => Promise<void>
   finishRemovalSnapshotPruneBatch?: (args: WorkspaceCleanupSnapshotPruneBatchArgs) => Promise<void>
   /** This app's own cleanup runner finished a run. */
-  onRunFinished?: (callback: (run: WorkspaceCleanupRunFinishedEvent['run']) => void) => () => void
+  onRunFinished: (callback: (run: WorkspaceCleanupRunFinishedEvent['run']) => void) => () => void
 }
 
 export type WorkspaceSpaceApi = {

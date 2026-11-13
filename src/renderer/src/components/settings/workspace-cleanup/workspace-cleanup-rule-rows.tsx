@@ -14,14 +14,17 @@ import {
   NumberField,
   SettingsBadge,
   SettingsRow,
-  SettingsSegmentedControl
+  SettingsSegmentedControl,
+  SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { Switch } from '../../ui/switch'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
-import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
+import {
+  WorkspaceCleanupWorkspaceLine,
+  workspaceCleanupRowKey
+} from './workspace-cleanup-workspace-line'
 import type { WorkspaceCleanupRuleKey } from './workspace-cleanup-rule-keys'
 
 export type WorkspaceCleanupRuleMatches = {
@@ -62,7 +65,7 @@ export function WorkspaceCleanupRuleRows({
 
   const ruleRow = (key: WorkspaceCleanupRuleKey, description: string, badge?: string) => (
     <SearchableSetting {...search[key]} forceVisible={forceVisible}>
-      <SettingsRow
+      <SettingsSwitchRow
         label={
           <span className="inline-flex items-center gap-2">
             {search[key].title}
@@ -84,14 +87,10 @@ export function WorkspaceCleanupRuleRows({
             ) : null}
           </>
         }
-        control={
-          <Switch
-            checked={rules[key].enabled}
-            disabled={disabled}
-            onCheckedChange={() => onToggle(key)}
-            aria-label={search[key].title}
-          />
-        }
+        checked={rules[key].enabled}
+        disabled={disabled}
+        onChange={() => onToggle(key)}
+        ariaLabel={search[key].title}
       />
       {key === 'inactive' && rules.inactive.enabled ? (
         <InactiveRuleOptions rules={rules} onChange={onChange} disabled={disabled} />
@@ -228,7 +227,7 @@ function RuleMatchesLine({
         <span className="mt-1 block space-y-0.5">
           {matches.rows.map((row) => (
             <WorkspaceCleanupWorkspaceLine
-              key={`${row.executionHostId ?? ''}:${row.worktreeId}`}
+              key={workspaceCleanupRowKey(row)}
               workspace={row}
               trailing={row.sizeBytes !== undefined ? formatBytes(row.sizeBytes) : undefined}
             />

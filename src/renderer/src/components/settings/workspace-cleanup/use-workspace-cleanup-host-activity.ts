@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  runtimeTargetEnvironmentId,
+  runtimeTargetForOwnerEnvironment
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
@@ -37,7 +40,11 @@ export function useWorkspaceCleanupHostActivity(
   preview: WorkspaceCleanupPreview | null
   cleaningUp: boolean
   cleanUpNow: () => Promise<void>
-  previewRules: (rules: WorkspaceCleanupRules) => Promise<WorkspaceCleanupPreview>
+  /** `save` marks the rules about to be saved, so their preview is kept as the page's matches. */
+  previewRules: (
+    rules: WorkspaceCleanupRules,
+    options?: { save?: boolean }
+  ) => Promise<WorkspaceCleanupPreview>
 } {
   const t = useTranslate()
   const environmentId = runtimeTargetEnvironmentId(owner)
@@ -69,10 +76,12 @@ export function useWorkspaceCleanupHostActivity(
   )
 
   useEffect(() => {
+    // Read once the rules are in: their arrival would otherwise read the report a second time.
+    if (!rulesKey) {
+      return
+    }
     let current = true
-    const target: RuntimeClientTarget = environmentId
-      ? { kind: 'environment', environmentId }
-      : { kind: 'local' }
+    const target = runtimeTargetForOwnerEnvironment(environmentId)
     void callRuntimeRpc<WorkspaceCleanupReport>(target, 'workspaceCleanup.report', undefined, {
       timeoutMs: REPORT_TIMEOUT_MS
     }).then(
@@ -108,9 +117,7 @@ export function useWorkspaceCleanupHostActivity(
       return
     }
     let current = true
-    const target: RuntimeClientTarget = environmentId
-      ? { kind: 'environment', environmentId }
-      : { kind: 'local' }
+    const target = runtimeTargetForOwnerEnvironment(environmentId)
     void callRuntimeRpc<WorkspaceCleanupPreview>(
       target,
       'workspaceCleanup.preview',
@@ -152,14 +159,19 @@ export function useWorkspaceCleanupHostActivity(
   }, [owner, t])
 
   const previewRules = useCallback(
-    async (nextRules: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> => {
+    async (
+      nextRules: WorkspaceCleanupRules,
+      options?: { save?: boolean }
+    ): Promise<WorkspaceCleanupPreview> => {
       const preview = await callRuntimeRpc<WorkspaceCleanupPreview>(
         owner,
         'workspaceCleanup.preview',
         { rules: nextRules },
         { timeoutMs: EVALUATE_TIMEOUT_MS }
       )
-      setPreviewState({ ownerKey, rulesKey: JSON.stringify(nextRules), revision, preview })
+      if (options?.save) {
+        setPreviewState({ ownerKey, rulesKey: JSON.stringify(nextRules), revision, preview })
+      }
       return preview
     },
     [owner, ownerKey, revision]
