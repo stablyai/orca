@@ -7,8 +7,7 @@ import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-ra
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
-import type { GitExecOptions } from './git-exec-options'
+import type { GitBufferExecOptions, GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
@@ -232,18 +231,7 @@ export function gitExecFileAsync(
 
 async function gitExecFileAsyncBufferInSpan(
   args: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    timeout?: number
-    timeoutMsForTest?: number
-    env?: NodeJS.ProcessEnv
-    wslDistro?: string
-    preferWslDirectGit?: boolean
-    admissionTier?: GitAdmissionTier
-    signal?: AbortSignal
-    stdin?: string
-  }
+  options: GitBufferExecOptions
 ): Promise<{ stdout: Buffer }> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
