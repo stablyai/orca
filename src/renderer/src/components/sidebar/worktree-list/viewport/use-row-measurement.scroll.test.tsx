@@ -80,7 +80,12 @@ function setup(interior = false) {
     element.setAttribute('data-worktree-virtual-row', '')
     element.setAttribute('data-worktree-virtual-row-key', `wt:${id}`)
     element.getBoundingClientRect = () =>
-      new DOMRect(0, (model.starts.get(id) ?? 0) - scroller.scrollTop, 300, 1000)
+      new DOMRect(
+        0,
+        (model.starts.get(id) ?? 0) - scroller.scrollTop,
+        300,
+        model.sizes.get(id) ?? 1000
+      )
     scroller.append(element)
     return element
   }
@@ -236,6 +241,10 @@ it('lets no-op direct input retire an old target and preserve position on a late
 
 it('keeps an interior descendant successor at the removed card position after action takeover', () => {
   const { scroller, model, mounted, mount, view } = setup(true)
+  model.sizes.set('b', 200)
+  model.starts.set('c', 1200)
+  model.starts.set('d', 2200)
+  model.totalSize = 3200
   const successor = mount('c')
   act(() => {
     scroller.scrollTop = 1020
@@ -250,7 +259,10 @@ it('keeps an interior descendant successor at the removed card position after ac
   model.items = ['a', 'c', 'd']
   model.totalSize = 3000
   view.rerender({ rows: [row('a'), { ...row('c'), depth: 1 }, row('d')] })
+  expect(scroller.scrollTop).toBe(1000)
   act(position)
+  view.rerender({ rows: [row('a'), { ...row('c'), depth: 1 }, row('d')] })
+  expect(scroller.scrollTop).toBe(1020)
   finishPositioning()
   expect(scroller.scrollTop).toBe(1020)
   expect(successor.getBoundingClientRect().top).toBe(-20)
