@@ -11,8 +11,6 @@ import { overageFailureCopy } from '../billing/plan-billing-copy'
 import { openPlansPage } from '../billing/plans/plans-page-store'
 import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import { formatCents } from '../billing/plans/plans-pricing'
-import { billingPortalLink } from '../billing/billing-link'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 
 /** The four ways billing can refuse a create (JA-21 progressive billing). */
 export type BillingBlockKind = 'plan' | 'hoursUsed' | 'spendCap' | 'payment'
@@ -215,17 +213,12 @@ export function VmBuildBillingBlockerView({
                   </Button>
                 ) : null}
                 {kind === 'payment' ? (
-                  // Opens the billing portal in the browser: the chevron copies the same link.
-                  <OpenExternalSplitButton
-                    size="sm"
-                    link={billingPortalLink}
-                    onClick={onUpdatePayment}
-                  >
+                  <Button type="button" size="sm" onClick={onUpdatePayment}>
                     {t(
                       'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
                       'Update payment method'
                     )}
-                  </OpenExternalSplitButton>
+                  </Button>
                 ) : (
                   <Button
                     type="button"
