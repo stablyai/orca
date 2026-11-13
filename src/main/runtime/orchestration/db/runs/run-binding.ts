@@ -4,7 +4,9 @@ import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { MessageType } from '../../../../../shared/orchestration/orchestration-message-types'
 import { findCallerWorkerDispatches, workerRunBindingRefusal } from './worker-run-binding'
+import { serializeRunNotifyTypes } from './run-notify-types'
 import {
   mailboxAddressOf,
   runBoundToCoordinator,
@@ -19,6 +21,8 @@ export function bindRun(
     coordinatorPaneKey: string | null
     /** The coordinator's bare Orca session id when it is a structured session; see orca-session-address. */
     coordinatorOrcaSessionId?: OrcaSessionId | null
+    /** Message types allowed to wake the coordinator; undefined keeps the setting, null restores all. */
+    notifyTypes?: readonly MessageType[] | null
     takeoverLegacy?: boolean
     legacyCoordinatorAuthority?: {
       runId: string
@@ -203,6 +207,11 @@ export function bindRun(
            WHERE id = ?`
         )
         .run(coordinator.orcaSessionId, params.runId)
+    }
+    if (params.notifyTypes !== undefined) {
+      this.db
+        .prepare("UPDATE runs SET notify_types = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(serializeRunNotifyTypes(params.notifyTypes), params.runId)
     }
     this.db.exec('COMMIT')
   } catch (error) {

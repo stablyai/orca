@@ -7,6 +7,7 @@ import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
+import type { MessageType } from '../../../../../../shared/orchestration/orchestration-message-types'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
@@ -33,13 +34,15 @@ export function createBoundRun(
   runtime: OrcaRuntimeService,
   caller: OrchestrationCallerIdentity,
   from: string,
-  objective: string
+  objective: string,
+  notifyTypes?: readonly MessageType[]
 ): RunRow {
   const run = runtime.getOrchestrationDb().createRun({
     objective,
     coordinatorHandle: caller.terminalHandle,
     coordinatorPaneKey: caller.paneKey,
-    coordinatorOrcaSessionId: caller.orcaSessionId
+    coordinatorOrcaSessionId: caller.orcaSessionId,
+    notifyTypes
   })
   // The earlier Run keeps this consumer, so only waiters that plain check now redirects end.
   runtime.cancelMessageWaiters(from)
@@ -60,7 +63,11 @@ export const ORCHESTRATION_RUN_METHODS = [
         callerSession: orchestrationCaller,
         requireStablePane: true
       })
-      return { run: exposeRun(createBoundRun(runtime, caller, params.from, params.objective)) }
+      return {
+        run: exposeRun(
+          createBoundRun(runtime, caller, params.from, params.objective, params.notifyTypes)
+        )
+      }
     }
   }),
   defineOrchestrationMethod({
@@ -109,6 +116,7 @@ export const ORCHESTRATION_RUN_METHODS = [
         coordinatorHandle: caller.terminalHandle,
         coordinatorPaneKey: caller.paneKey,
         coordinatorOrcaSessionId: caller.orcaSessionId,
+        notifyTypes: params.notifyTypes,
         takeoverLegacy: params.takeoverLegacy,
         legacyCoordinatorAuthority
       })
@@ -127,6 +135,10 @@ export const ORCHESTRATION_RUN_METHODS = [
       moved.forEach((mailbox) => runtime.cancelMessageWaiters(mailbox))
       // The former coordinator's waiting report cards are the new one's mail now.
       runtime.withdrawStaleChatMail(moved)
+      // A wider allow-list must surface mail the old one suppressed.
+      if (params.notifyTypes !== undefined) {
+        runtime.deliverPendingMessagesForHandle(`run:${run.id}`)
+      }
       return { run: exposeRun(run) }
     }
   }),

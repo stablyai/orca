@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS runs (
   coordinator_orca_session_id_generation INTEGER,
   consumer_generation   INTEGER NOT NULL DEFAULT 0,
   legacy                INTEGER NOT NULL DEFAULT 0,
+  -- JSON array of message types allowed to wake the coordinator; NULL wakes for every type.
+  notify_types          TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
