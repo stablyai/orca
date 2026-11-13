@@ -3,6 +3,7 @@ import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pendin
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import { remoteRuntimeTerminalColorPush } from '@/runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
@@ -64,6 +65,12 @@ export function installAppLifetimeIpcEvents(): () => void {
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
   )
+  const stopCleanupRunFinished = window.api.workspaceCleanup.onRunFinished?.((run) =>
+    emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
+  )
+  if (stopCleanupRunFinished) {
+    unsubs.push(stopCleanupRunFinished)
+  }
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
   const statusApi = window.api.runtimeEnvironments

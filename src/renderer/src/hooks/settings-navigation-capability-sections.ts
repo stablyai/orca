@@ -10,12 +10,14 @@ import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accou
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration/orchestration-search'
 import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
+import { getWorkspaceCleanupSettingsSearchEntries } from '@/components/settings/workspace-cleanup/workspace-cleanup-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import {
   Blocks,
   Bot,
+  BrushCleaning,
   CircleUserRound,
   Mic,
   MousePointerClick,
@@ -173,6 +175,17 @@ export function buildSetupSettingsSections(
       ),
       icon: SlidersHorizontal,
       searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isLocalWindowsHost }),
+      group: 'setup'
+    },
+    {
+      id: 'workspace-cleanup',
+      title: t('components.settings.workspaceCleanup.title', 'Workspace Cleanup'),
+      description: t(
+        'components.settings.workspaceCleanup.description',
+        "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work."
+      ),
+      icon: BrushCleaning,
+      searchEntries: getWorkspaceCleanupSettingsSearchEntries(),
       group: 'setup'
     },
     {

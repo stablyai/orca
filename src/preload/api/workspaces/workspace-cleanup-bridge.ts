@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { WorkspaceCleanupScanProgress } from '../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type { PreloadApi } from '../../api-types'
 
 export const workspaceCleanupApi = {
@@ -30,5 +31,13 @@ export const workspaceCleanupApi = {
   recordRemovalSnapshotPrune: (args) =>
     ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
   finishRemovalSnapshotPruneBatch: (args) =>
-    ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
+    ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args),
+  onRunFinished: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      run: WorkspaceCleanupRunFinishedEvent['run']
+    ): void => callback(run)
+    ipcRenderer.on('workspaceCleanup:runFinished', listener)
+    return () => ipcRenderer.removeListener('workspaceCleanup:runFinished', listener)
+  }
 } satisfies PreloadApi['workspaceCleanup']

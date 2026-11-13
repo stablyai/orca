@@ -1,4 +1,5 @@
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -55,6 +56,7 @@ export type RuntimeNotifier = {
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   browserProfilesChanged?(): void
+  workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,
     worktreeId: string,

@@ -2111,6 +2111,28 @@
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
     },
+    "settings": {
+      "workspaceCleanup": {
+        "enable": {
+          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
+          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on."
+        },
+        "rules": {
+          "inactiveDescription": "No activity for {{count}} days.",
+          "inactiveDescription_one": "No activity for 1 day.",
+          "inactiveDescription_other": "No activity for {{count}} days.",
+          "matchesCount": "Matches {{count}} workspaces now",
+          "matchesCount_one": "Matches 1 workspace now",
+          "matchesCount_other": "Matches {{count}} workspaces now"
+        },
+        "status": {
+          "lastRunFreed_one": "Last run {{when}} removed 1 workspace and freed {{size}}.",
+          "lastRunFreed_other": "Last run {{when}} removed {{count}} workspaces and freed {{size}}.",
+          "lastRunRemoved_one": "Last run {{when}} removed 1 workspace.",
+          "lastRunRemoved_other": "Last run {{when}} removed {{count}} workspaces."
+        }
+      }
+    },
     "tab": {
       "bar": {
         "bulkClose": {

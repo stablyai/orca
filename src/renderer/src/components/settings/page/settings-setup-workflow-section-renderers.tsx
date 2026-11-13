@@ -13,6 +13,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { WorkspaceCleanupSettingsPane } from '../workspace-cleanup/WorkspaceCleanupSettingsPane'
 
 export function renderOrcaAccountSettingsSection(
   context: SettingsRenderContext,
@@ -231,6 +232,32 @@ export function renderSessionHistorySettingsSection(
         <SessionHistorySettingsPane
           settings={model.settings}
           updateSettings={model.updateSettingsOrThrow}
+        />
+      ) : null}
+    </SettingsSection>
+  )
+}
+
+export function renderWorkspaceCleanupSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <SettingsSection
+      id="workspace-cleanup"
+      title={t('components.settings.workspaceCleanup.title', 'Workspace Cleanup')}
+      description={t(
+        'components.settings.workspaceCleanup.description',
+        "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work."
+      )}
+      searchEntries={navigation.getSectionSearchEntries('workspace-cleanup')}
+    >
+      {view.isSectionMounted('workspace-cleanup') ? (
+        <WorkspaceCleanupSettingsPane
+          hostScope={model.settingsHostScope}
+          settings={model.settings}
+          updateSettings={model.updateSettings}
         />
       ) : null}
     </SettingsSection>
