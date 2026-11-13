@@ -14,9 +14,9 @@ import {
 const SAMPLING_INTERVAL_BYTES = 512 * 1024
 const START_HEAP_RATIO = 0.6
 const STOP_HEAP_RATIO = 0.5
-// Each profile read forces a full renderer GC, so read only after the heap has grown this much.
+// Each profile read forces a full renderer GC, so after the first read require this much growth.
 const PROFILE_READ_GROWTH_RATIO = 0.05
-// Main checks heap growth itself because hidden renderers throttle memory samples.
+// Main checks the heap itself because hidden renderers throttle memory samples.
 const HEAP_CHECK_MS = 30_000
 
 export type ProfiledDebugger = {
@@ -73,11 +73,10 @@ type SamplingSession = {
   startedAtMs: number
   trustedScriptPrefix: string | null
   heapLimitBytes: number
-  // Highest heap ratio a read was admitted at; later reads need further growth.
-  readHeapRatio: number
-  // Null until startSampling resolves; profiles are only requested after that.
-  readyAtMs: number | null
-  profiled: boolean
+  admittedHeapRatio: number
+  profileReadAdmitted: boolean
+  // Wait for startSampling before requesting a profile.
+  ready: boolean
   reading: boolean
   checking: boolean
   stop: () => void
@@ -101,30 +100,31 @@ export function noteRendererHeapReading(
     }
     return
   }
-  noteSessionHeapRatio(renderer, session, reading.heapRatio, record)
+  noteSessionHeapRatio(renderer, session, reading.heapRatio, false, record)
 }
 
 function noteSessionHeapRatio(
   renderer: ProfiledRenderer,
   session: SamplingSession,
   heapRatio: number,
+  fromHeapCheck: boolean,
   record: (data: CrashReportBreadcrumbData) => void
 ): void {
   if (heapRatio < STOP_HEAP_RATIO) {
     session.stop()
     return
   }
-  if (session.readyAtMs === null || session.reading) {
+  if (!session.ready || session.reading) {
     return
   }
-  // Without growth, still take one profile after a check interval so a steady high heap has evidence.
-  const firstReadDue = !session.profiled && Date.now() - session.readyAtMs >= HEAP_CHECK_MS
-  if (!firstReadDue && heapRatio < session.readHeapRatio + PROFILE_READ_GROWTH_RATIO) {
+  // The first heap check reads even without growth so a steady high heap still has evidence.
+  const firstReadDue = fromHeapCheck && !session.profileReadAdmitted
+  if (!firstReadDue && heapRatio < session.admittedHeapRatio + PROFILE_READ_GROWTH_RATIO) {
     return
   }
   // Admission, not success, consumes the allowance: a failed read may already have paid for its GC.
-  session.profiled = true
-  session.readHeapRatio = Math.max(session.readHeapRatio, heapRatio)
+  session.profileReadAdmitted = true
+  session.admittedHeapRatio = Math.max(session.admittedHeapRatio, heapRatio)
   session.reading = true
   void renderer.debugger
     .sendCommand('HeapProfiler.getSamplingProfile')
@@ -162,13 +162,13 @@ function startSampling(
   }
   let stopped = false
   let unwatch = (): void => undefined
-  let heapCheckTimer: ReturnType<typeof setInterval> | undefined
+  let refreshTimer: ReturnType<typeof setInterval> | undefined
   const stop = (): void => {
     if (stopped) {
       return
     }
     stopped = true
-    clearInterval(heapCheckTimer)
+    clearInterval(refreshTimer)
     sessions.delete(renderer.id)
     debug.removeListener('detach', onDetach)
     unwatch()
@@ -190,9 +190,9 @@ function startSampling(
     startedAtMs: Date.now(),
     trustedScriptPrefix: trustedScriptPrefixFor(renderer.getURL()),
     heapLimitBytes: reading.heapLimitBytes,
-    readHeapRatio: reading.heapRatio,
-    readyAtMs: null,
-    profiled: false,
+    admittedHeapRatio: reading.heapRatio,
+    profileReadAdmitted: false,
+    ready: false,
     reading: false,
     checking: false,
     stop
@@ -209,9 +209,9 @@ function startSampling(
       if (stopped) {
         return
       }
-      session.readyAtMs = Date.now()
-      heapCheckTimer = setInterval(() => checkHeap(renderer, session, record), HEAP_CHECK_MS)
-      heapCheckTimer.unref?.()
+      session.ready = true
+      refreshTimer = setInterval(() => checkHeap(renderer, session, record), HEAP_CHECK_MS)
+      refreshTimer.unref?.()
     })
     .catch(stop)
 }
@@ -225,7 +225,6 @@ function checkHeap(
     return
   }
   session.checking = true
-  // Runtime.getHeapUsage reads heap statistics without collecting garbage.
   void renderer.debugger
     .sendCommand('Runtime.getHeapUsage')
     .then((result) => {
@@ -236,7 +235,7 @@ function checkHeap(
         Number.isFinite(used) &&
         sessions.get(renderer.id) === session
       ) {
-        noteSessionHeapRatio(renderer, session, used / session.heapLimitBytes, record)
+        noteSessionHeapRatio(renderer, session, used / session.heapLimitBytes, true, record)
       }
     })
     .catch(() => undefined)
@@ -271,7 +270,12 @@ function readHeapReading(
   }
   const used = 'usedHeapMB' in data ? data.usedHeapMB : undefined
   const limit = 'heapLimitMB' in data ? data.heapLimitMB : undefined
-  if (typeof used !== 'number' || typeof limit !== 'number' || !(limit > 0)) {
+  if (
+    typeof used !== 'number' ||
+    !Number.isFinite(used) ||
+    typeof limit !== 'number' ||
+    !(limit > 0)
+  ) {
     return null
   }
   const surface = 'rendererSurface' in data ? data.rendererSurface : undefined
