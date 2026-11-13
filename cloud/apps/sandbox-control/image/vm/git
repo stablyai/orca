@@ -41,14 +41,14 @@ hold_for_member_setup() {
   fi
   exit 1
 }
-# A commit under the workspace identity (Orca Cloud's name) says once per session how to use your own
+# A commit under the workspace identity (Orca <noreply@orca.dev>) says once per session how to use your own
 # (design-squad). /dev/shm is per boot: a wake or restart says it again.
 nudge_once() {
   [ "$sub" = commit ] || return 0
   local mark="${ORCA_GIT_NUDGE_DIR:-/dev/shm}/orca-git-nudge-$(id -u)"
   [ -e "$mark" ] && return 0
   : >"$mark" 2>/dev/null || return 0
-  printf '%s\n' "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings → Account to use yours." >&2
+  printf '%s\n' "orca: This commit is authored as Orca <noreply@orca.dev>. Connect GitHub in Settings → Account to commit as yourself." >&2
 }
 # PUSH-RAW-PROMPT: a push, pull or fetch to github.com that no credential covers (neither the person's
 # connected GitHub nor the App installation) must never fall through to git's own "Username for

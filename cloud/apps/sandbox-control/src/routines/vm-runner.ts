@@ -136,7 +136,7 @@ echo "routine: agent exit $code"
 if [ "$code" = 0 ] && [ "$post" = pr ] && [ -n "$start_sha" ]; then
   git add -A >/dev/null 2>&1 || true
   if ! git diff --cached --quiet 2>/dev/null; then
-    git -c user.name="Orca Routine" -c user.email="routines@onorca.dev" commit -q -m "$(cat "$D/title.txt")" -m "$summary" || note=commit_failed
+    git -c user.name="Orca Routine" -c user.email="noreply@orca.dev" commit -q -m "$(cat "$D/title.txt")" -m "$summary" || note=commit_failed
   fi
   if [ "$(git rev-parse HEAD)" != "$start_sha" ]; then
     changed=true

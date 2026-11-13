@@ -119,11 +119,16 @@ if [ -n "${ORCA_GIT_EXTRAHEADER:-}" ]; then
   git config --global http.https://github.com/.extraheader "$ORCA_GIT_EXTRAHEADER"
 fi
 # Commits outside a teammate's turn (or before any member connected GitHub) need an author too.
-# The fallback moved to orca.dev with the domain; a workspace still on the old default follows it.
-[ "$(git config --global user.email 2>/dev/null || true)" = 'cloud@users.noreply.onorca.dev' ] \
-  && git config --global user.email 'cloud@users.noreply.orca.dev'
-git config --global user.email >/dev/null 2>&1 || git config --global user.email 'cloud@users.noreply.orca.dev'
-git config --global user.name >/dev/null 2>&1 || git config --global user.name 'Orca Cloud'
+# The fallback is noreply@orca.dev (DOMAIN-1); a workspace still on an earlier default follows it.
+case "$(git config --global user.email 2>/dev/null || true)" in
+  cloud@users.noreply.onorca.dev | cloud@users.noreply.orca.dev)
+    git config --global user.email 'noreply@orca.dev' ;;
+esac
+git config --global user.email >/dev/null 2>&1 || git config --global user.email 'noreply@orca.dev'
+# The fallback name is "Orca" (DOMAIN-1); a workspace still on the earlier default follows it.
+[ "$(git config --global user.name 2>/dev/null || true)" = 'Orca Cloud' ] \
+  && git config --global user.name 'Orca'
+git config --global user.name >/dev/null 2>&1 || git config --global user.name 'Orca'
 # First boot clones while orcad starts (orcad only needs the directory to exist); ready waits for both.
 clone_pid=''
 if [ ! -d "$PROJECT" ]; then

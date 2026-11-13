@@ -65,7 +65,8 @@ describe('environment-build.sh auto_install (PARITY-AUTO-ENV-DEPS)', () => {
     expect(script).toMatch(/elif \[ "\$\{ORCA_AUTO_INSTALL:-\}" = 1 \] && \[ -n "\$first" \]; then\n {2}auto_install "\$first"\n/)
     expect(ENVIRONMENT_BUILD_SCRIPT).toBe(script)
     // env/ scripts ride in the Worker; the golden's VM scripts (and their hash) are untouched.
-    expect(VM_SCRIPTS_HASH).toBe('f4d18985')
+    // Pin updated by DOMAIN-1 #666, which changes the VM scripts on purpose.
+    expect(VM_SCRIPTS_HASH).toBe('6e35ca58')
   })
 
   it('picks the package manager from the lockfile, frozen, through corepack', () => {
