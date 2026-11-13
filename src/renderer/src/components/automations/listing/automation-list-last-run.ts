@@ -1,9 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
-import type {
-  AutomationRun,
-  AutomationRunStatus
+import {
+  getAutomationRunLastRunAt,
+  type AutomationRun,
+  type AutomationRunStatus
 } from '../../../../../shared/automations/history/automation-run'
 import type { ExternalAutomationJob } from '../../../../../shared/automations/external/external-automation'
 import {
@@ -47,10 +48,6 @@ export function indexLatestAutomationRuns(
     }
   }
   return latest
-}
-
-export function getAutomationRunLastRunAt(run: AutomationRun): number {
-  return run.dispatchedAt ?? run.startedAt ?? run.createdAt
 }
 
 export function getToneForAutomationRunStatus(status: AutomationRunStatus): AutomationLastRunTone {

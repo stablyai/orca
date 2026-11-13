@@ -8,8 +8,8 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { resolveUnattendedSetupDecision } from '../../../workspace-hooks/effective-hook-config'
 import { WORKER_START_VOCABULARY } from '../../rpc/methods/orchestration/structured-workers/orchestration-worker-start-mode'
-import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/worker-topology'
-import { resolveWorkerWorktreeName } from '../../rpc/methods/orchestration/worker/worker-worktree-creation'
+import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
+import { resolveWorkerWorktreeName } from '../../rpc/methods/orchestration/worker/start/placement/worker-worktree-creation'
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,

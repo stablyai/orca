@@ -130,8 +130,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   backfillChatPermissionModes = (ranWithFullAccess: (provider: string) => boolean): Promise<void> =>
     backfillAgentSessionPermissionModes(this.transactions, ranWithFullAccess)
 
-  getRecord = (sessionId: string): AgentSessionRecord | null =>
-    this.state.records.get(sessionId) ?? null
+  getRecord = (id: string): AgentSessionRecord | null => this.state.records.get(id) ?? null
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
@@ -145,6 +144,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       (id) => clearSuccessor(this.getConversation(id)) === sessionId
     )
   lineageRevision = (): object => this.transactions.lineageRevision()
+  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>

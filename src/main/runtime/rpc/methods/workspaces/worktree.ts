@@ -5,7 +5,7 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance,
   resolveClientAutomationWorkspaceProvenance
-} from '../../../../automations/workspace-provenance'
+} from '../../../../automations/ownership/workspace-provenance'
 import { getLocalWorktreeCatalogVersion } from '../../../../workspaces/catalog/local-worktree-scan-generation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../../shared/worktree/id'

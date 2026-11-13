@@ -1,7 +1,7 @@
 import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../shared/agent-session/agent-session-advisory-policy'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAdvisoryReportPublisher } from './agent-session-advisory-report'
-import { readStructuredWorkerSettings } from '../../../rpc/methods/orchestration/worker/session-worker-observation'
+import { readStructuredWorkerSettings } from '../../../rpc/methods/orchestration/worker/observation/session-worker-observation'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'

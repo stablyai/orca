@@ -110,7 +110,7 @@ export type ComputerActionMetadata = {
 export type ComputerActionVerification =
   | {
       state: 'verified'
-      property: 'focusedText' | 'selection' | 'value'
+      property: 'focusedText' | 'elementText' | 'selection' | 'value'
     }
   | {
       state: 'unverified'
@@ -171,6 +171,8 @@ export type ComputerProviderCapabilities = {
     actions: {
       click: boolean
       typeText: boolean
+      // Absent from providers that predate element-targeted typing; they type at focus and ignore the element.
+      typeTextElement?: boolean
       pressKey: boolean
       hotkey: boolean
       pasteText: boolean

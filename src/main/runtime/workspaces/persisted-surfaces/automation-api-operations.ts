@@ -15,7 +15,7 @@ import {
   type AutomationChangeSelector,
   type AutomationListResult
 } from '../../../../shared/automations/ownership/automation-list-scope'
-import type { AutomationService } from '../../../automations/service'
+import type { AutomationService } from '../../../automations/automation-service'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 
 export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithCrewOperations {

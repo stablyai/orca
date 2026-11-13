@@ -5,7 +5,7 @@ import type { AgentLaunchModeReceipt } from '../../../../../../shared/agent-laun
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerStartInput } from './worker-start-schema'
+import type { WorkerStartInput } from './start/worker-start-input'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 

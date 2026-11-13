@@ -700,6 +700,7 @@ import {
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalAgentId,
   TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
@@ -1577,6 +1578,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'status.get': StatusGetParams,
   'terminal.ackOutput': TerminalAckOutput,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
+  'terminal.agentId': TerminalAgentId,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,
   'terminal.close': TerminalHandle,
