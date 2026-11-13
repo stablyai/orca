@@ -137,7 +137,9 @@ export class GitAdmissionScheduler {
 
   private effectiveTier(waiter: AdmissionWaiter, now: number): number {
     const promotions = Math.floor((now - waiter.enqueuedAt) / this.config.agingMs)
-    return Math.max(0, ADMISSION_TIER_VALUE[waiter.tier] - promotions)
+    return waiter.tier === 'interactive'
+      ? 0
+      : Math.max(1, ADMISSION_TIER_VALUE[waiter.tier] - promotions)
   }
 
   private fits(waiter: AdmissionWaiter, slotKind: AdmissionSlotKind): boolean {
