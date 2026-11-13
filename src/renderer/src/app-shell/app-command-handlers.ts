@@ -13,6 +13,7 @@ import {
 } from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import { useAppStore } from '../store/index'
+import { resolveSidebarHostCycle } from '../components/sidebar/worktree-list/controls/sidebar-host-cycle'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
@@ -182,6 +183,20 @@ export function createAppCommandHandlers(
             store.setSidebarOpen(true)
           }
         })
+      }
+    ],
+    [
+      'sidebar.hosts.cycle',
+      () => {
+        if (
+          useAppStore.getState().activeModal !== 'none' ||
+          floatingWorkspaceFocused ||
+          hasVisibleOverlay({ ignoreMatches: '[role="listbox"], [role="menu"]' })
+        ) {
+          return false
+        }
+        const cycle = resolveSidebarHostCycle()
+        return cycle ? claim('sidebar.hosts.cycle', cycle) : false
       }
     ],
     [

@@ -64,6 +64,26 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'sidebar.hosts.cycle',
+    title: 'Cycle Sidebar Host Filter',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'sidebar',
+      'host',
+      'hosts',
+      'ssh',
+      'remote',
+      'server',
+      'filter',
+      'switch',
+      'cycle',
+      'next'
+    ],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

@@ -227,6 +227,9 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
+      if (matchAppShortcut('sidebar.hosts.cycle') && handlers.get('sidebar.hosts.cycle')?.()) {
+        return
+      }
       if (matchAppShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
