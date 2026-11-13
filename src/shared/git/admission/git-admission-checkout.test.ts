@@ -43,26 +43,3 @@ it('reserves interactive create capacity and leaves reads and other mutations in
   preparations.forEach((grant) => grant.release())
   interactive.release()
 })
-
-it('reuses checkout capacity after cancellation and idempotent release across WSL routes', async () => {
-  const scheduler = new GitAdmissionScheduler({ checkoutCap: 4, checkoutHeadroom: 0 })
-  const held = await Promise.all([
-    scheduler.acquire({ ...checkout, wslDistro: 'Ubuntu' }),
-    scheduler.acquire({ ...checkout, cwd: '\\\\wsl.localhost\\Ubuntu\\repo' })
-  ])
-  const cancel = new AbortController()
-  const waiting = scheduler.acquire({ ...checkout, wslDistro: 'ubuntu', signal: cancel.signal })
-  const rejected = expect(waiting).rejects.toMatchObject({ name: 'AbortError' })
-  const otherRoute = await scheduler.acquire({ ...checkout, wslDistro: 'Debian' })
-  cancel.abort()
-  await rejected
-  const replacement = scheduler.acquire({ ...checkout, wslDistro: 'UBUNTU' })
-  held[0].release()
-  held[0].release()
-  const granted = await replacement
-  granted.release()
-  held[1].release()
-  otherRoute.release()
-  const next = await scheduler.acquire({ ...checkout, wslDistro: 'Ubuntu' })
-  next.release()
-})

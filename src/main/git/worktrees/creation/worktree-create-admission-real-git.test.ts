@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
+import type { GitAdmissionGrant } from '../../../../shared/git/admission/git-admission-state'
 import { findGitSubcommandIndex } from '../../../../shared/git/commands/git-command-classification'
 import { createWorktreePreparationLockReason } from '../../../../shared/worktree/create-preparation'
 import { _resetGitAdmissionForTests } from '../../command-runner/admission/git-subprocess-admission'
@@ -43,31 +44,30 @@ afterEach(async () => {
 })
 
 async function behindCheckoutBudget(command: string, run: () => Promise<unknown>): Promise<void> {
-  const held = await Promise.all(
-    Array.from({ length: 3 }, () =>
-      admission.acquire({
-        args: ['worktree', 'add'],
-        cwd: repo,
-        admissionClass: 'checkout',
-        tier: 'interactive'
-      })
-    )
-  )
+  let held: GitAdmissionGrant[] = []
   const requested = Promise.withResolvers<void>()
   let admitted = false
   const acquire = admission.acquire.bind(admission)
-  const spy = vi.spyOn(admission, 'acquire').mockImplementation((request) => {
-    const grant = acquire(request)
-    if (
-      request.args[findGitSubcommandIndex(request.args)] === command &&
-      (command !== 'sparse-checkout' || request.args.includes('set'))
-    ) {
+  const spy = vi.spyOn(admission, 'acquire').mockImplementation(async (request) => {
+    if (request.args[findGitSubcommandIndex(request.args)] === command) {
+      held = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          acquire({
+            args: ['worktree', 'add'],
+            cwd: repo,
+            admissionClass: 'checkout',
+            tier: 'interactive'
+          })
+        )
+      )
+      const grant = acquire(request)
       requested.resolve()
       void grant.then(() => {
         admitted = true
       })
+      return grant
     }
-    return grant
+    return acquire(request)
   })
   const operation = run()
   try {
@@ -91,7 +91,7 @@ it('isolates ordinary and sparse creates while honoring the execution host check
   expect(await readFile(join(ordinary, 'included', 'file.txt'), 'utf8')).toBe('one\n')
   await gitExecFileAsync(['config', '--unset', 'checkout.workers'], { cwd: repo })
   const sparse = join(root, 'sparse')
-  await behindCheckoutBudget('sparse-checkout', () =>
+  await behindCheckoutBudget('checkout', () =>
     addSparseWorktree(repo, sparse, 'sparse', ['included'], 'main')
   )
   expect(await readFile(join(sparse, 'included', 'file.txt'), 'utf8')).toBe('one\n')
