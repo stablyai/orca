@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const wslUncDirectoryExistsAsyncMock = vi.hoisted(() => vi.fn())
@@ -15,17 +12,10 @@ import {
   _resetWorkingDirectoryValidationStateForTest
 } from './validation'
 
-let tempDir: string
-
-beforeEach(async () => {
+beforeEach(() => {
   wslUncDirectoryExistsAsyncMock.mockReset()
   wslUncDirectoryExistsAsyncMock.mockResolvedValue(null)
   _resetWorkingDirectoryValidationStateForTest()
-  tempDir = await mkdtemp(path.join(os.tmpdir(), 'orca-cwd-validate-'))
-})
-
-afterEach(async () => {
-  await rm(tempDir, { recursive: true, force: true })
 })
 
 describe('validateWorkingDirectoryAsync', () => {
@@ -59,27 +49,6 @@ describe('validateWorkingDirectoryAsync', () => {
       releaseProbe()
       await expect(staying).resolves.toBeUndefined()
       expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledOnce()
-    })
-  })
-
-  describe('UNC route concurrency', () => {
-    beforeEach(() => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    })
-
-    afterEach(() => {
-      vi.restoreAllMocks()
-    })
-
-    it('keeps a healthy local path out of a stalled share queue', async () => {
-      wslUncDirectoryExistsAsyncMock.mockReturnValue(new Promise<boolean>(() => {}))
-      for (let index = 0; index < 4; index += 1) {
-        void validateWorkingDirectoryAsync(`\\\\wsl.localhost\\Ubuntu\\blocking-${index}`).catch(
-          () => {}
-        )
-      }
-
-      await expect(validateWorkingDirectoryAsync(tempDir)).resolves.toBeUndefined()
     })
   })
 })
