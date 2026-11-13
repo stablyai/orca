@@ -18,6 +18,7 @@ import type { TerminalPaneSplitSource } from '../../../../shared/feature-educati
 import type { RendererTerminalSplitRequest } from '../../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
+import type { SessionTabScrollTarget } from '../../../../shared/workspace-layout/session-tab-scroll'
 import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabRequest
@@ -141,6 +142,8 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
+  /** Scrolls a tab the window shows, without raising it; resolves false when the tab is not on screen. */
+  scrollSessionTab?(target: SessionTabScrollTarget): Promise<boolean>
   /** `userInitiated` lets a chat tab move the window to another worktree. */
   focusEditorTab?(tabId: string, worktreeId: string, options?: { userInitiated: true }): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
