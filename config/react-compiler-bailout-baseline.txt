@@ -668,9 +668,9 @@
 1 src/renderer/src/components/use-terminal-window-lifecycle.ts
 1 src/renderer/src/components/use-terminal-workspace-foundation.ts
 1 src/renderer/src/components/virtualized-list.tsx
-1 src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-facet-rows.ts
-2 src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-git-evidence.ts
-1 src/renderer/src/components/workspace-cleanup/workspace-cleanup-candidate-list.tsx
+1 src/renderer/src/components/workspace-cleanup/browse/use-workspace-cleanup-facet-rows.ts
+2 src/renderer/src/components/workspace-cleanup/candidate-evidence/use-workspace-cleanup-git-evidence.ts
+1 src/renderer/src/components/workspace-cleanup/candidate-list/workspace-cleanup-candidate-list.tsx
 2 src/renderer/src/components/workspace-emoji/useWorkspaceEmojiShortcodeInput.ts
 1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-list-entries.ts
 1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-local-state.ts
