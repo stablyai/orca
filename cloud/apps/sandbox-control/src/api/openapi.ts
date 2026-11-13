@@ -209,6 +209,26 @@ const schemas: Record<string, object> = {
       logTail: { type: ['string', 'null'], description: 'Single-run view only: short, redacted tail of the runner log' }
     }
   },
+  AuditEvent: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      at: { type: 'integer' },
+      category: { type: 'string' },
+      action: { type: 'string', examples: ['secret.updated', 'member.removed', 'api_key.create'] },
+      actor: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['person', 'former_member', 'system'] },
+          userId: { type: ['string', 'null'] },
+          name: { type: ['string', 'null'] },
+          via: { type: ['string', 'null'], enum: ['api_key', 'mcp', 'agent', 'routine', null] }
+        }
+      },
+      target: { type: ['object', 'null'], properties: { type: { type: 'string' }, id: { type: ['string', 'null'] }, label: { type: ['string', 'null'] } } },
+      detail: { type: ['object', 'null'] }
+    }
+  },
   AuditEntry: {
     type: 'object',
     properties: {
@@ -338,6 +358,24 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
         { name: 'before', in: 'query', description: 'Cursor: `nextBefore` from the previous page', schema: { type: 'integer' } }
       ],
       responses: { 200: { description: 'Entries, newest first', schema: obj({ entries: { type: 'array', items: ref('AuditEntry') }, nextBefore: { type: ['integer', 'null'] } }) } }
+    }
+  },
+  '/v1/audit-log': {
+    get: {
+      tags: ['Account'],
+      scope: 'audit:read',
+      summary: 'Team audit log: every recorded change in one feed (team owner/admin; Enterprise plan)',
+      params: [
+        { name: 'category', in: 'query', schema: { type: 'string', enum: ['members', 'security', 'api_keys', 'apps', 'workspaces', 'secrets', 'routines', 'settings', 'billing', 'other'] } },
+        { name: 'actor', in: 'query', description: 'A user id, or `system`', schema: { type: 'string' } },
+        { name: 'cursor', in: 'query', description: '`nextCursor` from the previous page', schema: { type: 'string' } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 200 } },
+        { name: 'format', in: 'query', description: '`csv` downloads up to 5000 events, newest first', schema: { type: 'string', enum: ['json', 'csv'] } }
+      ],
+      responses: {
+        200: { description: 'Events, newest first. Never a secret value or hint.', schema: obj({ events: { type: 'array', items: ref('AuditEvent') }, nextCursor: { type: ['string', 'null'] } }) },
+        403: 'Not a team owner or admin (`forbidden`), or the plan does not include the audit log (`entitlement_denied`, reason `audit_log`)'
+      }
     }
   },
   '/v1/projects': {

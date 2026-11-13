@@ -13,12 +13,18 @@ export const ENTITLEMENT_KEYS = [
   'max_concurrent_sandboxes_per_member',
   'machine_sizes',
   'overage_allowed',
-  // Feature flags (Enterprise): viewing the team audit log. Recording never depends on it.
-  'audit_log'
+  // Enterprise features (boolean). Each gates a surface in the service that owns it:
+  // viewing the team audit log (recording never depends on it), SAML single sign-on, SCIM
+  // directory sync, and requiring multi-factor authentication for a team.
+  'audit_log',
+  'sso',
+  'scim',
+  'mfa_enforcement'
 ] as const
 export type EntitlementKey = (typeof ENTITLEMENT_KEYS)[number]
 
-type Aggregation = 'sum' | 'max' | 'union' | 'or'
+// `feature`: a boolean plan feature; on when any grant holds it as true, never per seat.
+type Aggregation = 'sum' | 'max' | 'union' | 'or' | 'feature'
 
 const NonNegative = z.number().finite().nonnegative().max(1_000_000)
 const NonNegativeInt = z.number().int().nonnegative().max(1_000_000)
@@ -30,11 +36,17 @@ export const ENTITLEMENT_REGISTRY: Record<EntitlementKey, { schema: z.ZodType; a
   max_concurrent_sandboxes_per_member: { schema: NonNegativeInt, aggregate: 'max', perSeatAllowed: false },
   machine_sizes: { schema: z.array(z.enum(MACHINE_SIZES)).max(MACHINE_SIZES.length), aggregate: 'union', perSeatAllowed: false },
   overage_allowed: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false },
-  audit_log: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false }
+  audit_log: { schema: z.boolean(), aggregate: 'feature', perSeatAllowed: false },
+  sso: { schema: z.boolean(), aggregate: 'feature', perSeatAllowed: false },
+  scim: { schema: z.boolean(), aggregate: 'feature', perSeatAllowed: false },
+  mfa_enforcement: { schema: z.boolean(), aggregate: 'feature', perSeatAllowed: false }
 }
 
-/** Boolean features a plan switches on. They gate a surface, never sandbox starts or usage. */
-export const FEATURE_KEYS = ['audit_log'] as const satisfies readonly EntitlementKey[]
+/**
+ * Boolean features a plan switches on. They gate a surface, never sandbox starts or usage. A new
+ * one is a key above, a `feature` registry row, an entry here, and a catalog version that sets it.
+ */
+export const FEATURE_KEYS = ['audit_log', 'sso', 'scim', 'mfa_enforcement'] as const satisfies readonly EntitlementKey[]
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
 export type FeatureFlags = Record<FeatureKey, boolean>
 
@@ -70,7 +82,7 @@ export type EffectiveValues = {
   maxConcurrentSandboxesPerMember: number
   machineSizes: MachineSize[]
   overageAllowed: boolean
-  auditLog: boolean
+  features: FeatureFlags
 }
 
 /** Combines grant values by each key's rule. Per-seat values multiply by max(1, seats). */
@@ -78,7 +90,8 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
   const sums: Record<string, number> = {}
   const maxes: Record<string, number> = {}
   const sizes = new Set<MachineSize>()
-  const flags: Record<string, boolean> = {}
+  let overage = false
+  const features = Object.fromEntries(FEATURE_KEYS.map((key) => [key, false])) as FeatureFlags
   for (const grant of grants) {
     const multiplier = grant.perSeat ? Math.max(1, grant.seats ?? 1) : 1
     const definition = ENTITLEMENT_REGISTRY[grant.key]
@@ -95,7 +108,12 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
         }
         break
       case 'or':
-        flags[grant.key] = flags[grant.key] === true || grant.value === true
+        overage = overage || grant.value === true
+        break
+      case 'feature':
+        if (grant.value === true && (FEATURE_KEYS as readonly string[]).includes(grant.key)) {
+          features[grant.key as FeatureKey] = true
+        }
         break
     }
   }
@@ -107,7 +125,7 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
     maxConcurrentSandboxesPerMember: maxes.max_concurrent_sandboxes_per_member ?? 0,
     // Registry order, so the list is stable whatever order grants came in.
     machineSizes: MACHINE_SIZES.filter((size) => sizes.has(size)),
-    overageAllowed: flags.overage_allowed === true,
-    auditLog: flags.audit_log === true
+    overageAllowed: overage,
+    features
   }
 }

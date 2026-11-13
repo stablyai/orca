@@ -126,7 +126,14 @@ describe('aggregation', () => {
       maxConcurrentSandboxes: 3,
       maxConcurrentSandboxesPerMember: 5,
       machineSizes: ['standard', 'large'],
-      overageAllowed: true
+      overageAllowed: true,
+      features: { audit_log: false, sso: false, scim: false, mfa_enforcement: false }
+    })
+    expect(aggregateGrants([{ key: 'audit_log', value: false, perSeat: false, seats: null }, { key: 'audit_log', value: true, perSeat: false, seats: null }]).features).toEqual({
+      audit_log: true,
+      sso: false,
+      scim: false,
+      mfa_enforcement: false
     })
   })
 })

@@ -15,7 +15,7 @@
 //   POST /v1/stripe/webhook                 signed events
 // Sandbox control plane (CONTROL_PLANE_TOKEN):
 //   POST /v1/internal/entitlements/check {accountId, machineSize, runningSandboxes}
-//   POST /v1/internal/entitlements/features {accountId} -> {features: {audit_log}}   plan feature flags
+//   POST /v1/internal/entitlements/features {accountId} -> {features: {audit_log, sso, scim, mfa_enforcement}}   plan feature flags (control plane or auth)
 //   POST /v1/internal/usage {usageId, accountId, sandboxId, machineSize, startedAt, endedAt}
 //   GET  /v1/internal/suspensions          accounts whose payment grace expired (suspend running)
 //   POST /v1/internal/trial/github {accountId, githubUserId?, githubOwnerId?} GitHub binding -> trial abuse keys
@@ -518,8 +518,8 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
       }
 
       case 'POST /v1/internal/entitlements/features': {
-        // Plan features the control plane gates a surface on (the team audit log).
-        if (!(await authenticateControlPlane(env, request))) {
+        // Plan features a service gates a surface on: the control plane (audit log) and auth (SSO, SCIM, MFA).
+        if (!(await authenticateControlPlane(env, request)) && !(await authenticateMembershipSync(env, request))) {
           return json({ error: 'unauthorized' }, 401)
         }
         const body = FeaturesRequestSchema.safeParse(await readJson(request))

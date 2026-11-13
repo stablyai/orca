@@ -1,10 +1,12 @@
-// Feature entitlements: boolean switches a plan turns on (the team audit log on Enterprise).
+// Feature entitlements: boolean switches a plan turns on (Enterprise: the team audit log, SSO,
+// SCIM, required MFA).
 // They gate a surface and nothing else, so they stay out of the Entitlement object: the start
 // check, usage metering and the shadow comparison never see them. Resolved from the account's
 // live grants in every mode but 'off' (where nothing projects grants, so nothing is on). The
 // legacy computation has no features, so there is nothing for shadow mode to compare.
 //
-//   POST /v1/internal/entitlements/features {accountId} -> { features: { audit_log: boolean } }
+//   POST /v1/internal/entitlements/features {accountId} -> { features: { audit_log, sso, scim, mfa_enforcement } }
+// Callers: the control plane (CONTROL_PLANE_TOKEN) and auth (MEMBERSHIP_SYNC_TOKEN). Both fail closed.
 import { z } from 'zod'
 import { FEATURE_KEYS, type FeatureFlags } from './entitlement-keys'
 import { entitlementsMode } from './entitlements-mode'

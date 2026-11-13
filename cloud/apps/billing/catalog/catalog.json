@@ -90,14 +90,18 @@
         },
         {
           "version": 2,
-          "note": "Adds the team audit log (audit_log). Sandbox hours and limits still come from the team's subscription.",
+          "note": "Enterprise features as entitlements: team audit log, SSO, SCIM, required MFA. Sandbox hours and limits still come from the team's subscription.",
           "entitlements": {
-            "audit_log": { "value": true }
+            "audit_log": { "value": true },
+            "sso": { "value": true },
+            "scim": { "value": true },
+            "mfa_enforcement": { "value": true }
           },
           "policy": {},
           "features": [
             { "id": "byoc", "params": {}, "text": "Run sandboxes in your own cloud" },
             { "id": "sso_scim", "params": {}, "text": "SSO and SCIM" },
+            { "id": "mfa_enforcement", "params": {}, "text": "Require multi-factor authentication" },
             { "id": "audit_log", "params": {}, "text": "Team audit log" },
             { "id": "egress_controls", "params": {}, "text": "Network egress controls" },
             { "id": "custom_limits", "params": {}, "text": "Custom limits and pricing" }

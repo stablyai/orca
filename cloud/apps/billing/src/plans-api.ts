@@ -167,7 +167,8 @@ export async function entitlementsView(env: Env, accountId: string, canManageBil
       source: row.source_type,
       state: row.state,
       ...(row.hold_reason ? { holdReason: row.hold_reason } : {}),
-      plan: row.plan_id && row.source_type !== 'manual' && row.source_type !== 'promo' ? { id: row.plan_id, version: row.plan_version } : null,
+      // Ad hoc manual and promo grants carry the placeholder plan 'manual'; a contact-sales plan granted by ops names itself.
+      plan: row.plan_id && row.plan_id !== 'manual' ? { id: row.plan_id, version: row.plan_version } : null,
       startsAt: row.starts_at,
       endsAt: row.ends_at
     })),
