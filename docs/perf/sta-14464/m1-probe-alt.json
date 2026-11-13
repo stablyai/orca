@@ -1,0 +1,19 @@
+{
+  "sessions": { "n": 5000 },
+  "old": { "median": 19.88, "max": 355.92, "result": null },
+  "seek": { "median": 4.77, "max": 5.58, "result": null },
+  "seekPlan": [
+    "CO-ROUTINE ids",
+    "SETUP",
+    "SCAN CONSTANT ROW",
+    "SCALAR SUBQUERY 1",
+    "SEARCH messages USING COVERING INDEX messages_session",
+    "RECURSIVE STEP",
+    "SCAN ids",
+    "CORRELATED SCALAR SUBQUERY 3",
+    "SEARCH messages USING COVERING INDEX messages_session (session_row_id>?)",
+    "SCAN ids",
+    "CORRELATED SCALAR SUBQUERY 5",
+    "SEARCH sessions USING INTEGER PRIMARY KEY (rowid=?)"
+  ]
+}

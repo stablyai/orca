@@ -1,0 +1,6 @@
+{
+  "k0": { "drain_ms": 35.5, "drained": 0 },
+  "k1": { "drain_ms": 57.7, "drained": 200 },
+  "k20": { "drain_ms": 1019.7, "drained": 4000 },
+  "k100": { "drain_ms": 3954.9, "drained": 20000 }
+}

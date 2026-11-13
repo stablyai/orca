@@ -1,0 +1,35 @@
+{
+  "load": [5.244140625, 11.982421875, 16.69140625],
+  "dbMB": 1730,
+  "rows": {
+    "n": 3000000
+  },
+  "sessions": {
+    "n": 15000
+  },
+  "plan": [
+    "SCAN messages USING COVERING INDEX messages_session",
+    "USING ROWID SEARCH ON TABLE sessions FOR IN-OPERATOR"
+  ],
+  "control_point_read_ms": {
+    "median": 0.01,
+    "max": 0.02,
+    "n": 7
+  },
+  "orphan_probe_ms": {
+    "median": 61.16,
+    "max": 120.91,
+    "n": 7
+  },
+  "purge_span_ms": {
+    "median": 61,
+    "max": 62,
+    "n": 7
+  },
+  "tool_purge_first_pass_ms": 2965.4,
+  "tool_purge_steady_ms": {
+    "median": 0.03,
+    "max": 0.06,
+    "n": 7
+  }
+}
