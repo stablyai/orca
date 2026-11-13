@@ -22,6 +22,11 @@ export type JiraViewer = {
 
 export type JiraSiteSelection = (string & {}) | 'all'
 
+export type JiraIssueSuggestions = {
+  query: string
+  currentJql: string
+}
+
 export type JiraConnectionStatus = {
   connected: boolean
   viewer: JiraViewer | null

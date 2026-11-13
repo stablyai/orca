@@ -11,6 +11,7 @@ import type {
   JiraCreateField,
   JiraCreateIssueArgs,
   JiraIssue,
+  JiraIssueSuggestions,
   JiraIssueFilter,
   JiraIssueListFilters,
   JiraIssueType,
@@ -40,6 +41,7 @@ export type JiraApi = {
   }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   searchIssues: (args: {
     jql: string
+    suggestions?: JiraIssueSuggestions
     limit?: number
     siteId?: JiraSiteSelection
     requestId?: string

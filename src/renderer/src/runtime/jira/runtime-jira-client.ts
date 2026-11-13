@@ -8,6 +8,7 @@ import type {
   JiraConnectionStatus,
   JiraCreateField,
   JiraIssue,
+  JiraIssueSuggestions,
   JiraIssueFilter,
   JiraIssueListFilters,
   JiraIssueType,
@@ -108,9 +109,17 @@ export async function jiraSearchIssues(
   jql: string,
   limit?: number,
   siteId?: JiraSiteSelection | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  suggestions?: JiraIssueSuggestions
 ): Promise<JiraIssue[]> {
-  return jiraSearchIssuesForTarget(rowLessSourceTarget(settings), jql, limit, siteId, signal)
+  return jiraSearchIssuesForTarget(
+    rowLessSourceTarget(settings),
+    jql,
+    limit,
+    siteId,
+    signal,
+    suggestions
+  )
 }
 
 export async function jiraSearchIssuesForTarget(
@@ -118,12 +127,17 @@ export async function jiraSearchIssuesForTarget(
   jql: string,
   limit?: number,
   siteId?: JiraSiteSelection | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  suggestions?: JiraIssueSuggestions
 ): Promise<JiraIssue[]> {
-  if (!isRuntimeProviderSearchQueryWithinLimit(jql)) {
+  if (
+    !isRuntimeProviderSearchQueryWithinLimit(jql) ||
+    !isRuntimeProviderSearchQueryWithinLimit(suggestions?.currentJql) ||
+    !isRuntimeProviderSearchQueryWithinLimit(suggestions?.query)
+  ) {
     return []
   }
-  const args = { jql, limit, siteId: siteId ?? undefined }
+  const args = { jql, limit, siteId: siteId ?? undefined, ...(suggestions ? { suggestions } : {}) }
   if (target.kind === 'environment') {
     return callRuntimeRpc<JiraIssue[]>(target, 'jira.searchIssues', args, {
       timeoutMs: 30_000,

@@ -1,7 +1,7 @@
-import type { JiraIssue, JiraSiteSelection } from '../../../../shared/jira/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
-type LocalJiraSearchArgs = { jql: string; limit?: number; siteId?: JiraSiteSelection }
+type LocalJiraSearchArgs = Omit<Parameters<typeof window.api.jira.searchIssues>[0], 'requestId'>
 
 function createJiraSearchAbortError(): Error {
   const error = new Error('Jira search aborted')

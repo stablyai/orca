@@ -21,6 +21,7 @@ import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { buildJiraPresetJql } from '../../../../../shared/jira/jira-preset-jql'
 import { restrictJiraQueryToProject } from '../../../../../shared/jira/jira-project-reference'
+import type { JiraIssueSuggestions } from '../../../../../shared/jira/jira-types'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {
     accountBackedTaskSourceHostId,
@@ -107,7 +108,11 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     const trimmed = jiraRemoteSearch.trim()
     const savedFilter = jiraSavedFilters.find((filter) => filter.id === jiraActiveSavedFilterId)
     const exactSavedJql = savedFilter?.jql === trimmed
-    const searchWithinLimit = async (query: string) => {
+    const scopeQuery = (jql: string) => {
+      const query = jiraCurrentSprint ? withCurrentSprintClause(jql) : jql
+      return jiraProjectFilter ? restrictJiraQueryToProject(query, jiraProjectFilter) : query
+    }
+    const searchWithinLimit = async (query: string, suggestions?: JiraIssueSuggestions) => {
       if (
         favourite &&
         (!jiraTaskSourceContext ||
@@ -132,7 +137,8 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
           : jiraProjectFilter
             ? { siteId: jiraProjectFilter.siteId }
             : {}),
-        force
+        force,
+        ...(suggestions ? { suggestions } : {})
       })
     }
     const request = jiraHasWorkspace
@@ -140,14 +146,15 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
       : trimmed.length > 0
         ? searchTaskPageJiraIssues(
             trimmed,
-            async (jql) => {
-              const sprintJql = jiraCurrentSprint ? withCurrentSprintClause(jql) : jql
-              const query = jiraProjectFilter
-                ? restrictJiraQueryToProject(sprintJql, jiraProjectFilter)
-                : sprintJql
-              return searchWithinLimit(query)
-            },
-            favourite || exactSavedJql ? 'jql' : 'input'
+            (jql, suggestions) =>
+              searchWithinLimit(
+                scopeQuery(jql),
+                suggestions
+                  ? { ...suggestions, currentJql: scopeQuery(suggestions.currentJql) }
+                  : undefined
+              ),
+            favourite || exactSavedJql ? 'jql' : 'input',
+            jiraProjectFilter?.key
           ).then((result) => ({ ...result, error: null }))
         : jiraProjectFilter
           ? searchWithinLimit(

@@ -24,10 +24,11 @@ export function mayBeJql(input: string): boolean {
   return JQL_OPERATOR_PATTERN.test(input.trim())
 }
 
-/** Exact-issue-key JQL when the whole input is key-shaped; null otherwise. */
-export function buildJiraIssueKeyJql(input: string): string | null {
+/** Exact issue key, including a bare number within a selected project. */
+export function buildJiraIssueKeyJql(input: string, projectKey?: string): string | null {
   const trimmed = input.trim()
-  return JIRA_ISSUE_KEY_PATTERN.test(trimmed) ? `key = "${trimmed.toUpperCase()}"` : null
+  const key = /^\d+$/.test(trimmed) && projectKey ? `${projectKey}-${trimmed}` : trimmed
+  return JIRA_ISSUE_KEY_PATTERN.test(key) ? `key = "${key.toUpperCase()}"` : null
 }
 
 /** Search issue text, ignoring key shape. Empty when no searchable words remain. */
