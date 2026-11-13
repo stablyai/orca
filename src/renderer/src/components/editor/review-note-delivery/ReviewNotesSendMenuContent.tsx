@@ -36,6 +36,10 @@ import {
 } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
 import { sendMessageToAgent } from '@/lib/agent-session/messaging/agent-message-send'
 import {
+  showNotePastedToast,
+  showNoteSendRefusalToast
+} from '@/components/notes/delivery/note-pasted-toast'
+import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
 } from '@/lib/agent-session/messaging/notes-send-agent-targets'
@@ -136,8 +140,10 @@ export function ReviewNotesSendMenuContent({
     (
       send: () => Promise<ActiveAgentNotesSendResult>,
       onSent: () => void,
-      options: { explicitTarget?: boolean; structured?: boolean } = {}
+      target: NotesSendAgentTarget
     ) => {
+      const { messageTarget } = target
+      const agent = formatAgentTypeLabel(target.agentType)
       // Settle the loading toast in place: immediate sends can resolve before Sonner mounts, racing a separate dismissal.
       const pending = toast.loading(
         translate(
@@ -148,6 +154,18 @@ export function ReviewNotesSendMenuContent({
 
       const sending = send()
         .then((result) => {
+          if (result.status === 'pasted') {
+            // The terminal holds the notes now; sending them again would paste them twice.
+            onPromptDelivered?.()
+            showNotePastedToast({
+              worktreeId,
+              target: messageTarget,
+              agentLabel: agent,
+              settleMs: result.pasteSettleMs,
+              toastId: pending
+            })
+            return
+          }
           if (result.status === 'sent') {
             onSent()
             toast.success(
@@ -160,25 +178,24 @@ export function ReviewNotesSendMenuContent({
             return
           }
 
-          if (options.structured && result.status === 'unconfirmed') {
+          if (messageTarget.kind === 'structured-session' && result.status === 'unconfirmed') {
             toast.dismiss(pending)
             return
           }
 
-          // Use a typed toast update; toast.message preserves the loading spinner.
-          toast.info(
-            activeAgentNotesSendFailureMessage(result.status, {
-              explicitTarget: options.explicitTarget,
-              code: result.code
-            }),
-            { id: pending }
-          )
+          showNoteSendRefusalToast({
+            result,
+            worktreeId,
+            target: messageTarget,
+            agentLabel: agent,
+            toastId: pending
+          })
         })
         .catch(() => {
           console.error('Failed to send notes:', { code: 'runtime-unverifiable' })
           toast.error(
             activeAgentNotesSendFailureMessage('status-unavailable', {
-              explicitTarget: options.explicitTarget,
+              explicitTarget: true,
               code: 'runtime-unverifiable'
             }),
             { id: pending }
@@ -186,7 +203,7 @@ export function ReviewNotesSendMenuContent({
         })
       onPromptHandedOff?.(sending)
     },
-    [onPromptHandedOff]
+    [onPromptHandedOff, onPromptDelivered, worktreeId]
   )
 
   const sendToAgentTarget = useCallback(
@@ -225,7 +242,7 @@ export function ReviewNotesSendMenuContent({
             request_kind: 'followup'
           })
         },
-        { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
+        target
       )
     },
     [hasPrompt, mode, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]

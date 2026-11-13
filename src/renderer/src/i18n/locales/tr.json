@@ -20987,6 +20987,11 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Not {{agent}} içine yapıştırıldı. Göndermek için orada Enter tuşuna basın.",
+      "pastingNote": "Not {{agent}} içine yapıştırılıyor…",
+      "pastedNoteWaiting": "{{agent}} içinde yapıştırılmış bir not bekliyor. Önce orada Enter tuşuna basın."
     }
   },
   "dashboardPopout": {

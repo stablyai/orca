@@ -22627,6 +22627,11 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "Não foi possível criar a árvore de trabalho.",
       "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente."
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Nota colada em {{agent}}. Pressione Enter lá para enviar.",
+      "pastingNote": "Colando nota em {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} tem uma nota colada em espera. Pressione Enter lá primeiro."
     }
   },
   "csv": {

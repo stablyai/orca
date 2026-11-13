@@ -20318,6 +20318,11 @@
       "filesDropFailed": "ファイルをドロップできませんでした。",
       "filesUploadFailed": "ファイルをアップロードできませんでした。",
       "filesResolveDroppedFailed": "ドロップしたファイルを解決できませんでした。"
+    },
+    "agentNotes": {
+      "pastedPressEnter": "メモを {{agent}} に貼り付けました。送信するには、そこで Enter キーを押してください。",
+      "pastingNote": "メモを {{agent}} に貼り付けています…",
+      "pastedNoteWaiting": "{{agent}} に貼り付けたメモが送信待ちです。先にそこで Enter キーを押してください。"
     }
   },
   "dashboardPopout": {

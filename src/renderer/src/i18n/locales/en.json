@@ -22475,7 +22475,10 @@
       "notWritable": "The {{target}} agent did not accept the notes.",
       "selectedSubmitFailed": "The notes may already be pasted in the selected terminal, but Orca could not submit them.",
       "activeSubmitFailed": "The notes may already be pasted in the active terminal, but Orca could not submit them.",
-      "notWritableSelection": "The {{target}} agent did not accept the selection."
+      "notWritableSelection": "The {{target}} agent did not accept the selection.",
+      "pastedPressEnter": "Note pasted into {{agent}}. Press Enter there to send.",
+      "pastingNote": "Pasting note into {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} has a pasted note waiting. Press Enter there first."
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence",
