@@ -6,6 +6,7 @@ it('promotes a shared selected demand without losing other rows or renewing its 
   const branches = ['ordinary-a', 'selected-a', 'selected-b']
   await Promise.all(branches.map((branch) => read(branch, 'active')))
   await vi.advanceTimersByTimeAsync(60_000)
+  // ast-grep-ignore: test-no-wall-clock -- The imported runtime fixture installs the fake clock.
   const gate = Date.now() + 60_000
   mocks.gate.mockResolvedValue(gate)
   const starts: string[] = []
@@ -53,6 +54,7 @@ it('promotes a shared selected demand without losing other rows or renewing its 
   // A selected request stays finite even when its only waiter detaches.
   await read('expires', 'active')
   await vi.advanceTimersByTimeAsync(60_000)
+  // ast-grep-ignore: test-no-wall-clock -- The imported runtime fixture installs the fake clock.
   mocks.gate.mockResolvedValue(Date.now() + 7 * 60_000)
   const abort = new AbortController()
   const expires = commands.getRepoPRForBranch(
@@ -104,6 +106,7 @@ it('keeps a selected join during an awaited quota probe and its later paused adm
   await Promise.all(branches.map((branch) => read(branch, 'active')))
   await vi.advanceTimersByTimeAsync(300_000)
   const quotaProbe = Promise.withResolvers<number | null>()
+  // ast-grep-ignore: test-no-wall-clock -- The imported runtime fixture installs the fake clock.
   const resetAt = Date.now() + 60_000
   mocks.gate.mockResolvedValue(resetAt).mockReturnValueOnce(quotaProbe.promise)
   const starts: string[] = []
@@ -139,6 +142,7 @@ it('uses selected demand only for admission priority, preserving the shared retr
   await read('retry-policy', 'active')
   await vi.advanceTimersByTimeAsync(60_000)
   mocks.resolve.mockRejectedValueOnce(new Error('offline'))
+  // ast-grep-ignore: test-no-wall-clock -- The imported runtime fixture installs the fake clock.
   const requestedAt = Date.now()
   const response = rpcRead({
     repo: 'repo',
