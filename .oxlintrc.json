@@ -272,6 +272,12 @@
       }
     },
     {
+      "files": ["src/renderer/src/components/browser-pane/ClientHostedBrowserPagePane.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 420, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
       "files": [
         "src/main/runtime/rpc/dispatcher.ts",
         "src/main/plugins/runtime/plugin-runtime-rpc.ts",

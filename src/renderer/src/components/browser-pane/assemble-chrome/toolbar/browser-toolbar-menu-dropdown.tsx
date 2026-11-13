@@ -41,6 +41,7 @@ import {
 } from './browser-toolbar-page-display-items'
 import {
   BrowserToolbarProfileSub,
+  BrowserToolbarProfileSubUnavailable,
   type BrowserToolbarProfileSubProps
 } from '../profile-routing/browser-toolbar-profile-sub'
 
@@ -58,7 +59,8 @@ type BrowserToolbarMenuDropdownProps = {
   browserPageId: string
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
-  profile: BrowserToolbarProfileSubProps
+  /** Null where the surface's profile cannot be switched here; a disabled entry with its reason renders instead. */
+  profile: BrowserToolbarProfileSubProps | { unavailableReason: string }
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu; null where the page's session runs no extensions. */
   extensionsSub: React.ReactNode
@@ -104,7 +106,9 @@ export function BrowserToolbarMenuDropdown({
           data-contextual-tour-target={
             extensionsSub && extensionDiscoveryTarget ? 'browser-extensions-control' : undefined
           }
-          data-browser-profile-id={profile.effectiveProfileId}
+          data-browser-profile-id={
+            'effectiveProfileId' in profile ? profile.effectiveProfileId : undefined
+          }
         >
           <Ellipsis className="size-4" />
         </Button>
@@ -181,7 +185,11 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         {extensionsSub}
-        <BrowserToolbarProfileSub {...profile} />
+        {'unavailableReason' in profile ? (
+          <BrowserToolbarProfileSubUnavailable reason={profile.unavailableReason} />
+        ) : (
+          <BrowserToolbarProfileSub {...profile} />
+        )}
 
         <DropdownMenuSeparator />
 
