@@ -2,7 +2,7 @@
 // CHAT-BANNERS B2: RA-11's running strip on a structured chat. Expired shows Renew; renewed confirms
 // with no Restart (the chat's next message uses the renewed sign-in) and its × dismisses; a held
 // launch's strip wins over it.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -21,7 +21,8 @@ const stub = vi.hoisted(() => {
     cleared: string[]
     calls: { paneKey: string; turnEndedFallback?: boolean }[]
     openedSettings: number
-  } = { strip: null, held: false, cleared: [], calls: [], openedSettings: 0 }
+    renewsRun: string[][]
+  } = { strip: null, held: false, cleared: [], calls: [], openedSettings: 0, renewsRun: [] }
   return state
 })
 
@@ -47,6 +48,9 @@ vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
   orcaCloudAgentAccountsLoadedAt: () => 1,
+  runOrcaCloudAgentSetups: (agents: string[]) => stub.renewsRun.push(agents),
+  stopOrcaCloudAgentSetups: () => undefined,
+  reloadOrcaCloudAgentAccounts: async () => undefined,
   useOrcaCloudAgentAccounts: () => ({
     load: { kind: 'loading' },
     keyKinds: {},
@@ -94,6 +98,7 @@ vi.stubGlobal(
 )
 
 const { CloudStructuredChatBanners } = await import('./CloudStructuredChatBanners')
+const { useCloudChatSendBlock } = await import('./use-cloud-chat-running-strip')
 
 const mount = () =>
   render(
@@ -117,7 +122,9 @@ describe('the running strip on a structured chat (B2)', () => {
     mount()
     expect(screen.getAllByText(/Claude sign-in expired/).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /Renew/ }))
-    expect(stub.openedSettings).toBe(1)
+    // CHAT-RENEW-INPLACE: Renew runs the renewal right here, never Settings.
+    expect(stub.renewsRun).toEqual([['claude']])
+    expect(stub.openedSettings).toBe(0)
     expect(stub.calls.at(-1)).toEqual({ paneKey: STATUS_KEY, turnEndedFallback: true })
   })
 
@@ -137,5 +144,56 @@ describe('the running strip on a structured chat (B2)', () => {
     mount()
     expect(screen.getByRole('button', { name: 'Set up once' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Renew/ })).toBeNull()
+  })
+})
+
+describe('an idle chat (no message yet, no status entry)', () => {
+  const IDLE_TAB = 'structured-agent-session-claude_idle'
+  const idle = () =>
+    render(
+      <TooltipProvider>
+        <CloudStructuredChatBanners
+          tabId={TAB_ID}
+          paneKey={HOLD_KEY}
+          statusKey={`${IDLE_TAB}:no-status`}
+          agent="claude"
+        />
+      </TooltipProvider>
+    )
+
+  it("expired account: the strip shows, decided from the chat's own agent", () => {
+    stub.strip = { phase: 'expired', agent: 'claude' }
+    idle()
+    expect(screen.getAllByText(/Claude sign-in expired/).length).toBeGreaterThan(0)
+    expect(stub.calls.at(-1)?.paneKey).toBe(`${IDLE_TAB}:no-status`)
+  })
+
+  it('covered account: no strip', () => {
+    idle()
+    expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('a held launch shows the held strip instead', () => {
+    stub.strip = { phase: 'expired', agent: 'claude' }
+    stub.held = true
+    idle()
+    expect(screen.getByRole('button', { name: 'Set up once' })).toBeTruthy()
+  })
+})
+
+describe('Send while the account is expired', () => {
+  const args = { tabId: TAB_ID, statusKey: STATUS_KEY, holdKey: HOLD_KEY, agent: 'claude' }
+
+  it('expired: Send is held with the Renew hint (typing is not touched)', () => {
+    stub.strip = { phase: 'expired', agent: 'claude' }
+    const { result } = renderHook(() => useCloudChatSendBlock(args))
+    expect(result.current).toBe('Renew Claude sign-in above to send')
+  })
+
+  it('renewed or covered: Send is free again', () => {
+    stub.strip = { phase: 'renewed', agent: 'claude', resumable: true }
+    expect(renderHook(() => useCloudChatSendBlock(args)).result.current).toBeUndefined()
+    stub.strip = null
+    expect(renderHook(() => useCloudChatSendBlock(args)).result.current).toBeUndefined()
   })
 })

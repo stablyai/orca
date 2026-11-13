@@ -1,7 +1,7 @@
 // The one locked state for everything on Settings › Enterprise: what the feature is, that it is
-// part of Enterprise, and Contact sales. The button opens the page; its chevron copies the link.
+// part of Enterprise, and Contact sales. The button opens the page (Copy link is for sign-in pages only).
 import { ExternalLink } from 'lucide-react'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** Where Contact sales goes when billing has not answered yet (billing's own Enterprise page). */
@@ -29,15 +29,15 @@ export function EnterpriseUpsell({
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground text-pretty">{body}</p>
       </div>
-      <OpenExternalSplitButton
+      <Button
+        type="button"
         variant="outline"
         size="sm"
-        link={contact.contactUrl}
         onClick={() => onContactSales(contact.contactUrl)}
       >
         {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
         <ExternalLink />
-      </OpenExternalSplitButton>
+      </Button>
     </div>
   )
 }

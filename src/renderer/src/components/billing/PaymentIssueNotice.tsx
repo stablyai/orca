@@ -1,7 +1,6 @@
 import { ExternalLink } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
-import { billingPortalLink } from './billing-link'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 
@@ -63,20 +62,16 @@ export function PaymentIssueNotice({
       }
       action={
         entitlement.canManageBilling ? (
-          <OpenExternalSplitButton
+          <Button
+            type="button"
             variant="outline"
             size="xs"
             aria-disabled={busy || undefined}
-            link={billingPortalLink}
-            onClick={() => {
-              if (!busy) {
-                onUpdatePayment()
-              }
-            }}
+            onClick={busy ? undefined : onUpdatePayment}
           >
             {t('auto.components.billing.updatePayment', 'Update payment method')}
             <ExternalLink />
-          </OpenExternalSplitButton>
+          </Button>
         ) : undefined
       }
     />

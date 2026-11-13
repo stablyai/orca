@@ -7,6 +7,7 @@ import { featuresFor } from '../src/features'
 import { grantContactSalesPlan, grantsForSource, revokeManualGrant } from '../src/grants'
 import { repoCatalog } from './catalog-fixture'
 import { createHarness } from './harness'
+import { checkoutCompleted } from './stripe-fake'
 
 const ALL_OFF = { audit_log: false, sso: false, scim: false, mfa_enforcement: false }
 const ALL_ON = { audit_log: true, sso: true, scim: true, mfa_enforcement: true }
@@ -50,11 +51,11 @@ describe('catalog', () => {
 describe.each(['shadow', 'on'])('features (ENTITLEMENTS_MODE=%s)', (mode) => {
   it('are off for a team without Enterprise and on for one granted the plan', async () => {
     const h = await createHarness({ ENTITLEMENTS_MODE: mode })
-    expect((await features(h)).body).toEqual({ features: ALL_OFF })
+    expect((await features(h)).body).toEqual({ features: ALL_OFF, subscribed: false })
     expect(await enterprise(h)).toEqual({ changed: true, planVersion: 2 })
-    expect((await features(h)).body).toEqual({ features: ALL_ON })
+    expect((await features(h)).body).toEqual({ features: ALL_ON, subscribed: false })
     // Another team is unaffected.
-    expect((await features(h, 'org:o2')).body).toEqual({ features: ALL_OFF })
+    expect((await features(h, 'org:o2')).body).toEqual({ features: ALL_OFF, subscribed: false })
   })
 
   it('the grant names the real plan and version, and stops when it ends or is revoked', async () => {
@@ -76,7 +77,7 @@ describe('features', () => {
     const h = await createHarness({ ENTITLEMENTS_MODE: 'shadow' })
     await enterprise(h)
     h.env.ENTITLEMENTS_MODE = 'off'
-    expect((await features(h)).body).toEqual({ features: ALL_OFF })
+    expect((await features(h)).body).toEqual({ features: ALL_OFF, subscribed: false })
   })
 
   it('only a contact-sales plan can be granted this way', async () => {
@@ -119,5 +120,45 @@ describe('features', () => {
     const body = (await read()).body
     expect(body.effective.features).toEqual(ALL_ON)
     expect(body.grants.find((grant: { key: string }) => grant.key === 'audit_log')).toMatchObject({ value: true, source: 'manual', plan: { id: 'enterprise', version: 2 }, state: 'active' })
+  })
+})
+
+describe('subscribed', () => {
+  const PERIOD_START = Math.floor(Date.now() / 1000) - 5 * 24 * 3600
+  const PERIOD_END = PERIOD_START + 30 * 24 * 3600
+
+  // A paid Team subscription for org:o1, through checkout and Stripe's webhook as in production.
+  async function paidTeam(mode = 'shadow') {
+    const h = await createHarness({ ENTITLEMENTS_MODE: mode })
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    const checkout = await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 2 }, headers: { authorization: `Bearer ${token}` } })
+    expect(checkout.status).toBe(200)
+    const customer = [...h.stripe.customers.keys()][0]!
+    const subscription = h.stripe.putSubscription({ customer, accountId: 'org:o1', basePrice: 'price_team_month', quantity: 2, periodStart: PERIOD_START, periodEnd: PERIOD_END })
+    await h.webhook(checkoutCompleted({ customer, subscription: subscription.id, accountId: 'org:o1' }))
+    return h
+  }
+  const setStatus = (h: Awaited<ReturnType<typeof createHarness>>, status: string) => h.raw.prepare('UPDATE subscriptions SET status = ? WHERE account_id = ?').run(status, 'org:o1')
+
+  it('is true for a team paying for a plan, whatever its hours, and false for everyone else', async () => {
+    for (const mode of ['off', 'shadow', 'on']) {
+      const h = await paidTeam(mode)
+      expect((await features(h)).body).toMatchObject({ subscribed: true })
+      // Another team, and the owner's personal account, have no subscription.
+      expect((await features(h, 'org:o2')).body).toMatchObject({ subscribed: false })
+      expect((await features(h, 'user:u1')).body).toMatchObject({ subscribed: false })
+    }
+  })
+
+  it('stays true while a payment is being retried, and ends with the subscription', async () => {
+    const h = await paidTeam()
+    for (const status of ['trialing', 'past_due', 'unpaid']) {
+      setStatus(h, status)
+      expect((await features(h)).body, status).toMatchObject({ subscribed: true })
+    }
+    for (const status of ['canceled', 'incomplete', 'incomplete_expired', 'paused']) {
+      setStatus(h, status)
+      expect((await features(h)).body, status).toMatchObject({ subscribed: false })
+    }
   })
 })

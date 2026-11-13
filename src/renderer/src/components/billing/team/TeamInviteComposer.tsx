@@ -10,9 +10,8 @@ import {
 } from '@/components/ui/select'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
 import type { OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import {
   MAX_INVITES_PER_BATCH,
@@ -22,17 +21,11 @@ import {
 } from './parse-invite-emails'
 import { roleDescription } from './team-copy'
 import { assignableRoles, roleLabel } from './team-roles'
-import { inviteSeatImpactLine } from './team-invite-impact-copy'
-import { inviteSeatImpact } from './team-seat-math'
 
 export type InviteBatchOutcome = { failed: { email: string; message: string }[] }
 
 export type TeamInviteComposerProps = {
   viewerRole: OrcaOrgRole
-  entitlement: OrcaBillingEntitlement | null
-  members: number
-  pendingInvites: number
-  now: number
   /** Sends every invite; resolves with the ones that failed so they stay in the field. */
   onInvite: (emails: string[], role: OrcaOrgRole) => Promise<InviteBatchOutcome>
   inputRef?: React.Ref<HTMLInputElement>
@@ -41,7 +34,6 @@ export type TeamInviteComposerProps = {
 /** Multi-email invite field: paste a list, review the chips, pick a role, send. */
 export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.Element {
   const t = useTranslate()
-  const locale = useIntlLocale()
   const id = useId()
   const [draft, setDraft] = useState('')
   const [candidates, setCandidates] = useState<InviteCandidate[]>([])
@@ -65,19 +57,10 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
   const pendingDraft = draft.trim()
     ? mergeInviteCandidates(candidates, splitInviteText(draft))
     : candidates
-  // The button and the seat line both count what Send would send, including a typed,
-  // unseparated address, so the seat impact always matches the invites about to go out.
+  // The button counts what Send would send, including a typed, unseparated address.
   const valid = pendingDraft.filter((candidate) => candidate.valid)
   const committedValid = candidates.filter((candidate) => candidate.valid)
   const invalidCount = candidates.length - committedValid.length
-  const paymentFailed = props.entitlement?.payment.pastDueSince != null
-  const impact = inviteSeatImpact({
-    entitlement: props.entitlement,
-    members: props.members,
-    pendingInvites: props.pendingInvites,
-    newInvites: valid.length,
-    now: props.now
-  })
 
   const send = async (): Promise<void> => {
     const all = commit(draft)
@@ -271,13 +254,8 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
         </div>
       </div>
       <p id={hintId} className="text-xs text-muted-foreground text-pretty">
-        {inviteSeatImpactLine(impact, valid.length, locale, t)}
-        {paymentFailed && valid.length > 0
-          ? ` ${t(
-              'auto.components.billing.team.invitePaymentFailed2',
-              'New seats are charged once the failed payment is fixed.'
-            )}`
-          : null}
+        {/* Only the rule: seat counts and prices live in Plan & billing (Neil, TEAM-DIALOG-2). */}
+        {t('auto.components.billing.team.inviteSeatRule', 'Each invite uses a seat once accepted.')}
         {invalidCount > 0
           ? ` ${t(
               'auto.components.billing.team.skipInvalid',

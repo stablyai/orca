@@ -49,7 +49,14 @@ vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
   orcaCloudAgentAccountsLoadedAt: () => 0,
-  useOrcaCloudAgentAccounts: () => ({ load: { kind: 'loading' }, keyKinds: {} })
+  useOrcaCloudAgentAccounts: () => ({
+    load: { kind: 'loading' },
+    keyKinds: {},
+    setups: { claude: { phase: 'idle' }, codex: { phase: 'idle' } }
+  }),
+  runOrcaCloudAgentSetups: () => undefined,
+  stopOrcaCloudAgentSetups: () => undefined,
+  reloadOrcaCloudAgentAccounts: async () => undefined
 }))
 vi.mock('@/lib/orca-cloud/cloud-running-agent-signout', () => ({
   clearCloudRunningSignout: () => undefined,

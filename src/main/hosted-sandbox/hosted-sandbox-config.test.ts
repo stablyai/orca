@@ -12,7 +12,7 @@ import {
   unlinkOrcaProfileFromCloud
 } from '../orca-profiles/cloud-auth/profile-cloud-index'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { getHostedSandboxConfig } from './hosted-sandbox-config'
+import { getHostedSandboxConfig, isMfaRequiredRefusal } from './hosted-sandbox-config'
 
 const state = { dir: '' }
 installFakeAppEnvironment({ getPath: () => state.dir })
@@ -116,5 +116,23 @@ describe('getHostedSandboxConfig sandbox tokens', () => {
     linkOrcaProfileToCloud(profileId, cloud('user-b'), state.dir)
     expect(claims(await a.getAccessToken()).sub).toBe('user-b')
     expect(claims(await b.getAccessToken()).sub).toBe('user-b')
+  })
+})
+
+describe('isMfaRequiredRefusal', () => {
+  it('recognizes the team MFA refusal and leaves the body readable', async () => {
+    const response = Response.json(
+      { error: 'mfa_required', orgId: 'org_1', enforceAt: 5 },
+      { status: 403 }
+    )
+    expect(await isMfaRequiredRefusal(response)).toBe(true)
+    expect(await response.json()).toMatchObject({ orgId: 'org_1' })
+  })
+
+  it('is false for other refusals and for bodies that are not JSON', async () => {
+    for (const body of [{ error: 'not_a_member' }, { error: 'sandbox_not_entitled' }, {}, null]) {
+      expect(await isMfaRequiredRefusal(Response.json(body, { status: 403 }))).toBe(false)
+    }
+    expect(await isMfaRequiredRefusal(new Response('<html>', { status: 403 }))).toBe(false)
   })
 })

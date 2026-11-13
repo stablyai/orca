@@ -6,6 +6,7 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
 import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
+import { TeamMfaRefused } from '@/components/team-mfa/TeamMfaAppBanner'
 import { describeInlineError } from './cloud-workspace-errors'
 import { openCloudWorkspacePicker } from './cloud-workspace-picker-store'
 
@@ -24,6 +25,16 @@ export function ErrorState({
   onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  if (reason === 'mfa_required') {
+    // The team's MFA policy refused this, so neither signing in again nor retrying helps: show
+    // the setup screen, and under it the plain sentence in case the policy could not be read.
+    return (
+      <>
+        <TeamMfaRefused />
+        <InlineError className="m-1" tone="neutral" title={describeInlineError(error, reason, t)} />
+      </>
+    )
+  }
   if (error === 'unauthorized') {
     return <SignInAgainNotice className="m-1" onSignIn={onSignIn} />
   }

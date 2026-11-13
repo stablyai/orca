@@ -152,6 +152,7 @@ export function nativeChatPaneHeader(
       tabId={view.tabId}
       paneKey={structuredCloudHoldKey(view.sessionId)}
       statusKey={structuredAgentSessionPaneKey(view.tabId, view.sessionId)}
+      agent={view.agent}
     />
   )
   const header =
