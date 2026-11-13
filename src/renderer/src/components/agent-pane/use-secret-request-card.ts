@@ -29,6 +29,7 @@ import {
 } from '../../../../shared/secret-request-contract'
 import { cloudWorkspaceSecretsMode } from '@/lib/orca-cloud/cloud-workspace-secrets-mode'
 import type { CloudSecretsErrorCode } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
+import { canWriteRepo } from './secret-request-repo-write'
 import type {
   SecretRequestCardActions,
   SecretRequestCardModel,
@@ -46,33 +47,7 @@ const TRANSPORT_FAILURES: ReadonlySet<CloudSecretsErrorCode> = new Set([
   'unknown'
 ])
 
-/** Whether this person can write the workspace repo's scope; asked once per repo per session. */
-const repoWriteCache = new Map<string, Promise<boolean>>()
-
-function canWriteRepo(repoKey: string): Promise<boolean> {
-  let pending = repoWriteCache.get(repoKey)
-  if (!pending) {
-    const api = window.api.cloudSecrets
-    pending = api
-      ? api.effective({ repo: repoKey }).then(
-          (result) => result.ok && result.value.caller.canWrite.repo,
-          () => false
-        )
-      : Promise.resolve(false)
-    // A failed read is retried next time rather than cached as "no".
-    void pending.then((value) => {
-      if (!value) {
-        repoWriteCache.delete(repoKey)
-      }
-    })
-    repoWriteCache.set(repoKey, pending)
-  }
-  return pending
-}
-
-export function resetSecretRequestCardCachesForTests(): void {
-  repoWriteCache.clear()
-}
+export { resetSecretRequestCardCachesForTests } from './secret-request-repo-write'
 
 function useWorkspaceRepoKey(worktreeId: string | null): string | null {
   return useAppStore((state) => {

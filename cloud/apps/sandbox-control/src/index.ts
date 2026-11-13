@@ -59,6 +59,7 @@ import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
 import { handleDeviceSessionsRoute } from './device-sessions'
 import { removeMember } from './member-removal'
+import { setFollow } from './workspace-follows'
 import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
@@ -208,6 +209,7 @@ import {
   WORKSPACE_ERROR_STATUS,
   WorkspaceError,
   canOpen,
+  canSee,
   isOrgAdmin,
   listWorkspaces,
   patchWorkspace,
@@ -2114,7 +2116,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       throw error
     }
   }
-  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
+  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|follow|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
     return fail('not_found', 404)
   }
@@ -2142,6 +2144,13 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     }
     await recordMemberSend(db, row.id, caller.userId, now)
     return json({ ok: true })
+  }
+  if (route === 'PUT follow' || route === 'DELETE follow') {
+    // Following needs seeing it; an admin addressing a private row for management can't follow it.
+    if (!canSee(caller, row)) {
+      throw new WorkspaceError('not_found')
+    }
+    return json(await setFollow(db, caller, row, route === 'PUT follow', now))
   }
   if (route === 'POST presence') {
     const body = PresenceSchema.safeParse(await readJson(request))
