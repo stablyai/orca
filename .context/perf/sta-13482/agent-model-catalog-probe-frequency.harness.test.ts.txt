@@ -1,6 +1,6 @@
 // STA-13482 harness: drives the REAL agent model catalog service/store with fake probes that take
 // each agent's measured wall time, under a fake clock, and counts probes per `+` open.
-// Run: cp into src/main/native-chat/agent-model-catalog/ and `pnpm test <that path> --maxWorkers=1`.
+// Run: cp into src/main/native-chat/agent-model-catalog/<name>.test.ts (drop .txt) and `pnpm test <that path> --maxWorkers=1`.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import { AgentModelCatalogStore } from './agent-model-catalog-store'

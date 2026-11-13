@@ -2,7 +2,7 @@
 
 - Base: `origin/main` @ 75823710787 (fetched 2026-11-12 23:0x PT). Main does **not** fix this: no catalog-freshness change has landed since the 1.4.258 field build.
 - Model: Opus 5.5 (claude-opus-5-5), high effort.
-- Artifacts (in this worktree): `.context/perf/sta-13482/` (`design.md`, `agent-model-catalog-probe-frequency.harness.test.ts`, `before-harness.json`).
+- Artifacts (in this worktree): `.context/perf/sta-13482/` (`design.md`, `agent-model-catalog-probe-frequency.harness.test.ts.txt`, `before-harness.json`).
 
 ## 1. Root cause
 
