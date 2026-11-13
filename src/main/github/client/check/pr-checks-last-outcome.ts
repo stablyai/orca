@@ -64,72 +64,74 @@ function recordPRChecksRead(key: string, read: PRChecksRead): void {
 export const prChecksProbeKey = (resource: string, noCache: boolean): string =>
   JSON.stringify([resource, noCache])
 
-/** What every read of one resource that overlaps another shares: the newest answer accepted for
- *  it. Reachable only from running reads, so it ends with the last of them; one answer, no history. */
-type PRChecksAuthority = { latest?: PRChecksRead }
-type PRChecksTask = { start: PRChecksReadStart; authority: PRChecksAuthority }
-// Mirrors the running coalesced probes key for key (the coalescer keeps no per-read data): set
-// when a read starts, deleted when that same read ends. It only lets a starting read join the
-// authority of a read it overlaps, a stale one it replaces or the other intent's.
-const runningTasks = new Map<string, PRChecksTask>()
+/** The provider reads of one resource that are running now, of either intent, including stale or
+ *  user-refreshed reads a newer one replaced in the coalescer, and the newest answer one of them
+ *  had accepted. It lives until the last of those reads has settled; one answer, no history. */
+type PRChecksOverlap = { running: number; latest?: PRChecksRead }
+const overlaps = new Map<string, PRChecksOverlap>()
 
 /**
  * The producer of one coalesced checks read; joiners only await it. A timed read and a manual
  * (`noCache`) read of the same resource can run side by side, and a stale or user-refreshed read
- * can replace one still running, so finishing last proves nothing. Overlapping reads share one
- * authority: the answer of the read that started last wins, an older read answers its callers with
- * that newer answer when it ends (even when its own provider read failed), and only a read that
- * still owns its key publishes. A replaced read publishes nothing; it answers with its successor's
- * accepted answer, or awaits the successor still running.
+ * can replace one still running, so finishing last proves nothing: the answer of the read that
+ * started last wins. A read that still owns its key publishes that answer. A replaced read
+ * publishes nothing and answers its callers with the newest accepted answer, even one the
+ * completed cache has since evicted, or with its successor's while that still runs; its own result
+ * is used only when nothing newer was accepted.
  */
 export async function producePRChecks(
   resource: string,
-  noCache: boolean,
   ownsKey: () => boolean,
   readChecks: () => Promise<PRCheckDetail[]>,
   successor: () => Promise<PRChecksRead> | undefined
 ): Promise<PRChecksRead> {
-  const key = prChecksProbeKey(resource, noCache)
   readSequence += 1
-  const authority =
-    runningTasks.get(key)?.authority ??
-    runningTasks.get(prChecksProbeKey(resource, !noCache))?.authority ??
-    {}
-  const task: PRChecksTask = {
-    start: { startedAt: Date.now(), sequence: readSequence },
-    authority
+  const start = { startedAt: Date.now(), sequence: readSequence }
+  let overlap = overlaps.get(resource)
+  if (!overlap) {
+    overlap = { running: 0 }
+    overlaps.set(resource, overlap)
   }
-  runningTasks.set(key, task)
+  const shared = overlap
+  shared.running += 1
+  const newer = () =>
+    shared.latest && shared.latest.start.sequence > start.sequence ? shared.latest : undefined
   try {
     let own: PRChecksRead | undefined
     let failure: unknown
     try {
-      own = { start: task.start, checks: await readChecks() }
+      own = { start, checks: await readChecks() }
     } catch (error) {
       failure = error
     }
-    const newer =
-      authority.latest && authority.latest.start.sequence > task.start.sequence
-        ? authority.latest
-        : undefined
     if (!ownsKey()) {
-      const running = newer ? undefined : successor()
-      if (newer || !running) {
-        return newer ?? own ?? Promise.reject(failure)
+      const running = newer() ? undefined : successor()
+      if (running) {
+        try {
+          const replaced = await running
+          return newer() ?? replaced
+        } catch (error) {
+          // A successor that fails leaves this read's own answer as the newest there is.
+          failure = own ? failure : error
+        }
       }
-      // A successor that fails leaves this read's own answer as the newest there is.
-      return await running.catch((error: unknown) => own ?? Promise.reject(error))
+      const answer = newer() ?? own
+      if (!answer) {
+        throw failure
+      }
+      return answer
     }
-    const answer = newer ?? own
+    const answer = newer() ?? own
     if (!answer) {
       throw failure
     }
-    authority.latest = answer
+    shared.latest = answer
     recordPRChecksRead(resource, answer)
     return answer
   } finally {
-    if (runningTasks.get(key) === task) {
-      runningTasks.delete(key)
+    shared.running -= 1
+    if (shared.running === 0 && overlaps.get(resource) === shared) {
+      overlaps.delete(resource)
     }
   }
 }
@@ -166,10 +168,10 @@ export function readPacedPRChecks(
 }
 
 export function _prChecksResultCountForTests(): { completed: number; running: number } {
-  return { completed: lastReads.size, running: runningTasks.size }
+  return { completed: lastReads.size, running: overlaps.size }
 }
 
 export function _resetPacedPRChecksForTests(): void {
   lastReads.clear()
-  runningTasks.clear()
+  overlaps.clear()
 }

@@ -137,18 +137,23 @@ export function shouldSkipFresh(
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
-export function freshRetryAt(
-  candidate: GitHubPRRefreshCandidate,
-  cadence?: PRAutoRefreshCadence
-): number | null {
+export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
   return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
-    : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate, cadence)
+    : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+}
+
+/** How old data may be when a foreground return reads it again: its Default interval (the
+ *  validated quiet one where that applies), or the settled age for data Default runs no timer for.
+ *  The same age decides whether a return earns a read and whether a cached answer satisfies it. */
+export function foregroundAgeMs(candidate: GitHubPRRefreshCandidate): number {
+  const defaultInterval = refreshIntervalForCandidate(candidate, 'default')
+  return Number.isFinite(defaultInterval) ? defaultInterval : settledForegroundAgeMs()
 }
 
 /** The exact completed answer a queued read may take instead of reading: the same validated
- *  interval that schedules its follow-up has not passed since that answer was read. A queued row's
- *  foreground exposure was made due by the Default interval, so it is judged by that interval. */
+ *  interval that schedules its follow-up has not passed since that answer was read. A foreground
+ *  return judges the current answer by the foreground age that earned it the read. */
 export function freshQueuedPROutcome(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason,
@@ -166,10 +171,11 @@ export function freshQueuedPROutcome(
   if (!outcome || outcome.kind === 'upstream-error') {
     return null
   }
-  const dueAt = freshRetryAt(
-    visibleCandidateAfterOutcome(candidate, outcome),
-    foreground ? 'default' : undefined
-  )
+  const current = visibleCandidateAfterOutcome(candidate, outcome)
+  if (foreground) {
+    return Date.now() - outcome.fetchedAt < foregroundAgeMs(current) ? outcome : null
+  }
+  const dueAt = freshRetryAt(current)
   return dueAt !== null && dueAt > Date.now() ? outcome : null
 }
 
@@ -286,7 +292,7 @@ export function foregroundExposureAgeMs(
 ): number | null {
   const defaultInterval = refreshIntervalForCandidate(candidate, 'default')
   if (!Number.isFinite(defaultInterval)) {
-    return reexposed ? settledForegroundAgeMs() : null
+    return reexposed ? foregroundAgeMs(candidate) : null
   }
   const foreground =
     reexposed || (reason === 'visible' && candidate.isSelected === true && priority >= 80)

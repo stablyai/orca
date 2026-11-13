@@ -14,10 +14,10 @@ import type { PRRefreshQueue } from './pr-refresh-queue'
 type ErrorBackoff = {
   failures: number
   failedAt: number
-  /** The schedule a producer settlement attached to this failure, and how to re-plan it; null
-   *  once a newer read replaced that error. */
+  /** The schedule a producer settlement attached to this failure, and how to re-plan it: the gate
+   *  that holds its key and whether a timed retry is planned; null once a newer read replaced it. */
   settled?: PRRefreshOutcome
-  retime?: () => number | null
+  retime?: () => { gate: number; timed: boolean } | null
 }
 
 export class PRRefreshRetryState {
@@ -80,16 +80,23 @@ export class PRRefreshRetryState {
     return state ? planErrorRetry(candidate, state.failures, state.failedAt, 'default') : Date.now()
   }
 
-  /** Moves every retained error's shared schedule and gate to the current cadence. */
-  retimeErrors(queue: PRRefreshQueue): void {
+  /** Moves every retained error's shared schedule and gate to the current cadence, and returns
+   *  when each still-current failure retries under it (none under Off), from its own failure. */
+  retimeErrors(queue: PRRefreshQueue): Map<string, number> {
+    const retries = new Map<string, number>()
     for (const [key, state] of this.errorBackoff) {
-      const gate = state.retime?.()
-      if (gate === null) {
+      const plan = state.retime?.()
+      if (plan === null) {
         state.retime = undefined
-      } else if (gate !== undefined) {
-        queue.protectBackgroundUntil(key, Math.max(gate, this.manualGateUntil(key)))
+      } else if (plan !== undefined) {
+        const gate = Math.max(plan.gate, this.manualGateUntil(key))
+        queue.protectBackgroundUntil(key, gate)
+        if (plan.timed) {
+          retries.set(key, gate)
+        }
       }
     }
+    return retries
   }
 
   withErrorSchedule(outcome: PRRefreshOutcome, retryAt: number): PRRefreshOutcome {
@@ -155,7 +162,10 @@ export class PRRefreshRetryState {
       if (prepared.accepts(next)) {
         scheduled = next
       }
-      return Math.max(this.errorGateAt(key, candidate, planned), rateLimitedUntil)
+      return {
+        gate: Math.max(this.errorGateAt(key, candidate, planned), rateLimitedUntil),
+        timed: Number.isFinite(planned)
+      }
     }
     queue.protectBackgroundUntil(
       key,

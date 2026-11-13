@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { PRAutoRefreshCadence } from '../../../../src/shared/review-refresh-policy'
@@ -44,7 +44,7 @@ const pr = {
 type PendingCall = { method: string; params: unknown; settle: (reply: RpcResponse) => void }
 
 describe('the phone PR screen’s timer with host revalidation receipts', () => {
-  let renderer: ReactTestRenderer | null = null
+  let renderer: { unmount: () => void } | null = null
   let queryClient: QueryClient
   let calls: PendingCall[]
 

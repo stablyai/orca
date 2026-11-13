@@ -129,17 +129,33 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 /** A cadence change moves queued visible follow-ups, error retries and their shared schedules to
  *  the new interval, and the gates of queued host jobs with them; "off" drops them. Under a timed
  *  cadence visible rows then get the next read it gives them, so Off back to Default resumes without
- *  waiting for the windows to report again. Off resumes nothing: a row that failed would otherwise
- *  be queued again for its gate, an automatic retry Off does not make. */
+ *  waiting for the windows to report again: a row whose failure is still current gets that
+ *  failure's own retry back, still an error retry the next Off retires; others their next read. */
 export function retimePRRefreshesForCadence(): void {
-  retry.retimeErrors(queue)
+  const failureRetries = retry.retimeErrors(queue)
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
   drainer.hostedJobs.retime()
   const timed = getPRAutoRefreshCadence() !== 'off'
-  for (const [windowId, candidate] of timed ? visibility.reported() : []) {
-    if (!validateCandidate(candidate)) {
-      queue.enqueue(visibility.candidate(refreshKey(candidate), candidate), 'visible', 40, windowId)
+  for (const [windowId, reported] of timed ? visibility.reported() : []) {
+    const key = refreshKey(reported)
+    const candidate = visibility.candidate(key, reported)
+    const retryAt = failureRetries.get(key)
+    if (validateCandidate(candidate)) {
+      continue
+    }
+    // Work already queued for the row (its retry, a return or an action) keeps its own reason.
+    if (retryAt !== undefined && !queue.get(key)) {
+      drainer.scheduleErrorRetry(
+        key,
+        candidate,
+        retryAt,
+        40,
+        [aliasFromCandidate(candidate)],
+        windowId
+      )
+    } else if (retryAt === undefined) {
+      queue.enqueue(candidate, 'visible', 40, windowId)
     }
   }
   drainer.schedule()

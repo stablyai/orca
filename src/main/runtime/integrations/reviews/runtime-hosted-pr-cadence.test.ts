@@ -44,6 +44,7 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
       kind: 'upstream-error',
       errorType: 'network',
       message: 'offline',
+      // ast-grep-ignore: test-no-wall-clock -- the shared snapshot harness installs fake timers
       fetchedAt: Date.now()
     }))
     const failing = read('failing')
@@ -62,6 +63,7 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
 
     mocks.resolve.mockImplementation(async () => found())
     fixture.title = 'recovered'
+    // ast-grep-ignore: test-no-wall-clock -- the shared snapshot harness installs fake timers
     await vi.advanceTimersByTimeAsync(181_000 - Date.now())
     const recovered = read('failing')
     await vi.advanceTimersByTimeAsync(0)
@@ -71,6 +73,7 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
   it('retires a queued revalidation when the host turns auto-refresh off', async () => {
     await read('queued', 'active')
     await vi.advanceTimersByTimeAsync(60_000)
+    // ast-grep-ignore: test-no-wall-clock -- the shared snapshot harness installs fake timers
     mocks.gate.mockResolvedValue(Date.now() + 120_000)
     const waiting = read('queued')
     await vi.advanceTimersByTimeAsync(25_000)
@@ -104,6 +107,7 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
     fixture.title = 'read again'
     const replacement = read('held')
     await vi.advanceTimersByTimeAsync(0)
+    // ast-grep-ignore: test-no-wall-clock -- the shared snapshot harness installs fake timers
     quota.resolve(pauseMs === null ? null : Date.now() + pauseMs)
     return { retired, replacement }
   }
@@ -111,6 +115,8 @@ describe('hosted PR snapshots under the host’s auto-refresh cadence', () => {
   it('lets the retired revalidation neither start nor take the replacement’s place once quota admits it', async () => {
     const { retired, replacement } = await retireWhileAwaitingQuota(null)
     expect(retired).toMatchObject({ kind: 'found', fetchedAt: 1_000 })
+    // The retired read had already taken the key's ordinary 10 s start cooldown before quota.
+    await vi.advanceTimersByTimeAsync(10_000)
     expect(await replacement).toMatchObject({ pr: { title: 'read again' } })
     expect(mocks.resolve).toHaveBeenCalledTimes(2)
   })

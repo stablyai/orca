@@ -172,6 +172,43 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     expect(getPRForBranchOutcomeMock.mock.calls.length).toBeGreaterThan(2)
   })
 
+  it('restores a failed row’s own retry on Default, which the next Off retires again', async () => {
+    const { policy, coordinator } = await loadCoordinatorWithCadence('default')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'offline',
+      fetchedAt: Date.now()
+    }))
+    // Fails at 1 s; Default would retry it at 121 s.
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    const switchTo = async (cadence: 'default' | 'off', at: number) => {
+      await vi.advanceTimersByTimeAsync(at - Date.now())
+      policy.setPRAutoRefreshCadence(cadence)
+      coordinator.retimePRRefreshesForCadence()
+    }
+    await switchTo('off', 1_500)
+    await switchTo('default', 2_000)
+    await switchTo('off', 3_000)
+    await vi.advanceTimersByTimeAsync(130_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'pending' }),
+      fetchedAt: Date.now()
+    }))
+    await switchTo('default', Date.now())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(coordinatorMocks.sendToTrustedUIRendererMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      outcome: { kind: 'found' }
+    })
+  })
+
   it('moves an already queued error retry to the stretched interval when the cadence changes to reduced', async () => {
     const { policy, coordinator } = await loadCoordinatorWithCadence('default')
     getPRForBranchOutcomeMock.mockImplementation(async () => ({

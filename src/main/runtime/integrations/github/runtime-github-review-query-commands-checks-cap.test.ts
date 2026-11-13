@@ -12,9 +12,16 @@ import {
 } from '../../../source-control/hosted-review-scope-generations'
 
 // Only the provider is faked: each gh call waits for the test to answer it with a check name.
-const provider = vi.hoisted(() => ({
-  calls: [] as { answer: (name: string) => void; fail: () => void }[],
-  offline: false
+type ProviderCall = { answer: (name: string) => void; fail: () => void }
+const provider = vi.hoisted(() => {
+  const calls: ProviderCall[] = []
+  return { calls, offline: false }
+})
+// Command slots only bound how many provider commands run at once; the reads under test are live
+// either way, so each gh call here reaches the fake provider as soon as it starts.
+vi.mock('../../../github/execution/github-operation-slots', () => ({
+  acquire: async () => {},
+  release: () => {}
 }))
 vi.mock('../../../git/command-runner/hosted-cli/gh-exec-file', () => ({
   ghExecFileAsync: () =>
@@ -105,6 +112,11 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     __resetHostedReviewScopeGenerationsForTests()
   })
   afterEach(() => {
+    // Settle whatever a failed case left running, so no read carries into the next case.
+    provider.offline = true
+    for (const call of provider.calls.splice(0)) {
+      call.fail()
+    }
     setPRAutoRefreshCadence('default')
     vi.useRealTimers()
   })
@@ -185,16 +197,21 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
   })
 
   it.each(['answers', 'fails'] as const)(
-    'a read replaced by a user refresh that ended long ago and was evicted %s without ever answering for it',
+    'a read replaced by a user refresh that ended long ago %s with the newest answer accepted since, even after eviction',
     async (outcome) => {
       const replaced = timed()
       const joined = read()
       await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
-      // A user refresh of the same read replaces the running one instead of joining it.
+      // A user refresh of the same read replaces the running one instead of joining it, and ends.
       const refreshed = read({ userRefresh: true })
       await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
       provider.calls.pop()!.answer('refreshed')
       expect(await names(refreshed)).toEqual(['refreshed'])
+      // A later manual read of the other intent starts and ends while the replaced read still runs.
+      const manualRead = manual()
+      await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
+      provider.calls.pop()!.answer('manual')
+      expect(await names(manualRead)).toEqual(['manual'])
       for (let head = 0; head < 256; head += 1) {
         const other = read({}, `evicting-head-${head}`)
         await vi.waitFor(() => expect(provider.calls).toHaveLength(2), { interval: 1 })
@@ -207,12 +224,27 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
         provider.offline = true
         provider.calls.shift()!.fail()
       }
-      expect(await names(replaced)).toEqual(['refreshed'])
-      expect(await names(joined)).toEqual(['refreshed'])
+      expect(await names(replaced)).toEqual(['manual'])
+      expect(await names(joined)).toEqual(['manual'])
       expect(provider.calls).toHaveLength(0)
       expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
     }
   )
+
+  it('a replaced read answers with its own result when its successor fails and nothing newer was accepted', async () => {
+    const replaced = timed()
+    const joined = read()
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1))
+    const refreshed = read({ userRefresh: true })
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2))
+    provider.calls.shift()!.answer('replaced')
+    provider.offline = true
+    provider.calls.shift()!.fail()
+    await expect(refreshed).rejects.toThrow()
+    expect(await names(replaced)).toEqual(['replaced'])
+    expect(await names(joined)).toEqual(['replaced'])
+    expect(_prChecksResultCountForTests().running).toBe(0)
+  })
 
   it('keeps at most 256 completed answers while every one of them is being read again, and a new manual read still works', async () => {
     const heads = Array.from({ length: 256 }, (_, head) => `cached-head-${head}`)

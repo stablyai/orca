@@ -33,6 +33,7 @@ export class PRRefreshQueueDrainer {
   readonly hostedJobs: HostedPRReadJobs
   private readonly scheduler: PRRefreshQueueScheduler
   readonly scheduleVisibleFollowUp: PRRefreshQueueScheduler['scheduleVisibleFollowUp']
+  readonly scheduleErrorRetry: PRRefreshQueueScheduler['scheduleErrorRetry']
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -52,6 +53,7 @@ export class PRRefreshQueueDrainer {
       () => this.drain()
     )
     this.scheduleVisibleFollowUp = this.scheduler.scheduleVisibleFollowUp.bind(this.scheduler)
+    this.scheduleErrorRetry = this.scheduler.scheduleErrorRetry.bind(this.scheduler)
     this.hostedJobs = new HostedPRReadJobs(
       queue,
       pacing,

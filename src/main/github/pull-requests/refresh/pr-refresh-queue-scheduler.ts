@@ -65,21 +65,9 @@ export class PRRefreshQueueScheduler {
         )
       )
       // Auto-refresh off: no timed retry; the next selection, push or manual refresh reads again.
-      if (!Number.isFinite(retryAt) || !this.visibility.has(key)) {
-        return
+      if (Number.isFinite(retryAt)) {
+        this.scheduleErrorRetry(key, candidate, retryAt, priority, aliases, windowId)
       }
-      this.queue.setVisibleFollowUp({
-        key,
-        candidate,
-        aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
-        reason: 'visible',
-        priority,
-        dueAt: retryAt,
-        queuedAt: this.queue.nextOrder(),
-        errorRetry: true,
-        windowId
-      })
-      this.schedule(retryAt - Date.now())
       return
     }
     this.retry.reset(key)
@@ -121,6 +109,33 @@ export class PRRefreshQueueScheduler {
       windowId
     })
     this.schedule(Math.max(0, dueAt - Date.now()))
+  }
+
+  /** Queues the automatic retry a failure earned; it stays an error retry until it runs, is
+   *  replaced or a cadence change retires it. */
+  scheduleErrorRetry(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    retryAt: number,
+    priority: number,
+    aliases: GitHubPRRefreshAlias[],
+    windowId?: number
+  ): void {
+    if (!this.visibility.has(key)) {
+      return
+    }
+    this.queue.setVisibleFollowUp({
+      key,
+      candidate,
+      aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
+      reason: 'visible',
+      priority,
+      dueAt: retryAt,
+      queuedAt: this.queue.nextOrder(),
+      errorRetry: true,
+      windowId
+    })
+    this.schedule(retryAt - Date.now())
   }
 
   ordered(): PRRefreshQueueEntry[] {

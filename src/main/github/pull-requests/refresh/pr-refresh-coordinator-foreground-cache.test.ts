@@ -23,6 +23,7 @@ beforeEach(() => {
   moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
   provider.resolve.mockReset().mockImplementation(async () => ({
     kind: 'found',
+    // ast-grep-ignore: test-no-wall-clock -- resetPRRefreshCoordinatorMocks installs fake timers
     fetchedAt: Date.now(),
     pr: makePR({ checksStatus: 'pending' })
   }))
@@ -62,5 +63,57 @@ it.each(['default', 'reduced', 'off'] as const)(
     // Default keeps its one-minute timer; Reduced waits five minutes and Off has none.
     await vi.advanceTimersByTimeAsync(4 * 60_000)
     expect(provider.resolve.mock.calls.length > 2).toBe(cadence === 'default')
+  }
+)
+
+it.each([
+  ['default', 5_000, 21_000],
+  ['reduced', 31_000, 91_000],
+  ['off', 31_000, 91_000]
+] as const)(
+  'a settled PR shown again under %s reads only once past its settled age, and delivers the change without a timer after',
+  async (cadence, earlyAt, dueAt) => {
+    const policy = await import('../../../../shared/review-refresh-policy')
+    policy.setPRAutoRefreshCadence(cadence)
+    const coordinator = await import('./pr-refresh-coordinator')
+    const settled = (title: string) => async () => ({
+      kind: 'found',
+      // ast-grep-ignore: test-no-wall-clock -- resetPRRefreshCoordinatorMocks installs fake timers
+      fetchedAt: Date.now(),
+      pr: makePR({ title, state: 'merged', checksStatus: 'success' })
+    })
+    provider.resolve.mockImplementation(settled('merged'))
+    const candidate = makeCandidate({ currentHeadOid: 'head-sha' })
+    coordinator.reportVisiblePRRefreshCandidates([candidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.resolve).toHaveBeenCalledTimes(1)
+    const shownAgain = {
+      ...candidate,
+      cachedFetchedAt: 1_000,
+      cachedHeadOid: 'head-sha',
+      cachedHasPR: true,
+      cachedPRState: 'merged' as const,
+      cachedChecksStatus: 'success' as const
+    }
+
+    // Shown again inside the settled age (10 s on Default, a minute otherwise): nothing is read.
+    coordinator.clearVisiblePRRefreshWindow(1)
+    await vi.advanceTimersByTimeAsync(earlyAt - 1_000)
+    coordinator.reportVisiblePRRefreshCandidates([shownAgain], 2, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.resolve).toHaveBeenCalledTimes(1)
+
+    // Shown again past it: the cached answer cannot satisfy the earned read, the change arrives.
+    coordinator.clearVisiblePRRefreshWindow(1)
+    await vi.advanceTimersByTimeAsync(dueAt - earlyAt)
+    provider.resolve.mockImplementation(settled('changed'))
+    coordinator.reportVisiblePRRefreshCandidates([shownAgain], 3, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.resolve).toHaveBeenCalledTimes(2)
+    expect(coordinatorMocks.sendToTrustedUIRendererMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      outcome: { pr: { title: 'changed' } }
+    })
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(provider.resolve).toHaveBeenCalledTimes(2)
   }
 )

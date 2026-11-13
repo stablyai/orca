@@ -274,15 +274,13 @@ export function getPRChecks(
     }
     // The resource key carries the review generation, so a read after a PR mutation never joins
     // one that started before it; the producer records its own result at its own start order.
-    const noCache = Boolean(options?.noCache)
-    const probeKey = prChecksProbeKey(resource, noCache)
+    const probeKey = prChecksProbeKey(resource, Boolean(options?.noCache))
     const read = await runCoalescedProbe(
       checksReads,
       probeKey,
       (ownsKey) =>
         producePRChecks(
           resource,
-          noCache,
           ownsKey,
           () =>
             readPRChecks(
