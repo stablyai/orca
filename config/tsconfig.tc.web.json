@@ -20,7 +20,7 @@
     "../src/preload/renderer/window-commands/close-active-tab-payload-admission.ts",
     "../src/preload/renderer/e2e-config.ts",
     "../src/preload/renderer/hidden-window-frame-pump.ts",
-    "../src/preload/api/gitlab.ts",
+    "../src/preload/api/gitlab/gitlab.ts",
     "../src/preload/renderer/renderer-runtime.ts",
     "../src/preload/renderer/diagnostics/renderer-heap-statistics-reader.ts",
     "../src/preload/renderer/diagnostics/renderer-process-memory-reader.ts",

@@ -6,7 +6,7 @@ import type {
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER

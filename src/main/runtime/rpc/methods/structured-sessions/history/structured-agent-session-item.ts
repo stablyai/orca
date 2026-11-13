@@ -1,7 +1,7 @@
 // Negotiate item-detail.v1 for full journal items beyond preview heads; fit replies to transport limits and mark remaining truncation.
 
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { ItemParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
+import { ItemParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { shortenedAgentJournalItem } from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
 import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from '../../../../../native-chat/agent-session-journal/journal-domain-item-wire'
 import { defineMethod } from '../../../core'
