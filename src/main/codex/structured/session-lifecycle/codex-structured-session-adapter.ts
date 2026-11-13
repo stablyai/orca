@@ -49,10 +49,10 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
-import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
-import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
+import { openCodexStart } from './codex-structured-start-verdict'
+import { codexRewindsForgettingVoice } from './codex-structured-rewind-voice'
 import { codexLiveProviderProcess } from './codex-structured-provider-liveness'
 import { CodexRealtimeVoice } from '../realtime/codex-realtime-voice'
 
@@ -276,14 +276,14 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       ? { supported: false, reason: 'history-not-paginated' }
       : { supported: true }
 
-  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = (input) =>
-    codexRewind.prepareCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
-
-  rewind: NonNullable<SessionAdapter['rewind']> = (input) =>
-    codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
-
-  recoverRewind: NonNullable<SessionAdapter['recoverRewind']> = (input) =>
-    recoverCodexRewindAtStart(this.sessions, input, this.deps.requestTimeoutMs)
+  private readonly rewinds = codexRewindsForgettingVoice(
+    this.sessions,
+    this.voice,
+    () => this.deps.requestTimeoutMs
+  )
+  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = this.rewinds.prepare
+  rewind: NonNullable<SessionAdapter['rewind']> = this.rewinds.rewind
+  recoverRewind: NonNullable<SessionAdapter['recoverRewind']> = this.rewinds.recover
 
   startupEnding = (id: string, generation: string) => this.acquisitions.endings.get(id, generation)
   retireStartup = (sessionId: string, generation: string) =>

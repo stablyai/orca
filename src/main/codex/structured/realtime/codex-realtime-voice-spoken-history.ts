@@ -12,6 +12,14 @@ export class CodexVoiceSpokenHistory {
     return this.threads.get(threadId) ?? []
   }
 
+  forget(...threadIds: (string | undefined)[]): void {
+    for (const threadId of threadIds) {
+      if (threadId) {
+        this.threads.delete(threadId)
+      }
+    }
+  }
+
   remember(threadId: string, segment: CodexVoiceSpokenSegment): void {
     const segments = this.threads.get(threadId) ?? []
     // Re-inserting keeps the most recently heard thread last, so the oldest is dropped first.

@@ -44,11 +44,9 @@ export class CodexRealtimeVoice {
   private readonly slots = new Map<string, Slot>()
   private readonly spoken = new CodexVoiceSpokenHistory()
 
-  /** An open voice session is live work: the idle sweep must not stop its child. A child whose
-   *  stop failed may be retired, which ends the attempt for certain. */
+  /** Live voice keeps its child from the idle sweep; one whose stop failed may be retired. */
   confirmIdle(sessionId: string): Promise<'busy'> | undefined {
-    const slot = this.slots.get(sessionId)
-    return slot && !slot.stopFailed ? Promise.resolve('busy') : undefined
+    return this.slots.get(sessionId)?.stopFailed === false ? Promise.resolve('busy') : undefined
   }
 
   /** Adapter deps whose child-ended events also end that child's voice session. */
@@ -64,6 +62,15 @@ export class CodexRealtimeVoice {
         }
         deps.onEvent?.(event)
       }
+    }
+  }
+
+  /** Rewind undoes turns in place: forget what was heard and end a call that heard it. */
+  forget(sessionId: string, threadId: string | undefined): void {
+    const slot = this.slots.get(sessionId)
+    this.spoken.forget(threadId, slot?.threadId)
+    if (slot) {
+      this.finish(sessionId, slot, 'requested')
     }
   }
 
