@@ -100,10 +100,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         worktreeId,
         paneKeysByPtyId,
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
-        readRows: () =>
-          Array.from(new Set([...paneKeysByPtyId.values()].flatMap((keys) => [...keys]))).flatMap(
-            (key) => this.getAgentProviderSessionRowsForPaneFn?.(key) ?? []
-          ),
+        readRowsForPane: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [],
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
       })
