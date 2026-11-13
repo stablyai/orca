@@ -42,7 +42,10 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
-import { getManagedAccountInlineLabel } from '../../../src/shared/agent-accounts/managed-account-display-names'
+import {
+  getManagedAccountInlineLabel,
+  getManagedAccountPrimaryLabel
+} from '../../../src/shared/agent-accounts/managed-account-display-names'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -225,7 +228,13 @@ export function MobileAccountsScreen() {
             return (
               <ListRow
                 key={account.id}
-                title={getManagedAccountInlineLabel(account)}
+                title={getManagedAccountPrimaryLabel(account)}
+                subtitle={
+                  getManagedAccountPrimaryLabel(account) === account.email
+                    ? undefined
+                    : account.email
+                }
+                accessibilityLabel={getManagedAccountInlineLabel(account)}
                 detail={
                   <>
                     <ProviderUsageWindows
