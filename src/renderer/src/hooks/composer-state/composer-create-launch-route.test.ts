@@ -72,7 +72,16 @@ describe('composerCreateLaunchRoute', () => {
     ).toBe('terminal-tui')
   })
 
-  it('a surface the person picked for a VM create is kept', () => {
+  it('Claude set to Terminal in Chat UI (others on Chat): an Orca Cloud create stays a terminal', () => {
+    expect(
+      composerCreateLaunchRoute(
+        store({ ...CHAT_UI_ON, nativeChatProviders: { claude: false } }),
+        create('cloud')
+      )
+    ).toBe('terminal-tui')
+  })
+
+  it('an explicit Terminal pick on a VM create is kept (requestedSurface terminal)', () => {
     const picked: AgentLaunchChoice = { ...MENU_NO_HOST, requestedSurface: 'terminal' }
     expect(composerCreateLaunchRoute(store(CHAT_UI_ON), create('cloud', picked))).toBe(
       'terminal-tui'
