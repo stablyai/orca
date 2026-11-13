@@ -29689,5 +29689,34 @@
     "copyLinkFailed": "Couldn’t copy the link.",
     "linkCopied": "Link copied",
     "signInLinkHint": "Open it in any browser on this computer."
+  },
+  "cloudFollow": {
+    "role": {
+      "creator": "Created this workspace",
+      "follower": "Following"
+    },
+    "state": {
+      "typing": "Typing now",
+      "viewing": "Here now"
+    },
+    "stackLabel": "People on this workspace",
+    "following": "Following",
+    "unfollow": "Unfollow",
+    "follow": "Follow",
+    "unfollowNamed": "Unfollow {{title}}"
+  },
+  "sidebarTeam": {
+    "title": "Team",
+    "typingIn": "Typing in {{workspace}}",
+    "viewing": "In {{workspace}}",
+    "theirWorkspaces": "{{name}}’s workspaces",
+    "showAll": "Show all {{count}}"
+  },
+  "sidebarFollowing": {
+    "asleep": "Asleep",
+    "waking": "Waking",
+    "archived": "Archived",
+    "title": "Following",
+    "hereNow": "{{count}} here now"
   }
 }
