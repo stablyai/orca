@@ -352,7 +352,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     get: {
       tags: ['Account'],
       scope: 'audit:read',
-      summary: 'Audit log (owner/admin)',
+      summary: 'Audit log of API activity (owner/admin; for a team, the Enterprise plan). `/v1/audit-log` is the full team log.',
       params: [
         { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 200 } },
         { name: 'before', in: 'query', description: 'Cursor: `nextBefore` from the previous page', schema: { type: 'integer' } }

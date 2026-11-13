@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import { GuardrailError, consumeCreateToken } from '../guardrails'
 import type { PlanFeatures } from '../entitlements'
-import { handleAuditLog } from './audit-log'
+import { handleAuditLog, requireAuditLogPlan } from './audit-log'
 import type { LifecycleDeps } from '../lifecycle'
 import { AGENTS } from './vm-agent'
 import { memberNamesFor, rememberCallerName } from '../member-names'
@@ -349,6 +349,11 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
   if (resource === 'audit' && !id && method === 'GET') {
     requireScope(caller, 'audit:read')
     requireAdmin(caller)
+    if (caller.orgId) {
+      // A team's audit log is an Enterprise feature whichever route reads it (see audit-log.ts).
+      // A personal account's own entries stay readable: it has no team log.
+      await requireAuditLogPlan(caller, ctx)
+    }
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') ?? 50) || 50))
     const before = Number(url.searchParams.get('before')) || undefined
     const rows = await listAudit(ctx.db, caller.accountId, { before, limit })

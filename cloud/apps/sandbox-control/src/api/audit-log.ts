@@ -361,7 +361,15 @@ export async function requireAuditLogAccess(caller: ApiCaller, ctx: Pick<ApiCont
     throw new ApiError(403, 'forbidden', 'team_required')
   }
   requireAdmin(caller)
-  // Billing down or unconfigured throws BillingUnavailableError (503): never read as "not on the plan".
+  await requireAuditLogPlan(caller, ctx)
+}
+
+/**
+ * The plan half of the gate, shared with the older GET /v1/audit so a team can't read the same
+ * rows around it. Billing down or unconfigured throws BillingUnavailableError (503): never read
+ * as "not on the plan", and never as an open log.
+ */
+export async function requireAuditLogPlan(caller: Pick<ApiCaller, 'accountId'>, ctx: Pick<ApiContext, 'features'>): Promise<void> {
   const features = ctx.features ? await ctx.features(caller.accountId) : { auditLog: false }
   if (!features.auditLog) {
     throw new ApiError(403, 'entitlement_denied', 'audit_log')

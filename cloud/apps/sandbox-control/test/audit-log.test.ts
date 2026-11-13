@@ -381,6 +381,26 @@ describe('events from other services (POST /v1/internal/audit-events)', () => {
   })
 })
 
+describe('the older GET /v1/audit', () => {
+  it('is behind the same plan gate for a team, so it is no way around it; a personal account keeps its own', async () => {
+    const s = await setup({ entitled: false })
+    await seed(s)
+    expect((await s.h.call('GET', '/v1/audit', { bearer: s.owner })).body).toEqual({ error: 'entitlement_denied', reason: 'audit_log' })
+    const key = await s.h.call('POST', '/v1/api-keys', { bearer: s.owner, body: { name: 'siem', scopes: ['audit:read'] } })
+    expect((await s.h.call('GET', '/v1/audit', { bearer: key.body.secret })).status).toBe(403)
+    s.h.billing.features = { auditLog: true }
+    expect((await s.h.call('GET', '/v1/audit', { bearer: key.body.secret })).status).toBe(200)
+    // No team, no team log: a personal account still reads its own API activity on any plan.
+    s.h.billing.features = { auditLog: false }
+    await s.h.call('POST', '/v1/api-keys', { bearer: s.solo, body: { name: 'mine', scopes: ['workspaces:read'] } })
+    const own = await s.h.call('GET', '/v1/audit', { bearer: s.solo })
+    expect(own.status).toBe(200)
+    expect(own.body.entries.map((entry: { action: string }) => entry.action)).toEqual(['api_key.create'])
+    // But never the unified route.
+    expect((await s.log(s.solo)).body).toEqual({ error: 'forbidden', reason: 'team_required' })
+  })
+})
+
 describe('what is recorded', () => {
   it('desktop workspace changes: create, share, stop sharing, archive, unarchive and delete, each by the person who did it', async () => {
     const h = await createHarness({ SHARE_LINK_SECRET: 's'.repeat(40), SHARE_HOST_SUFFIX: 'share.test' })
