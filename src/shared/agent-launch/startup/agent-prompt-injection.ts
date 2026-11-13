@@ -176,15 +176,36 @@ export function resolveAgentPromptSubmitDelayForAgent(
   prompt: string,
   agent: TerminalAgent | null | undefined
 ): number {
-  const config = isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : undefined
-  return getAgentPromptSubmitDelayMs(
-    platform,
-    Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8'),
-    {
-      lineSettleMsPerLine: config?.submitLineSettleMsPerLine,
-      lineCount: countAgentTuiInputLines(prompt)
-    }
-  )
+  const lineSettleMsPerLine =
+    (isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent].submitLineSettleMsPerLine : undefined) ?? 0
+  return getAgentPromptSubmitDelayMs(platform, getAgentPromptPasteByteLength(prompt), {
+    lineSettleMsPerLine,
+    // Only an agent that settles per line pays for the count.
+    lineCount: lineSettleMsPerLine > 0 ? countAgentTuiInputLines(prompt) : 1
+  })
+}
+
+// Why 20 s: a phone's terminal.send times out at 30 s and a lost reply is unknown delivery, so the
+// held Enter leaves room for the launch-composer wait and relay latency.
+const MAX_KEY_EVENT_BURST_SUBMIT_DELAY_MS = 20_000
+
+/** How long Enter must trail `text` written to an agent TUI on `platform`. `requiredMs` is the
+ *  whole wait; `hostHeldMs` caps the key-event burst for a host that holds Enter inside one send. */
+export function getTerminalTextSubmitDelay(
+  platform: NodeJS.Platform,
+  agent: TerminalAgent | null | undefined,
+  text: string
+): { requiredMs: number; hostHeldMs: number } {
+  // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
+  const ingestDelayMs = resolveAgentPromptSubmitDelayForAgent(platform, text, agent)
+  // Windows Codex also reads typed text one key event at a time and keeps a mid-burst Enter
+  // as a newline, so add that burst.
+  const requiredMs = ingestDelayMs + getWindowsInputRecordPasteBurstMs(platform, agent, text)
+  return {
+    requiredMs,
+    // Capped so a combined send still answers inside a phone's RPC timeout.
+    hostHeldMs: Math.max(ingestDelayMs, Math.min(requiredMs, MAX_KEY_EVENT_BURST_SUBMIT_DELAY_MS))
+  }
 }
 
 const ESCAPE = '\x1b'
@@ -204,6 +225,20 @@ export function sanitizeAgentPromptText(text: string): string {
     escapeIndex = text.indexOf(ESCAPE, start)
   }
   return sanitized + text.slice(start)
+}
+
+/** UTF-8 size of `buildAgentPromptPasteBytes(prompt)`, counted without building it. */
+function getAgentPromptPasteByteLength(prompt: string): number {
+  let escapes = 0
+  for (let at = prompt.indexOf(ESCAPE); at !== -1; at = prompt.indexOf(ESCAPE, at + 1)) {
+    escapes += 1
+  }
+  return (
+    Buffer.byteLength(prompt, 'utf8') +
+    escapes * (INERT_ESCAPE.length - ESCAPE.length) +
+    AGENT_PROMPT_BRACKETED_PASTE_START.length +
+    AGENT_PROMPT_BRACKETED_PASTE_END.length
+  )
 }
 
 /** `leadLine` is typed, not pasted; folded to one line so it cannot submit. */
