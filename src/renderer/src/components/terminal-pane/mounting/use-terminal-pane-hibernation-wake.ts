@@ -3,11 +3,13 @@ import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-typ
 import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
 export function useTerminalPaneHibernationWake(
-  deps: Pick<UseTerminalPaneLifecycleDeps, 'worktreeId' | 'panePtyBindingsRef'>
+  deps: Pick<UseTerminalPaneLifecycleDeps, 'worktreeId' | 'tabId' | 'panePtyBindingsRef'>
 ): void {
   useEffect(
     () =>
-      listenForHibernatedAgentWake(deps.worktreeId, () => deps.panePtyBindingsRef.current.values()),
-    [deps.worktreeId, deps.panePtyBindingsRef]
+      listenForHibernatedAgentWake(deps.worktreeId, deps.tabId, () =>
+        deps.panePtyBindingsRef.current.values()
+      ),
+    [deps.worktreeId, deps.tabId, deps.panePtyBindingsRef]
   )
 }

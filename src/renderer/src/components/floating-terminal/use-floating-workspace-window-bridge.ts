@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
+  type WakeHibernatedAgentsWorktreeDetail
+} from '@/constants/terminal'
 import { registerVisibleTerminalTab } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
-import { requestSleepingAgentWakeOnMount } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
+import { setTabShownOutsidePane } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import { useAppStore } from '@/store'
 import { buildFloatingWorkspaceWindowSnapshot } from './build-floating-workspace-window-snapshot'
 import { persistFloatingTerminalPanelOpen } from './floating-terminal-panel-view-state'
@@ -61,6 +65,32 @@ export function startFloatingWorkspaceWindowBridge(
   let stopStore: (() => void) | null = null
   let visibleTabId: string | null = null
   let releaseVisibleTab: (() => void) | null = null
+  let wokenTabId: string | null = null
+
+  // The pane stays hidden in pop-out, so no reveal starts its sleeping agent; this stands in for one.
+  const wakeShownTab = (): void => {
+    if (disposed || !shown) {
+      return
+    }
+    const activeTab = buildFloatingWorkspaceWindowSnapshot(store.getState()).activeTab
+    const tabId = activeTab?.kind === 'terminal' ? activeTab.tabId : null
+    // A pane that connects later reads this; one already holding its agent takes the event below.
+    setTabShownOutsidePane(FLOATING_TERMINAL_WORKTREE_ID, tabId)
+    // Each switch to a tab wakes it once, like an in-window reveal; the two publishes of one switch wake once.
+    if (tabId === wokenTabId) {
+      return
+    }
+    wokenTabId = tabId
+    if (!tabId) {
+      return
+    }
+    const detail: WakeHibernatedAgentsWorktreeDetail = {
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabIds: [tabId],
+      wokenClaimKeys: new Set()
+    }
+    window.dispatchEvent(new CustomEvent(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, { detail }))
+  }
 
   const publish = (): void => {
     const snapshot = buildFloatingWorkspaceWindowSnapshot(store.getState())
@@ -71,6 +101,8 @@ export function startFloatingWorkspaceWindowBridge(
       releaseVisibleTab?.()
       visibleTabId = tabId
       releaseVisibleTab = registerVisibleTerminalTab(tabId)
+      // Why a microtask: a reveal and its tab switch land in one task, so only the tab left showing wakes.
+      queueMicrotask(wakeShownTab)
     }
     if (key !== published) {
       published = key
@@ -88,6 +120,8 @@ export function startFloatingWorkspaceWindowBridge(
     releaseVisibleTab?.()
     releaseVisibleTab = null
     visibleTabId = null
+    wokenTabId = null
+    setTabShownOutsidePane(FLOATING_TERMINAL_WORKTREE_ID, null)
     published = ''
   }
 
@@ -125,10 +159,6 @@ export function startFloatingWorkspaceWindowBridge(
         }, SNAPSHOT_DEBOUNCE_MS)
       })
       publish()
-      const activeTab = buildFloatingWorkspaceWindowSnapshot(state).activeTab
-      if (focusOnShow && activeTab?.kind === 'terminal') {
-        requestSleepingAgentWakeOnMount(FLOATING_TERMINAL_WORKTREE_ID, [activeTab.tabId])
-      }
       void api.show({ focus: focusOnShow }).catch(() => undefined)
     } else if (!state.floatingWorkspacePanelOpen && shown) {
       shown = false
