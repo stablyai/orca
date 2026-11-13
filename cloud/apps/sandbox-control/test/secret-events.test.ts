@@ -191,9 +191,9 @@ describe('activity window and pagination', () => {
   })
 
   it('ignores a malformed cursor or limit rather than failing', async () => {
-    const { admin, put, activity } = await setup()
-    await put('org', 'TEAM_VAR', VALUES[1]!, admin)
-    const res = await activity(admin, 'view=team&cursor=%27%20OR%201%3D1&limit=-5')
+    const { member, put, activity } = await setup()
+    await put('personal', 'MY_VAR', VALUES[1]!, member)
+    const res = await activity(member, 'view=personal&cursor=%27%20OR%201%3D1&limit=-5')
     expect(res.status).toBe(200)
     expect(res.body.events).toHaveLength(1)
   })
