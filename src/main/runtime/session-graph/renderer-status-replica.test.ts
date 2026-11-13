@@ -30,21 +30,32 @@ describe('renderer status / graph join', () => {
     replica.beginEpoch('renderer')
     replica.apply({ type: 'snapshot', epoch: 'renderer', seq: 1, rows: [record('A', 'first')] })
     expect(replica.get('tab:leaf')).toBeUndefined()
-    reconcile(replica, members('A'))
+    const control = { ...member('control'), paneKey: 'control:leaf', worktreeId: 'other' }
+    replica.reconcileGraph(
+      new Map([...members('A'), ['control:leaf', control]]),
+      new Set(['workspace', 'other'])
+    )
+    replica.apply({
+      type: 'changes',
+      epoch: 'renderer',
+      seq: 2,
+      rows: [{ ...control, row: { ...row, paneKey: 'control:leaf', prompt: 'untouched' } }]
+    })
     expect(replica.get('tab:leaf')?.row?.prompt).toBe('first')
-    replica.apply({ type: 'changes', epoch: 'renderer', seq: 2, rows: [record('B', 'next')] })
+    replica.apply({ type: 'changes', epoch: 'renderer', seq: 3, rows: [record('B', 'next')] })
     expect(replica.get('tab:leaf')?.row?.prompt).toBe('first')
     reconcile(replica, members('B'))
     expect(replica.get('tab:leaf')?.row?.prompt).toBe('next')
-    replica.apply({ type: 'changes', epoch: 'renderer', seq: 3, rows: [record('A', 'late')] })
+    replica.apply({ type: 'changes', epoch: 'renderer', seq: 4, rows: [record('A', 'late')] })
     expect(replica.get('tab:leaf')?.row?.prompt).toBe('next')
-    replica.apply({ type: 'changes', epoch: 'renderer', seq: 4, rows: [record('C', 'future')] })
+    replica.apply({ type: 'changes', epoch: 'renderer', seq: 5, rows: [record('C', 'future')] })
     reconcile(replica, new Map())
-    replica.apply({ type: 'changes', epoch: 'renderer', seq: 5, rows: [record('B', 'closed')] })
+    replica.apply({ type: 'changes', epoch: 'renderer', seq: 6, rows: [record('B', 'closed')] })
     reconcile(replica, members('B'))
     expect(replica.get('tab:leaf')?.row).toBeUndefined()
     reconcile(replica, members('C'))
     expect(replica.get('tab:leaf')?.row).toBeUndefined()
+    expect(replica.get('control:leaf')?.row?.prompt).toBe('untouched')
   })
 
   it('preserves unbound and remounted rows and re-shapes title changes without another status write', () => {
@@ -67,6 +78,24 @@ describe('renderer status / graph join', () => {
     replica.apply({ type: 'changes', epoch: 'renderer', seq: 3, rows: [record('B', 'bound')] })
     reconcile(replica, members('B'))
     expect(replica.get('tab:leaf')?.row?.prompt).toBe('bound')
+  })
+
+  it('requests a replacement snapshot on pending overflow while retaining the newest future occupant', () => {
+    const replica = new RendererStatusReplica()
+    replica.beginEpoch('renderer')
+    const overflow = replica.apply({
+      type: 'snapshot',
+      epoch: 'renderer',
+      seq: 1,
+      rows: Array.from({ length: 2049 }, (_, index) => record(`future-${index}`, `turn-${index}`))
+    })
+    expect(overflow).toMatchObject({ accepted: true, snapshotRequired: true })
+    reconcile(replica, members('future-0'))
+    expect(replica.get('tab:leaf')?.row).toBeUndefined()
+    reconcile(replica, members('future-2048'))
+    expect(replica.get('tab:leaf')?.row?.prompt).toBe('turn-2048')
+    replica.apply({ type: 'snapshot', epoch: 'renderer', seq: 2, rows: [] })
+    expect(replica.get('tab:leaf')?.row).toBeUndefined()
   })
 
   it('requires a snapshot on a gap and replaces only the current publisher scope', () => {
