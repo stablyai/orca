@@ -1,3 +1,4 @@
+import * as subscriberFrames from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
 // Check released stop-note projection and cursor resume after reopening disk state in one process.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -201,6 +202,14 @@ describe('cross-version structured agent sessions', () => {
     afterEach(() => releaseHostRoot(root))
 
     it('resumes from the cursor the client held, with no snapshot and no replay', async () => {
+      const emitted: { event: AgentSessionSubscribeEvent; stack: string | undefined }[] = []
+      const originalEmit = subscriberFrames.emitSubscriberFrame
+      const frameTrace = vi
+        .spyOn(subscriberFrames, 'emitSubscriberFrame')
+        .mockImplementation((...args) => {
+          emitted.push({ event: args[2], stack: new Error('subscriber frame emission').stack })
+          return originalEmit(...args)
+        })
       const created = await answer('agentSession.create', createIntentParams())
       expect(created.ok).toBe(true)
       const first = await answer('agentSession.send', sendParams('before restart', created.fence))
@@ -226,7 +235,16 @@ describe('cross-version structured agent sessions', () => {
       })
       const read = () => replies.map((reply) => reply.result as AgentSessionSubscribeEvent)
       // Catch-up frames follow committed reads after the subscription opens.
-      await vi.waitFor(() => expect(read().map((event) => event.type)).toEqual(['batch', 'batch']))
+      try {
+        await vi.waitFor(() =>
+          expect(
+            read().map((event) => event.type),
+            JSON.stringify({ received: read(), emitted }, null, 2)
+          ).toEqual(['batch', 'batch'])
+        )
+      } finally {
+        frameTrace.mockRestore()
+      }
       const events = read()
       const batches = events.filter((event) => event.type === 'batch')
       const batch = batches[0]?.batch
