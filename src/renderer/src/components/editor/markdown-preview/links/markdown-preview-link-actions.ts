@@ -15,6 +15,7 @@ import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-foc
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
 import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
 import { resolveMarkdownLinkTarget } from '../../markdown/link-routing/markdown-internal-links'
+import { isExternalEditorFileDeepLink } from '../../../../../../shared/external-editor-uri-schemes'
 import {
   fileUrlToAbsolutePath,
   resolveMarkdownPreviewHref
@@ -97,11 +98,11 @@ export async function handleMarkdownPreviewLinkClick({
   filePath: string
   context: MarkdownPreviewLinkContext
 }): Promise<void> {
+  // Why: an empty href (a stripped URL) would otherwise reload the Orca window.
+  event.preventDefault()
   if (!href) {
     return
   }
-
-  event.preventDefault()
 
   const {
     sourceOwner,
@@ -122,11 +123,34 @@ export async function handleMarkdownPreviewLinkClick({
     return
   }
 
+  const target = resolveMarkdownPreviewHref(href, filePath)
+
+  // Why: every click opens an editor link through the OS, so it skips the modifier routing.
+  if (target && isExternalEditorFileDeepLink(target)) {
+    if (sourceOwner.kind === 'unknown') {
+      return
+    }
+    if (
+      isLocalPathOpenBlocked(
+        getLinkSourceLocalOpenOwner(useAppStore.getState(), sourceOwner, sourceRoutingWorktreeId)
+      )
+    ) {
+      // Why: the link names a path on this computer, not on the document's remote host.
+      showLocalPathOpenBlockedToast()
+      return
+    }
+    try {
+      await window.api.shell.openUrl(target.toString())
+    } catch {
+      toast.error(translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'))
+    }
+    return
+  }
+
   if (handleMarkdownPreviewSystemLinkClick({ event, href, filePath, context })) {
     return
   }
 
-  const target = resolveMarkdownPreviewHref(href, filePath)
   if (!target) {
     return
   }

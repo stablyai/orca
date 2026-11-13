@@ -3,6 +3,7 @@ import { BrowserWindow, ipcMain, shell } from 'electron'
 import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, extname, posix, win32 } from 'node:path'
+import { isExternalEditorFileDeepLink } from '../../shared/external-editor-uri-schemes'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -179,7 +180,11 @@ export function registerShellHandlers(
       return
     }
 
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    if (
+      parsed.protocol !== 'https:' &&
+      parsed.protocol !== 'http:' &&
+      !isExternalEditorFileDeepLink(parsed)
+    ) {
       return
     }
 
