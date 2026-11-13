@@ -425,6 +425,8 @@ describe('MCP authorization', () => {
 
     const page = await h.send(new Request(`${ORIGIN}/oauth/authorize?${h.authorizeParams(client.client_id, challenge)}`))
     expect(page.headers.get('x-frame-options')).toBe('DENY')
+    // Browsers only send a real Origin on the approval POST when the page's policy allows it (END-PASS: no-referrer broke every browser).
+    expect(page.headers.get('referrer-policy')).toBe('same-origin')
     expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
     expect(page.headers.get('content-security-policy')).toContain('form-action \'self\' http://127.0.0.1:33418')
     expect(page.headers.get('set-cookie')).toMatch(/__Host-orca_mcp_csrf=\w+; Path=\/; Secure; HttpOnly; SameSite=Strict/)
