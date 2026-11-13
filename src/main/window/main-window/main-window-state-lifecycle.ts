@@ -75,13 +75,16 @@ export function installMainWindowStateLifecycle(args: {
     if (isWindowlessLaunch()) {
       return
     }
-    // Windows can only maximize by activating (SW_MAXIMIZE), so a background reveal skips it there.
-    if (savedMaximized && !(revealInBackground && process.platform === 'win32')) {
-      mainWindow.maximize()
-    }
     if (revealInBackground) {
+      // Maximizing a hidden window shows it active; Windows activates on any maximize, so it stays restored there.
       mainWindow.showInactive()
+      if (savedMaximized && process.platform !== 'win32') {
+        mainWindow.maximize()
+      }
     } else {
+      if (savedMaximized) {
+        mainWindow.maximize()
+      }
       showWindowWithoutStealingFocus(mainWindow)
     }
     // Fullscreen needs a shown window; after maximize so leaving it returns there. Background launches must not take a Space.

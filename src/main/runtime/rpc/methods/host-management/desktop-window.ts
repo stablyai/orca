@@ -5,7 +5,7 @@ export const DESKTOP_WINDOW_METHODS = [
   // `orca open` asks the running app instead of relaunching it, which would hand it the foreground.
   defineMethod({
     name: 'desktop.openWindowInBackground',
-    permission: 'workspace',
+    permission: 'desktop-control',
     params: null,
     handler: async () => ({ requested: requestBackgroundWindowOpen() })
   })
