@@ -35,7 +35,11 @@ export async function decideWorkspaceCleanup(
   }
   const { reason } = evaluation
   // An unattended run never runs repo scripts nobody approved, and never skips the teardown they do.
-  if (getEffectiveHooks(workspace.repo)?.scripts.archive) {
+  // The checkout's own orca.yaml can add one the repo root lacks.
+  if (
+    getEffectiveHooks(workspace.repo)?.scripts.archive ||
+    getEffectiveHooks(workspace.repo, workspace.ref.path)?.scripts.archive
+  ) {
     return { action: 'keep', cause: 'archive-script', reason }
   }
   const terminals = await readWorkspaceCleanupTerminalActivity(
