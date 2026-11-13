@@ -2652,9 +2652,9 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "titleOne": "macOS just interrupted an agent",
-        "titleMany": "macOS interrupted your agents {{count}}×",
-        "subtitle": "Full Disk Access stops these file prompts.",
+        "titleOne": "macOS just showed a file prompt",
+        "titleMany": "macOS showed {{count}} file prompts",
+        "subtitle": "Full Disk Access stops these prompts.",
         "enable": "Turn on Full Disk Access",
         "close": "Close",
         "dismiss": "Don't show again"

@@ -35,12 +35,10 @@ export function FullDiskAccessNudgeToast({
   const t = useTranslate()
   const title =
     promptCount > 1
-      ? t(
-          'auto.hooks.useMacosTccPromptNotice.titleMany',
-          'macOS interrupted your agents {{count}}×',
-          { count: promptCount }
-        )
-      : t('auto.hooks.useMacosTccPromptNotice.titleOne', 'macOS just interrupted an agent')
+      ? t('auto.hooks.useMacosTccPromptNotice.titleMany', 'macOS showed {{count}} file prompts', {
+          count: promptCount
+        })
+      : t('auto.hooks.useMacosTccPromptNotice.titleOne', 'macOS just showed a file prompt')
 
   return (
     <div className="@container relative w-[26rem] max-w-full rounded-lg border border-border bg-popover px-3.5 py-3.5 text-popover-foreground shadow-floating">
@@ -61,7 +59,7 @@ export function FullDiskAccessNudgeToast({
           <p className="text-[12.5px] leading-snug text-muted-foreground">
             {t(
               'auto.hooks.useMacosTccPromptNotice.subtitle',
-              'Full Disk Access stops these file prompts.'
+              'Full Disk Access stops these prompts.'
             )}
           </p>
         </div>
