@@ -62,6 +62,7 @@ describe('web settings preload API', () => {
       result: {
         settings: {
           compactWorktreeCards: true,
+          compactWorktreeCardHover: false,
           worktreeVisibilityDefaults: { external: 'show' }
         }
       },
@@ -70,6 +71,7 @@ describe('web settings preload API', () => {
 
     await expect(read).resolves.toMatchObject({
       compactWorktreeCards: true,
+      compactWorktreeCardHover: false,
       worktreeVisibilityDefaults: { external: 'hide' }
     })
     expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).toMatchObject({

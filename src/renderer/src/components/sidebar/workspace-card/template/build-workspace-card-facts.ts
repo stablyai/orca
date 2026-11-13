@@ -120,7 +120,8 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
     options: {
       style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',
       show: showOptions(card.cardProps),
-      agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
+      agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full',
+      compactHover: card.compactCardHover
     },
     env: { projectGroups: card.projectGroups.length > 0 }
   }
