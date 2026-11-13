@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { autoUpdate } from '@floating-ui/dom'
 import { Button } from '@/components/ui/button'
 import {
@@ -7,6 +7,10 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
+import { useSubmenuOpensLeft } from './use-submenu-opens-left'
+
+const SETUP_SUBMENU_WIDTH_PX = 416
+const SETUP_SUBMENU_COLLISION_PADDING_PX = 8
 
 export function AgentLaunchSetupSubmenu({
   open,
@@ -31,6 +35,10 @@ export function AgentLaunchSetupSubmenu({
   const [focusPanel, setFocusPanel] = useState(true)
   const content = useRef<HTMLDivElement>(null)
   const [sideOffset, setSideOffset] = useState(4)
+  const opensLeft = useSubmenuOpensLeft(trigger, {
+    submenuWidth: SETUP_SUBMENU_WIDTH_PX,
+    collisionPadding: SETUP_SUBMENU_COLLISION_PADDING_PX
+  })
   useLayoutEffect(() => {
     if (!open) {
       return
@@ -41,8 +49,11 @@ export function AgentLaunchSetupSubmenu({
     }
     const measure = () => {
       const rect = anchor.getBoundingClientRect()
-      const space = Math.max(rect.left - 8, document.documentElement.clientWidth - rect.right - 8)
-      setSideOffset(Math.min(4, space - 416))
+      const space = Math.max(
+        rect.left - SETUP_SUBMENU_COLLISION_PADDING_PX,
+        document.documentElement.clientWidth - rect.right - SETUP_SUBMENU_COLLISION_PADDING_PX
+      )
+      setSideOffset(Math.min(4, space - SETUP_SUBMENU_WIDTH_PX))
     }
     const stop = autoUpdate(anchor, null, measure, { animationFrame: false })
     const observer = new ResizeObserver(measure)
@@ -99,6 +110,7 @@ export function AgentLaunchSetupSubmenu({
         hideChevron
         ref={trigger}
         variant="launch-row"
+        className={opensLeft ? 'flex-row-reverse' : undefined}
         disabled={disabled}
         onPointerMove={(event) => {
           if (event.target instanceof Node && segment.current?.contains(event.target)) {
@@ -132,7 +144,7 @@ export function AgentLaunchSetupSubmenu({
         {renderAnchor(
           <Button
             ref={segment}
-            variant="menu-segment"
+            variant={opensLeft ? 'menu-segment-start' : 'menu-segment'}
             size="icon"
             // Why: stretch to the row so compact omnibox rows keep their height.
             className="h-auto min-h-6 self-stretch"
@@ -170,7 +182,11 @@ export function AgentLaunchSetupSubmenu({
               }
             }}
           >
-            <ChevronRight className="size-3.5 text-current" />
+            {opensLeft ? (
+              <ChevronLeft className="size-3.5 text-current" />
+            ) : (
+              <ChevronRight className="size-3.5 text-current" />
+            )}
           </Button>
         )}
       </DropdownMenuSubTrigger>
@@ -179,7 +195,7 @@ export function AgentLaunchSetupSubmenu({
         aria-label={label}
         aria-labelledby={undefined}
         sideOffset={sideOffset}
-        collisionPadding={8}
+        collisionPadding={SETUP_SUBMENU_COLLISION_PADDING_PX}
         variant="picker"
         className="flex w-104 min-w-0 max-w-[calc(100vw-1rem)] max-h-(--radix-dropdown-menu-content-available-height) flex-col"
         onFocusCapture={(event) => {

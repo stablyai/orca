@@ -11,6 +11,7 @@ import type { DropIndicator } from './drop-indicator'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, resolveTerminalItemTab, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
+import { useTabStripOrientation } from './tab-strip-orientation'
 import {
   useStructuredChatTabConversationName,
   useStructuredChatTabNamingFailure
@@ -72,6 +73,7 @@ function TabBarItemRow({
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
+  const stripOrientation = useTabStripOrientation()
   const dragData: TabDragItemData = {
     kind: 'tab',
     worktreeId,
@@ -81,7 +83,8 @@ function TabBarItemRow({
     tabType: item.type,
     label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName, t),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
-    color: item.type === 'terminal' ? (item.data.color ?? null) : null
+    color: item.type === 'terminal' ? (item.data.color ?? null) : null,
+    stripOrientation
   }
   const shared = {
     isActive,

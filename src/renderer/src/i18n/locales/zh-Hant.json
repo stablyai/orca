@@ -13279,6 +13279,15 @@
           "shownPluginCount_one": "顯示 {{count}} 個符合的外掛，包括此外掛",
           "shownPluginCount_other": "顯示 {{count}} 個符合的外掛，包括此外掛",
           "samePublisher": "更多列為 {{value0}} 的外掛"
+        },
+        "TabStripPlacementControl": {
+          "description": "在頂部分頁列或右側可調整大小的面板中顯示分頁。",
+          "keywordSidePanel": "側邊面板",
+          "keywordTabStrip": "分頁列",
+          "keywordVerticalTabs": "垂直分頁",
+          "rightPanel": "右側面板",
+          "title": "分頁位置",
+          "top": "頂部分頁列"
         }
       },
       "right": {

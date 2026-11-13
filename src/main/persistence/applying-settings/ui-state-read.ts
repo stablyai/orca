@@ -15,6 +15,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentag
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
+import { clampTabSidePanelWidth } from '../../../shared/tab-side-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
   normalizeVisibleExecutionHostIds,
@@ -66,6 +67,7 @@ export function getPersistedUI(
     trayMinimizeNoticeShown: state.ui?.trayMinimizeNoticeShown === true,
     osc52ClipboardDefaultOnNoticePending: state.ui?.osc52ClipboardDefaultOnNoticePending === true,
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(state.ui?.markdownTocPanelWidth),
+    tabSidePanelWidth: clampTabSidePanelWidth(state.ui?.tabSidePanelWidth),
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(state.ui?.combinedDiffFileTreeWidth),
     visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(state.ui?.visibleWorkspaceHostIds),
     agentsVisibleHostIds: normalizeVisibleExecutionHostIds(state.ui?.agentsVisibleHostIds),

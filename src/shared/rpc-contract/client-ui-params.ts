@@ -135,6 +135,7 @@ export const UiUpdateFields = z
     rightSidebarWidth: z.number().finite().optional(),
     activityBarPosition: z.enum(['top', 'side']).optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
+    tabSidePanelWidth: z.number().finite().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),

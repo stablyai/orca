@@ -16,18 +16,13 @@ import type { BrowserWorkspace } from '../../../../shared/browser-workspace-type
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
-import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
-  getDropIndicatorClasses,
-  getTabRootStateClasses,
-  getTabStripBorderClasses,
-  type DropIndicator
-} from './drop-indicator'
+import { getTabRootStateClasses, type DropIndicator } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { useTabStripChromeClasses } from './use-tab-strip-chrome-classes'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
@@ -160,6 +155,11 @@ export default function BrowserTab({
     { onActivate }
   )
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
+  const chrome = useTabStripChromeClasses(
+    hasTabsToRight,
+    includeTopTabBorder,
+    dropIndicator ?? null
+  )
   const slotProps = useTabStripSlotProps(tab.id, isActive)
 
   const tabRoot = (
@@ -170,7 +170,7 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${chrome.edges} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -194,7 +194,7 @@ export default function BrowserTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={chrome.activeIndicator} aria-hidden />}
       {/* Keep browser identity distinct on inactive tabs too; muted icons look disabled. */}
       {agentDriving ? (
         // Why: the dimmed favicon keeps the site recognizable under the agent's arrow.

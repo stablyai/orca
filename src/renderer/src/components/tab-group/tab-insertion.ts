@@ -1,11 +1,13 @@
 import { useCallback, useState } from 'react'
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import type { TabDragItemData } from './tab-drag-data'
+import { TAB_STRIP_ORIENTATION } from '../tab-bar/tab-strip-orientation'
 
 // Keep tabs anchored and draw the insertion bar on the hovered tab’s before/after edge.
 export type HoveredTabInsertion = {
   groupId: string
   visibleTabId: string
+  /** `left` inserts before the hovered tab and `right` after it, also in a vertical strip. */
   side: 'left' | 'right'
 }
 
@@ -34,11 +36,15 @@ export function resolveTabInsertion(
   if (!center) {
     return null
   }
-  const midpoint = event.over.rect.left + event.over.rect.width / 2
+  const { rect } = event.over
+  const isBefore =
+    overData.stripOrientation === TAB_STRIP_ORIENTATION.vertical
+      ? center.y < rect.top + rect.height / 2
+      : center.x < rect.left + rect.width / 2
   return {
     groupId: overData.groupId,
     visibleTabId: overData.visibleTabId,
-    side: center.x < midpoint ? 'left' : 'right'
+    side: isBefore ? 'left' : 'right'
   }
 }
 

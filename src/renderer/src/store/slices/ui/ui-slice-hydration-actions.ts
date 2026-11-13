@@ -30,9 +30,7 @@ import {
   normalizeWorkspaceStatuses
 } from '../../../../../shared/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
-import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
-import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
@@ -69,7 +67,11 @@ import {
   hydratedUIPartialMatchesState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import {
+  hydrateAgentReadState,
+  hydratePanelWidths,
+  sanitizeTaskResumeState
+} from './ui-slice-hydration-values'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -113,16 +115,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             s.rightSidebarWidth,
             MAX_RIGHT_SIDEBAR_WIDTH
           ),
-          markdownTocPanelWidth: clampMarkdownTocPanelWidth(
-            ui.markdownTocPanelWidth,
-            undefined,
-            s.markdownTocPanelWidth
-          ),
-          combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
-            ui.combinedDiffFileTreeWidth,
-            undefined,
-            s.combinedDiffFileTreeWidth
-          ),
+          ...hydratePanelWidths(ui, s),
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),

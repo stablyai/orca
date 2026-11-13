@@ -172,6 +172,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarWidth: 350,
     activityBarPosition: 'top',
     markdownTocPanelWidth: 240,
+    tabSidePanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'recent',

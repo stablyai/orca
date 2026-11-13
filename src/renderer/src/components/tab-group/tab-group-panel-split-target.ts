@@ -47,8 +47,22 @@ function getTabGroupBodyElement(groupId: string, worktreeId: string): HTMLElemen
   )
 }
 
+function measureTabGroupPanelRect(body: HTMLElement): DOMRect | null {
+  const panelRect = body.parentElement?.getBoundingClientRect()
+  if (!panelRect) {
+    return null
+  }
+  // Why: the side tab panel reorders tabs, so split edges must end where the body ends.
+  if (!body.nextElementSibling?.matches('[data-tab-side-panel]')) {
+    return panelRect
+  }
+  const width = body.getBoundingClientRect().right - panelRect.left
+  return new DOMRect(panelRect.left, panelRect.top, width, panelRect.height)
+}
+
 export function getTabGroupPanelRect(groupId: string, worktreeId: string): DOMRect | null {
-  return getTabGroupBodyElement(groupId, worktreeId)?.parentElement?.getBoundingClientRect() ?? null
+  const body = getTabGroupBodyElement(groupId, worktreeId)
+  return body ? measureTabGroupPanelRect(body) : null
 }
 
 export function getTabGroupBodyRect(groupId: string, worktreeId: string): DOMRect | null {
@@ -65,13 +79,13 @@ export function captureTabGroupPanelGeometrySnapshot(
   const entries: TabGroupPanelGeometryEntry[] = []
   for (const body of bodies) {
     const groupId = body.dataset.tabGroupBodyId
-    const panelElement = body.parentElement
-    if (!groupId || !panelElement) {
+    const panelRect = measureTabGroupPanelRect(body)
+    if (!groupId || !panelRect) {
       continue
     }
     entries.push({
       groupId,
-      panelRect: panelElement.getBoundingClientRect(),
+      panelRect,
       bodyRect: body.getBoundingClientRect()
     })
   }

@@ -33,6 +33,12 @@ export type WorkspaceVisibleTabType =
   | 'browser'
   | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
+export const TAB_STRIP_PLACEMENT = { top: 'top', rightPanel: 'right-panel' } as const
+export type TabStripPlacement = (typeof TAB_STRIP_PLACEMENT)[keyof typeof TAB_STRIP_PLACEMENT]
+export type TabStripPlacementSettings = {
+  /** Where split groups draw their tabs; optional (older profiles), readers default to the top strip. */
+  tabStripPlacement?: TabStripPlacement
+}
 
 // Many content kinds collapse to editor; resolve a concrete tab and project forward instead of trying to invert equality.
 export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {

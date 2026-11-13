@@ -8,6 +8,8 @@ import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-control
 import { usePluginNewFileMenuOptions } from './use-plugin-new-file-menu-options'
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
+import { renderTabBarVerticalSurface } from './tab-bar-vertical-surface'
+import { TAB_STRIP_ORIENTATION } from './tab-strip-orientation'
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
@@ -113,6 +115,21 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
   })
+
+  if (props.orientation === TAB_STRIP_ORIENTATION.vertical) {
+    return renderTabBarVerticalSurface(
+      {
+        props,
+        runtime,
+        createMenu,
+        itemProjection,
+        activeClientHostedBrowserRowId,
+        itemActions,
+        surfaceRef
+      },
+      t
+    )
+  }
 
   return renderTabBarSurface(
     {

@@ -13435,6 +13435,15 @@
           "shownPluginCount_one": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "shownPluginCount_other": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "samePublisher": "{{value0}} olarak listelenen diğerleri"
+        },
+        "TabStripPlacementControl": {
+          "description": "Sekmeleri üst şeritte veya sağdaki yeniden boyutlandırılabilir panelde gösterin.",
+          "keywordSidePanel": "yan panel",
+          "keywordTabStrip": "sekme şeridi",
+          "keywordVerticalTabs": "dikey sekmeler",
+          "rightPanel": "Sağ panel",
+          "title": "Sekme Konumu",
+          "top": "Üst şerit"
         }
       },
       "right": {

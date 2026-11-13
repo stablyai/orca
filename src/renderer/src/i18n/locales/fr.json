@@ -13358,6 +13358,15 @@
           "shownPluginCount_other": "{{count}} plugins correspondants affichés, dont celui-ci",
           "samePublisher": "Autres éléments répertoriés sous {{value0}}",
           "shownPluginCount_many": "{{count}} plugins correspondants affichés, dont celui-ci"
+        },
+        "TabStripPlacementControl": {
+          "description": "Afficher les onglets dans la barre supérieure ou dans un panneau redimensionnable à droite.",
+          "keywordSidePanel": "panneau latéral",
+          "keywordTabStrip": "barre d’onglets",
+          "keywordVerticalTabs": "onglets verticaux",
+          "rightPanel": "Panneau de droite",
+          "title": "Position des onglets",
+          "top": "Barre supérieure"
         }
       },
       "right": {

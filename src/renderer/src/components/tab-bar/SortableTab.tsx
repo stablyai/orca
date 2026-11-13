@@ -11,13 +11,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store/index'
-import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
-  getDropIndicatorClasses,
-  getTabRootStateClasses,
-  getTabStripBorderClasses,
-  type DropIndicator
-} from './drop-indicator'
+import { getTabRootStateClasses, type DropIndicator } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { useSortableTabRename } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
@@ -26,6 +20,7 @@ import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { useTabStripChromeClasses } from './use-tab-strip-chrome-classes'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
@@ -198,6 +193,11 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
+  const chrome = useTabStripChromeClasses(
+    hasTabsToRight,
+    includeTopTabBorder,
+    dropIndicator ?? null
+  )
   const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
@@ -212,7 +212,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${chrome.edges} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -243,7 +243,7 @@ export default function SortableTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={chrome.activeIndicator} aria-hidden />}
       {showUnreadActivity && (
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />

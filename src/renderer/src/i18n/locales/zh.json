@@ -13049,6 +13049,15 @@
             "buckets": "Gemini 模型分组",
             "optional": "其中的占位符为空时省略该组"
           }
+        },
+        "TabStripPlacementControl": {
+          "description": "在顶部标签栏或右侧可调整大小的面板中显示标签页。",
+          "keywordSidePanel": "侧边面板",
+          "keywordTabStrip": "标签栏",
+          "keywordVerticalTabs": "垂直标签页",
+          "rightPanel": "右侧面板",
+          "title": "标签页位置",
+          "top": "顶部标签栏"
         }
       },
       "right": {

@@ -5,6 +5,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
+import type { TabStripOrientation } from './tab-strip-orientation'
 
 export type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -56,4 +57,5 @@ export type TabBarProps = {
   hoveredTabInsertion?: HoveredTabInsertion | null
   /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
   tabStripChrome?: 'default' | 'floating-panel'
+  orientation?: TabStripOrientation
 }

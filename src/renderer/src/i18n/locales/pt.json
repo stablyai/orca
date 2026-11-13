@@ -10031,6 +10031,15 @@
             "buckets": "grupos de modelos Gemini",
             "optional": "omitido quando um marcador dentro do grupo está vazio"
           }
+        },
+        "TabStripPlacementControl": {
+          "description": "Mostra as abas na faixa superior ou em um painel redimensionável à direita.",
+          "keywordSidePanel": "painel lateral",
+          "keywordTabStrip": "faixa de abas",
+          "keywordVerticalTabs": "abas verticais",
+          "rightPanel": "Painel direito",
+          "title": "Posição das abas",
+          "top": "Faixa superior"
         }
       },
       "right": {

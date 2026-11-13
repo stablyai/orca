@@ -12801,6 +12801,15 @@
           "shownPluginCount_one": "이 플러그인을 포함해 일치하는 플러그인 {{count}}개 표시 중",
           "shownPluginCount_other": "이 플러그인을 포함해 일치하는 플러그인 {{count}}개 표시 중",
           "samePublisher": "{{value0}}(으)로 등록된 다른 플러그인"
+        },
+        "TabStripPlacementControl": {
+          "description": "탭을 상단 스트립 또는 크기를 조절할 수 있는 오른쪽 패널에 표시합니다.",
+          "keywordSidePanel": "사이드 패널",
+          "keywordTabStrip": "탭 스트립",
+          "keywordVerticalTabs": "세로 탭",
+          "rightPanel": "오른쪽 패널",
+          "title": "탭 위치",
+          "top": "상단 스트립"
         }
       },
       "right": {
