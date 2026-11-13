@@ -4,8 +4,10 @@ import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
-import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
-import { registerTranscriptConsumer } from '../../ai-vault/transcripts/session-transcript-consumers'
+import {
+  resetTranscriptConsumersForTests,
+  registerTranscriptConsumer
+} from '../../ai-vault/transcripts/session-transcript-consumers'
 import { physicalSessionCandidates } from '../../ai-vault/session-scanner-types'
 import { isolatedScanRoots } from '../../ai-vault/scanner-fixtures/session-scanner-test-fixtures'
 import {
@@ -21,7 +23,7 @@ import {
   type SessionSearchIndexFile
 } from '../storage/session-search-index-test-fixture'
 
-const io = vi.hoisted(() => ({ failed: '', paths: [] as string[] }))
+const io = vi.hoisted((): { failed: string; paths: string[] } => ({ failed: '', paths: [] }))
 vi.mock(
   '../../native-chat/transcript-filesystem/wsl-transcript-fs-access',
   async (importOriginal) => {

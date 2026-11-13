@@ -32,12 +32,13 @@ export async function runSessionSearchIndexPass(
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
   const stats = createSessionParseStats()
   const cutoffMs = store.retentionCutoff
+  const acceptsReads = () => store.acceptingReads !== false
   let read = 0
   let outOfTime = false
   let left = 0
   for (const choice of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
-    if (store.acceptingReads === false) {
+    if (!acceptsReads()) {
       break
     }
     let deferred = false
@@ -45,7 +46,7 @@ export async function runSessionSearchIndexPass(
     let admitted = false
     for (const candidate of physicalSessionCandidates(choice)) {
       throwIfAiVaultScanCancelled(options.signal)
-      if (store.acceptingReads === false) {
+      if (!acceptsReads()) {
         break
       }
       const path = candidate.file.path
@@ -72,7 +73,7 @@ export async function runSessionSearchIndexPass(
         continue
       }
       throwIfAiVaultScanCancelled(options.signal)
-      if (store.acceptingReads === false) {
+      if (!acceptsReads()) {
         break
       }
       admitted = true

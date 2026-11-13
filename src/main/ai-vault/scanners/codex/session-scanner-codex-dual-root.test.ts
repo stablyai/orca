@@ -9,12 +9,19 @@ import { sessionCandidatesFromDiscoveries } from '../../discovery/session-scanne
 import { scanAiVaultSessions } from '../../session-scanner'
 import { isolatedScanRoots, jsonLines } from '../../scanner-fixtures/session-scanner-test-fixtures'
 
-const reads = vi.hoisted(() => ({
-  failed: '',
-  failedSlice: '',
-  cancel: null as AbortController | null,
-  paths: [] as string[]
-}))
+const reads = vi.hoisted(
+  (): {
+    failed: string
+    failedSlice: string
+    cancel: AbortController | null
+    paths: string[]
+  } => ({
+    failed: '',
+    failedSlice: '',
+    cancel: null,
+    paths: []
+  })
+)
 vi.mock(
   '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access',
   async (importOriginal) => {

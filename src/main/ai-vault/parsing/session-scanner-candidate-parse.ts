@@ -1,5 +1,10 @@
 import { isTranscriptSourceFailure } from './session-scanner-jsonl-reader'
-import { physicalSessionCandidates, type SessionFileChoice } from '../session-scanner-types'
+import {
+  physicalSessionCandidates,
+  type SessionFileCandidate,
+  type SessionFileChoice,
+  type SessionParseResult
+} from '../session-scanner-types'
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import { isTextTaskRequestSession } from './text-task-request-sessions'
 import { candidateFileTime } from '../scanners/antigravity/antigravity-transcript-candidates'
@@ -26,7 +31,6 @@ import {
   sessionParseCacheKey
 } from '../parse-cache/session-parse-cache-store'
 import { canStopParsingSessions } from './session-scan-cutoff'
-import type { SessionFileCandidate, SessionParseResult } from '../session-scanner-types'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { noteAiVaultScanWorkChanged } from '../scan-lifecycle/ai-vault-scan-progress'
 
