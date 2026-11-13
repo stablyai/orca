@@ -13,8 +13,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../media/visuals/native-chat-visual-owner', () => ({
   useNativeChatVisualOwner: () => mocks.owner
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  supportsStructuredAgentSessionItemDetail: async () => true,
+vi.mock(
+  '../../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    supportsStructuredAgentSessionItemDetail: async () => true
+  })
+)
+
+vi.mock('../../../../runtime/native-chat/journal/structured-agent-session-journal-reads', () => ({
   readStructuredAgentSessionItem: mocks.read
 }))
 const container = document.createElement('div')

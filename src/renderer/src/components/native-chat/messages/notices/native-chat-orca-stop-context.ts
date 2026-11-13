@@ -12,6 +12,8 @@ export type NativeChatOrcaStopView = {
   continueNow: () => void
   usageLimitTurnItemId: string | null
   usageLimitAutoContinue?: NativeChatUsageLimitAutoContinueState | null
+  /** When Continue past the usage limit applies; earlier than its reset after an account switch. */
+  usageLimitContinueAt?: number
   onUsageLimitHandOffStarted?: () => void
   usageLimitContinueDisabled?: boolean
   continueUsageLimit: (hadFocus?: boolean) => void

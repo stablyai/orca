@@ -7,6 +7,7 @@ import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { withPreviewEnded } from './tab-preview-flag'
 import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 /** Activation ends a preview unless it preserves it; main's frame ends one main owns. */
 function withPreviewOnActivation(tab: Tab, preservePreview: boolean, endsHere: boolean): Tab {
@@ -32,37 +33,40 @@ export function tabActivationPatch(
 ): ActivationState {
   const tabId = tab.id
   return {
-    unifiedTabsByWorktree: {
-      ...state.unifiedTabsByWorktree,
-      [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-        item.id === tabId
-          ? {
-              ...withPreviewOnActivation(item, opts?.preservePreview === true, endsPreview),
-              ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
-            }
-          : item
-      )
-    },
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
-        group.id === tab.groupId
-          ? {
-              ...group,
-              activeTabId: tabId,
-              // Track MRU for close-time selection, pruning removed IDs.
-              recentTabIds: pushRecentTabId(
-                sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
-                tabId
-              )
-            }
-          : group
-      )
-    },
-    activeGroupIdByWorktree: {
-      ...state.activeGroupIdByWorktree,
-      [worktreeId]: tab.groupId
-    }
+    unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+      [
+        worktreeId,
+        (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+          item.id === tabId
+            ? {
+                ...withPreviewOnActivation(item, opts?.preservePreview === true, endsPreview),
+                ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
+              }
+            : item
+        )
+      ]
+    ]),
+    groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+      [
+        worktreeId,
+        (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
+          group.id === tab.groupId
+            ? {
+                ...group,
+                activeTabId: tabId,
+                // Track MRU for close-time selection, pruning removed IDs.
+                recentTabIds: pushRecentTabId(
+                  sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
+                  tabId
+                )
+              }
+            : group
+        )
+      ]
+    ]),
+    activeGroupIdByWorktree: replaceRecordEntries(state.activeGroupIdByWorktree, [
+      [worktreeId, tab.groupId]
+    ])
   }
 }
 

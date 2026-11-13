@@ -1,4 +1,4 @@
-import { readAgentSenderGeneration } from '../../../runtime-agent-sender-history-triggers'
+import { readAgentSenderGeneration } from '../../../agent-senders/runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { previousCustodianLookup } from '../../db/worker-terminal/worker-terminal-transfer'

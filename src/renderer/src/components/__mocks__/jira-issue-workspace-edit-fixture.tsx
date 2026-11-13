@@ -6,7 +6,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { JiraPatchOptions } from '../../store/slices/jira/jira-slice-contract'
 import type { AppState } from '../../store/types'
 import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'

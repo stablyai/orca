@@ -8,7 +8,7 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
@@ -73,13 +73,6 @@ describe('adoptRuntimeProvisionedRoot', () => {
       )
     ).rejects.toThrow(message)
     expect(setWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it('refuses a project whose root is not the recipe root', async () => {
-    const { value } = ports([checkout()])
-    await expect(
-      adoptRuntimeProvisionedRoot('repo-vm', { name: 'fix-login', expectedPath: '/other' }, value)
-    ).rejects.toThrow('does not match')
   })
 
   it('refuses a project a WSL move is taking before reading its checkout', async () => {

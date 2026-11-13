@@ -1,4 +1,5 @@
 import type { AppState } from '../../types'
+import { sleepingAgentRecordIndex } from '../../terminals/sleep/sleeping-agent-record-index'
 import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -40,7 +41,10 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   const promotedLiveRecoveryPaneKeys = new Set<string>()
 
   if (isManualWorktreeSleep) {
-    for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
+    for (const [, existing] of sleepingAgentRecordIndex.entries(
+      state.sleepingAgentSessionsByPaneKey,
+      worktreeId
+    )) {
       const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
       if (
         existing.worktreeId !== worktreeId ||

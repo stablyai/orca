@@ -1,8 +1,10 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import { Fragment, type MutableRefObject } from 'react'
 import { useAppStore } from '@/store'
 import { isMac } from '@/app-shell/app-window-chrome'
 import { translate } from '@/i18n/i18n'
-import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { openLinkInNewBrowserTab } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import {
   buildSearchUrl,
   DEFAULT_SEARCH_ENGINE,
@@ -43,17 +45,20 @@ type BrowserPageContextMenuItemsProps = {
 }
 
 /** Specific editable/link/image/selection sections replace generic page navigation. */
-function buildMenuSections({
-  menu,
-  browserPageId,
-  worktreeId,
-  canGoBack,
-  canGoForward,
-  webviewRef,
-  onReload,
-  onClose,
-  searchEngine
-}: BrowserPageContextMenuItemsProps & { searchEngine: SearchEngine }): MenuItem[][] {
+function buildMenuSections(
+  {
+    menu,
+    browserPageId,
+    worktreeId,
+    canGoBack,
+    canGoForward,
+    webviewRef,
+    onReload,
+    onClose,
+    searchEngine
+  }: BrowserPageContextMenuItemsProps & { searchEngine: SearchEngine },
+  t: Translate = translate
+): MenuItem[][] {
   const { editable, image, linkUrl, pageUrl, pagePoint } = menu
   const selectionText = menu.selectionText.trim() ? menu.selectionText : ''
 
@@ -75,7 +80,7 @@ function buildMenuSections({
     }
   })
   const openInNewTab = (url: string, activate: boolean): void => {
-    openUrlInTabBesideBrowserPage({ sourcePageId: browserPageId, worktreeId, url, activate })
+    openLinkInNewBrowserTab({ sourcePageId: browserPageId, worktreeId, url, activate })
   }
   const openExternally = (url: string): void => {
     const targetUrl = normalizeExternalBrowserUrl(url)
@@ -92,10 +97,7 @@ function buildMenuSections({
       ...(misspelledWord
         ? [
             item(
-              translate(
-                'auto.components.browser.pane.BrowserPane.addToDictionary',
-                'Add to Dictionary'
-              ),
+              t('auto.components.browser.pane.BrowserPane.addToDictionary', 'Add to Dictionary'),
               () =>
                 void window.api.browser.addWordToDictionary({ browserPageId, word: misspelledWord })
             )
@@ -104,47 +106,36 @@ function buildMenuSections({
     ])
     sections.push([
       editItem(
-        translate('auto.components.browser.pane.BrowserPane.undo', 'Undo'),
+        t('auto.components.browser.pane.BrowserPane.undo', 'Undo'),
         'undo',
         editable.canUndo
       ),
-      editItem(
-        translate('auto.components.browser.pane.BrowserPane.redo', 'Redo'),
-        'redo',
-        editable.canRedo
-      )
+      editItem(t('auto.components.browser.pane.BrowserPane.redo', 'Redo'), 'redo', editable.canRedo)
     ])
     sections.push([
+      editItem(t('auto.components.browser.pane.BrowserPane.cut', 'Cut'), 'cut', editable.canCut),
       editItem(
-        translate('auto.components.browser.pane.BrowserPane.cut', 'Cut'),
-        'cut',
-        editable.canCut
-      ),
-      editItem(
-        translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy'),
+        t('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy'),
         'copy',
         editable.canCopy
       ),
       editItem(
-        translate('auto.components.browser.pane.BrowserPane.paste', 'Paste'),
+        t('auto.components.browser.pane.BrowserPane.paste', 'Paste'),
         'paste',
         editable.canPaste
       ),
       editItem(
         isMac
-          ? translate(
+          ? t(
               'auto.components.browser.pane.BrowserPane.pasteAndMatchStyle',
               'Paste and Match Style'
             )
-          : translate(
-              'auto.components.browser.pane.BrowserPane.pasteAsPlainText',
-              'Paste as Plain Text'
-            ),
+          : t('auto.components.browser.pane.BrowserPane.pasteAsPlainText', 'Paste as Plain Text'),
         'pasteAndMatchStyle',
         editable.canPaste
       ),
       editItem(
-        translate('auto.components.browser.pane.BrowserPane.selectAll', 'Select All'),
+        t('auto.components.browser.pane.BrowserPane.selectAll', 'Select All'),
         'selectAll',
         editable.canSelectAll
       )
@@ -153,21 +144,15 @@ function buildMenuSections({
   if (linkUrl) {
     sections.push([
       item(
-        translate(
-          'auto.components.browser.pane.BrowserPane.b5b87d6cbb',
-          'Open Link In Orca Browser'
-        ),
+        t('auto.components.browser.pane.BrowserPane.b5b87d6cbb', 'Open Link In Orca Browser'),
         () => openInNewTab(linkUrl, false)
       ),
       item(
-        translate(
-          'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
-          'Open Link In Default Browser'
-        ),
+        t('auto.components.browser.pane.BrowserPane.8ce4f6b12e', 'Open Link In Default Browser'),
         () => openExternally(linkUrl)
       ),
       item(
-        translate('auto.components.browser.pane.BrowserPane.efb0e8f7f3', 'Copy Link Address'),
+        t('auto.components.browser.pane.BrowserPane.efb0e8f7f3', 'Copy Link Address'),
         () => void window.api.ui.writeClipboardText(linkUrl)
       )
     ])
@@ -179,7 +164,7 @@ function buildMenuSections({
       ...(openableImageUrl
         ? [
             item(
-              translate(
+              t(
                 'auto.components.browser.pane.BrowserPane.openImageInNewTab',
                 'Open Image in New Tab'
               ),
@@ -188,19 +173,16 @@ function buildMenuSections({
           ]
         : []),
       // Use guest download rules for local Downloads or the client-hosted remote workspace.
-      item(translate('auto.components.browser.pane.BrowserPane.saveImage', 'Save Image'), () =>
+      item(t('auto.components.browser.pane.BrowserPane.saveImage', 'Save Image'), () =>
         webviewRef.current?.downloadURL(image.url)
       ),
       item(
-        translate('auto.components.browser.pane.BrowserPane.copyImage', 'Copy Image'),
+        t('auto.components.browser.pane.BrowserPane.copyImage', 'Copy Image'),
         () => void window.api.browser.copyImageAt({ browserPageId, point: pagePoint }),
         !image.canCopy
       ),
       item(
-        translate(
-          'auto.components.browser.pane.BrowserPane.copyImageAddress',
-          'Copy Image Address'
-        ),
+        t('auto.components.browser.pane.BrowserPane.copyImageAddress', 'Copy Image Address'),
         () => void window.api.ui.writeClipboardText(image.url)
       )
     ])
@@ -213,12 +195,12 @@ function buildMenuSections({
         : [
             // Why: copy the native selection directly, bypassing pages that suppress copy via oncopy handlers.
             item(
-              translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy'),
+              t('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy'),
               () => void window.api.ui.writeClipboardText(selectionText)
             )
           ]),
       item(
-        translate(
+        t(
           'auto.components.browser.pane.BrowserPane.searchSelection',
           'Search {{value0}} for “{{value1}}”',
           {
@@ -239,34 +221,31 @@ function buildMenuSections({
   if (!editable && !linkUrl && !image && !selectionText) {
     sections.push([
       item(
-        translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back'),
-        () => webviewRef.current?.goBack(),
+        t('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back'),
+        () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack()),
         !canGoBack
       ),
       item(
-        translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward'),
-        () => webviewRef.current?.goForward(),
+        t('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward'),
+        () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward()),
         !canGoForward
       ),
-      item(translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload'), onReload)
+      item(t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload'), onReload)
     ])
     sections.push([
       item(
-        translate(
-          'auto.components.browser.pane.BrowserPane.f7ab83f7ed',
-          'Open Page In Default Browser'
-        ),
+        t('auto.components.browser.pane.BrowserPane.f7ab83f7ed', 'Open Page In Default Browser'),
         () => openExternally(pageUrl)
       ),
       item(
-        translate('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL'),
+        t('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL'),
         () => void window.api.ui.writeClipboardText(pageUrl)
       )
     ])
   }
   sections.push([
     item(
-      translate('auto.components.browser.pane.BrowserPane.inspect', 'Inspect'),
+      t('auto.components.browser.pane.BrowserPane.inspect', 'Inspect'),
       () => void window.api.browser.openDevTools({ browserPageId, inspectAt: pagePoint })
     )
   ])
@@ -277,8 +256,9 @@ function buildMenuSections({
 export function BrowserPageContextMenuItems(
   props: BrowserPageContextMenuItemsProps
 ): React.JSX.Element {
+  const t = useTranslate()
   const searchEngine = useAppStore((s) => s.browserDefaultSearchEngine) ?? DEFAULT_SEARCH_ENGINE
-  const sections = buildMenuSections({ ...props, searchEngine })
+  const sections = buildMenuSections({ ...props, searchEngine }, t)
   const { extensionMenu } = props.menu
   return (
     <>

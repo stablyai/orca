@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/constants'
-import { getWorktreeCardDetails } from '../../../../../../shared/worktree/card-properties'
+import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -9,7 +9,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'

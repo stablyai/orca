@@ -1,3 +1,4 @@
+import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
@@ -8,26 +9,24 @@ import {
   listCapableSharedControlSockets,
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
-import { agentHookServer } from '../agent-hooks/server'
-import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
-import { initObservability } from '../observability'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { initObservability } from '../observability/index'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
+import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
+import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
-import { ClaudeUsageStore } from '../claude-usage/store'
-import { CodexUsageStore } from '../codex-usage/store'
-import { OpenCodeUsageStore } from '../opencode-usage/store'
-import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
-import { runAfterFirstWindowShown } from './first-window-deferral'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 
@@ -115,10 +114,23 @@ export function initializeMainProcessObservers(): void {
   })
   state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
   if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
-    })
+    const marker = state.hangDetection
+    const report = (details: NativeHangTelemetry): void => {
+      track('main_thread_hang_detected', {
+        unresponsive_ms: Math.round(marker.unresponsiveMs),
+        self_recovered: marker.selfRecovered,
+        ...details
+      })
+    }
+    if (process.platform === 'darwin') {
+      void import('../hang-watchdog/previous-native-hang-telemetry')
+        .then(({ readPreviousNativeHangTelemetry }) =>
+          readPreviousNativeHangTelemetry(getCanonicalUserDataPath(), marker)
+        )
+        .then(report, () => report({}))
+    } else {
+      report({})
+    }
   }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
@@ -146,8 +158,12 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
-  state.claudeUsage = new ClaudeUsageStore(store)
-  state.codexUsage = new CodexUsageStore(store)
-  state.openCodeUsage = new OpenCodeUsageStore(store)
-  state.museUsage = new MuseUsageStore(store)
+  const usageWorktrees = new UsageWorktreeHistory(
+    store,
+    join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
+  )
+  state.usageWorktreeHistory = usageWorktrees
+  state.backend = new BackendSupervisor(usageWorktrees)
+  state.claudeUsage = state.backend.automationClient('claudeUsage')
+  state.codexUsage = state.backend.automationClient('codexUsage')
 }

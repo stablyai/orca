@@ -4,9 +4,9 @@ import {
   retiredNamesAfterRefresh,
   selectRetiredNameRegistry,
   type RetiredNamesLoad
-} from '../../../src/shared/worktree/retired-name-cache'
-import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
-import type { RpcClient } from '../transport/rpc-client'
+} from '../../../src/shared/worktree/naming/retired-name-cache'
+import type { RetiredNameRegistry } from '../../../src/shared/worktree/naming/retired-name-registry'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { retiredWorktreeNamesRead } from './worktree-catalog-operations'
 
 export function buildRetiredWorktreeNamesRefreshKey(

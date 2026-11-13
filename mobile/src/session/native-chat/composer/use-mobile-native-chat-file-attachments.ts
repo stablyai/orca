@@ -6,12 +6,12 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import { useCallback } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
-import { useMediaPicker } from '../../../platform/media-picker'
-import type { PickedMobileFile } from '../../../platform/media-picker-contract'
-import { encodeBase64Bytes } from '../../../transport/base64-byte-codec'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { useMediaPicker } from '../../../platform/media-picking/media-picker'
+import type { PickedMobileFile } from '../../../platform/media-picking/media-picker-contract'
+import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'
 import { agentSessionPastedTextName } from '../../../../../src/shared/agent-session/agent-session-attachments'
-import { uploadMobileAgentSessionAttachment } from '../../mobile-agent-session-attachment-upload'
+import { uploadMobileAgentSessionAttachment } from '../../../files/attachments/mobile-agent-session-attachment-upload'
 import {
   uploadPickedNativeChatFiles,
   type PendingNativeChatFile

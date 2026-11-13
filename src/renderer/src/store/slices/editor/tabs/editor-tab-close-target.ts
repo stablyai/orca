@@ -9,7 +9,7 @@ import {
   openFileIndex
 } from './workspace-editor-files'
 import { isEditorTabContentType } from './editor-tab-content-type'
-import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 export function editorCloseTarget(state: AppState, id: string) {
   const candidate = editorPlacementIndex(state.unifiedTabsByWorktree).tabById.get(id)

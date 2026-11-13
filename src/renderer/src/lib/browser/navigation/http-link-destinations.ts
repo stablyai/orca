@@ -1,19 +1,19 @@
-import type { BrowserLinkOpenContext } from './browser-link-destination'
-import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
 import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
-import { beginLinkOpenRequest } from '../../link-open-request'
+import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
 import {
   isGitHubPullRequestUrl,
   openGitHubPullRequestUrlInOrca
 } from './http-link-open-pull-request-in-orca'
-import type { Translate } from '@/i18n/use-translate'
 import {
   openHttpLink,
   captureHttpLinkIntent,
-  canHttpLinkOpenInSourceGroup,
-  type HttpLinkSourceOwner
+  canHttpLinkOpenInSourceGroup
 } from '@/lib/browser/navigation/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { BrowserLinkOpenContext } from './browser-link-destination'
+import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
+import type { Translate } from '@/i18n/use-translate'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null

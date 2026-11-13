@@ -1,12 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { describe, it } from 'vitest'
 import {
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
 } from '../../provider-process/provider-process-supervisor'
 import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
-import { classifyCodexTrustGrantError } from '../trust/grants/codex-trust-grant-telemetry'
+
 import {
   alive,
   createSupervisedProbeRig,
@@ -44,14 +44,14 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     const readPids = rig.readPids
     const reported: { pids?: { provider: number; grandchild: number } } = {}
     // Let PID discovery fail before the session deadline if a slow host never arms the stand-in.
-    const startBudgetMs = 8_000
+    const startBudgetMs = 5_000
     const session = runCodexAppServerSession(
       {
         command: standIn,
         cliPath: null,
         args: ['app-server'],
         env: rig.env,
-        timeoutMs: startBudgetMs + 2_000
+        timeoutMs: startBudgetMs + 1_000
       },
       async () => {
         reported.pids = await readPids(startBudgetMs)
@@ -97,25 +97,5 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     expect((events.SIGTERM ?? 0) - (events['stdin-end'] ?? 0)).toBeGreaterThanOrEqual(
       PROVIDER_STDIN_END_GRACE_MS - 50
     )
-  })
-
-  it('reports a missing Codex binary as the spawn error, not an early exit', async ({
-    expect,
-    onTestFinished
-  }) => {
-    const rig = createSupervisedProbeRig()
-    onTestFinished(() => rig.cleanup())
-    const error = await runCodexAppServerSession(
-      {
-        command: join(rig.dir, 'missing', 'codex'),
-        cliPath: null,
-        args: ['app-server'],
-        timeoutMs: 5_000
-      },
-      async () => null
-    ).catch((caught: unknown) => caught)
-
-    expect(error).toMatchObject({ code: 'ENOENT' })
-    expect(classifyCodexTrustGrantError(error)).toBe('binary-missing')
   })
 })

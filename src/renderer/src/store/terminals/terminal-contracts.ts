@@ -3,7 +3,7 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 
 export type TerminalCreationExecutionFacts = {
   hostId: ExecutionHostId

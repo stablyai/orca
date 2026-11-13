@@ -1,3 +1,6 @@
+import { useStore } from 'zustand'
+import type { GitGraphCommitActionsController } from './git-graph-commit-actions-controller'
+import type { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { useMemo, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import {
@@ -8,14 +11,14 @@ import {
 } from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import type { gitGraphScope } from '@/lib/git-graph-tab'
+import type { gitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
 import { gitGraphWorkspaceCatalog } from './git-graph-workspace-navigation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-history-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function useGitGraphWorkspaces(scope: ReturnType<typeof gitGraphScope>) {
   const worktrees = useAppStore(selectWorktreesByRepo)
@@ -36,13 +39,21 @@ export function GitGraphRefs({
   references,
   currentRefId,
   workspaces,
-  onSwitch
+  onSwitch,
+  onCheckout,
+  controller,
+  support
 }: {
   references: GitHistoryItemRef[]
   currentRefId?: string
   workspaces: Map<string, Worktree>
   onSwitch: (refId: string) => Promise<void>
+  onCheckout: (ref: GitHistoryItemRef) => void
+  controller: GitGraphCommitActionsController
+  support: ReturnType<typeof useGitCommitActionsSupport>
 }) {
+  const t = useTranslate()
+  const running = useStore(controller.view, (state) => state.running)
   const [open, setOpen] = useState(false)
   const [menuRef, setMenuRef] = useState<GitHistoryItemRef>()
   const current = references.find((ref) => ref.id === currentRefId)
@@ -83,7 +94,7 @@ export function GitGraphRefs({
             <TooltipTrigger asChild>
               <button
                 className="shrink-0"
-                aria-label={translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+                aria-label={t('gitGraph.switchWorkspace', 'Switch to workspace')}
                 onClick={(event) => {
                   event.stopPropagation()
                   void onSwitch(ref.id)
@@ -92,9 +103,7 @@ export function GitGraphRefs({
                 <ArrowUpRight className="size-3" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>
-              {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
-            </TooltipContent>
+            <TooltipContent>{t('gitGraph.switchWorkspace', 'Switch to workspace')}</TooltipContent>
           </Tooltip>
         )}
       </span>
@@ -113,12 +122,15 @@ export function GitGraphRefs({
         {references.length > inline.length && (
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-              <button className="shrink-0 text-2xs text-muted-foreground">
+              <button
+                className="shrink-0 text-2xs text-muted-foreground"
+                onClick={(event) => event.stopPropagation()}
+              >
                 +{references.length - inline.length}
               </button>
             </PopoverTrigger>
             {open && (
-              <PopoverContent>
+              <PopoverContent onClick={(event) => event.stopPropagation()}>
                 <div className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
                   {references.filter((ref) => !inline.includes(ref)).map(badge)}
                 </div>
@@ -128,13 +140,28 @@ export function GitGraphRefs({
         )}
       </div>
       {menuRef && (
-        <ContextMenuContent>
+        <ContextMenuContent onClick={(event) => event.stopPropagation()}>
           <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>
-            {translate('gitGraph.copyBranch', 'Copy branch name')}
+            {t('gitGraph.copyBranch', 'Copy branch name')}
           </ContextMenuItem>
+          {menuRef.id !== currentRefId &&
+            !workspaces.has(menuRef.id) &&
+            (menuRef.id.startsWith('refs/heads/') || menuRef.id.startsWith('refs/remotes/')) && (
+              <>
+                <ContextMenuItem
+                  disabled={running || !support.supported}
+                  onSelect={() => onCheckout(menuRef)}
+                >
+                  {t('gitGraph.checkoutBranch', 'Check out branch')}
+                </ContextMenuItem>
+                {support.reason && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">{support.reason}</p>
+                )}
+              </>
+            )}
           {workspaces.has(menuRef.id) && (
             <ContextMenuItem onSelect={() => void onSwitch(menuRef.id)}>
-              {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+              {t('gitGraph.switchWorkspace', 'Switch to workspace')}
             </ContextMenuItem>
           )}
         </ContextMenuContent>

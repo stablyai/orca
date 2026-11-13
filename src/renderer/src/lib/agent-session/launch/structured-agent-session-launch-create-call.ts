@@ -1,43 +1,49 @@
 import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import {
-  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
 } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import type {
-  AgentSessionAttachResult,
-  AgentSessionMutationResult
-} from '../../../../../shared/agent-session/agent-session-wire'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
+  isAgentSessionForkSourceAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import {
-  callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,
-  structuredAgentSessionHostCapabilityState,
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
-} from '@/runtime/structured-agent-session-client'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-placement'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import { withFrameDrawnChatTabPlacement } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
-import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
-import {
-  abandonStructuredAgentSessionLaunchIntent,
-  type StructuredAgentSessionLaunchIntent
-} from '../../launch-structured-agent-session'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
+import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import {
   StructuredAgentSessionCreateError,
   StructuredAgentSessionCreateAbandonedError,
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
+import {
+  requireHostForkSupport,
+  inheritedForkCreateOptions,
+  refuseUnsentInheritedFork
+} from './structured-agent-session-launch-fork-support'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  RuntimeRpcCallError
+} from '@/runtime/rpc/calls/runtime-rpc-result'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
+} from '../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
+import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 const DEFINITIVE_CREATE_FAILURE_CODES = [
@@ -90,35 +96,6 @@ async function requireHostCreateSupport(
   return support.seedOptions
 }
 
-/** The refusal a fork gets from a host that does not advertise forks; nothing was sent to it. */
-export const STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL =
-  'structured_agent_session_fork_unsupported'
-
-async function requireHostForkSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
-  if (!intent.params.forkFrom) {
-    return
-  }
-  const support = await structuredAgentSessionHostCapabilityState(
-    intent.target,
-    AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
-  )
-  if (support === 'supported') {
-    return
-  }
-  // An unanswered probe may follow a create whose reply was lost, so it settles nothing.
-  if (support === 'unknown') {
-    throw new StructuredAgentSessionCreateUnknownOutcomeError(
-      'The host could not say whether it forks chats.',
-      'runtime_unavailable'
-    )
-  }
-  abandonStructuredAgentSessionLaunchIntent(intent)
-  throw new StructuredAgentSessionCreateRefusalError(
-    STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL,
-    STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL
-  )
-}
-
 /** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
 const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
 
@@ -164,6 +141,14 @@ export async function launchStructuredAgentSession(
       throw new StructuredAgentSessionCreateAbandonedError('Conversation source kept its terminal.')
     }
     delete intent.createAfter
+  }
+  let forkOptions: Awaited<ReturnType<typeof inheritedForkCreateOptions>>
+  if (intent.params.forkFrom) {
+    try {
+      forkOptions = await inheritedForkCreateOptions(intent)
+    } catch (error) {
+      refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown, error)
+    }
   }
   await requireHostForkSupport(intent)
   const hostSeed = await requireHostCreateSupport(intent)
@@ -212,9 +197,17 @@ export async function launchStructuredAgentSession(
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      params
+      params,
+      ...(forkOptions ? ([forkOptions] as const) : ([] as const))
     )
   } catch (error) {
+    if (
+      forkOptions?.expectedEnvironmentRuntimeId &&
+      (error instanceof RuntimeConnectionChangedBeforeSendError ||
+        (error instanceof RuntimeRpcCallError && error.code === 'runtime_environment_changed'))
+    ) {
+      refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown)
+    }
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)
     if (code) {
       abandonStructuredAgentSessionLaunchIntent(intent)
@@ -233,7 +226,8 @@ export async function launchStructuredAgentSession(
       !priorCreateOutcomeUnknown &&
       result.refusal.createAttemptRefusedBeforeCommit === true &&
       refusal !== undefined &&
-      isAgentSessionCreateAdmissionRefusal(refusal)
+      (isAgentSessionCreateAdmissionRefusal(refusal) ||
+        (!!intent.params.forkFrom && isAgentSessionForkSourceAdmissionRefusal(refusal)))
     // Attempt proof cannot settle an earlier create whose reply was lost.
     if (
       !attemptRefusedBeforeCommit &&

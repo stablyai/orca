@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../../shared/artifacts'
+import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../../shared/artifacts/artifacts'
 import type { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import {
   getShareableBrowserArtifactFile,

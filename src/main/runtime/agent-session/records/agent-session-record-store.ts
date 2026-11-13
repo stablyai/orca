@@ -1,7 +1,7 @@
-import { agentSessionRecordPredecessorIds } from '../../agent-session-record-lineage'
-import { clearSuccessor } from '../../agent-session-sender-identity-revision'
+import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
+import { clearSuccessor } from './agent-session-sender-identity-revision'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
+import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -144,6 +144,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       (id) => clearSuccessor(this.getConversation(id)) === sessionId
     )
   lineageRevision = (): object => this.transactions.lineageRevision()
+  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
@@ -175,8 +176,20 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
     setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
-  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
-    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
+  compareAndSetConversationName: CompareAndSetConversationName = (
+    id,
+    name,
+    expected,
+    context,
+    applicable
+  ) =>
+    compareAndSetAgentSessionRecordName(
+      (apply) => this.mutate(id, apply),
+      name,
+      expected,
+      context,
+      applicable
+    )
 
   /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>

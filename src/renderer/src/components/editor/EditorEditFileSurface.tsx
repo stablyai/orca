@@ -1,5 +1,5 @@
-import { translate } from '@/i18n/i18n'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { useTranslate } from '@/i18n/use-translate'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
@@ -18,9 +18,15 @@ import {
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
-import type { FileContent } from './editor-panel-content-types'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type FileContent,
+  type ReloadContentOptions
+} from './editor-panel-content-types'
 import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
+import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
 import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
@@ -30,7 +36,6 @@ import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
 // Retry is a user act: it may start a stopped WSL distro.
-const USER_RETRY = { wakeWslDistro: true }
 
 const noopEditorContentChange = (_content: string): void => {}
 const noopEditorSave = async (_content: string): Promise<boolean> => false
@@ -108,15 +113,16 @@ export function EditorEditFileSurface({
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
   if (!fileContent) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
+        {t('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
       </div>
     )
   }
@@ -138,7 +144,7 @@ export function EditorEditFileSurface({
         code={fileContent.loadErrorCode}
         worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
-        onHostStarted={() => reloadContent(activeFile)}
+        onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
       />
     )
   }
@@ -188,10 +194,10 @@ export function EditorEditFileSurface({
       <div className="flex h-full flex-col">
         <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {translate(
-            'auto.components.editor.EditorContent.b9de81ba52',
-            'Binary file — cannot display'
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+          {t('auto.components.editor.EditorContent.b9de81ba52', 'Binary file — cannot display')}
+          {fileContent.byteSource && (
+            <BinaryFileDefaultAppButton key={activeFile.id} source={fileContent.byteSource} />
           )}
         </div>
       </div>

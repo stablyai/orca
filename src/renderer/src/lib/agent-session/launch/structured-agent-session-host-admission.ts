@@ -9,10 +9,8 @@ import { STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY } f
 import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import {
-  callStructuredAgentSession,
-  structuredAgentSessionHostCapabilityState
-} from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 
 /** The host answers a worktree selector it cannot resolve yet with this rather than a verdict. */
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'

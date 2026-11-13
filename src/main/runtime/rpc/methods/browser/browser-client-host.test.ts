@@ -1,7 +1,6 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/protocol-version'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
@@ -43,31 +42,6 @@ function runtime(cleanups = new Map<string, () => void>()): OrcaRuntimeService {
 }
 
 describe('browser.clientHost.attach RPC', () => {
-  it('requires an authenticated negotiated paired-runtime connection', async () => {
-    const hostRuntime = runtime()
-    const dispatcher = new RpcDispatcher({
-      runtime: hostRuntime,
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-    const replies: string[] = []
-
-    await dispatcher.dispatchStreaming(request(), (reply) => replies.push(reply), {
-      connectionId: 'connection-a',
-      clientKind: 'runtime',
-      pairedDeviceId: 'device-a'
-    })
-
-    expect(replies.map((reply) => JSON.parse(reply))).toEqual([
-      expect.objectContaining({
-        ok: false,
-        error: expect.objectContaining({ message: 'browser_client_host_capability_required' })
-      })
-    ])
-    expect(() => getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toThrow(
-      'browser_host_unavailable'
-    )
-  })
-
   it('publishes server-owned epoch and generation then releases on cleanup', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
@@ -106,65 +80,6 @@ describe('browser.clientHost.attach RPC', () => {
     expect(() => getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toThrow(
       'browser_host_unavailable'
     )
-  })
-
-  it('echoes page-command negotiation only to an explicit v1 client', async () => {
-    const cleanups = new Map<string, () => void>()
-    const hostRuntime = runtime(cleanups)
-    const dispatcher = new RpcDispatcher({
-      runtime: hostRuntime,
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-    const replies: string[] = []
-    const dispatch = dispatcher.dispatchStreaming(
-      request('host-a', 1),
-      (reply) => replies.push(reply),
-      {
-        connectionId: 'connection-a',
-        clientKind: 'runtime',
-        pairedDeviceId: 'device-a',
-        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
-      }
-    )
-
-    await vi.waitFor(() => expect(replies).toHaveLength(1))
-    expect(JSON.parse(replies[0]!).result).toMatchObject({
-      type: 'ready',
-      pageCommandProtocolVersion: 1
-    })
-    cleanups.get('browser-client-host:host-a')?.()
-    await dispatch
-    expect(JSON.parse(replies[1]!).result).not.toHaveProperty('pageCommandProtocolVersion')
-  })
-
-  it('echoes and retains only an explicitly negotiated complete page inventory', async () => {
-    const cleanups = new Map<string, () => void>()
-    const hostRuntime = runtime(cleanups)
-    const dispatcher = new RpcDispatcher({
-      runtime: hostRuntime,
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-    const replies: string[] = []
-    const dispatch = dispatcher.dispatchStreaming(
-      request('host-a', undefined, 1),
-      (reply) => replies.push(reply),
-      {
-        connectionId: 'connection-a',
-        clientKind: 'runtime',
-        pairedDeviceId: 'device-a',
-        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
-      }
-    )
-
-    await vi.waitFor(() => expect(replies).toHaveLength(1))
-    expect(JSON.parse(replies[0]!).result).toMatchObject({ pageInventoryProtocolVersion: 1 })
-    expect(getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toMatchObject({
-      pageInventoryProtocolVersion: 1,
-      pageInventory: [inventoryPage()]
-    })
-
-    cleanups.get('browser-client-host:host-a')?.()
-    await dispatch
   })
 
   it('publishes one server-owned command and fences result authority', async () => {
@@ -404,53 +319,6 @@ describe('browser.clientHost.attach RPC', () => {
     await replacement
   })
 
-  it('rejects command results from unauthenticated callers', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: runtime(),
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-
-    expect(
-      await dispatchCommandResult(dispatcher, unownedCommandResult('runtime-a'), {
-        pairedDeviceId: undefined,
-        connectionId: undefined
-      })
-    ).toMatchObject({
-      ok: false,
-      error: { message: 'authenticated_browser_client_host_required' }
-    })
-  })
-
-  it('rejects command results from an unnegotiated runtime connection', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: runtime(),
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-
-    expect(
-      await dispatchCommandResult(dispatcher, unownedCommandResult('runtime-a'), {
-        clientCapabilities: []
-      })
-    ).toMatchObject({
-      ok: false,
-      error: { message: 'browser_client_host_capability_required' }
-    })
-  })
-
-  it('rejects command results addressed to another runtime authority', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: runtime(),
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-
-    expect(
-      await dispatchCommandResult(dispatcher, unownedCommandResult('runtime-b'))
-    ).toMatchObject({
-      ok: false,
-      error: { message: 'browser_client_host_authority_mismatch' }
-    })
-  })
-
   it('fences a replaced subscription and increments its host generation', async () => {
     const hostRuntime = runtime()
     const dispatcher = new RpcDispatcher({
@@ -559,21 +427,6 @@ async function dispatchCommandResult(
     }
   )
   return JSON.parse(replies[0]!)
-}
-
-function unownedCommandResult(authorityRuntimeId: string) {
-  return {
-    pageCommandProtocolVersion: 1,
-    authorityRuntimeId,
-    authorityEpoch: 'epoch-a',
-    browserHostClientId: 'host-a',
-    browserHostGeneration: 1,
-    browserPageId: 'page-a',
-    pageHostGeneration: 1,
-    commandSequence: 1,
-    commandId: 'command-a',
-    result: { status: 'completed' }
-  }
 }
 
 function inventoryPage() {

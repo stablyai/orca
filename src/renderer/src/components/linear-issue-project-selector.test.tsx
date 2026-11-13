@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
+import { normalizeTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
 
 const runtimeMocks = vi.hoisted(() => ({

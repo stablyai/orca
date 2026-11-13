@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   webContents: { fromFrame: fromFrameMock }
 }))
 
-vi.mock('../browser-manager', () => ({
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { getRendererContextForGuest: getRendererContextForGuestMock }
 }))
 import {

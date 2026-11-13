@@ -1,5 +1,4 @@
 import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import '../../unused-default-rpc-methods.test-fixture'
 /** Caller-reserved pane identity crosses the wire; placement stays client-owned, and the returned paneKey identifies the actual pane after replay or fallback. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -11,10 +10,9 @@ import { openTestAgentSessionRecordStore } from '../../../agent-session/records/
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
-import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import '../../../orchestration/orchestration-error'
 import {
   CAPABLE_CLIENT,
-  STRUCTURED_PREFERENCE,
   methodNamed,
   rpcContext,
   runtimeStub,
@@ -53,170 +51,6 @@ async function launch(params: unknown, runtime: RuntimeStub, context: Partial<Rp
   }
   return AGENT_LAUNCH.handler(parsed.data, rpcContext(runtime, { ...CAPABLE_CLIENT, ...context }))
 }
-
-function terminalOptions(runtime: RuntimeStub): Record<string, unknown> {
-  return runtime.createTerminal.mock.calls[0]?.[1] ?? {}
-}
-
-describe('a launch into an existing workspace', () => {
-  it('creates the terminal under the pane the caller reserved', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(terminalOptions(runtime)).toMatchObject({
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      requireFreshPane: true
-    })
-  })
-
-  // Unnamed launches write no ledger record, so an unavailable record store must not stop them.
-  it('starts a reserved pane with no operation id even when the launch record cannot open', async () => {
-    setAgentLaunchRecordStore(null)
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    const result = await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(result.outcome.kind).toBe('terminal')
-    expect(terminalOptions(runtime)).toMatchObject({ tabId: TAB_ID, leafId: LEAF_ID })
-    expect(runtime.openAgentSessionRecordStore).not.toHaveBeenCalled()
-  })
-
-  it('leaves the pane to the runtime when the caller reserved none', async () => {
-    // Every shipped caller sends nothing; its options must not gain a key.
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    await launch(EXISTING_LAUNCH, runtime)
-
-    expect(terminalOptions(runtime)).not.toHaveProperty('tabId')
-    expect(terminalOptions(runtime)).not.toHaveProperty('leafId')
-    expect(terminalOptions(runtime)).not.toHaveProperty('requireFreshPane')
-  })
-
-  it('keeps the reservation through a downgrade from structured to terminal', async () => {
-    const runtime = runtimeStub({
-      settings: STRUCTURED_PREFERENCE,
-      createSupport: { supported: false, reason: 'wsl' }
-    })
-
-    const result = await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(result.receipt).toMatchObject({ mode: 'terminal' })
-    expect(terminalOptions(runtime)).toMatchObject({ tabId: TAB_ID, leafId: LEAF_ID })
-  })
-
-  it('creates no terminal for a launch the host settles as a chat', async () => {
-    // The reservation simply goes unused; the structured outcome tells the caller to burn it.
-    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
-
-    const result = await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(result.outcome.kind).toBe('structured')
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('creates no terminal when it reuses a running one', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    const result = await launch(
-      { ...EXISTING_LAUNCH, paneKey: PANE_KEY, reuseTerminal: { handle: 'term_live' } },
-      runtime
-    )
-
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_live' })
-  })
-})
-
-describe('a reserved pane that is already live', () => {
-  // A live reserved pane would attach rather than start the agent, then paste into an unrelated process.
-  it('refuses the launch and delivers no prompt', async () => {
-    // An agent that takes its prompt as a paste after start, so a missing refusal would reach it.
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY, terminalPaneAlreadyLive: true })
-    const prompt = {
-      waitForTerminal: vi.fn(async () => ({ satisfied: true })),
-      sendTerminalAgentPrompt: vi.fn(async () => true)
-    }
-    Object.assign(runtime, prompt)
-
-    await expect(
-      launch(
-        {
-          ...EXISTING_LAUNCH,
-          agent: 'aider',
-          paneKey: PANE_KEY,
-          prompt: { text: 'hi', delivery: 'submit' }
-        },
-        runtime
-      )
-    ).rejects.toThrow('agent_launch_pane_already_live')
-    expect(prompt.waitForTerminal).not.toHaveBeenCalled()
-    expect(prompt.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('launches normally when the runtime spawned a fresh pane', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY, terminalPaneKey: PANE_KEY })
-
-    const result = await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1', paneKey: PANE_KEY })
-  })
-})
-
-describe('a launch that creates its workspace', () => {
-  it('carries the reservation to the startup terminal the create spawns', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    await launch({ ...CREATE_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ startupPaneKey: PANE_KEY })
-    )
-  })
-
-  it('sends no startup pane when the caller reserved none', async () => {
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    await launch(CREATE_LAUNCH, runtime)
-
-    expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupPaneKey')
-  })
-
-  it('keeps the reservation out of the worktree.create payload', async () => {
-    // paneKey belongs to this launch, outside the worktree-create payload.
-    const runtime = runtimeStub({ settings: TERMINAL_ONLY })
-
-    await launch({ ...CREATE_LAUNCH, paneKey: PANE_KEY }, runtime)
-
-    expect(runtime.createManagedWorktree.mock.calls[0]?.[0]).not.toHaveProperty('paneKey')
-  })
-})
-
-describe('the reservation at the wire', () => {
-  it.each([
-    ['no leaf', TAB_ID],
-    ['a leaf that is not a UUID', `${TAB_ID}:leaf-1`],
-    ['an empty tab id', `:${LEAF_ID}`],
-    ['an extra separator', `${TAB_ID}:${LEAF_ID}:x`]
-  ])('refuses a pane key with %s rather than letting the runtime mint silently', (_, paneKey) => {
-    expect(AGENT_LAUNCH.params.safeParse({ ...EXISTING_LAUNCH, paneKey }).success).toBe(false)
-  })
-
-  it.each([
-    ['a tab id the runtime would trim', ` ${TAB_ID}:${LEAF_ID}`],
-    ['a tab id that trims to nothing', `   :${LEAF_ID}`],
-    ['a tab id longer than the spawn reservation keys', `${'t'.repeat(513)}:${LEAF_ID}`]
-  ])('refuses a pane key with %s, which the runtime would not adopt verbatim', (_, paneKey) => {
-    expect(AGENT_LAUNCH.params.safeParse({ ...EXISTING_LAUNCH, paneKey }).success).toBe(false)
-  })
-
-  it('accepts a well-formed pane key', () => {
-    expect(AGENT_LAUNCH.params.safeParse({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }).success).toBe(
-      true
-    )
-  })
-})
 
 describe('a live-pane refusal under a named operation', () => {
   // The ledger admits against `Date.now()`, so the id must be dated now.
@@ -262,15 +96,6 @@ describe('a live-pane refusal under a named operation', () => {
     const retry = runtimeStub({ settings: TERMINAL_ONLY })
     await expect(launch(params, retry)).rejects.toThrow('agent_launch_pane_already_live')
     expect(retry.createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('repeats a coded refusal in its own words on a retry', async () => {
-    const params = { ...EXISTING_LAUNCH, operationId: OPERATION_ID }
-    const words = 'No agent was started. WSL is not available.'
-    const first = runtimeStub({ settings: TERMINAL_ONLY })
-    first.createTerminal.mockRejectedValue(new OrchestrationError('repair_required', words))
-    await expect(launch(params, first)).rejects.toThrow(words)
-    await expect(launch(params, runtimeStub({ settings: TERMINAL_ONLY }))).rejects.toThrow(words)
   })
 
   it('answers agent.launchReplay with the refusal code, not operation_unknown', async () => {

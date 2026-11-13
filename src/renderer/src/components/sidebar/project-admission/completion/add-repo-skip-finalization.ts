@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { isDefaultBranchWorkspace } from '../../../../../../shared/worktree/workspace-kinds'
+import { isDefaultBranchWorkspace } from '../../../../../../shared/worktree/visibility/workspace-kinds'
 import {
   revealRepoInProjectFilter,
   type ProjectFilterRevealState

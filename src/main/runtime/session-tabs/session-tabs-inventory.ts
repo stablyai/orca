@@ -9,20 +9,18 @@ import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminal
 import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { OrcaRuntimeWithSyncWindowGraph } from '../session-graph/session-window-graph'
-import {
-  mainTerminalSurfaces,
-  type MainTerminalSurfacesHost
-} from '../terminal/surface/main-terminal-surfaces'
+import { mainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import type { MainTerminalSurfacesHost } from '../terminal/surface/main-terminal-surfaces-host'
 import type { WorkspaceLayoutReads } from '../terminal/surface/workspace-layout-stream'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
-import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
-import type { PaneStartStatuses } from '../pane-start-statuses'
+import type { PtyControllerInventory } from '../terminal/lifecycle/runtime-pty-controller-contract'
+import type { PaneStartStatuses } from '../terminal/surface/pane-start-statuses'
 import {
   paneOfPty,
   type PtyPane,

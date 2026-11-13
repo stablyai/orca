@@ -1,3 +1,8 @@
+import {
+  openingMessageReceipt,
+  openingMessageReceiptRefusal
+} from '../operations/structured-agent-session-command-receipt'
+import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
@@ -31,7 +36,6 @@ import {
 } from '../providers/structured-agent-session-provider-support'
 import { performSend } from '../operations/structured-agent-session-turns'
 import { observedReceipt } from '../operations/structured-agent-session-operation-settlement'
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent-session-replay-outcome'
 import { openingMessageOptions } from '../options/structured-agent-session-execution-options'
 
@@ -45,14 +49,14 @@ export type StructuredAgentSessionCreateOptions = {
 
 export function createStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
-  callerKey: string,
+  caller: StructuredAgentSessionCaller,
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionCreateOptions = {}
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   return context.tasks.trackAttach(
     context.serialize(params.envelope.sessionId, async () => {
       try {
-        return await foundConversation(context, callerKey, params, options)
+        return await foundConversation(context, caller, params, options)
       } catch (error) {
         if (isAgentSessionRefusalError(error)) {
           return { ok: false, refusal: error.refusal }
@@ -66,10 +70,11 @@ export function createStructuredAgentSession(
 
 async function foundConversation(
   context: StructuredAgentSessionAttachContext,
-  callerKey: string,
+  caller: StructuredAgentSessionCaller,
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionCreateOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  const { callerKey } = caller
   const { deps } = context
   const { store } = deps
   const sessionId = params.envelope.sessionId
@@ -213,7 +218,10 @@ async function foundConversation(
             persistedOptions: candidate.record.options,
             persistOptions: async () => {},
             publish: () => {},
-            operationReceipt: observedReceipt(store, store.founding.receipt(request)),
+            operationReceipt: observedReceipt(
+              store,
+              openingMessageReceipt(store, request, first.clientMessageId)
+            ),
             now: context.now
           },
           {
@@ -224,8 +232,18 @@ async function foundConversation(
             ...(first.selection === undefined
               ? openingMessageOptions(candidate.record.options)
               : {})
+          },
+          caller.userClient,
+          caller.telemetryOwnerKey
+        ).catch((error: unknown) => {
+          if (!(error instanceof CommandReceiptExistsError)) {
+            throw error
           }
-        )
+          return {
+            ok: false as const,
+            refusal: openingMessageReceiptRefusal(error, first.clientMessageId, params.envelope)
+          }
+        })
         if (!sent.ok) {
           return sent
         }
@@ -282,22 +300,5 @@ async function foundConversation(
     if (!committed && !existing) {
       await session.journal.close()
     }
-  }
-}
-
-export function structuredAgentSessionEntryDelegates(
-  context: () => StructuredAgentSessionAttachContext
-) {
-  return {
-    attach: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: Parameters<typeof attachStructuredAgentSession>[3]
-    ) => attachStructuredAgentSession(context(), caller.callerKey, params, options),
-    create: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: StructuredAgentSessionCreateOptions
-    ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
 }

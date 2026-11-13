@@ -7,6 +7,7 @@ import {
 } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
@@ -152,8 +153,11 @@ export function summaryContributionSource(
   }
 }
 
-function languageDetail(coverage: number | undefined): Pick<PluginContribution, 'detail' | 'tone'> {
-  const label = translate(
+function languageDetail(
+  coverage: number | undefined,
+  t: Translate = translate
+): Pick<PluginContribution, 'detail' | 'tone'> {
+  const label = t(
     'auto.components.settings.PluginDetailSections.typeLanguagePack',
     'Interface language'
   )
@@ -162,7 +166,7 @@ function languageDetail(coverage: number | undefined): Pick<PluginContribution, 
   }
   if (coverage < PLUGIN_LANGUAGE_PACK_MIN_COVERAGE) {
     return {
-      detail: translate(
+      detail: t(
         'auto.components.settings.pluginContributions.languageIncomplete',
         '{{value0}}% translated, too incomplete to use as Orca’s language',
         { value0: coverage }
@@ -171,7 +175,7 @@ function languageDetail(coverage: number | undefined): Pick<PluginContribution, 
     }
   }
   return {
-    detail: translate(
+    detail: t(
       'auto.components.settings.pluginContributions.languageCoverage',
       'Interface language · {{value0}}% translated',
       { value0: coverage }
@@ -182,7 +186,9 @@ function languageDetail(coverage: number | undefined): Pick<PluginContribution, 
 
 /** Every named contribution as a row, in the order a reader scans: looks, languages, then UI. */
 export function describePluginContributions(
-  source: PluginContributionSource
+  source: PluginContributionSource,
+  t: Translate = translate,
+  intlLocale?: string
 ): PluginContribution[] {
   const rows: PluginContribution[] = []
   for (const theme of source.themes) {
@@ -191,8 +197,9 @@ export function describePluginContributions(
       kind: 'themes',
       title: theme.label,
       detail: withMode(
-        translate('auto.components.settings.PluginDetailSections.typeAppTheme', 'App theme'),
-        theme.base
+        t('auto.components.settings.PluginDetailSections.typeAppTheme', 'App theme'),
+        theme.base,
+        t
       ),
       tone: 'default'
     })
@@ -203,11 +210,9 @@ export function describePluginContributions(
       kind: 'terminalThemes',
       title: theme.label,
       detail: withMode(
-        translate(
-          'auto.components.settings.PluginDetailSections.typeTerminalTheme',
-          'Terminal theme'
-        ),
-        theme.mode
+        t('auto.components.settings.PluginDetailSections.typeTerminalTheme', 'Terminal theme'),
+        theme.mode,
+        t
       ),
       tone: 'default'
     })
@@ -217,17 +222,14 @@ export function describePluginContributions(
       key: `iconThemes:${theme.id}`,
       kind: 'iconThemes',
       title: theme.label,
-      detail: translate(
-        'auto.components.settings.PluginDetailSections.typeIconTheme',
-        'File icon theme'
-      ),
+      detail: t('auto.components.settings.PluginDetailSections.typeIconTheme', 'File icon theme'),
       tone: 'default'
     })
   }
-  rows.push(...fontContributionRows(source.fonts))
+  rows.push(...fontContributionRows(source.fonts, t))
   for (const syntax of source.syntaxes) {
     const files = fileList(syntax.extensions, syntax.filenames)
-    const label = translate(
+    const label = t(
       'auto.components.settings.PluginDetailSections.typeSyntax',
       'Syntax highlighting'
     )
@@ -236,7 +238,7 @@ export function describePluginContributions(
       kind: 'syntaxes',
       title: syntax.label,
       detail: syntax.failed
-        ? translate(
+        ? t(
             'auto.components.settings.PluginSettingsRow.syntaxFailed',
             'Highlighting stopped: this grammar failed.'
           )
@@ -250,8 +252,8 @@ export function describePluginContributions(
     rows.push({
       key: `languagePacks:${language.locale}`,
       kind: 'languagePacks',
-      title: languageDisplayName(language.locale),
-      ...languageDetail(language.coverage)
+      title: languageDisplayName(language.locale, intlLocale),
+      ...languageDetail(language.coverage, t)
     })
   }
   for (const [index, title] of source.panels.entries()) {
@@ -259,14 +261,14 @@ export function describePluginContributions(
       key: `panels:${index}`,
       kind: 'panels',
       title,
-      detail: translate('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel'),
+      detail: t('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel'),
       tone: 'default'
     })
   }
   for (const [index, editor] of source.customEditors.entries()) {
-    const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
+    const label = t('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
     const files = fileList(editor.extensions, editor.filenames)
-    const takeover = customEditorTakeover(editor)
+    const takeover = customEditorTakeover(editor, t)
     rows.push({
       key: `customEditors:${index}`,
       kind: 'customEditors',
@@ -277,7 +279,7 @@ export function describePluginContributions(
   }
   for (const [index, newFile] of source.newFiles.entries()) {
     // Why no name: the row title is the menu item itself, so title and detail read as one line.
-    const label = translate(
+    const label = t(
       'auto.components.settings.pluginContributions.newFileMenu',
       'Adds to the + menu'
     )
@@ -289,13 +291,13 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
-  rows.push(...statusBarContributionRows(source.statusBarItems))
+  rows.push(...statusBarContributionRows(source.statusBarItems, t))
   for (const [index, title] of source.vmRecipes.entries()) {
     rows.push({
       key: `vmRecipes:${index}`,
       kind: 'vmRecipes',
       title,
-      detail: translate('auto.components.settings.PluginDetailSections.recipe', 'Machine recipe'),
+      detail: t('auto.components.settings.PluginDetailSections.recipe', 'Machine recipe'),
       tone: 'default'
     })
   }

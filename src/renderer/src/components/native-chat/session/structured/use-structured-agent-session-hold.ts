@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { structuredAgentSessionHolderId } from '../../../../../../shared/agent-session/view/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 
 export function useStructuredAgentSessionHold(args: {
   sessionId: string

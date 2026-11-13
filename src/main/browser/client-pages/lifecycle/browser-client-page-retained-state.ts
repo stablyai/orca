@@ -1,8 +1,6 @@
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type {
-  BrowserClientPageNetworkRoute,
-  BrowserClientPageRenderer
-} from './browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import type {
   BrowserRouteGuestLifecycleClaim,
   BrowserRoutePageGuestIdentity
@@ -20,7 +18,7 @@ export type BrowserClientPageLifecycleRegistry = Pick<
   | 'beginGuestRetirement'
 > &
   Partial<Pick<BrowserRouteWebContentsRegistry, 'rekeyGuestLifecycle' | 'watchPageAvailability'>> &
-  Partial<Pick<BrowserRouteWebContentsRegistry, 'grantReconciledNavigation'>>
+  Partial<Pick<BrowserRouteWebContentsRegistry, 'grantReconciledNavigation' | 'initializeGuest'>>
 
 export type BrowserClientRetainedPage = {
   generation: number
@@ -30,6 +28,7 @@ export type BrowserClientRetainedPage = {
   renderer: BrowserClientPageRenderer
   route: BrowserClientPageNetworkRoute
   routeSession: BrowserRouteSessionHandle
+  cleanup?: (() => Promise<void>) & { nativeNetworkRetired?(): boolean }
   retiring: Promise<void> | null
   reconciling: boolean
   releaseAvailabilityWatch?: () => void
@@ -59,7 +58,6 @@ export function forgetBrowserClientRetainedPage(
 
 export async function retireBrowserClientRetainedPage(
   pages: Map<string, BrowserClientRetainedPage>,
-  failedPages: Map<string, BrowserClientHostedPageInventory>,
   browserPageId: string,
   pageHostGeneration: number,
   cleanupPage: (page: BrowserClientRetainedPage) => Promise<void>
@@ -68,12 +66,11 @@ export async function retireBrowserClientRetainedPage(
   if (!page || page.generation !== pageHostGeneration) {
     return false
   }
-  page.retiring ??= cleanupPage(page)
+  page.retiring = cleanupPage(page)
   try {
     await page.retiring
   } catch (error) {
-    forgetBrowserClientRetainedPage(pages, browserPageId, page)
-    failedPages.set(browserPageId, Object.freeze({ ...page.inventory, state: 'outcomeUnknown' }))
+    page.inventory = Object.freeze({ ...page.inventory, state: 'outcomeUnknown' })
     throw error
   }
   forgetBrowserClientRetainedPage(pages, browserPageId, page)

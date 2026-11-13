@@ -1,6 +1,6 @@
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/web-runtime-request-registry'
-import { assertFileMutationOwnershipCapability } from '../../../../../shared/file-mutation-ownership'
+import { assertFileMutationOwnershipCapability } from '../../../../../shared/file-write/file-mutation-ownership'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import {

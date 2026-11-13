@@ -2,11 +2,11 @@ import {
   ManagedServerRecover,
   ManagedServerSelector,
   ManagedServerUpdate
-} from '../../../../../shared/rpc-contract/managed-server-params'
+} from '../../../../../shared/rpc-contract/host-management/managed-server-params'
 import {
   getManagedServerActions,
   type ManagedServerActions
-} from '../../../managed-server-actions-registry'
+} from '../../../hosts/management/managed-server-actions-registry'
 import { defineMethod } from '../../core'
 
 // Only desktop main registers actions; report absence like an older host's method_not_found.

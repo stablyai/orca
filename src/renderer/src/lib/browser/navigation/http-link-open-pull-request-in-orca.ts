@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
-import { findMatchingRepoForSlug } from '@/components/new-workspace/smart-workspace-repo-slug'
+import { findMatchingRepoForSlug } from '@/components/new-workspace/source-search/smart-workspace-repo-slug'
 import { translate } from '@/i18n/i18n'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { useAppStore } from '@/store'
-import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
 
 export function isGitHubPullRequestUrl(url: string | undefined): boolean {
   return url !== undefined && parseGitHubIssueOrPRLink(url)?.type === 'pr'

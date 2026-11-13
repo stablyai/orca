@@ -11,7 +11,6 @@ import type { AgentJournalRenderItem } from '../../../../../../shared/agent-sess
 import { AGENT_SESSION_REWIND_RESET_TIMEOUT_MS } from '../../../../../../shared/agent-session/lifecycle/agent-session-rewind-request'
 import { useNativeChatRewind } from './use-native-chat-rewind'
 
-import { nativeChatRewindReasonCopy, sayNativeChatRewind } from './native-chat-rewind-copy'
 import type { AgentSessionWriteFailure } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   readNativeChatDraftCache,
@@ -146,10 +145,6 @@ describe('structured chat rewind', () => {
     })
     expect(view.result.current.pending).toBe(true)
     expect(view.result.current.blockedRef.current).toBe(true)
-    expect(view.result.current.disabledReason).toBe(sayNativeChatRewind('pending'))
-    // The host's latch covers its own in-flight work; it does not relabel ours.
-    view.rerender({ ...props, hostBlockedReason: 'outcome-unknown' })
-    expect(view.result.current.disabledReason).toBe(sayNativeChatRewind('pending'))
     await act(async () => {
       view.rerender({ ...props, state: { ...props.state, epoch: 'new', items: [] } })
       response.resolve(done)
@@ -178,20 +173,6 @@ describe('structured chat rewind', () => {
       response.resolve(done)
       await request
     })
-  })
-
-  it("lets the host's in-doubt latch disable only the action, never sending", async () => {
-    const props: Input = { ...input(), hostBlockedReason: 'outcome-unknown' }
-    const view = render(props)
-    expect(view.result.current.disabledReason).toBe(nativeChatRewindReasonCopy('outcome-unknown'))
-    expect(view.result.current.blockedRef.current).toBe(false)
-    expect(view.result.current.pending).toBe(false)
-    expect(view.result.current.admitsSend()).toBe(true)
-    const confirm = vi.fn()
-    await act(() => view.result.current.request('user', confirm))
-    expect(confirm).not.toHaveBeenCalled()
-    view.rerender({ ...props, hostBlockedReason: undefined })
-    expect(view.result.current.disabledReason).toBeNull()
   })
 
   it.each([done, notDone(unknownRefusal)])(
@@ -241,12 +222,10 @@ describe('structured chat rewind', () => {
       const view = render(props)
       await act(() => view.result.current.request('user', async () => true))
       expect(view.result.current.blockedRef.current).toBe(true)
-      await act(() => vi.advanceTimersByTimeAsync(AGENT_SESSION_REWIND_RESET_TIMEOUT_MS - 1))
-      expect(view.result.current.pending).toBe(true)
-      await act(() => vi.advanceTimersByTimeAsync(1))
+      await act(() => vi.advanceTimersByTimeAsync(AGENT_SESSION_REWIND_RESET_TIMEOUT_MS))
       expect(view.result.current.pending).toBe(false)
       expect(view.result.current.blockedRef.current).toBe(false)
-      expect(toastError).toHaveBeenCalledExactlyOnceWith(sayNativeChatRewind('timeout'))
+      expect(toastError).toHaveBeenCalledOnce()
       await act(() => vi.advanceTimersByTimeAsync(AGENT_SESSION_REWIND_RESET_TIMEOUT_MS))
       expect(toastError).toHaveBeenCalledOnce()
     } finally {

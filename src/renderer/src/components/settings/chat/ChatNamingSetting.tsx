@@ -10,18 +10,19 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { CUSTOM_AGENT_ID } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { useTranslate } from '@/i18n/use-translate'
 import { Switch } from '../../ui/switch'
-import { Card, CardContent } from '../../ui/card'
 import { SourceControlActionRecipeRow } from '../source-control/SourceControlActionRecipeRow'
 import { replayGlobalTextModelEdits } from '../source-control/text-actions/source-control-text-action-model-replay'
 import { CustomAgentCommandField } from '../source-control/CustomAgentCommandField'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { useAppStore } from '../../../store/index'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import type { ActionRecipeDraftValue } from '../source-control/source-control-ai-action-recipe-draft'
-import { AppearanceAdvancedDisclosure } from '../appearance/AppearanceAdvancedDisclosure'
 
 type ChatNamingSettingProps = {
   settings: GlobalSettings
@@ -37,7 +38,9 @@ export function ChatNamingSetting({
   writeSourceControlAiSettings,
   onDirtyChange,
   forceVisible = false
-}: ChatNamingSettingProps): React.JSX.Element {
+}: ChatNamingSettingProps): React.JSX.Element | null {
+  const t = useTranslate()
+  const query = useAppStore((state) => state.settingsSearchQuery)
   const config = useMemo(
     () => normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
     [settings.sourceControlAi, settings.commitMessageAi]
@@ -133,7 +136,7 @@ export function ChatNamingSetting({
       onDirtyChangeRef.current?.(hasNewEdits || hasNewCommandEdits)
     } catch (error) {
       console.error('Failed to save chat name recipe', error)
-      toast.error(translate('settings.chat.names.saveFailed', 'Could not save chat name settings.'))
+      toast.error(t('settings.chat.names.saveFailed', 'Could not save chat name settings.'))
     } finally {
       setIsSaving(false)
     }
@@ -154,7 +157,7 @@ export function ChatNamingSetting({
       }))
     } catch (error) {
       console.error('Failed to save chat name agent', error)
-      toast.error(translate('settings.chat.names.saveFailed', 'Could not save chat name settings.'))
+      toast.error(t('settings.chat.names.saveFailed', 'Could not save chat name settings.'))
     }
   }
 
@@ -179,45 +182,46 @@ export function ChatNamingSetting({
     : null
   const cliAgent = cliRecipe?.ok ? cliRecipe.value.params.agentId : null
   const defaultAgentLabel = cliAgent
-    ? translate('settings.chat.names.configuredCliAgent', 'Use configured CLI agent ({{agent}})', {
+    ? t('settings.chat.names.configuredCliAgent', 'Use configured CLI agent ({{agent}})', {
         agent:
           cliAgent === 'custom'
-            ? translate(
+            ? t(
                 'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
                 'Custom command'
               )
             : getAgentLabel(cliAgent)
       })
     : cliRecipe
-      ? translate('settings.chat.names.configuredCliAgentUnknown', 'Use configured CLI agent')
-      : translate('settings.chat.names.useChatAgent', 'Use chat agent')
+      ? t('settings.chat.names.configuredCliAgentUnknown', 'Use configured CLI agent')
+      : t('settings.chat.names.useChatAgent', 'Use chat agent')
   const searchEntry = getChatNamingSearchEntry()
+  // Skip the whole group, not just its row, so a filtered-out row leaves no titled empty card.
+  if (!forceVisible && !dirty && !matchesSettingsSearch(query, [searchEntry])) {
+    return null
+  }
   return (
-    <SearchableSetting
-      {...searchEntry}
-      id="chat-names"
-      forceVisible={forceVisible || dirty}
-      className="max-w-none space-y-3"
-    >
-      <SettingsSubsectionHeader title={searchEntry.title} />
-      <Card>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">{searchEntry.description}</p>
-              </div>
-              <Switch
-                aria-label={translate('settings.chat.names.enable', 'Name chats automatically')}
-                checked={settings.nativeChatAutoName !== false}
-                onCheckedChange={(checked) => updateSettings({ nativeChatAutoName: checked })}
-              />
-            </div>
-            {settings.nativeChatAutoName !== false || dirty ? (
-              <AppearanceAdvancedDisclosure
-                forceOpen={dirty || isSaving}
-                contentClassName="space-y-3 pt-3"
-              >
+    // The anchor wraps the group so navigation lands on the Chat names heading.
+    <SettingsGroup id="chat-names" title={searchEntry.title}>
+      <SearchableSetting
+        {...searchEntry}
+        forceVisible={forceVisible || dirty}
+        className="max-w-none"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">{searchEntry.description}</p>
+          </div>
+          <Switch
+            aria-label={t('settings.chat.names.enable', 'Name chats automatically')}
+            checked={settings.nativeChatAutoName !== false}
+            onCheckedChange={(checked) => updateSettings({ nativeChatAutoName: checked })}
+          />
+        </div>
+        {/* Inside the row so the naming anchor and highlight cover its Advanced recipe too. */}
+        {settings.nativeChatAutoName !== false || dirty ? (
+          <div className="mt-3">
+            <SettingsGroupDisclosure forceOpen={dirty || isSaving}>
+              <div className="space-y-3 pt-1 pb-2">
                 {recipe?.agentId === CUSTOM_AGENT_ID ||
                 cliAgent === CUSTOM_AGENT_ID ||
                 customCommandDirty ? (
@@ -225,7 +229,7 @@ export function ChatNamingSetting({
                     id="chat-name-custom-command"
                     value={customCommand}
                     onChange={updateCustomCommandDraft}
-                    description={translate(
+                    description={t(
                       'settings.chat.names.customCommandDescription',
                       'Command line shared by recipes that select Custom command. Use {prompt} to pass the input as an argument; otherwise it is piped to stdin.'
                     )}
@@ -244,7 +248,7 @@ export function ChatNamingSetting({
                     cliRecipe && !cliRecipe.ok
                       ? cliRecipe.error
                       : cliRecipe
-                        ? translate(
+                        ? t(
                             'settings.chat.names.clearCliArguments',
                             'Clear CLI arguments to use each chat’s agent.'
                           )
@@ -253,7 +257,7 @@ export function ChatNamingSetting({
                   defaultAgentArgsPlaceholder={
                     cliAgent
                       ? undefined
-                      : translate(
+                      : t(
                           'settings.chat.names.cliArgumentsPlaceholder',
                           'Optional arguments for a configured CLI naming agent'
                         )
@@ -286,12 +290,12 @@ export function ChatNamingSetting({
                   }}
                   onSave={() => void save()}
                 />
-              </AppearanceAdvancedDisclosure>
-            ) : null}
+              </div>
+            </SettingsGroupDisclosure>
           </div>
-        </CardContent>
-      </Card>
-      <span ref={clearDirtyOnUnmount} />
-    </SearchableSetting>
+        ) : null}
+        <span ref={clearDirtyOnUnmount} />
+      </SearchableSetting>
+    </SettingsGroup>
   )
 }

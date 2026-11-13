@@ -2,9 +2,9 @@ import { Home, Power, RotateCw, Smartphone } from 'lucide-react'
 import { EmulatorDevicePicker } from './emulator-device-picker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type EmulatorPaneToolbarProps = {
   displayName: string
@@ -31,6 +31,7 @@ export function EmulatorPaneToolbar({
   onHome,
   onRotate
 }: EmulatorPaneToolbarProps) {
+  const t = useTranslate()
   // Show preview/control connection state rather than CoreSimulator boot state.
   const statusLabel = isLive ? 'Connected' : loading ? 'Working…' : 'Not connected'
   const subtleStatus = isLive || loading
@@ -67,22 +68,19 @@ export function EmulatorPaneToolbar({
             className="h-7 gap-1 px-2 text-xs"
             onClick={onRotate}
             disabled={!isLive || loading}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a',
               'Rotate'
             )}
           >
             <RotateCw className="size-3.5" />
             <span className="hidden sm:inline">
-              {translate(
-                'auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a',
-                'Rotate'
-              )}
+              {t('auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a', 'Rotate')}
             </span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate('auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a', 'Rotate')}
+          {t('auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a', 'Rotate')}
         </TooltipContent>
       </Tooltip>
       <Tooltip>
@@ -94,16 +92,13 @@ export function EmulatorPaneToolbar({
             className="size-7"
             onClick={onHome}
             disabled={!isLive || loading}
-            aria-label={translate(
-              'auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e',
-              'Home'
-            )}
+            aria-label={t('auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e', 'Home')}
           >
             <Home className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate('auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e', 'Home')}
+          {t('auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e', 'Home')}
         </TooltipContent>
       </Tooltip>
       {isLive ? (
@@ -116,7 +111,7 @@ export function EmulatorPaneToolbar({
               className="size-7 text-muted-foreground hover:text-destructive"
               onClick={onShutdown}
               disabled={loading}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.emulator.pane.emulator.pane.toolbar.06e10d7356',
                 'Shut down emulator'
               )}
@@ -125,7 +120,7 @@ export function EmulatorPaneToolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate(
+            {t(
               'auto.components.emulator.pane.emulator.pane.toolbar.06e10d7356',
               'Shut down emulator'
             )}
@@ -145,14 +140,8 @@ export function EmulatorPaneToolbar({
           }
         >
           {loading
-            ? translate(
-                'auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938',
-                'Working…'
-              )
-            : translate(
-                'auto.components.emulator.pane.emulator.pane.toolbar.81b3571a07',
-                'Connect'
-              )}
+            ? t('auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938', 'Working…')
+            : t('auto.components.emulator.pane.emulator.pane.toolbar.81b3571a07', 'Connect')}
         </Button>
       )}
     </div>

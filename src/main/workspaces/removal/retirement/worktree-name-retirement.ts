@@ -5,12 +5,11 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import {
-  creatureNameTier,
   EMPTY_RETIRED_NAME_REGISTRY,
   isEmptyRetiredNameRegistry,
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../../shared/worktree/retired-name-registry'
+} from '../../../../shared/worktree/naming/retired-name-registry'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -74,11 +73,7 @@ function withMirrorDistro(
   return distro ? { ...settings, wslMirrorDistro: distro } : settings
 }
 
-/** Persist canonical generator names only; repeat-suffixed collision fallbacks cannot be generated again. */
-export function normalizeRetirableGeneratedName(name: string): string | null {
-  const normalized = name.trim().toLowerCase()
-  return normalized.length <= 256 && creatureNameTier(normalized) !== null ? normalized : null
-}
+export { normalizeRetirableGeneratedName } from './retirable-generated-name'
 
 /** Failed sparse rollback can leave the rejected create's path occupied. */
 export function failedWorktreeCreationNeedsRetirement(error: unknown): boolean {

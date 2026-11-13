@@ -1,5 +1,5 @@
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
-import { readWorkerTerminalHostScope } from '../../../../../shared/worker-terminal-host-scope'
+import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'

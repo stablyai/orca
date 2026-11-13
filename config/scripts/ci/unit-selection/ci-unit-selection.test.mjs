@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { buildUnitDependencyGraph } from './dependency-graph/ci-unit-dependency-graph.mjs'
-import { UNIT_SETUP_FILES } from './dependency-graph/ci-unit-files.mjs'
 import { planUnitSelection, selectUnitFiles } from './ci-unit-selection.mjs'
 
 const sources = new Map(
@@ -22,12 +21,8 @@ const graph = { ...buildUnitDependencyGraph(sources), files: new Set(sources.key
 const files = [...sources.keys()].filter((file) => file.endsWith('.test.ts')).sort()
 
 describe('conservative unit selection', () => {
-  it.each([
-    'config/vitest.config.ts',
-    'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
-    ...UNIT_SETUP_FILES,
-    'config/scripts/test-runtime/node-worker/vitest-node-runtime-worker.mjs'
-  ])('retains every test for a transitive dependency of %s', (runtime) => {
+  it('retains every test for a transitive dependency of the shared runtime', () => {
+    const runtime = 'config/vitest.config.ts'
     const sources = new Map([
       ['src/input.ts', 'export const value = 1'],
       ['config/scripts/setup-forward.ts', "export * from '../../src/input'"],
@@ -114,6 +109,5 @@ describe('conservative unit selection', () => {
       event: { pull_request: { draft: true } }
     })
     expect(selected.executionFiles).not.toContain('src/unrelated.test.ts')
-    expect(selected.shards).toEqual([{ index: 1, count: 1 }])
   })
 })

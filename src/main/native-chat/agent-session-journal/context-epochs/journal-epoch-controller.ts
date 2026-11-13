@@ -8,7 +8,7 @@ import type { JournalHostDatabase } from '../database/journal-host-database'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import type { JournalLoad } from '../replay/journal-open'
-import type { AgentJournalEpochReason } from '../durable-rows/journal-row-schema'
+import type { JournalEpochRow, AgentJournalEpochReason } from '../durable-rows/journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from '../writing/journal-row-writer'
 import { rewindJournalContext } from './journal-context-rewind'
 
@@ -50,7 +50,8 @@ export class JournalEpochController {
     fence: number,
     items: readonly JournalReplacementItem[],
     receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt,
-    providerHandle = agentSessionJournalProviderHandle(this.deps.identity)
+    providerHandle = agentSessionJournalProviderHandle(this.deps.identity),
+    historyOrigin?: JournalEpochRow['historyOrigin']
   ): Promise<AgentJournalCursor> {
     return rewindJournalContext({
       state: this.deps.state,
@@ -60,7 +61,7 @@ export class JournalEpochController {
       items,
       receipt,
       inputReceipt: this.deps.inputReceipt,
-      boundary: { reason, providerHandle }
+      boundary: { reason, providerHandle, historyOrigin }
     })
   }
 }

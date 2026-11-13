@@ -8,6 +8,7 @@ import {
   PLUGIN_EVENT_CAPABILITY,
   PLUGIN_EVENT_NAMES,
   PLUGIN_V1_EVENT_ALIASES,
+  pluginEventCapabilityGranted,
   type PluginEventName
 } from '../../shared/plugins/contributions/plugin-event-contribution'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../shared/plugins/events/plugin-events'
@@ -82,6 +83,11 @@ export async function resolveDevPlugin(
   })
 }
 
+function capabilityNote(event: PluginEventName): string {
+  const required = PLUGIN_EVENT_CAPABILITY[event]
+  return required ? ` Either needs the ${required} capability.` : ''
+}
+
 function skipError(
   plugin: DiscoveredPlugin,
   event: PluginEventName,
@@ -101,7 +107,7 @@ function skipError(
     case 'not-subscribed':
       return new PluginCliError('invalid_argument', `Nothing in ${key} listens for ${event}.`, {
         nextSteps: [
-          `A worker hears it with { "on": "${event}" } in contributes.events; an open panel hears it once it calls orca.on('${event}', …). Either needs the ${PLUGIN_EVENT_CAPABILITY[event]} capability.`
+          `A worker hears it with { "on": "${event}" } in contributes.events; an open panel hears it once it calls orca.on('${event}', …).${capabilityNote(event)}`
         ]
       })
     case 'not-approved':
@@ -113,7 +119,7 @@ function skipError(
     case 'not-granted':
       return new PluginCliError(
         'invalid_argument',
-        `${key} was not granted ${PLUGIN_EVENT_CAPABILITY[event]}, which ${event} needs.`,
+        `${key} was not granted ${PLUGIN_EVENT_CAPABILITY[event] ?? 'approval'}, which ${event} needs.`,
         { nextSteps: ['Add the capability, then reload with `orca plugin dev reload <dir>`.'] }
       )
   }
@@ -153,7 +159,7 @@ export async function emitPluginDevEvent(input: {
     throw skipError(plugin, event, 'not-approved')
   }
   const granted = service.eventDelivery.grantedCapabilities(plugin.pluginKey)
-  if (!granted?.includes(PLUGIN_EVENT_CAPABILITY[event])) {
+  if (!pluginEventCapabilityGranted(event, granted)) {
     throw skipError(plugin, event, 'not-granted')
   }
   const projected = PLUGIN_EVENT_PAYLOAD_SCHEMAS[event].safeParse(input.payload ?? {})

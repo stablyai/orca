@@ -1,4 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // worker-start adopts a chat through its queued send; Stop and failed start must leave the chat intact.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,7 +21,7 @@ import {
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
-import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
+import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/start/placement/worker-start-agent-placement'
 
 type WorkspaceLookup = {
   showManagedTerminalWorkspace: (

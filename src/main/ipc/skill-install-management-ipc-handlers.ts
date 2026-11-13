@@ -17,11 +17,11 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   supportsSkillRuntimeBundleInstall,
   supportsSkillRuntimeManagement
-} from '../skills/skill-runtime-capability'
+} from '../skills/runtime-transfer/skill-runtime-capability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
-import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 
 const environmentIdSchema = z.string().min(1).max(128)
 const skillNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)

@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { getSetupScriptPromptDismissalKey } from '../../../lib/setup-script-prompt'
+import { getSetupScriptPromptDismissalKey } from '../../../runtime/repo-hooks/setup-script-prompt'
 import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed

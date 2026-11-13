@@ -8,7 +8,8 @@ vi.mock('@/runtime/hosted-terminals/actions/web-runtime-pane-layout-update', () 
 }))
 
 const { createRemotePaneLayoutPusher } = await import('./remote-pane-layout-push')
-const { notePendingPaneTitleRename } = await import('@/runtime/pending-pane-title-renames')
+const { notePendingPaneTitleRename } =
+  await import('@/runtime/web-session-tabs-sync/naming/pending-pane-title-renames')
 const { toRemoteRuntimePtyId } =
   await import('../../../../../../shared/remote-runtime/remote-runtime-pty-id')
 

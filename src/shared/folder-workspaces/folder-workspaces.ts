@@ -1,12 +1,12 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
-import { normalizeStoredTaskSourceContext } from '../task-source-context'
+import { normalizeStoredTaskSourceContext } from '../work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from '../workspace-creator-provenance'
 import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
-import { isSmartTier } from '../sidebar-list/sort-stamps'
+import { isSmartTier } from '../sidebar-list/sorting/sort-stamps'
 import { normalizeOrcadRetainedMarker } from '../orcad-retained-marker'
 
 export function normalizeFolderWorkspaceName(

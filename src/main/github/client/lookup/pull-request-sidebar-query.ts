@@ -1,8 +1,9 @@
 import { z } from 'zod'
-import { ghExecFileAsync } from '../../gh-utils'
-import { extractExecError } from '../../../git/exec-error'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 import {
@@ -117,7 +118,8 @@ async function readQuery(
 export async function readPullRequestSidebarQuery(
   repository: GitHubApiRepository,
   number: number,
-  options: GhExecOptions
+  options: GhExecOptions,
+  checkPageLimit?: number
 ): Promise<PullRequestLookupData | null | undefined> {
   if (repository.host?.toLowerCase() !== 'github.com') {
     return undefined
@@ -177,7 +179,8 @@ export async function readPullRequestSidebarQuery(
         headRefOid: pr.headRefOid,
         commits: prCheckRollupCommitsSchema.parse(pr.commits)
       },
-      createPRCheckRollupPageReader(repository, number, options)
+      createPRCheckRollupPageReader(repository, number, options),
+      checkPageLimit
     )
   } catch {
     // Metadata remains usable when complete checks need REST recovery.

@@ -12,6 +12,8 @@ export function performContextualTourStepAction(args: {
   openTaskPage: () => void
   openModal: (modal: 'setup-guide', data?: Record<string, unknown>) => void
   openClientHostedBrowserSettings: () => void
+  openChromeWebStore: () => Promise<boolean>
+  reportChromeWebStoreOpenFailure: () => void
   openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
   splitActiveChat: () => void
@@ -68,5 +70,14 @@ export function performContextualTourStepAction(args: {
       args.schedule(() => {
         args.openClientHostedBrowserSettings()
       })
+      return
+    case 'open-chrome-web-store':
+      void args.openChromeWebStore().then((opened) => {
+        if (opened) {
+          args.finishTour()
+        } else {
+          args.reportChromeWebStoreOpenFailure()
+        }
+      }, args.reportChromeWebStoreOpenFailure)
   }
 }

@@ -74,14 +74,6 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/doc-preview-scheme.ts",
-      "inputs": [],
-      "emptyEnv": [],
-      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
-      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
-      "sourceClosureSha256": "4a3a0dab2fc5b009d4e4e0d6bb5ba49dae08726f3d94fa83c54283f21f8df097"
-    },
-    {
       "file": "src/shared/node-dist-mirror.ts",
       "inputs": [],
       "emptyEnv": [],

@@ -1,9 +1,9 @@
-import type { FsChangedPayload } from '../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../shared/file-watch/filesystem-change-event'
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 type RuntimeFileWatchEvent =
   | { type: 'starting'; subscriptionId: string }

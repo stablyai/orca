@@ -1,22 +1,30 @@
 // Share renderer/mobile countdown copy without platform imports.
 
 /** Floor durations to whole units (47m, 3h 54m, 6d 7h); nonpositive values return now for reset-specific copy. */
-export function formatResetDuration(ms: number): string {
+export function formatResetDuration(
+  ms: number,
+  formatUnit: (value: number, unit: 'minute' | 'hour' | 'day') => string = (value, unit) =>
+    `${value}${unit === 'minute' ? 'm' : unit === 'hour' ? 'h' : 'd'}`
+): string {
   if (ms <= 0) {
     return 'now'
   }
   const totalMins = Math.floor(ms / 60_000)
   if (totalMins < 60) {
-    return `${totalMins}m`
+    return formatUnit(totalMins, 'minute')
   }
   const hours = Math.floor(totalMins / 60)
   const mins = totalMins % 60
   if (hours >= 24) {
     const days = Math.floor(hours / 24)
     const remHours = hours % 24
-    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
+    return remHours > 0
+      ? `${formatUnit(days, 'day')} ${formatUnit(remHours, 'hour')}`
+      : formatUnit(days, 'day')
   }
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+  return mins > 0
+    ? `${formatUnit(hours, 'hour')} ${formatUnit(mins, 'minute')}`
+    : formatUnit(hours, 'hour')
 }
 
 /** "Resets in 3h 54m" / "Resets now" for a window's time-until-reset (ms). */

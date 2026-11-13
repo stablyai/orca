@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef } from 'react'
 import { toast } from 'sonner'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   AgentLaunchSettings,
@@ -27,6 +28,7 @@ function modeLabel(choice: AgentPermissionChoice): string {
 }
 
 export function useAgentPermissionOverrideNotice() {
+  const t = useTranslate()
   const id = useId()
   const mounted = useMountedRef()
   const active = useRef<Permissions>(undefined)
@@ -90,14 +92,14 @@ export function useAgentPermissionOverrideNotice() {
     const more = (count: number) =>
       count > 3 ? (
         <div>
-          {translate('settings.agents.permissionOverrideMore', 'and {{count}} more', {
+          {t('settings.agents.permissionOverrideMore', 'and {{count}} more', {
             count: count - 3
           })}
         </div>
       ) : null
     toast.success(
       retained.length
-        ? translate(
+        ? t(
             'settings.agents.permissionOverridesKept',
             '{{count}} agents still use their own permission setting:',
             {
@@ -105,15 +107,11 @@ export function useAgentPermissionOverrideNotice() {
               defaultValue_one: '{{count}} agent still uses their own permission setting:'
             }
           )
-        : translate(
-            'settings.agents.permissionOverridesFollow',
-            '{{count}} agents now follow {{mode}}',
-            {
-              count: vanished.length,
-              mode,
-              defaultValue_one: '{{count}} agent now follows {{mode}}'
-            }
-          ),
+        : t('settings.agents.permissionOverridesFollow', '{{count}} agents now follow {{mode}}', {
+            count: vanished.length,
+            mode,
+            defaultValue_one: '{{count}} agent now follows {{mode}}'
+          }),
       {
         id,
         description: (
@@ -128,11 +126,10 @@ export function useAgentPermissionOverrideNotice() {
             {more(retained.length)}
             {vanished.slice(0, 3).map((agent) => (
               <div key={agent}>
-                {translate(
-                  'settings.agents.permissionOverrideFollows',
-                  '{{agent}} now follows {{mode}}',
-                  { agent: getAgentLabel(agent), mode }
-                )}
+                {t('settings.agents.permissionOverrideFollows', '{{agent}} now follows {{mode}}', {
+                  agent: getAgentLabel(agent),
+                  mode
+                })}
               </div>
             ))}
             {more(vanished.length)}
@@ -142,7 +139,7 @@ export function useAgentPermissionOverrideNotice() {
         ...(retained.length
           ? {
               action: {
-                label: translate('settings.agents.permissionOverridesUse', 'Use {{mode}}', {
+                label: t('settings.agents.permissionOverridesUse', 'Use {{mode}}', {
                   mode
                 }),
                 onClick: () => {

@@ -10,7 +10,7 @@ import { getTerminalScrollOnUserInputSearchEntry } from './appearance/terminal-p
 import { getTerminalRightClickToPasteSearchEntry } from './platform/terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../../terminal-pane/clipboard/osc52-clipboard-setting-anchor'
 import { isMacPlatform } from '../../terminal-pane/links/terminal-link-open-hints'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
   DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
@@ -21,7 +21,7 @@ import {
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
-} from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+} from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalInteractionSectionProps = {
@@ -35,38 +35,39 @@ export function TerminalInteractionSection({
   updateSettings,
   searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
+  const t = useTranslate()
   // Context-menu escape always uses Control; call it Control-click on macOS and Ctrl+right-click elsewhere.
   const isMac = isMacPlatform()
   const rightClickPasteDescription = isMac
-    ? translate(
+    ? t(
         'auto.components.settings.TerminalInteractionSection.567633ff50',
         'Right-click pastes the clipboard into the terminal. Control-click to open the context menu.'
       )
-    : translate(
+    : t(
         'auto.components.settings.TerminalPane.af0c3b6e39',
         'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
       )
   const rightClickPasteSwitchDescription = isMac
-    ? translate(
+    ? t(
         'auto.components.settings.TerminalInteractionSection.c64497148a',
         'Right-click pastes the clipboard. Control-click opens the context menu.'
       )
-    : translate(
+    : t(
         'auto.components.settings.TerminalPane.16753eea48',
         'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
       )
   return (
     <SettingsGroup
       key="pane-interaction"
-      title={translate('auto.components.settings.TerminalPane.45721f3e67', 'Terminal Interaction')}
-      description={translate(
+      title={t('auto.components.settings.TerminalPane.82e19f00f0', 'Terminal interaction')}
+      description={t(
         'auto.components.settings.TerminalPane.96fe15def8',
         'Scrolling, mouse, and clipboard behavior for terminal panes.'
       )}
     >
       <SearchableSetting
-        title={translate('auto.components.settings.TerminalPane.scrollSpeed.title', 'Scroll Speed')}
-        description={translate(
+        title={t('auto.components.settings.TerminalPane.scrollSpeed.f7b030e015', 'Scroll speed')}
+        description={t(
           'auto.components.settings.TerminalPane.scrollSpeed.description',
           'Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.'
         )}
@@ -87,13 +88,10 @@ export function TerminalInteractionSection({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-0.5">
               <Label>
-                {translate(
-                  'auto.components.settings.TerminalPane.scrollSpeed.title',
-                  'Scroll Speed'
-                )}
+                {t('auto.components.settings.TerminalPane.scrollSpeed.f7b030e015', 'Scroll speed')}
               </Label>
               <p className="max-w-xl text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.TerminalPane.scrollSpeed.helper',
                   'Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.'
                 )}
@@ -112,16 +110,13 @@ export function TerminalInteractionSection({
               }
             >
               <RotateCcw className="size-3.5" />
-              {translate('auto.components.settings.TerminalPane.scrollSpeed.reset', 'Reset')}
+              {t('auto.components.settings.TerminalPane.scrollSpeed.reset', 'Reset')}
             </Button>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <ScrollSpeedSlider
-              label={translate(
-                'auto.components.settings.TerminalPane.scrollSpeed.normal',
-                'Normal'
-              )}
-              description={translate(
+              label={t('auto.components.settings.TerminalPane.scrollSpeed.normal', 'Normal')}
+              description={t(
                 'auto.components.settings.TerminalPane.scrollSpeed.normalDescription',
                 'Scrollback wheel multiplier.'
               )}
@@ -137,8 +132,8 @@ export function TerminalInteractionSection({
               }
             />
             <ScrollSpeedSlider
-              label={translate('auto.components.settings.TerminalPane.scrollSpeed.fast', 'Fast')}
-              description={translate(
+              label={t('auto.components.settings.TerminalPane.scrollSpeed.fast', 'Fast')}
+              description={t(
                 'auto.components.settings.TerminalPane.scrollSpeed.fastDescription',
                 'Extra multiplier while scrolling with a modifier key.'
               )}
@@ -154,8 +149,8 @@ export function TerminalInteractionSection({
               }
             />
             <ScrollSpeedSlider
-              label={translate('auto.components.settings.TerminalPane.scrollSpeed.tui', 'TUI')}
-              description={translate(
+              label={t('auto.components.settings.TerminalPane.scrollSpeed.tui', 'TUI')}
+              description={t(
                 'auto.components.settings.TerminalPane.scrollSpeed.tuiDescription',
                 'Discrete wheel reports for full-screen terminal apps.'
               )}
@@ -178,11 +173,11 @@ export function TerminalInteractionSection({
 
       <SearchableSetting {...getTerminalScrollOnUserInputSearchEntry()[0]}>
         <SettingsSwitchRow
-          label={translate(
-            'components.settings.TerminalInteraction.scrollOnUserInput',
-            'Scroll to Bottom on Input'
+          label={t(
+            'components.settings.TerminalInteraction.4c690cdfc3',
+            'Scroll to bottom on input'
           )}
-          description={translate(
+          description={t(
             'components.settings.TerminalInteraction.scrollOnUserInputDescription',
             'Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.'
           )}
@@ -199,18 +194,12 @@ export function TerminalInteractionSection({
 
       {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalPane.9c178cf8aa',
-            'Right-click to paste'
-          )}
+          title={t('auto.components.settings.TerminalPane.9c178cf8aa', 'Right-click to paste')}
           description={rightClickPasteDescription}
           keywords={['terminal', 'right click', 'paste', 'context menu']}
         >
           <SettingsSwitchRow
-            label={translate(
-              'auto.components.settings.TerminalPane.9c178cf8aa',
-              'Right-click to paste'
-            )}
+            label={t('auto.components.settings.TerminalPane.9c178cf8aa', 'Right-click to paste')}
             description={rightClickPasteSwitchDescription}
             checked={settings.terminalRightClickToPaste}
             onChange={() =>
@@ -223,19 +212,16 @@ export function TerminalInteractionSection({
       ) : null}
 
       <SearchableSetting
-        title={translate('auto.components.settings.TerminalPane.8eefeaa3da', 'Focus Follows Mouse')}
-        description={translate(
+        title={t('auto.components.settings.TerminalPane.8c07bc4d7a', 'Focus follows mouse')}
+        description={t(
           'auto.components.settings.TerminalPane.9129b7e805',
           'Hovering a terminal pane activates it without needing to click.'
         )}
         keywords={['focus', 'follows', 'mouse', 'hover', 'pane', 'ghostty', 'active']}
       >
         <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.TerminalPane.8eefeaa3da',
-            'Focus Follows Mouse'
-          )}
-          description={translate(
+          label={t('auto.components.settings.TerminalPane.8c07bc4d7a', 'Focus follows mouse')}
+          description={t(
             'auto.components.settings.TerminalPane.9129b7e805',
             'Hovering a terminal pane activates it without needing to click.'
           )}
@@ -249,8 +235,8 @@ export function TerminalInteractionSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
-        description={translate(
+        title={t('auto.components.settings.TerminalPane.8f3e7bc91f', 'Copy on select')}
+        description={t(
           'components.settings.TerminalInteraction.copyOnSelectDescription',
           'Automatically copy text you select in a terminal or chat to the clipboard.'
         )}
@@ -270,8 +256,8 @@ export function TerminalInteractionSection({
         ]}
       >
         <SettingsSwitchRow
-          label={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
-          description={translate(
+          label={t('auto.components.settings.TerminalPane.8f3e7bc91f', 'Copy on select')}
+          description={t(
             'components.settings.TerminalInteraction.copyOnSelectDescription',
             'Automatically copy text you select in a terminal or chat to the clipboard.'
           )}
@@ -285,11 +271,8 @@ export function TerminalInteractionSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={translate(
-          'components.settings.TerminalInteraction.copyTrimsGutter',
-          'Trim Gutter on Copy'
-        )}
-        description={translate(
+        title={t('components.settings.TerminalInteraction.4ed43d5060', 'Trim gutter on copy')}
+        description={t(
           'components.settings.TerminalInteraction.copyTrimsGutterDescription',
           'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
         )}
@@ -307,11 +290,8 @@ export function TerminalInteractionSection({
         ]}
       >
         <SettingsSwitchRow
-          label={translate(
-            'components.settings.TerminalInteraction.copyTrimsGutter',
-            'Trim Gutter on Copy'
-          )}
-          description={translate(
+          label={t('components.settings.TerminalInteraction.4ed43d5060', 'Trim gutter on copy')}
+          description={t(
             'components.settings.TerminalInteraction.copyTrimsGutterDescription',
             'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
           )}
@@ -326,11 +306,11 @@ export function TerminalInteractionSection({
 
       <SearchableSetting
         id={OSC52_CLIPBOARD_SETTING_ID}
-        title={translate(
-          'auto.components.settings.TerminalPane.3338dcf8c1',
-          'Allow TUI Clipboard Writes (OSC 52)'
+        title={t(
+          'auto.components.settings.TerminalPane.d54811df09',
+          'Allow TUI clipboard writes (OSC 52)'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.TerminalPane.69c64a479c',
           'Let Zellij, tmux, Neovim, fzf, and Grok copy to the system clipboard over the PTY (including over SSH).'
         )}
@@ -351,11 +331,11 @@ export function TerminalInteractionSection({
         ]}
       >
         <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.TerminalPane.3338dcf8c1',
-            'Allow TUI Clipboard Writes (OSC 52)'
+          label={t(
+            'auto.components.settings.TerminalPane.d54811df09',
+            'Allow TUI clipboard writes (OSC 52)'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalPane.6e6480a7df',
             'Let programs in the terminal (Zellij, tmux, Neovim, fzf, Grok, SSH) copy to your system clipboard.'
           )}

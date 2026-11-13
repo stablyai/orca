@@ -1,6 +1,6 @@
 import { resetAgentPaneAuthorityAliasesForTests } from '../../src/renderer/src/store/slices/agent-status/agent-pane-authority'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentHookServer } from '../../src/main/agent-hooks/server'
+import { AgentHookServer } from '../../src/main/agent-hooks/server/agent-hook-server'
 import { toAgentStatusIpcPayload } from '../../src/main/agent-hooks/server/server-status-identity'
 import type { AgentStatusIpcPayload } from '../../src/shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'

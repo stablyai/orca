@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { parseCompilerPass } from './check-node-tests-typecheck.mjs'
 import {
-  checkTransfers,
   hasTsNocheckDirective,
   parseFailingFiles,
   parseProgramTestFiles
@@ -16,18 +15,6 @@ vi.mock('./mobile-typecheck-compiler.mjs', () => ({
     cwd
   })
 }))
-
-const transfers = [
-  'src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx',
-  'src/test-support/rpc-recording/recorded-request-params.test.ts'
-]
-const cleanTransfers = () => ({
-  ok: true,
-  expected: transfers,
-  programTestFiles: transfers,
-  failures: [],
-  problems: []
-})
 
 describe('the failing-file parser', () => {
   // Normalize Windows separators or every baseline entry appears stale and added.
@@ -58,16 +45,11 @@ describe('the @ts-nocheck guard', () => {
   })
 })
 
-describe('checked transfers', () => {
-  const allowed = new Map(transfers.map((file) => [file, 'checked transfer']))
-
-  it('never reads a failed declaration producer or final compiler as clean output', () => {
+describe('compiler pass failures', () => {
+  it('rejects nonzero exits and diagnostics returned with a zero exit', () => {
     expect(parseCompilerPass('/repo/mobile/src/a.test.ts\n', 2).ok).toBe(false)
     expect(
       parseCompilerPass('/repo/mobile/src/a.test.ts\nsrc/a.test.ts(1,1): error TS2322: x\n', 0).ok
     ).toBe(false)
-    expect(checkTransfers({ ...cleanTransfers(), ok: false }, allowed)).toEqual([
-      'the phone/host contract program did not pass'
-    ])
   })
 })

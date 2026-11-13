@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
+import { ArrowRight, Bot, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -8,12 +8,17 @@ import { Button } from '../../../ui/button'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
-import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import {
+  launchEnvironmentSetupAgent,
+  pickEnvironmentSetupRepo
+} from '@/lib/agent-session/launch/environment-setup-agent-launch'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
@@ -24,9 +29,15 @@ const AGENT_PROMPT =
   'Use the orca-per-workspace-env skill to set up a per-workspace environment for this repo.'
 
 export function EphemeralVmsPane(): React.JSX.Element {
+  const t = useTranslate()
   const openModal = useAppStore((state) => state.openModal)
+  const repos = useAppStore((state) => state.repos)
+  const activeRepoId = useAppStore((state) => state.activeRepoId)
+  const setupRepo = pickEnvironmentSetupRepo(repos, activeRepoId)
+  const [agentLaunching, setAgentLaunching] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
+  const [credentialEnvNames, setCredentialEnvNames] = useState<string[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [promptCopied, setPromptCopied] = useState(false)
   const mountedRef = useMountedRef()
@@ -84,6 +95,18 @@ export function EphemeralVmsPane(): React.JSX.Element {
   }, [refresh])
 
   useEffect(() => {
+    // The warning is advisory; if the names can't be read the list still works without it.
+    void window.api.ephemeralVm
+      .listCredentialEnvNames()
+      .then((names) => {
+        if (mountedRef.current) {
+          setCredentialEnvNames(names)
+        }
+      })
+      .catch(() => undefined)
+  }, [mountedRef])
+
+  useEffect(() => {
     if (!window.api.plugins?.onChanged) {
       return
     }
@@ -119,12 +142,28 @@ export function EphemeralVmsPane(): React.JSX.Element {
       }, 1500)
     } catch {
       toast.error(
-        translate(
-          'auto.components.settings.EphemeralVmsPane.copyError',
-          'Could not copy the prompt.'
-        )
+        t('auto.components.settings.EphemeralVmsPane.copyError', 'Could not copy the prompt.')
       )
     }
+  }
+
+  const setUpWithAgent = (): void => {
+    if (!setupRepo) {
+      return
+    }
+    setAgentLaunching(true)
+    void launchEnvironmentSetupAgent({ repoId: setupRepo.id })
+      .then((launched) => {
+        if (launched) {
+          useAppStore.getState().recordFeatureInteraction('ephemeral-vm-setup')
+        }
+      })
+      .catch(() => undefined)
+      .then(() => {
+        if (mountedRef.current) {
+          setAgentLaunching(false)
+        }
+      })
   }
 
   const recipes = catalog.flatMap((entry) => entry.recipes.map((recipe) => ({ entry, recipe })))
@@ -132,11 +171,11 @@ export function EphemeralVmsPane(): React.JSX.Element {
   return (
     <div className="space-y-6" data-settings-section="ephemeral-vms">
       <AgentSkillSetupPanel
-        title={translate(
+        title={t(
           'auto.components.settings.EphemeralVmsPane.cloudVmSkillTitle',
           'Cloud VM setup skill'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.EphemeralVmsPane.skillDescription',
           'Sets up, builds, authenticates, and validates repo-owned environment recipes.'
         )}
@@ -154,34 +193,57 @@ export function EphemeralVmsPane(): React.JSX.Element {
 
       <div className="space-y-3 rounded-lg border border-border/60 bg-card/30 p-4">
         <div className="text-sm font-medium">
-          {translate(
+          {t(
             'auto.components.settings.EphemeralVmsPane.whatTitle',
             'What the skill does, with you'
           )}
         </div>
         <ul className="space-y-2">
           <WhatItem
-            text={translate(
+            text={t(
               'auto.components.settings.EphemeralVmsPane.whatScaffold',
               'Writes the recipe & scripts for your provider — connected over an Orca server or SSH.'
             )}
           />
           <WhatItem
-            text={translate(
+            text={t(
               'auto.components.settings.EphemeralVmsPane.whatBuild',
               'Builds a reusable base image and signs your agent in.'
             )}
           />
           <WhatItem
-            text={translate(
+            text={t(
               'auto.components.settings.EphemeralVmsPane.whatValidate',
               'Validates it so you can create a workspace on it.'
             )}
           />
         </ul>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
+          <Button
+            type="button"
+            size="sm"
+            disabled={!setupRepo || agentLaunching}
+            onClick={setUpWithAgent}
+          >
+            {agentLaunching ? <Loader2 className="animate-spin" /> : <Bot />}
+            {t('auto.components.settings.EphemeralVmsPane.setUpWithAgent', 'Set up with an agent')}
+          </Button>
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+            {setupRepo
+              ? t(
+                  'auto.components.settings.EphemeralVmsPane.setUpWithAgentHint',
+                  'Starts your default agent in {{repo}}. It edits orca.yaml, runs the doctors until they pass, and opens a PR.',
+                  { repo: setupRepo.displayName }
+                )
+              : t(
+                  'auto.components.settings.EphemeralVmsPane.setUpWithAgentNoRepo',
+                  'Add a project first.'
+                )}
+          </span>
+        </div>
         <div className="space-y-2 pt-1">
           <div className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.EphemeralVmsPane.promptHint',
               'In any workspace, ask your agent:'
             )}
@@ -195,13 +257,13 @@ export function EphemeralVmsPane(): React.JSX.Element {
               variant="outline"
               size="xs"
               className="shrink-0 gap-1.5"
-              aria-label={translate('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
+              aria-label={t('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
               onClick={() => void copyPrompt()}
             >
               {promptCopied ? (
                 <>
                   <Check className="size-3" />
-                  {translate('auto.components.settings.EphemeralVmsPane.copied', 'Copied')}
+                  {t('auto.components.settings.EphemeralVmsPane.copied', 'Copied')}
                 </>
               ) : (
                 <Copy className="size-3" />
@@ -215,10 +277,10 @@ export function EphemeralVmsPane(): React.JSX.Element {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-0.5">
             <div className="text-sm font-medium">
-              {translate('auto.components.settings.EphemeralVmsPane.recipes', 'Recipes')}
+              {t('auto.components.settings.EphemeralVmsPane.recipes', 'Recipes')}
             </div>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.EphemeralVmsPane.recipesHelp',
                 'Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.'
               )}
@@ -228,7 +290,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.EphemeralVmsPane.cloudVmRefresh',
               'Refresh Cloud VM recipes'
             )}
@@ -243,14 +305,8 @@ export function EphemeralVmsPane(): React.JSX.Element {
           {recipes.length === 0 ? (
             <div className="px-3 py-4 text-sm text-muted-foreground">
               {isLoading
-                ? translate(
-                    'auto.components.settings.EphemeralVmsPane.checking',
-                    'Checking recipes...'
-                  )
-                : translate(
-                    'auto.components.settings.EphemeralVmsPane.none',
-                    'No recipes found yet.'
-                  )}
+                ? t('auto.components.settings.EphemeralVmsPane.checking', 'Checking recipes...')
+                : t('auto.components.settings.EphemeralVmsPane.none', 'No recipes found yet.')}
             </div>
           ) : (
             <div className="divide-y divide-border/50">
@@ -259,6 +315,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
                   key={`${entry.repoId}:${recipe.id}`}
                   entry={entry}
                   recipe={recipe}
+                  credentialEnvNames={credentialEnvNames}
                   onUse={() => openWorkspaceComposerForRecipe(entry.repoId, recipe.id)}
                 />
               ))}

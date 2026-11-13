@@ -8,25 +8,29 @@ import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { CustomKeyModal } from './CustomKeyModal'
 import { ListRow } from './list/ListGroup'
 import { SettingsEmptyRow, SettingsSection } from '../settings/settings-screen-frame'
-import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
+import {
+  loadCustomKeys,
+  saveCustomKeys,
+  type CustomKey
+} from '../terminal/key-input/terminal-custom-keys'
 import { DragReorderList } from './DragReorderList'
 import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './terminal-shortcut-settings-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import {
-  TERMINAL_ACCESSORY_KEYS,
-  type TerminalAccessoryKey
-} from '../terminal/terminal-accessory-keys'
+import '../terminal/key-input/terminal-accessory-keys'
+import type { TerminalAccessoryKey } from '../terminal/key-input/terminal-accessory-keys'
+import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '../terminal/key-input/terminal-key-definitions'
 import {
   getDefaultTerminalAccessoryLayout,
   loadTerminalAccessoryLayout,
   reorderTerminalAccessoryBuiltInIds,
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible
-} from '../terminal/terminal-accessory-layout'
+} from '../terminal/key-input/terminal-accessory-layout'
 import { MobileSwitch } from './MobileSwitch'
+import { SmartRailRow } from './SmartRailRow'
 
 // Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
@@ -148,10 +152,13 @@ export function TerminalShortcutSettings({
     [persistLayout]
   )
 
+  // Resetting the keys leaves the Smart rail setting alone.
   const resetBuiltInKeys = useCallback(() => {
-    const next = defaultLayout()
-    setShortcutLayout(next)
-    persistLayout(next)
+    setShortcutLayout((current) => {
+      const next = { ...defaultLayout(), smartRail: current.smartRail }
+      persistLayout(next)
+      return next
+    })
   }, [defaultLayout, persistLayout])
 
   const reorderCustomKeys = useCallback(
@@ -182,6 +189,18 @@ export function TerminalShortcutSettings({
 
   return (
     <>
+      <SettingsSection>
+        <SmartRailRow
+          enabled={shortcutLayout.smartRail === true}
+          onChange={(enabled) =>
+            setShortcutLayout((current) => {
+              const next = { ...current, smartRail: enabled }
+              persistLayout(next)
+              return next
+            })
+          }
+        />
+      </SettingsSection>
       {hasPad ? (
         <SettingsSection
           title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}

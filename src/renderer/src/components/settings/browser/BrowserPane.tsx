@@ -23,6 +23,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { BrowserSessionCookiesSection } from './profiles/BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './profiles/BrowserNewProfileDialog'
 import { BrowserExtensionsSection } from './extensions/BrowserExtensionsSection'
+import { getBrowserExtensionsSearchEntry } from './extensions/browser-extensions-search'
 import { BrowserPasswordsSection } from './passwords/BrowserPasswordsSection'
 import { getBrowserPasswordsSearchEntry } from './passwords/browser-passwords-copy'
 import {
@@ -36,9 +37,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacUserAgent } from '@/lib/user-agent-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { translate } from '@/i18n/i18n'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
@@ -62,6 +65,7 @@ export function BrowserPane({
   updateSettings,
   onOpenComputerUse
 }: BrowserPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
@@ -111,7 +115,7 @@ export function BrowserPane({
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
-  const browserSearchEntries = getBrowserPaneSearchEntries()
+  const browserSearchEntries = getBrowserPaneSearchEntries(undefined, t)
   const showHomePage = matchesSettingsSearch(searchQuery, [browserSearchEntries[0]])
   const showSearchEngine = matchesSettingsSearch(searchQuery, [browserSearchEntries[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [browserSearchEntries[2]])
@@ -126,33 +130,37 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
-  const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry()])
+  const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
     { isMac },
-    settings.openLinksInAppModifierInverts === true
+    settings.openLinksInAppModifierInverts === true,
+    t
   )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const browserSessionHostOptions = useMemo(
     () =>
-      buildSidebarHostOptions({
-        repos,
-        sshTargetLabels,
-        sshConnectionStates,
-        settings,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides
-      })
+      buildSidebarHostOptions(
+        {
+          repos,
+          sshTargetLabels,
+          sshConnectionStates,
+          settings,
+          runtimeEnvironments,
+          runtimeStatusByEnvironmentId,
+          hostLabelOverrides
+        },
+        t
+      )
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
         .map((host) => ({
           id: host.id,
-          label: host.label,
+          label: translateHostDisplayLabel(host, t),
           detail:
             host.kind === 'local'
-              ? translate('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
-              : translate(
+              ? t('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
+              : t(
                   'auto.components.settings.BrowserPane.c0f85056d9',
                   'Browser profiles on this Orca server.'
                 )
@@ -166,7 +174,8 @@ export function BrowserPane({
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
       hostLabelOverrides,
-      languageRevision
+      languageRevision,
+      t
     ]
   )
   const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
@@ -178,9 +187,10 @@ export function BrowserPane({
   const activeBrowserSessionProfileId =
     useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
     'default'
-  const activeBrowserSessionProfileLabel =
-    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label ??
+  const activeBrowserSessionProfileLabel = translateBrowserSessionProfileLabel(
+    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label,
     activeBrowserSessionProfileId
+  )
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -235,7 +245,7 @@ export function BrowserPane({
     !isWebClientLocation() &&
     selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID
   const showExtensions =
-    settings.experimentalBrowserExtensions === true &&
+    matchesSettingsSearch(searchQuery, [getBrowserExtensionsSearchEntry()]) &&
     selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID
 
   return (
@@ -340,8 +350,8 @@ export function BrowserPane({
 
       {showClientHostedRemote || showSshWorkspaceRouting ? (
         <SettingsGroup
-          title={translate('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
-          description={translate(
+          title={t('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
+          description={t(
             'settings.browser.remoteBrowsing.headingDescription',
             'Where remote workspace pages render, and where their network traffic leaves from.'
           )}
@@ -392,6 +402,8 @@ export function BrowserPane({
             <BrowserExtensionsSection
               profileId={activeBrowserSessionProfileId}
               profileLabel={activeBrowserSessionProfileLabel}
+              settings={settings}
+              updateSettings={updateSettings}
             />
           ) : null}
         </SettingsGroup>

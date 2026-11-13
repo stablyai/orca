@@ -7,13 +7,13 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   isHiddenByWorkspaceKindSwitch,
   type WorkspaceKindSwitches
-} from '../../../../shared/worktree/workspace-kinds'
+} from '../../../../shared/worktree/visibility/workspace-kinds'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../shared/workspace-creator-visibility'
 import type { NotificationSettings } from '../../../../shared/notification-settings-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type WorkspaceNotificationMuteDeps = {
   store: Pick<

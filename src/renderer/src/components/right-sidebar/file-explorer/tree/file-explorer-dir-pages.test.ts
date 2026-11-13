@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DirEntry } from '../../../../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 
 const readRuntimeDirectoryPage = vi.fn()
 const readRuntimeDirectory = vi.fn()

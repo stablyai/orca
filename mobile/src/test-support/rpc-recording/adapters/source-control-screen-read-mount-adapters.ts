@@ -1,3 +1,5 @@
+import type * as UseMobileSourceControlLoadersModule from '../../../source-control/changes/use-mobile-source-control-loaders'
+import type * as MobileGitHistoryListModule from '../../../source-control/history/MobileGitHistoryList'
 import { createElement } from 'react'
 import { hookMount, performHookAction } from '../hook-mount'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
@@ -5,7 +7,7 @@ import { mountFixture } from '../recorder-fixture-shape'
 import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 
 const HOST = 'host-1'
 const WORKTREE = 'repo42::/p'
@@ -20,10 +22,8 @@ export function sourceControlScreenReadMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'source-control.changes-load': ({ client, effect }) => {
-      const useLoaders = modules.load<
-        typeof import('../../../source-control/use-mobile-source-control-loaders')
-      >(
-        'mobile/src/source-control/use-mobile-source-control-loaders.ts'
+      const useLoaders = modules.load<typeof UseMobileSourceControlLoadersModule>(
+        'mobile/src/source-control/changes/use-mobile-source-control-loaders.ts'
       ).useMobileSourceControlLoaders
       let loaders: ReturnType<typeof useLoaders>
       // Keep callbacks stable; new identities would retrigger status loading and hide settled state.
@@ -58,9 +58,7 @@ export function sourceControlScreenReadMountAdapters(
           }
           // The read every Source Control write makes once it succeeds.
           if (name === 'written') {
-            return performHookAction(() =>
-              loaders.loadStatus({ preserveReadyOnFailure: true, force: true })
-            )
+            return performHookAction(() => loaders.loadStatus({ force: true }))
           }
           throw new Error(`Unknown changes load action: ${name}`)
         },
@@ -73,8 +71,8 @@ export function sourceControlScreenReadMountAdapters(
       }
     },
     'source-control.history-branch-commits': ({ client, effect }) => {
-      const List = modules.load<typeof import('../../../source-control/MobileGitHistoryList')>(
-        'mobile/src/source-control/MobileGitHistoryList.tsx'
+      const List = modules.load<typeof MobileGitHistoryListModule>(
+        'mobile/src/source-control/history/MobileGitHistoryList.tsx'
       ).MobileGitHistoryList
       const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({

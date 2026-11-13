@@ -1,8 +1,8 @@
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import {
   isManualSimulatorLaunchPending,
   rememberPrelaunchedSimulatorSession
-} from '@/lib/simulator-launch-coordination'
+} from '@/lib/simulator/launch/simulator-launch-coordination'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 export function registerContentCreationIpcBridge(

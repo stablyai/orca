@@ -33,12 +33,14 @@ function compactTerminalText(buffer: string): string {
 
 function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolean {
   const text = compactTerminalText(buffer)
-  const marker = `setmodelto${modelLabel.replace(/\s+/g, '').toLowerCase()}`
+  // Claude echoes neither the vendor prefix nor Orca's picker-only `alias` suffix.
+  const label = modelLabel.replace(/^claude[\s-]+/i, '').replace(/\s+alias$/i, '')
+  const marker = `setmodelto${label.replace(/\s+/g, '').toLowerCase()}`
   if (text.includes(marker)) {
     return true
   }
   // Match every picker token so a versioned echo cannot confirm the wrong context variant.
-  const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
+  const labelTokens = label.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
   const successStart = text.lastIndexOf('setmodelto')
   if (successStart === -1 || labelTokens.length === 0) {
     return false

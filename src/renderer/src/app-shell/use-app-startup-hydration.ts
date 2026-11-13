@@ -1,9 +1,9 @@
 import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
-import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
-import { syncZoomCSSVar } from '@/lib/ui-zoom'
+import { restoreLocalStructuredChatsAtStartup } from '@/runtime/native-chat/local-sessions/local-structured-chats'
+import { syncZoomCSSVar } from '@/app-shell/chrome/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
@@ -14,7 +14,7 @@ import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
 } from '../lib/workspace/persistence/workspace-session-hydration-keys'
-import { hydratePersistedUIAfterStartupRead } from '../lib/startup-ui-hydration'
+import { hydratePersistedUIAfterStartupRead } from './startup/startup-ui-hydration'
 import {
   logRendererStartupDiagnostic,
   timeRendererStartupStep,
@@ -24,11 +24,12 @@ import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
-import { getSystemPrefersDark } from '../lib/terminal-theme'
+import { getSystemPrefersDark } from '../lib/terminal/appearance/terminal-theme'
 import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
+import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
@@ -39,12 +40,12 @@ import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hos
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { ensureLocalRuntimeCapabilities } from '../runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   finishStartupWorktreeHydration,
   refreshStartupWorktrees
 } from '../startup/startup-worktree-refresh'
+import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
 export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
@@ -262,17 +263,18 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          const restoredPtyIds = collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+          // Unawaited: liveness answers only widen parking later and must never delay reconnect.
+          void probeTerminalProviderGoneSessions(restoredPtyIds)
           await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () =>
-            refreshTerminalProviderSnapshotCapabilities(
-              collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
-            )
+            refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
           )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
           )
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
-            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup({ afterReconnect: true })
           )
           await restoreLocalStructuredChatsAtStartup(useAppStore.getState().settings, (restore) =>
             timeRendererStartupStep('project-structured-session-tabs', restore)

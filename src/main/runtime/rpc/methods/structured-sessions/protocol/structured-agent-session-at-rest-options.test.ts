@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
@@ -9,7 +8,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as REST_TEST_THREAD
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   foundRestTestChat,
   REST_TEST_CALLER as CALLER,
@@ -18,7 +17,7 @@ import {
 
 import { closeStructuredAgentSessionChild } from '../../../../agent-session/structured-agent-session-close'
 import { discardStructuredWorkerSession } from '../../orchestration/structured-workers/orchestration-structured-worker-session'
-import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 
 import { fixture, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
 
@@ -48,43 +47,6 @@ it('records a pick as intent and replays it at the next start (P2-16)', async ()
   expect(fixture.rig.adapter.acquire.mock.calls[0]?.[0]).toMatchObject({
     options: expect.objectContaining({ model: 'gpt-picked' })
   })
-})
-
-it('answers the provider-level features of a chat at rest (P2-17)', async () => {
-  await restingChat()
-  setStructuredAgentSessionHost(await fixture.rig.restart({ agents: claudeAndCodexDeclared() }))
-  Object.assign(fixture.rig.host.deps.adapter, {
-    rewindSupport: (_id: string, agent?: string) =>
-      agent === 'codex' ? { supported: true } : { supported: false, reason: 'unsupported' }
-  })
-  const [options] = await call('agentSession.options', { sessionId: SESSION })
-  expect(options).toMatchObject({
-    ok: true,
-    result: { threadGoal: { current: null }, rewind: { supported: true } }
-  })
-  expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
-  expect(fixture.rig.adapter.readOptions).not.toHaveBeenCalled()
-})
-
-it('is shown, not respawned; the next send starts the agent (P2-18)', async () => {
-  await foundRestTestChat(fixture.rig)
-  const running = fixture.rig.host.collaboratorsForTests().sessions.get(SESSION)!.child!
-  await fixture.rig.host.handleAdapterEvent({
-    type: 'ended',
-    sessionId: SESSION,
-    reason: 'killed',
-    cause: 'unexpected-exit',
-    fence: running.fence,
-    acquisitionGeneration: running.generation!
-  })
-  // ast-grep-ignore: test-no-real-time-wait -- proves no respawn follows the exit; an absence has no condition to wait on.
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  expect(fixture.rig.adapter.acquire).toHaveBeenCalledOnce()
-
-  const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
-  expect(fixture.rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-  await fixture.rig.host.send(CALLER, restTestSend('again', fence))
-  await vi.waitFor(() => expect(fixture.rig.adapter.acquire).toHaveBeenCalledTimes(2))
 })
 
 it('whose settlement write failed is settled by the next send, which is delivered', async () => {

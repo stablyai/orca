@@ -1,4 +1,4 @@
-import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
+import { simulatorRuntimeLabel } from '@/lib/simulator/launch/simulator-runtime-label'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 
 export function groupEmulatorDevices(devices: SimulatorDeviceRow[], selected: string | null) {

@@ -1,12 +1,9 @@
-import {
-  moveDisposition,
-  notApplicableDisposition,
-  type WslMoveFieldDisposition
-} from './wsl-move-dispositions'
+import { moveDisposition, notApplicableDisposition } from './wsl-move-dispositions'
+import type { WslMoveFieldDisposition } from './wsl-move-dispositions'
 
 /** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
-  'src/renderer/src/lib/quick-open-file-history.ts': {
+  'src/renderer/src/lib/files/search/quick-open-file-history.ts': {
     disposition: 'rewrite-desktop',
     item: 42
   },
@@ -30,18 +27,21 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
-    62,
-    "The mover's own record of which renderer rewrites landed; keyed by move id."
-  ),
-  'src/renderer/src/lib/wsl-drive-unc-renderer-store-rewrites.ts': notApplicableDisposition(
-    62,
-    "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
-  ),
-  'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
-    60,
-    'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
-  ),
+  'src/renderer/src/lib/workspace/persistence/wsl-move-renderer-store-rewrites.ts':
+    notApplicableDisposition(
+      62,
+      "The mover's own record of which renderer rewrites landed; keyed by move id."
+    ),
+  'src/renderer/src/lib/workspace/persistence/wsl-drive-unc-renderer-store-rewrites.ts':
+    notApplicableDisposition(
+      62,
+      "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
+    ),
+  'src/renderer/src/store/workspace-layout/frames/desktop-created-server-tabs.ts':
+    notApplicableDisposition(
+      60,
+      'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
+    ),
   'src/renderer/src/store/slices/worktrees/session/worktree-visit-recency.ts':
     notApplicableDisposition(
       32,
@@ -51,8 +51,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     [
       'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',
       'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
+      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
+      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',
@@ -83,9 +83,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
-      'src/renderer/src/lib/feature-education-telemetry.ts',
-      'src/renderer/src/lib/orchestration-setup-state.ts',
-      'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',
+      'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
+      'src/renderer/src/components/orchestration/setup/orchestration-setup-state.ts',
+      'src/renderer/src/lib/notifications/terminal-shortcut-capture-notification.tsx',
       'src/renderer/src/web/preload-api/web-keybindings-api.ts',
       'src/renderer/src/web/preload-api/web-onboarding-api.ts',
       'src/renderer/src/web/preload-api/web-preferences-store.ts',
@@ -105,9 +105,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
 
 /** The database each schema file creates tables in; a new schema file fails the census. */
 export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
-  'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
+  'src/main/ai-vault-search/storage/session-search-query-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
@@ -123,7 +123,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
     'agent-session-journal',
-  'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
+  'src/main/persistence/profile-state/database/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-legacy-contract-storage.ts': 'orchestration',
@@ -139,7 +139,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
     'test-fixture',
-  'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
+  'src/main/ai-vault/scanner-fixtures/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'

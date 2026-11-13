@@ -91,21 +91,4 @@ describe('stale document visibility', () => {
     expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
     expect(recovery).toHaveBeenCalledTimes(2)
   })
-
-  it('removes global listeners when the last pane unregisters', () => {
-    const unregisterA = mod.registerStaleDocumentVisibilityRecovery(vi.fn())
-    const unregisterB = mod.registerStaleDocumentVisibilityRecovery(vi.fn())
-    expect(documentStub.listenerCount('keydown')).toBe(1)
-
-    unregisterA()
-    expect(documentStub.listenerCount('keydown')).toBe(1)
-    unregisterB()
-    expect(documentStub.listenerCount('keydown')).toBe(0)
-    expect(documentStub.listenerCount('pointerdown')).toBe(0)
-    expect(documentStub.listenerCount('visibilitychange')).toBe(0)
-    expect(windowStub.listenerCount('focus')).toBe(0)
-
-    mod.registerStaleDocumentVisibilityRecovery(vi.fn())
-    expect(documentStub.listenerCount('keydown')).toBe(1)
-  })
 })

@@ -18,6 +18,7 @@ export function createGlobalSettingsFixture(
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'JetBrains Mono',
+      terminalFontWeight: 500,
       terminalInactivePaneOpacity: 0.5,
       terminalRightClickToPaste: false,
       notifications: getDefaultNotificationSettings(),

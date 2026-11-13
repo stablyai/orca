@@ -62,9 +62,10 @@ export function journalStateScalars(state: JournalReducerState, format: 2 | 3 = 
       latestStop: stop && { sequence: stop.sequence, event: stop.event }
     },
     queue: { revision: state.queue.revision },
-    historyOrigin: state.historyOrigin,
     ...(state.contextBoundary > 1 ? { contextBoundary: state.contextBoundary } : {})
-  } satisfies Record<Exclude<ScalarKey, 'contextBoundary'>, unknown> & { contextBoundary?: number })
+  } satisfies Record<Exclude<ScalarKey, 'contextBoundary' | 'historyOrigin'>, unknown> & {
+    contextBoundary?: number
+  })
 }
 
 export function journalStateCollections(state: JournalReducerState): Collection[] {

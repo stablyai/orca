@@ -7,7 +7,7 @@ import type {
 } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupDecision } from '../../shared/worktree/create-types'
-import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 
 function getEffectiveHookScript(
   yamlScript: string | undefined,
@@ -75,6 +75,17 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   }
 
   return policy === 'run-by-default'
+}
+
+/** Unattended creates (orchestration workers) cannot ask, so only an explicit project skip turns setup off. */
+export function resolveUnattendedSetupDecision(
+  repo: Repo,
+  requested?: SetupDecision
+): Extract<SetupDecision, 'run' | 'skip'> {
+  if (requested === 'run' || requested === 'skip') {
+    return requested
+  }
+  return getEffectiveSetupRunPolicy(repo) === 'skip-by-default' ? 'skip' : 'run'
 }
 
 export function getDefaultTabsLaunch(

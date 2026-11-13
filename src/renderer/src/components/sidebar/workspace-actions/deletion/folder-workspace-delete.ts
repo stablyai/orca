@@ -2,10 +2,13 @@ import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
-import { getExecutionHostIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
+import { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+
+const pendingFolderDeletes = new Map<string, Promise<boolean>>()
 
 /** Mirrors deleteFolderWorkspace: its tabs close only when no same-id folder survives elsewhere. */
 export function folderWorkspaceDeleteClosesTabs(
@@ -32,6 +35,14 @@ export function deleteFolderWorkspaceUnlessUnsaved(
   executionHostId?: ExecutionHostId
 ): Promise<boolean> | null {
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+  const pendingIdentity = composeWorktreeHostIdentity(
+    getExecutionHostIdForFolderWorkspace(getState(), folderWorkspaceId, executionHostId),
+    workspaceKey
+  )
+  const pending = pendingFolderDeletes.get(pendingIdentity)
+  if (pending) {
+    return pending
+  }
   const name =
     selectFolderWorkspaces(getState()).find((workspace) => workspace.id === folderWorkspaceId)
       ?.name ?? folderWorkspaceId
@@ -42,7 +53,7 @@ export function deleteFolderWorkspaceUnlessUnsaved(
   ) {
     return null
   }
-  return getState()
+  const deletion = getState()
     .deleteFolderWorkspace(folderWorkspaceId, executionHostId ? { executionHostId } : undefined)
     .then((deleted) => {
       const current = getState()
@@ -55,4 +66,7 @@ export function deleteFolderWorkspaceUnlessUnsaved(
       }
       return deleted
     })
+    .finally(() => pendingFolderDeletes.delete(pendingIdentity))
+  pendingFolderDeletes.set(pendingIdentity, deletion)
+  return deletion
 }

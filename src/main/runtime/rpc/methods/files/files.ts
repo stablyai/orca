@@ -7,12 +7,12 @@ import {
   assertDirListingWithinRemoteBudget,
   remoteFileContentBudget
 } from './files-remote-content-budget'
-import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../../shared/quick-open-transport-budget'
+import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../../shared/quick-open/quick-open-transport-budget'
 import {
   FileOpen,
   FileWatch,
   WorktreeSelector
-} from '../../../../../shared/rpc-contract/files-target-params'
+} from '../../../../../shared/rpc-contract/filesystem/files-target-params'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
   ChatImageRead,
@@ -30,8 +30,8 @@ import {
   FileUnwatch,
   ResolveTerminalPath,
   ServerDirectoryBrowse
-} from '../../../../../shared/rpc-contract/files-params'
-import { limitSearchResultToContentBudget } from '../../../../../shared/search-result-transport-budget'
+} from '../../../../../shared/rpc-contract/filesystem/files-params'
+import { limitSearchResultToContentBudget } from '../../../../../shared/file-search/search-result-transport-budget'
 
 let filesWatchSubscriptionSeq = 0
 

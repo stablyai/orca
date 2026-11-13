@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -10,30 +11,32 @@ import type { CursorAccountStatus } from '../../../../../../shared/rate-limit-ty
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 
 const CURSOR_USAGE_DASHBOARD_URL = 'https://cursor.com/dashboard/spending'
 const SEARCH_KEYWORDS = ['cursor', 'usage', 'plan', 'spend', 'billing', 'rate limit']
 
-function credentialSourceLabel(source: CursorAccountStatus['credentialSource']): string | null {
+function credentialSourceLabel(
+  source: CursorAccountStatus['credentialSource'],
+  t: Translate = translate
+): string | null {
   if (source === 'keychain') {
-    return translate(
+    return t(
       'auto.components.settings.CursorAccountsSection.source.keychain',
       'macOS Keychain (cursor-agent)'
     )
   }
   if (source === 'cli') {
-    return translate(
-      'auto.components.settings.CursorAccountsSection.source.cli',
-      'Cursor CLI auth file'
-    )
+    return t('auto.components.settings.CursorAccountsSection.source.cli', 'Cursor CLI auth file')
   }
   if (source === 'desktop') {
-    return translate('auto.components.settings.CursorAccountsSection.source.desktop', 'Cursor IDE')
+    return t('auto.components.settings.CursorAccountsSection.source.desktop', 'Cursor IDE')
   }
   return null
 }
 
 export function CursorAccountsSection(): React.JSX.Element {
+  const t = useTranslate()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const cursorUsage = useAppStore((s) => s.rateLimits.cursor)
   const [status, setStatus] = useState<CursorAccountStatus | null>(null)
@@ -86,7 +89,7 @@ export function CursorAccountsSection(): React.JSX.Element {
 
   const signedIn = status?.signedIn === true
   const tokenFresh = status?.tokenFresh === true
-  const sourceLabel = credentialSourceLabel(status?.credentialSource ?? null)
+  const sourceLabel = credentialSourceLabel(status?.credentialSource ?? null, t)
   const pools = cursorUsage?.buckets ?? []
   const monthly = cursorUsage?.monthly ?? null
   // Explain unknown/failed usage rather than hiding the signed-in account or implying healthy allowance.
@@ -103,15 +106,15 @@ export function CursorAccountsSection(): React.JSX.Element {
       : null
 
   return (
-    <div id="accounts-cursor" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.cursor} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">
             <AgentIcon agent="cursor" size={16} />
-            {translate('auto.components.settings.CursorAccountsSection.title', 'Cursor')}
+            {t('auto.components.settings.CursorAccountsSection.title', 'Cursor')}
           </span>
         }
-        description={translate(
+        description={t(
           'auto.components.settings.CursorAccountsSection.subtitle',
           'Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
         )}
@@ -123,10 +126,7 @@ export function CursorAccountsSection(): React.JSX.Element {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate(
-              'auto.components.settings.CursorAccountsSection.dashboardLink',
-              'Cursor dashboard'
-            )}
+            {t('auto.components.settings.CursorAccountsSection.dashboardLink', 'Cursor dashboard')}
             <ExternalLink className="size-3" />
           </a>
         }
@@ -141,31 +141,28 @@ export function CursorAccountsSection(): React.JSX.Element {
           <div className="min-w-0 flex-1 space-y-1">
             {loading ? (
               <p className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.CursorAccountsSection.loading', 'Loading…')}
+                {t('auto.components.settings.CursorAccountsSection.loading', 'Loading…')}
               </p>
             ) : signedIn ? (
               <>
                 <p className="truncate text-xs font-medium">
                   {status?.email ??
                     status?.displayName ??
-                    translate(
-                      'auto.components.settings.CursorAccountsSection.signedIn',
-                      'Signed in'
-                    )}
+                    t('auto.components.settings.CursorAccountsSection.signedIn', 'Signed in')}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {tokenFresh
                     ? sourceLabel
-                      ? translate(
+                      ? t(
                           'auto.components.settings.CursorAccountsSection.signedInFrom',
                           'Signed in. Orca reads the session stored in {{source}}.',
                           { source: sourceLabel }
                         )
-                      : translate(
+                      : t(
                           'auto.components.settings.CursorAccountsSection.signedInGeneric',
                           'Signed in. Orca reads the Cursor session stored on this computer.'
                         )
-                    : translate(
+                    : t(
                         'auto.components.settings.CursorAccountsSection.expired',
                         'Sign-in expired — run cursor-agent login on the computer running Orca, then click Refresh usage.'
                       )}
@@ -174,13 +171,13 @@ export function CursorAccountsSection(): React.JSX.Element {
             ) : (
               <>
                 <p className="text-xs font-medium">
-                  {translate(
+                  {t(
                     'auto.components.settings.CursorAccountsSection.signedOut',
                     'No Cursor sign-in found on this computer'
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.CursorAccountsSection.signedOutHelp',
                     'Sign in with Cursor IDE, or run cursor-agent login in a terminal, then click Refresh usage here.'
                   )}
@@ -201,20 +198,14 @@ export function CursorAccountsSection(): React.JSX.Element {
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate(
-              'auto.components.settings.CursorAccountsSection.refreshUsage',
-              'Refresh usage'
-            )}
+            {t('auto.components.settings.CursorAccountsSection.refreshUsage', 'Refresh usage')}
           </Button>
         </div>
 
         {pools.length > 0 || monthly ? (
           <SearchableSetting
-            title={translate(
-              'auto.components.settings.CursorAccountsSection.usageTitle',
-              'Plan usage'
-            )}
-            description={translate(
+            title={t('auto.components.settings.CursorAccountsSection.usageTitle', 'Plan usage')}
+            description={t(
               'auto.components.settings.CursorAccountsSection.usageDescription',
               'Cursor bills two pools that reset with your billing cycle, plus on-demand spend once they run out.'
             )}
@@ -236,22 +227,20 @@ export function CursorAccountsSection(): React.JSX.Element {
                     <span className="tabular-nums">{Math.round(monthly.usedPercent)}%</span>
                   </Badge>
                   <span className="text-muted-foreground">
-                    {translate('auto.components.settings.CursorAccountsSection.planTotal', 'Plan')}
+                    {t('auto.components.settings.CursorAccountsSection.planTotal', 'Plan')}
                   </span>
                 </div>
               ) : null}
               {(monthly ?? pools[0])?.resetDescription ? (
                 <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.CursorAccountsSection.resets',
-                    'Resets {{when}}',
-                    { when: (monthly ?? pools[0])?.resetDescription ?? '' }
-                  )}
+                  {t('auto.components.settings.CursorAccountsSection.resets', 'Resets {{when}}', {
+                    when: (monthly ?? pools[0])?.resetDescription ?? ''
+                  })}
                 </p>
               ) : null}
               {staleUsageError ? (
                 <p className="text-xs text-destructive">
-                  {translate(
+                  {t(
                     'auto.components.settings.CursorAccountsSection.staleUsage',
                     'Last known usage — the latest refresh failed: {{reason}}',
                     { reason: staleUsageError }
@@ -262,8 +251,8 @@ export function CursorAccountsSection(): React.JSX.Element {
           </SearchableSetting>
         ) : unavailableReason ? (
           <SearchableSetting
-            title={translate('auto.components.settings.CursorAccountsSection.usageLabel', 'Usage')}
-            description={translate(
+            title={t('auto.components.settings.CursorAccountsSection.usageLabel', 'Usage')}
+            description={t(
               'auto.components.settings.CursorAccountsSection.noAllowance',
               'Cursor reported no usage allowance for this account.'
             )}

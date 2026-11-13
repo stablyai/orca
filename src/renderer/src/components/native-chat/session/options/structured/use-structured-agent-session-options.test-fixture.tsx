@@ -5,7 +5,7 @@ import { renderHook } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
-import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
+import type * as HostCapability from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { SelectionOutcome } from '../../../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 
 type OptionsFixtureMocks = {
@@ -60,37 +60,47 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
-vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
-  const actual = await vi.importActual<typeof HostCapability>(
-    '@/runtime/structured-agent-session-host-capability'
-  )
-  return {
-    ...actual,
-    useStructuredAgentSessionHostCapabilityState: (
-      target: RuntimeClientTarget | null,
-      capability: string
-    ) => {
-      const state = actual.useStructuredAgentSessionHostCapabilityState(target, capability)
-      return mocks.effortDiscovery && capability === 'agent-session.model-catalog.model-efforts.v1'
-        ? 'supported'
-        : state
-    },
-    useStructuredAgentSessionHostCapability: (
-      target: RuntimeClientTarget,
-      capability: Parameters<typeof actual.useStructuredAgentSessionHostCapability>[1]
-    ) => {
-      const supported = actual.useStructuredAgentSessionHostCapability(target, capability)
-      return (
-        (mocks.coherentCatalog && capability === 'agent-session.coherent-model-catalog.v1') ||
-        (mocks.sendSelection && capability === 'agent-session.send-selection.v1') ||
-        supported
-      )
+vi.mock(
+  '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
+  async () => {
+    const actual = await vi.importActual<typeof HostCapability>(
+      '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+    )
+    return {
+      ...actual,
+      useStructuredAgentSessionHostCapabilityState: (
+        target: RuntimeClientTarget | null,
+        capability: string
+      ) => {
+        const state = actual.useStructuredAgentSessionHostCapabilityState(target, capability)
+        return mocks.effortDiscovery &&
+          capability === 'agent-session.model-catalog.model-efforts.v1'
+          ? 'supported'
+          : state
+      },
+      useStructuredAgentSessionHostCapability: (
+        target: RuntimeClientTarget,
+        capability: Parameters<typeof actual.useStructuredAgentSessionHostCapability>[1]
+      ) => {
+        const supported = actual.useStructuredAgentSessionHostCapability(target, capability)
+        return (
+          (mocks.coherentCatalog && capability === 'agent-session.coherent-model-catalog.v1') ||
+          (mocks.sendSelection && capability === 'agent-session.send-selection.v1') ||
+          supported
+        )
+      }
     }
   }
-})
+)
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
+vi.mock(
+  '../../../../../runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
+  })
+)
+
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 

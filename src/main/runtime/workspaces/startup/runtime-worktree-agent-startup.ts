@@ -5,7 +5,7 @@ import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telem
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../../../shared/execution-host'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -27,7 +27,7 @@ import {
 } from '../../terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../../../preflight/workspace-agent-detection'
 import { agentCommandOverrideDetectionOptions } from '../../../preflight/installed-agent-detection'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }

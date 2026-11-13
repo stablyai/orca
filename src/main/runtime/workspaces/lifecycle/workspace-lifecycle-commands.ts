@@ -1,3 +1,4 @@
+import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/removal/nested-removal'
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
@@ -11,7 +12,7 @@ import { splitWorktreeId } from '../../../../shared/worktree/id'
 import {
   isProvenLivePtyRemovalError,
   isUnstoppedPtyRemovalError
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import {
   getExplicitWorktreeIdSelector,
   getRuntimeWorktreeRemovalOptionsKey
@@ -166,7 +167,9 @@ export function queueWorkspaceDelete<T>(
   selector: string,
   hostId: string | undefined,
   requested: Partial<Record<RemovalFlag, boolean>> &
-    Pick<RemoveManagedWorktreeOptions, 'deleteBranch'>,
+    Pick<RemoveManagedWorktreeOptions, 'deleteBranch'> & {
+      approvedNestedWorktrees?: readonly NestedWorktreeRemovalApproval[]
+    },
   run: (
     removal: Record<RemovalFlag, boolean> &
       Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch'>
@@ -180,7 +183,8 @@ export function queueWorkspaceDelete<T>(
     allowFailedArchiveHook: requested.allowFailedArchiveHook === true
   }
   const options: LifecycleDeleteOptions = {
-    key: getRuntimeWorktreeRemovalOptionsKey(removal),
+    // A reviewed nested delete must not share a plain delete's reply, which refuses the nesting.
+    key: `${getRuntimeWorktreeRemovalOptionsKey(removal)}${requested.approvedNestedWorktrees ? `:nested:${JSON.stringify(requested.approvedNestedWorktrees)}` : ''}`,
     force: removal.allowUnverifiedPtyStop,
     label: getExplicitWorktreeIdSelector(selector) ?? selector
   }
@@ -191,6 +195,35 @@ export function queueWorkspaceDelete<T>(
     observe: observeTerminals(runtime, selector),
     delete: options
   }
+  return submitCheckoutDelete(runtime, selector, hostId, command)
+}
+
+/** Archive deletes the checkout, so it queues as a delete; its own key refuses to join a plain delete. */
+export function queueWorkspaceArchive<T>(
+  runtime: LifecycleRuntime & ObservingRuntime,
+  selector: string,
+  hostId: string | undefined,
+  run: () => Promise<T>
+): Promise<T> {
+  return submitCheckoutDelete(runtime, selector, hostId, {
+    kind: 'delete',
+    run,
+    lostContact: deleteLostContact,
+    observe: observeTerminals(runtime, selector),
+    delete: {
+      key: 'archive',
+      force: false,
+      label: getExplicitWorktreeIdSelector(selector) ?? selector
+    }
+  })
+}
+
+function submitCheckoutDelete<T>(
+  runtime: LifecycleRuntime,
+  selector: string,
+  hostId: string | undefined,
+  command: LifecycleCommand<T>
+): Promise<T> {
   const queue = runtime.workspaceLifecycle
   if (!queue) {
     return command.run()
@@ -209,4 +242,19 @@ export function queueWorkspaceDelete<T>(
           }),
         command
       )
+}
+
+/** Restore is ordered with this workspace's other commands; one sent during its archive is refused. */
+export function queueWorkspaceRestore<T>(
+  runtime: LifecycleRuntime,
+  selector: string,
+  hostId: string | undefined,
+  run: () => Promise<T>
+): Promise<T> {
+  // Restore takes a bare worktree id too; key it the same way so it never skips the queue.
+  const worktreeId = getExplicitWorktreeIdSelector(selector) ?? selector
+  const key = explicitKey(runtime.listRepos(), `id:${worktreeId}`, hostId)
+  return key
+    ? runWorkspaceLifecycleCommand(runtime.workspaceLifecycle, key, { kind: 'wake', run })
+    : run()
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionAccountUsage } from '../../../../../shared/agent-session/agent-session-account-usage'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import {
   CODEX_RESET_AUTHORITY_READING,
   useNativeChatUsageResetAuthority

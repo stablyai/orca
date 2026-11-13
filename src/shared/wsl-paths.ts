@@ -69,6 +69,12 @@ export function toWindowsWslUncPath(linuxPath: string, distro: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath === '/' ? '\\' : linuxPath.replace(/\//g, '\\')}`
 }
 
+/** Both UNC spellings of a WSL path: `\\\\wsl.localhost\\` and the older `\\\\wsl$\\`. */
+export function toWindowsWslUncPathSpellings(linuxPath: string, distro: string): string[] {
+  const localhost = toWindowsWslUncPath(linuxPath, distro)
+  return [localhost, `\\\\wsl$${localhost.slice('\\\\wsl.localhost'.length)}`]
+}
+
 /** Resolve an absolute POSIX base within the repo’s WSL distro; Windows otherwise treats it as drive-relative and discards it (STA-4772). Other forms pass through.
  * Keep drvfs on the distro UNC view so mirroring retains WSL terminal routing. Preserve ambiguous multi-slash/backslash roots unchanged; collapse dot segments so creation and ownership classification agree. */
 export function resolveWslRepoWorktreeBasePath(repoPath: string, basePath: string): string {

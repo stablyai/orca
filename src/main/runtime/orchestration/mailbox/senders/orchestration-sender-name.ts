@@ -1,5 +1,5 @@
 import { senderDispatchLaunch } from './sender-dispatch-launch'
-import { readWorkerTerminalHostScope } from '../../../../../shared/worker-terminal-host-scope'
+import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
@@ -252,12 +252,16 @@ function observedTaskName(
   return task?.display_name || task?.task_title || null
 }
 
+export function liveSenderAgent(observation: SenderObservation): AgentType | null {
+  return observation.chat?.agent || observation.terminal?.agent || null
+}
+
 /** Current live kind wins; exact durable dispatch knowledge survives loss of live observations. */
 export function orchestrationSenderAgent(
   sources: Pick<SenderNamingSources, 'db' | 'dispatchLaunch'>,
   observation: SenderObservation
 ): AgentType | null {
-  const live = observation.chat?.agent || observation.terminal?.agent
+  const live = liveSenderAgent(observation)
   if (live) {
     return live
   }

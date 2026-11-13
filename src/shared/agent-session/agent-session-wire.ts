@@ -1,5 +1,6 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
+import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
@@ -190,11 +191,7 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
-  usageLimitContinue?: {
-    turnItemId: string
-    resetsAt: number
-    state: 'scheduled' | 'cancelled' | 'failed' | 'off'
-  }
+  usageLimitContinue?: AgentSessionUsageLimitContinue
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string
@@ -214,7 +211,7 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
-  /** Current child's reported execution model, independent of the next-turn selection. */
+  /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
@@ -400,6 +397,9 @@ export type AgentSessionModelCatalogResult = {
    *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
    *  from a host that predates it; such a host sends it only with `unknown`. */
   listingInProgress?: true
+  /** A `waitForListing` read ran out of budget while its listing still ran. The answer remains
+   *  provisional with `listingInProgress`; a reader still showing the picker may wait again. */
+  waitExpired?: true
   /** Why no chat can start under the account, as the host's probe last found it. Absent is
    *  unknown, which shows nothing; an older host never sends it. */
   unavailable?: AgentSessionUnavailable

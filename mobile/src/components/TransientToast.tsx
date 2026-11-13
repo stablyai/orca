@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Text, View } from 'react-native'
-import { mobileSessionReviewCommentStyles } from '../session/mobile-session-review-comment-styles'
+import { mobileSessionReviewCommentStyles } from '../source-control/review/mobile-session-review-comment-styles'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 

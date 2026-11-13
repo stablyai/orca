@@ -1,6 +1,6 @@
 import { parseOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
-import type { MobileSessionTab } from '../../mobile-session-route-types'
+import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
   agentMessageSavedKind,
@@ -8,7 +8,7 @@ import {
   agentMessageSenderView,
   type AgentMessageSenderView
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
-import { resolveMobileTerminalTabAgentId } from '../../mobile-terminal-tab-agent'
+import { resolveMobileTerminalTabAgentId } from '../../tabs/mobile-terminal-tab-agent'
 import { agentDotState } from '../../../worktree/agent-row-display'
 
 type Sender = AgentMessageSource['senders'][number]

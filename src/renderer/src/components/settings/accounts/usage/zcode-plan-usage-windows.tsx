@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatResetDuration } from '../../../../../../shared/rate-limit-reset-format'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../../../shared/rate-limit-types'
 import { Badge } from '../../../ui/badge'
@@ -10,14 +11,14 @@ export type ZcodeUsageWindowRow = {
   window: RateLimitWindow
 }
 
-function windowLabel(kind: ZcodeUsageWindowKind): string {
+function windowLabel(kind: ZcodeUsageWindowKind, t: Translate = translate): string {
   if (kind === 'session') {
-    return translate('auto.components.settings.ZcodePlanAccountsSection.window.session', '5 hours')
+    return t('auto.components.settings.ZcodePlanAccountsSection.window.session', '5 hours')
   }
   if (kind === 'weekly') {
-    return translate('auto.components.settings.ZcodePlanAccountsSection.window.weekly', 'Weekly')
+    return t('auto.components.settings.ZcodePlanAccountsSection.window.weekly', 'Weekly')
   }
-  return translate('auto.components.settings.ZcodePlanAccountsSection.window.mcp', 'MCP monthly')
+  return t('auto.components.settings.ZcodePlanAccountsSection.window.mcp', 'MCP monthly')
 }
 
 function formatWindowReset(window: RateLimitWindow, now: number): string | null {
@@ -50,6 +51,7 @@ export function ZcodeUsageWindowView({
   row: ZcodeUsageWindowRow
   now: number
 }): React.JSX.Element {
+  const t = useTranslate()
   const resetLabel = formatWindowReset(row.window, now)
   return (
     <div className="flex items-center gap-2 text-xs">
@@ -57,9 +59,9 @@ export function ZcodeUsageWindowView({
         <span className="tabular-nums">{Math.round(row.window.usedPercent)}%</span>
       </Badge>
       <span className="text-muted-foreground">
-        {windowLabel(row.kind)}
+        {windowLabel(row.kind, t)}
         {resetLabel
-          ? translate(
+          ? t(
               'auto.components.settings.ZcodePlanAccountsSection.resetIn',
               ' — resets in {{value0}}',
               { value0: resetLabel }

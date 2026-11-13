@@ -7,6 +7,7 @@ import { showDeleteWorktreeFailureToast } from '../../sidebar/workspace-actions/
 import { showLocalBaseRefUpdateSuggestionToast } from '../../sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
@@ -137,6 +138,7 @@ function showDeleteFailureToast(): void {
 
 // Preview Cloud auth under dev environment flags while packaged account switchers remain hidden.
 function OrcaCloudDevSubsection(): React.JSX.Element {
+  const t = useTranslate()
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
   const signOut = useAppStore((s) => s.signOutCurrentOrcaProfile)
   const refresh = useAppStore((s) => s.fetchOrcaProfileAuthStatus)
@@ -146,14 +148,14 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
 
   return (
     <SettingsGroup
-      title={translate('auto.components.settings.DevToolsPane.orcaCloud', 'Orca Cloud')}
-      description={translate(
+      title={t('auto.components.settings.DevToolsPane.orcaCloud', 'Orca Cloud')}
+      description={t(
         'auto.components.settings.DevToolsPane.orcaCloudDescription',
         'Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.'
       )}
       action={
         <Badge variant="outline">
-          {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
+          {t('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
         </Badge>
       }
       bodyClassName="py-4"
@@ -161,35 +163,29 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
       {configured ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.DevToolsPane.orcaCloudStatus', 'Status')}:{' '}
+            {t('auto.components.settings.DevToolsPane.orcaCloudStatus', 'Status')}:{' '}
             <span className="font-medium text-foreground">{authStatus?.state}</span>
           </p>
           <div className="flex flex-wrap gap-2">
             {connected ? (
               <Button type="button" variant="outline" size="sm" onClick={() => void signOut()}>
-                {translate('auto.components.settings.DevToolsPane.orcaCloudSignOut', 'Sign out')}
+                {t('auto.components.settings.DevToolsPane.orcaCloudSignOut', 'Sign out')}
               </Button>
             ) : (
               <OrcaSignInButton variant="outline" size="sm">
-                {translate(
-                  'auto.components.settings.DevToolsPane.orcaCloudConnect',
-                  'Connect profile'
-                )}
+                {t('auto.components.settings.DevToolsPane.orcaCloudConnect', 'Connect profile')}
               </OrcaSignInButton>
             )}
             {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
             <Button type="button" variant="ghost" size="sm" onClick={() => void refresh()}>
-              {translate(
-                'auto.components.settings.DevToolsPane.orcaCloudRefresh',
-                'Refresh status'
-              )}
+              {t('auto.components.settings.DevToolsPane.orcaCloudRefresh', 'Refresh status')}
             </Button>
           </div>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
           {authStatus?.setupMessage ??
-            translate(
+            t(
               'auto.components.settings.DevToolsPane.orcaCloudNotConfigured',
               'Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.'
             )}
@@ -200,17 +196,18 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
 }
 
 export function DevToolsPane(): React.JSX.Element {
+  const t = useTranslate()
   const actions: DevToastAction[] = [
     {
-      title: translate('auto.components.settings.DevToolsPane.infoToast', 'Info toast'),
-      description: translate(
+      title: t('auto.components.settings.DevToolsPane.infoToast', 'Info toast'),
+      description: t(
         'auto.components.settings.DevToolsPane.infoToastDescription',
         'Long informational copy with no explicit action.'
       ),
       icon: <Info className="size-4" />,
       onClick: () =>
         toast.info(
-          translate(
+          t(
             'auto.components.settings.DevToolsPane.localCanaryBehind',
             'Local canary is behind origin/canary'
           ),
@@ -221,33 +218,30 @@ export function DevToolsPane(): React.JSX.Element {
         )
     },
     {
-      title: translate('auto.components.settings.DevToolsPane.successToast', 'Success toast'),
-      description: translate(
+      title: t('auto.components.settings.DevToolsPane.successToast', 'Success toast'),
+      description: t(
         'auto.components.settings.DevToolsPane.successToastDescription',
         'Short confirmation state.'
       ),
       icon: <Sparkles className="size-4" />,
       onClick: () =>
-        toast.success(
-          translate('auto.components.settings.DevToolsPane.settingsSaved', 'Settings saved'),
-          {
-            description: translate(
-              'auto.components.settings.DevToolsPane.shortSuccessCopy',
-              'Short success copy.'
-            )
-          }
-        )
+        toast.success(t('auto.components.settings.DevToolsPane.settingsSaved', 'Settings saved'), {
+          description: t(
+            'auto.components.settings.DevToolsPane.shortSuccessCopy',
+            'Short success copy.'
+          )
+        })
     },
     {
-      title: translate('auto.components.settings.DevToolsPane.errorToast', 'Error toast'),
-      description: translate(
+      title: t('auto.components.settings.DevToolsPane.errorToast', 'Error toast'),
+      description: t(
         'auto.components.settings.DevToolsPane.errorToastDescription',
         'Long error copy without recovery actions.'
       ),
       icon: <OctagonX className="size-4" />,
       onClick: () =>
         toast.error(
-          translate(
+          t(
             'auto.components.settings.DevToolsPane.failedToSyncWorkspaceMetadata',
             'Failed to sync workspace metadata'
           ),
@@ -258,11 +252,8 @@ export function DevToolsPane(): React.JSX.Element {
         )
     },
     {
-      title: translate(
-        'auto.components.settings.DevToolsPane.nativeActionToast',
-        'Native action toast'
-      ),
-      description: translate(
+      title: t('auto.components.settings.DevToolsPane.nativeActionToast', 'Native action toast'),
+      description: t(
         'auto.components.settings.DevToolsPane.nativeActionToastDescription',
         'Uses Sonner action and cancel slots.'
       ),
@@ -270,11 +261,8 @@ export function DevToolsPane(): React.JSX.Element {
       onClick: showNativeActionToast
     },
     {
-      title: translate(
-        'auto.components.settings.DevToolsPane.deleteFailureToast',
-        'Delete failure toast'
-      ),
-      description: translate(
+      title: t('auto.components.settings.DevToolsPane.deleteFailureToast', 'Delete failure toast'),
+      description: t(
         'auto.components.settings.DevToolsPane.deleteFailureToastDescription',
         'Custom footer with View and Force Delete.'
       ),
@@ -282,11 +270,8 @@ export function DevToolsPane(): React.JSX.Element {
       onClick: showDeleteFailureToast
     },
     {
-      title: translate(
-        'auto.components.settings.DevToolsPane.behindBaseRefToast',
-        'Behind base ref toast'
-      ),
-      description: translate(
+      title: t('auto.components.settings.DevToolsPane.behindBaseRefToast', 'Behind base ref toast'),
+      description: t(
         'auto.components.settings.DevToolsPane.behindBaseRefToastDescription',
         'Persistent prompt with an inline Settings link and footer action.'
       ),
@@ -298,17 +283,17 @@ export function DevToolsPane(): React.JSX.Element {
   return (
     <div className="space-y-8">
       <SettingsGroup
-        title={translate(
+        title={t(
           'auto.components.settings.DevToolsPane.notificationPlayground',
           'Notification playground'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.DevToolsPane.notificationPlaygroundDescription',
           'Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.'
         )}
         action={
           <Badge variant="outline">
-            {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
+            {t('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
           </Badge>
         }
         bodyClassName="py-4"

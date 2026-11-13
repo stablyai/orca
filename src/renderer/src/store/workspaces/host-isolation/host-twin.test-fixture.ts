@@ -1,24 +1,24 @@
 /** Seed same-ID repo/folder twins on two hosts with live/dormant shells, dirty drafts and sleeping agents. Raw-ID buckets are shared; host-twin-state-projection.test-fixture.ts attributes survivors. */
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../../slices/editor/types/open-file.test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../slices/worktrees/worktree.test-fixture'
 import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
-import { markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { markWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   beginHugeRepoWarningProbe,
-  markHugeRepoWarningDismissed,
-  type HugeRepoWarningProbe
+  markHugeRepoWarningDismissed
 } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
+import type { HugeRepoWarningProbe } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project-group-types'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export type HostTwinKind =
   | 'local+ssh'

@@ -8,11 +8,11 @@ import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
   type TerminalOutputMeta
-} from '../../terminal-output-frame-chunks'
+} from '../../terminal/terminal-output-frame-chunks'
 import {
   measureTerminalStreamByteLength,
   terminalStreamByteLength
-} from '../../terminal-stream-byte-length'
+} from '../../terminal/terminal-stream-byte-length'
 import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 
@@ -132,14 +132,16 @@ export function buildResumeGapChunk(output: PublishedTerminalOutput[]): Terminal
 
 export function appendAckPendingOutput(
   stream: TerminalMultiplexStream,
-  chunk: TerminalOutputFrameChunk
+  chunk: TerminalOutputFrameChunk,
+  maxBytes: number
 ): TerminalOutputFrameChunk[] {
   stream.ackPendingOutput.push(chunk)
   stream.ackPendingOutputBytes += chunk.bytes.byteLength
   const trimmed = trimHeadToBudget(
     stream.ackPendingOutput,
     stream.ackPendingOutputBytes,
-    (pending) => pending.bytes.byteLength
+    (pending) => pending.bytes.byteLength,
+    maxBytes
   )
   stream.ackPendingOutputBytes = trimmed.bytes
   stream.ackPendingOutputOverflowed ||= trimmed.overflowed
@@ -150,16 +152,22 @@ export function trimPendingOutputToBudget(
   pendingOutput: TerminalOutputChunk[],
   pendingOutputBytes: number
 ): { bytes: number; overflowed: boolean } {
-  return trimHeadToBudget(pendingOutput, pendingOutputBytes, (chunk) => chunk.bytes)
+  return trimHeadToBudget(
+    pendingOutput,
+    pendingOutputBytes,
+    (chunk) => chunk.bytes,
+    TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
+  )
 }
 
 function trimHeadToBudget<T>(
   items: T[],
   bytes: number,
-  sizeOf: (item: T) => number
+  sizeOf: (item: T) => number,
+  maxBytes: number
 ): { bytes: number; overflowed: boolean; omitted: T[] } {
   let omittedCount = 0
-  while (bytes > TERMINAL_MULTIPLEX_PENDING_MAX_BYTES && omittedCount < items.length) {
+  while (bytes > maxBytes && omittedCount < items.length) {
     bytes -= sizeOf(items[omittedCount]!)
     omittedCount += 1
   }

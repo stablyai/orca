@@ -1,27 +1,28 @@
 import {
   hasAgentSenderPublication,
   selectAgentSenderAssociation
-} from '@/runtime/agent-sender-associations'
+} from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import {
   structuredChatTabBySessionId,
   structuredChatWorkspacesBySessionId
-} from '@/lib/structured-chat-tab-index'
-import { useStructuredConversationName } from '@/runtime/structured-conversation-name'
+} from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { useStructuredConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionOwnerInputs,
   resolveStructuredAgentSessionOwner,
   executionHostIdForStructuredTarget
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
 import type { Tab } from '../../../../../../shared/tab-types'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 export function unnamedSenderLabel(t: Translate = translate): string {
   return t('components.native-chat.agentMessage.unnamedSender', 'an agent')

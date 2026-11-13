@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
+import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
 import { warnUnreadableEnvironmentState } from './runtime-environment-store-records'
 import {
   getPreferredLoopbackRuntimePort,
@@ -10,7 +10,7 @@ import {
   KnownRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-file'
+import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
 import { OrcadWslDeploymentLinkSchema } from '../host-catalog/wsl-host-deployment-link'
 
 // Isolate WSL records so older builds cannot reject the entire pairing store.

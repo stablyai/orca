@@ -11,8 +11,8 @@ import {
 import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import {
   getContextualTour,
   type ContextualTourId,
@@ -27,9 +27,9 @@ import {
   watchContextualTourFloatingPosition,
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
-import { translate } from '@/i18n/i18n'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { useTranslate } from '@/i18n/use-translate'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getMeasurableContextualTourTarget } from './contextual-tour-gate'
 
 const FOCUSABLE_SELECTOR =
@@ -111,6 +111,7 @@ export function ContextualTourOverlaySurface({
   onStepAction,
   onOverlayKeyDownCapture
 }: ContextualTourOverlaySurfaceProps): JSX.Element {
+  const t = useTranslate()
   const arrowRef = useRef<SVGSVGElement | null>(null)
   const [floatingPosition, setFloatingPosition] = useState<ContextualTourFloatingPosition | null>(
     null
@@ -133,11 +134,8 @@ export function ContextualTourOverlaySurface({
   const defaultPrimaryAction = {
     kind: renderState.isLastStep ? 'complete' : 'next',
     label: renderState.isLastStep
-      ? translate('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
-      : translate(
-          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
-          'Next'
-        )
+      ? t('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
+      : t('auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418', 'Next')
   } satisfies ContextualTourStepAction
   const primaryAction =
     renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)
@@ -201,11 +199,11 @@ export function ContextualTourOverlaySurface({
           data-contextual-tour-dismiss=""
           aria-label={
             renderState.isLastStep
-              ? translate(
+              ? t(
                   'auto.components.contextual.tours.ContextualTourOverlaySurface.d974f32a83',
                   'Dismiss tour'
                 )
-              : translate(
+              : t(
                   'auto.components.contextual.tours.ContextualTourOverlaySurface.4f86e2a10b',
                   'Skip tour'
                 )
@@ -217,9 +215,7 @@ export function ContextualTourOverlaySurface({
         </Button>
         <h2 className="flex items-center gap-2 pr-6 text-sm font-semibold tracking-tight text-foreground">
           {renderState.badge === 'new' ? (
-            <Badge variant="secondary">
-              {translate('components.contextualTours.badgeNew', 'New')}
-            </Badge>
+            <Badge variant="secondary">{t('components.contextualTours.badgeNew', 'New')}</Badge>
           ) : null}
           <span className="min-w-0">{renderState.title}</span>
         </h2>
@@ -236,14 +232,14 @@ export function ContextualTourOverlaySurface({
                 type="button"
                 variant="ghost"
                 size="xs"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
                   'Back'
                 )}
                 onClick={onBack}
               >
                 <ArrowLeft />
-                {translate(
+                {t(
                   'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
                   'Back'
                 )}

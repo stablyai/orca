@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   CODEX_DISABLE_AUTO_START_COMMAND,
   CODEX_STOP_SHARED_SERVER_COMMAND
@@ -32,6 +32,7 @@ function useFixStep(run: () => Promise<boolean>): {
 }
 
 function CommandBlock({ command }: { command: string }): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) {
@@ -59,8 +60,8 @@ function CommandBlock({ command }: { command: string }): React.JSX.Element {
       >
         {copied ? <Check /> : <Copy />}
         {copied
-          ? translate('terminal.codexSharedServerBanner.copied', 'Copied')
-          : translate('terminal.codexSharedServerBanner.copy', 'Copy')}
+          ? t('terminal.codexSharedServerBanner.copied', 'Copied')
+          : t('terminal.codexSharedServerBanner.copy', 'Copy')}
       </Button>
     </div>
   )
@@ -93,6 +94,7 @@ function FixStep({
   note?: string
   warning?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-3.5">
       <div className="flex items-center gap-3">
@@ -124,7 +126,7 @@ function FixStep({
       <div className="flex min-w-0 flex-col gap-1 pl-8">
         {/* Why always shown: the user sees exactly what Orca runs on their behalf. */}
         <p className="flex min-w-0 items-baseline gap-1.5 text-xs text-muted-foreground">
-          {translate('terminal.codexSharedServerBanner.runs', 'Runs')}
+          {t('terminal.codexSharedServerBanner.runs', 'Runs')}
           <code className="min-w-0 rounded-sm bg-muted px-1.5 py-0.5 font-mono break-all">
             {command}
           </code>
@@ -151,18 +153,16 @@ function ConfirmStopDialog({
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'terminal.codexSharedServerBanner.confirmStopTitle',
-              'Stop the shared server?'
-            )}
+            {t('terminal.codexSharedServerBanner.confirmStopTitle', 'Stop the shared server?')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'terminal.codexSharedServerBanner.confirmStopDescription',
               'This closes any open Codex sessions that share it, including ones outside Orca.'
             )}
@@ -170,10 +170,10 @@ function ConfirmStopDialog({
         </DialogHeader>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-            {translate('terminal.codexSharedServerBanner.cancel', 'Cancel')}
+            {t('terminal.codexSharedServerBanner.cancel', 'Cancel')}
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm}>
-            {translate('terminal.codexSharedServerBanner.stopServer', 'Stop server')}
+            {t('terminal.codexSharedServerBanner.stopServer', 'Stop server')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -192,6 +192,7 @@ export function CodexSharedServerFixDialog({
   onOpenChange: (open: boolean) => void
   onServerStopped: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const turnOff = useFixStep(() => window.api.pty.disableCodexSharedServerAutoStart(ptyId))
   const stop = useFixStep(() => window.api.pty.stopCodexSharedServer(ptyId))
   const [confirmStopOpen, setConfirmStopOpen] = useState(false)
@@ -201,13 +202,13 @@ export function CodexSharedServerFixDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'terminal.codexSharedServerBanner.dialogTitle',
               'Give each Codex tab its own server'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'terminal.codexSharedServerBanner.dialogDescription',
               'Codex sessions started directly in a terminal share one background server. Orca keeps the Codex sessions it starts separate. When sessions share a server, closing one can end the others, and agent status can be wrong.'
             )}
@@ -216,44 +217,44 @@ export function CodexSharedServerFixDialog({
         <div className="flex flex-col gap-3">
           <FixStep
             step={1}
-            title={translate(
+            title={t(
               'terminal.codexSharedServerBanner.step1Title',
               'Turn off Codex server sharing'
             )}
             command={CODEX_DISABLE_AUTO_START_COMMAND}
             status={turnOff.status}
-            actionLabel={translate('terminal.codexSharedServerBanner.turnOff', 'Turn off')}
-            runningLabel={translate('terminal.codexSharedServerBanner.turningOff', 'Turning off…')}
-            doneLabel={translate('terminal.codexSharedServerBanner.turnedOff', 'Turned off')}
-            failedLabel={translate(
+            actionLabel={t('terminal.codexSharedServerBanner.turnOff', 'Turn off')}
+            runningLabel={t('terminal.codexSharedServerBanner.turningOff', 'Turning off…')}
+            doneLabel={t('terminal.codexSharedServerBanner.turnedOff', 'Turned off')}
+            failedLabel={t(
               'terminal.codexSharedServerBanner.turnOffFailed',
               "Orca couldn't turn this off."
             )}
             onAction={() => void turnOff.start()}
-            note={translate(
+            note={t(
               'terminal.codexSharedServerBanner.step1Note',
               'This changes your Codex settings, so it also applies outside Orca.'
             )}
           />
           <FixStep
             step={2}
-            title={translate(
+            title={t(
               'terminal.codexSharedServerBanner.step2Title',
               'Stop the running shared server'
             )}
             command={CODEX_STOP_SHARED_SERVER_COMMAND}
             status={stop.status}
-            actionLabel={translate('terminal.codexSharedServerBanner.stopServer', 'Stop server')}
-            runningLabel={translate('terminal.codexSharedServerBanner.stopping', 'Stopping…')}
-            doneLabel={translate('terminal.codexSharedServerBanner.stopped', 'Stopped')}
-            failedLabel={translate(
+            actionLabel={t('terminal.codexSharedServerBanner.stopServer', 'Stop server')}
+            runningLabel={t('terminal.codexSharedServerBanner.stopping', 'Stopping…')}
+            doneLabel={t('terminal.codexSharedServerBanner.stopped', 'Stopped')}
+            failedLabel={t(
               'terminal.codexSharedServerBanner.stopFailed',
               "Orca couldn't stop the server."
             )}
             onAction={() => setConfirmStopOpen(true)}
             // Why: with sharing still on, the next Codex restarts the server it just closed sessions to stop.
             locked={turnOff.status !== 'done'}
-            warning={translate(
+            warning={t(
               'terminal.codexSharedServerBanner.step2Warning',
               'Closes any open Codex sessions that share the server'
             )}
@@ -261,13 +262,13 @@ export function CodexSharedServerFixDialog({
         </div>
         <DialogFooter className="items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'terminal.codexSharedServerBanner.undo',
               'To undo, run codex features enable daemon_auto_start.'
             )}
           </p>
           <Button type="button" onClick={() => onOpenChange(false)}>
-            {translate('terminal.codexSharedServerBanner.done', 'Done')}
+            {t('terminal.codexSharedServerBanner.done', 'Done')}
           </Button>
         </DialogFooter>
         <ConfirmStopDialog

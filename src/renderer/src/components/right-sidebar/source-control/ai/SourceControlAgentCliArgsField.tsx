@@ -1,7 +1,7 @@
 import React from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Native chat uses a protocol and ignores CLI arguments, so omit the field for those launches. */
 export function SourceControlAgentCliArgsField({
@@ -13,13 +13,14 @@ export function SourceControlAgentCliArgsField({
   value: string
   onChange: (value: string) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!applies) {
     return null
   }
   return (
     <div className="space-y-2">
       <Label htmlFor="source-control-agent-cli-args" className="text-xs">
-        {translate('settings.sourceControl.actionModel.extraArgs', 'Extra CLI arguments')}
+        {t('settings.sourceControl.actionModel.extraArgs', 'Extra CLI arguments')}
       </Label>
       <Input
         id="source-control-agent-cli-args"

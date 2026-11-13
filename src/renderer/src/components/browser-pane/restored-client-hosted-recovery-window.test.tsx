@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  annotateBrowserPageHandles,
+  markHydratedBrowserPageHandles
+} from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,7 +14,7 @@ const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 vi.mock('sonner', () => ({
@@ -64,23 +68,25 @@ function runtimeStatusMap(
 
 function seedStore(options: { restored: boolean; environment: EnvironmentReachability }): void {
   useAppStore.setState({
-    remoteBrowserPageHandlesByPageId: options.restored
-      ? {
-          [PAGE_ID]: {
-            environmentId: ENVIRONMENT_ID,
-            remotePageId: 'remote-page-a',
-            restoredFromSession: true,
-            restoredClientHosted: true
+    remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles(
+      options.restored
+        ? {
+            [PAGE_ID]: {
+              environmentId: ENVIRONMENT_ID,
+              remotePageId: 'remote-page-a',
+              restoredFromSession: true,
+              restoredClientHosted: true
+            }
           }
-        }
-      : {
-          [PAGE_ID]: {
-            environmentId: ENVIRONMENT_ID,
-            remotePageId: 'remote-page-a',
-            staged: true,
-            stagedClientHosted: true
+        : {
+            [PAGE_ID]: {
+              environmentId: ENVIRONMENT_ID,
+              remotePageId: 'remote-page-a',
+              staged: true,
+              stagedClientHosted: true
+            }
           }
-        },
+    ),
     runtimeStatusByEnvironmentId: runtimeStatusMap(options.environment)
   })
 }
@@ -121,7 +127,7 @@ describe('restored client-hosted recovery window', () => {
     cleanup()
     vi.useRealTimers()
     useAppStore.setState({
-      remoteBrowserPageHandlesByPageId: {},
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({}),
       runtimeStatusByEnvironmentId: new Map()
     })
   })
@@ -150,23 +156,29 @@ describe('restored client-hosted recovery window', () => {
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
     act(() => {
       useAppStore.setState({
-        remoteBrowserPageHandlesByPageId: {
-          [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
-        }
+        remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+          {
+            [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
+          },
+          [PAGE_ID]
+        )
       })
     })
     expect(noticeShown()).toBe(false)
 
     act(() => {
       useAppStore.setState({
-        remoteBrowserPageHandlesByPageId: {
-          [PAGE_ID]: {
-            environmentId: ENVIRONMENT_ID,
-            remotePageId: 'remote-page-a',
-            restoredFromSession: true,
-            restoredClientHosted: true
-          }
-        }
+        remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+          {
+            [PAGE_ID]: {
+              environmentId: ENVIRONMENT_ID,
+              remotePageId: 'remote-page-a',
+              restoredFromSession: true,
+              restoredClientHosted: true
+            }
+          },
+          [PAGE_ID]
+        )
       })
       view.rerender(paneElement())
     })

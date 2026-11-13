@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { Terminal } from '@xterm/headless'
 import type { ILink } from '@xterm/xterm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   createDeferred,
@@ -19,12 +19,16 @@ import {
 const doubles = createTerminalLinkTestDoubles()
 const { storeState, fsPathExistsMock, runtimeEnvironmentCallMock, statMock } = doubles
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/lib/language-detect', () => ({ detectLanguage: () => 'plaintext' }))
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
+  detectLanguage: () => 'plaintext'
+}))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
 installTerminalLinkTestEnvironment(doubles)
 
 const firstPath = '/home/alice/dev/notes/README.md'

@@ -26,10 +26,12 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../../runtime/agent-session/records/agent-session-record-conversation-name'
@@ -38,7 +40,7 @@ import type { AgentSessionSpawnTokenScan } from '../../../runtime/agent-session/
 import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
-import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type {
@@ -61,6 +63,11 @@ import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
+  clientKind?: 'mobile' | 'runtime'
+  /** Proven by the caller's transport, never inferred from an unnamed/runtime client. */
+  userClient?: 'desktop' | 'mobile'
+  /** Consent-owning paired desktop, including the authenticated parent of a delegated phone. */
+  telemetryOwnerKey?: string
   readsOptionsWithoutModel?: boolean
 }
 
@@ -183,6 +190,13 @@ export type StructuredAgentSessionHostDeps = {
     isEnabled: () => boolean
     subscribe: (changed: () => void) => () => void
     isWorkspaceAsleep: (workspaceId: string) => boolean
+    /** The hold scope of a launch at `home` and its polled usage; undefined when it can't hold. */
+    accountUsage?: (
+      provider: AgentSessionRecord['provider'],
+      home: AgentSessionAccountHome
+    ) => Promise<UsageLimitAccountScope | undefined>
+    /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
+    accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
@@ -206,6 +220,12 @@ export type StructuredAgentSessionHostDeps = {
    *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
+  /** Every committed journal batch, after request-failure observation; must not throw. */
+  observeCommittedRows?: (
+    sessionId: string,
+    journal: AgentSessionJournal,
+    rows: readonly JournalRow[] | undefined
+  ) => void
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,
@@ -233,6 +253,10 @@ export type SetUserConversationName = StructuredAgentSessionConversationNaming['
 export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
 
 export type StructuredAgentSessionConversationNaming = {
+  captureTitleSourceUnavailable?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => (() => void) | undefined
   publishName: (workspaceId: string, sessionId: string) => void
   activeSessionIds: () => string[]
   failure: (sessionId: string) => StructuredChatNamingFailure | undefined

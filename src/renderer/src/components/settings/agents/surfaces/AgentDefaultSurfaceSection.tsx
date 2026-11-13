@@ -8,9 +8,10 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
-import { getIntlLocale, translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { trackAgentDefaultSurfaceChanged } from '../../../feature-tips/feature-tip-telemetry'
 import {
@@ -18,7 +19,6 @@ import {
   TerminalSurfacePreview
 } from '../../../agent/launch-settings/AgentDefaultSurfacePreviews'
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
-import { Card, CardContent } from '../../../ui/card'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { Button } from '../../../ui/button'
@@ -41,6 +41,8 @@ type Writer = {
 
 /** After the default changes, names the agents set for themselves to the other surface. */
 function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) => void {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   const id = useId()
   const mounted = useMountedRef()
   useEffect(
@@ -61,7 +63,7 @@ function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) 
       return
     }
     const values = {
-      agents: new Intl.ListFormat(getIntlLocale(), { type: 'conjunction' }).format(
+      agents: new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
         kept.map((agent) => getAgentLabel(agent))
       ),
       count: kept.length
@@ -69,12 +71,12 @@ function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) 
     const chat = surface === 'chat'
     toast.success(
       chat
-        ? translate('settings.agents.defaultSurfaceNowChat', 'Agents now open as chats')
-        : translate('settings.agents.defaultSurfaceNowTerminal', 'Agents now open in the terminal'),
+        ? t('settings.agents.defaultSurfaceNowChat', 'Agents now open as chats')
+        : t('settings.agents.defaultSurfaceNowTerminal', 'Agents now open in the terminal'),
       {
         id,
         description: chat
-          ? translate(
+          ? t(
               'settings.agents.defaultSurfaceKeptTerminal',
               '{{agents}} stay in the terminal, as you set.',
               {
@@ -83,19 +85,15 @@ function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) 
                 defaultValue_one: '{{agents}} stays in the terminal, as you set.'
               }
             )
-          : translate(
-              'settings.agents.defaultSurfaceKeptChat',
-              '{{agents}} stay as chats, as you set.',
-              {
-                ...values,
-                count: values.count,
-                defaultValue_one: '{{agents}} stays as a chat, as you set.'
-              }
-            ),
+          : t('settings.agents.defaultSurfaceKeptChat', '{{agents}} stay as chats, as you set.', {
+              ...values,
+              count: values.count,
+              defaultValue_one: '{{agents}} stays as a chat, as you set.'
+            }),
         action: {
           label: chat
-            ? translate('settings.agents.defaultSurfaceSetAllChat', 'Set all to Chat')
-            : translate('settings.agents.defaultSurfaceSetAllTerminal', 'Set all to Terminal'),
+            ? t('settings.agents.defaultSurfaceSetAllChat', 'Set all to Chat')
+            : t('settings.agents.defaultSurfaceSetAllTerminal', 'Set all to Terminal'),
           onClick: () =>
             void followAgentDefaultSurface({ agents: kept, surface, ...writer }).catch(saveFailed)
         }
@@ -174,13 +172,14 @@ export function AgentDefaultSurfaceSection({
   settings: GlobalSettings
   presentation?: 'tiles' | 'switch'
 }): JSX.Element {
+  const t = useTranslate()
   const name = useId()
   const notify = useKeptSurfaceNotice()
   const updateSettings = useAppStore((s) => s.updateSettingsOrThrow)
   const mutation = useImmediateMutation()
   const pending = mutation.isPending('default-surface')
   const surface = normalizeAgentDefaultSurface(settings.agentDefaultSurface)
-  const title = translate('settings.agents.defaultSurfaceTitle', 'Open agents as')
+  const title = t('settings.agents.defaultSurfaceTitle', 'Open agents as')
   const choose = (next: AgentDefaultSurface): void => {
     const writer = { fallbackSettings: settings, updateSettings }
     void mutation.run('default-surface', {
@@ -203,48 +202,46 @@ export function AgentDefaultSurfaceSection({
   }
   if (presentation === 'switch') {
     return (
-      <Card>
-        <CardContent>
-          <SettingsRow
-            label={
-              <span className="text-lg font-semibold">
-                {surface === 'chat'
-                  ? translate('settings.chat.launch.on', 'Chat UI is on')
-                  : translate('settings.chat.launch.off', 'Chat UI is off')}
-              </span>
-            }
-            description={
-              surface === 'chat'
-                ? translate(
-                    'settings.chat.launch.chatDescription',
-                    'New agents will launch in chat mode by default.'
-                  )
-                : translate(
-                    'settings.chat.launch.cliDescription',
-                    'New agents will launch as CLI by default.'
-                  )
-            }
-            control={
-              <Button
-                variant={surface === 'chat' ? 'outline' : 'default'}
-                disabled={pending}
-                onClick={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
-              >
-                {surface === 'chat'
-                  ? translate('settings.chat.launch.turnOff', 'Turn off')
-                  : translate('settings.chat.launch.turnOn', 'Turn on')}
-              </Button>
-            }
-          />
-        </CardContent>
-      </Card>
+      <SettingsGroup>
+        <SettingsRow
+          label={
+            <span className="text-lg font-semibold">
+              {surface === 'chat'
+                ? t('settings.chat.launch.on', 'Chat UI is on')
+                : t('settings.chat.launch.off', 'Chat UI is off')}
+            </span>
+          }
+          description={
+            surface === 'chat'
+              ? t(
+                  'settings.chat.launch.chatDescription',
+                  'New agents will launch in chat mode by default.'
+                )
+              : t(
+                  'settings.chat.launch.cliDescription',
+                  'New agents will launch as CLI by default.'
+                )
+          }
+          control={
+            <Button
+              variant={surface === 'chat' ? 'outline' : 'default'}
+              disabled={pending}
+              onClick={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
+            >
+              {surface === 'chat'
+                ? t('settings.chat.launch.turnOff', 'Turn off')
+                : t('settings.chat.launch.turnOn', 'Turn on')}
+            </Button>
+          }
+        />
+      </SettingsGroup>
     )
   }
   return (
     <div id={AGENT_DEFAULT_SURFACE_SECTION_ID} className="@container scroll-mt-8">
       <SettingsGroup
         title={title}
-        description={translate(
+        description={t(
           'settings.agents.defaultSurfaceDescription',
           'The default for agents on this computer.'
         )}
@@ -254,14 +251,14 @@ export function AgentDefaultSurfaceSection({
           role="radiogroup"
           aria-label={title}
           aria-busy={pending}
-          className="grid gap-3.5 @3xl:grid-cols-2"
+          className="grid gap-3.5 @2xl:grid-cols-2"
         >
           <SurfaceTile
             name={name}
             pending={pending}
             checked={surface === 'chat'}
-            title={translate('settings.agents.defaultOpensAsChat', 'Chat')}
-            description={translate(
+            title={t('settings.agents.defaultOpensAsChat', 'Chat')}
+            description={t(
               'settings.agents.defaultSurfaceChatDescription',
               'Rich messages, visuals and images.'
             )}
@@ -272,8 +269,8 @@ export function AgentDefaultSurfaceSection({
             name={name}
             pending={pending}
             checked={surface === 'terminal'}
-            title={translate('settings.agents.defaultSurfaceTerminal', 'Terminal')}
-            description={translate(
+            title={t('settings.agents.defaultSurfaceTerminal', 'Terminal')}
+            description={t(
               'settings.agents.defaultSurfaceTerminalDescription',
               'Each agent’s own CLI.'
             )}
@@ -287,7 +284,7 @@ export function AgentDefaultSurfaceSection({
             onClick={showInstalledList}
             className="inline-flex items-center gap-0.5 rounded-sm text-[13px] font-medium underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
-            {translate('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}
+            {t('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}
             <ChevronRight className="size-3.5" />
           </button>
         </div>

@@ -4,15 +4,9 @@ import {
   type ClipboardEventDataLike
 } from '../../../../../src/shared/native-chat/input/native-chat-clipboard-event'
 import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/native-chat-long-paste'
-import type { ClipboardReader } from '../../../platform/clipboard'
-import type { PickedMobileImage } from '../../../platform/media-picker-contract'
-import { encodeBase64Bytes } from '../../../transport/base64-byte-codec'
-import {
-  MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
-  normalizeMobileClipboardImageBase64,
-  prepareMobileClipboardImageBase64
-} from '../../mobile-clipboard-image'
-import { resizeMobileClipboardImage } from '../../mobile-clipboard-image-resize'
+import type { ClipboardReader } from '../../../platform/clipboard/clipboard'
+import type { PickedMobileImage } from '../../../platform/media-picking/media-picker-contract'
+import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'
 
 /** One paste's image: the event's file, or null when WebKit left the bytes out and the shell clipboard holds them. */
 export type MobilePastedImages = { readonly file: File | null }
@@ -22,45 +16,21 @@ type PasteEvent = ClipboardEventDataLike<File> & {
   preventDefault: () => void
 }
 
-async function sizedForUpload(data: string, width: number, height: number): Promise<string> {
-  const prepared = await prepareMobileClipboardImageBase64(
-    { data, size: { width, height } },
-    resizeMobileClipboardImage
-  )
-  return normalizeMobileClipboardImageBase64(prepared)
-}
-
-async function readEventImage(file: Blob): Promise<PickedMobileImage> {
-  const base64 = encodeBase64Bytes(new Uint8Array(await file.arrayBuffer()))
-  const uri = `data:${file.type};base64,${base64}`
-  // Agents read only these formats; anything else (HEIC, TIFF) is re-encoded as PNG.
-  const readable = /^image\/(?:png|jpeg|gif|webp)$/.test(file.type)
-  if (readable && base64.length <= MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS) {
-    return { base64, uri }
-  }
-  const image = new Image()
-  image.src = uri
-  await image.decode()
-  const size = { width: image.naturalWidth, height: image.naturalHeight }
-  const source = readable ? base64 : (await resizeMobileClipboardImage(base64, size)).data
-  return { base64: await sizedForUpload(source, size.width, size.height) }
-}
-
-/** Sized for upload; the clipboard reader is the uploader's, so the composer needs no shell bridge. */
+/** Raw bytes; the uploader fits them for agents. The clipboard reader is the uploader's, so the composer needs no shell bridge. */
 export async function readMobilePastedImages(
   { file }: MobilePastedImages,
   clipboard: Pick<ClipboardReader, 'readImage' | 'contents'>
 ): Promise<readonly PickedMobileImage[]> {
   if (file) {
-    return [await readEventImage(file)]
+    return [
+      { base64: encodeBase64Bytes(new Uint8Array(await file.arrayBuffer())), mime: file.type }
+    ]
   }
   if (!(await clipboard.contents()).image) {
     return []
   }
   const image = await clipboard.readImage()
-  return image
-    ? [{ base64: await sizedForUpload(image.data, image.size.width, image.size.height) }]
-    : []
+  return image ? [{ base64: image.data }] : []
 }
 
 /** Text pastes stay native unless long; images attach as chips like Photos picks. A disabled composer leaves pastes to the field. */

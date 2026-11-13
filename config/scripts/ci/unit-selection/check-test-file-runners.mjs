@@ -35,13 +35,6 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["'tests/e2e/computer-*.e2e.ts'"]
   },
   {
-    name: 'agent-status benchmark',
-    manual: true,
-    include: ['config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'],
-    sources: ['config/vitest.agent-status-benchmark.config.ts'],
-    mirrors: ["'config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'"]
-  },
-  {
     name: 'mobile',
     include: ['mobile/src/**/*.test.ts', 'mobile/src/**/*.test.tsx', 'mobile/scripts/**/*.test.ts'],
     sources: ['mobile/vitest.config.ts'],
@@ -56,6 +49,12 @@ const NON_UNIT_TEST_RUNNERS = [
     sources: [`cloud/apps/${app}/vitest.config.ts`],
     mirrors: ["include: ['src/**/*.test.ts']"]
   })),
+  {
+    name: 'cloud relay-edge',
+    include: ['cloud/apps/relay-edge/test/**/*.test.ts'],
+    sources: ['cloud/apps/relay-edge/vitest.config.ts'],
+    mirrors: ["include: ['test/**/*.test.ts']"]
+  },
   ...[
     'cloud/apps/relay-fence-broker',
     'cloud/packages/cloud-database',
@@ -85,7 +84,7 @@ const NON_UNIT_TEST_RUNNERS = [
     // `orca plugin test` runs every example's own tests in Node; the unit test drives it.
     name: 'example plugin tests (orca plugin test)',
     include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
-    sources: ['src/cli/plugin-authoring/plugin-test-runner.test.ts'],
+    sources: ['src/cli/plugins/authoring/plugin-test-runner.test.ts'],
     mirrors: ['readdirSync(EXAMPLES)']
   },
   {

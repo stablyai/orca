@@ -1,4 +1,4 @@
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: number): void {

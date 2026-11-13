@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, vi } from 'vitest'
@@ -41,8 +40,8 @@ import { useAppStore } from '@/store'
 import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
 import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
 import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
-import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 export const WORKSPACE = 'repo1::/tmp/wt'
 export const TAB = 'chat'

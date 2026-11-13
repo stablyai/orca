@@ -10,17 +10,17 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   installSkillBundleCloudGrant,
   installSkillCloudGrant
-} from '../skills/skill-cloud-grant-installation'
-import { SkillRemoteInstallCancellation } from '../skills/skill-remote-install-cancellation'
-import { classifySkillCloudInstallTarget } from '../skills/skill-cloud-install-target'
-import { assertSkillCloudGrantVersion } from '../skills/skill-cloud-grant-version'
-import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
+} from '../skills/cloud/skill-cloud-grant-installation'
+import { SkillRemoteInstallCancellation } from '../skills/runtime-transfer/skill-remote-install-cancellation'
+import { classifySkillCloudInstallTarget } from '../skills/cloud/skill-cloud-install-target'
+import { assertSkillCloudGrantVersion } from '../skills/cloud/skill-cloud-grant-version'
+import { SkillSharePreparationService } from '../skills/sharing/skill-share-preparation'
 import {
   supportsSkillRuntimeBundleInstall,
   supportsSkillRuntimeCancellation,
   supportsSkillRuntimeInstall
-} from '../skills/skill-runtime-capability'
-import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+} from '../skills/runtime-transfer/skill-runtime-capability'
+import { callRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 import { sendBundleInstallProgress, sendSkillInstallProgress } from './skill-install-progress-ipc'
@@ -35,7 +35,7 @@ import {
   skillSharePrepareIpcSchema,
   skillSharePublishIpcSchema
 } from './skill-share-publishing-ipc-schemas'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 
 /** Discovery for Share; `skillDirectories` limits which stopped WSL roots it may read. */
 export type SkillShareDiscover = (

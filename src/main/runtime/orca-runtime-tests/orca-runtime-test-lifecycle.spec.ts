@@ -1,4 +1,7 @@
 import './runtime-test-module-registration.spec'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   MOCK_GIT_WORKTREES,
   addGitHubIssueCommentMock,
@@ -85,9 +88,11 @@ import { _resetTerminalViewAttributesForTest } from '../terminal/view/terminal-v
 import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, vi, type MockInstance } from 'vitest'
+import { initOrcaProfilePaths } from '../../orca-profiles/profile-storage-paths'
+import { stopStructuredAgentSessionRuntime } from '../agent-session/structured-agent-session-runtime'
 import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
-import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests as cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
+import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests as cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import {
   createSetupRunnerScript,
@@ -114,18 +119,19 @@ import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
-import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
-import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
+import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
+import { setRuntimeTerminalUnavailableCause } from '../terminal/launch/native-terminal-availability'
 import { OrcaRuntimeService as runtimeMockOrcaRuntimeService } from '../orca-runtime'
-import type { MockInstance } from 'vitest'
+
 import * as worktreeChangeInvalidators from '../../ipc/worktrees/listing/worktree-change-invalidators'
-import { awaitBackgroundRemovalsInRuntimeTests } from '../orca-runtime-background-removal-test-support'
+import { awaitBackgroundRemovalsInRuntimeTests } from '../workspaces/removal/orca-runtime-background-removal-test-support'
 import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
 } from '../../workspaces/removal/worktree-background-removal'
-import { _resetCanonicalRepoKeyCacheForTests } from '../../git/canonical-repo-key'
+import { _resetCanonicalRepoKeyCacheForTests } from '../../git/repositories/canonical-repo-key'
+import { setWorktreeRemovalRecordsDirectory } from '../../workspaces/removal/worktree-removal-table'
 
 awaitBackgroundRemovalsInRuntimeTests(runtimeMockOrcaRuntimeService.prototype)
 commitFakeSpawnsInRuntimeTests(runtimeMockOrcaRuntimeService.prototype)
@@ -133,6 +139,7 @@ commitFakeSpawnsInRuntimeTests(runtimeMockOrcaRuntimeService.prototype)
 function resetRuntimeTestMocks(): void {
   _resetCanonicalRepoKeyCacheForTests()
   _resetPendingWorktreeRemovalsForTests()
+  setWorktreeRemovalRecordsDirectory(removalRecordsDirectory)
   // Chromium commands install only at Electron entry; Node hosts must refuse browser RPCs without them.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
     clientHosting: true
@@ -154,6 +161,7 @@ function resetRuntimeTestMocks(): void {
     getPath: () => electronMocks.app.getPath(),
     isPackaged: () => electronMocks.app.isPackaged
   })
+  initOrcaProfilePaths()
   // Deferred worker recovery re-arms forever; cancel it before shared git stubs leak across cases.
   cancelLegacyWorkerTerminalRecoveryRetriesForTests()
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
@@ -211,7 +219,8 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(shouldRunSetupForCreate).mockReset()
   vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
-  vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
+  // Setup derives effective hooks from the parsed orca.yaml; tests steer it through getEffectiveHooks.
+  vi.mocked(getEffectiveHooksFromConfig).mockImplementation((repo) => getEffectiveHooks(repo))
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(undefined)
   vi.mocked(loadHooks).mockReturnValue(null)
   vi.mocked(resolveSetupRunnerShell).mockReturnValue(undefined)
@@ -374,6 +383,11 @@ function resetRuntimeTestMocks(): void {
 let registrationSpy:
   | MockInstance<typeof worktreeChangeInvalidators.registerWorktreeChangeInvalidator>
   | undefined
+let removalRecordsDirectory = ''
+
+beforeAll(async () => {
+  removalRecordsDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-removal-records-'))
+})
 
 beforeEach(() => {
   resetRuntimeTestMocks()
@@ -398,3 +412,8 @@ afterEach(async () => {
 })
 
 export { resetRuntimeTestMocks }
+
+afterAll(async () => {
+  await stopStructuredAgentSessionRuntime()
+  await rm(removalRecordsDirectory, { recursive: true, force: true })
+})

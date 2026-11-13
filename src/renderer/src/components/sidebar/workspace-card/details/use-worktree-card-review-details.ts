@@ -3,15 +3,15 @@ import { getDetachedWorkspaceReviewRequest } from '../review/workspace-detached-
 import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getWorkspaceAttachmentSourceContext } from '../review/workspace-attachment-source-result'
 import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-reference-details'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'
-import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import { areTaskSourceContextsEqual } from '../../../../../../shared/task-source-context'
+import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
@@ -19,6 +19,7 @@ import {
 } from '../review/worktree-card-pr-display'
 import type { WorktreeCardProps } from '../controller/worktree-card-model'
 import type { useWorktreeCardFoundation } from '../controller/use-worktree-card-foundation'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
 
@@ -31,6 +32,7 @@ export function useWorktreeCardReviewDetails({
   newCardStyle
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
   Pick<Foundation, 'settings' | 'projectGroups' | 'cardProps' | 'newCardStyle'>) {
+  const t = useTranslate()
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
@@ -195,7 +197,8 @@ export function useWorktreeCardReviewDetails({
           : hostedReviewEntry?.linkedReviewHintKey,
       branchLookupGitHubPRNumber,
       suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
-    }
+    },
+    t
   )
 
   return {

@@ -6,7 +6,7 @@ import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../../shared/browser-webauthn-account'
-import { browserManager } from '../browser-manager'
+import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 
 export const BROWSER_WEBAUTHN_ACCOUNT_PICKER_TIMEOUT_MS = 60_000
 

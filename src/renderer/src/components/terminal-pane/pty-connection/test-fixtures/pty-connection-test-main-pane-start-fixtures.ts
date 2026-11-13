@@ -1,9 +1,9 @@
 import { expect } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { PaneResumeOutcome } from '../../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneResumeOutcome } from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
-import type { layoutApplyTestTransport as answeringFallback } from '@/runtime/layout-apply-test-transport.test-fixture'
+import type { layoutApplyTestTransport as answeringFallback } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 
 type ConnectOptions = {
   sessionId?: string
@@ -48,7 +48,7 @@ type LayoutApplyTestTransport = typeof answeringFallback
 /** Resolve the mocked layout-command transport dynamically across resetModules. */
 export async function mainLayoutApplyTransport(): Promise<LayoutApplyTestTransport> {
   const { ANSWERING_TRANSPORT, layoutApplyTestTransport } =
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   const client: object = await import('@/runtime/rpc/calls/runtime-rpc-call')
   const answering = ANSWERING_TRANSPORT in client ? client[ANSWERING_TRANSPORT] : undefined
   return isLayoutApplyTestTransport(answering) ? answering : layoutApplyTestTransport

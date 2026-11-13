@@ -207,14 +207,21 @@ export class CodexChildWorkEvidence {
       const lastMessage = ofTurn(facts.lastMessage, turnId)?.text
       const { totalTokens } = facts
       const outcome = codexChildTurnOutcome(state)
-      this.publish(facts, JSON.stringify(['ended', turnId, state]), (observedAt) => ({
-        type: 'ended',
-        observedAt,
-        handle: { idKind: 'thread_id', id: threadId, runId: turnId },
-        outcome,
-        ...(lastMessage ? { lastMessage } : {}),
-        ...(totalTokens !== undefined ? { totalTokens } : {})
-      }))
+      const published = this.publish(
+        facts,
+        JSON.stringify(['ended', turnId, state]),
+        (observedAt) => ({
+          type: 'ended',
+          observedAt,
+          handle: { idKind: 'thread_id', id: threadId, runId: turnId },
+          outcome,
+          ...(lastMessage ? { lastMessage } : {}),
+          ...(totalTokens !== undefined ? { totalTokens } : {})
+        })
+      )
+      if (facts.lastMessage?.turnId === turnId && (published || state !== 'unverifiable')) {
+        facts.lastMessage = undefined
+      }
       return
     }
     for (const [itemId, call] of facts.openCalls) {
@@ -259,6 +266,8 @@ export class CodexChildWorkEvidence {
       residency: 'background',
       state: facts.waiting ? 'waiting' : 'working',
       ...(child.label ? { description: child.label } : {}),
+      ...(child.model ? { model: child.model } : {}),
+      ...(child.effort ? { effort: child.effort } : {}),
       ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
       ...(lastMessage ? { lastMessage } : {}),
       ...(spawner && spawner !== this.primaryThreadId ? { ownerId: spawner } : {}),
@@ -267,19 +276,21 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  private publish(facts: ChildFacts, fingerprint: string, edge: CodexPendingChildWork): void {
+  private publish(facts: ChildFacts, fingerprint: string, edge: CodexPendingChildWork): boolean {
     if (facts.published !== fingerprint) {
       facts.published = fingerprint
       this.pending.push(edge)
+      return true
     }
+    return false
   }
 
   // Reassert ownership for work admitted before its owner's record existed.
   private requeueOwnedBy(threadId: string): void {
     this.queueCommands(this.liveCommands(threadId))
-    for (const spawned of this.executions.workingChildren()) {
+    for (const spawned of this.executions.workingSpawnedBy(threadId)) {
       const facts = this.facts.get(spawned.agentThreadId)
-      if (spawned.spawnerThreadId === threadId && facts?.published !== undefined) {
+      if (facts?.published !== undefined) {
         facts.published = undefined
         this.queueChild(spawned.agentThreadId)
       }

@@ -1,12 +1,12 @@
 import { protocol } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
+import { MEDIA_PREVIEW_SCHEME } from '../../shared/file-preview/media-preview-scheme'
 import {
   filePreviewForPath,
   isDocumentPreview,
   streamsPreviewByRange,
   type FilePreview
-} from '../../shared/file-preview-kind'
+} from '../../shared/file-preview/file-preview-kind'
 import {
   assertLocalPreviewRasterHeader,
   assertPreviewableRasterHeader,
@@ -18,8 +18,8 @@ import {
   prefixFitsDocumentPreview
 } from './preview-document-signature'
 import { openLocalPreviewGrantFile } from './local-preview-grant-file'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
-import { remoteFilePath } from '../../shared/remote-file-locator'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import { remoteFilePath } from '../../shared/file-access/remote-file-locator'
 import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
@@ -33,7 +33,7 @@ import {
   statRemotePreviewFile,
   type RemotePreviewFileSnapshot
 } from './remote-file-preview-reader'
-import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { readRegisteredPairingRevision } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   grants,
   mintPreviewUrl,

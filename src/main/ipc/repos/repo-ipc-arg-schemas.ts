@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
+import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
@@ -21,12 +21,17 @@ export const ProjectGroupUpdateArgs = z.object({
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: z.string().nullable().optional()
   })
 })
 
 export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
+})
+
+export const ProjectGroupUpdateManyArgs = z.object({
+  mutations: z.array(ProjectGroupUpdateArgs)
 })
 
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({

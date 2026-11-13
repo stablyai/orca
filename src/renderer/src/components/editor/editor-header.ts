@@ -3,6 +3,7 @@ import type { GitBranchChangeEntry } from '../../../../shared/git/diff/git-diff-
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { getEditorDisplayLabel } from './editor-labels'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export type EditorHeaderCopyState = {
@@ -21,15 +22,18 @@ export function shouldShowEditorPanelHeader(file: OpenFile, isCombinedDiff: bool
   return !isCombinedDiff && !isVirtualEditorFile(file)
 }
 
-export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState {
+export function getEditorHeaderCopyState(
+  file: OpenFile,
+  t: Translate = translate
+): EditorHeaderCopyState {
   if (file.mode === 'conflict-review') {
     return {
       copyText: file.filePath,
-      copyToastLabel: translate(
+      copyToastLabel: t(
         'auto.components.editor.editorHeader.worktreePathCopied',
         'Worktree path copied'
       ),
-      pathLabel: translate('auto.components.editor.editorLabels.conflictReview', 'Conflict Review'),
+      pathLabel: t('auto.components.editor.editorLabels.conflictReview', 'Conflict Review'),
       pathTitle: file.filePath
     }
   }
@@ -38,17 +42,17 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
     return {
       copyText: null,
       copyToastLabel: '',
-      pathLabel: translate('gitGraph.title', 'Git Graph'),
-      pathTitle: translate('gitGraph.title', 'Git Graph')
+      pathLabel: t('gitGraph.title', 'Git Graph'),
+      pathTitle: t('gitGraph.title', 'Git Graph')
     }
   }
   if (file.mode === 'check-details') {
     const label =
       file.checkRunDetails?.check.name ??
-      translate('auto.components.editor.editorHeader.checkDetails', 'Check details')
+      t('auto.components.editor.editorHeader.checkDetails', 'Check details')
     return {
       copyText: null,
-      copyToastLabel: translate(
+      copyToastLabel: t(
         'auto.components.editor.editorHeader.checkDetailsCopied',
         'Check details copied'
       ),
@@ -67,7 +71,7 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   if (isCombinedDiff) {
     return {
       copyText: file.filePath,
-      copyToastLabel: translate(
+      copyToastLabel: t(
         'auto.components.editor.editorHeader.worktreePathCopied',
         'Worktree path copied'
       ),
@@ -76,14 +80,11 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
     }
   }
 
-  const displayLabel = getEditorDisplayLabel(file, 'fullPath')
+  const displayLabel = getEditorDisplayLabel(file, 'fullPath', t)
 
   return {
     copyText: file.filePath,
-    copyToastLabel: translate(
-      'auto.components.editor.editorHeader.filePathCopied',
-      'File path copied'
-    ),
+    copyToastLabel: t('auto.components.editor.editorHeader.filePathCopied', 'File path copied'),
     pathLabel: displayLabel,
     pathTitle: displayLabel
   }

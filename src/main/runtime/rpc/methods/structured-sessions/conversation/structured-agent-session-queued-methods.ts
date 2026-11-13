@@ -9,14 +9,14 @@ import {
 import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
 import {
   QueuedMessageMoveParams,
   QueuedMessageUpdateParams,
   QueuedMessageEditHoldParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { readsQueuedImageCards } from '../attachments/structured-agent-session-queued-image-capability'
 
 export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [

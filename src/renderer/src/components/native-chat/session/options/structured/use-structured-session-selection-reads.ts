@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
+import { recomputeOn } from '@/lib/recompute-on'
 import type { structuredSessionSelectionAuthority } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import type { StructuredSessionSelectionController } from '../../../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
@@ -16,7 +17,7 @@ export function useStructuredSessionSelectionReads(args: {
   const { controller, target, authority, hostOptionStamp, turnId, rereadOptions } = args
   const [, setContact] = useState(0)
   const selectionRevision = useSyncExternalStore(controller.subscribe, controller.snapshot)
-  const terminal = controller.terminalSnapshot()
+  const terminal = recomputeOn([selectionRevision], () => controller.terminalSnapshot())
   const readStamp = JSON.stringify([hostOptionStamp, turnId])
   const seenReadStamp = useRef(readStamp)
   useEffect(() => {

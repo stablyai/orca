@@ -5,10 +5,10 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
-} from '../../../../shared/worktree/visibility-sources'
-import { createRepoRowExecutionHostLookup } from '../../../../shared/worktree-execution-host-resolution'
+} from '../../../../shared/worktree/visibility/visibility-sources'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 
 export function buildRuntimeWorktreeVisibilityMatchers(
   repos: readonly Repo[],

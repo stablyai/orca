@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import { recoverCodexRewind, rewindCodexSession } from './codex-structured-rewind'
+import {
+  recoverCodexRewind,
+  rewindCodexSession,
+  prepareCodexRewind
+} from './codex-structured-rewind'
 
 function fixture(turns = ['kept', 'drop'], reverted = false) {
   let history = reverted ? turns.slice(0, turns.indexOf('drop')) : turns
@@ -40,24 +44,23 @@ function fixture(turns = ['kept', 'drop'], reverted = false) {
   return { request, session }
 }
 
-const methods = (request: ReturnType<typeof fixture>['request']) =>
-  request.mock.calls.map(([method]) => method)
+async function rewind(session: CodexSession, input: { fence: number; beforeTurnId: string }) {
+  const proof = await prepareCodexRewind(session, input)
+  return proof.ok ? rewindCodexSession(session, input) : proof
+}
 
 describe('Codex rewind', () => {
   it('rewinds a long chat reading only the turns it undoes, and trusts the revert', async () => {
     const turns = [...Array.from({ length: 5_000 }, (_, i) => `t${i}`), 'drop']
     turns.push(...Array.from({ length: 250 }, (_, i) => `later${i}`))
     const { session, request } = fixture(turns)
+    expect(await prepareCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
+      ok: true,
+      revert: { threadId: 'thread', beforeTurnId: 'drop', keptTurnId: 't4999' }
+    })
     expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: true
     })
-    expect(methods(request)).toEqual([
-      'thread/read',
-      'thread/turns/list',
-      'thread/turns/list',
-      'thread/read',
-      'thread/revert'
-    ])
     expect(request).toHaveBeenCalledWith(
       'thread/revert',
       { threadId: 'thread', beforeTurnId: 'drop' },
@@ -66,18 +69,17 @@ describe('Codex rewind', () => {
   })
   it('recovers an applied revert from the newest turn alone', async () => {
     const turns = [...Array.from({ length: 5_000 }, (_, i) => `t${i}`), 'drop', 'after']
-    const { session, request } = fixture(turns, true)
+    const { session } = fixture(turns, true)
     expect(
       await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop', keptTurnId: 't4999' })
     ).toEqual({ ok: true })
-    expect(methods(request)).toEqual(['thread/read', 'thread/turns/list'])
   })
   it('recovers an unapplied revert from the still-present target, never repeating it', async () => {
     const { session, request } = fixture(['kept', 'drop', 'after'])
     expect(
       await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop', keptTurnId: 'kept' })
     ).toEqual({ ok: false, reason: 'provider-refused' })
-    expect(methods(request)).not.toContain('thread/revert')
+    expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
   })
   it('never calls a revert applied when the history does not end at the kept turn', async () => {
     const { session } = fixture(['other', 'kept', 'foreign'])
@@ -104,15 +106,16 @@ describe('Codex rewind', () => {
   it('refuses a known legacy thread before making a request', async () => {
     const { session, request } = fixture()
     session.historyMode = 'legacy'
-    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
+    expect(await rewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: false,
       reason: 'history-not-paginated'
     })
     expect(request).not.toHaveBeenCalled()
   })
+
   it('refuses a missing target before mutation', async () => {
     const { session, request } = fixture()
-    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'missing' })).toEqual({
+    expect(await rewind(session, { fence: 2, beforeTurnId: 'missing' })).toEqual({
       ok: false,
       reason: 'invalid-target'
     })
@@ -128,7 +131,7 @@ describe('Codex rewind', () => {
       }
       return original(method, params)
     })
-    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
+    expect(await rewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: false,
       reason: 'busy'
     })
@@ -150,16 +153,10 @@ describe('Codex rewind', () => {
         'thread/revert only supports paginated threads'
       )
     })
-    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
+    expect(await rewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: false,
       reason: 'history-not-paginated'
     })
-    expect(request.mock.calls.map(([method]) => method)).toEqual([
-      'thread/read',
-      'thread/turns/list',
-      'thread/read',
-      'thread/revert'
-    ])
   })
   it('refuses activity arriving during the preflight await', async () => {
     const { session, request } = fixture()
@@ -167,10 +164,28 @@ describe('Codex rewind', () => {
       session.activeTurnIds!.add('racing-turn')
       return { thread: { id: 'thread', status: { type: 'idle' } } }
     })
-    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
+    expect(await rewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
       ok: false,
       reason: 'busy'
     })
-    expect(request).toHaveBeenCalledTimes(1)
   })
+})
+
+it.each([
+  { turns: ['T1', 'T2', 'drop'], kept: 'T2' },
+  { turns: ['T1', 'drop'], kept: 'T1' },
+  { turns: ['T1', 'T2', 'drop', 'later'], kept: 'T2' },
+  { turns: ['drop'], kept: null }
+])('recovers a lost reply with the prepared native predecessor $kept', async ({ turns, kept }) => {
+  const { session, request } = fixture(turns)
+  const prepared = await prepareCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })
+  expect(prepared).toEqual({
+    ok: true,
+    revert: { threadId: 'thread', beforeTurnId: 'drop', keptTurnId: kept }
+  })
+  await request('thread/revert')
+  if (!prepared.ok) {
+    throw new Error('rewind was not prepared')
+  }
+  expect(await recoverCodexRewind(session, { fence: 2, ...prepared.revert })).toEqual({ ok: true })
 })

@@ -16,7 +16,7 @@
     "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && (!vars.compact || ws.branch != ws.name)",
     "identityInMeta": "vars.newStyle && options.show.branch && ws.identity != null",
     "folderInMeta": "vars.newStyle ? options.show.branch && vars.folder && ws.identity != null : vars.folder",
-    "conflict": "git.conflictOperation != null && git.conflictOperation != 'unknown' && git.conflictOperation != 'rebase'",
+    "conflict": "git.conflictOperation == 'cherry-pick'",
     "hasComment": "len(trim(ws.comment)) > 0",
     "details": "links.count > 0 || (options.show.issue && links.issue) || (options.show.linearIssue && links.linearIssue) || (options.show.jiraIssue && links.jiraIssue) || (!vars.newStyle && options.show.pr && review != null) || (options.show.comment && vars.hasComment) || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli)",
     "ports": "options.show.ports && ports.count > 0",

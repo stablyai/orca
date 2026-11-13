@@ -2,13 +2,13 @@
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { _resetLayoutFramePositionForTests } from '@/runtime/layout-frame-position'
-import { _resetPendingTabsForTests } from '@/runtime/layout-owner-pending-tabs'
-import { _resetPendingTabFactsForTests } from '@/runtime/layout-owner-pending-tab-facts'
-import { _resetContentRekeysForTests } from '@/runtime/layout-owner-content-rekeys'
-import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
-import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { _resetLayoutFramePositionForTests } from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { _resetPendingTabsForTests } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { _resetPendingTabFactsForTests } from '@/runtime/workspace-layout/intents/layout-owner-pending-tab-facts'
+import { _resetContentRekeysForTests } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
+import { loadMainLayoutModel } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import type { AppState } from '../../types'
 
 type DrawnStore = {

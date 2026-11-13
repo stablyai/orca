@@ -11,7 +11,7 @@ import type { StructuredAgentSessionCurrentWork } from '../observations/structur
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { stopIsAPersons } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 
 export function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,

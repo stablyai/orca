@@ -6,16 +6,6 @@ import type * as journalTypes from '../../../../shared/agent-session/journal/age
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import { journalUserStopInForce, type JournalQueuePauseMarks } from './queued-message-pause-marks'
-export {
-  createJournalQueuePauseMarks,
-  foldJournalQueuePauseMark,
-  journalManualStop,
-  journalQueueStopHolds,
-  journalUserStopInForce,
-  type JournalQueuePauseMarks,
-  type JournalStopSettle,
-  type JournalStopFailedOn
-} from './queued-message-pause-marks'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
 

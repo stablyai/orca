@@ -10,6 +10,7 @@ import {
   type NativeChatResumeCommand
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
+import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
@@ -21,6 +22,7 @@ export function useNativeChatComposerCommandPicker(
     | 'sessionSkills'
     | 'onPickerOpened'
     | 'onPickerDemand'
+    | 'skillsChecking'
     | 'launchWorktreeId'
     | keyof ResumeArgs['editor']
   > &
@@ -30,7 +32,7 @@ export function useNativeChatComposerCommandPicker(
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
     }
-): { picker: NativeChatPickerState; resume: NativeChatResumeCommand } {
+): { picker: NativeChatPickerState; orcaCommands: NativeChatResumeCommand } {
   const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
@@ -54,6 +56,7 @@ export function useNativeChatComposerCommandPicker(
     commandAvailable,
     sessionSkills,
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,
+    skillsChecking: structuredTransport?.commandsChecking === true,
     ...(!structuredTransport?.setCommandsMenuOpen && structuredTransport?.refreshCommands
       ? { onPickerOpened: structuredTransport.refreshCommands }
       : {})
@@ -66,5 +69,21 @@ export function useNativeChatComposerCommandPicker(
     editor,
     setNotice
   })
-  return { picker, resume }
+  const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
+  // `/btw` and `/resume` never collide, so each draft and pick has at most one owner.
+  const { consume: sideConsume, matchesDraft: sideMatches, interceptPick: sideIntercept } = side
+  const {
+    consume: resumeConsume,
+    matchesDraft: resumeMatches,
+    interceptPick: resumeIntercept
+  } = resume
+  const orcaCommands = useMemo(
+    (): NativeChatResumeCommand => ({
+      matchesDraft: (draft) => sideMatches(draft) || resumeMatches(draft),
+      consume: (draft) => sideConsume(draft) || resumeConsume(draft),
+      interceptPick: (pick) => sideIntercept(resumeIntercept(pick))
+    }),
+    [resumeConsume, resumeIntercept, resumeMatches, sideConsume, sideIntercept, sideMatches]
+  )
+  return { picker, orcaCommands }
 }

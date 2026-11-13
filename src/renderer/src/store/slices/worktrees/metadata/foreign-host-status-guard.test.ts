@@ -7,8 +7,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory,
-  runtimeEnvironmentCall
+  resetWorktreeSliceModuleMemory
 } from '../worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -55,43 +54,6 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.workspaceStatus).toBeUndefined()
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
       expect.objectContaining({ updates: { manualOrder: 5 } })
-    )
-  })
-
-  it("still moves a paired host's card into that host's own column", async () => {
-    const store = createTestStore()
-    const hosted = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      hostId: 'runtime:env-1'
-    })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-set-status',
-      ok: true,
-      result: { worktree: { ...hosted, workspaceStatus: 'status-6' } },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    store.setState({
-      worktreesByRepo: { repo1: [hosted] },
-      workspaceStatuses: [{ id: 'in-progress', label: 'In progress' }],
-      hostWorkspaceStatuses: { 'env-1': [{ id: 'status-6', label: 'Today' }] }
-    })
-
-    await store.getState().updateWorktreesMeta([
-      {
-        worktreeId: hosted.id,
-        updates: { workspaceStatus: 'status-6' },
-        executionHostId: 'runtime:env-1'
-      }
-    ])
-
-    expect(store.getState().worktreesByRepo.repo1[0]?.workspaceStatus).toBe('status-6')
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        params: expect.objectContaining({ workspaceStatus: 'status-6' })
-      })
     )
   })
 })

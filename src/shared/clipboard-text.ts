@@ -20,19 +20,6 @@ export type WriteClipboardTextOptions = {
   maxBytes?: number
 }
 
-export type ClipboardTextByteLengthMeasurement = Utf8ByteLengthMeasurement
-
-export function measureClipboardTextByteLength(
-  text: string,
-  options: { stopAfterBytes?: number } = {}
-): ClipboardTextByteLengthMeasurement {
-  return measureUtf8ByteLength(text, options)
-}
-
-export function getClipboardTextByteLength(text: string): number {
-  return measureClipboardTextByteLength(text).byteLength
-}
-
 export async function measureClipboardTextByteLengthWithYield(
   text: string,
   options: {
@@ -40,7 +27,7 @@ export async function measureClipboardTextByteLengthWithYield(
     yieldAfterCodeUnits?: number
     yieldToEventLoop?: () => Promise<void>
   } = {}
-): Promise<ClipboardTextByteLengthMeasurement> {
+): Promise<Utf8ByteLengthMeasurement> {
   const stopAfterBytes = options.stopAfterBytes
   const yieldAfterCodeUnits = Math.max(
     1,
@@ -70,7 +57,7 @@ export async function measureClipboardTextByteLengthWithYield(
 export function isClipboardTextByteLengthOverLimit(text: string, maxBytes: number): boolean {
   return (
     text.length > maxBytes ||
-    measureClipboardTextByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
+    measureUtf8ByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
   )
 }
 

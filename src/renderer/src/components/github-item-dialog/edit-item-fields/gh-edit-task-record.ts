@@ -1,8 +1,8 @@
 import { useAppStore } from '@/store'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { untrackedTaskOperation, type TaskChange } from '@/store/github/task-records/task-change'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 /** Whether a task record will own an edit of this item; otherwise main's untracked paths apply. */
 export function isTrackedEdit(item: GitHubWorkItem, source: TaskSourceContext | null | undefined) {

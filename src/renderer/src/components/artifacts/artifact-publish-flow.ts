@@ -3,13 +3,13 @@ import type {
   ArtifactCloudOperation,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../../../shared/artifacts'
+} from '../../../../shared/artifacts/artifacts'
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
   ARTIFACT_MAX_REQUEST_BYTES,
   artifactContentByteLength,
   artifactWriteRequestByteLength
-} from '../../../../shared/artifacts'
+} from '../../../../shared/artifacts/artifacts'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'

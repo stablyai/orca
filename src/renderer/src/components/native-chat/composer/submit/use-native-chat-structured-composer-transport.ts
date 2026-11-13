@@ -2,12 +2,15 @@ import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from '@/components/native-chat/composer/submit/structured-composer-command-error-text'
-import { useStructuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
+import { useStructuredAgentAcceptsImages } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import type { NativeChatOptionPickerRequest } from '@/components/native-chat/session/options/controls/native-chat-option-picker-request'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
-import type { NativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import type {
+  NativeChatPaneFork,
+  NativeChatPaneForks
+} from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
@@ -63,10 +66,10 @@ function nativeChatForkCommand(
 }
 
 export function useNativeChatStructuredComposerTransport(args: {
-  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
+  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'tabId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
-  /** The session's fork, run by `/fork`. */
-  fork: NativeChatPaneFork | undefined
+  /** The session's fork, run by `/fork` and `/btw`. */
+  forks: NativeChatPaneForks
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,
@@ -83,7 +86,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
-  const { props, controller, fork, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
+  const { props, controller, forks, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
     args
   const { setOptionPickerRequest, onError } = args
   const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
@@ -94,6 +97,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     controller.acceptsImages
   )
+  const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     // A held host takes no turn; pausing or clearing a goal starts none.
@@ -118,39 +122,50 @@ export function useNativeChatStructuredComposerTransport(args: {
           : undefined,
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
-      send: (text, attachments, ...request) =>
-        sendBlockedReason === null &&
-        sendThroughLaunch(
-          text,
+      ...(sideChat ? { sideChat } : {}),
+      send: (text, attachments, ...request) => {
+        if (sendBlockedReason !== null) {
+          return false
+        }
+        const requiresSession =
           attachments.length > 0 ||
-            request[0]?.prepareAttachments !== undefined ||
-            Boolean(request[0]?.skills?.length),
-          () =>
-            controller.send(
-              text,
-              attachments.map(({ path, connectionId }) => ({
-                path,
-                previewUri: path,
-                ...(connectionId ? { connectionId } : {})
-              })),
-              ...request
-            )
-        ),
-      dispatchCommand: (text: string) =>
-        dispatchStructuredAgentSessionComposerCommand(text, {
-          agent: props.agent,
-          snapshot: controller.optionSnapshot,
-          invokeAction: async (id) => {
-            setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
-            return true
+          request[0]?.prepareAttachments !== undefined ||
+          Boolean(request[0]?.skills?.length)
+        if (starting && requiresSession) {
+          onError(nativeChatSessionAttachmentNotReadyNotice(props.agent, true))
+          return false
+        }
+        return sendThroughLaunch(text, requiresSession, () =>
+          controller.send(
+            text,
+            attachments.map(({ path, connectionId }) => ({
+              path,
+              previewUri: path,
+              ...(connectionId ? { connectionId } : {})
+            })),
+            ...request
+          )
+        )
+      },
+      dispatchCommand: (text: string, onSent?: () => void) =>
+        dispatchStructuredAgentSessionComposerCommand(
+          text,
+          {
+            agent: props.agent,
+            snapshot: controller.optionSnapshot,
+            invokeAction: async (id) => {
+              setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
+              return true
+            },
+            setOption: controller.setStructuredOption,
+            sessionCommands: controller.sessionCommands,
+            conversationCommands: controller.conversationCommands,
+            compactInstructions: controller.compactInstructions,
+            runConversationCommand: controller.runConversationCommand,
+            ...(changeThreadGoal ? { changeThreadGoal } : {})
           },
-          setOption: controller.setStructuredOption,
-          sessionCommands: controller.sessionCommands,
-          conversationCommands: controller.conversationCommands,
-          compactInstructions: controller.compactInstructions,
-          runConversationCommand: controller.runConversationCommand,
-          ...(changeThreadGoal ? { changeThreadGoal } : {})
-        }).then(localizeStructuredComposerOutcome),
+          onSent
+        ).then(localizeStructuredComposerOutcome),
       ...(changeThreadGoal
         ? {
             threadGoal: {
@@ -158,7 +173,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           }
         : {}),
-      sendOut: controller.sendOut || starting,
+      sendOut: controller.sendOut,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,
@@ -169,6 +184,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       sessionCommands: controller.sessionCommands,
       refreshCommands: controller.refreshCommands,
       setCommandsMenuOpen: controller.setCommandsMenuOpen,
+      commandsChecking: controller.commandsChecking,
       acceptsImages,
       contextUsage: controller.contextUsage,
       worktreeId,
@@ -190,6 +206,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     acceptsImages,
     controller,
     fork,
+    sideChat,
     worktreeId,
     onError,
     onSubmitted,

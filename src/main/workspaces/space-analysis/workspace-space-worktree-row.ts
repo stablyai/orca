@@ -33,7 +33,7 @@ function createBaseWorktreeRow(repo: Repo, worktree: Worktree, scannedAt: number
     executionHostId: getWorktreeExecutionHostId(worktree, repo),
     repoDisplayName: repo.displayName,
     repoPath: repo.path,
-    displayName: worktree.displayName,
+    displayName: worktree.displayName ?? '',
     path: worktree.path,
     branch: worktree.branch,
     isMainWorktree: worktree.isMainWorktree,

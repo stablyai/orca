@@ -9,7 +9,7 @@ import {
   testState
 } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createProfileStateStore } from './profile-state/profile-state-store-factory'
+import { createProfileStateStore } from './profile-state/startup/profile-state-store-factory'
 import type * as FsModule from 'node:fs'
 import {
   existsSync,
@@ -107,7 +107,7 @@ describe('loading Store extraction seams', () => {
     const first = await createStore()
     const { Store } = await import('./loading-store/store')
     const { setMigrationUnsupportedPty } =
-      await import('../agent-hooks/migration-unsupported-pty-state')
+      await import('../agent-hooks/observations/migration-unsupported-pty-state')
     const secondDataFile = join(testState.dir, 'second-profile', 'orca-data.json')
     const second = createSqliteTestStore(Store, { dataFile: secondDataFile })
 

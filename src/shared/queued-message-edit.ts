@@ -8,8 +8,11 @@ import {
   pickedSkillsInText,
   agentSessionSendBodyFingerprint
 } from './agent-session/requests/structured-agent-session-send-mutation'
-import { MAX_SKILL_REFS } from './rpc-contract/structured-agent-session-message-params'
-import { MAX_BLOCKS, MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-params'
+import {
+  MAX_SKILL_REFS,
+  MAX_BLOCKS,
+  MAX_PROMPT_BYTES
+} from './rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import {
   imageReferenceInsertion,
   withoutImageReference

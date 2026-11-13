@@ -1,6 +1,6 @@
-import { useMemo, type CSSProperties, type JSX, type ReactNode } from 'react'
+import { useMemo } from 'react'
+import type { CSSProperties, JSX, ReactNode } from 'react'
 import { ArrowUp, ChevronDown, Eye, Hand, Plus, X } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { FlowDiagram } from '@/components/feature-tips/ChatUiHereFeatureTipVisual'
 import {
   CHAT_DEMO_FILE,
@@ -15,11 +15,12 @@ import {
 } from '@/components/tab-bar/drop-indicator'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-import { translate } from '@/i18n/i18n'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { buildFontFamily } from '@/lib/monospace-font-family'
-import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { cn } from '@/lib/utils'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal/appearance/terminal-theme'
+import { cn } from '@/lib/class-names'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 // The tip's chat miniature, finished and denser so it fits a tile; nothing here animates.
 const CHAT_SCALE: CSSProperties & { '--chat-font-size': string } = { '--chat-font-size': '10px' }
@@ -65,7 +66,9 @@ function MiniWindow({
 }
 
 export function ChatSurfacePreview(): JSX.Element {
-  const copy = getChatDemoCopy()
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const copy = getChatDemoCopy(t, intlLocale)
   return (
     <MiniWindow title={copy.tabTitle} className="bg-chat-canvas">
       <div
@@ -80,7 +83,7 @@ export function ChatSurfacePreview(): JSX.Element {
           </div>
           <div className="flex items-center gap-[5px] whitespace-nowrap text-chat-foreground-faint">
             <Eye className="size-[11px] shrink-0" />
-            {nativeChatToolRowVerb('read')}
+            {nativeChatToolRowVerb('read', t)}
             <span className="text-chat-foreground-strong">{CHAT_DEMO_FILE}</span>
           </div>
           <p className="line-clamp-4">
@@ -103,7 +106,7 @@ export function ChatSurfacePreview(): JSX.Element {
         <div className="shrink-0 px-3 pt-2 pb-3">
           <div className="rounded-[10px] border border-chat-composer-border bg-chat-composer-surface px-1.5 pt-1.5 pb-[5px] shadow-xs">
             <div className="truncate px-1 pb-1.5 text-[9.5px] leading-[13px] text-chat-foreground-faint">
-              {translate(
+              {t(
                 'components.native-chat.composer.placeholder',
                 'Ask anything, @ to mention files, / for commands'
               )}
@@ -112,7 +115,7 @@ export function ChatSurfacePreview(): JSX.Element {
               <Plus className="size-[11px] shrink-0" />
               <span className="flex min-w-0 items-center gap-[3px] px-[3px]">
                 <Hand className="size-[9px] shrink-0" />
-                <span className="truncate">{nativeChatPermissionModeLabel('ask')}</span>
+                <span className="truncate">{nativeChatPermissionModeLabel('ask', t)}</span>
                 <ChevronDown className="size-[9px] shrink-0" />
               </span>
               <span className="flex-1" />
@@ -154,7 +157,9 @@ function Mascot(): JSX.Element {
 
 /** Claude Code's own interface, in the user's terminal theme and font. */
 export function TerminalSurfacePreview({ settings }: { settings: GlobalSettings }): JSX.Element {
-  const copy = getChatDemoCopy()
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const copy = getChatDemoCopy(t, intlLocale)
   const systemPrefersDark = useSystemPrefersDark()
   const customThemes = JSON.stringify(settings.terminalCustomThemes)
   const pluginPalettes = JSON.stringify(settings.terminalPluginPalettes)

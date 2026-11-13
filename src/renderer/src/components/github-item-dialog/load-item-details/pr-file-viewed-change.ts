@@ -1,11 +1,11 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { toast } from 'sonner'
 import { setPRFileViewedForRepo } from '@/components/github/github-work-item-comment-mutations'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
 import {
   EMPTY_VIEWED_PATHS,

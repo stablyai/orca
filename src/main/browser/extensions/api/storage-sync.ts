@@ -6,10 +6,8 @@ import {
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import {
-  getBrowserExtensionSyncStorageStore,
-  type BrowserExtensionSyncItems
-} from '../profile-storage/browser-extension-sync-storage-store'
+import { getBrowserExtensionSyncStorageStore } from '../profile-storage/browser-extension-sync-storage-store'
+import type { BrowserExtensionProfileDocumentItems } from '../profile-storage/browser-extension-profile-document-store'
 
 /**
  * Electron disables chrome.storage.sync ("not available in this instance of Chrome"), so Orca
@@ -17,7 +15,7 @@ import {
  * writer, so every change carries exact old values. A write returns its changes to the caller,
  * which fires its own listeners (a starting worker's write can reach main before its listen
  * does); onChanged goes to the extension's other pages and its worker in the session.
- * The preload installs it as chrome.storage.sync (src/preload/browser-extension-storage-sync.ts).
+ * The preload installs it as chrome.storage.sync (src/preload/browser/extensions/storage/browser-extension-storage-sync.ts).
  */
 const STORAGE_SYNC_NAMESPACE = 'orcaStorageSync'
 
@@ -50,7 +48,7 @@ function itemBytes(key: string, value: unknown): number {
   return Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(value))
 }
 
-function bytesInUse(items: BrowserExtensionSyncItems, keys: string[]): number {
+function bytesInUse(items: BrowserExtensionProfileDocumentItems, keys: string[]): number {
   return keys.reduce(
     (total, key) => (Object.hasOwn(items, key) ? total + itemBytes(key, items[key]) : total),
     0
@@ -65,15 +63,15 @@ function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function readItems(caller: BrowserExtensionCaller): BrowserExtensionSyncItems {
+function readItems(caller: BrowserExtensionCaller): BrowserExtensionProfileDocumentItems {
   return getBrowserExtensionSyncStorageStore().read(caller.browserProfileId, caller.extension.id)
 }
 
 /** Saves `next`; returns and announces the changes for every key whose value differs. */
 function commit(
   caller: BrowserExtensionCaller,
-  current: BrowserExtensionSyncItems,
-  next: BrowserExtensionSyncItems,
+  current: BrowserExtensionProfileDocumentItems,
+  next: BrowserExtensionProfileDocumentItems,
   keys: Iterable<string>
 ): StorageChanges {
   const changes: StorageChanges = {}
@@ -103,7 +101,7 @@ function commit(
 function get(
   caller: BrowserExtensionCaller,
   keys: z.infer<typeof getKeysSchema>
-): BrowserExtensionSyncItems {
+): BrowserExtensionProfileDocumentItems {
   const items = readItems(caller)
   if (keys == null) {
     return { ...items }
@@ -113,7 +111,7 @@ function get(
       [keys].flat().flatMap((key) => (Object.hasOwn(items, key) ? [[key, items[key]]] : []))
     )
   }
-  const result: BrowserExtensionSyncItems = {}
+  const result: BrowserExtensionProfileDocumentItems = {}
   for (const [key, fallback] of Object.entries(keys)) {
     const value = Object.hasOwn(items, key) ? items[key] : toStoredValue(fallback)
     if (value !== undefined) {
@@ -123,7 +121,10 @@ function get(
   return result
 }
 
-function set(caller: BrowserExtensionCaller, input: BrowserExtensionSyncItems): StorageChanges {
+function set(
+  caller: BrowserExtensionCaller,
+  input: BrowserExtensionProfileDocumentItems
+): StorageChanges {
   const current = readItems(caller)
   const next = { ...current }
   let total = bytesInUse(current, Object.keys(current))

@@ -1,3 +1,4 @@
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type { applyTerminalRecordUpdates } from './apply-terminal-records'
 import {
   browserCertificateFailureEqual,
@@ -5,7 +6,7 @@ import {
   sameBrowserPages
 } from './state-equality-tabs'
 import { writableWebSessionTabsRecord } from './state-equality-core'
-import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-placement'
+import { markWebSessionBrowserPlacementAdopted } from '../browser/placement/web-session-browser-placement'
 
 type BrowserRecordContext = ReturnType<typeof applyTerminalRecordUpdates>
 
@@ -69,6 +70,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
                   batchContext
                 )
               : nextRemoteBrowserPageHandlesByPageId
+          annotateBrowserPageHandles(nextRemoteBrowserPageHandlesByPageId, [page.id])
           delete nextRemoteBrowserPageHandlesByPageId[page.id]
         }
       }
@@ -80,7 +82,8 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
     certificateFailure,
     remotePageId,
     browserProfileId,
-    placement
+    placement,
+    initializationPresentation
   } of mirroredBrowserTabs) {
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
     if (!sameBrowserPages(current, [page])) {
@@ -95,6 +98,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
       currentHandle?.environmentId !== environmentId ||
       currentHandle.remotePageId !== remotePageId ||
       currentHandle.browserProfileId !== browserProfileId ||
+      currentHandle.initializationPresentation !== initializationPresentation ||
       // A host snapshot is the adoption boundary for a staged handle.
       currentHandle.staged === true ||
       // Restored markers are spent when the host republishes the page.
@@ -105,9 +109,11 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
           ? writableWebSessionTabsRecord(state, 'remoteBrowserPageHandlesByPageId', batchContext)
           : nextRemoteBrowserPageHandlesByPageId
+      annotateBrowserPageHandles(nextRemoteBrowserPageHandlesByPageId, [page.id])
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
         remotePageId,
+        ...(initializationPresentation ? { initializationPresentation } : {}),
         ...(browserProfileId ? { browserProfileId } : {}),
         ...(placement ? { placement } : {})
       }

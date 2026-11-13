@@ -52,6 +52,25 @@ describe('TerminalStreamPosition', () => {
     )
   })
 
+  it('re-arms an escape the replay omitted for a chunk cut at its seq (#33766)', () => {
+    const position = new TerminalStreamPosition()
+    position.anchor(PTY, 100, '')
+    const cut = { startsAtGround: false, boundaryUnknown: true, cutEscapeTail: '\x1b[' }
+    expect(position.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('\x1b[>4;2m')
+    // Only the delivery at the replay's own seq re-arms.
+    expect(position.admit(PTY, '>4;2m', at(105, '>4;2m', cut))).toBe('>4;2m')
+  })
+
+  it('leaves a cut as it is when the replay re-armed a tail or did not say', () => {
+    const cut = { startsAtGround: false, boundaryUnknown: true, cutEscapeTail: '\x1b[' }
+    const rearmed = new TerminalStreamPosition()
+    rearmed.anchor(PTY, 100, '\x1b[')
+    expect(rearmed.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('>4;2m')
+    const unsaid = new TerminalStreamPosition()
+    unsaid.anchor(PTY, 100)
+    expect(unsaid.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('>4;2m')
+  })
+
   it('treats bytes after its own reset as a gap, even at the same position', () => {
     const position = new TerminalStreamPosition()
     position.anchor(PTY, 100)
@@ -67,10 +86,6 @@ describe('TerminalStreamPosition', () => {
     replaced.anchor(PTY, 100)
     // Even the new stream's first byte: xterm may still hold the old stream's escape.
     expect(replaced.admit('pty-2', 'hello', at(0, 'hello'))).toBe('\x18hello')
-  })
-
-  it("writes a brand-new pane's first byte without grounding", () => {
-    expect(new TerminalStreamPosition().admit(PTY, 'hello', at(0, 'hello'))).toBe('hello')
   })
 
   it("forgets the position when the stream's seq domain ends", () => {
@@ -169,6 +184,18 @@ describe('streamDeliveryOf', () => {
       startsAtGround: false,
       boundaryUnknown: true
     })
+  })
+
+  it('reports the escape a cut leaves open where its state is known', () => {
+    const cutTail = (delivered: { data: string; seq: number; midEscape?: true | 'unknown' }) =>
+      streamDeliveryOf('>4;2m', delivered, { seqCountsChars: true }).cutEscapeTail
+    expect(cutTail({ data: 'ab\x1b[>4;2m', seq: 9 })).toBe('\x1b[')
+    expect(cutTail({ data: 'ab\x1b[1m>4;2m', seq: 11 })).toBeUndefined()
+    // A chunk that starts inside an escape is known from the first ESC it cuts off.
+    expect(cutTail({ data: '2B\x1b[>4;2m', seq: 9, midEscape: true })).toBe('\x1b[')
+    expect(cutTail({ data: '2B>4;2m', seq: 7, midEscape: 'unknown' })).toBeUndefined()
+    // Cut-off bytes holding a C1 control are not scanned.
+    expect(cutTail({ data: '\u009bab\x1b[>4;2m', seq: 10 })).toBeUndefined()
   })
 
   it('never fabricates a position for a suffix of a transformed chunk', () => {

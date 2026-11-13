@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useWorktreeMap } from '../../store/slices/worktrees/listing/use-worktree-catalog'
 import type {
   Metric,
@@ -76,6 +76,7 @@ export function ResourceTree({
   onDelete: (worktreeId: string) => void
   onKillSession: (session: UnifiedSessionRow) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const worktreeById = useWorktreeMap()
 
   const sortedRepos = useMemo(() => {
@@ -121,11 +122,11 @@ export function ResourceTree({
                 className="pl-2 py-2 pr-0.5 transition-colors hover:bg-muted/50"
                 aria-label={
                   repoCollapsed
-                    ? translate(
+                    ? t(
                         'auto.components.status.bar.ResourceUsageStatusSegment.b12e31dfcb',
                         'Expand repo'
                       )
-                    : translate(
+                    : t(
                         'auto.components.status.bar.ResourceUsageStatusSegment.73a3fd68a9',
                         'Collapse repo'
                       )
@@ -144,7 +145,7 @@ export function ResourceTree({
                   </span>
                   {group.hasRemoteChildren && (
                     <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
-                      {translate(
+                      {t(
                         'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
                         '· remote'
                       )}

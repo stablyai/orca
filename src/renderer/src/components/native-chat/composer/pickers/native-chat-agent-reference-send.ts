@@ -7,7 +7,7 @@ import {
   mayHoldAgentReferences,
   printableAgentLabel,
   type OrchestrationAgentReference
-} from '../../../../../../shared/orchestration-agent-reference'
+} from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   projectNativeChatPastedText,
   projectNativeChatPastedTextParts

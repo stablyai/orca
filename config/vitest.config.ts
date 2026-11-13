@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
@@ -9,17 +9,22 @@ import {
   UNIT_SETUP_FILES
 } from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
+import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/vitest-shared-worker-files.mjs'
+import { gitSigningOffEnv } from './scripts/test-runtime/environment/vitest-git-signing-env.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
 import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
+import { vitestReactCompiler } from './build-plugins/vitest-react-compiler'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+// An Orca terminal publishes its WSL hosts gate to children; empty reads as unset, so tests resolve their own.
+const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
@@ -44,6 +49,7 @@ const transforms = {
       }
     } satisfies Plugin,
     ...(moduleCachePath ? [moduleCacheResolutionKey()] : []),
+    ...vitestReactCompiler(),
     {
       // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
       name: 'locale-catalog-test-assets',
@@ -85,7 +91,7 @@ const testOptions = {
   // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
-  env: { ORCA_VITEST_RUNTIME: 'node' },
+  env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
   execArgv: ['--no-experimental-webstorage', '--expose-gc'],
@@ -101,7 +107,7 @@ const nodeProject = {
   test: {
     ...testOptions,
     name: process.versions.bun ? 'node-runtime' : 'node',
-    env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
+    env: { ...gitEnv, ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
     include: process.versions.bun ? nodeRuntimeInclude : UNIT_INCLUDE,
     sequence: { groupOrder: 1 },
     ...(process.versions.bun
@@ -115,13 +121,57 @@ const bunProject = {
   test: {
     ...testOptions,
     name: 'bun',
-    env: { ORCA_VITEST_RUNTIME: 'bun' },
+    env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'bun' },
     pool: 'forks',
     exclude: [...testOptions.exclude, ...nodeRuntimeInclude],
     sequence: { groupOrder: 1 }
   }
 }
-const projects = [...(process.versions.bun ? [bunProject] : []), nodeProject]
+// Files whose state the per-file reset can undo share one worker's module cache instead of
+// re-importing thousands of modules each. ORCA_VITEST_ISOLATE_EVERY_FILE=1 turns it off.
+// Windows workers that keep native addons (process tree, ConPTY) across files die of heap
+// corruption (0xC0000374); production code loads them lazily, so the file scan can't see them.
+const runtimeProject = process.versions.bun ? bunProject : nodeProject
+const nodeRuntimeFiles = new Set(nodeRuntimeInclude.map((file) => file.replaceAll('\\', '/')))
+const sharedWorkerFiles =
+  process.env.ORCA_VITEST_ISOLATE_EVERY_FILE === '1' || process.platform === 'win32'
+    ? []
+    : filesSafeToShareWorker(
+        process.cwd(),
+        globSync(UNIT_INCLUDE)
+          .map((file) => file.replaceAll('\\', '/'))
+          .filter((file) => !nodeRuntimeFiles.has(file)),
+        [
+          { find: '@renderer', replacement: resolve('src/renderer/src') },
+          { find: '@', replacement: resolve('src/renderer/src') }
+        ]
+      )
+const sharedProjects =
+  sharedWorkerFiles.length > 0
+    ? [
+        {
+          ...runtimeProject,
+          test: {
+            ...runtimeProject.test,
+            name: `${runtimeProject.test.name}-shared`,
+            include: sharedWorkerFiles,
+            isolate: false,
+            runner: resolve(
+              'config/scripts/test-runtime/execution-policy/vitest-shared-worker-setup-runner.mjs'
+            ),
+            setupFiles: [
+              ...runtimeProject.test.setupFiles,
+              resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')
+            ]
+          }
+        }
+      ]
+    : []
+runtimeProject.test.exclude = [
+  ...(runtimeProject.test.exclude ?? testOptions.exclude),
+  ...sharedWorkerFiles
+]
+const projects = [...(process.versions.bun ? [bunProject] : []), nodeProject, ...sharedProjects]
 
 export default defineConfig({
   ...transforms,
@@ -142,6 +192,9 @@ export default defineConfig({
         }
       : {}),
     projects,
+    // A finished file's background log can lose the race with worker teardown; only that log line is lost.
+    onUnhandledError: (error) =>
+      !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
     ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
   }
 })

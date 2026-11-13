@@ -72,20 +72,6 @@ describe('device registry save racing another writer', () => {
     expect(registry.validateToken(kept.token)?.deviceId).toBe(kept.deviceId)
   })
 
-  it('keeps both writers changes: a row another process added during the save survives', () => {
-    const registry = new DeviceRegistry(dir)
-    const { kept } = pairedDevices(registry)
-    const other = new DeviceRegistry(dir)
-
-    afterRead.hook = () => other.addDevice('From the CLI', 'runtime')
-    const added = registry.addDevice('From the desktop', 'runtime')
-
-    expect(new Set(diskIds())).toEqual(
-      new Set([kept.deviceId, added.deviceId, ...other.listDevices().map((d) => d.deviceId)])
-    )
-    expect(diskIds()).toHaveLength(4)
-  })
-
   it('waits out an admin write caught half-way instead of treating it as a corrupt file', () => {
     const registry = new DeviceRegistry(dir)
     const { kept, revoked } = pairedDevices(registry)

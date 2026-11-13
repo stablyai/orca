@@ -3,9 +3,10 @@ import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import {
   connectRuntimeEnvironmentSshTarget,
   resyncRuntimeEnvironmentSshTargets
@@ -77,6 +78,7 @@ export function WorktreeCardSshHostControl({
   iconOnly,
   onPointerDown
 }: WorktreeCardSshHostControlProps): React.JSX.Element | null {
+  const t = useTranslate()
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   // Share in-flight state across all host surfaces; store IPC lags the initial click.
   const inFlight = useSshConnectInFlight(targetId)
@@ -132,11 +134,11 @@ export function WorktreeCardSshHostControl({
       <PassiveGlyph
         targetLabel={targetLabel}
         icon={<Server className="size-3 text-muted-foreground" />}
-        tooltip={translate(
+        tooltip={t(
           'auto.components.sidebar.WorktreeCardSshHostControl.connectedTooltip',
           'Project on SSH host'
         )}
-        accessibleName={translate(
+        accessibleName={t(
           'auto.components.sidebar.WorktreeCardSshHostControl.connectedName',
           'Project on SSH host {{value0}}',
           { value0: targetLabel }
@@ -151,11 +153,11 @@ export function WorktreeCardSshHostControl({
       <PassiveGlyph
         targetLabel={targetLabel}
         icon={<ServerOff className="size-3 text-muted-foreground" />}
-        tooltip={translate(
+        tooltip={t(
           'auto.components.sidebar.WorktreeCardSshHostControl.removedTooltip',
           'SSH host removed — reconnect unavailable'
         )}
-        accessibleName={translate(
+        accessibleName={t(
           'auto.components.sidebar.WorktreeCardSshHostControl.removedName',
           'SSH host {{value0}} was removed',
           { value0: targetLabel }
@@ -171,26 +173,26 @@ export function WorktreeCardSshHostControl({
   }
 
   const failed = status === 'error' || status === 'reconnection-failed' || status === 'auth-failed'
-  const label = connecting ? sshConnectingLabel() : sshConnectVerb(status)
+  const label = connecting ? sshConnectingLabel(t) : sshConnectVerb(status, t)
   const accessibleName = connecting
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeCardSshHostControl.connectingName',
         'Connecting to SSH host {{value0}}',
         { value0: targetLabel }
       )
     : status === 'auth-failed'
-      ? translate(
+      ? t(
           'auto.components.sidebar.WorktreeCardSshHostControl.authFailedName',
           'Reconnect SSH host {{value0}} — authentication failed',
           { value0: targetLabel }
         )
       : failed
-        ? translate(
+        ? t(
             'auto.components.sidebar.WorktreeCardSshHostControl.retryName',
             'Retry SSH connection to {{value0}}',
             { value0: targetLabel }
           )
-        : translate(
+        : t(
             'auto.components.sidebar.WorktreeCardSshHostControl.connectName',
             'Connect to SSH host {{value0}}',
             { value0: targetLabel }
@@ -198,13 +200,13 @@ export function WorktreeCardSshHostControl({
   const tooltip = connecting
     ? accessibleName
     : status === 'auth-failed'
-      ? translate(
+      ? t(
           'auto.components.sidebar.WorktreeCardSshHostControl.authFailedTooltip',
           '{{value0}} · authentication failed',
           { value0: targetLabel }
         )
       : failed
-        ? translate(
+        ? t(
             'auto.components.sidebar.WorktreeCardSshHostControl.failedTooltip',
             '{{value0}} · connection failed',
             { value0: targetLabel }

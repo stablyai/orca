@@ -1,4 +1,4 @@
-import type { CookieClearIdentity } from './browser-cookie-import-clear'
+import type { CookieClearIdentity } from './storage/cookie-store-contracts'
 
 export async function restoreEveryCookieIdentity(
   identities: readonly CookieClearIdentity[],

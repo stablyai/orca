@@ -3,7 +3,7 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
 } from '../../../shared/agent-session/agent-session-question-answer'
-import { AcpRpcError } from '../acp-errors'
+import { AcpRpcError } from '../transport/acp-errors'
 import {
   pendingAcpResolution,
   type AcpRequestPresentation,

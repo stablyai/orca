@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../ui/dialog'
 import {
@@ -64,6 +65,7 @@ export function PluginUpdateAllDialog({
   onClose: () => void
   onUpdated: (pluginKeys: string[]) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [candidates, setCandidates] = useState<UpdateCandidate[] | null>(null)
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set())
   const [updated, setUpdated] = useState<ReadonlySet<string>>(() => new Set())
@@ -221,17 +223,14 @@ export function PluginUpdateAllDialog({
         <DialogHeader>
           <DialogTitle>
             {reviewing
-              ? translate(
+              ? t(
                   'auto.components.settings.PluginUpdateReview.title',
                   'Review update to {{value0}}',
                   { value0: reviewing.entry.name }
                 )
               : plugins.length === 1
-                ? translate(
-                    'auto.components.settings.PluginUpdateAllDialog.updateOne',
-                    'Update 1 plugin'
-                  )
-                : translate(
+                ? t('auto.components.settings.PluginUpdateAllDialog.updateOne', 'Update 1 plugin')
+                : t(
                     'auto.components.settings.PluginUpdateAllDialog.updateMany',
                     'Update {{value0}} plugins',
                     { value0: plugins.length }
@@ -283,26 +282,26 @@ export function PluginUpdateAllDialog({
           <DialogFooter>
             <Button variant="ghost" disabled={busy} onClick={leaveReview}>
               {plugins.length === 1
-                ? translate('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')
-                : translate('auto.components.settings.PluginUpdateReview.back', 'Back')}
+                ? t('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')
+                : t('auto.components.settings.PluginUpdateReview.back', 'Back')}
             </Button>
             <Button disabled={busy} onClick={() => void approveReviewed(reviewing)}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              {translate('auto.components.settings.PluginUpdateReview.approve', 'Approve & update')}
+              {t('auto.components.settings.PluginUpdateReview.approve', 'Approve & update')}
             </Button>
           </DialogFooter>
         ) : (
           <DialogFooter>
             <Button variant="ghost" disabled={busy} onClick={onClose}>
               {updated.size > 0
-                ? translate('auto.components.settings.PluginUpdateAllDialog.close', 'Close')
-                : translate('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')}
+                ? t('auto.components.settings.PluginUpdateAllDialog.close', 'Close')
+                : t('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')}
             </Button>
             <Button disabled={busy || chosen.length === 0} onClick={() => void update()}>
               {busy ? <Loader2 className="animate-spin" /> : null}
               {failure
-                ? translate('auto.components.settings.PluginUpdateAllDialog.retry', 'Try again')
-                : translate('auto.components.settings.PluginUpdateAllDialog.update', 'Update')}
+                ? t('auto.components.settings.PluginUpdateAllDialog.retry', 'Try again')
+                : t('auto.components.settings.PluginUpdateAllDialog.update', 'Update')}
             </Button>
           </DialogFooter>
         )}

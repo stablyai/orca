@@ -5,7 +5,7 @@ import {
   updateMobileNativeChatRunDescriptors,
   type MobileNativeChatRunHistory,
   type MobileNativeChatRunPresentation
-} from '../mobile-native-chat-run-descriptors'
+} from './mobile-native-chat-run-descriptors'
 import {
   isSubagentGroupBlock,
   isToolResultBlock,

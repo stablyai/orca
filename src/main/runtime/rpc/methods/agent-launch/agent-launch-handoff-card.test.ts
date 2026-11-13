@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 /** An agent's own `orca agent launch` leaves one card in its chat; nothing else does, and the card never gates the launch. */
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -9,7 +8,7 @@ import {
 import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../../core'
-import { LOCAL_CLI_RPC_CALLER } from '../../rpc-caller-identity'
+import { LOCAL_CLI_RPC_CALLER } from '../../callers/rpc-caller-identity'
 import {
   methodNamed,
   rpcContext,

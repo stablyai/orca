@@ -6,9 +6,9 @@ import {
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getManagedOrcadApi } from '@/runtime/hosts/installation/managed-orcad-api-availability'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 
 export type ManagedServerCatalog = {
@@ -22,11 +22,6 @@ export type ManagedServerCatalog = {
   resumingId: string | null
   reload: () => Promise<void>
   resume: (row: OrcadManagedPendingMigrationRow) => Promise<void>
-}
-
-/** Web fallback stubs cannot manage SSH hosts. */
-export function getManagedOrcadApi(): ManagedOrcadPreloadApi | undefined {
-  return isWebClientLocation() ? undefined : window.api.runtimeEnvironments.managedOrcad
 }
 
 export function useManagedServerCatalog(

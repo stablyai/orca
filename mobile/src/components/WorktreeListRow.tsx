@@ -1,14 +1,14 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
-import { triggerMediumImpact } from '../platform/haptics'
+import { triggerMediumImpact } from '../platform/haptics/haptics'
 import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceListItem, Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
-import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
+import type { WorktreeCardDetails } from '../../../src/shared/worktree/row-display/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
@@ -20,18 +20,14 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { PrStateIcon } from './PrStateIcon'
+import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
-
-// Match desktop formatBranchName by hiding refs/heads/ prefix.
-function displayBranch(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
 
 type Props = {
   item: Worktree
   view: WorktreeRowView
   isReadOnly: boolean
-  now: number
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
   // Grouped repo header already identifies project; omit duplicate icon/name on each row.
@@ -39,19 +35,21 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeStatus
+  /** Null until a live read says (rows from the phone's store carry no agent state). */
+  status: WorktreeStatus | null
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
   onToggleLineage?: (item: WorkspaceListItem) => void
+  /** A rename the desktop hasn't taken yet; the row keeps its real name and points to this one. */
+  unsavedName?: string
 }
 
 function WorktreeListRowComponent({
   item,
   view,
   isReadOnly,
-  now,
   repoColor,
   repoIcon,
   hideRepo = false,
@@ -62,14 +60,16 @@ function WorktreeListRowComponent({
   onAgentPress,
   statusLive,
   onLongPress,
-  onToggleLineage
+  onToggleLineage,
+  unsavedName
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
-  const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
+  // Match desktop formatBranchName by hiding refs/heads/ prefix.
+  const metaText = isFolderWorkspace ? folderMeta : item.branch.replace(/^refs\/heads\//, '')
   const lineageDepth = Math.max(0, view.lineageDepth ?? 0)
   const indent = projectGroupRowIndent(item, view) + lineageDepth * 18
   const count = view.lineageChildCount ?? 0
@@ -77,6 +77,8 @@ function WorktreeListRowComponent({
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
   const hostId = view.hostContextHostId ?? item.hostId
+  const prState = item.linkedPR?.state ?? ''
+  const prColor = prStateColor(prState)
   const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')
@@ -154,10 +156,8 @@ function WorktreeListRowComponent({
           </Text>
           {cardDetails.pr && item.linkedPR && (
             <View style={styles.prBadge}>
-              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state)} />
-              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state) }]}>
-                #{item.linkedPR.number}
-              </Text>
+              <PrStateIcon state={prState} size={10} color={prColor} />
+              <Text style={[styles.prNumber, { color: prColor }]}>#{item.linkedPR.number}</Text>
             </View>
           )}
           {isFolderWorkspace && (
@@ -219,11 +219,11 @@ function WorktreeListRowComponent({
             )}
           </View>
         )}
+        {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
         {/* Match desktop agent activity only; plain terminal shell-output tails stay hidden. */}
         {cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
-            now={now}
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}

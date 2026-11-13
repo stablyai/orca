@@ -1,4 +1,4 @@
-import { pickApprovedSetupHashes } from '../../../../../shared/worktree/approved-setup-hashes'
+import { pickApprovedSetupHashes } from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import type { z } from 'zod'
@@ -8,7 +8,7 @@ import {
   hostQualifiedRepoSelector,
   type RuntimeRepoSelector
 } from '../../../workspaces/catalog/runtime-repo-selector'
-import type { WorktreeCreate } from '../../../../../shared/rpc-contract/worktree-create-params'
+import type { WorktreeCreate } from '../../../../../shared/rpc-contract/workspaces/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
@@ -128,6 +128,7 @@ export function buildManagedWorktreeCreateArgs(
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
+      ...(params.matchFolderWorkspaces ? { matchFolderWorkspaces: true as const } : {}),
       ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
       ...(params.crossStoreParentInferredFrom
         ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }

@@ -1,7 +1,5 @@
-import {
-  callStructuredAgentSession,
-  supportsStructuredAgentSessionContinuationContext
-} from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { supportsStructuredAgentSessionContinuationContext } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AgentSessionContinuationContext } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'

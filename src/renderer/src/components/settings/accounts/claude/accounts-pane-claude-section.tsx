@@ -1,5 +1,6 @@
 import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -7,6 +8,7 @@ import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,
@@ -31,7 +33,11 @@ import {
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
-export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
+export function renderClaudeAccountsSection(
+  model: AccountsPaneSectionModel,
+  t: Translate = translate,
+  intlLocale?: string
+): React.JSX.Element {
   const {
     accountRuntime,
     accountRuntimeSentenceLabel,
@@ -40,6 +46,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
+    recordFeatureInteraction,
     remoteAccountScopeNotice,
     runClaudeAccountAction,
     setRemoveClaudeTarget,
@@ -84,17 +91,17 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
         title={
           <span className="flex items-center gap-2">
             <ClaudeIcon size={16} />
-            {translate('auto.components.settings.AccountsPane.26ef4b55be', 'Claude')}
+            {t('auto.components.settings.AccountsPane.26ef4b55be', 'Claude')}
           </span>
         }
-        description={translate(
+        description={t(
           'auto.components.settings.AccountsPane.72b36ea174',
           'Optional. Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.'
         )}
       >
         <SearchableSetting
-          title={translate('auto.components.settings.AccountsPane.8bbfd74556', 'Claude Accounts')}
-          description={translate(
+          title={t('auto.components.settings.AccountsPane.89b9a151c3', 'Claude accounts')}
+          description={t(
             'accounts.claude.profileSwitching',
             'Switching applies to the next Claude you start in any tab.'
           )}
@@ -103,17 +110,15 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
         >
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
-              <Label>
-                {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
-              </Label>
+              <Label>{t('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}</Label>
               <p className="text-xs text-muted-foreground">
                 {isRemoteAccountScope
-                  ? translate(
+                  ? t(
                       'accounts.remoteScopeAccountsAddHere',
                       'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
                       { value0: accountRuntimeSentenceLabel }
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.AccountsPane.c0a52abfc5',
                       'Showing accounts for {{value0}}. New accounts are added there.',
                       { value0: accountRuntimeSentenceLabel }
@@ -134,7 +139,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                   ) : (
                     <Plus className="size-3" />
                   )}
-                  {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+                  {t('auto.components.settings.AccountsPane.7e9977b560', 'Add account')}
                 </Button>
                 {!isRemoteAccountScope && canOfferClaudeSignInLink(accountRuntime.runtime) ? (
                   <ClaudeSignInLinkMenu
@@ -158,7 +163,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                   className="gap-1.5 text-muted-foreground hover:text-foreground"
                 >
                   <X className="size-3" />
-                  {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+                  {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
                 </Button>
               ) : null}
             </div>
@@ -195,29 +200,22 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium">
                     {systemDefaultEmail
-                      ? translate(
-                          'accounts.claude.systemDefaultNamed',
-                          'System default: {{value0}}',
-                          {
-                            value0: systemDefaultEmail
-                          }
-                        )
-                      : translate(
-                          'auto.components.settings.AccountsPane.f2a265f8c7',
-                          'System default'
-                        )}
+                      ? t('accounts.claude.systemDefaultNamed', 'System default: {{value0}}', {
+                          value0: systemDefaultEmail
+                        })
+                      : t('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
                   </span>
                   {systemClaudeActive ? (
                     <Badge
                       variant="outline"
                       className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
                     >
-                      {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
+                      {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
                     </Badge>
                   ) : null}
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.AccountsPane.e05d0ff737',
                     'Use your current {{value0}} Claude login.',
                     { value0: accountRuntimeSentenceLabel }
@@ -228,7 +226,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             {systemDefaultIsSaved ? (
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'accounts.claude.systemDefaultIsSaved',
                     'System default is signed in as {{value0}}, which is also a saved account. An earlier Orca version may have copied that login there. If it is not your own login, select System default and run claude /login.',
                     { value0: systemDefaultEmail }
@@ -239,19 +237,19 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                   size="xs"
                   onClick={() => updateSettings({ claudeCopiedSystemDefaultNoticeDismissed: true })}
                 >
-                  {translate('accounts.claude.systemDefaultIsSavedDismiss', 'Dismiss')}
+                  {t('accounts.claude.systemDefaultIsSavedDismiss', 'Dismiss')}
                 </Button>
               </div>
             ) : null}
             {visibleClaudeAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {isRemoteAccountScope
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AccountsPane.remoteEmptyClaudeAccounts',
                       'No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.',
                       { value0: accountRuntimeSentenceLabel }
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.AccountsPane.3fe7862418',
                       "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
                       { value0: accountRuntimeSentenceLabel }
@@ -321,22 +319,19 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                               variant="outline"
                               className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
                             >
-                              {translate(
-                                'auto.components.settings.AccountsPane.e74831fb6b',
-                                'Active'
-                              )}
+                              {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
                             </Badge>
                           ) : null}
                         </div>
                         <span className="truncate text-[11px] text-muted-foreground">
                           {account.needsSignIn
-                            ? translate(
+                            ? t(
                                 'accounts.claude.signInRequired',
                                 'Sign in again to use this account'
                               )
                             : account.organizationName
-                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                              : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}`
+                              : formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
@@ -356,7 +351,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                             ) : (
                               <RefreshCw className="size-3" />
                             )}
-                            {translate('accounts.claude.signInAgain', 'Sign in again')}
+                            {t('accounts.claude.signInAgain', 'Sign in again')}
                           </Button>
                           {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
                             <ClaudeSignInLinkMenu
@@ -380,7 +375,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                           className="h-6 px-2 text-muted-foreground hover:text-destructive"
                         >
                           <Trash2 className="size-3" />
-                          {translate('auto.components.settings.AccountsPane.db209ee572', 'Remove')}
+                          {t('auto.components.settings.AccountsPane.db209ee572', 'Remove')}
                         </Button>
                       </div>
                     </div>
@@ -390,6 +385,13 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             )}
           </div>
         </SearchableSetting>
+        {isRemoteAccountScope ? null : (
+          <ClaudeOAuthUsageSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            recordFeatureInteraction={recordFeatureInteraction}
+          />
+        )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}

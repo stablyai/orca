@@ -1,5 +1,5 @@
 import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
-import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
+import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -12,15 +12,15 @@ import {
   getRuntimeTargetHostId
 } from '../../runtime/rpc/targets/runtime-client-target'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
+import { formatFolderWorkspaceCreateError } from '../../lib/workspace/paths/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
+} from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
-import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
+import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import {
   folderWorkspaceOwnerTarget,
   folderWorkspaceUpdateInvalidatesPathStatus,

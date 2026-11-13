@@ -1,6 +1,6 @@
 import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 import { isNativeOutcomeField } from './journal-outcome-format-2'
-import { journalManualStop } from '../queued-messages/queued-message-pause'
+import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import {
   detachJournalNativePrefix,

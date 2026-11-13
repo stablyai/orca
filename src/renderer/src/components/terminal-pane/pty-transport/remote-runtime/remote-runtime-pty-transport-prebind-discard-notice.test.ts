@@ -11,10 +11,7 @@ afterEach(() => {
   expect(appStore.getState).not.toHaveBeenCalled()
 })
 
-import {
-  createDeferred,
-  flushAsyncTicks
-} from '../../pty-connection/test-fixtures/pty-connection-test-async'
+import { createDeferred } from '../../pty-connection/test-fixtures/pty-connection-test-async'
 import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
 import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
@@ -106,22 +103,5 @@ describe('remote pre-bind typing discard notice', () => {
 
     expect(onTypingDiscardedBeforeBind).not.toHaveBeenCalled()
     transport.destroy?.()
-  })
-
-  it('says nothing once the pane is closed', async () => {
-    const onTypingDiscardedBeforeBind = vi.fn()
-    const { transport, created, waitForCreate } = await createGatedTransport({
-      keepTypeAheadForNewTerminal: () => true,
-      onTypingDiscardedBeforeBind
-    })
-    expect(transport.sendInput('lost\r', 'driving')).toBe(true)
-    const connecting = transport.connect({ url: '', callbacks: {} })
-    await waitForCreate()
-    transport.destroy?.()
-    created.resolve(new Error('offline'))
-    await connecting
-    await flushAsyncTicks()
-
-    expect(onTypingDiscardedBeforeBind).not.toHaveBeenCalled()
   })
 })

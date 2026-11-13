@@ -6,11 +6,11 @@ import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
 } from '../../../src/shared/open-structured-agent-session'
-import type { RpcClient } from '../transport/rpc-client'
-import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
-import { openMobileStructuredSession } from './open-mobile-structured-session'
-import { openMobileAgentMessageTerminal } from './mobile-agent-message-terminal'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { mobileStructuredSessionOpenMessage } from './native-chat/agent-session/mobile-structured-session-open-message'
+import { openMobileStructuredSession } from './native-chat/agent-session/open-mobile-structured-session'
+import { openMobileAgentMessageTerminal } from './tabs/mobile-agent-message-terminal'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
 export function useMobileAgentMessageNavigation(
   client: RpcClient | null,

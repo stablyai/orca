@@ -8,11 +8,11 @@ import type { RemoteInstallTransport } from '../../managed-server/install/remote
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { REMOTE_INSTALL_TIMEOUT_MS } from '../../managed-server/install/remote-deploy-timing'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   collectLocalUploadPlan,
   type LocalUploadPlan
-} from '../../ssh/system-transport/system-ssh-file-transfer'
+} from '../../ssh/system-transport/file-transfer/system-ssh-file-transfer'
 import {
   buildUstarEntryHeader,
   USTAR_BLOCK_BYTES,

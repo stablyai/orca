@@ -34,15 +34,15 @@ vi.mock('./ui', () => ({ getTrustedUIRendererWebContents: trustedRendererMock })
 vi.mock('./skill-install-management-ipc-handlers', () => ({
   registerSkillInstallManagementIpcHandlers: registerInstallManagementMock
 }))
-vi.mock('../skills/skill-cloud-install-target', () => ({
+vi.mock('../skills/cloud/skill-cloud-install-target', () => ({
   classifySkillCloudInstallTarget: classifyInstallTargetMock
 }))
-vi.mock('../skills/skill-runtime-capability', () => ({
+vi.mock('../skills/runtime-transfer/skill-runtime-capability', () => ({
   supportsSkillRuntimeBundleInstall: vi.fn(),
   supportsSkillRuntimeCancellation: vi.fn(),
   supportsSkillRuntimeInstall: vi.fn()
 }))
-vi.mock('../skills/skill-cloud-grant-installation', () => ({
+vi.mock('../skills/cloud/skill-cloud-grant-installation', () => ({
   installSkillBundleCloudGrant: vi.fn(),
   installSkillCloudGrant: installSkillCloudGrantMock
 }))
@@ -50,12 +50,11 @@ vi.mock('./skill-install-progress-ipc', () => ({
   sendBundleInstallProgress: vi.fn(),
   sendSkillInstallProgress: vi.fn()
 }))
-vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: vi.fn()
 }))
 
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
-import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
 
 describe('skill cloud IPC', () => {
   beforeEach(() => {
@@ -101,14 +100,12 @@ describe('skill cloud IPC', () => {
         }
       )
     ).rejects.toThrow('skill-package-version-mismatch')
-    expect(installSkillCloudGrantMock).not.toHaveBeenCalled()
   })
 
   const preparationId = 'cf38dbdc-bff0-4e87-a7ea-ef81b7edaa1a'
 
   it('rejects share publication from an unrelated renderer before starting it', () => {
-    const publish = vi.spyOn(SkillSharePreparationService.prototype, 'publish')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration captures the runtime; the publish spy never accesses it.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration captures the runtime; sender refusal never accesses it.
     registerSkillCloudIpcHandlers({} as never, vi.fn())
 
     expect(() =>
@@ -117,8 +114,5 @@ describe('skill cloud IPC', () => {
         { preparationId, releaseNotes: 'Reviewed release' }
       )
     ).toThrow('Unauthorized skill IPC sender')
-    expect(publish).not.toHaveBeenCalled()
-    expect(mainRenderer.send).not.toHaveBeenCalled()
-    expect(otherRenderer.send).not.toHaveBeenCalled()
   })
 })

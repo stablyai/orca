@@ -1,67 +1,103 @@
 // @vitest-environment happy-dom
-
-import { act, useRef } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
-import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
 import { NotificationCardStack } from './NotificationCardStack'
 
-let resize: (() => void) | null = null
-let height = 0
-let root: Root | null = null
+/** A ResizeObserver that reports only what it observes, when the test resizes an element. */
+class FakeResizeObserver implements ResizeObserver {
+  static all: FakeResizeObserver[] = []
+  private readonly targets = new Set<Element>()
 
-const toasterVar = (name: string): string =>
-  document.querySelector<HTMLElement>('[data-toaster]')?.style.getPropertyValue(name) ?? ''
-const published = (): string => toasterVar(NOTIFICATION_CARD_STACK_HEIGHT_VAR)
+  constructor(private readonly callback: ResizeObserverCallback) {
+    FakeResizeObserver.all.push(this)
+  }
 
-function ToasterStandIn(): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  useNotificationCardLayoutVarReader(ref)
-  return <div ref={ref} data-toaster="" />
-}
+  observe(target: Element): void {
+    this.targets.add(target)
+  }
 
-function Corner(): React.JSX.Element {
-  return (
-    <>
-      <ToasterStandIn />
-      <NotificationCardStack>card</NotificationCardStack>
-    </>
-  )
-}
+  unobserve(target: Element): void {
+    this.targets.delete(target)
+  }
 
-beforeEach(() => {
-  height = 0
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      callback: () => void
-      constructor(callback: () => void) {
-        this.callback = callback
-        resize = callback
+  disconnect(): void {
+    this.targets.clear()
+  }
+
+  static resize(target: Element): void {
+    for (const observer of FakeResizeObserver.all) {
+      if (observer.targets.has(target)) {
+        observer.callback([], observer)
       }
-      observe(): void {}
-      disconnect(): void {}
     }
-  )
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => height)
-  root = createRoot(document.body.appendChild(document.createElement('div')))
-})
+  }
+}
 
-afterEach(() => {
-  act(() => root?.unmount())
-  vi.unstubAllGlobals()
-  vi.restoreAllMocks()
-})
+function stackOf(card: HTMLElement): HTMLElement {
+  const stack = card.parentElement
+  if (!stack) {
+    throw new Error('card is not in a stack')
+  }
+  return stack
+}
+
+/** Pins the stack's scroll metrics; its box stays capped at 220px while content grows. */
+function capStack(stack: HTMLElement, content: { height: number }): void {
+  Object.defineProperty(stack, 'clientHeight', { configurable: true, get: () => 220 })
+  Object.defineProperty(stack, 'scrollHeight', { configurable: true, get: () => content.height })
+}
 
 describe('NotificationCardStack', () => {
-  it('publishes its height plus the gap so toasts sit above the cards, and clears it when empty', () => {
-    height = 120
-    act(() => root?.render(<Corner />))
-    expect(published()).toBe('calc(120px + 0.5rem)')
+  beforeEach(() => {
+    FakeResizeObserver.all = []
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+  })
 
-    height = 0
-    act(() => resize?.())
-    expect(published()).toBe('')
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('starts scrolling when a card grows inside a stack already at its max height', () => {
+    render(
+      <NotificationCardStack>
+        <div data-testid="card" />
+      </NotificationCardStack>
+    )
+    const card = screen.getByTestId('card')
+    const stack = stackOf(card)
+    const content = { height: 220 }
+    capStack(stack, content)
+    act(() => FakeResizeObserver.resize(stack))
+    expect(stack.hasAttribute('data-overflowing')).toBe(false)
+
+    content.height = 240
+    act(() => FakeResizeObserver.resize(card))
+
+    expect(stack.hasAttribute('data-overflowing')).toBe(true)
+  })
+
+  it('watches a card that mounts after the stack', async () => {
+    const { rerender } = render(
+      <NotificationCardStack>
+        <div data-testid="first" />
+      </NotificationCardStack>
+    )
+    const stack = stackOf(screen.getByTestId('first'))
+    const content = { height: 200 }
+    capStack(stack, content)
+    rerender(
+      <NotificationCardStack>
+        <div data-testid="first" />
+        <div data-testid="second" />
+      </NotificationCardStack>
+    )
+    // MutationObserver delivers on a microtask.
+    await act(async () => {})
+
+    content.height = 260
+    act(() => FakeResizeObserver.resize(screen.getByTestId('second')))
+
+    expect(stack.hasAttribute('data-overflowing')).toBe(true)
   })
 })

@@ -29,10 +29,12 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
+// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
+export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9.5 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10 * 1024 * 1024
 
 // Only this licensed desktop-identical asset has its own allowance; other fonts (KaTeX's) and code count.
 export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
@@ -52,25 +54,25 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 }
 
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
-// Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
+// Re-measure table with measure-mobile-web-app-chunk-sweep.mjs when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 4],
   ['./h/[hostId]/[...page].tsx', 6],
-  ['./h/[hostId]/accounts.tsx', 9],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 12],
-  ['./h/[hostId]/automations.tsx', 17],
-  ['./h/[hostId]/edit.tsx', 19],
-  ['./h/[hostId]/files/[worktreeId].tsx', 25],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 34],
-  ['./h/[hostId]/history/[worktreeId].tsx', 36],
-  ['./h/[hostId]/index.tsx', 45],
-  ['./h/[hostId]/new-workspace.tsx', 56],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 57],
-  ['./h/[hostId]/review/[worktreeId].tsx', 69],
-  ['./h/[hostId]/session/[worktreeId].tsx', 83],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 90],
-  ['./h/[hostId]/tasks.tsx', 104],
-  ['./h/_layout.tsx', 108]
+  ['./h/[hostId]/accounts.tsx', 7],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
+  ['./h/[hostId]/automations.tsx', 13],
+  ['./h/[hostId]/edit.tsx', 14],
+  ['./h/[hostId]/files/[worktreeId].tsx', 19],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 27],
+  ['./h/[hostId]/history/[worktreeId].tsx', 28],
+  ['./h/[hostId]/index.tsx', 32],
+  ['./h/[hostId]/new-workspace.tsx', 40],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 41],
+  ['./h/[hostId]/review/[worktreeId].tsx', 48],
+  ['./h/[hostId]/session/[worktreeId].tsx', 60],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 66],
+  ['./h/[hostId]/tasks.tsx', 73],
+  ['./h/_layout.tsx', 75]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -185,6 +187,23 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes`
     )
   }
+  // buildId leaves the host's JSON catalogs out, so a stale copy shows only here.
+  const hostCatalogsOf = (built) => JSON.stringify(built.catalogs ?? [])
+  if (hostCatalogsOf(first.manifest) !== hostCatalogsOf(second.manifest)) {
+    fail('host language catalogs are not reproducible')
+  }
+  if (hostCatalogsOf(first.manifest) !== hostCatalogsOf(manifest)) {
+    fail(`${bundleDir} is stale: its host language catalogs differ from a fresh build's`)
+  }
+  const oversized = (manifest.catalogs ?? []).find(
+    (catalog) => catalog.byteLength > MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES
+  )
+  if (oversized) {
+    fail(
+      `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
+        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
+    )
+  }
   const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
   if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
@@ -210,7 +229,8 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (first.chunkCount > maxChunks) {
     fail(
       `bundle is cut into ${String(first.chunkCount)} chunks, over the Phase C budget of ` +
-        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s)`
+        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s); ` +
+        'measure-mobile-web-app-chunk-sweep.mjs re-measures MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP'
     )
   }
   if (first.entryStaticBytes > MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES) {

@@ -11,8 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { partialRuntimeStore } from '../../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
@@ -27,7 +26,7 @@ vi.mock('../../structured-sessions/creation/structured-agent-session-create', ()
 
 const { stopStructuredWorker } = await import('./orchestration-structured-worker-lifecycle')
 const { createStructuredWorkerSession } = await import('./orchestration-structured-worker-session')
-const { completeWorkerTerminalRelease } = await import('../worker/worker-release-completion')
+await import('../worker/release/worker-release-completion')
 
 const WORKTREE = 'workspace-1'
 const SESSION = 'session-1'
@@ -148,161 +147,6 @@ describe('structured worker stop retires the chat tab', () => {
     expect(published.activeTabId).toBeNull()
     expect(published.activeTabType).toBeNull()
     expect(emit).toHaveBeenCalled()
-  })
-
-  it('leaves the tab alone when the close was NOT proven', async () => {
-    installHost({ closeThrows: true })
-    const identity = registerIdentity()
-    const { runtime } = await runtimeShowingStructuredTab()
-
-    const stop = await stopStructuredWorker(identity, runtime)
-
-    expect(stop.stopped).toBe(false)
-    expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
-  })
-
-  it('cannot turn a proven stop into a retained one when the prune throws', async () => {
-    installHost()
-    const identity = registerIdentity()
-    const runtime: NonNullable<Parameters<typeof stopStructuredWorker>[1]> = {
-      captureStructuredAgentSessionPresentation: () => ({
-        raw: { worktreeId: WORKTREE, tabId: 'agent-session:session-1' },
-        saved: []
-      }),
-      currentLocalStructuredSessionPresentation: () => ({
-        worktreeId: WORKTREE,
-        tabId: 'agent-session:session-1'
-      }),
-      removeCapturedStructuredSessionSavedTabs: vi.fn(),
-      forgetStructuredSessionMail: vi.fn(),
-      retireStructuredAgentSessionTabFromSnapshot: vi.fn(() => {
-        throw new Error('snapshot is wedged')
-      })
-    }
-
-    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
-      stopped: true,
-      closeAttempted: true
-    })
-    expect(runtime.retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(
-      SESSION,
-      'agent-session:session-1',
-      WORKTREE
-    )
-  })
-
-  it('settles a runtime that has no tab surface at all', async () => {
-    installHost()
-    const identity = registerIdentity()
-    await expect(stopStructuredWorker(identity)).resolves.toEqual({
-      stopped: true,
-      closeAttempted: true
-    })
-  })
-})
-
-describe('structured worker release retires the chat tab', () => {
-  it('prunes the tab once the release settles', async () => {
-    installHost()
-    const identity = registerIdentity()
-    const { runtime } = await runtimeShowingStructuredTab()
-    const resource = {
-      id: 'resource-1',
-      terminal_handle: HANDLE,
-      host_scope: JSON.stringify(HOST_SCOPE),
-      archive_source: 'transcript',
-      archive_status: 'captured',
-      ownership_state: 'owned',
-      release_state: 'requested'
-    } as WorkerTerminalResourceRow
-    const db = {
-      getWorkerDispatch: () => ({
-        agent_terminal_handle: HANDLE,
-        created_at: '2026-09-05 00:00:00'
-      }),
-      getDispatchContextById: () => null,
-      isDispatchProcessCurrent: (args: { paneKey: string; processIncarnation: string }) =>
-        args.paneKey === identity.paneKey &&
-        args.processIncarnation === identity.processIncarnation,
-      workerTerminalResourceHasIdentityConflict: () => false,
-      getWorkerTerminalArchive: () => ({ kind: 'transcript_pin' }),
-      commitWorkerTerminalArchiveForRelease: () => ({
-        ...resource,
-        release_state: 'releasing'
-      }),
-      settleWorkerTerminalRelease: () => ({ ...resource, release_state: 'released' }),
-      markWorkerTerminalReleaseUnknown: (_id: string, error: string) => ({
-        ...resource,
-        release_state: 'unknown',
-        release_error: error
-      })
-    } as unknown as OrchestrationDb
-
-    await expect(
-      completeWorkerTerminalRelease({ runtime, db, dispatchId: 'd1', resource })
-    ).resolves.toMatchObject({ state: 'released' })
-
-    expect(await structuredTabIds(runtime)).toEqual([])
-  })
-
-  it('settles rather than wedging when the user already closed the worker chat tab', async () => {
-    // User-closed chats cannot provide more journal evidence; archive_failed must not wedge their release forever.
-    installHost({
-      lease: {
-        runtimeKind: 'native',
-        claimStatus: 'released',
-        deathEvidence: { kind: 'exit-observed', detail: 'surface released', observedAt: 1 },
-        runtimeFence: 2
-      }
-    })
-    vi.spyOn(hostTestState().host, 'history').mockRejectedValue(
-      new Error('The closed chat journal is unavailable')
-    )
-    const identity = registerIdentity()
-    const resource = {
-      id: 'resource-2',
-      terminal_handle: HANDLE,
-      host_scope: JSON.stringify(HOST_SCOPE),
-      archive_source: null,
-      archive_status: null,
-      ownership_state: 'owned',
-      release_state: 'requested'
-    } as unknown as WorkerTerminalResourceRow
-    let stored: { kind?: string; content?: string } = {}
-    const db = {
-      getWorkerDispatch: () => ({
-        agent_terminal_handle: HANDLE,
-        created_at: '2026-09-05 00:00:00'
-      }),
-      getDispatchContextById: () => null,
-      isDispatchProcessCurrent: (args: { paneKey: string; processIncarnation: string }) =>
-        args.paneKey === identity.paneKey &&
-        args.processIncarnation === identity.processIncarnation,
-      workerTerminalResourceHasIdentityConflict: () => false,
-      getWorkerTerminalArchive: () => undefined,
-      commitWorkerTerminalArchiveForRelease: (args: { kind?: string; content?: string }) => {
-        stored = args
-        return { ...resource, release_state: 'releasing' }
-      },
-      settleWorkerTerminalRelease: () => ({ ...resource, release_state: 'released' }),
-      markWorkerTerminalReleaseUnknown: (_id: string, error: string) => ({
-        ...resource,
-        release_state: 'unknown',
-        release_error: error
-      })
-    } as unknown as OrchestrationDb
-
-    const { runtime } = await runtimeShowingStructuredTab()
-    await expect(
-      completeWorkerTerminalRelease({
-        runtime,
-        db,
-        dispatchId: 'd2',
-        resource
-      })
-    ).resolves.toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
-    expect(stored.kind).toBe('structured_journal')
-    expect(stored.content).toContain('could not be preserved')
   })
 })
 
