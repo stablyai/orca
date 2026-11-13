@@ -21,6 +21,11 @@ export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
 export const PROJECT_GROUP_HEADER_INDENT = 10
 export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
+// Why: the grouped title already sits on the project name, so status icons move by their icon-to-title distance.
+const LEGACY_STATUS_ICON_TO_TITLE = 16
+const NEW_CARD_STATUS_ICON_TO_TITLE = 22.5
+// Why: a status-less title starts where the legacy status slot and gap would sit.
+const STATUS_LESS_TITLE_TO_PROJECT_NAME = 18
 
 function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))
@@ -44,6 +49,17 @@ export function getWorktreeCardContentIndent(args: {
         GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
         lineageIndent
     : lineageIndent
+}
+
+/** Nests a project's worktrees so their leading status icon (or title, without one) starts at the project name. */
+export function getProjectWorktreeLeadingIndent(args: {
+  newCardStyle: boolean
+  showStatus: boolean
+}): number {
+  if (!args.showStatus) {
+    return STATUS_LESS_TITLE_TO_PROJECT_NAME
+  }
+  return args.newCardStyle ? NEW_CARD_STATUS_ICON_TO_TITLE : LEGACY_STATUS_ICON_TO_TITLE
 }
 
 export function getFolderWorkspaceCardContentIndent(args: { groupDepth: number }): number {

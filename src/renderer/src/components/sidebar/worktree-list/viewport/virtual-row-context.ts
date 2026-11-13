@@ -16,6 +16,7 @@ import type { WorktreeListVirtualizer } from './use-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
+import { getProjectWorktreeLeadingIndent } from '../rows/indentation'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
 
@@ -29,6 +30,7 @@ type BuildArgs = {
   settings: AppState['settings']
   projectActions: RepoHeaderProjectActions
   newCardStyle: boolean
+  showCardStatus: boolean
   session: WorktreeDragSession
   runtime: WorktreeDragRuntime
   primaryActive: ReturnType<typeof usePrimaryActiveWorktreeRow>
@@ -99,6 +101,10 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     item: {
       settings: args.settings,
       groupBy: props.groupBy,
+      projectWorktreeLeadingIndent: getProjectWorktreeLeadingIndent({
+        newCardStyle: args.newCardStyle,
+        showStatus: args.showCardStatus
+      }),
       groupKeyByRowKey: session.groupKeyByRowKey,
       groupIndexByRowKey: session.groupIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,

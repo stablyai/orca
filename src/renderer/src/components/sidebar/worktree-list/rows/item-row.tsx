@@ -8,7 +8,10 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  isProjectSectionGroupKey,
+  PINNED_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getLineageChildrenInlineStyle,
@@ -26,6 +29,7 @@ import type { WorktreeRowDragState } from '../drag/row-state'
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
   groupBy: WorktreeGroupBy
+  projectWorktreeLeadingIndent: number
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
@@ -78,9 +82,12 @@ function getWorktreeItemRowGeometry(
     lineageDepth: itemRow.depth
   })
   const surfaceInset = getWorktreeCardSurfaceInset({ isGrouped, groupDepth: itemRow.groupDepth })
+  const projectIndent = isProjectSectionGroupKey(itemRow.sectionKey)
+    ? ctx.projectWorktreeLeadingIndent
+    : 0
   return {
     surfaceInset,
-    cardContentIndent: Math.max(0, paddingLeft - surfaceInset)
+    cardContentIndent: Math.max(0, paddingLeft + projectIndent - surfaceInset)
   }
 }
 
