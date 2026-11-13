@@ -6688,7 +6688,6 @@
       "src/shared/tab-agent-from-signals-pi-identity.test.ts": 103,
       "src/shared/task-query.test.ts": 55,
       "src/shared/task-source-context.test.ts": 103,
-      "src/shared/telemetry-payload-contracts.test.ts": 282,
       "src/shared/program-status/terminal-agent-status-processor.test.ts": 74,
       "src/shared/terminal/output/terminal-bell-detector.test.ts": 40,
       "src/shared/terminal/protocol/queries/terminal-color-scheme-protocol.test.ts": 39,
