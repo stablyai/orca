@@ -28,6 +28,7 @@ import {
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { WorkspaceCleanupReleasedWorker } from './workspace-cleanup-orchestration-workers'
+import type { WorkspaceCleanupRepoRefs } from './workspace-cleanup-merge-evidence'
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
@@ -40,6 +41,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
   findAutomationRun: WorkspaceCleanupAutomationRunLookup
   releasedWorker?: WorkspaceCleanupReleasedWorker
   signal?: AbortSignal
+  repoRefs: WorkspaceCleanupRepoRefs
 }): Promise<WorkspaceCleanupCandidate> {
   const {
     repo,
@@ -50,7 +52,8 @@ export async function buildWorkspaceCleanupCandidate(args: {
     skipGit,
     forceGitCheck,
     releasedWorker,
-    signal
+    signal,
+    repoRefs
   } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupWorkspaceReasons(worktree, scannedAt, args.findAutomationRun)
@@ -82,6 +85,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
         repo,
         route,
         prCache,
+        repoRefs,
         signal,
         releasedWorker?.coordinatorBranch
       )
