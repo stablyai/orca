@@ -17308,7 +17308,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Mostrar menos",
-          "showMore": "Mostrar más"
+          "showMore": "Mostrar más",
+          "copied": "Copiado",
+          "copyFailed": "No se pudo copiar",
+          "copyPrompt": "Copiar prompt"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17347,7 +17350,14 @@
           "precheckNone": "Ninguna",
           "migrate": "Migrar",
           "migrateNotice": "{{host}} se actualizó a un nuevo host remoto. Migra esta automatización para que siga ejecutándose.",
-          "needsMigration": "Requiere migración"
+          "needsMigration": "Requiere migración",
+          "repeats": "Se repite",
+          "missedRunGrace": "Período de gracia",
+          "execution": "Ejecución",
+          "notRunYet": "Aún no se ha ejecutado",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} ejecución informada",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",

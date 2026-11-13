@@ -14793,7 +14793,14 @@
           "precheckNone": "Nenhuma",
           "migrate": "Migrar",
           "migrateNotice": "{{host}} foi atualizado para um novo host remoto. Migre esta automação para que ela continue em execução.",
-          "needsMigration": "Requer migração"
+          "needsMigration": "Requer migração",
+          "repeats": "Repetição",
+          "missedRunGrace": "Tolerância de execução perdida",
+          "execution": "Execução",
+          "notRunYet": "Ainda não executada",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} execução relatada",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas"
         },
         "ExternalAutomationManagers": {
           "e02f970595": "Nenhum gerenciador de automação externa encontrado.",
@@ -15022,7 +15029,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Mostrar menos",
-          "showMore": "Mostrar mais"
+          "showMore": "Mostrar mais",
+          "copied": "Copiado",
+          "copyFailed": "Falha ao copiar",
+          "copyPrompt": "Copiar prompt"
         },
         "AutomationRunPageFrame": {
           "40a511bed4": "Contexto da execução",

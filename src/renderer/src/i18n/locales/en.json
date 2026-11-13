@@ -18556,7 +18556,8 @@
           "missedRunGrace": "Missed-run grace",
           "execution": "Execution",
           "notRunYet": "Not run yet",
-          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} run reported",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported",
           "createdBy": "Created by",
           "createdByPluginTitle": "Plugin {{plugin}}",
           "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"

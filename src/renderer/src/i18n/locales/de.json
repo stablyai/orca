@@ -17575,7 +17575,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Weniger anzeigen",
-          "showMore": "Mehr anzeigen"
+          "showMore": "Mehr anzeigen",
+          "copied": "Kopiert",
+          "copyFailed": "Kopieren fehlgeschlagen",
+          "copyPrompt": "Prompt kopieren"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17612,7 +17615,13 @@
           "precheckNone": "Keine",
           "migrate": "Migrieren",
           "migrateNotice": "{{host}} wurde auf einen neuen Remote-Host umgestellt. Migriere diese Automatisierung, damit sie weiterläuft.",
-          "needsMigration": "Migration erforderlich"
+          "needsMigration": "Migration erforderlich",
+          "repeats": "Wiederholung",
+          "missedRunGrace": "Nachholfrist",
+          "execution": "Ausführung",
+          "notRunYet": "Noch nicht ausgeführt",
+          "usageDetail_one": "{{tokens}} Token · {{known}}/{{count}} Ausführung gemeldet",
+          "usageDetail_other": "{{tokens}} Token · {{known}}/{{count}} Ausführungen gemeldet"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",

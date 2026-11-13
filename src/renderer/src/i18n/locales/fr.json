@@ -17549,7 +17549,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Afficher moins",
-          "showMore": "Afficher plus"
+          "showMore": "Afficher plus",
+          "copied": "Copié",
+          "copyFailed": "Échec de la copie",
+          "copyPrompt": "Copier le prompt"
         },
         "AutomationDetail": {
           "401f40ae79": "Dépense est.",
@@ -17588,7 +17591,14 @@
           "precheckNone": "Aucune",
           "migrate": "Migrer",
           "migrateNotice": "{{host}} a été mis à niveau vers un nouvel hôte distant. Migrez cette automatisation pour qu'elle continue de s'exécuter.",
-          "needsMigration": "Migration requise"
+          "needsMigration": "Migration requise",
+          "repeats": "Répétition",
+          "missedRunGrace": "Marge de rattrapage",
+          "execution": "Exécution",
+          "notRunYet": "Pas encore exécutée",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} exécution signalée",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} exécutions signalées",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} exécutions signalées"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Annuler",

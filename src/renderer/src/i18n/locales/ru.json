@@ -18070,7 +18070,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Свернуть",
-          "showMore": "Показать ещё"
+          "showMore": "Показать ещё",
+          "copied": "Скопировано",
+          "copyFailed": "Не удалось скопировать",
+          "copyPrompt": "Копировать запрос"
         },
         "AutomationDetail": {
           "host": "Сервер",
@@ -18111,7 +18114,15 @@
           "precheckNone": "Нет",
           "migrate": "Перенести",
           "migrateNotice": "{{host}} обновлён до нового удалённого хоста. Перенесите эту автоматизацию, чтобы она продолжала работать.",
-          "needsMigration": "Требуется перенос"
+          "needsMigration": "Требуется перенос",
+          "repeats": "Повтор",
+          "missedRunGrace": "Допустимая задержка запуска",
+          "execution": "Выполнение",
+          "notRunYet": "Ещё не запускалась",
+          "usageDetail_one": "Токены: {{tokens}} · {{known}}/{{count}} запуск с данными",
+          "usageDetail_few": "Токены: {{tokens}} · {{known}}/{{count}} запуска с данными",
+          "usageDetail_many": "Токены: {{tokens}} · {{known}}/{{count}} запусков с данными",
+          "usageDetail_other": "Токены: {{tokens}} · {{known}}/{{count}} запуска с данными"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Отмена",
