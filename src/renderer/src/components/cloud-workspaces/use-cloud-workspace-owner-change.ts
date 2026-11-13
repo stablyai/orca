@@ -11,6 +11,7 @@ import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 import { ownerChangeRefusal, previousOwnerToast } from './owner-change-copy'
 import {
   markNewOwnerNoticeSeen,
+  markOwnerChangeMadeHere,
   refreshPreviousOwnerNoticesNow
 } from './owner-change-notices-store'
 
@@ -89,7 +90,9 @@ export function useCloudWorkspaceOwnerChange({
         told ? { description: told, duration: TOLD_TOAST_MS } : undefined
       )
       if (previousOwner?.userId === selfId) {
-        // You gave away your own: your notice (with the advice to rotate) is waiting.
+        // You gave away your own: your notice (with the advice to rotate) is waiting, and this
+        // is the one device that shows it (TRANSFER-TOAST-OTHER-DEVICE).
+        markOwnerChangeMadeHere(localStorageOrNull(), next.id)
         refreshPreviousOwnerNoticesNow()
       }
       refresh()

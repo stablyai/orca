@@ -11,8 +11,11 @@ import {
   resetCloudWorkspaceIdentityForTests
 } from './cloud-workspace-identity'
 import { AUTH_STATUS, ROSTER, SELF_ID, workspace } from './cloud-workspaces.test-fixture'
-import { OwnerChangeNotices } from './OwnerChangeNotices'
-import { resetOwnerChangeNoticesForTests } from './owner-change-notices-store'
+import { OWNER_NOTICE_POLL_MS, OwnerChangeNotices } from './OwnerChangeNotices'
+import {
+  markOwnerChangeMadeHere,
+  resetOwnerChangeNoticesForTests
+} from './owner-change-notices-store'
 
 type Shown = { view: CloudToastView; onDismiss?: () => void }
 const stack = vi.hoisted(() => ({ shown: new Map<string, Shown>() }))
@@ -112,6 +115,41 @@ describe('OwnerChangeNotices (OWNER-TRANSFER)', () => {
       ])
     )
     expect(stack.shown.has(id)).toBe(false)
+  })
+
+  it('a notice closed on another device goes away here at the next read (dismissal is the control plane’s)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<OwnerChangeNotices />)
+      await waitFor(() => expect(stack.shown.has('owner-change:otn_1')).toBe(true))
+      // Closed elsewhere: the control plane stops listing it.
+      notices = []
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(OWNER_NOTICE_POLL_MS * 5)
+      })
+      await waitFor(() => expect(stack.shown.has('owner-change:otn_1')).toBe(false))
+      expect(dismissOwnerNotice).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('TRANSFER-TOAST-OTHER-DEVICE: "You made X the owner" does not echo on a device that did not make the change', async () => {
+    notices = [{ ...NOTICE, id: 'otn_self', actor: { userId: SELF_ID, name: null } }]
+    render(<OwnerChangeNotices />)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(stack.shown.has('owner-change:otn_self')).toBe(false)
+    cleanup()
+    // The device that made it shows it.
+    markOwnerChangeMadeHere(window.localStorage, NOTICE.workspace.id)
+    resetOwnerChangeNoticesForTests()
+    render(<OwnerChangeNotices />)
+    await waitFor(() =>
+      expect(line('owner-change:otn_self')?.text).toBe(
+        'You made Linus Park the owner of Checkout retries.'
+      )
+    )
   })
 
   it('shows nothing on a personal account', async () => {
