@@ -99,3 +99,39 @@ describe('orca-sandbox-env: Codex via the Orca account', () => {
     }
   })
 })
+
+// G9: ~/.claude.json pre-approves ANTHROPIC_API_KEY by its last 20 characters. Only an Orca placeholder's tail may be
+// written; a real key (placeholders off) leaves nothing of itself on disk, and an older image's tail is scrubbed.
+describe('orca-sandbox-env: Claude Code API-key approval (G9)', () => {
+  const PLACEHOLDER = 'orca-ph-anthropic-api-key-sbx_0123456789abcdef'
+  const REAL = 'sk-ant-api03-REALkey-fake-for-tests-0000-TAILTAILTAIL1234'
+  const claude = (file: (path: string) => string | null) => JSON.parse(file('.claude.json') ?? '{}')
+
+  it('a placeholder: its tail is approved', () => {
+    const { run, file } = scratch()
+    run({ ANTHROPIC_API_KEY: PLACEHOLDER })
+    expect(claude(file).customApiKeyResponses.approved).toEqual([PLACEHOLDER.slice(-20)])
+  })
+
+  it('a real key: nothing from it is written, and a tail an older image wrote is removed', () => {
+    const { home, run, file } = scratch()
+    writeFileSync(
+      join(home, '.claude.json'),
+      JSON.stringify({ customApiKeyResponses: { approved: [REAL.slice(-20), 'someone-elses-tail-x'], rejected: [REAL.slice(-20)] } })
+    )
+    run({ ANTHROPIC_API_KEY: REAL })
+    const text = file('.claude.json')!
+    expect(text).not.toContain(REAL.slice(-20))
+    expect(text).not.toContain(REAL.slice(-8))
+    expect(claude(file).customApiKeyResponses).toEqual({ approved: ['someone-elses-tail-x'], rejected: [] })
+    // The rest of the first-run answers still apply.
+    expect(claude(file).hasCompletedOnboarding).toBe(true)
+  })
+
+  it('no key: no approval entry at all (unchanged)', () => {
+    const { run, file } = scratch()
+    run({ FOO: 'bar' })
+    expect(claude(file).customApiKeyResponses).toBeUndefined()
+    expect(claude(file).hasCompletedOnboarding).toBe(true)
+  })
+})
