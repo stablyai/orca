@@ -26,6 +26,8 @@ export type GitExecOptions = {
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
+  /** File materialization during worktree creation has a separate concurrency budget. */
+  admissionClass?: 'checkout'
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */
   admissionExempt?: true
   /** Native macOS deletion spawns use the shared process worker. */

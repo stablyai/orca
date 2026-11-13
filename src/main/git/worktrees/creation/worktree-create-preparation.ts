@@ -98,7 +98,11 @@ export async function prepareWorktreeCreateCheckout(
             '--hard',
             materializationBase
           ],
-          { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          {
+            ...gitExecOptions(worktreePath, options),
+            admissionClass: 'checkout',
+            timeout: resolveWorktreeAddTimeoutMs()
+          }
         )
         await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
       })

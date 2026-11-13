@@ -271,6 +271,7 @@ async function performAddWorktree(
   try {
     await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
       ...gitExecOptions(repoPath, options),
+      ...(!noCheckout ? { admissionClass: 'checkout' as const } : {}),
       // Resolve per call so later environment overrides take effect.
       timeout: resolveWorktreeAddTimeoutMs(),
       ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})

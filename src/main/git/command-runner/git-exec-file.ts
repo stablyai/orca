@@ -75,6 +75,7 @@ async function gitExecFileAsyncUnlocked(
             cwd: options.cwd,
             wslDistro: options.wslDistro,
             tier: options.admissionTier,
+            admissionClass: options.admissionClass,
             signal: options.admissionSignal ?? options.signal
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
