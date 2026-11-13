@@ -2,7 +2,11 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveGuestNativeAgentCommand, WINDOWS_ONLY_AGENT_CLI_DIR } from './command'
+import {
+  isCodexCliAvailable,
+  resolveGuestNativeAgentCommand,
+  WINDOWS_ONLY_AGENT_CLI_DIR
+} from './command'
 
 let root: string
 let native: string
@@ -45,4 +49,18 @@ describe.skipIf(process.platform === 'win32')('agent CLI resolution on a WSL hos
       )
     }
   )
+})
+
+describe('codex CLI availability', () => {
+  const options = () => ({ pathEnv: '', homePath: join(root, 'home') })
+
+  it('reports unavailable when no codex binary is on PATH or in install dirs', () => {
+    expect(isCodexCliAvailable(options())).toBe(false)
+  })
+
+  it('reports available when PATH resolves a codex binary', () => {
+    const binDir = join(root, 'bin')
+    install(binDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+    expect(isCodexCliAvailable({ ...options(), pathEnv: binDir })).toBe(true)
+  })
 })

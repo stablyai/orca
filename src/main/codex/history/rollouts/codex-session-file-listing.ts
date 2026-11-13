@@ -26,7 +26,10 @@ export function listCodexSessionJsonlFiles(rootPath: string): string[] {
       }
     }
   } catch (error) {
-    console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+    // Date folders only exist for days that had sessions; absence means empty.
+    if (!isNotFoundError(error)) {
+      console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+    }
   }
   return files.sort()
 }
@@ -102,9 +105,16 @@ async function* listCodexSessionFilesIncrementally(
       }
     } catch (error) {
       await onDirectoryError?.(currentDirectory, error)
-      console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+      // Date folders only exist for days that had sessions; absence means empty.
+      if (!isNotFoundError(error)) {
+        console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
+      }
     }
   }
+}
+
+export function isNotFoundError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
 function delayIncrementalBridge(ms: number): Promise<void> {

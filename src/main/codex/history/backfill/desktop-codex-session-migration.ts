@@ -3,6 +3,7 @@ import type { createProviderAccountServices } from '../../../providers/accounts/
 import { createCodexSessionMigrationScheduler } from './codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from './codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from '../index/codex-session-index-heal'
+import { isCodexCliAvailable } from '../../../codex-cli/command'
 import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 import {
   getCodexPaneAccount,
@@ -26,7 +27,9 @@ export function createDesktopCodexSessionMigration(
       getRuntimeHome()?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
     finishScheduledRun: () => getRuntimeHome()?.finishHostSystemDefaultSessionMigrationPass(),
     startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground
+    startIndexHeal: startCodexSessionIndexHealInBackground,
+    // Bridge, backfill and index heal all presume Codex exists; skip them without a binary (#42096).
+    isCodexCliAvailable
   })
 }
 
