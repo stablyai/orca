@@ -1,4 +1,5 @@
 import { OrcaCloudNeedsRepoLine } from './run-on/OrcaCloudNeedsRepoLine'
+import { GitHubHandoffLine } from './run-on/GitHubHandoffLine'
 import { ORCA_CLOUD_NEEDS_REPO_ID } from './run-on/cloud-start-view'
 import React, { useMemo } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
@@ -224,6 +225,11 @@ export function NewWorkspaceComposerProjectSection({
               }}
               onMoreCloudAccess={cloudOnly?.moreAccess}
               onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
+              cloudReposRetry={
+                cloudOnly?.retryRepos
+                  ? { retry: cloudOnly.retryRepos, retrying: cloudOnly.retryingRepos }
+                  : null
+              }
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
@@ -239,6 +245,11 @@ export function NewWorkspaceComposerProjectSection({
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
+            ) : cloudOnly && cloudOnly.githubHandoff !== 'idle' ? (
+              <GitHubHandoffLine
+                phase={cloudOnly.githubHandoff}
+                onCheckAgain={cloudOnly.checkGitHubAgain}
+              />
             ) : needsRepo ? (
               <OrcaCloudNeedsRepoLine
                 hasRepos={needsRepo.hasRepos}

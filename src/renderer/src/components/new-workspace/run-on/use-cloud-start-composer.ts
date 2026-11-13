@@ -2,7 +2,7 @@
 // dialog: Start either creates the workspace (everything is set up) or saves the draft, closes the
 // dialog and opens the full-page setup, which starts the prompt by itself when done. Also: where
 // each project last started (O5), the remembered default (D7) and GitHub-only repositories (D4).
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { clearCloudStartDraft, saveCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
 import {
@@ -89,12 +89,15 @@ export function useCloudStartComposer({
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
   const githubProjectCount = useAppStore((s) => s.repos.filter(isGitHubBackedProject).length)
+  const selectOrcaCloudRef = useRef<() => void>(() => {})
   const cloudOnly = useCloudOnlyRepo({
     repoId,
     initialPicked: initialGitHubRepo,
     cloudSelected,
     cloudOffered: segment === 'enabled',
-    signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out'
+    signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out',
+    // A repository granted on GitHub is picked for the person, so Run on follows it.
+    onAutoPick: () => selectOrcaCloudRef.current()
   })
   const { steps: rowSteps } = useCloudStartSteps({
     availability,
@@ -135,6 +138,9 @@ export function useCloudStartComposer({
     markTouched()
     setRecipeId?.(ORCA_CLOUD_RECIPE_ID)
   }, [markTouched, setRecipeId])
+  useEffect(() => {
+    selectOrcaCloudRef.current = onSelectOrcaCloud
+  }, [onSelectOrcaCloud])
 
   // Start with setup still open: the dialog closes and the page takes over, prompt kept (N6).
   const openSetup = useCallback(

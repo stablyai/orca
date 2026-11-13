@@ -27,6 +27,15 @@ const actions = {
   onMoveToComputer: noop,
   onDelete: noop
 }
+// A paired row (created on another desktop): everything but Move to this computer (PAIRED-ARCHIVE).
+const pairedActions = {
+  onWake: noop,
+  onRestart: noop,
+  onArchive: noop,
+  onUnarchive: noop,
+  onSleep: noop,
+  onDelete: noop
+}
 
 const running: HostedWorkspaceStatus = {
   state: 'ready',
@@ -100,7 +109,8 @@ function card({
   emptyContext = false,
   attention = null,
   layer = 'main',
-  details = false
+  details = false,
+  paired = false
 }: {
   id: string
   state?: CloudDotState
@@ -109,11 +119,15 @@ function card({
   attention?: CloudCardAttention | null
   layer?: CloudCardLayer
   details?: boolean
+  paired?: boolean
 }) {
   // Seeded once, outside render: the card reads it through the same store as the live app.
   seedCloudSyncView(syncView(id, mirror, emptyContext))
   return defineFixture({
     width: 320,
+    // A paired card is registered as paired (PAIRED-STATUS), as the app does for its row.
+    setup: () =>
+      seedCloudWorkspaceSnapshot(paired ? { paired: { [id]: 'env-paired' }, idsLoaded: true } : {}),
     render: () => (
       <div className="w-72 rounded-md border border-border bg-floating-surface p-3">
         <CloudWorkspaceStatusPanel
@@ -122,7 +136,7 @@ function card({
           state={state}
           entry={entry(state === 'sleeping' ? asleep : state === 'archived' ? archived : running)}
           pending={undefined}
-          actions={actions}
+          actions={paired ? pairedActions : actions}
           attention={attention}
           asOf={AS_OF}
           initialLayer={layer}
@@ -183,6 +197,43 @@ export const menuOpen = defineFixture({
       ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
+})
+
+/** A paired row running: no "On this computer" (sync is this desktop's own only), Sleep and ⋯. */
+export const pairedRunningCard = card({ id: 'card-paired-running', paired: true })
+/** PAIRED-CHROME: a paired row asleep: Wake, as on an owned row. */
+export const pairedAsleepCard = card({ id: 'card-paired-asleep', state: 'sleeping', paired: true })
+/** PAIRED-ARCHIVE: the ⋯ menu on a paired row: Details, Restart, Archive and Delete; no Move. */
+export const pairedMenuOpen = defineFixture({
+  width: 320,
+  render: () => (
+    <div className="w-72 rounded-md border border-border bg-floating-surface p-3">
+      <CloudWorkspaceStatusPanel
+        workspaceId="card-paired-menu"
+        name="fix-login-redirect"
+        state="running"
+        entry={entry(running)}
+        pending={undefined}
+        actions={pairedActions}
+        attention={null}
+        asOf={AS_OF}
+        detailsOpen={false}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('[data-cloud-card-more]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+
+/** PAIRED-ARCHIVE: a paired row archived: the same snapshot line and Unarchive as an owned one. */
+export const pairedArchivedCard = card({
+  id: 'card-paired-archived',
+  state: 'archived',
+  paired: true
 })
 
 /** Archived: the snapshot line names the day it is deleted; Unarchive is the one action. */

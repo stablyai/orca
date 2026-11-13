@@ -3,6 +3,8 @@
 // is rate limited per caller, and every mutation is audited. See openapi.ts for the contract.
 import { z } from 'zod'
 import { GuardrailError, consumeCreateToken } from '../guardrails'
+import type { PlanFeatures } from '../entitlements'
+import { handleAuditLog, requireAuditLogPlan } from './audit-log'
 import type { LifecycleDeps } from '../lifecycle'
 import { AGENTS } from './vm-agent'
 import { memberNamesFor, rememberCallerName } from '../member-names'
@@ -52,6 +54,8 @@ export type ApiContext = {
   life: LifecycleDeps | null
   waitUntil: (promise: Promise<unknown>) => void
   readJson: () => Promise<unknown>
+  /** Plan features from billing (the audit log's Enterprise gate). Absent: every feature is off. */
+  features?: (accountId: string) => Promise<PlanFeatures>
   /** Extra route groups mounted under the same auth (routines). */
   extensions?: ApiExtension[]
 }
@@ -181,7 +185,7 @@ import { parseWakeWait } from '../wire'
 import { MachineSizeInput } from '../machine-size'
 
 export function isApiPath(pathname: string): boolean {
-  return /^\/v1\/(me|models|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)
+  return /^\/v1\/(me|models|api-keys|settings|audit|audit-log|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)
 }
 
 export async function handleApi(request: Request, url: URL, env: Parameters<typeof authenticateApi>[0], ctx: ApiContext): Promise<Response> {
@@ -338,9 +342,18 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
     }
   }
 
+  if (resource === 'audit-log' && !id && method === 'GET') {
+    return handleAuditLog(url, caller, ctx)
+  }
+
   if (resource === 'audit' && !id && method === 'GET') {
     requireScope(caller, 'audit:read')
     requireAdmin(caller)
+    if (caller.orgId) {
+      // A team's audit log is an Enterprise feature whichever route reads it (see audit-log.ts).
+      // A personal account's own entries stay readable: it has no team log.
+      await requireAuditLogPlan(caller, ctx)
+    }
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') ?? 50) || 50))
     const before = Number(url.searchParams.get('before')) || undefined
     const rows = await listAudit(ctx.db, caller.accountId, { before, limit })

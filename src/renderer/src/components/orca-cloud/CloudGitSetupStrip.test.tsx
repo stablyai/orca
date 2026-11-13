@@ -8,7 +8,7 @@ import { seedCloudGitSetupState } from '@/lib/orca-cloud/cloud-git-setup-store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CloudGitSetupStrip } from './CloudGitSetupStrip'
 
-function seed(gitSetupFailed: boolean): void {
+function seed(gitSetupFailed: boolean, { paired = false }: { paired?: boolean } = {}): void {
   const status: CloudWorkspaceStatus = {
     state: 'ready',
     metrics: null,
@@ -19,7 +19,9 @@ function seed(gitSetupFailed: boolean): void {
     ...(gitSetupFailed ? { gitSetupFailed: true as const } : {})
   }
   seedCloudWorkspaceSnapshot({
-    ids: new Set(['w1']),
+    // A paired row (created on another desktop) is registered apart from this desktop's own ids.
+    ids: new Set(paired ? [] : ['w1']),
+    paired: paired ? { w1: 'env-paired' } : {},
     idsLoaded: true,
     status: { w1: { status, loading: false, error: null, fetchedAt: 1 } }
   })
@@ -48,6 +50,19 @@ describe('CloudGitSetupStrip', () => {
     expect(element?.getAttribute('data-cloud-git-setup-strip')).toBe('failed')
     expect(element?.textContent).toContain('Commits and pushes are off in this workspace')
     expect(element?.querySelector('button')?.textContent).toBe('Restart')
+  })
+
+  it('PAIRED-GIT-SETUP: a paired row gets the same strip and Restart', () => {
+    seed(true, { paired: true })
+    const element = strip()
+    expect(element?.getAttribute('data-cloud-git-setup-strip')).toBe('failed')
+    expect(element?.querySelector('button')?.textContent).toBe('Restart')
+  })
+
+  it('a row that is neither owned nor paired never shows it', () => {
+    seed(true)
+    seedCloudWorkspaceSnapshot({ ids: new Set(), idsLoaded: true })
+    expect(strip()).toBeNull()
   })
 
   it('stays hidden after × for this session', () => {

@@ -5,6 +5,7 @@ import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-h
 import CacheTimer from '../activity/CacheTimer'
 import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
+import { useIsCloudHostRow } from '@/lib/orca-cloud/cloud-host-rows'
 import {
   WorktreeCardDeleteQuickAction,
   WorktreeCardPrimaryBadge,
@@ -100,6 +101,20 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
   )
 }
 
+/**
+ * An Orca Cloud workspace's own checkout (owned or PAIRED) IS the workspace, not a repo's primary
+ * checkout: no "primary" badge or star on it (CLOUD-PRIMARY-DELETE, PAIRED-BADGE).
+ */
+function NotOnCloudRow({
+  worktree,
+  children
+}: {
+  worktree: WorktreeCardController['worktree']
+  children: React.ReactNode
+}): React.JSX.Element | null {
+  return useIsCloudHostRow(worktree) ? null : <>{children}</>
+}
+
 export const CARD_IDENTITY_PARTS = {
   Title: part(['dimWhenRead', 'tooltip'], (props, _children, card) => title(props, card)),
   RepoChip: part([], (_props, _children, { repo }) =>
@@ -134,9 +149,15 @@ export const CARD_IDENTITY_PARTS = {
     />
   )),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
-    <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
+    <NotOnCloudRow worktree={card.worktree}>
+      <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
+    </NotOnCloudRow>
   )),
-  PrimaryStar: part([], () => <WorktreeCardPrimaryStar />),
+  PrimaryStar: part([], (_props, _children, card) => (
+    <NotOnCloudRow worktree={card.worktree}>
+      <WorktreeCardPrimaryStar />
+    </NotOnCloudRow>
+  )),
   SparseBadge: part(['hasHoverDetails'], (props, _children, card) => (
     <WorktreeCardSparseBadge
       card={card}

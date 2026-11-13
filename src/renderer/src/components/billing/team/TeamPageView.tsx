@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef } from 'react'
-import { ExternalLink, LogOut, RefreshCw } from 'lucide-react'
+import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { OrcaBillingStatusResult } from '../../../../../shared/orca-billing'
 import type {
@@ -16,9 +16,12 @@ import { TeamMark } from './TeamAvatar'
 import { TeamCreateView, type TeamCreateViewProps } from './TeamCreateView'
 import { TeamInviteComposer, type InviteBatchOutcome } from './TeamInviteComposer'
 import { TeamMemberList, type TeamRowState } from './TeamMemberList'
-import { TeamBillingBlock, TeamCheckoutCelebration } from './TeamPlanSummary'
+import { PaymentIssueNotice } from '../PaymentIssueNotice'
+import { TeamCheckoutCelebration, TeamUpgradeCard } from './TeamPlanSummary'
 import { memberCountLabel } from './team-copy'
+import { leaveBlockedReason } from './team-leave'
 import { otherOwnerCount, teamRows } from './team-roster-rows'
+import { isActivePlan } from './team-seat-math'
 import type { TeamPageArrival } from './team-page-store'
 
 export type TeamPageViewProps = {
@@ -49,46 +52,12 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
-  /** Opens the Enterprise contact page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
+  /** Opens the Enterprise page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
   onContactSales: (url: string) => void
   /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
   inline?: { onOpenPlanBilling: () => void }
   /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
   dangerZone?: React.ReactNode
-}
-
-function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
-  switch (role) {
-    case 'owner':
-      return t('auto.components.billing.team.youAreOwner', 'You’re an owner')
-    case 'admin':
-      return t('auto.components.billing.team.youAreAdmin', 'You’re an admin')
-    case 'member':
-      return t('auto.components.billing.team.youAreMember', 'You’re a member')
-  }
-}
-
-/** Mirrors the plan card (title + badge, three stats, a two-line note) so loading doesn't jump. */
-function PlanSkeleton(): React.JSX.Element {
-  return (
-    <div aria-hidden className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-4 w-12" />
-        <Skeleton shape="circle" className="h-5 w-14" />
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        {[0, 1, 2].map((index) => (
-          <div key={index} className="space-y-1.5">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-        ))}
-      </div>
-      <Skeleton className="h-3 w-11/12" />
-      <Skeleton className="h-3 w-2/3" />
-    </div>
-  )
 }
 
 function SkeletonRows(): React.JSX.Element {
@@ -127,7 +96,6 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       document.querySelector<HTMLElement>('[data-team-page-heading]')?.focus()
     }
   }, [hasRoster, inline])
-  const leaveTitleId = useId()
 
   if (!props.org) {
     return (
@@ -169,8 +137,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                     ? t('auto.components.billing.team.invitedCount', '{{count}} invited', {
                         count: roster.pendingInvites.length
                       })
-                    : null,
-                  viewerRoleSentence(viewerRole, t)
+                    : null
                 ]
                   .filter(Boolean)
                   .join(' · ')
@@ -179,6 +146,20 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 : t('auto.components.billing.team.loadFailedTitle', 'Couldn’t load team')}
           </p>
         </div>
+        {!inline && entitlement?.canManageBilling ? (
+          // Seats, prices and invoices live in Plan & billing; one quiet way there from here.
+          // mr-6 clears the dialog's close button, which sits in this corner.
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="mr-6 shrink-0"
+            onClick={props.onSeePlans}
+          >
+            <CreditCard />
+            {t('auto.components.billing.team.planBillingLink', 'Plan & billing')}
+          </Button>
+        ) : null}
       </header>
 
       {props.arrival?.kind === 'checkout-success' && entitlement ? (
@@ -210,15 +191,16 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
           </button>
         </p>
       ) : entitlement ? (
-        <TeamBillingBlock
-          entitlement={entitlement}
-          members={roster?.members.length ?? 0}
-          busy={props.billingBusy}
-          onManageBilling={props.onManageBilling}
-          onSeePlans={props.onSeePlans}
-        />
-      ) : props.billing === null ? (
-        <PlanSkeleton />
+        <>
+          <PaymentIssueNotice
+            entitlement={entitlement}
+            busy={props.billingBusy}
+            onUpdatePayment={props.onManageBilling}
+          />
+          {isActivePlan(entitlement) ? null : (
+            <TeamUpgradeCard entitlement={entitlement} onSeePlans={props.onSeePlans} />
+          )}
+        </>
       ) : null}
 
       {props.roster === null ? (
@@ -269,6 +251,10 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             viewerRole={viewerRole}
             rowStates={props.rowStates}
             canLeave={canLeave}
+            leaveBlockedReason={leaveBlockedReason(
+              { canLeave, canDeleteTeam: Boolean(props.dangerZone) },
+              t
+            )}
             now={props.now}
             // Promoting to owner hands over billing control, so it always confirms first.
             onChangeRole={(member, role) =>
@@ -312,82 +298,22 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {(roster?.canManageMembers && enterprise) || selfRow ? (
+      {(roster?.canManageMembers && enterprise) || props.dangerZone ? (
         <div className="divide-y divide-border/60 rounded-xl border border-border">
           {roster?.canManageMembers && enterprise ? (
             <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-[14rem] flex-1 space-y-0.5">
-                <h3 id={ssoTitleId} className="text-sm font-medium">
-                  {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
-                </h3>
-                <p className="text-xs text-muted-foreground text-pretty">
-                  {t(
-                    'auto.components.billing.team.ssoBody',
-                    'SAML SSO and SCIM user provisioning are part of {{value0}}.',
-                    { value0: enterprise.label }
-                  )}
-                </p>
-              </div>
-              <Button
-                type="button"
+              <h3 id={ssoTitleId} className="min-w-[14rem] flex-1 text-sm font-medium">
+                {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
+              </h3>
+              <OpenExternalSplitButton
                 variant="outline"
                 size="sm"
+                link={enterprise.contactUrl}
                 onClick={() => props.onContactSales(enterprise.contactUrl)}
               >
                 {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
                 <ExternalLink />
-              </Button>
-            </section>
-          ) : null}
-          {selfRow ? (
-            <section
-              aria-labelledby={leaveTitleId}
-              className="flex flex-wrap items-center gap-3 p-4"
-            >
-              <div className="min-w-[14rem] flex-1 space-y-0.5">
-                <h3 id={leaveTitleId} className="text-sm font-medium">
-                  {t('auto.components.billing.team.leaveTitle', 'Leave {{value0}}', {
-                    value0: props.org.name
-                  })}
-                </h3>
-                <p className="text-xs text-muted-foreground text-pretty">
-                  {canLeave
-                    ? t(
-                        'auto.components.billing.team.leaveBody2',
-                        'You lose access to the team’s cloud workspaces and secrets. An owner or admin can invite you back.'
-                      )
-                    : props.dangerZone
-                      ? t(
-                          'auto.components.billing.team.leaveLastOwnerOrDelete',
-                          'You’re the only owner. Make someone else an owner first, or delete the team.'
-                        )
-                      : t(
-                          'auto.components.billing.team.leaveLastOwner',
-                          'You’re the only owner. Make someone else an owner first.'
-                        )}
-                </p>
-              </div>
-              <SettingsDisabledControlTooltip
-                reason={
-                  canLeave
-                    ? undefined
-                    : t(
-                        'auto.components.billing.team.leaveNeedsOwner',
-                        'Make someone else an owner first'
-                      )
-                }
-              >
-                <Button
-                  type="button"
-                  variant="destructive-chip"
-                  size="sm"
-                  disabled={!canLeave}
-                  onClick={props.onLeave}
-                >
-                  <LogOut />
-                  {t('auto.components.billing.team.leaveCta', 'Leave team')}
-                </Button>
-              </SettingsDisabledControlTooltip>
+              </OpenExternalSplitButton>
             </section>
           ) : null}
           {props.dangerZone}

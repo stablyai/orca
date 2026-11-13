@@ -155,7 +155,8 @@ import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
-import { audit } from './api/audit'
+import { audit, auditSession } from './api/audit'
+import { AuditIngestError, AuditIngestSchema, ingestAuditEvents } from './api/audit-ingest'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSlept, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
@@ -848,6 +849,11 @@ async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise
     life: resolved,
     waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
     readJson: () => readJson(request, MAX_API_JSON_BYTES),
+    // Works without provider config too: reading the log needs billing, not a sandbox provider.
+    features: (accountId) => {
+      const client = resolved?.entitlements ?? deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env))
+      return client.features?.(accountId) ?? Promise.resolve({ auditLog: false })
+    },
     extensions: [oauthApprovalsApi, oauthGrantsApi, routines, ...(deps.apiExtensions ?? [])]
   }
 }
@@ -1241,14 +1247,31 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed
-      // push and deleting a team. Never the operator routes.
+      // Auth's token (MEMBER_REMOVED_TOKEN) is good for its own routes only: the member-removed and
+      // role-changed pushes and deleting a team. Never the other operator routes.
       const teamDelete = teamDeleteRoute(url.pathname, request.method)
-      const authOnly =
-        ((url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') || teamDelete !== null) &&
-        (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      // Append-only events from auth for the team audit log (api/audit-ingest.ts).
+      const auditIngest = url.pathname === '/v1/internal/audit-events' && request.method === 'POST'
+      const memberPush =
+        request.method === 'POST' && (url.pathname === '/v1/internal/org-members/removed' || url.pathname === '/v1/internal/members/role-changed')
+      const authOnly = (memberPush || teamDelete !== null || auditIngest) && (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
       if (!authOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
+      }
+      if (auditIngest) {
+        // Append-only, and needs no sandbox provider: events from auth and billing for the team audit log.
+        const body = AuditIngestSchema.safeParse(await readJson(request, MAX_API_JSON_BYTES))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        try {
+          return json(await ingestAuditEvents(env.SANDBOX_DB, body.data, (deps.now ?? Date.now)()))
+        } catch (error) {
+          if (error instanceof AuditIngestError) {
+            return fail('invalid_request', 400, error.message)
+          }
+          throw error
+        }
       }
       if (teamDelete) {
         if (teamDelete.action === 'delete-check') {
@@ -1300,14 +1323,15 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           return fail('invalid_request', 400)
         }
         // Same cleanup as /v1/internal/members/removed: keys, phones, workspace grants and routines.
-        const removal = await removeMember(life, body.data.accountId, body.data.userId, life.now(), body.data.changedAt)
+        const removal = await removeMember(life, body.data.accountId, body.data.userId, life.now(), body.data.changedAt, body.data.actorUserId)
         return json({ revoked: removal.grantsRevoked, queued: removal.grantsQueued, ...removal })
       }
       return (
         (await handleOperator(request, url.pathname, {
           life,
           github: deps.github ?? githubMinter(env),
-          readJson: () => readJson(request)
+          readJson: () => readJson(request),
+          keyring: () => keyringFor(env)
         })) ?? fail('not_found', 404)
       )
     }
@@ -1700,6 +1724,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
               deferMemberGit: true
             })
             await recordOwnerDeviceForCreate(life, ready)
+            await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop' } }, life.now())
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
@@ -1751,6 +1776,8 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
             .bind(life.now(), row.id),
           life.db.prepare('DELETE FROM workspace_presence WHERE sandbox_id = ?').bind(row.id)
         ])
+        // The name goes with the row's history: the workspace can no longer be looked up.
+        await auditSession(life.db, caller, { action: 'workspace.destroy', targetType: 'workspace', targetId: row.id, detail: { name: row.name ?? null } }, life.now())
         return json({ sandbox: view(destroyed) })
       }
       case 'POST suspend': {
@@ -1804,12 +1831,15 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         if (!body.success) {
           return fail('invalid_request', 400)
         }
-        return json({ sandbox: view(await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))) })
+        const archived = await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))
+        await auditSession(life.db, caller, { action: 'workspace.archive', targetType: 'workspace', targetId: row.id }, life.now())
+        return json({ sandbox: view(archived) })
       }
       case 'GET archive':
         return json({ archive: await readArchive(env.SANDBOX_DB, row.id) })
       case 'POST unarchive': {
         const ready = await unarchiveSandbox(life, row)
+        await auditSession(life.db, caller, { action: 'workspace.unarchive', targetType: 'workspace', targetId: row.id }, life.now())
         return json(readyView(ready.row, ready.connection))
       }
       case 'POST env/refresh':
@@ -1993,7 +2023,9 @@ const MemberRemovedSchema = z
     accountId: z.string().min(1).max(160).regex(/^(org|dev:org):[A-Za-z0-9_.:-]+$/),
     userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/),
     /** Auth's time of the removal (ms); tokens issued up to then stop working. */
-    changedAt: z.number().int().positive().optional()
+    changedAt: z.number().int().positive().optional(),
+    /** Who removed them (the same id when they left by themselves); absent from a directory sync. */
+    actorUserId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()
   })
   .strict()
 

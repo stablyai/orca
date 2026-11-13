@@ -4,6 +4,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CloudAgentSignInStrip, type CloudStripActions } from './CloudAgentSignInStrip'
+import { stripPrimaryLink } from './CloudStripPrimaryButton'
 import type { CloudStripModel } from './cloud-agent-strip-model'
 
 afterEach(() => cleanup())
@@ -50,5 +51,46 @@ describe('CloudAgentSignInStrip wrap', () => {
       expect(text?.className).not.toContain('sr-only')
     }
     expect(title?.textContent).toBe(model.title)
+  })
+})
+
+describe('CloudAgentSignInStrip Copy link', () => {
+  const deviceUrl = 'https://auth.openai.com/codex/device'
+  const device: CloudStripModel = {
+    ...model,
+    status: 'need',
+    title: 'Enter this code on auth.openai.com',
+    detail: 'Only continue if you started this sign-in in Orca.',
+    primary: {
+      label: 'Copy code and open',
+      action: { kind: 'copyAndOpen', url: deviceUrl, code: 'EY7X-YDTV6' }
+    },
+    code: 'EY7X-YDTV6'
+  }
+  const renderStrip = (m: CloudStripModel): HTMLElement =>
+    render(
+      <TooltipProvider>
+        <CloudAgentSignInStrip model={m} prompt={null} actions={actions} width="wide" />
+      </TooltipProvider>
+    ).container
+
+  it('gives a primary that opens a page the Copy link chevron', () => {
+    expect(renderStrip(device).querySelector('[data-open-external-chevron]')).not.toBeNull()
+  })
+
+  it('keeps a primary that opens nothing a plain button', () => {
+    expect(renderStrip(model).querySelector('[data-open-external-chevron]')).toBeNull()
+  })
+
+  it('copies the verification URL, a lazy setup link, or nothing', () => {
+    expect(stripPrimaryLink(device.primary!.action, {})).toBe(deviceUrl)
+    expect(stripPrimaryLink({ kind: 'openAgain', url: 'https://claude.ai/x' }, {})).toBe(
+      'https://claude.ai/x'
+    )
+    expect(stripPrimaryLink({ kind: 'reopenSetup' }, {})).toBeNull()
+    const lazy = async (): Promise<string> => 'https://claude.ai/setup'
+    const linkFor = (action: { kind: string }) => (action.kind === 'reopenSetup' ? lazy : null)
+    expect(stripPrimaryLink({ kind: 'reopenSetup' }, { linkFor })).toBe(lazy)
+    expect(stripPrimaryLink({ kind: 'restart' }, {})).toBeNull()
   })
 })

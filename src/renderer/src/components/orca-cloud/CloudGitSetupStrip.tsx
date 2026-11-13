@@ -4,6 +4,7 @@
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { dismissCloudGitSetup, useCloudGitSetup } from '@/lib/orca-cloud/cloud-git-setup-store'
 import {
   CloudAgentSignInStrip,
@@ -52,7 +53,9 @@ export function CloudGitSetupStrip({
   worktreeId: string | null
 }): React.JSX.Element | null {
   const id = worktreeId ?? ''
-  const isCloud = useCloudWorkspace((s) => (worktreeId ? s.ids.has(worktreeId) : false))
+  // PAIRED-GIT-SETUP: a paired row's status reads like an owned one's, and its Restart reaches the
+  // sandbox (PAIRED-WAKE), so its strip shows the same way.
+  const isCloud = useCloudWorkspace((s) => (worktreeId ? isCloudStatusRow(s, worktreeId) : false))
   const gitSetupFailed = useCloudWorkspace((s) => s.status[id]?.status?.gitSetupFailed === true)
   const dismissed = useCloudGitSetup((s) => s.dismissed[id] === true)
   const restarted = useCloudGitSetup((s) => s.restarted[id] === true)

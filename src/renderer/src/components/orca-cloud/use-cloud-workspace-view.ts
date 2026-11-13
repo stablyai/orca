@@ -15,6 +15,7 @@ import {
   useCloudWorkspace,
   type CloudStatusEntry
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import type {
   CloudOomEvent,
   CloudWakeProgressEvent
@@ -29,9 +30,18 @@ export type CloudWorkspaceView = {
   pending: 'restart' | 'archive' | 'unarchive' | undefined
 }
 
-/** Everything a cloud surface needs for one workspace; non-cloud workspaces read only `isCloud`. */
-export function useCloudWorkspaceView(workspaceId: string): CloudWorkspaceView {
-  const isCloud = useCloudWorkspace((s) => s.ids.has(workspaceId))
+/**
+ * Everything a cloud surface needs for one workspace; non-cloud workspaces read only `isCloud`.
+ * `pairedRows`: surfaces that only show status (the sidebar mark, state word and glyph) count a
+ * PAIRED row as cloud too; flows that act through this desktop's own records keep owned-only.
+ */
+export function useCloudWorkspaceView(
+  workspaceId: string,
+  { pairedRows = false }: { pairedRows?: boolean } = {}
+): CloudWorkspaceView {
+  const isCloud = useCloudWorkspace((s) =>
+    pairedRows ? isCloudStatusRow(s, workspaceId) : s.ids.has(workspaceId)
+  )
   const entry = useCloudWorkspace((s) => s.status[workspaceId])
   const wake = useCloudWorkspace((s) => s.wake[workspaceId])
   const oomEvent = useCloudWorkspace((s) => s.oom[workspaceId])

@@ -1,9 +1,10 @@
 // The Orca Cloud sandbox id (the control plane's workspaceId) behind a runtime environment on this
-// computer. Only an Orca Cloud runtime this desktop provisioned resolves, so the renderer can't name
-// an arbitrary sandbox.
+// computer. Only an Orca Cloud runtime this desktop provisioned or paired resolves, so the renderer
+// can't name an arbitrary sandbox.
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import { cloudPairedSandboxesByEnvironment } from '../cloud-workspaces/cloud-paired-environment-ids'
 
 export function orcaCloudSandboxIdFor(
   userDataPath: string,
@@ -19,5 +20,9 @@ export function orcaCloudSandboxIdFor(
   const handle = runtime?.recipeResult
     ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
     : null
-  return handle?.environmentId ?? null
+  // PAIRED-HELD-STRIPS: a paired workspace (opened here, created elsewhere or from a GitHub-only
+  // repo) has no local runtime record; its pairing binding names the same sandbox.
+  return (
+    handle?.environmentId ?? cloudPairedSandboxesByEnvironment().get(runtimeEnvironmentId) ?? null
+  )
 }

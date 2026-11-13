@@ -10,6 +10,8 @@ vi.mock('../environment-providers/environment-provider-recipe-adapter', () => ({
 }))
 
 const { orcaCloudSandboxIdFor } = await import('./orca-cloud-sandbox-id')
+const { noteCloudPairingBindings } =
+  await import('../cloud-workspaces/cloud-paired-environment-ids')
 
 describe('orcaCloudSandboxIdFor', () => {
   it('resolves composer-created cloud workspaces whose recipe has no provider (RA-11)', () => {
@@ -41,5 +43,13 @@ describe('orcaCloudSandboxIdFor', () => {
     expect(orcaCloudSandboxIdFor('/u', 'env-c')).toBeNull()
     expect(orcaCloudSandboxIdFor('/u', 'env-d')).toBeNull()
     expect(orcaCloudSandboxIdFor('/u', 'env-zzz')).toBeNull()
+  })
+
+  it('resolves a paired workspace (no local runtime record) from its pairing binding', () => {
+    runtimes.list = []
+    noteCloudPairingBindings({ sbx_paired: { environmentId: 'env-paired' } })
+    expect(orcaCloudSandboxIdFor('/u', 'env-paired')).toBe('sbx_paired')
+    expect(orcaCloudSandboxIdFor('/u', 'env-unknown')).toBeNull()
+    noteCloudPairingBindings({})
   })
 })

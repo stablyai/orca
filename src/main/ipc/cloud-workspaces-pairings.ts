@@ -28,7 +28,9 @@ import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-drive
 import { retireGoneCloudSandbox } from '../hosted-sandbox/cloud-sandbox-gone-retire'
 import {
   cloudPairingBindingsPath,
-  noteCloudPairingBindings
+  isCloudPairingForActiveAccount,
+  noteCloudPairingBindings,
+  setCloudPairingActiveAccountReader
 } from '../cloud-workspaces/cloud-paired-environment-ids'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
@@ -128,6 +130,21 @@ function updateBindings(
 }
 
 let pairings: CloudWorkspacesPairings | null = null
+
+/** The active Orca account, the id bindings are stamped with ("org:<id>" or "user:<id>"). */
+function activeAccountId(): string | null {
+  return orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud)
+}
+
+/** The bindings a window may resolve: the active account's, plus unstamped ones (PAIRED-ACCOUNT-FILTER). */
+export async function readActiveAccountBindings(): Promise<Record<string, Binding>> {
+  const bindings = await readBindings()
+  return Object.fromEntries(
+    Object.entries(bindings).filter(([, binding]) =>
+      isCloudPairingForActiveAccount(binding.accountId ?? null)
+    )
+  )
+}
 export const STARTUP_PRUNE_DELAY_MS = 15_000
 
 /** One fetch of a sandbox: not found (deleted, or never visible) or destroyed means gone. */
@@ -153,9 +170,10 @@ export function createCloudWorkspacesPairings(
   }
   // Load the paired-server mark for the runtime catalog now, not at the first prune (PAIRED-AWARE).
   void readBindings()
+  // Only the active account's pairings resolve to a sandbox (PAIRED-ACCOUNT-FILTER).
+  setCloudPairingActiveAccountReader(activeAccountId)
   const prune = createCloudPairingPrune({
-    activeAccountId: () =>
-      orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud),
+    activeAccountId,
     readBindings,
     updateBindings,
     listVisible: async () => {

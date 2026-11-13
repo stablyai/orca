@@ -93,6 +93,73 @@ export function isWorktreeKeptAwake(worktreeId: string): boolean {
   return keptAwake.has(worktreeId)
 }
 
+/**
+ * SLEEP-IN-PROGRESS: the read-only copy a sleeping cloud workspace shows, from the Sleep press until
+ * a copy at least that new has been read back ("saved", the entry goes), or it never came ("failed").
+ * The sleep call returns before the asleep view has read the copy, so `goingToSleep` alone left the
+ * panes on their "nothing was saved" lines until a later poll.
+ */
+export type SleepCopySave = { state: 'saving' | 'failed'; since: number }
+/** No copy read back this long after the press: say so instead of spinning. */
+export const SLEEP_COPY_DEADLINE_MS = 90_000
+const copySave = new Map<string, SleepCopySave>()
+const copyTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function setCopySave(worktreeId: string, next: SleepCopySave | null): void {
+  const timer = copyTimers.get(worktreeId)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    copyTimers.delete(worktreeId)
+  }
+  if (next) {
+    copySave.set(worktreeId, next)
+  } else if (!copySave.delete(worktreeId)) {
+    return
+  }
+  emit()
+}
+
+export function markSleepCopySaving(worktreeId: string, since: number = Date.now()): void {
+  setCopySave(worktreeId, { state: 'saving', since })
+  copyTimers.set(
+    worktreeId,
+    setTimeout(() => {
+      copyTimers.delete(worktreeId)
+      if (copySave.get(worktreeId)?.state === 'saving') {
+        markSleepCopyFailed(worktreeId, since)
+      }
+    }, SLEEP_COPY_DEADLINE_MS)
+  )
+}
+
+/** A copy at least as new as the press was read back (`capturedAt`): saving is over. */
+export function noteSleepCopyRead(worktreeId: string, capturedAt: number | null): void {
+  const entry = copySave.get(worktreeId)
+  if (entry && capturedAt !== null && capturedAt >= entry.since) {
+    setCopySave(worktreeId, null)
+  }
+}
+
+/** The copy is known not to be coming (or the deadline passed): the panes say so. */
+export function markSleepCopyFailed(worktreeId: string, since: number = Date.now()): void {
+  setCopySave(worktreeId, { state: 'failed', since: copySave.get(worktreeId)?.since ?? since })
+}
+
+/** Nothing to save after all (the sleep failed or was undone) or the workspace woke. */
+export function clearSleepCopySave(worktreeId: string): void {
+  setCopySave(worktreeId, null)
+}
+
+export function sleepCopySave(worktreeId: string): SleepCopySave | null {
+  return copySave.get(worktreeId) ?? null
+}
+
+export function useSleepCopySave(worktreeId: string | null): SleepCopySave | null {
+  return useSyncExternalStore(subscribeWorktreeSleepView, () =>
+    worktreeId === null ? null : (copySave.get(worktreeId) ?? null)
+  )
+}
+
 export function useIsWorktreeGoingToSleep(worktreeId: string | null): boolean {
   return useSyncExternalStore(subscribeWorktreeSleepView, () =>
     worktreeId === null ? false : goingToSleep.has(worktreeId)
@@ -108,5 +175,10 @@ export function resetWorktreeSleepViewForTests(): void {
   viewOnly.clear()
   keptAwake.clear()
   suspendCommitted.clear()
+  for (const timer of copyTimers.values()) {
+    clearTimeout(timer)
+  }
+  copyTimers.clear()
+  copySave.clear()
   listeners.clear()
 }

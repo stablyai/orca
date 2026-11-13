@@ -4,7 +4,11 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import { CloudAsleepFilesPanel, changeStatusLetter, formatWhen } from './CloudAsleepFilesPanel'
-import { markWorktreeGoingToSleep, resetWorktreeSleepViewForTests } from '@/lib/worktree-sleep-view'
+import {
+  markSleepCopySaving,
+  markWorktreeGoingToSleep,
+  resetWorktreeSleepViewForTests
+} from '@/lib/worktree-sleep-view'
 
 const NOW = 1_800_000_000_000
 const DAY = 24 * 60 * 60 * 1000
@@ -117,14 +121,23 @@ describe('asleep Files tab (RA-10)', () => {
     ).toBe('none')
   })
 
-  it('while going to sleep: says the copy shows when done, and offers no Wake (RA-13b)', () => {
+  it('while going to sleep: says the copy is being saved, and offers no Wake (RA-13b)', () => {
     serve(snapshot(null))
     markWorktreeGoingToSleep('ws')
     const { container, queryByRole } = render(<CloudAsleepFilesPanel workspaceId="ws" />)
-    expect(container.textContent).toBe(
-      'Going to sleep… The read-only copy shows here when it’s done.'
-    )
+    expect(container.textContent).toContain('Saving a read-only copy…')
+    expect(container.textContent).not.toContain('Files aren’t available')
     expect(queryByRole('button')).toBeNull()
+  })
+
+  it('SLEEP-IN-PROGRESS: still saving after the sleep returned, no "Files aren’t available" yet', () => {
+    serve(snapshot(null))
+    markSleepCopySaving('ws', NOW)
+    const { container } = render(<CloudAsleepFilesPanel workspaceId="ws" />)
+    expect(
+      container.querySelector('[data-cloud-asleep-files]')?.getAttribute('data-cloud-asleep-files')
+    ).toBe('saving')
+    expect(container.textContent).not.toContain('Files aren’t available')
   })
 
   it('archived: says "archived", never "went to sleep", and offers no Wake (DS-h)', async () => {

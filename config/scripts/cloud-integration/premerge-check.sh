@@ -9,6 +9,10 @@
 # Prints "premerge OK" only when everything passes. Nothing here reads /tmp state. On macOS (no flock) wrap heavy runs
 # as /tmp/vdrv/heavy.sh 'config/scripts/cloud-integration/premerge-check.sh'.
 set -euo pipefail
+# macOS: /tmp and /var are symlinks into /private. Tests that build expected paths from os.tmpdir() then compare them with a
+# realpath'd value (packaged-cli-assets' macOS launcher argv, #574) fail only because of that. Resolve TMPDIR once so the gate's
+# environment matches what child processes see.
+TMPDIR=$(cd "${TMPDIR:-/tmp}" && pwd -P); export TMPDIR
 base=private/cloud/integration
 if [[ -z "${PREMERGE_IN_WORKTREE:-}" ]]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
@@ -126,6 +130,15 @@ else
       if [[ -n "$t" && -f "$t" ]]; then tests+=("$t"); n_graph=$((n_graph + 1)); fi
     done <<<"$graph"
     echo "premerge: module graph (vitest --changed=$base) adds $n_graph related test file(s)"
+  fi
+  # Always-run tests: source-scanning lints (they glob/read src rather than import it, so neither name matching nor the
+  # module graph selects them; #610 broke cloud-glossary-lint unnoticed). One repo path per line, # comments allowed.
+  always=config/scripts/cloud-integration/premerge-always-tests.txt
+  if [[ -f "$always" ]]; then
+    while IFS= read -r t; do
+      t=${t%%#*}; t=${t//[[:space:]]/}
+      if [[ -n "$t" && -f "$t" ]]; then tests+=("$t"); fi
+    done <"$always"
   fi
   if ((${#tests[@]} > 0)); then
     # Skip files on the full-suite base list: they fail on upstream too (this Mac's environment), so they would only

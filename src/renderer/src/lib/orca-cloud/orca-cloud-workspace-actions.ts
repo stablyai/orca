@@ -6,6 +6,7 @@ import type { CloudWorkspaceResult } from '../../../../shared/hosted-sandbox/clo
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
   cloudWorkspaceApi,
+  cloudWorkspaceTarget,
   dismissCloudOom,
   refreshCloudWorkspaceStatus,
   updateCloudWorkspaceSnapshot
@@ -44,7 +45,7 @@ export function restartCloudWorkspace(workspaceId: string): Promise<CloudWorkspa
     return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'restart', async () => {
-    const result = await bridge.restart({ workspaceId })
+    const result = await bridge.restart(cloudWorkspaceTarget(workspaceId))
     if (result.ok) {
       dismissCloudOom(workspaceId)
     }
@@ -79,7 +80,7 @@ export function archiveCloudWorkspace(
       return { ok: false, code: 'failed', message, userMessage: message }
     }
     const archived = await bridge.archive({
-      workspaceId,
+      ...cloudWorkspaceTarget(workspaceId),
       ...(deps.pullRequests?.length ? { pullRequests: deps.pullRequests } : {})
     })
     if (archived.ok) {
@@ -99,7 +100,7 @@ export function unarchiveCloudWorkspace(
     return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'unarchive', async () => {
-    const result = await bridge.unarchive({ workspaceId })
+    const result = await bridge.unarchive(cloudWorkspaceTarget(workspaceId))
     if (result.ok) {
       noteCloudArchiveChanged()
       // Mark it unarchived so the wake path's archive guard lets the wake through.

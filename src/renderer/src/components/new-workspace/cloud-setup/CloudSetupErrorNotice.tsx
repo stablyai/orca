@@ -3,6 +3,8 @@
 // team failed. Finished steps stay done, the prompt stays in the composer, and no codes are shown.
 import React from 'react'
 import { Button } from '@/components/ui/button'
+import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
+import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
@@ -74,12 +76,15 @@ function actionLabel(action: CloudSetupErrorAction, t: Translate): string {
 export function CloudSetupErrorNotice({
   error,
   canManageBilling = true,
+  reopenLink,
   onAction,
   className
 }: {
   error: CloudSetupError
   /** Members can't choose a plan: the trial notice then names who can, with no button. */
   canManageBilling?: boolean
+  /** Reopen browser's page (a fresh setup link): its chevron offers "Copy link". */
+  reopenLink?: ExternalLinkSource | null
   onAction: (action: CloudSetupErrorAction) => void
   className?: string
 }): React.JSX.Element {
@@ -95,9 +100,20 @@ export function CloudSetupErrorNotice({
       title={errorTitle(error, canManageBilling, t)}
       action={
         showAction ? (
-          <Button type="button" variant="outline" size="xs" onClick={() => onAction(action)}>
-            {actionLabel(action, t)}
-          </Button>
+          action === 'reopen-browser' && reopenLink ? (
+            <OpenExternalSplitButton
+              variant="outline"
+              size="xs"
+              link={reopenLink}
+              onClick={() => onAction(action)}
+            >
+              {actionLabel(action, t)}
+            </OpenExternalSplitButton>
+          ) : (
+            <Button type="button" variant="outline" size="xs" onClick={() => onAction(action)}>
+              {actionLabel(action, t)}
+            </Button>
+          )
         ) : undefined
       }
       className={className}

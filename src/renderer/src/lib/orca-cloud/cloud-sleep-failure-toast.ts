@@ -12,11 +12,23 @@ export function isCloudWorkspaceId(worktreeId: string): boolean {
   return getCloudWorkspaceSnapshot().ids.has(worktreeId) || isPairedCloudSleepTarget(worktreeId)
 }
 
-function workspaceName(worktreeId: string): string {
-  return (
-    findWorktreeById(useAppStore.getState(), worktreeId)?.displayName ??
-    translate('orcaCloudWorkspace.thisWorkspace', 'This workspace')
-  )
+function workspaceName(worktreeId: string): string | null {
+  return findWorktreeById(useAppStore.getState(), worktreeId)?.displayName || null
+}
+
+function sleepFailedTitle(worktreeIds: readonly string[]): string {
+  if (worktreeIds.length > 1) {
+    return translate(
+      'orcaCloudWorkspace.sleepFailedCount',
+      'Couldn’t put {{count}} workspaces to sleep',
+      { count: worktreeIds.length }
+    )
+  }
+  const name = workspaceName(worktreeIds[0]!)
+  // No name: its own sentence, never "This workspace" spliced into the middle.
+  return name
+    ? translate('orcaCloudWorkspace.sleepFailedNamed', 'Couldn’t put {{name}} to sleep', { name })
+    : translate('orcaCloudWorkspace.sleepFailedUnnamed', 'Couldn’t put this workspace to sleep')
 }
 
 /** True when it showed the cloud toast (every id is an Orca Cloud workspace). */
@@ -27,19 +39,7 @@ export function toastCloudSleepFailure(
   if (worktreeIds.length === 0 || !worktreeIds.every(isCloudWorkspaceId)) {
     return false
   }
-  const title =
-    worktreeIds.length === 1
-      ? translate('orcaCloudWorkspace.sleepFailedNamed', 'Couldn’t put {{name}} to sleep', {
-          name: workspaceName(worktreeIds[0]!)
-        })
-      : translate(
-          'orcaCloudWorkspace.sleepFailedCount',
-          'Couldn’t put {{count}} workspaces to sleep',
-          {
-            count: worktreeIds.length
-          }
-        )
-  toast.error(title, {
+  toast.error(sleepFailedTitle(worktreeIds), {
     description: translate(
       'orcaCloudWorkspace.sleepFailedDetail',
       'Its sandbox is still running and using sandbox hours. Your files are safe.'

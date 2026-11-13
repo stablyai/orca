@@ -3,8 +3,9 @@ import { useAppStore } from '@/store'
 import { HostGlyph } from '@/components/host-row-icon'
 import {
   refreshCloudWorkspaceIds,
-  useIsCloudWorkspace
+  useCloudWorkspace
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { CloudWorkspaceMark } from './CloudWorkspaceMark'
 import { useIsOrcaCloudHost } from './WorkspaceHostGlyph'
@@ -35,7 +36,8 @@ export function CloudWorkspaceMarkSlot({
   fallback: React.ReactNode
   onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element | null {
-  const isCloud = useIsCloudWorkspace(workspaceId)
+  // PAIRED-CHROME: a paired row's own checkout gets the live mark too (its status reads like an owned one's).
+  const isCloud = useCloudWorkspace((s) => isCloudStatusRow(s, workspaceId))
   const onCloudHost = useIsOrcaCloudHost(hostId)
   const onCloudSandbox = useRunsOnOrcaCloudSandbox(workspaceId) || onCloudHost
   const awaitingId = onCloudSandbox && !isCloud

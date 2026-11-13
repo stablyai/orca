@@ -9,15 +9,13 @@
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { openCloudWorkspace } from '@/components/cloud-workspaces/open-cloud-workspace'
-import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
-import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { appendProvisioningLog } from '@/lib/workspace/creation/pending-creation-provisioning-log'
 import { trackOrcaCloudCreateStep } from '@/lib/orca-cloud-cancel-cleanup'
+import { launchFirstCloudAgent } from './github-cloud-first-agent'
 import {
   forgetGitHubCreateKey,
   githubCreateIdempotencyKey,
@@ -210,25 +208,14 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
   forgetGitHubCreateKey(creationId)
   // Opened: the workspace replaces the sheet. Nothing to clean up, the sandbox is the workspace.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
-  if (opened.worktreeId && source.prompt.trim()) {
-    void launchPrompt(opened.worktreeId, source.prompt, request.agent)
-  }
+  // PAIRED-HELD-STRIPS (#568): the chosen agent starts even with no prompt, once the workspace
+  // lists its first worktree and is confirmed Orca Cloud (so its launch holds when it can't run).
+  void launchFirstCloudAgent({
+    fullName: source.fullName,
+    prompt: source.prompt,
+    agent: request.agent,
+    worktreeId: opened.worktreeId,
+    hostId: opened.hostId
+  })
   return true
-}
-
-async function launchPrompt(worktreeId: string, prompt: string, picked: string | null) {
-  const agent = isTuiAgent(picked)
-    ? picked
-    : await resolveDefaultAgentForWorktree(useAppStore.getState, worktreeId).catch(() => null)
-  if (agent) {
-    launchAgentInNewTabWithOutcome({
-      requestId: createNonSecureContextUuid(),
-      ...captureAgentTabLaunchContext(worktreeId),
-      agent,
-      worktreeId,
-      prompt,
-      promptDelivery: 'submit-after-ready',
-      launchSource: 'unknown'
-    })
-  }
 }

@@ -4,12 +4,15 @@
 import { useAppStore } from '@/store'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
 
-/** '' while signed out or not connected; otherwise stable for one account on one team. */
+/** '' while signed out or not connected; otherwise stable for one account, team and role. */
 export function orcaCloudIdentityKey(status: OrcaProfileAuthStatus | null | undefined): string {
   if (status?.state !== 'connected' || !status.cloud) {
     return ''
   }
-  return `${status.activeProfileId}\0${status.cloud.userId}\0${status.cloud.activeOrgId ?? ''}`
+  const orgId = status.cloud.activeOrgId ?? ''
+  // The role too (GH-LIST-MISSING): an owner → member → owner switch must read team answers again.
+  const role = status.organizations?.find((org) => org.orgId === orgId)?.role ?? ''
+  return `${status.activeProfileId}\0${status.cloud.userId}\0${orgId}\0${role}`
 }
 
 export function useOrcaCloudIdentityKey(): string {

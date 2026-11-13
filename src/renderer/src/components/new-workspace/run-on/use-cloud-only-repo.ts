@@ -11,11 +11,16 @@ import {
 } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 import { startCloudWorkspaceFromGitHub } from '@/lib/orca-cloud/start-cloud-workspace-from-github'
 import type { CloudSetupStep } from './cloud-start-model'
+import { useGitHubAccessHandoff, type GitHubAccessHandoffPhase } from './use-github-access-handoff'
 
 export type CloudOnlyRepo = {
   repos: readonly OrcaCloudGitHubRepository[] | null
   /** Fetches GitHub's next pages; null when everything is listed. */
   showMore: (() => void) | null
+  /** GitHub's list couldn't be read: read it again. Null while it reads fine. */
+  retryRepos: (() => void) | null
+  /** That Retry is reading now. */
+  retryingRepos: boolean
   picked: OrcaCloudGitHubRepository | null
   /** The project is a plain folder: Orca Cloud needs a GitHub repository (D3/D4). */
   folderProject: boolean
@@ -24,6 +29,10 @@ export type CloudOnlyRepo = {
   pick: (fullName: string) => void
   clear: () => void
   moreAccess: () => void
+  /** Back from GitHub's access page: the list re-reads until the new repository shows up. */
+  githubHandoff: GitHubAccessHandoffPhase
+  /** After the wait ran out with nothing new: read once more and wait again. */
+  checkGitHubAgain: () => void
   start: (request: { prompt: string; agent: string | null }) => Promise<boolean>
 }
 
@@ -32,7 +41,8 @@ export function useCloudOnlyRepo({
   initialPicked = null,
   cloudSelected,
   cloudOffered,
-  signedIn
+  signedIn,
+  onAutoPick
 }: {
   repoId: string
   /** `owner/repo` picked when the composer opens (Back to draft from its build sheet). */
@@ -43,12 +53,26 @@ export function useCloudOnlyRepo({
   cloudOffered: boolean
   /** The list needs an account; signed out, setup comes first. */
   signedIn: boolean
+  /** A repository granted on GitHub was picked for the person: Run on becomes Orca Cloud. */
+  onAutoPick?: () => void
 }): CloudOnlyRepo {
   const { folderProject, folderStep } = useFolderGitHubStep(repoId)
   // D4 rows show while Orca Cloud is picked, or for a folder, which can only start from GitHub.
   const enabled = (cloudSelected || folderProject) && cloudOffered
-  const { repos, showMore } = useOrcaCloudGitHubRepositories(enabled && signedIn)
+  const [refreshSignal, setRefreshSignal] = useState(0)
+  const { repos, showMore, unavailable, retrying, retry } = useOrcaCloudGitHubRepositories(
+    enabled && signedIn,
+    refreshSignal
+  )
   const [pickedName, setPickedName] = useState<string | null>(initialPicked)
+  const handoff = useGitHubAccessHandoff({
+    repos,
+    onReread: () => setRefreshSignal((n) => n + 1),
+    onNewRepository: (fullName) => {
+      setPickedName(fullName)
+      onAutoPick?.()
+    }
+  })
   const picked = useMemo(
     () => (enabled ? (repos?.find((repo) => repo.fullName === pickedName) ?? null) : null),
     [enabled, pickedName, repos]
@@ -65,11 +89,23 @@ export function useCloudOnlyRepo({
         : null,
     [picked]
   )
-  const clear = useCallback(() => setPickedName(null), [])
+  const { begin: beginHandoff, cancel: cancelHandoff } = handoff
+  const clear = useCallback(() => {
+    cancelHandoff()
+    setPickedName(null)
+  }, [cancelHandoff])
+  const pick = useCallback(
+    (fullName: string) => {
+      cancelHandoff()
+      setPickedName(fullName)
+    },
+    [cancelHandoff]
+  )
   const moreAccess = useCallback(() => {
     invalidateOrcaCloudGitHubRepositories()
+    beginHandoff()
     void window.api.orcaCloudWorkspace.connectGitHub()
-  }, [])
+  }, [beginHandoff])
   const start = useCallback(
     (request: { prompt: string; agent: string | null }) =>
       picked
@@ -85,12 +121,16 @@ export function useCloudOnlyRepo({
   return {
     repos,
     showMore,
+    retryRepos: unavailable ? retry : null,
+    retryingRepos: retrying,
     picked,
     githubStep: githubStep ?? folderStep,
     folderProject,
-    pick: setPickedName,
+    pick,
     clear,
     moreAccess,
+    githubHandoff: enabled ? handoff.phase : 'idle',
+    checkGitHubAgain: handoff.checkAgain,
     start
   }
 }

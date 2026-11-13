@@ -7,6 +7,10 @@ import { toast } from 'sonner'
 import { destroyCloudPrimary } from './CloudPrimaryDeleteDialog'
 import type { CloudPrimaryDeleteTarget } from '@/lib/orca-cloud/cloud-primary-delete-request'
 import { resetCloudWorkspaceIdentityForTests } from '@/components/cloud-workspaces/cloud-workspace-identity'
+import {
+  isCloudWorkspaceDeleting,
+  registerQueuedCloudArchive
+} from '@/lib/orca-cloud/pending-cloud-archive'
 
 function stub(
   destroy: () => Promise<unknown>,
@@ -65,5 +69,22 @@ describe('destroyCloudPrimary', () => {
     expect(toast.error).toHaveBeenCalledWith('Couldn’t delete ik-main', {
       description: "Orca couldn't find this workspace's sandbox. Delete it from Cloud workspaces."
     })
+  })
+
+  it('INT-T1: Delete cancels an archive still in its Undo window and quiets one under way', async () => {
+    let deletingDuringDestroy = false
+    stub(
+      async () => {
+        deletingDuringDestroy = isCloudWorkspaceDeleting(row.id)
+        return { ok: true, value: null }
+      },
+      { sbx_paired: { environmentId: 'env-cloud' } }
+    )
+    const cancelQueuedArchive = vi.fn()
+    registerQueuedCloudArchive(row.id, cancelQueuedArchive)
+    await destroyCloudPrimary(row)
+    expect(cancelQueuedArchive).toHaveBeenCalledTimes(1)
+    expect(deletingDuringDestroy).toBe(true)
+    expect(isCloudWorkspaceDeleting(row.id)).toBe(false)
   })
 })

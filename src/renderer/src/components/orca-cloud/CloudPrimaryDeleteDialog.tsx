@@ -14,6 +14,10 @@ import {
 import { describeError } from '@/components/cloud-workspaces/cloud-workspace-errors'
 import { archiveSandboxThroughControlPlane } from '@/components/cloud-workspaces/cloud-workspace-home-archive'
 import { noteCloudArchiveChanged } from '@/lib/orca-cloud/cloud-archive-changes'
+import {
+  noteCloudWorkspaceDeleteSettled,
+  noteCloudWorkspaceDeleting
+} from '@/lib/orca-cloud/pending-cloud-archive'
 import { resolveCloudRowSandboxId } from '@/lib/orca-cloud/cloud-host-rows'
 import { refreshCloudWorktreeBindings } from '@/components/cloud-workspaces/cloud-workspace-identity'
 import {
@@ -49,6 +53,17 @@ async function withSandbox(target: Target, run: (sandboxId: string) => Promise<v
 /** Destroys the sandbox (only "destroyed" counts) and refreshes what lists it. */
 export async function destroyCloudPrimary(target: Target): Promise<void> {
   const name = target.displayName ?? ''
+  // INT-T1 for cloud rows (owned or PAIRED): Delete cancels an archive still in its Undo window and
+  // quiets one already under way, the same as the sidebar's ordinary delete.
+  noteCloudWorkspaceDeleting(target.id)
+  try {
+    await destroyCloudSandbox(target, name)
+  } finally {
+    noteCloudWorkspaceDeleteSettled(target.id)
+  }
+}
+
+async function destroyCloudSandbox(target: Target, name: string): Promise<void> {
   await withSandbox(target, async (sandboxId) => {
     const result = await window.api.cloudWorkspaces.destroy(sandboxId)
     if (!result.ok) {
