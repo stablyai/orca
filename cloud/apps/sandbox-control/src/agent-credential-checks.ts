@@ -111,8 +111,10 @@ async function checkCredential(
 export async function handleAccountUnauthorized(
   ctx: CheckContext & { sandboxId: string; path: string }
 ): Promise<CheckOutcome> {
+  // The 401 that triggered the failed check was consumed by that check, so any 401 seen here, with the
+  // sign-in already in question, is a different, later real request.
   const suspectAt = await agentCredentialSuspectAt(ctx.db, ctx.userId, ctx.provider.agent)
-  if (suspectAt !== null && ctx.now > suspectAt) {
+  if (suspectAt !== null) {
     await markAgentCredentialRevoked(ctx.db, ctx.userId, ctx.provider.agent, ctx.now)
     await audit(ctx.db, {
       userId: ctx.userId,
