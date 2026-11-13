@@ -236,6 +236,8 @@ export function NewWorkspaceComposerProjectSection({
               }
               triggerClassName="h-9 w-full border-input text-sm focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring"
               invalid={Boolean(projectError) || Boolean(needsRepo)}
+              // Waiting for a GitHub repository is a fixable precondition: amber, not red.
+              invalidTone={!projectError && needsRepo ? 'warning' : 'error'}
               describedBy={
                 !projectError && needsRepo ? ORCA_CLOUD_NEEDS_REPO_ID : projectDescriptionId
               }
@@ -255,6 +257,8 @@ export function NewWorkspaceComposerProjectSection({
               <OrcaCloudNeedsRepoLine
                 hasRepos={needsRepo.hasRepos}
                 onAddRepository={onAddProject}
+                unreachable={needsRepo.unreachable === true}
+                onMoreAccess={cloudOnly?.moreAccess}
               />
             ) : projectOptions.length === 0 ? (
               <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">

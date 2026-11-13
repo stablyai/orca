@@ -99,6 +99,7 @@ const handoffCloudStart = (githubHandoff: 'waiting' | 'timed-out'): CloudStartVi
     picked: null,
     folderProject: false,
     needsGitHubPick: false,
+    remoteServerProject: false,
     githubStep: null,
     pick: () => {},
     clear: () => {},

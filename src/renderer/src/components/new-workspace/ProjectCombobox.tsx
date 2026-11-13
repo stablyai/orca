@@ -23,7 +23,7 @@ import {
 import { ProjectOptionMark, ProjectOptionRow } from './ProjectComboboxRow'
 import { useRecentProjectIds } from './use-recent-project-ids'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
-import type { ProjectComboboxProps } from './project-combobox-props'
+import { projectFieldInvalidClass, type ProjectComboboxProps } from './project-combobox-props'
 import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import {
   cloudRepoKey,
@@ -48,6 +48,7 @@ export default function ProjectCombobox({
   placeholder = 'Choose project',
   triggerClassName,
   invalid = false,
+  invalidTone = 'error',
   describedBy,
   cloudRepos = null,
   cloudRepoValue = null,
@@ -218,9 +219,8 @@ export default function ProjectCombobox({
               }}
               className={cn(
                 COMBOBOX_FIELD_SHELL,
-                // Invalid stays red while focused, so the field and its error read as one.
-                invalid &&
-                  'border-destructive ring-destructive/20 focus-within:border-destructive focus-within:ring-destructive/40 dark:ring-destructive/40',
+                // Invalid stays marked while focused, so the field and its line read as one.
+                invalid && projectFieldInvalidClass(invalidTone),
                 triggerClassName
               )}
             >

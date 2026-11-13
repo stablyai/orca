@@ -16,7 +16,7 @@ export type CloudStartView = {
    * Project. `hasRepos`: any to choose from. `attempt` counts those stopped Creates (focus moves to
    * Project on each); absent until the first.
    */
-  needsGitHubRepo?: { hasRepos: boolean; attempt?: number } | null
+  needsGitHubRepo?: { hasRepos: boolean; unreachable?: boolean; attempt?: number } | null
   /** Bumped to open the Project picker at its GitHub repositories (CLONE-ACCESS-ERROR's Choose another). */
   openRepoPickerSignal?: number
 }
@@ -32,10 +32,19 @@ export function orcaCloudNeedsGitHubRepo(args: {
   pickedRepo: boolean
   repoCount: number
   githubProjectCount: number
-}): { hasRepos: boolean } | null {
-  return args.cloudSelected && args.folderProject && !args.pickedRepo
-    ? { hasRepos: args.repoCount > 0 || args.githubProjectCount > 0 }
-    : null
+  /**
+   * UNREACHABLE-REPO-NO-ROUTE: a GitHub project cloned only on a remote server whose repository
+   * Orca Cloud can't reach. The line says so and offers More access, instead of the folder wording.
+   */
+  remoteServerProject?: boolean
+}): { hasRepos: boolean; unreachable?: true } | null {
+  if (!args.cloudSelected || !args.folderProject || args.pickedRepo) {
+    return null
+  }
+  return {
+    hasRepos: args.repoCount > 0 || args.githubProjectCount > 0,
+    ...(args.remoteServerProject ? { unreachable: true as const } : {})
+  }
 }
 
 /** A project that can start in Orca Cloud: git, with a GitHub remote (or one not read yet). */

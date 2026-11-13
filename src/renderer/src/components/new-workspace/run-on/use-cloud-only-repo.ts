@@ -34,6 +34,8 @@ export type CloudOnlyRepo = {
    * cloned only on a remote server (RUNON-NO-NEW-SANDBOX). Create waits until one is picked.
    */
   needsGitHubPick: boolean
+  /** A GitHub project cloned only on a remote server (RUNON-NO-NEW-SANDBOX). */
+  remoteServerProject: boolean
   /** The GitHub row is done for a repository listed from the team's installations. */
   githubStep: CloudSetupStep | null
   pick: (fullName: string) => void
@@ -140,6 +142,7 @@ export function useCloudOnlyRepo({
     githubStep: githubStep ?? folderStep ?? (remoteServer ? remoteServerStep() : null),
     folderProject,
     needsGitHubPick: folderProject || remoteServer,
+    remoteServerProject: remoteServer,
     pick,
     clear,
     moreAccess,
@@ -159,8 +162,8 @@ function remoteServerStep(): CloudSetupStep {
     label: translate('orcaCloud.setup.github.repositoryLabel', 'GitHub repository'),
     status: translate('orcaCloud.setup.github.neededStatus', 'Needed'),
     detail: translate(
-      'components.newWorkspace.cloudOnly.remoteServerDetail',
-      'Orca Cloud starts from a GitHub repository and can’t reach this project’s. Give Orca access with More access, or pick another repository.'
+      'components.newWorkspace.cloudOnly.remoteServerUnreachable',
+      'Orca Cloud starts from a GitHub repository and can’t reach this project’s. Give Orca access to it, or pick another repository.'
     )
   }
 }

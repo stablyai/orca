@@ -25,6 +25,7 @@ function cloudOnly(
     picked: null,
     folderProject: false,
     needsGitHubPick: false,
+    remoteServerProject: false,
     githubStep: null,
     pick: () => {},
     clear: () => {},

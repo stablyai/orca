@@ -10,12 +10,44 @@ import { ORCA_CLOUD_NEEDS_REPO_ID } from './cloud-start-view'
  */
 export function OrcaCloudNeedsRepoLine({
   hasRepos,
-  onAddRepository
+  onAddRepository,
+  unreachable = false,
+  onMoreAccess
 }: {
   hasRepos: boolean
   onAddRepository: () => void
+  /** UNREACHABLE-REPO-NO-ROUTE: the project's own GitHub repository is out of Orca Cloud's reach. */
+  unreachable?: boolean
+  /** Opens GitHub to give Orca access to more repositories ("Give Orca access"). */
+  onMoreAccess?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  if (unreachable) {
+    return (
+      <div
+        id={ORCA_CLOUD_NEEDS_REPO_ID}
+        role="alert"
+        className="flex flex-col items-start text-[11px]"
+        data-orca-cloud-needs-repo="unreachable"
+      >
+        <p className="text-muted-foreground">
+          {t(
+            'components.newWorkspace.cloudOnly.remoteServerUnreachable',
+            'Orca Cloud starts from a GitHub repository and can’t reach this project’s. Give Orca access to it, or pick another repository.'
+          )}
+        </p>
+        {onMoreAccess ? (
+          <div className="-mx-1">
+            <Button type="button" variant="link" size="statusAction" onClick={onMoreAccess}>
+              <span className="underline underline-offset-4">
+                {t('worktreeCreation.cloneAccess.giveAccess', 'Give Orca access')}
+              </span>
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
   return (
     <div
       id={ORCA_CLOUD_NEEDS_REPO_ID}
@@ -23,7 +55,7 @@ export function OrcaCloudNeedsRepoLine({
       className="flex flex-col items-start text-[11px]"
       data-orca-cloud-needs-repo
     >
-      <p className="text-destructive">
+      <p className="text-muted-foreground">
         {t(
           'components.newWorkspace.cloudOnly.needsRepository',
           'Orca Cloud needs a GitHub repository.'

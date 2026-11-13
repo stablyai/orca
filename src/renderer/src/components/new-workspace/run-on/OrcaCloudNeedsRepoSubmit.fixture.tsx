@@ -37,17 +37,40 @@ const orcaCloud: EphemeralVmRecipeOption = {
   create: 'orca-cloud create'
 }
 const NEEDS_REPO = { hasRepos: true }
+// UNREACHABLE-REPO-NO-ROUTE: Hello-World cloned only on a paired server, out of Orca Cloud's reach.
+const UNREACHABLE = { hasRepos: true, unreachable: true }
 
-function Composer(): React.JSX.Element {
+function Composer({ unreachable = false }: { unreachable?: boolean }): React.JSX.Element {
   const [project, setProject] = useState('folder')
   const [created, setCreated] = useState(false)
-  const needsRepo = project === 'folder' ? NEEDS_REPO : null
+  const needsRepo = project === 'folder' ? (unreachable ? UNREACHABLE : NEEDS_REPO) : null
   const guard = useNeedsRepoSubmitGuard(needsRepo, () => setCreated(true))
   const cloudStart = {
     onSelectOrcaCloud: () => {},
     onUserPick: () => {},
     folderProject: project === 'folder',
-    needsGitHubRepo: guard.shown
+    needsGitHubRepo: guard.shown,
+    ...(unreachable
+      ? {
+          cloudOnly: {
+            repos: [],
+            showMore: null,
+            retryRepos: null,
+            retryingRepos: false,
+            picked: null,
+            folderProject: false,
+            needsGitHubPick: true,
+            remoteServerProject: true,
+            githubStep: null,
+            pick: () => {},
+            clear: () => {},
+            moreAccess: () => {},
+            githubHandoff: 'idle' as const,
+            checkGitHubAgain: () => {},
+            start: async () => false
+          }
+        }
+      : {})
   }
   return (
     <div className="w-[520px] space-y-4 rounded-xl border border-border bg-background p-4">
@@ -99,7 +122,8 @@ function Composer(): React.JSX.Element {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const clickCreate = (frame: HTMLElement): void =>
   [...frame.querySelectorAll<HTMLButtonElement>('button')]
-    .find((button) => button.textContent?.includes('Create workspace'))
+    // The footer's primary reads "Create" (its shortcut chip follows).
+    .find((button) => /^Create\b/.test(button.textContent?.trim() ?? ''))
     ?.click()
 
 const base = {
@@ -128,6 +152,15 @@ export const fixed = defineFixture({
     clickCreate(frame)
     await wait(150)
     frame.querySelector<HTMLButtonElement>('[data-fixture-pick-github]')?.click()
+    await wait(200)
+  }
+})
+/** A remote-server project whose GitHub repository Orca Cloud can't reach, after Create. */
+export const unreachableAfterSubmit = defineFixture({
+  ...base,
+  render: () => <Composer unreachable />,
+  interact: async (frame) => {
+    clickCreate(frame)
     await wait(200)
   }
 })

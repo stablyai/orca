@@ -2731,13 +2731,6 @@
         "sendingNotConfigured": "sending diagnostics is not configured for this build"
       }
     },
-    "enterprise": {
-      "audit": {
-        "action": {
-          "wsOwnerNotified": "Notified the previous owner about an owner change"
-        }
-      }
-    },
     "groups": {
       "orcaCloud": "Orca Cloud"
     },
