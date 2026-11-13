@@ -17,6 +17,12 @@ import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from './use-pan-zoom-viewport'
 import { useViewerZoomCommands } from './use-viewer-zoom-commands'
+import {
+  handlePanZoomNavigationKey,
+  PanZoomImagePosition,
+  PanZoomImageStepButtons,
+  type PanZoomImageNavigation
+} from './PanZoomImageNavigation'
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
@@ -34,6 +40,9 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
+  navigation?: PanZoomImageNavigation
+  /** A new value starts the canvas fitted again, for previews that swap images in place. */
+  contentKey?: string
 }
 
 async function copyImageAsPng(
@@ -82,7 +91,10 @@ export function PanZoomImageDialog({
   background,
   fallback,
   toolbarActions,
+  navigation,
+  contentKey,
   onCloseAutoFocus,
+  onKeyDown,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -93,6 +105,10 @@ export function PanZoomImageDialog({
         {...contentProps}
         showCloseButton={false}
         className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
+        onKeyDown={(event) => {
+          onKeyDown?.(event)
+          handlePanZoomNavigationKey(event, navigation)
+        }}
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -122,6 +138,7 @@ export function PanZoomImageDialog({
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content so each opening starts fitted. */}
         <PanZoomImageCanvas
+          key={contentKey}
           src={src}
           size={size}
           title={title}
@@ -129,6 +146,7 @@ export function PanZoomImageDialog({
           background={background}
           fallback={fallback}
           toolbarActions={toolbarActions}
+          navigation={navigation}
           onClose={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -144,10 +162,18 @@ function PanZoomImageCanvas({
   background,
   fallback,
   toolbarActions,
+  navigation,
   onClose
 }: Pick<
   PanZoomImageDialogProps,
-  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
+  | 'src'
+  | 'size'
+  | 'title'
+  | 'showTitle'
+  | 'background'
+  | 'fallback'
+  | 'toolbarActions'
+  | 'navigation'
 > & { onClose: () => void }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -187,6 +213,7 @@ function PanZoomImageCanvas({
               {title}
             </span>
           ) : null}
+          {navigation ? <PanZoomImagePosition navigation={navigation} /> : null}
           <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
             <ToolbarButton
               label={t('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
@@ -227,6 +254,7 @@ function PanZoomImageCanvas({
             </ToolbarButton>
           </div>
         </div>
+        {navigation ? <PanZoomImageStepButtons navigation={navigation} /> : null}
       </TooltipProvider>
     </>
   )
