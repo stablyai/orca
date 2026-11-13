@@ -81,52 +81,72 @@ export function importProfileStateJson(
     if (options.expectedRevision !== undefined && actualRevision !== options.expectedRevision) {
       throw new ProfileStateRevisionConflictError(options.expectedRevision, actualRevision)
     }
-    const revision = actualRevision + 1
-    clearProfileStateAutomationRuns(db)
-    // Imported rows are authoritative; the next write of a split domain re-splits it.
-    clearProfileStateDocumentParts(db)
-    db.exec('DELETE FROM profile_state_documents')
-    const automationRuns = entries.find((entry) => entry.domain === 'automationRuns')
-    const normalizedRuns =
-      automationRuns !== undefined &&
-      rebuildProfileStateAutomationRunsProjection(
-        db,
-        automationRuns.payload,
-        PROFILE_STATE_DOCUMENT_VERSION,
-        updatedAt,
-        revision
-      )
-    const insert = db.prepare(
-      `INSERT INTO profile_state_documents
-       (domain, payload, domain_version, revision, updated_at, content_hash)
-       VALUES (?, ?, ?, ?, ?, ?)`
+    return replaceProfileStateDomainsInTransaction(
+      db,
+      entries,
+      actualRevision,
+      updatedAt,
+      options.acceptedLegacyJsonHash
     )
-    for (const entry of entries) {
-      const payload = normalizedRuns && entry.domain === 'automationRuns' ? 'null' : entry.payload
-      insert.run(
-        entry.domain,
-        payload,
-        PROFILE_STATE_DOCUMENT_VERSION,
-        revision,
-        updatedAt,
-        hashProfileStatePayload(payload)
-      )
-    }
+  })
+}
+
+/** Reuse import application inside an already fenced prepared write, without nesting transactions. */
+export function replaceProfileStateDomainsInTransaction(
+  db: Database.Database,
+  entries: readonly { domain: string; payload: string }[],
+  previousRevision: number,
+  updatedAt: number,
+  acceptedLegacyJsonHash?: string
+): number {
+  if (!db.isTransaction) {
+    throw new Error('Profile state replacement requires an active write transaction')
+  }
+  const revision = previousRevision + 1
+  clearProfileStateAutomationRuns(db)
+  // Imported rows are authoritative; the next write of a split domain re-splits it.
+  clearProfileStateDocumentParts(db)
+  db.exec('DELETE FROM profile_state_documents')
+  const automationRuns = entries.find((entry) => entry.domain === 'automationRuns')
+  const normalizedRuns =
+    automationRuns !== undefined &&
+    rebuildProfileStateAutomationRunsProjection(
+      db,
+      automationRuns.payload,
+      PROFILE_STATE_DOCUMENT_VERSION,
+      updatedAt,
+      revision
+    )
+  const insert = db.prepare(
+    `INSERT INTO profile_state_documents
+     (domain, payload, domain_version, revision, updated_at, content_hash)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  )
+  for (const entry of entries) {
+    const payload = normalizedRuns && entry.domain === 'automationRuns' ? 'null' : entry.payload
+    insert.run(
+      entry.domain,
+      payload,
+      PROFILE_STATE_DOCUMENT_VERSION,
+      revision,
+      updatedAt,
+      hashProfileStatePayload(payload)
+    )
+  }
+  db.prepare(
+    `INSERT INTO profile_state_meta (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(PROFILE_STATE_META_REVISION, String(revision))
+  if (acceptedLegacyJsonHash !== undefined) {
     db.prepare(
       `INSERT INTO profile_state_meta (key, value) VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-    ).run(PROFILE_STATE_META_REVISION, String(revision))
-    if (options.acceptedLegacyJsonHash !== undefined) {
-      db.prepare(
-        `INSERT INTO profile_state_meta (key, value) VALUES (?, ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-      ).run(
-        PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE,
-        JSON.stringify({ jsonHash: options.acceptedLegacyJsonHash, acceptedRevision: revision })
-      )
-    }
-    return revision
-  })
+    ).run(
+      PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE,
+      JSON.stringify({ jsonHash: acceptedLegacyJsonHash, acceptedRevision: revision })
+    )
+  }
+  return revision
 }
 
 export function profileStateJsonMatchesAcceptance(db: Database.Database, rawJson: string): boolean {

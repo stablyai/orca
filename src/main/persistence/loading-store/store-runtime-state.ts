@@ -35,6 +35,7 @@ import type { ProfileStatePersistenceAuthority } from './profile-writing/profile
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/terminal-history/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
+import { ProfileStateSplitSnapshots } from './profile-writing/profile-state-split-snapshots'
 
 export type DurableProfileStateMutation<T> = {
   value: T
@@ -79,6 +80,7 @@ export class StoreRuntimeState {
   quitFlushStarted = false
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
+  readonly profileStateSplitSnapshots = new ProfileStateSplitSnapshots()
   lastDurableWriteGeneration = -1
   /** Required durable generation for locally committed migrations; disk-loaded receipts have no entry. */
   readonly orcadMigrationCommitWriteGenerations = new Map<string, number>()

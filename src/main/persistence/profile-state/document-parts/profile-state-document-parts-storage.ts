@@ -28,6 +28,11 @@ type PartsMeta = {
   legacyRevision: number | null
 }
 
+export type ProfileStateExistingDocumentParts = Map<
+  string,
+  { ordinal: number; contentHash: string }
+>
+
 function readPartsMeta(db: Database.Database, domain: string): PartsMeta | undefined {
   if (!hasProfileStateDocumentPartsTables(db)) {
     return undefined
@@ -99,7 +104,8 @@ export function authoritativeMeta(
 export function readProfileStateSplitDocument(
   db: Database.Database,
   domain: string,
-  legacyRevision: number
+  legacyRevision: number,
+  retainedParts?: ProfileStateExistingDocumentParts
 ): ProfileStateDocument | undefined {
   if (!isProfileStateSplitDomain(domain)) {
     return undefined
@@ -110,7 +116,7 @@ export function readProfileStateSplitDocument(
   }
   const rows = db
     .prepare(
-      `SELECT part_key, payload, content_hash FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
+      `SELECT part_key, ordinal, payload, content_hash FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
        WHERE domain = ? ORDER BY ordinal`
     )
     .iterate(domain)
@@ -128,6 +134,10 @@ export function readProfileStateSplitDocument(
       )
     }
     parts.push({ key: row.part_key, payload: row.payload })
+    retainedParts?.set(row.part_key, {
+      ordinal: Number(row.ordinal),
+      contentHash: String(row.content_hash)
+    })
   }
   let payload: string
   try {
@@ -208,6 +218,7 @@ export function writeProfileStateDomainParts(
     legacyRevision: number
     /** Existing parts are a valid base to diff against. */
     diffExisting: boolean
+    existingParts?: ProfileStateExistingDocumentParts
   }
 ): boolean {
   if (!hasProfileStateDocumentPartsTables(db)) {
@@ -226,8 +237,8 @@ export function writeProfileStateDomainParts(
     deleteProfileStateDomainParts(db, args.domain)
     return false
   }
-  const existing = new Map<string, { ordinal: number; contentHash: string }>()
-  if (args.diffExisting) {
+  const existing = args.existingParts ?? new Map<string, { ordinal: number; contentHash: string }>()
+  if (args.diffExisting && args.existingParts === undefined) {
     for (const row of db
       .prepare(
         `SELECT part_key, ordinal, content_hash FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
@@ -241,7 +252,7 @@ export function writeProfileStateDomainParts(
         })
       }
     }
-  } else {
+  } else if (!args.diffExisting) {
     db.prepare(`DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} WHERE domain = ?`).run(
       args.domain
     )

@@ -1,6 +1,10 @@
 import type { AsyncProfileStateAuthority } from './profile-state-authority'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
-import { markPrimaryStateWriteDurable } from './primary-state-write-runtime'
+import {
+  capturePrimaryStateWriteIntent,
+  markPrimaryStateWriteDurable
+} from './primary-state-write-runtime'
+import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import { prepareSelectiveProfileStateWrite } from './profile-state-selective-write'
 
 // Capture intent now; edits made while this operation waits belong to the next write.
@@ -9,30 +13,8 @@ export async function writeProfileStateInWorker(
   authority: AsyncProfileStateAuthority
 ): Promise<boolean> {
   authority.assertWritable()
-  const generation = runtime.writeGeneration
-  const dirtyDomains = runtime.dirtyProfileStateDomains
-  const automationRuns = runtime.pendingAutomationRunsAfter
-  runtime.dirtyProfileStateDomains = new Set()
-  runtime.pendingAutomationRunsAfter = undefined
-
-  const restoreIntent = (): void => {
-    if (dirtyDomains === null) {
-      runtime.dirtyProfileStateDomains = null
-    } else if (runtime.dirtyProfileStateDomains !== null) {
-      for (const domain of dirtyDomains) {
-        runtime.dirtyProfileStateDomains.add(domain)
-      }
-    }
-    if (automationRuns === undefined || runtime.pendingAutomationRunsAfter !== undefined) {
-      return
-    }
-    // A run list replaced while this write was in flight is newer; save it as a whole row instead.
-    if (automationRuns === runtime.state.automationRuns) {
-      runtime.pendingAutomationRunsAfter = automationRuns
-    } else {
-      runtime.dirtyProfileStateDomains?.add('automationRuns')
-    }
-  }
+  const { generation, dirtyDomains, automationRuns, restoreIntent } =
+    capturePrimaryStateWriteIntent(runtime)
 
   try {
     const prepared = beginWrite(
@@ -48,6 +30,7 @@ export async function writeProfileStateInWorker(
       return false
     }
     await prepared.completion
+    prepared.acknowledge?.()
     runtime.protectedSecrets.commitRetentionUpdates(prepared.protectedSecretUpdates)
     runtime.lastWrittenStateHash =
       runtime.writeGeneration === generation ? prepared.stateHash : null
@@ -60,6 +43,9 @@ export async function writeProfileStateInWorker(
       runtime.firstPendingSaveAt = null
     }
   } catch (error) {
+    if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
+      runtime.profileStateSplitSnapshots.clear()
+    }
     restoreIntent()
     throw error
   }
@@ -80,6 +66,24 @@ function beginWrite(
   lastWrittenStateHash: string | null,
   isCurrent: () => boolean
 ) {
+  if (authority.writePreparedState) {
+    const captured = serialization.buildPreparedStateWrite(dirtyDomains, automationRuns)
+    if (!isCurrent()) {
+      return undefined
+    }
+    const unchanged = captured.stateHash !== null && captured.stateHash === lastWrittenStateHash
+    const completion = unchanged
+      ? authority.assertCurrentRevision()
+      : captured.write
+        ? authority.writePreparedState(captured.write)
+        : authority.writeSerializedState(captured.payload)
+    return {
+      completion,
+      stateHash: captured.stateHash,
+      protectedSecretUpdates: unchanged ? [] : captured.protectedSecretUpdates,
+      acknowledge: captured.acknowledge
+    }
+  }
   const selective = prepareSelectiveProfileStateWrite(
     authority,
     serialization,
@@ -94,7 +98,12 @@ function beginWrite(
       selective.automationRuns !== undefined
         ? authority.writeSerializedAutomationRuns(selective.replacements, selective.automationRuns)
         : authority.writeSerializedDomains(selective.replacements)
-    return { completion, stateHash: null, protectedSecretUpdates: selective.protectedSecretUpdates }
+    return {
+      completion,
+      stateHash: null,
+      protectedSecretUpdates: selective.protectedSecretUpdates,
+      acknowledge: undefined
+    }
   }
   const complete = serialization.buildStateToSave(true)
   if (!isCurrent()) {
@@ -109,6 +118,7 @@ function beginWrite(
   return {
     completion,
     stateHash: complete.stateHash,
-    protectedSecretUpdates: unchanged ? [] : complete.protectedSecretUpdates
+    protectedSecretUpdates: unchanged ? [] : complete.protectedSecretUpdates,
+    acknowledge: undefined
   }
 }

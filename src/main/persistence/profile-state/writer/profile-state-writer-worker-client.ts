@@ -1,9 +1,16 @@
-import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
+import type {
+  ProfileStateDomainReplacement,
+  PreparedProfileStateWrite
+} from '../../loading-store/profile-writing/profile-state-authority'
 import { ProfileStateWriterConnection } from './profile-state-writer-connection'
 import './profile-state-writer-worker-path'
 import './profile-state-writer-errors'
 
 export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection {
+  writePreparedState(write: PreparedProfileStateWrite): Promise<number> {
+    return this.dispatch({ command: 'write-prepared', write }).then((response) => response.revision)
+  }
+
   assertWritable(): void {
     this.assertDispatchable()
   }

@@ -5,7 +5,7 @@ import {
   PROFILE_STATE_DOCUMENT_VERSION,
   PROFILE_STATE_META_REVISION
 } from '../database/profile-state-database-schema'
-import './profile-state-documents'
+import { replaceProfileStateDomainsInTransaction } from './profile-state-documents'
 import {
   ProfileStateRevisionConflictError,
   isRecord,
@@ -32,6 +32,9 @@ import {
   validateProfileStateDomainTransaction,
   type PreparedProfileStateMutation
 } from './profile-state-domain-write-validation'
+import type { ProfileStateDomainPatch } from './profile-state-domain-patches'
+import { preparePatchedProfileStateDomains } from './profile-state-patched-domain-preparation'
+import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
 
 export type ProfileStateDomainReplacement = {
   domain: string
@@ -51,7 +54,11 @@ export type ProfileStateDomainTransaction = {
   replacements: readonly ProfileStateDomainMutation[]
   /** Enable selective run-row updates from Store's changed projection. */
   automationRunsAfter?: readonly unknown[]
+  patches?: readonly ProfileStateDomainPatch[]
+  complete?: boolean
 }
+
+export type ProfileStateDomainChanges = Omit<ProfileStateDomainTransaction, 'expectedRevision'>
 
 export type ProfileStateDomainWriteResult = {
   changed: boolean
@@ -86,14 +93,50 @@ export function writeProfileStateDomains(
   db: Database.Database,
   transaction: ProfileStateDomainTransaction
 ): ProfileStateDomainTransactionResult {
-  validateProfileStateDomainTransaction(transaction)
+  const patches = validateProfileStateDomainTransaction(transaction)
 
-  const prepared = transaction.replacements.map(prepareProfileStateDomainMutation)
+  const prepared = transaction.replacements.map((replacement) =>
+    prepareProfileStateDomainMutation(replacement)
+  )
 
   return withProfileStateWriteTransaction(db, () => {
     const actualRevision = readProfileStateRevision(db)
     if (actualRevision !== transaction.expectedRevision) {
       throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
+    }
+    const mutations = [
+      ...prepared,
+      ...preparePatchedProfileStateDomains(db, patches, actualRevision)
+    ]
+    if (transaction.complete) {
+      const present = [
+        ...patches.map(({ domain }) => domain),
+        ...(transaction.automationRunsAfter === undefined ? [] : ['automationRuns'])
+      ]
+      const complete = buildCompleteDocumentReplacements(db, mutations, present)
+      if (actualRevision === 0 || (complete.length === 0 && present.length === 0)) {
+        const entries = mutations.flatMap(({ domain, payload }) =>
+          payload === null ? [] : [{ domain, payload }]
+        )
+        if (transaction.automationRunsAfter !== undefined) {
+          entries.push({
+            domain: 'automationRuns',
+            payload: JSON.stringify(transaction.automationRunsAfter)
+          })
+        }
+        const revision = replaceProfileStateDomainsInTransaction(
+          db,
+          entries,
+          actualRevision,
+          Date.now()
+        )
+        return { changed: true, revision, changedDomains: entries.map(({ domain }) => domain) }
+      }
+      mutations.push(
+        ...complete
+          .slice(mutations.length)
+          .map((mutation) => prepareProfileStateDomainMutation(mutation))
+      )
     }
     const currentAutomationRuns = readCurrentAutomationRunsState(db, actualRevision)
 
@@ -154,7 +197,7 @@ export function writeProfileStateDomains(
         updates.push(mutation)
       }
     }
-    for (const mutation of prepared) {
+    for (const mutation of mutations) {
       admit(mutation)
     }
     if (transaction.automationRunsAfter !== undefined) {
@@ -218,7 +261,8 @@ export function writeProfileStateDomains(
             revision: nextRevision,
             updatedAt,
             legacyRevision: splitState.legacyRevision,
-            diffExisting: true
+            diffExisting: true,
+            existingParts: mutation.existingParts
           })
         ) {
           continue

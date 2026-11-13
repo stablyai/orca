@@ -3,6 +3,7 @@ import type {
   ProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateDomainReplacement,
+  PreparedProfileStateWrite,
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
 import {
@@ -16,15 +17,16 @@ import {
   openWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './database/profile-state-database'
-import { writeProfileStateDomains } from './documents/profile-state-domain-writes'
+import {
+  writeProfileStateDomains,
+  type ProfileStateDomainChanges
+} from './documents/profile-state-domain-writes'
 import {
   prepareProfileStateDomainMutation,
+  profileStateDomainsFromSerializedState,
   validateProfileStateDomainTransaction
 } from './documents/profile-state-domain-write-validation'
-import {
-  parseProfileStateRoot,
-  ProfileStateRevisionConflictError
-} from './documents/profile-state-document-validation'
+import { ProfileStateRevisionConflictError } from './documents/profile-state-document-validation'
 import { assertProfileStateRevisionOnDisk } from './database/profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
@@ -145,6 +147,19 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     replacements: readonly ProfileStateDomainReplacement[],
     automationRunsAfter?: readonly unknown[]
   ): void {
+    this.writeDomainTransaction({ replacements, automationRunsAfter })
+  }
+
+  writePreparedState(write: PreparedProfileStateWrite): void {
+    this.writeDomainTransaction({
+      replacements: write.replacements,
+      patches: write.patches,
+      complete: write.complete,
+      automationRunsAfter: write.runPayloads?.map((payload): unknown => JSON.parse(payload))
+    })
+  }
+
+  private writeDomainTransaction(transaction: ProfileStateDomainChanges): void {
     this.assertActive()
     if (this.observedRevision === undefined) {
       // Direct callers must establish a revision fence even without Store's initial read.
@@ -153,9 +168,8 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened = this.openWritableDatabase()
     this.legacyDocuments.catchUp(this.writableDatabase?.db)
     this.observedRevision = writeProfileStateDomains(opened.db, {
-      expectedRevision: this.observedRevision ?? 0,
-      replacements,
-      automationRunsAfter
+      ...transaction,
+      expectedRevision: this.observedRevision ?? 0
     }).revision
     this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
@@ -176,20 +190,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedState(payload: Buffer): void {
     this.assertActive()
-    const serialized = payload.toString('utf8')
-    if (!Buffer.from(serialized, 'utf8').equals(payload)) {
-      throw new Error('Profile state payload is not valid UTF-8')
-    }
-    const parsed = parseProfileStateRoot(serialized)
-    this.writeCompleteSerializedDomains(
-      Object.entries(parsed).map(([domain, value]) => {
-        const payload = JSON.stringify(value)
-        if (payload === undefined) {
-          throw new Error(`Profile state domain payload is not serializable: ${domain}`)
-        }
-        return { domain, payload }
-      })
-    )
+    this.writeCompleteSerializedDomains(profileStateDomainsFromSerializedState(payload))
   }
 
   writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): void {

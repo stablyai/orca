@@ -116,3 +116,11 @@ function encodeOpenErrorCause(cause: unknown): ProfileStateWriterErrorData['caus
     ...(errcode !== undefined ? { errcode } : {})
   }
 }
+
+export function closedProfileStateWriterError(): ProfileStateWriterError {
+  return new ProfileStateWriterError(
+    'profile-state-writer-closed',
+    'Profile state writer is closing',
+    'known-failure'
+  )
+}

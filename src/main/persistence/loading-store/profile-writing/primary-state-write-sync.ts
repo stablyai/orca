@@ -1,7 +1,9 @@
 import { writeSelectiveProfileState } from './profile-state-selective-write'
+import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import {
   canReuseDurableProfileState,
+  capturePrimaryStateWriteIntent,
   markPrimaryStateWriteDurable
 } from './primary-state-write-runtime'
 
@@ -27,6 +29,45 @@ export function writeToDiskSync(
     opts.expectedGeneration === undefined
       ? undefined
       : () => runtime.writeGeneration === opts.expectedGeneration
+  if (authority.writePreparedState) {
+    const intent = capturePrimaryStateWriteIntent(runtime)
+    try {
+      const captured = serialization.buildPreparedStateWrite(
+        intent.dirtyDomains,
+        intent.automationRuns
+      )
+      if (isCurrent && !isCurrent()) {
+        intent.restoreIntent()
+        return false
+      }
+      if (captured.stateHash !== null && canReuseDurableProfileState(runtime, captured.stateHash)) {
+        captured.acknowledge()
+      } else {
+        if (captured.write) {
+          authority.writePreparedState(captured.write)
+        } else {
+          authority.writeSerializedState(captured.payload)
+        }
+        captured.acknowledge()
+        runtime.protectedSecrets.commitRetentionUpdates(captured.protectedSecretUpdates)
+      }
+      runtime.lastWrittenStateHash =
+        runtime.writeGeneration === intent.generation ? captured.stateHash : null
+      markPrimaryStateWriteDurable(runtime, intent.generation)
+    } catch (error) {
+      if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
+        runtime.profileStateSplitSnapshots.clear()
+      }
+      intent.restoreIntent()
+      throw error
+    }
+    try {
+      authority.scheduleBackup?.()
+    } catch (error) {
+      console.error('[persistence] Failed to schedule profile state backup:', error)
+    }
+    return true
+  }
   const selective = writeSelectiveProfileState(
     authority,
     serialization,

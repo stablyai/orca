@@ -1,4 +1,7 @@
-import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
+import type {
+  ProfileStateDomainReplacement,
+  PreparedProfileStateWrite
+} from '../../loading-store/profile-writing/profile-state-authority'
 import { isRecord } from '../documents/profile-state-document-validation'
 
 export type ProfileStateWriterInitialization = {
@@ -9,6 +12,7 @@ export type ProfileStateWriterInitialization = {
 
 export type ProfileStateWriterCommand =
   | { command: 'write-state'; payload: Uint8Array }
+  | { command: 'write-prepared'; write: PreparedProfileStateWrite }
   | {
       command: 'write-complete' | 'write-domains'
       replacements: readonly ProfileStateDomainReplacement[]
@@ -65,11 +69,45 @@ function isReplacement(value: unknown): value is ProfileStateDomainReplacement {
   )
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry: unknown) => typeof entry === 'string')
+}
+
+function isPatchOperation(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isStringArray(value.path) &&
+    (value.kind === 'remove' ||
+      (value.kind === 'set' && typeof value.payload === 'string') ||
+      (value.kind === 'order' && isStringArray(value.keys)))
+  )
+}
+
+function isPreparedWrite(value: unknown): value is PreparedProfileStateWrite {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.replacements) &&
+    value.replacements.every(isReplacement) &&
+    Array.isArray(value.patches) &&
+    value.patches.every(
+      (patch: unknown) =>
+        isRecord(patch) &&
+        typeof patch.domain === 'string' &&
+        Array.isArray(patch.operations) &&
+        patch.operations.every(isPatchOperation)
+    ) &&
+    (value.complete === undefined || typeof value.complete === 'boolean') &&
+    (value.runPayloads === undefined || isStringArray(value.runPayloads))
+  )
+}
+
 export function isProfileStateWriterRequest(value: unknown): value is ProfileStateWriterRequest {
   if (!isRecord(value) || !isProfileStateRevision(value.id) || value.id === 0) {
     return false
   }
   switch (value.command) {
+    case 'write-prepared':
+      return isPreparedWrite(value.write)
     case 'write-state':
       return value.payload instanceof Uint8Array
     case 'assert-revision':

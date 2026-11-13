@@ -78,6 +78,23 @@ function readState(input: ReturnType<typeof options>) {
 }
 
 describe('live profile authority admission', () => {
+  it('saves split-domain changes through the real worker and reads them after graceful restart', async () => {
+    const input = options()
+    const first = await open(input)
+    first.store.setWorkspaceSession({ ...first.store.getWorkspaceSession(), activeTabId: 'first' })
+    await first.store.flushPendingOrThrowAsync()
+    first.store.getWorkspaceSession().activeTabId = 'getter-only-final'
+    await first.store.freezeWritesAsync()
+    const reopened = await open(input)
+    expect(reopened.store.getWorkspaceSession().activeTabId).toBe('getter-only-final')
+    reopened.store.setWorkspaceSession({
+      ...reopened.store.getWorkspaceSession(),
+      activeTabId: 'after-restart'
+    })
+    await reopened.store.freezeWritesAsync()
+    expect(readState(input).workspaceSession.activeTabId).toBe('after-restart')
+  })
+
   it('never adopts a competing revision between bootstrap and worker readiness', async () => {
     const input = options()
     const original = ProfileStateSqliteAuthority.prototype.retireForWorker
