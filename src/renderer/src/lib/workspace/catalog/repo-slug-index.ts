@@ -18,7 +18,7 @@ import {
 import {
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
-} from '../../../../../shared/github/repository-identity-key'
+} from '../../../../../shared/github/repositories/repository-identity-key'
 import { createBoundedGenerationMap } from '../../bounded-generation-map'
 
 const slugResolutionInFlight = new Map<string, Promise<string | null>>()

@@ -34,8 +34,7 @@ const GATED_FAMILIES = [
   {
     modules: [
       'src/main/git/command-runner/git-exec-file',
-      'src/main/git/command-runner/git-exec-file-sync',
-      'src/main/git/runner'
+      'src/main/git/command-runner/git-exec-file-sync'
     ],
     advice: { gitExecFileSync: 'use gitExecFileAsync' }
   },

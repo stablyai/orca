@@ -10,7 +10,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Layout model, persistence and compatibility folders.
   'src/shared/workspace-layout/',
   'src/shared/remote-layout-snapshot.ts',
-  'src/shared/workspace-layout/terminal-leaf-move.ts',
+  'src/shared/workspace-layout/terminal-topology/terminal-leaf-move.ts',
   'src/main/persistence/terminal-topology/',
   'src/main/persistence/restoring-sessions/',
   'src/main/persistence/loading-store/terminal-bindings/pty-binding-',

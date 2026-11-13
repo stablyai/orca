@@ -378,8 +378,7 @@
       "pausedState": "Pausado",
       "queuedState": "Na fila",
       "resume": "Retomar",
-      "resumeSending": "Retomar o envio das mensagens na fila",
-      "title": "Mensagens na fila"
+      "resumeSending": "Retomar o envio das mensagens na fila"
     },
     "offlineQueue": {
       "failed": "Não foi possível enviar — toque em Enviar para tentar de novo",
@@ -1716,7 +1715,6 @@
     "desktops": {
       "pairDesktop": "Emparelhe um computador"
     },
-    "jumpBackIn": {},
     "sections": {
       "tasks": "Tarefas",
       "tasksSubtitle": "Explore suas issues e revisões"
@@ -2763,13 +2761,10 @@
       "loadFailed": "Não foi possível carregar o pull request"
     },
     "queuedCardText": {
-      "showLess": "Mostrar menos",
       "showLessHint": "Mostra menos conteúdo da mensagem",
-      "showMore": "Mostrar mais",
       "showMoreHint": "Mostra a mensagem inteira"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Excluir esta mensagem da fila",
       "images_many": "{{count}} imagens",
       "images_one": "{{count}} imagem",
       "images_other": "{{count}} imagens",
@@ -2777,7 +2772,6 @@
       "send": "Enviar",
       "sendAgainHint": "Enviar esta mensagem novamente",
       "sendHint": "Enviar esta mensagem",
-      "showLessHint": "Mostra menos conteúdo da mensagem",
       "steer": "Orientar",
       "steerHint": "Enviar sem interromper o modelo"
     },
@@ -2897,8 +2891,7 @@
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
       "newTab": "Nova aba",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
@@ -2941,6 +2934,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Falha ao anexar (reconectando)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Não foi possível fechar a aba. Tente novamente.",
+      "closeFailedDesktopNotReady": "Não foi possível fechar a aba. O Orca ainda está carregando no seu computador. Tente novamente em instantes."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Falha no comando do navegador",
@@ -3220,8 +3217,6 @@
     },
     "presentation": {
       "loadingTabs": "Carregando guias",
-      "oneTab": "1 guia",
-      "tabCount": "{{tabCount}} guias",
       "tapToRetry": "{{status}} — toque para tentar novamente"
     },
     "documentReaders": {

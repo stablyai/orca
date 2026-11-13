@@ -21,8 +21,8 @@ import {
   codexStructuredLaunchPart,
   type CodexStructuredLaunchPartDeps
 } from '../../../codex/structured/launch/codex-structured-launch-resolution'
-import type { PrepareNativeChatVisuals } from '../../../native-chat/native-chat-visuals-delivery'
-import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
+import type { PrepareNativeChatVisuals } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../../../pi/rpc-agent-definition'
 import {
   piRpcLaunchPart,

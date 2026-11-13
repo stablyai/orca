@@ -37,6 +37,7 @@ import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
+import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
 import { nativeStackReturn } from './native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -188,7 +189,10 @@ export function MobileWebShellScreen({
       router.dismissTo(href)
       return
     }
-    return void (replace ? router.replace(href) : router.push(href))
+    // A standalone session takes the host list's place, so Back leaves the host.
+    return void (replace || isStandaloneSessionHref(href)
+      ? router.replace(href)
+      : router.push(href))
   }
   const openTarget = usePageOpenTarget({
     route,

@@ -25,7 +25,7 @@ import {
   claudeModelCatalogDiscovery,
   codexModelCatalogDiscovery
 } from '../model-catalog/structured-agent-model-catalog-discovery'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import type {
   StructuredAgentAccountHomeRequest,

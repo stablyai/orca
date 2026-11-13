@@ -3354,7 +3354,6 @@
             "runningTerminalBlocker": "Proceso de terminal en ejecución",
             "terminalLivenessUnknownBlocker": "Estado del terminal desconocido",
             "dirtyEditorBufferBlocker": "Búfer del editor sin guardar",
-            "volatileLocalContextBlocker": "Contexto local volátil",
             "recentVisibleContextBlocker": "Pestañas visitadas recientemente",
             "liveAgentBlocker": "Agente activo",
             "sshDisconnectedBlocker": "Remoto no disponible",
@@ -3516,6 +3515,8 @@
             "15dd899676": "Añadir a {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "Problema del terminal",
+            "errorTitle": "Error del terminal",
             "e4aa243f8c": "Reiniciar servicio",
             "a7e2fd2699": "abre un issue",
             "5c8ce20be6": "Si esto persiste, por favor",
@@ -7320,8 +7321,6 @@
             "ba1d9a0607": "Tinte de la barra lateral"
           },
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
-          "interfaceDefaultFont": "Fuente predeterminada",
-          "terminalDefaultFont": "Fuente predeterminada",
           "interfaceTitle": "Interfaz",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",
@@ -8200,16 +8199,12 @@
           "5426ecbdcb": "Los scripts locales no se ejecutarán",
           "95a0411b3e": "plantilla",
           "175daba180": "Ejemplo",
-          "b20c5df6ca": "Agrega un archivo `orca.yaml` para habilitar valores predeterminados compartidos de configuración, archivado o automatización de Issues para este repositorio. Plantilla de ejemplo:",
-          "56f9a4a1d0": "Usando `orca.yaml`",
           "623e0c9f31": "No se pudo analizar `orca.yaml`",
-          "5a67e4793d": "No se detectó `orca.yaml`",
           "07ba35bc68": "Revisa la indentación bajo `scripts:`. Las claves de hooks deben usar dos espacios y las líneas de comandos deben usar cuatro.",
           "787ca433ef": "Define solo las claves admitidas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compara tu archivo con la plantilla funcional de abajo y copia esa estructura si hace falta.",
           "0cc712b823": "El archivo de configuración principal existe en la raíz del repositorio, pero Orca aún no pudo analizar las definiciones de hooks admitidas.",
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
-          "ca424ff135": "Los valores predeterminados compartidos de hooks y automatización de Issues están definidos en el repositorio y disponibles para todos los que lo usan.",
           "8bfe65fc60": "Usar comandos locales",
           "8d6c56bff8": "Ejecutar ambos",
           "0fa21e19ec": "Nombre del workspace, normalmente basado en el nombre de la rama.",
@@ -16910,6 +16905,14 @@
                     "logins": {
                       "title": "Mantén la sesión iniciada",
                       "body": "Lleva tus inicios de sesión existentes a Orca para seguir conectado de inmediato."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensiones de Chrome",
+                        "body": "Instala extensiones desde Chrome Web Store y fíjalas junto a la barra de direcciones.",
+                        "action": "Abrir Web Store",
+                        "secondaryAction": "Entendido"
+                      }
                     }
                   },
                   "tasks": {
@@ -17299,7 +17302,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Mostrar menos",
-          "showMore": "Mostrar más"
+          "showMore": "Mostrar más",
+          "copied": "Copiado",
+          "copyFailed": "No se pudo copiar",
+          "copyPrompt": "Copiar prompt"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -17338,7 +17344,14 @@
           "precheckNone": "Ninguna",
           "migrate": "Migrar",
           "migrateNotice": "{{host}} se actualizó a un nuevo host remoto. Migra esta automatización para que siga ejecutándose.",
-          "needsMigration": "Requiere migración"
+          "needsMigration": "Requiere migración",
+          "repeats": "Se repite",
+          "missedRunGrace": "Período de gracia",
+          "execution": "Ejecución",
+          "notRunYet": "Aún no se ha ejecutado",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} ejecución informada",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} ejecuciones informadas"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
@@ -20563,6 +20576,7 @@
           "about": {
             "parakeetV3": "Rápido. {{languages}} idiomas europeos.",
             "parakeetV2": "Rápido. Solo inglés, y el más preciso en él.",
+            "parakeetUnifiedEn": "Solo inglés. Las palabras aparecen mientras hablas.",
             "whisperTiny": "La descarga más pequeña. Bueno para probar el dictado.",
             "whisperTurbo": "La mayoría de idiomas, unos 100. Lento sin GPU.",
             "senseVoice": "Rápido. Para chino, japonés y coreano.",
@@ -21153,7 +21167,8 @@
       "remove": "Eliminar…",
       "empty": "No hay extensiones activadas para este perfil",
       "visitWebStore": "Visitar Chrome Web Store",
-      "manage": "Administrar extensiones"
+      "manage": "Administrar extensiones",
+      "openWebStoreFailed": "No se pudo abrir Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Móvil S — 320 × 568",
@@ -21477,7 +21492,6 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
-      "chatTitle": "Chats de Antigravity",
       "chatSignIn": "Iniciar sesión",
       "chatChangeAccount": "Cambiar de cuenta",
       "chatRetry": "Reintentar inicio de sesión",
@@ -21498,20 +21512,10 @@
       "retry": "Reintentar",
       "remove": "Eliminar",
       "usage": "Actualizar uso",
-      "signIn": "Inicia agy en este host y completa su inicio de sesión en el navegador, luego guarda la cuenta actual. Para agregar otra cuenta, usa /logout en agy e inicia sesión de nuevo.",
-      "docs": "Instrucciones de inicio de sesión",
-      "identityUnknown": "Identidad de sesión no disponible",
-      "signedOut": "No hay ninguna cuenta nativa de agy con sesión iniciada.",
       "changed": "La cuenta nativa cambió. Selecciona de nuevo una cuenta guardada antes de iniciar agy.",
-      "save": "Guardar cuenta actual",
       "refresh": "Actualizar cuentas",
-      "working": "Actualizando cuenta",
       "usageReading": "Sesión: {{session}} · Semanal: {{weekly}}",
       "saved": "Cuenta de Google guardada",
-      "nativeActive": "Cuenta nativa",
-      "selected": "Seleccionada",
-      "select": "Seleccionar",
-      "sessions": "La selección se aplica a las nuevas sesiones de agy en este host. Las sesiones existentes pueden conservar su cuenta anterior.",
       "searchDescription": "Guarda y selecciona cuentas nativas de Google de agy en el host de ejecución.",
       "title": "Antigravity",
       "keyword": {
@@ -21523,7 +21527,6 @@
       "authMethod": "Iniciar sesión con",
       "personal": "Cuenta de Google",
       "gcpProject": "Proyecto de Google Cloud",
-      "gcpLocation": "Ubicación de Google Cloud",
       "settingsIncomplete": "Elige un tipo de cuenta de Antigravity e introduce su proyecto y ubicación de Google Cloud.",
       "settingsLoadFailed": "Orca no pudo cargar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
@@ -23530,11 +23533,10 @@
     "setByArguments": "Definido por tus argumentos",
     "searchModels": "Buscar modelos",
     "noModels": "Ningún modelo coincide con tu búsqueda.",
-    "legacyModels": "Modelos antiguos",
     "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos",
+    "moreModelsWithCount": "Más modelos ({{total}})",
     "use": "Usar",
     "select": "Seleccionar agente",
     "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",

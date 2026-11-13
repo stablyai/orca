@@ -35,7 +35,7 @@ describe('trackRuntimeEnvironmentVerifiedTransitions', () => {
         return 'failed'
       }
       inbox.push(...outbox.splice(0))
-      return 'synced'
+      return 'moved'
     })
     const publish = trackRuntimeEnvironmentVerifiedTransitions((environmentId) =>
       relays.resetEnvironment(environmentId)

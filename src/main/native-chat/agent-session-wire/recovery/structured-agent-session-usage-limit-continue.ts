@@ -132,7 +132,9 @@ export class StructuredAgentSessionUsageLimitContinue {
       turnItemId: cut.turnItemId,
       resetsAt: cut.resetsAt,
       // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
-      ...(!hold.unknownReset && hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
+      ...(!hold.unknownReset && hold.resetsAt !== cut.resetsAt
+        ? { continueAt: hold.resetsAt }
+        : {}),
       state
     }
   }
@@ -172,13 +174,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     if (this.running || this.disposed) {
       return
     }
-    // Off, nothing can be scheduled; the settings listener publishes the switch itself.
-    if (!this.enabled()) {
-      if (this.holds.size + this.cold.size + this.attempts.size > 0) {
-        this.retainShown(this.deps.host.store.listVisibleSessionIds())
-      }
-      return
-    }
+    // Off, nothing is sent, but an account switch still moves when Continue applies.
     this.running = true
     try {
       const visible = this.deps.host.store.listVisibleSessionIds()
@@ -197,10 +193,10 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (!cut || previous?.identity !== identity(cut)) {
           this.attempts.delete(id)
         }
-        // Before the overdue check: after a restart only the reading still knows a later reset.
-        // Only a reading taken after the cut's reset counts, so attribution waits for it.
-        if (cut?.resetsAt !== undefined && this.deps.now() >= cut.resetsAt) {
-          await this.holds.attribute(id, this.deps.host)
+        // Before the overdue check: after a restart only the reading still knows a later reset,
+        // and a switched account frees the chat before it.
+        if (cut?.resetsAt !== undefined) {
+          await this.attribute(id, cut)
         }
         const attempt = this.attempts.get(id)
         if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
@@ -226,6 +222,13 @@ export class StructuredAgentSessionUsageLimitContinue {
     }
   }
 
+  /** The account a cut hit is the one its turn's runtime launched under, when the record names it. */
+  private attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
+    const launched = this.deps.host.store.getRecord(id)?.launchedAccount
+    const home = launched && launched.fence === cut.fence ? launched.accountHome : null
+    return this.holds.attribute(id, this.deps.host, { cut: identity(cut), home }, this.deps.now())
+  }
+
   private deferUnchangedCut(id: string, cut: Cut, at: number): void {
     const current = this.cold.read(id)
     // Admission also refuses temporary backlog; yield the next passes without spending a failure.
@@ -243,7 +246,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   private async send(id: string, cut: Cut): Promise<void> {
     // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
     if (!this.holds.attributionCurrent(id, this.deps.host)) {
-      await this.holds.attribute(id, this.deps.host)
+      await this.attribute(id, cut)
     }
     const record = this.deps.host.store.getRecord(id)
     if (!record) {

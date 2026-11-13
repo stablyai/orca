@@ -189,7 +189,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # Design D2: the parent release-cut run merged it from every node-server lane at this tag.
