@@ -128,7 +128,7 @@ export function formatWorkspaceCleanupReport(report: WorkspaceCleanupReport): st
   const lines = [
     status.join(' '),
     '',
-    `Last run (${latest.trigger}, ${new Date(latest.startedAt).toISOString()}):`,
+    `Last run (${terminalSafeLine(latest.trigger)}, ${new Date(latest.startedAt).toISOString()}):`,
     formatWorkspaceCleanupRun(latest)
   ]
   if (earlier.length > 0) {
@@ -137,7 +137,7 @@ export function formatWorkspaceCleanupReport(report: WorkspaceCleanupReport): st
       'Earlier runs:',
       ...earlier.map(
         (run) =>
-          `${new Date(run.startedAt).toISOString()}  ${run.trigger}  ${formatRunSummary(run)}${run.error ? ` ${terminalSafeLine(run.error)}` : ''}`
+          `${new Date(run.startedAt).toISOString()}  ${terminalSafeLine(run.trigger)}  ${formatRunSummary(run)}${run.error ? ` ${terminalSafeLine(run.error)}` : ''}`
       )
     )
   }

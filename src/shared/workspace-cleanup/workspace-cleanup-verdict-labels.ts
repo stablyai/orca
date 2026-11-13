@@ -19,7 +19,7 @@ export const WORKSPACE_CLEANUP_KEEP_CAUSE_LABELS: Record<WorkspaceCleanupKeepCau
   pinned: 'pinned',
   'no-rule-matched': 'no rule matched',
   waiting: 'waiting',
-  'recently-active': 'used in the last hour',
+  'recently-active': 'used recently',
   'active-workspace': 'active workspace',
   'agent-running': 'agent running',
   'terminal-running': 'terminal running a process',
