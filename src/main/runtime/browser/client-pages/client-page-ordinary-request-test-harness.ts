@@ -3,7 +3,7 @@ import { BROWSER_CORE_METHODS } from '../../rpc/methods/browser/browser-core'
 import { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
 import type { createRecoveryLoop } from './client-page-recovery-loop-test-harness'
 import { vi } from 'vitest'
-import { orcadClientPageCommand } from '../../../orcad/orcad-client-page-commands'
+import { orcadClientPageCommand } from '../../../orcad/browser-providers/orcad-client-page-commands'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 
 export function ordinaryPageRpc(h: ReturnType<typeof createRecoveryLoop>, remote = false) {
