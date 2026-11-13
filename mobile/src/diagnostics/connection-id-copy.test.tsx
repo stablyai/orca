@@ -1,8 +1,15 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { AccessibilityInfo, Platform } from 'react-native'
 import { afterEach, expect, it, vi } from 'vitest'
 
-vi.mock('react-native', () => ({ View: 'View', Text: 'Text', Pressable: 'Pressable' }))
+vi.mock('react-native', () => ({
+  View: 'View',
+  Text: 'Text',
+  Pressable: 'Pressable',
+  AccessibilityInfo: { announceForAccessibility: vi.fn() },
+  Platform: { OS: 'ios' }
+}))
 vi.mock('../theme/mobile-theme', () => ({ pressedStyle: {} }))
 vi.mock('./connection-diagnostics-screen-styles', () => ({ connectionDiagnosticsScreenStyles: {} }))
 
@@ -15,6 +22,8 @@ afterEach(async () => {
     await act(() => tree?.unmount())
   }
   tree = undefined
+  vi.clearAllMocks()
+  Platform.OS = 'ios'
 })
 
 async function render(hostId: string | null, writeClipboard: (value: string) => Promise<unknown>) {
@@ -40,8 +49,12 @@ it('copies the selected connection ID and confirms only after the clipboard writ
   expect(write).toHaveBeenCalledExactlyOnceWith('host-123')
   expect(button().props.disabled).toBe(true)
   expect(text()).not.toContain('Connection ID copied')
+  expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled()
   await act(async () => pending.resolve())
   expect(text()).toContain('Connection ID copied')
+  expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledExactlyOnceWith(
+    'Connection ID copied'
+  )
 })
 
 it('allows retry after clipboard rejection without reporting success', async () => {
@@ -51,8 +64,15 @@ it('allows retry after clipboard rejection without reporting success', async () 
   expect(text()).toContain('Could not copy. Try again.')
   expect(text()).not.toContain('Connection ID copied')
   expect(button().props.disabled).toBe(false)
+  expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledExactlyOnceWith(
+    'Could not copy. Try again.'
+  )
+  vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear()
   await act(async () => button().props.onPress())
   expect(text()).toContain('Connection ID copied')
+  expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledExactlyOnceWith(
+    'Connection ID copied'
+  )
   expect(write.mock.calls).toEqual([['host-456'], ['host-456']])
 })
 
@@ -67,6 +87,17 @@ it('does not attribute an earlier pending write to a newly selected host', async
   await act(async () => pending.resolve())
   expect(text()).not.toContain('Connection ID copied')
   expect(text()).toContain('host-B')
+  expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled()
   await act(async () => button().props.onPress())
   expect(write.mock.calls).toEqual([['host-A'], ['host-B']])
+})
+
+it('keeps Android copy feedback in the live region without an explicit announcement', async () => {
+  Platform.OS = 'android'
+  await render('host-android', () => Promise.resolve())
+  await act(async () => button().props.onPress())
+  expect(tree!.root.findByProps({ accessibilityLiveRegion: 'polite' }).props.children).toBe(
+    'Connection ID copied'
+  )
+  expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled()
 })

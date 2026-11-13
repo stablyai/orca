@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { pressedStyle } from '../theme/mobile-theme'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
@@ -9,12 +9,14 @@ type Props = {
   writeClipboard: (value: string) => Promise<unknown>
 }
 
+/** Key feedback to the selected connection so pending writes cannot outlive their host. */
 export function ConnectionIdCopy({ hostId, writeClipboard }: Props) {
   return hostId ? (
     <SelectedConnectionIdCopy key={hostId} hostId={hostId} writeClipboard={writeClipboard} />
   ) : null
 }
 
+/** Keep clipboard feedback and announcements scoped to this connection's lifetime. */
 function SelectedConnectionIdCopy({ hostId, writeClipboard }: Props & { hostId: string }) {
   const t = useMobileTranslation()
   const [status, setStatus] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle')
@@ -27,23 +29,31 @@ function SelectedConnectionIdCopy({ hostId, writeClipboard }: Props & { hostId: 
     }
   }, [])
 
+  /** Announce settled clipboard results only while their connection is still selected. */
   const copy = async () => {
     if (pending.current) {
       return
     }
     pending.current = true
     setStatus('copying')
+    let result: 'copied' | 'failed' = 'copied'
     try {
       await writeClipboard(hostId)
-      if (mounted.current) {
-        setStatus('copied')
-      }
     } catch {
-      if (mounted.current) {
-        setStatus('failed')
-      }
+      result = 'failed'
     } finally {
       pending.current = false
+    }
+    if (!mounted.current) {
+      return
+    }
+    setStatus(result)
+    if (Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(
+        result === 'copied'
+          ? t('diagnostics.connectionIdCopy.copied', 'Connection ID copied')
+          : t('diagnostics.connectionIdCopy.failed', 'Could not copy. Try again.')
+      )
     }
   }
 
