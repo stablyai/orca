@@ -13,6 +13,7 @@ import {
 } from '../../cloud-environment/CloudEnvironmentSection'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { EnterpriseSettingsPane } from '../enterprise/EnterpriseSettingsPane'
 import { CloudSecretsSection } from '../cloud-secrets/CloudSecretsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudPredictiveWakeSetting } from './CloudPredictiveWakeSetting'
@@ -102,6 +103,11 @@ function OrcaCloudAccountGate({
       })}
     </Fragment>
   )
+}
+
+/** Settings › Enterprise: single sign-on, sign-in policies and the team audit log. */
+export function OrcaCloudEnterprisePane(): React.JSX.Element {
+  return <OrcaCloudAccountGate>{() => <EnterpriseSettingsPane />}</OrcaCloudAccountGate>
 }
 
 export function OrcaCloudTeamPane(): React.JSX.Element {
