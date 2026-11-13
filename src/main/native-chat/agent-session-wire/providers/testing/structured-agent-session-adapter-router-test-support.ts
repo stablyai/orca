@@ -72,7 +72,8 @@ export function claudeAndCodexDeclared(): StructuredAgentRegistry {
     }),
     rewind: unused,
     recoverRewind: unused,
-    copyConversation: unused
+    copyConversation: unused,
+    startVoiceConversation: unused
   })
 }
 
