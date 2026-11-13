@@ -58,7 +58,9 @@ export function CloudStructuredChatBanners({
         event.key !== 'Escape' ||
         event.defaultPrevented ||
         !(event.target instanceof Node) ||
-        !chat?.contains(event.target)
+        !chat?.contains(event.target) ||
+        // The strip handles its own Escape; this covers the rest of the chat (e.g. the composer).
+        slot.current?.contains(event.target)
       ) {
         return
       }
