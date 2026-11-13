@@ -65,9 +65,10 @@ export function FullDiskAccessNudgeToast({
         </div>
       </div>
       {/* Why: on a roomy card, indent by illustration width + gap so the actions start
-          under the title. Below ~22rem of card width (20rem content box) that indent would
-          push the button past the border, so the row drops it and stacks full width. */}
-      <div className="mt-3 flex flex-col items-start gap-y-1.5 @[20rem]:ml-[90px] @[20rem]:flex-row @[20rem]:flex-wrap @[20rem]:items-center @[20rem]:gap-x-2">
+          under the title; below a 20rem content box that indent would overflow, so stack.
+          Each property is set only by a container variant: dev-loaded utility sheets
+          (react-grab) re-declare base utilities later and would win a base-vs-variant tie. */}
+      <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1.5 @[20rem]:ml-[90px] @[20rem]:items-center @max-[20rem]:flex-col @max-[20rem]:items-start">
         {/* Why: Button is nowrap/shrink-0 by default; let the label wrap rather than overflow. */}
         <Button
           variant="default"
@@ -79,7 +80,7 @@ export function FullDiskAccessNudgeToast({
         </Button>
         <button
           type="button"
-          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          className="rounded-sm text-xs text-muted-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={onDontShowAgain}
         >
           {t('auto.hooks.useMacosTccPromptNotice.dismiss', "Don't show again")}
