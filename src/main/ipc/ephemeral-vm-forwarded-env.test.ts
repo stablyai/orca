@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, (_event: unknown, args?: unknown) => unknown>()
+// The only channel registered here returns a summary.
+const handlers = new Map<string, (_event: unknown, args?: unknown) => RecipeForwardedEnvSummary>()
 const { listRuntimesMock, recipeContextMock } = vi.hoisted(() => ({
   listRuntimesMock: vi.fn(),
   recipeContextMock: vi.fn()
@@ -31,7 +32,7 @@ function summarize(args?: unknown): RecipeForwardedEnvSummary {
   if (!handler) {
     throw new Error('handler not registered')
   }
-  return handler({}, args) as RecipeForwardedEnvSummary
+  return handler({}, args)
 }
 
 beforeEach(() => {
