@@ -1,5 +1,4 @@
 import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
-import { getProviderProcessHostClient } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isLocalExecutionHost } from '../../../shared/execution-host'
@@ -8,6 +7,7 @@ import { track } from '../../telemetry/client'
 import { getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
 import {
   getDaemonProvider,
+  getProviderProcessHostClient,
   listLiveDaemonPtyIds
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { initDaemonPtyProvider } from '../../daemon/providers/lifecycle/daemon-provider-init'

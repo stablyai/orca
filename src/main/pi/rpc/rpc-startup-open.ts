@@ -1,4 +1,4 @@
-import type { PiRpcConnection } from './rpc-session'
+import type { PiRpcConnection, PiRpcSession } from './rpc-session'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type {
   StructuredAgentSessionAcquireInput,
@@ -8,7 +8,6 @@ import type { AgentSessionStartEndings } from '../../native-chat/agent-session-w
 import type { StructuredAgentSessionProviderOpenInput } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { JsonlRpcAgentExitError } from '../../jsonl-rpc/agent-connection'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
-import type { PiRpcSession } from './rpc-session'
 import { piStartFailure } from './rpc-startup-outcome'
 
 /** Takes this child's own exit when first seen, so a start settling meanwhile cannot miss it; the

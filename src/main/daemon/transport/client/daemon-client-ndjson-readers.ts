@@ -25,6 +25,7 @@ export function attachControlResponseReader(
   const parser = createNdjsonParser(
     (msg) => {
       if (msg && typeof msg === 'object' && 'type' in msg && msg.type === 'providerExit') {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The authenticated daemon emits this tagged record through its typed provider outcome encoder.
         onProviderEvent?.(msg as HostedProviderExitEvent)
       } else {
         onResponse(msg as RpcResponse)

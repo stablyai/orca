@@ -141,6 +141,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   if (!value || typeof value !== 'object') {
     return null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only optional unknown fields are projected after the object check; values are validated below.
   const identity = value as {
     pid?: unknown
     startedAtMs?: unknown

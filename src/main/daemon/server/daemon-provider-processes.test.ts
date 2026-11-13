@@ -13,6 +13,7 @@ it.each([10, 100])('drains %i live roots without rescanning retained outcomes', 
     const child = Object.assign(new EventEmitter(), { pid: 42, kill: vi.fn(() => true) })
     children.push(child)
     queueMicrotask(() => child.emit('spawn'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This held-child fixture supplies the PID, events and kill method used by the provider registry.
     return child as never
   })
   const owner = new Socket()

@@ -80,6 +80,7 @@ function pendingChild() {
   }
   const child = new HostedProviderChild(
     spec,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements the daemon methods exercised by the hosted child without opening real daemon sockets.
     async () => client as never,
     () => {
       throw new Error('Duplicate spawn')
@@ -204,6 +205,7 @@ it('keeps a bounded startup longer than one second hosted instead of spawning tw
   handle.exit()
   await vi.advanceTimersByTimeAsync(1_001)
   const startup = Promise.withResolvers<typeof handle.client>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Startup resolves to the same daemon-method fixture exercised by the hosted child.
   installProviderProcessHost(async () => startup.promise as never)
   const direct = vi.fn(() => {
     throw new Error('Unexpected fallback')
@@ -243,6 +245,7 @@ it('keeps direct-fallback tree cleanup when its first stop signal fails', async 
     async () => null,
     () => {
       queueMicrotask(() => direct.emit('spawn'))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the streams, PID, events and kill result consumed by direct-child adoption and teardown.
       return direct as never
     }
   )

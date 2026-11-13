@@ -1,8 +1,7 @@
-import type { DaemonClientConnections } from './daemon-client-connections'
+import type { DaemonClientConnections, ConnectedDaemonClient } from './daemon-client-connections'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
-import type { ConnectedDaemonClient } from './daemon-client-connections'
 import type { DaemonProviderProcesses } from './daemon-provider-processes'
 import type { DaemonServerLifecycle } from './daemon-server-lifecycle'
 
