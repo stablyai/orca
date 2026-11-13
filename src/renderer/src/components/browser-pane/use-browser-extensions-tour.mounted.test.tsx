@@ -343,9 +343,11 @@ describe('useBrowserExtensionsTour banner assignment', () => {
 
   it('does not show once a dialog opened while main was answering', async () => {
     let answer: (reply: Reply) => void = () => {}
-    window.api.telemetryAssignBrowserExtensionsBanner = () =>
-      new Promise((resolve) => (answer = resolve))
+    const assign = vi.fn(() => new Promise<Reply>((resolve) => (answer = resolve)))
+    window.api.telemetryAssignBrowserExtensionsBanner = assign
     renderHook(() => useBrowserExtensionsTour(true, true))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(assign).toHaveBeenCalledTimes(1)
     act(() => useAppStore.setState({ activeModal: 'add-repo' }))
     await act(async () => {
       answer({ status: 'not_enrolled' })

@@ -142,14 +142,13 @@ export function recordBrowserExtensionInstalled(source: 'web_store' | 'unpacked'
   }
 }
 
-/** Reported once per launch. */
+/** Reported once per launch; a refused report is retried on the next use. */
 export function recordBrowserExtensionUsed(): void {
   if (usedThisSession) {
     return
   }
-  usedThisSession = true
   try {
-    track('browser_extension_used', {})
+    usedThisSession = track('browser_extension_used', {})
   } catch {
     // Telemetry never costs a click.
   }
