@@ -185,6 +185,14 @@ describe('device sessions', () => {
     expect((await enroll(fresh)).status).toBe(200)
   })
 
+  it('a token minted seconds after a role change (auth backdates iat 30 s) can enroll a phone', async () => {
+    const { h, enroll } = await setup()
+    await h.call('POST', '/v1/internal/members/role-changed', { bearer: OP, body: { accountId: 'org:acme', userId: 'ada', role: 'member' } })
+    h.advance(5_000)
+    // Its iat is 25 s before the change, but it was minted after it: fresh, so the desktop's one re-mint works.
+    expect((await enroll(await h.token('ada', 'acme', 'sandbox', { orgRole: 'member' }))).status).toBe(200)
+  })
+
   it('a desktop token from before a removal cannot enroll a new phone', async () => {
     const { h, enroll } = await setup()
     const old = await h.token('bob', 'acme')

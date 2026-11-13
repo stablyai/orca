@@ -45,7 +45,7 @@ export async function tokenMintedBeforeMemberChange(db: D1Database, caller: Sand
   if (caller.tokenIssuedAt === undefined) {
     return false
   }
-  return tokenPredatesMemberChange(db, { ...caller, tokenIssuedAt: caller.tokenIssuedAt + AUTH_IAT_BACKDATE_MS })
+  return tokenPredatesMemberChange(db, caller)
 }
 
 export async function tokenPredatesMemberChange(db: D1Database, caller: SandboxCaller): Promise<boolean> {
@@ -56,7 +56,8 @@ export async function tokenPredatesMemberChange(db: D1Database, caller: SandboxC
     .prepare('SELECT changed_at FROM member_changes WHERE account_id = ? AND user_id = ?')
     .bind(caller.accountId, caller.userId)
     .first<{ changed_at: number }>()
-  return row !== null && caller.tokenIssuedAt <= row.changed_at
+  // Auth backdates iat by 30 s: compare the mint time, so a token re-minted just after the change is fresh.
+  return row !== null && caller.tokenIssuedAt + AUTH_IAT_BACKDATE_MS <= row.changed_at
 }
 
 /**
@@ -72,7 +73,7 @@ export async function tokenPredatesRemoval(db: D1Database, caller: SandboxCaller
     .prepare('SELECT removed_at FROM member_changes WHERE account_id = ? AND user_id = ?')
     .bind(caller.accountId, caller.userId)
     .first<{ removed_at: number | null }>()
-  return row?.removed_at != null && caller.tokenIssuedAt <= row.removed_at
+  return row?.removed_at != null && caller.tokenIssuedAt + AUTH_IAT_BACKDATE_MS <= row.removed_at
 }
 
 /** True once auth reported this user removed from the account (a later re-add is not recorded). */
