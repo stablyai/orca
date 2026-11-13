@@ -10,6 +10,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { vmBuildFailureSummary } from '@/components/worktree-creation/vm-build-failure-toast'
+import {
+  classifyVmBuildFailure,
+  isBillingFailure
+} from '@/components/worktree-creation/vm-build-failure'
 import type { Repo } from '../../../../../../shared/repo-types'
 
 function statusLabel(
@@ -67,6 +71,11 @@ export function PendingWorktreeRow({
 
   const isError = entry.status === 'error'
   const isOrcaCloud = entry.request.ephemeralVmRecipe?.provider === 'orca-cloud'
+  // A billing refusal is a precondition, not an error: muted text; the glyph carries the state.
+  const refused =
+    isError &&
+    isOrcaCloud &&
+    isBillingFailure(classifyVmBuildFailure({ entry, error: entry.error ?? null, cloud: true }))
   return (
     <div
       className={cn(
@@ -104,7 +113,7 @@ export function PendingWorktreeRow({
           <span
             className={cn(
               'block truncate text-[11px] tabular-nums',
-              isError ? 'text-destructive/90' : 'text-muted-foreground'
+              isError && !refused ? 'text-destructive/90' : 'text-muted-foreground'
             )}
           >
             {statusLabel(entry, repos, t)}
