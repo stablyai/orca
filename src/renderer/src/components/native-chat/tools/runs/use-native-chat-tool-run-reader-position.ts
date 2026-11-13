@@ -6,14 +6,23 @@ import { ROW_KEY_ATTRIBUTE } from './use-native-chat-tool-run-pins'
 import type { NativeChatToolRunVirtualizer } from './use-native-chat-tool-run-window'
 
 const REVEAL_EVENT = 'native-chat-tool-run-reveal'
-// A card can reveal in the same commit that mounts its run, before the run listens for it.
-const unclaimedReveals = new WeakSet<Element>()
+// A card can reveal in the same commit that mounts its run, before the run listens for it. The place is read from
+// the card's own row as it aligns, since the window's model may not yet know that row's new height.
+const unclaimedReveals = new WeakMap<Element, NativeChatRunPosition | null>()
 // Confirmation frames a landing may spend per real change before it waits for the next one.
 const MAX_LANDING_FRAMES = 12
 
 /** A card has just scrolled itself to the top of its run: that is now the reader's place. */
-export function claimNativeChatToolRunReveal(scroller: HTMLElement): void {
-  unclaimedReveals.add(scroller)
+export function claimNativeChatToolRunReveal(scroller: HTMLElement, member: HTMLElement): void {
+  const row = member.closest(`[${ROW_KEY_ATTRIBUTE}]`)
+  const key = row?.getAttribute(ROW_KEY_ATTRIBUTE)
+  const offset = row
+    ? scroller.getBoundingClientRect().top - row.getBoundingClientRect().top
+    : undefined
+  unclaimedReveals.set(
+    scroller,
+    key && offset !== undefined ? { key, offset: Math.max(0, offset) } : null
+  )
   scroller.dispatchEvent(new Event(REVEAL_EVENT))
 }
 
@@ -111,15 +120,22 @@ export function useNativeChatToolRunReaderPosition({
 
   // A reveal in this commit (from the live listener or a claim left before this run listened) owns the box.
   const revealedRef = useRef(false)
+  // The revealed row's own place, read from the DOM as the card aligned; absent, the model decides below.
+  const revealedPlaceRef = useRef<NativeChatRunPosition | null>(null)
   const takeReveal = useCallback(() => {
     const scroller = scrollerRef.current
-    if (!scroller || !unclaimedReveals.delete(scroller)) {
+    if (!scroller || !unclaimedReveals.has(scroller)) {
       return
     }
+    const place = unclaimedReveals.get(scroller) ?? null
+    unclaimedReveals.delete(scroller)
     revealedRef.current = true
+    revealedPlaceRef.current = place
     retireLanding()
     latest.current.onRevealed()
-    if (isVisibleRef.current) {
+    if (place) {
+      positionRef.current = place
+    } else if (isVisibleRef.current) {
       capture(scroller.scrollTop)
     }
   }, [capture, retireLanding, scrollerRef])
@@ -148,10 +164,11 @@ export function useNativeChatToolRunReaderPosition({
   // The reveal's own place, read once visibility is current; the next commit may restore again.
   useLayoutEffect(() => {
     const scroller = scrollerRef.current
-    if (revealedRef.current && scroller && isVisibleRef.current) {
+    if (revealedRef.current && !revealedPlaceRef.current && scroller && isVisibleRef.current) {
       capture(scroller.scrollTop)
     }
     revealedRef.current = false
+    revealedPlaceRef.current = null
   })
   useLayoutEffect(() => {
     const scroller = scrollerRef.current

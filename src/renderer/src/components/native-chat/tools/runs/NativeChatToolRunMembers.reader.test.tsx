@@ -251,6 +251,18 @@ async function scrollBox(container: HTMLElement, top: number): Promise<void> {
   await settle()
 }
 
+/** The browser's report of a landing's own scroll write, which this harness does not send: it may only
+ *  let the window catch up to where the box already is, never move it. */
+async function reportLandingScroll(container: HTMLElement): Promise<void> {
+  const box = membersBox(container)
+  const landed = box.scrollTop
+  await act(async () => {
+    fireEvent.scroll(box)
+  })
+  await settle()
+  expect(box.scrollTop).toBe(landed)
+}
+
 describe('NativeChatToolRun opened-run reader', () => {
   beforeEach(() => {
     vi.useFakeTimers({
@@ -283,6 +295,7 @@ describe('NativeChatToolRun opened-run reader', () => {
     rerender(<Transcript blocks={calls(1_010)} mounted={false} />)
     rerender(<Transcript blocks={calls(1_020)} />)
     await settle()
+    await reportLandingScroll(container)
 
     const after = topRow(container)
     expect(after.key).toBe(before.key)
@@ -395,6 +408,7 @@ describe('NativeChatToolRun opened-run reader', () => {
     pane.hidden = false
     rerender(<Transcript blocks={blocks} revealedDiff={{ ...reveal, requestId: 2 }} />)
     await settle()
+    // The revealed row stays drawn while its request stands, so no scroll report is needed to see it.
     expect(topRow(container).key).toBe('edit:apply_patch:400')
   })
 
@@ -557,6 +571,7 @@ describe('NativeChatToolRun opened-run reader', () => {
       pane.hidden = false
       rerender(<Transcript blocks={calls(1_000)} />)
       await settle()
+      await reportLandingScroll(container)
       expect(topRow(container)).toEqual(before)
     })
   }

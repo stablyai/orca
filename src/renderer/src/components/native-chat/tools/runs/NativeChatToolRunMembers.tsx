@@ -42,7 +42,7 @@ export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement 
   }
   scroller.scrollTop += member.getBoundingClientRect().top - scroller.getBoundingClientRect().top
   // The revealed card is now the reader's place: a pending landing or follow must not move it again.
-  claimNativeChatToolRunReveal(scroller)
+  claimNativeChatToolRunReveal(scroller, member)
   return scroller
 }
 
