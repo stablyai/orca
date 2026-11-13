@@ -419,7 +419,8 @@ module.exports = {
           context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
         buildJournalFileLock(
           join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', lockName),
-          context.arch === 3 ? 'arm64' : 'x64'
+          context.arch === 3 ? 'arm64' : 'x64',
+          { glibcFloor: context.electronPlatformName === 'linux' }
         )
       }
     )

@@ -1,3 +1,5 @@
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import { journalOpenRefusal } from './replay/journal-open-failure'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
@@ -45,7 +47,11 @@ export type LegacySourceSession = {
   epoch: string
   empty: boolean
 }
-export type LegacyProofPage = { next: LegacyProofCursor | null; sessions: LegacySourceSession[] }
+export type LegacyProofPage = {
+  next: LegacyProofCursor | null
+  sessions: LegacySourceSession[]
+  retained?: string
+}
 
 /** Every saved content row must belong to the current catalog before any source file can retire. */
 export function readJournalLegacyProofPage(
@@ -62,7 +68,7 @@ export function readJournalLegacyProofPage(
   if (cursor.table === 0 && cursor.after === null) {
     const version = Number(db.pragma('user_version', { simple: true }))
     if (version !== 3 && version !== 4) {
-      throw new Error('unsupported legacy source inventory')
+      throw new JournalLegacyRetentionError('unsupported legacy source inventory')
     }
     for (const table of tables) {
       const names =
@@ -80,7 +86,7 @@ export function readJournalLegacyProofPage(
             .all()
             .some((column) => !columns.has(column.name))
         ) {
-          throw new Error('legacy source has unaccounted columns')
+          throw new JournalLegacyRetentionError('legacy source has unaccounted columns')
         }
       }
 
@@ -93,17 +99,21 @@ export function readJournalLegacyProofPage(
       }
       const quoted = `"${table.replaceAll('"', '""')}"`
       if (db.prepare(`SELECT 1 FROM ${quoted} LIMIT 1`).get()) {
-        throw new Error('legacy source has unaccounted recovery data')
+        throw new JournalLegacyRetentionError('legacy source has unaccounted recovery data')
       }
       if (!RECOVERY_TABLES.includes(table)) {
-        throw new Error('legacy source has an unknown table')
+        throw new JournalLegacyRetentionError('legacy source has an unknown table')
       }
     }
   }
-  if (cursor.table < CONTENT_TABLES.length) {
-    const table = CONTENT_TABLES[cursor.table]!
+  if (cursor.table > 0) {
+    const table = CONTENT_TABLES[cursor.table - 1]!
     if (!tables.has(table)) {
-      return { next: { table: cursor.table + 1, after: null }, sessions: [] }
+      return {
+        next:
+          cursor.table < CONTENT_TABLES.length ? { table: cursor.table + 1, after: null } : null,
+        sessions: []
+      }
     }
     const columns =
       table === 'journal_outcomes'
@@ -132,7 +142,7 @@ export function readJournalLegacyProofPage(
           db.prepare('SELECT * FROM queued_messages WHERE rowid=?').get(row.rowid!)
         )
       ) {
-        throw new Error('legacy source has unreadable queued text')
+        throw new JournalLegacyRetentionError('legacy source has unreadable queued text')
       }
 
       const session =
@@ -143,6 +153,20 @@ export function readJournalLegacyProofPage(
               )
               .get(row.generation!)
           : row
+      if (table === 'journal_outcomes' && !session) {
+        throw new JournalLegacyRetentionError('legacy source has an orphan outcome')
+      }
+      if (table === 'journal_outcomes' || table === 'journal_outcome_generations') {
+        if (
+          !db
+            .prepare(
+              'SELECT 1 FROM journal_outcome_epochs WHERE session_id=? AND epoch=? AND generation=?'
+            )
+            .get(session!.session_id!, session!.epoch!, row.generation!)
+        ) {
+          continue
+        }
+      }
       const matchEpoch = table !== 'queued_messages' || session?.epoch != null
       if (
         !session ||
@@ -152,25 +176,15 @@ export function readJournalLegacyProofPage(
           )
           .get(session.session_id!, ...(matchEpoch ? [session.epoch!] : []))
       ) {
-        throw new Error('legacy source has orphan content')
-      }
-      if (table.startsWith('journal_outcome')) {
-        const generation = row.generation
-        if (
-          !db
-            .prepare(
-              'SELECT 1 FROM journal_outcome_epochs WHERE session_id=? AND epoch=? AND generation=?'
-            )
-            .get(session.session_id!, session.epoch!, generation!)
-        ) {
-          throw new Error('legacy source has an orphan outcome generation')
-        }
+        throw new JournalLegacyRetentionError('legacy source has orphan content')
       }
     }
     return {
       next: rows.length
         ? { table: cursor.table, after: String(rows.at(-1)!.rowid) }
-        : { table: cursor.table + 1, after: null },
+        : cursor.table < CONTENT_TABLES.length
+          ? { table: cursor.table + 1, after: null }
+          : null,
       sessions: []
     }
   }
@@ -186,7 +200,7 @@ export function readJournalLegacyProofPage(
       tables.has('queued_messages') &&
       !!db.prepare('SELECT 1 FROM queued_messages WHERE session_id=? LIMIT 1').get(id)
     if (!hasRows && hasQueue) {
-      throw new Error('legacy queued-only history still requires its source')
+      throw new JournalLegacyRetentionError('legacy queued-only history still requires its source')
     }
     const empty =
       !hasRows &&
@@ -196,7 +210,9 @@ export function readJournalLegacyProofPage(
     return { sessionId: id, workspaceId: String(row.workspace_id), epoch: String(row.epoch), empty }
   })
   return {
-    next: rows.length ? { table: cursor.table, after: String(rows.at(-1)!.session_id) } : null,
+    next: rows.length
+      ? { table: 0, after: String(rows.at(-1)!.session_id) }
+      : { table: 1, after: null },
     sessions
   }
 }
@@ -217,8 +233,22 @@ export async function completeJournalLegacyProof(
     const started = performance.now()
     const page = await readers.legacyProof(cursor)
     await rest(started)
+    if (page.retained) {
+      throw new JournalLegacyRetentionError(page.retained)
+    }
     for (const source of page.sessions) {
-      await conversions.ensure(source.sessionId, false)
+      try {
+        await conversions.ensure(source.sessionId, false)
+      } catch (error) {
+        const refusal = journalOpenRefusal(error)
+        if (
+          refusal.code === 'agent_session_journal_unreadable' &&
+          refusal.details?.reason !== 'journalUnavailable'
+        ) {
+          throw new JournalLegacyRetentionError(refusal.message)
+        }
+        throw error
+      }
       if ((await readers.importState(source.sessionId)).state !== 'ready' && source.empty) {
         await writer.maintain({
           kind: 'import-finish',
@@ -240,7 +270,9 @@ export async function completeJournalLegacyProof(
         })
       }
       if ((await readers.importState(source.sessionId)).state !== 'ready') {
-        throw new Error('legacy source still has unconverted or queued history')
+        throw new JournalLegacyRetentionError(
+          'legacy source still has unconverted or queued history'
+        )
       }
     }
     cursor = page.next

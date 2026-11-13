@@ -1,3 +1,6 @@
+import { spawnProcess } from '@orca/process-host'
+import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
+import { openJournalDatabase } from './database/journal-database'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -224,4 +227,61 @@ it('serves domain reads while source recycling yields to a new chat', async () =
   pool.releaseSourceReaders(lease!)
   expect(await conversion).toBeNull()
   expect(await pool.importState('session')).toMatchObject({ state: 'ready' })
+})
+
+it('heals a failed proof slot through the public pool without an unready chat', async () => {
+  const { root, filename } = await fixture()
+  const original = join(root, 'legacy.db')
+  openJournalDatabase(original).db.close()
+  const workerPath = join(root, 'proof-reader.cjs')
+  await writeFile(
+    workerPath,
+    `const {parentPort}=require('node:worker_threads');
+    parentPort.on('message',()=>process.exit(7));parentPort.postMessage({type:'ready'})`
+  )
+  const pool = new JournalSqlReaderPool(filename, original, workerPath)
+  readers.push(pool)
+  await expect(pool.legacyProof({ table: 0, after: null })).rejects.toThrow('reader exited (7)')
+  await writeFile(workerPath, `require(${JSON.stringify(journalSqlReaderPath())})`)
+  expect(await pool.legacyProof({ table: 0, after: null })).toEqual({
+    next: { table: 1, after: null },
+    sessions: []
+  })
+  const legacy = openJournalDatabase(original).db
+  legacy.exec("INSERT INTO journal_rows VALUES('orphan','old',1,1,'unaccounted user text')")
+  legacy.close()
+  expect(await pool.legacyProof({ table: 1, after: null })).toMatchObject({
+    retained: 'legacy source has orphan content'
+  })
+})
+
+it('a source demand and pool close terminate an unresponsive helper before releasing the gate', async () => {
+  const { root, filename } = await fixture()
+  for (const action of ['demand', 'close'] as const) {
+    const pool = new JournalSqlReaderPool(filename, join(root, 'absent.db'), journalSqlReaderPath())
+    readers.push(pool)
+    const lease = (await pool.recycleSourceReaders())!
+    const started = Promise.withResolvers<void>()
+    let child: ReturnType<typeof spawnProcess> | undefined
+    const acquired = acquireJournalLegacyFileLock(filename, lease.signal, (spec) => {
+      const spawned = spawnProcess({
+        ...spec,
+        program: process.execPath,
+        args: ['-e', "process.stdout.write('fixture-ready');setInterval(()=>{},1000)"]
+      })
+      child = spawned
+      spawned.stdout.once('data', () => started.resolve())
+      return spawned
+    })
+      .catch(() => false)
+      .finally(() => pool.releaseSourceReaders(lease))
+    await started.promise
+    if (action === 'demand') {
+      expect(await pool.prepareConversion('new-chat')).toBeNull()
+    } else {
+      await pool.close()
+    }
+    expect(await acquired).toBe(false)
+    expect(child!.exitCode !== null || child!.signalCode !== null).toBe(true)
+  }
 })

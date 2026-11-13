@@ -1,3 +1,4 @@
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -133,6 +134,14 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
     }
   } catch (error) {
+    if (operation.kind === 'legacy-proof' && error instanceof JournalLegacyRetentionError) {
+      reply({
+        type: 'legacy-proof',
+        id,
+        page: { next: null, sessions: [], retained: error.message }
+      })
+      return
+    }
     let retire = operation.kind === 'fork-prepare'
     if (fork) {
       try {

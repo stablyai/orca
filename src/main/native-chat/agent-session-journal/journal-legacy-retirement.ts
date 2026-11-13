@@ -1,16 +1,13 @@
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import { randomUUID } from 'node:crypto'
-import { lstat, unlink } from 'node:fs/promises'
 import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
 import { journalDatabasePath } from './database/journal-host-database'
 import { journalDomainDatabasePath } from './database/journal-domain-database'
 import {
-  LEGACY_COMPANION_SUFFIXES as SUFFIXES,
   legacyFilePresent as filePresent,
-  syncLegacyDirectory,
   removeLegacyCompanions,
-  syncLegacyDestination,
-  legacyDestinationIdentity,
-  type LegacyCompanionManifest as Manifest,
+  legacyDestinationMain,
+  retireJournalLegacyMain,
   type LegacyDestinationIdentity
 } from './journal-legacy-retirement-files'
 import {
@@ -19,11 +16,12 @@ import {
   JournalLegacyGraceClock,
   type Retirement
 } from './journal-legacy-retirement-state'
+import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import {
-  captureJournalLegacySourceReceipt,
-  journalLegacyFileIdentity
-} from './database/journal-legacy-source-receipt'
-import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
+  acquireJournalLegacyFileLock,
+  checkJournalLegacyFileLock,
+  requireJournalLegacyFileLock
+} from './journal-legacy-file-lock'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
@@ -40,6 +38,12 @@ export class JournalLegacyRetirement {
   private lastSaved = 0
   private diagnosed?: string
   private stopped = new AbortController()
+  private descriptor?: string
+  private retained = false
+  private eligible = false
+  private proven = false
+  private retryAt = 0
+  private retryDelay = 60_000
 
   constructor(
     private readonly directory: string,
@@ -53,7 +57,11 @@ export class JournalLegacyRetirement {
     private readonly report: (error: unknown) => void,
     private readonly ownsProfile = () => ownsOrcadProfileDirectory(directory),
     private readonly lock = acquireJournalLegacyFileLock,
-    private readonly rest: (started: number) => Promise<void> = async () => {}
+    private readonly rest: (started: number) => Promise<void> = async () => {},
+    private readonly eligibility = {
+      check: checkJournalLegacyFileLock,
+      present: requireJournalLegacyFileLock
+    }
   ) {
     this.filename = journalDatabasePath(directory)
   }
@@ -69,6 +77,12 @@ export class JournalLegacyRetirement {
     try {
       await this.attempt()
     } catch (error) {
+      if (error instanceof JournalLegacyRetentionError) {
+        this.retained = true
+      } else {
+        this.retryAt = performance.now() + this.retryDelay
+        this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
+      }
       const reason = error instanceof Error ? error.message : String(error)
       if (this.diagnosed !== reason) {
         this.diagnosed = reason
@@ -138,8 +152,11 @@ export class JournalLegacyRetirement {
     return JSON.stringify(captureJournalLegacySourceReceipt(this.filename)) === proof
   }
 
-  private prove(): Promise<void> {
-    return completeJournalLegacyProof(
+  private async prove(): Promise<void> {
+    if (this.proven) {
+      return
+    }
+    await completeJournalLegacyProof(
       this.readers,
       this.conversions,
       this.writer,
@@ -147,6 +164,8 @@ export class JournalLegacyRetirement {
       this.stopped.signal,
       this.rest
     )
+    this.proven = true
+    this.retryDelay = 60_000
   }
 
   private async attempt(): Promise<void> {
@@ -167,9 +186,20 @@ export class JournalLegacyRetirement {
       return
     }
     const proof = saved.receipt
+    const observed = JSON.stringify(captureJournalLegacySourceReceipt(this.filename))
+    const descriptor = `${proof}\n${observed}\n${legacyDestinationMain(journalDomainDatabasePath(this.directory))}`
+    if (descriptor !== this.descriptor) {
+      this.descriptor = descriptor
+      this.retained = this.eligible = this.proven = false
+      this.retryAt = 0
+      this.retryDelay = 60_000
+    }
+    if (this.retained || performance.now() < this.retryAt) {
+      return
+    }
     let state = decodeRetirement(saved.retirement)
     if (state && state.proof !== saved.receipt) {
-      throw new Error('legacy retirement provenance changed')
+      throw new JournalLegacyRetentionError('legacy retirement provenance changed')
     }
     if (state?.phase === 'complete') {
       if (!(await filePresent(this.filename))) {
@@ -181,8 +211,19 @@ export class JournalLegacyRetirement {
       await this.removeCompanions(state)
       return
     }
-    if (!this.matches(proof)) {
-      throw new Error('legacy source changed; retaining the original')
+    if (observed !== proof) {
+      throw new JournalLegacyRetentionError('legacy source no longer matches its copy receipt')
+    }
+    if (!this.ownsProfile()) {
+      return
+    }
+    this.eligibility.present()
+    if (await filePresent(`${this.filename}-journal`)) {
+      throw new JournalLegacyRetentionError('legacy rollback journal retained')
+    }
+    if (!this.eligible) {
+      await this.eligibility.check(this.filename, this.stopped.signal)
+      this.eligible = true
     }
     const now = Date.now()
     if (!state) {
@@ -206,6 +247,7 @@ export class JournalLegacyRetirement {
     }
     const advanced = this.clock.observe(state, now, PROCESS_TOKEN)
     if (advanced.process !== state.process || advanced.completedAt !== state.completedAt) {
+      this.proven = false
       await this.prove()
       if (!this.matches(proof)) {
         return
@@ -224,67 +266,31 @@ export class JournalLegacyRetirement {
     if (!this.ownsProfile() || !this.matches(proof)) {
       return
     }
+    this.eligibility.present()
     const recycled = await this.readers.recycleSourceReaders()
     if (!recycled) {
       return
     }
     const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
-    let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
     try {
-      lease = await this.lock(this.filename, signal)
-      const validate = () => {
-        if (!lease?.held() || signal.aborted || !this.ownsProfile() || !this.matches(proof)) {
-          throw new Error('legacy retirement lost exclusive ownership')
+      const removed = await retireJournalLegacyMain(
+        this.directory,
+        this.filename,
+        signal,
+        this.ownsProfile,
+        () => this.matches(proof),
+        this.lock,
+        async (manifest, destination) => {
+          state = { ...state, phase: 'prepared', manifest }
+          await this.save(state, true, destination)
         }
-      }
-      validate()
-      if (await filePresent(`${this.filename}-journal`)) {
-        throw new Error('legacy rollback journal retained')
-      }
-      const manifest: Manifest = {}
-      for (const suffix of SUFFIXES) {
-        if (await filePresent(this.filename + suffix)) {
-          const file = await lstat(this.filename + suffix)
-          if (!file.isFile()) {
-            throw new Error('legacy companion is not a regular file')
-          }
-          manifest[suffix] = journalLegacyFileIdentity(this.filename + suffix)
-        }
-      }
-      if (manifest['-wal'] && manifest['-wal'].size !== '0') {
-        throw new Error('legacy WAL still contains data')
-      }
-      const domain = journalDomainDatabasePath(this.directory)
-      const destination = legacyDestinationIdentity(domain)
-      await syncLegacyDestination(this.directory, this.filename)
-      if (JSON.stringify(legacyDestinationIdentity(domain)) !== JSON.stringify(destination)) {
-        throw new Error('journal destination changed during sync')
-      }
-      state = { ...state, phase: 'prepared', manifest }
-      await this.save(state, true, destination)
-      validate()
-      if (JSON.stringify(legacyDestinationIdentity(domain)) !== JSON.stringify(destination)) {
-        throw new Error('journal destination changed after prepare')
-      }
-      if (process.platform === 'win32') {
-        await lease.close()
-        lease = undefined
-      }
-      if (!this.ownsProfile() || signal.aborted || !this.matches(proof)) {
-        return
-      }
-      await unlink(this.filename)
-      await syncLegacyDirectory(this.directory)
-      await lease?.close()
-      lease = undefined
-      this.readers.releaseSourceReaders(recycled)
-      await this.removeCompanions(state)
-    } finally {
-      try {
-        await lease?.close()
-      } finally {
+      )
+      if (removed) {
         this.readers.releaseSourceReaders(recycled)
+        await this.removeCompanions(state)
       }
+    } finally {
+      this.readers.releaseSourceReaders(recycled)
     }
   }
 

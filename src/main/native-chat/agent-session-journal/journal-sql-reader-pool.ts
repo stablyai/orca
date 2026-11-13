@@ -111,7 +111,9 @@ export class JournalSqlReaderPool {
 
   async legacyProof(cursor: LegacyProofCursor) {
     await this.releaseSourceLease()
-    this.conversionSlot ??= this.slot()
+    if (!this.conversionSlot || this.conversionSlot.failed) {
+      this.conversionSlot = this.slot()
+    }
     const response = await this.conversionSlot.request({ kind: 'legacy-proof', cursor })
     if (response.type !== 'legacy-proof') {
       throw new Error('legacy proof reader returned no page')
@@ -215,6 +217,7 @@ export class JournalSqlReaderPool {
     this.closed = true
     this.forkRelease?.resolve()
     return (this.closing ??= Promise.all([
+      this.sourceRelease?.promise,
       ...this.retiring,
       ...this.slots.map((slot) => slot.close())
     ]).then(() => {}))

@@ -1,3 +1,4 @@
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import {
   mkdtempSync,
   rmSync,
@@ -50,7 +51,10 @@ afterEach(() => {
   }
 })
 
-async function profile(seed?: (db: Database.Database) => void) {
+async function profile(
+  seed?: (db: Database.Database) => void,
+  eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
+) {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const filename = journalDatabasePath(root)
@@ -136,7 +140,12 @@ async function profile(seed?: (db: Database.Database) => void) {
     async () => true,
     (error) => errors.push(error),
     () => true,
-    lock
+    lock,
+    undefined,
+    eligibility ??
+      (process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
+        ? undefined
+        : { check: async () => {}, present: () => {} })
   )
   const receiptState = () =>
     JSON.parse(
@@ -179,12 +188,15 @@ async function profile(seed?: (db: Database.Database) => void) {
     saveState,
     writer,
     closeDomain,
+    readers,
     recycle: readers.recycleSourceReaders
   }
 }
 
 it('accounts for an unopened folder chat, removes only the certified file and keeps current history', async () => {
   const test = await profile((legacy) => {
+    legacy.exec(`INSERT INTO journal_outcome_generations VALUES(900,'unopened','retired-epoch');
+      INSERT INTO journal_outcomes VALUES(900,1,'retired','key',1,'0','"unreachable retired text"',0)`)
     legacy
       .prepare(
         `INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason,queued_epoch,queued_sequence)
@@ -394,11 +406,21 @@ it('does not earn grace from forward wall-clock steps and re-stamps a future com
 })
 
 it('retains queued-only text, recovery obligations and orphan history', async () => {
-  for (const kind of ['queue', 'repair', 'orphan', 'extra-profile-column'] as const) {
+  for (const kind of [
+    'queue',
+    'repair',
+    'orphan',
+    'orphan-outcome',
+    'extra-profile-column'
+  ] as const) {
     const test = await profile((legacy) => {
       if (kind === 'queue') {
         legacy.exec(
           'DELETE FROM journal_rows; INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason) VALUES(\'unopened\',\'held\',1,\'{"kind":"message","role":"user","blocks":[{"type":"text","text":"held user text"}]}\',\'f\',1,\'h\',\'waiting\',\'manual\')'
+        )
+      } else if (kind === 'orphan-outcome') {
+        legacy.exec(
+          `INSERT INTO journal_outcomes VALUES(901,1,'orphan','key',1,'0','"orphan user text"',0)`
         )
       } else if (kind === 'repair') {
         legacy.exec("INSERT INTO journal_repairs VALUES('unopened','epoch',1,100)")
@@ -474,4 +496,48 @@ it('resumes only the prepared empty companions and preserves a recreated main', 
       expect(existsSync(shm)).toBe(false)
     }
   }
+})
+
+it('settles an unchanged permanent proof refusal and retries a recoverable reader failure', async () => {
+  const retained = await profile((legacy) => {
+    legacy.exec("INSERT INTO journal_rows VALUES('orphan','old',1,1,'orphan user text')")
+  })
+  const pages = vi.spyOn(retained.readers, 'legacyProof')
+  await retained.retirement.run()
+  const firstPass = pages.mock.calls.length
+  expect(firstPass).toBeGreaterThan(0)
+  await retained.retirement.run()
+  await retained.retirement.run()
+  expect(pages.mock.calls).toHaveLength(firstPass)
+  expect(readFileSync(retained.filename).includes(Buffer.from('orphan user text'))).toBe(true)
+
+  const unsupported = await profile(undefined, {
+    check: async () => {
+      throw new JournalLegacyRetentionError('unsupported volume')
+    },
+    present: () => {}
+  })
+  const unsupportedProof = vi.spyOn(unsupported.readers, 'legacyProof')
+  const recycle = vi.spyOn(unsupported.readers, 'recycleSourceReaders')
+  await unsupported.retirement.run()
+  await unsupported.retirement.run()
+  expect(unsupportedProof).not.toHaveBeenCalled()
+  expect(recycle).not.toHaveBeenCalled()
+  expect(existsSync(unsupported.filename)).toBe(true)
+
+  const recovered = await profile()
+  let now = 0
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
+  const retry = vi
+    .spyOn(recovered.readers, 'legacyProof')
+    .mockRejectedValueOnce(new Error('reader exited'))
+  await recovered.retirement.run()
+  await recovered.retirement.run()
+  expect(retry.mock.calls).toHaveLength(1)
+  now = 60_001
+  await recovered.retirement.run()
+  expect(recovered.receiptState().phase).toBe('grace')
+  recovered.arm()
+  await recovered.retirement.run()
+  expect(existsSync(recovered.filename)).toBe(false)
 })

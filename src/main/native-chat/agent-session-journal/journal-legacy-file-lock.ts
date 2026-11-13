@@ -1,3 +1,6 @@
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
@@ -15,63 +18,141 @@ export function journalLegacyFileLockPath(): string {
   return existsSync(staged) ? staged : resolve('native/journal-file-lock/.build', name)
 }
 
-/** The helper never opens SQLite; closing stdin releases its single non-writing source handle. */
-export async function acquireJournalLegacyFileLock(filename: string, signal: AbortSignal) {
+/** Both helper modes are bounded; only observed exit releases the source gate. */
+async function startLegacyHelper(
+  filename: string,
+  signal: AbortSignal,
+  check: boolean,
+  spawn: PipedProcessSpawner = spawnProcess
+) {
   signal.throwIfAborted()
-  const child = spawnProcess({
+  const child = spawn({
     program: journalLegacyFileLockPath(),
-    args: [filename],
-    stdio: 'pipe'
+    args: [filename, ...(check ? ['--check'] : [])],
+    stdio: 'pipe',
+    detached: process.platform !== 'win32'
   })
   child.stdin.on('error', () => {})
+  child.stdout.on('error', () => {})
+  child.stderr.on('error', () => {})
   child.stderr.resume()
   let exited = false
+  let closing: Promise<void> | undefined
+  let forceTimer: ReturnType<typeof setTimeout> | undefined
+  const ready = Promise.withResolvers<void>()
   const done = new Promise<void>((resolve, reject) => {
-    child.once('error', reject)
+    child.once('error', (error) => {
+      ready.reject(error)
+      if (!child.pid) {
+        exited = true
+        reject(error)
+      }
+    })
     child.once('exit', (code) => {
       exited = true
+      clearTimeout(forceTimer)
       if (code === 0) {
         resolve()
       } else {
-        reject(new Error('legacy journal lock is unavailable'))
+        const error =
+          code === 4
+            ? new JournalLegacyRetentionError('legacy storage or file identity is unsupported')
+            : new Error('legacy journal lock is unavailable')
+        ready.reject(error)
+        reject(error)
+      }
+      if (!check) {
+        ready.reject(new Error('legacy journal lock was released'))
       }
     })
   })
   void done.catch(() => {})
-  const release = () => child.stdin.end()
-  signal.addEventListener('abort', release, { once: true })
-  if (signal.aborted) {
-    release()
+  const force = () => {
+    if (!exited) {
+      void signalProcessTree(child, 'SIGKILL')
+        .then((signalled) => {
+          if (!signalled && !exited) {
+            child.kill('SIGKILL')
+          }
+        })
+        .catch(() => {
+          if (!exited) {
+            child.kill('SIGKILL')
+          }
+        })
+    }
   }
-  try {
-    await new Promise<void>((resolve, reject) => {
-      let output = ''
-      child.stdout.on('data', (chunk: Buffer) => {
-        output += chunk.toString()
-        if (output === 'locked\n' || output === 'locked\r\n') {
-          resolve()
-        } else if (output.length > 64) {
-          reject(new Error('invalid legacy lock acknowledgement'))
-        }
-      })
-      child.once('error', reject)
-      child.once('exit', () => reject(new Error('legacy journal lock was refused')))
-    })
-  } catch (error) {
-    release()
-    await done.catch(() => {})
-    signal.removeEventListener('abort', release)
-    throw error
-  }
-  return {
-    held: () => !exited && !signal.aborted,
-    close: async () => {
-      release()
+  const close = () =>
+    (closing ??= (async () => {
+      child.stdin.end()
+      forceTimer = setTimeout(force, 250)
       try {
         await done
       } finally {
-        signal.removeEventListener('abort', release)
+        clearTimeout(forceTimer)
+        signal.removeEventListener('abort', abort)
       }
+    })())
+  const abort = () => {
+    ready.reject(signal.reason ?? new Error('legacy journal lock cancelled'))
+    force()
+    void close().catch(() => {})
+  }
+  signal.addEventListener('abort', abort, { once: true })
+  if (signal.aborted) {
+    abort()
+  }
+  let output = ''
+  child.stdout.on('data', (chunk: Buffer) => {
+    output += chunk.toString()
+    if (
+      output === (check ? 'eligible\n' : 'locked\n') ||
+      output === (check ? 'eligible\r\n' : 'locked\r\n')
+    ) {
+      ready.resolve()
+    } else if (output.length > 64) {
+      ready.reject(new Error('invalid legacy lock acknowledgement'))
     }
+  })
+  const startup = setTimeout(() => {
+    ready.reject(new Error('legacy journal lock acknowledgement timed out'))
+    force()
+  }, 5000)
+  try {
+    await ready.promise
+    if (check) {
+      await close()
+    }
+  } catch (error) {
+    force()
+    await close().catch(() => {})
+    throw error
+  } finally {
+    clearTimeout(startup)
+  }
+  return { held: () => !exited && !signal.aborted, close }
+}
+
+export function acquireJournalLegacyFileLock(
+  filename: string,
+  signal: AbortSignal,
+  spawn?: PipedProcessSpawner
+) {
+  return startLegacyHelper(filename, signal, false, spawn)
+}
+
+export async function checkJournalLegacyFileLock(
+  filename: string,
+  signal: AbortSignal
+): Promise<void> {
+  if (!existsSync(journalLegacyFileLockPath())) {
+    throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
+  }
+  await startLegacyHelper(filename, signal, true)
+}
+
+export function requireJournalLegacyFileLock(): void {
+  if (!existsSync(journalLegacyFileLockPath())) {
+    throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
   }
 }

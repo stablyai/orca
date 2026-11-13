@@ -1,3 +1,5 @@
+import type { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import { lstat, open, stat, unlink } from 'node:fs/promises'
 import { lstatSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -118,7 +120,7 @@ export async function removeLegacyCompanions(
       JSON.stringify(journalLegacyFileIdentity(name)) !== JSON.stringify(expected) ||
       (suffix === '-wal' && expected.size !== '0')
     ) {
-      throw new Error('legacy companion changed; retaining it')
+      throw new JournalLegacyRetentionError('legacy companion changed; retaining it')
     }
     await unlink(name)
   }
@@ -134,4 +136,67 @@ export async function removeLegacyCompanions(
   }
   await syncLegacyDirectory(directory)
   return true
+}
+
+export async function retireJournalLegacyMain(
+  directory: string,
+  filename: string,
+  signal: AbortSignal,
+  ownsProfile: () => boolean,
+  matches: () => boolean,
+  lock: typeof acquireJournalLegacyFileLock,
+  prepare: (
+    manifest: LegacyCompanionManifest,
+    destination: LegacyDestinationIdentity
+  ) => Promise<void>
+): Promise<boolean> {
+  let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
+  try {
+    lease = await lock(filename, signal)
+    const validate = () => {
+      if (!lease?.held() || signal.aborted || !ownsProfile() || !matches()) {
+        throw new Error('legacy retirement lost exclusive ownership')
+      }
+    }
+    validate()
+    if (await legacyFilePresent(`${filename}-journal`)) {
+      throw new JournalLegacyRetentionError('legacy rollback journal retained')
+    }
+    const manifest: LegacyCompanionManifest = {}
+    for (const suffix of LEGACY_COMPANION_SUFFIXES) {
+      if (await legacyFilePresent(filename + suffix)) {
+        const file = await lstat(filename + suffix)
+        if (!file.isFile()) {
+          throw new JournalLegacyRetentionError('legacy companion is not a regular file')
+        }
+        manifest[suffix] = journalLegacyFileIdentity(filename + suffix)
+      }
+    }
+    if (manifest['-wal'] && manifest['-wal'].size !== '0') {
+      throw new JournalLegacyRetentionError('legacy WAL still contains data')
+    }
+    const domain = journalDomainDatabasePath(directory)
+    const destination = legacyDestinationIdentity(domain)
+    await syncLegacyDestination(directory, filename)
+    if (JSON.stringify(legacyDestinationIdentity(domain)) !== JSON.stringify(destination)) {
+      throw new Error('journal destination changed during sync')
+    }
+    await prepare(manifest, destination)
+    validate()
+    if (JSON.stringify(legacyDestinationIdentity(domain)) !== JSON.stringify(destination)) {
+      throw new Error('journal destination changed after prepare')
+    }
+    if (process.platform === 'win32') {
+      await lease.close()
+      lease = undefined
+    }
+    if (!ownsProfile() || signal.aborted || !matches()) {
+      return false
+    }
+    await unlink(filename)
+    await syncLegacyDirectory(directory)
+    return true
+  } finally {
+    await lease?.close()
+  }
 }
