@@ -31,15 +31,9 @@ import {
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from '../../../../../shared/rpc-contract/filesystem/files-params'
-import type { RuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
 import { limitSearchResultToContentBudget } from '../../../../../shared/file-search/search-result-transport-budget'
 
 let filesWatchSubscriptionSeq = 0
-
-// Phones and older CLIs send no target; see FileOpenTarget.
-function fileOpenNavigation(navigation?: RuntimeNavigationTarget): RuntimeNavigationTarget {
-  return navigation ?? 'caller'
-}
 
 export const FILE_METHODS = [
   defineMethod({
@@ -85,7 +79,7 @@ export const FILE_METHODS = [
       runtime.openMobileFile(
         params.worktree,
         params.relativePath,
-        fileOpenNavigation(params.navigation),
+        params.navigation ?? 'caller',
         ...(params.line === undefined ? [] : [{ line: params.line, column: params.column }])
       )
   }),
@@ -98,7 +92,7 @@ export const FILE_METHODS = [
         params.worktree,
         params.relativePath,
         params.staged === true,
-        fileOpenNavigation(params.navigation),
+        params.navigation ?? 'caller',
         ...(params.oldPath ? ([params.oldPath] as const) : [])
       )
   }),

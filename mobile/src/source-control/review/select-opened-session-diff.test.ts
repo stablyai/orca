@@ -28,6 +28,7 @@ describe('selectOpenedSessionDiff', () => {
                       diffSource: 'staged'
                     },
                     { id: 'edit', type: 'file', mode: 'edit', relativePath: 'a.ts' },
+                    { id: 'branch', type: 'file', mode: 'diff', relativePath: 'a.ts' },
                     {
                       id: 'unstaged',
                       type: 'file',
@@ -40,11 +41,15 @@ describe('selectOpenedSessionDiff', () => {
         }
         return ok({ activeTabId: 'unstaged' })
       })
-      const selecting = selectOpenedSessionDiff({ sendRequest } as unknown as RpcClient, {
-        worktreeId: 'wt-1',
-        relativePath: 'a.ts',
-        staged: false
-      })
+      const selecting = selectOpenedSessionDiff(
+        { sendRequest } as unknown as RpcClient,
+        {
+          worktreeId: 'wt-1',
+          relativePath: 'a.ts',
+          staged: false
+        },
+        () => true
+      )
       await vi.runAllTimersAsync()
       await selecting
 
