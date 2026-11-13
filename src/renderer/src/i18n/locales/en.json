@@ -28447,6 +28447,9 @@
       "setUpNotStarted": "{{agent}} is set up. Open the workspace to start it.",
       "notStartedRow": "{{agent}} hasn’t started"
     },
+    "chatSend": {
+      "renewAbove": "Renew {{agent}} sign-in above to send"
+    },
     "chatSignIn": {
       "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
     },
@@ -29049,6 +29052,10 @@
     "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
+    "renewInSettings": "Renew in Settings",
+    "finishRenewing": "Finish renewing",
+    "expiredHeldDetail": "Renew to start {{agent}}.",
+    "expiredHeldAnnounce": "Your {{agent}} sign-in expired. Renew to start {{agent}}.",
     "rowNeedsSignIn": "Needs sign-in",
     "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",
@@ -29068,9 +29075,7 @@
     "useMySignIn": "Use my {{agent}} sign-in",
     "signIn": "Sign in",
     "expired": "Your {{agent}} sign-in expired",
-    "expiredDetail": "Sign in once to fix every workspace.",
     "renew": "Renew",
-    "expiredAnnounce": "Your {{agent}} sign-in expired. Renew it once to fix every workspace.",
     "waiting": "Approve on {{site}}",
     "openAgain": "Open again",
     "waitingAnnounce": "Waiting for you to approve in your browser.",

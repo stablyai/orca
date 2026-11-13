@@ -57,6 +57,11 @@ export type CloudStripModel = {
   otherWays: boolean
   /** Already on a code: ⋯ offers the paste fallback and Cancel instead of "Use a code". */
   codeStep?: boolean
+  /**
+   * CHAT-RENEW-INPLACE: a quiet text link at the end of the actions row ("Renew in Settings"); in
+   * the narrow stack it gets its own line under the buttons.
+   */
+  settingsLink?: string
   /** RA-11 state 2: a dismiss × with this label (the strip otherwise drops its × on Renew). */
   dismiss?: string
   /** RA-11 "Restarting…": nothing to close; the strip leaves with the result. */
@@ -121,15 +126,15 @@ export function cloudAgentStripModel(args: {
     return {
       status: 'warning',
       title: t('agentSignInStrip.expired', 'Your {{agent}} sign-in expired', { agent }),
-      detail: t('agentSignInStrip.expiredDetail', 'Sign in once to fix every workspace.'),
+      detail: t('agentSignInStrip.expiredHeldDetail', 'Renew to start {{agent}}.', { agent }),
       description: null,
       primary: { label: t('agentSignInStrip.renew', 'Renew'), action: { kind: 'renew' } },
       code: null,
       paste: null,
       otherWays: false,
       announcement: t(
-        'agentSignInStrip.expiredAnnounce',
-        'Your {{agent}} sign-in expired. Renew it once to fix every workspace.',
+        'agentSignInStrip.expiredHeldAnnounce',
+        'Your {{agent}} sign-in expired. Renew to start {{agent}}.',
         { agent }
       )
     }

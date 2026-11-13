@@ -42,6 +42,7 @@ import {
   cloudRestartFreshModel,
   cloudRunningStripModel
 } from './cloud-running-strip-model'
+import { openOrcaCloudAccountsSettings, withRenewInPlace } from './cloud-renew-in-place'
 
 const NO_ACTIONS: CloudStripActions = {
   primary: () => undefined,
@@ -50,12 +51,6 @@ const NO_ACTIONS: CloudStripActions = {
   useCode: () => undefined,
   useApiKey: () => undefined,
   cancel: () => undefined
-}
-
-function openAccounts(): void {
-  const store = useAppStore.getState()
-  store.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
-  store.openSettingsPage()
 }
 
 export function CloudRunningStripPortal({
@@ -192,7 +187,7 @@ export function CloudRunningStripPortal({
   const actions: CloudStripActions = {
     primary: (action) => {
       if (action.kind === 'renew') {
-        openAccounts()
+        openOrcaCloudAccountsSettings()
       } else if (action.kind === 'restart' && strip.phase === 'renewed') {
         restart({ agent: strip.agent, resumable: strip.resumable })
       }
@@ -204,6 +199,19 @@ export function CloudRunningStripPortal({
     // State 2's ×; state 1 has none (Renew is the action) and Escape leaves it showing.
     cancel: () => (strip.phase === 'renewed' ? clearCloudRunningSignout(paneKey) : undefined)
   }
+  // CHAT-RENEW-INPLACE: "sign-in expired · Renew" renews right here; renewed keeps RA-11's Restart.
+  const model = cloudRunningStripModel(strip, t)
+  const shown =
+    strip.phase === 'expired'
+      ? withRenewInPlace({
+          agent: strip.agent,
+          setup: accounts.setups[strip.agent],
+          model,
+          actions,
+          key: paneKey,
+          t
+        })
+      : { model, actions }
   return (
     <CloudPaneBannerPortal
       pane={pane}
@@ -212,10 +220,10 @@ export function CloudRunningStripPortal({
       stripLayer
     >
       <CloudAgentSignInStrip
-        model={cloudRunningStripModel(strip, t)}
+        model={shown.model}
         prompt={null}
         width={cloudStripWidth(pane.container.clientWidth)}
-        actions={actions}
+        actions={shown.actions}
       />
     </CloudPaneBannerPortal>
   )

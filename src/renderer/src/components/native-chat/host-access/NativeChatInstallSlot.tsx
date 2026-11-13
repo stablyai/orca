@@ -1,6 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import { useCloudChatHoldHint } from '../../agent-sign-in-strip/use-cloud-chat-hold-hint'
 import { structuredCloudHoldKey } from '@/lib/orca-cloud/cloud-structured-launch-hold'
+import { useCloudChatSendBlock } from '../../agent-sign-in-strip/use-cloud-chat-running-strip'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   managedRuntimeInstallCard,
@@ -33,7 +35,10 @@ const RESERVED: NativeChatInstallSlotState = { kind: 'reserved' }
 
 /** Reserve unknown readiness with an editable composer and held sends; missing runtimes show installation, while read failures leave it alone. */
 export function useNativeChatInstallSlot(
-  props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'isVisible' | 'sessionId'>,
+  props: Pick<
+    NativeChatStructuredViewProps,
+    'target' | 'agent' | 'isVisible' | 'sessionId' | 'tabId'
+  >,
   agentLabel: string,
   layout: ManagedRuntimeInstallLayout
 ): {
@@ -49,7 +54,15 @@ export function useNativeChatInstallSlot(
     hostProgram
   )
   // CHAT-BANNERS: an Orca Cloud launch held on the chat's strip has no agent to send to yet.
-  const cloudHoldHint = useCloudChatHoldHint(structuredCloudHoldKey(props.sessionId), '')
+  const cloudHoldKey = structuredCloudHoldKey(props.sessionId)
+  const cloudHoldHint = useCloudChatHoldHint(cloudHoldKey, '')
+  // While its Orca Cloud account is expired, the chat takes typing but holds Send (draft kept).
+  const cloudSendBlock = useCloudChatSendBlock({
+    tabId: props.tabId,
+    statusKey: structuredAgentSessionPaneKey(props.tabId, props.sessionId),
+    holdKey: cloudHoldKey,
+    agent: props.agent
+  })
   const unavailableHint =
     cloudHoldHint ??
     (slot.kind === 'install'
@@ -57,7 +70,8 @@ export function useNativeChatInstallSlot(
       : undefined)
   return {
     slot,
-    sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
+    sendBlockedReason:
+      unavailableHint ?? cloudSendBlock ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint
   }
 }

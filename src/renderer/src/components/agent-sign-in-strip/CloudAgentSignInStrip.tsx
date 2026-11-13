@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { CloudStripPasteForm } from './CloudStripPasteForm'
 import { StripPrimaryButton, stripPrimaryLink } from './CloudStripPrimaryButton'
+import { CloudStripSettingsLink } from './CloudStripSettingsLink'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,6 +104,8 @@ export type CloudStripActions = {
    * setup's sign-in page, known only to main). Actions carrying a `url` copy it without this.
    */
   linkFor?: (action: CloudStripPrimary) => ExternalLinkSource | null
+  /** CHAT-RENEW-INPLACE: the model's `settingsLink` ("Renew in Settings"). */
+  openSettings?: () => void
 }
 
 /** GA-P3t: the strip's severity look; anything that isn't a warning or an error reads as info. */
@@ -336,6 +339,9 @@ export function CloudAgentSignInStrip({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
+        {model.settingsLink && !stacked ? (
+          <CloudStripSettingsLink label={model.settingsLink} onOpen={actions.openSettings} />
+        ) : null}
         {/* Renew and Restart are the whole action and the strip leaves on its own; Escape still cancels. */}
         {model.noClose ||
         (!model.dismiss &&
@@ -377,6 +383,13 @@ export function CloudAgentSignInStrip({
             >
               {model.primary.label}
             </StripPrimaryButton>
+          ) : null}
+          {model.settingsLink ? (
+            <CloudStripSettingsLink
+              ownLine
+              label={model.settingsLink}
+              onOpen={actions.openSettings}
+            />
           ) : null}
         </div>
       ) : null}
