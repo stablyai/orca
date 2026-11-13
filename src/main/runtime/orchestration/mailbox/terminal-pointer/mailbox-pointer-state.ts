@@ -62,6 +62,12 @@ export class OrchestrationMailboxPointerState {
     return this.flightsByPtyId.has(ptyId)
   }
 
+  completeRecovery(ptyId: string): void {
+    if (!this.hasFlight(ptyId)) {
+      this.foreground.completeDelivery(ptyId)
+    }
+  }
+
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {
     const flight = {
       enterTimer: null,

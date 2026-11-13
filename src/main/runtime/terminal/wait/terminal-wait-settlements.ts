@@ -74,6 +74,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       inFlight: (ptyId) => this.orchestrationMailboxPointerDelivery.isDeliveryInFlight(ptyId),
       held: (ptyId) => this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId),
       hasMail: (terminal) => this.orchestrationMailboxNotifications.hasDeliverableMail(terminal),
+      settle: (ptyId) =>
+        this.orchestrationMailboxNotifications.settleDelivery(
+          this.getOrchestrationMailboxTerminal(ptyId)
+        ),
       readinessDelay: (terminal) => {
         if (
           !isMailboxTerminalTakingInput(terminal) &&

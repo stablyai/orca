@@ -238,6 +238,23 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
+  settleConsumedTerminalMail(mailboxes: readonly string[]): void {
+    try {
+      const ptys = new Set<string>()
+      for (const mailbox of mailboxes) {
+        const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
+        if (terminal) {
+          ptys.add(terminal.ptyId)
+        }
+      }
+      for (const ptyId of ptys) {
+        this.armDeliveryRecheck(ptyId, { settled: true })
+      }
+    } catch {
+      // A consuming check must not fail because terminal cleanup is unavailable.
+    }
+  }
+
   /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;
    *  opening the database lets a restart's first handover decide. */
   structuredChatMailOwed(

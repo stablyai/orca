@@ -1,12 +1,13 @@
 import type { OrchestrationMailboxTerminal } from '../routing/mailbox-owner'
 
-export type MailboxDeliveryDecision = { foreground?: boolean; reset?: boolean }
+export type MailboxDeliveryDecision = { foreground?: boolean; reset?: boolean; settled?: boolean }
 
 type RecheckReaders = {
   terminal(ptyId: string): OrchestrationMailboxTerminal | null
   inFlight(ptyId: string): boolean
   held(ptyId: string): boolean
   hasMail(terminal: OrchestrationMailboxTerminal): boolean
+  settle(ptyId: string): boolean
   readinessDelay(terminal: OrchestrationMailboxTerminal): number | null
   deliver(ptyId: string): void
 }
@@ -23,6 +24,10 @@ export class MailboxDeliveryRecheck {
   ) {}
 
   request(ptyId: string, decision: MailboxDeliveryDecision = {}): void {
+    if (decision.settled && this.read.settle(ptyId)) {
+      this.retire(ptyId)
+      return
+    }
     if (decision.foreground === true) {
       this.foregroundPending.add(ptyId)
     }

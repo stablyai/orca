@@ -84,6 +84,14 @@ export class OrchestrationMailboxNotificationCoordinator<
     }
   }
 
+  settleDelivery(terminal: OrchestrationMailboxTerminal | null): boolean {
+    if (!terminal || !this.deps.pointerDelivery.requiresCurrentScreen(terminal.ptyId)) {
+      return false
+    }
+    this.hasDeliverableMail(terminal)
+    return !this.deps.pointerDelivery.requiresCurrentScreen(terminal.ptyId)
+  }
+
   notifyMessageArrived(handle: string, messageType?: string): void {
     const { mailboxHandle, forwarded, directTypes } = this.resolveArrivedMailboxes(handle)
     this.notifyForwarded(forwarded)

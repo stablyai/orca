@@ -1,3 +1,4 @@
+import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -34,11 +35,11 @@ it.each([2, 20])(
   async (m) => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mail-screen-cost-')
-    const row = {
+    const row: AgentStatusIpcPayload = {
       paneKey: PANE_KEY,
       connectionId: null,
-      agentType: 'claude' as const,
-      state: 'done' as const,
+      agentType: 'claude',
+      state: 'done',
       prompt: '',
       receivedAt: Date.now(),
       stateStartedAt: 1
@@ -162,6 +163,28 @@ it.each([2, 20])(
       expect(row.state).toBe('done')
       await vi.advanceTimersByTimeAsync(65000)
       expect(write).toHaveBeenCalledTimes(2)
+      write.mockImplementation(() => true)
+      row.state = 'working'
+      row.receivedAt = Date.now()
+      runtime.onPtyData(
+        PTY_ID,
+        '\x1b[2J\x1b[HWorking on the next task\r\n\x1b]0;Claude working\x07',
+        Date.now()
+      )
+      const later = insertDirectRunMessage(db, run.id, 'Independent obligation')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(10000)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r',
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+      expect(db.getMessageById(later.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String),
+        pointer_enter_pending: 0
+      })
     } finally {
       db.close()
     }

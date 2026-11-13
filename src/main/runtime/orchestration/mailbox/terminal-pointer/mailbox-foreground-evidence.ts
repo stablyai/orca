@@ -117,8 +117,11 @@ export class MailboxForegroundEvidence {
 
   completeDelivery(ptyId: string): void {
     const observation = this.foregroundObservations.get(ptyId)
-    if (observation && !observation.held) {
+    if (observation?.screenRequired) {
+      observation.held = false
       observation.screenRequired = false
+      observation.generation++
+      observation.contradiction++
     }
   }
 

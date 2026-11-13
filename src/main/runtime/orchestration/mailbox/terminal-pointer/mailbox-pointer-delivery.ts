@@ -184,7 +184,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   completeRecovery(ptyId: string): void {
-    this.state.foreground.completeDelivery(ptyId)
+    this.state.completeRecovery(ptyId)
   }
 
   hasPendingFlightMail(terminal: OrchestrationMailboxTerminal): boolean {
@@ -302,7 +302,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
-    this.deps.onDeliveryDecision(ptyId)
+    this.deps.onDeliveryDecision(ptyId, { settled: true })
     const current = this.deps.getTerminal(ptyId)
     for (const [mailboxHandle, reservedTypes] of parked ?? []) {
       if (current) {
