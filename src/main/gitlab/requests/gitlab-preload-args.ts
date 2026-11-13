@@ -49,17 +49,20 @@ export function normalizeGitLabIssueListArgs(args: {
   assignee?: unknown
   limit?: unknown
   page?: unknown
+  query?: unknown
 }): {
   state: GitLabIssueListState
   assignee: '@me' | undefined
   limit: number
   page: number
+  query: string | undefined
 } {
   return {
     state: normalizeGitLabIssueListState(args.state),
     assignee: normalizeGitLabIssueAssignee(args.assignee),
     limit: normalizeGitLabPositiveInteger(args.limit, 20, 100),
     // GitLab pages are 1-based; the renderer translates its 0-based UI index.
-    page: normalizeGitLabPositiveInteger(args.page, 1, 10_000)
+    page: normalizeGitLabPositiveInteger(args.page, 1, 10_000),
+    query: normalizeGitLabSearchQuery(args.query)
   }
 }

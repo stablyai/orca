@@ -13,6 +13,7 @@ import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-i
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab/gitlab-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
@@ -22,9 +23,10 @@ export function gitLabListQueryKey(
   view: string,
   filter: string,
   involvement: string | null,
-  reposKey: string
+  reposKey: string,
+  search: string
 ): string {
-  return JSON.stringify([view, filter, view === 'mrs' ? involvement : null, reposKey])
+  return JSON.stringify([view, filter, view === 'mrs' ? involvement : null, reposKey, search])
 }
 
 function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
@@ -51,6 +53,9 @@ type GitLabLoadingInput = Pick<
   | 'setGitlabTodosLoading'
   | 'activeGitlabFilter'
   | 'gitlabMRInvolvement'
+  | 'gitlabSearchInput'
+  | 'appliedGitlabSearch'
+  | 'setAppliedGitlabSearch'
   | 'gitlabItems'
   | 'gitlabError'
   | 'gitlabLoading'
@@ -74,14 +79,21 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabTodosLoading,
     activeGitlabFilter,
     gitlabMRInvolvement,
+    gitlabSearchInput,
+    appliedGitlabSearch,
+    setAppliedGitlabSearch,
     gitlabListQueryKey,
     setGitlabListQueryKey
   } = model
+  // GitLab search state is not persisted across visits, so there is no resume state to wait for.
+  useTaskSearchDebouncedApply(gitlabSearchInput, true, setAppliedGitlabSearch)
+  const gitlabQuery = appliedGitlabSearch.trim()
   const currentListQueryKey = gitLabListQueryKey(
     gitlabView,
     activeGitlabFilter,
     gitlabMRInvolvement,
-    selectedReposKey
+    selectedReposKey,
+    gitlabQuery
   )
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
@@ -125,7 +137,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 ...selector,
                 state: 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
-                limit: 50
+                limit: 50,
+                ...(gitlabQuery ? { query: gitlabQuery } : {})
               })
               .then((result) => {
                 const typed = result as {
@@ -152,7 +165,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 state: activeMRFilter ?? 'opened',
                 ...(gitlabMRInvolvement ? { involvement: gitlabMRInvolvement } : {}),
                 page: 1,
-                perPage: 50
+                perPage: 50,
+                ...(gitlabQuery ? { query: gitlabQuery } : {})
               })
               .then((result) => {
                 const typed = result as {
@@ -226,6 +240,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabView,
     activeGitlabFilter,
     gitlabMRInvolvement,
+    gitlabQuery,
     gitlabRefreshNonce,
     selectedReposKey,
     setGitlabError,

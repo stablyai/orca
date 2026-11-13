@@ -53,6 +53,7 @@ export const glApi = {
       assignee?: string
       limit?: number
       page?: number
+      query?: string
     }
   ) => ipcRenderer.invoke('gitlab:listIssues', args),
 

@@ -63,7 +63,8 @@ export const GITLAB_METHODS = [
         normalized.state,
         normalized.assignee,
         normalized.limit,
-        normalized.page
+        normalized.page,
+        normalized.query
       )
     }
   }),

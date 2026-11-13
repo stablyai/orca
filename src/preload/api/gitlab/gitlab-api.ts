@@ -69,6 +69,7 @@ export type GitLabApi = {
       assignee?: string
       limit?: number
       page?: number
+      query?: string
     }
   ) => Promise<{
     items: GitLabWorkItem[]

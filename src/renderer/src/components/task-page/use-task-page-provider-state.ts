@@ -65,6 +65,8 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   // Like Linear, fetch GitLab directly for the primary repo without GitHub’s workItemsCache/aggregation path.
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabMRInvolvement, setGitlabMRInvolvement] = useState<GitLabMRInvolvement | null>(null)
+  const [gitlabSearchInput, setGitlabSearchInput] = useState('')
+  const [appliedGitlabSearch, setAppliedGitlabSearch] = useState('')
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [gitlabListQueryKey, setGitlabListQueryKey] = useState<string | null>(null)
   const [gitlabLoading, setGitlabLoading] = useState(false)
@@ -184,6 +186,11 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.gitlabFilterIsValid = gitlabFilterIsValid
   nextModel.activeGitlabFilter = activeGitlabFilter
   nextModel.displayedGitLabItems = displayedGitLabItems
-  return nextModel
+  return Object.assign(nextModel, {
+    gitlabSearchInput,
+    setGitlabSearchInput,
+    appliedGitlabSearch,
+    setAppliedGitlabSearch
+  })
 }
 export type TaskPageProviderStateModel = ReturnType<typeof useTaskPageProviderState>

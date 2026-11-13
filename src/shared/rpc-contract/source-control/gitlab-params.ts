@@ -38,7 +38,8 @@ export const IssuesList = RepoSelector.extend({
   state: z.unknown().optional(),
   assignee: OptionalString,
   limit: OptionalFiniteNumber,
-  page: OptionalFiniteNumber
+  page: OptionalFiniteNumber,
+  query: OptionalString
 })
 
 export const CreateIssue = RepoSelector.extend({

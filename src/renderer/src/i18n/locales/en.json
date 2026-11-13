@@ -3965,7 +3965,9 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "gitlabSearchIssues": "Search GitLab issues or #123...",
+        "gitlabSearchMrs": "Search GitLab merge requests..."
       },
       "Terminal": {
         "73768427cf": "Close",

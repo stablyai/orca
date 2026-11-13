@@ -6,7 +6,9 @@ import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { LoaderCircle, RefreshCw } from 'lucide-react'
+import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { getGitLabMRInvolvementFilters } from '@/components/task-page/task-page-localized-options'
 
 function FilterChip({
@@ -59,8 +61,15 @@ export function TaskPageGitLabFilters({
     gitlabTodosLoading,
     activeGitlabFilter,
     gitlabMRInvolvement,
-    setGitlabMRInvolvement
+    setGitlabMRInvolvement,
+    gitlabSearchInput,
+    setGitlabSearchInput,
+    setAppliedGitlabSearch
   } = model
+  const gitlabSearchLabel =
+    gitlabView === 'issues'
+      ? t('auto.components.TaskPage.gitlabSearchIssues', 'Search GitLab issues or #123...')
+      : t('auto.components.TaskPage.gitlabSearchMrs', 'Search GitLab merge requests...')
   return (
     <>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -120,6 +129,51 @@ export function TaskPageGitLabFilters({
             triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
           />
         </div>
+        {gitlabView === 'todos' ? null : (
+          <div className="flex h-8 min-w-0 flex-1 basis-64 items-center gap-2 rounded-md border border-border/50 bg-background px-2.5 transition-[box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+            <Search className="size-3.5 shrink-0 text-muted-foreground" />
+            <Input
+              surface="embedded"
+              value={gitlabSearchInput}
+              onChange={(e) => setGitlabSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') {
+                  return
+                }
+                if (
+                  shouldSuppressEnterSubmit(
+                    { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
+                    false
+                  )
+                ) {
+                  return
+                }
+                e.preventDefault()
+                const trimmed = gitlabSearchInput.trim()
+                setGitlabSearchInput(trimmed)
+                setAppliedGitlabSearch(trimmed)
+                setGitlabRefreshNonce((n) => n + 1)
+              }}
+              placeholder={gitlabSearchLabel}
+              aria-label={gitlabSearchLabel}
+            />
+            {gitlabSearchInput ? (
+              <Button
+                type="button"
+                variant="muted-field-icon"
+                size="icon-xs"
+                aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
+                onClick={() => {
+                  setGitlabSearchInput('')
+                  setAppliedGitlabSearch('')
+                }}
+                className="shrink-0"
+              >
+                <X className="size-3.5" />
+              </Button>
+            ) : null}
+          </div>
+        )}
       </div>
       <div
         className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"

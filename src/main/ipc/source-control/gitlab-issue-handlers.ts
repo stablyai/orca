@@ -5,7 +5,8 @@ import type { Store } from '../../persistence/loading-store/store'
 import {
   normalizeGitLabIssueAssignee,
   normalizeGitLabIssueListState,
-  normalizeGitLabPositiveInteger
+  normalizeGitLabPositiveInteger,
+  normalizeGitLabSearchQuery
 } from '../../gitlab/requests/gitlab-preload-args'
 import {
   addIssueComment,
@@ -52,6 +53,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
         assignee?: string
         limit?: number
         page?: number
+        query?: string
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -67,7 +69,8 @@ export function registerGitLabIssueHandlers(store: Store): void {
         assignee,
         repoConnectionId(repo),
         localGitOptionArgs(store, repo)[0] ?? {},
-        page
+        page,
+        normalizeGitLabSearchQuery(args.query)
       )
       // Tasks shares MR/issue row rendering through the WorkItem shape.
       const workItems: GitLabWorkItem[] = result.items.map((issue) => ({

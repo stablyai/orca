@@ -84,14 +84,15 @@ export class RuntimeGitLabQueryCommands {
     state?: GitLabIssueListState,
     assignee?: string,
     limit?: number,
-    page?: number
+    page?: number,
+    query?: string
   ): Promise<{
     items: GitLabWorkItem[]
     totalPages: number
     error?: Awaited<ReturnType<typeof listIssues>>['error']
   }> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
+    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page, query })
     // Keep page after localGitOptions; spreading optional args before it shifts positions (#13538).
     const result = await listIssues(
       repo.path,
@@ -101,7 +102,8 @@ export class RuntimeGitLabQueryCommands {
       normalized.assignee,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      normalized.page
+      normalized.page,
+      normalized.query
     )
     // Match TaskPage's desktop preload contract on web runtime.
     const items: GitLabWorkItem[] = result.items.map((issue) => ({
