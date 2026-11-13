@@ -63,7 +63,10 @@ function securityHeaders(formAction: string): Record<string, string> {
     // Clickjacking: never framed. form-action also covers the 302 to the client after submit.
     'x-frame-options': 'DENY',
     'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; script-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' ${formAction}`,
-    'referrer-policy': 'no-referrer',
+    // Not no-referrer: under no-referrer browsers send `Origin: null` on the form POST, which the
+    // same-origin check in oauth.ts refuses, so every real approval failed. same-origin still sends
+    // no referrer (and so none of the query) to any other origin.
+    'referrer-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
     'cross-origin-opener-policy': 'same-origin'
   }

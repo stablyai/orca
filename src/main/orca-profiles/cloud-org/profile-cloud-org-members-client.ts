@@ -54,7 +54,7 @@ function optionalPictureUrl(value: unknown): string | undefined {
   }
 }
 
-const MEMBER_MFA: readonly OrcaOrgMemberMfa[] = ['on', 'off', 'pending']
+const MEMBER_MFA: readonly OrcaOrgMemberMfa[] = ['on', 'off', 'pending', 'sso']
 
 // Absent for plain members (the server leaves it out); an unknown value is dropped, never guessed.
 function normalizeMemberMfa(
@@ -128,7 +128,8 @@ export function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
     pendingInvites,
     // Malformed roles must not widen UI permissions; the server still authorizes mutations.
     viewerRole: normalizeRole(record.viewerRole, 'member'),
-    canManageMembers: record.canManageMembers === true
+    canManageMembers: record.canManageMembers === true,
+    ...(record.directoryManaged === true ? { directoryManaged: true } : {})
   }
 }
 

@@ -76,6 +76,7 @@ export async function readRepoSetupImports(
   return {
     envVarNames: envNames.names,
     ...(first ? { installScript: first.setup } : {}),
+    ...(first?.ubuntuNote ? { ubuntuNote: first.ubuntuNote } : {}),
     sources
   }
 }

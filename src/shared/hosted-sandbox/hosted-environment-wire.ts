@@ -108,6 +108,13 @@ export const HostedEnvironmentBuildViewSchema = z.looseObject({
   repos: z.array(HostedEnvironmentBuildRepoSchema).max(HOSTED_ENVIRONMENT_MAX_REPOS),
   diskUsedBytes: z.number().nonnegative().nullable(),
   diskTotalBytes: z.number().nonnegative().nullable(),
+  // AUTO-ENV-DEPS-LABEL: an automatic environment's lockfile install. Older control planes omit it,
+  // and an unknown manager or outcome from a newer one reads as none rather than failing the list.
+  autoInstall: z
+    .object({ manager: z.enum(['pnpm', 'yarn', 'npm']), outcome: z.enum(['installed', 'skipped']) })
+    .nullable()
+    .optional()
+    .catch(null),
   logBytes: z.number().int().nonnegative(),
   logTruncated: z.boolean()
 })

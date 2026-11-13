@@ -1591,7 +1591,34 @@
           "cancelScheduledOn": "Plan set to end on {{date}}",
           "seatsChangedDetail": "Seats changed from {{from}} to {{to}}",
           "spendCapChanged2": "Changed the monthly spend cap",
-          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}"
+          "spendCapChangedTo": "Changed the monthly spend cap to {{amount}}",
+          "ssoSetupLink": "Created a single sign-on setup link",
+          "ssoConfigured": "Set up single sign-on",
+          "ssoConfiguredNamed": "Set up single sign-on with {{name}}",
+          "ssoWentLive": "Turned on single sign-on",
+          "ssoWentLiveNamed": "Turned on single sign-on with {{name}}",
+          "ssoRemoved": "Removed single sign-on",
+          "ssoSignInRefused": "Tried to sign in without single sign-on",
+          "ssoSessionsEnded": "Ended sign-ins made before single sign-on was turned on",
+          "ssoDomainAdded": "Added an email domain",
+          "ssoDomainAddedNamed": "Added email domain {{name}}",
+          "ssoDomainVerified": "Verified an email domain",
+          "ssoDomainVerifiedNamed": "Verified email domain {{name}}",
+          "ssoDomainRemoved": "Removed an email domain",
+          "ssoDomainRemovedNamed": "Removed email domain {{name}}",
+          "ssoDomainRecordMissing": "Found an email domain’s DNS record missing",
+          "ssoDomainRecordMissingNamed": "Found the DNS record for {{name}} missing",
+          "scimEnabled": "Turned on directory sync",
+          "scimDisabled": "Turned off directory sync",
+          "scimKeyCreated": "Created a directory sync key",
+          "scimKeyRevoked": "Revoked a directory sync key",
+          "scimGroupChanged": "Changed a directory group",
+          "scimGroupMembershipChanged": "Changed who is in a directory group",
+          "mfaPolicyEnabled": "Required two-factor authentication",
+          "mfaPolicyChanged": "Changed the two-factor authentication date",
+          "mfaPolicyDisabled": "Stopped requiring two-factor authentication",
+          "mfaReminderResent": "Sent a two-factor authentication reminder",
+          "mfaMemberReset": "Reset a member’s two-factor authentication"
         },
         "interval": {
           "month": "monthly",
@@ -1675,7 +1702,6 @@
       "keywordScim": "scim",
       "keywordCompliance": "compliance",
       "description": "Single sign-on, sign-in policies and the audit log for your team.",
-      "bannerTitle": "Single sign-on and the audit log are part of {{plan}}",
       "bannerBody": "Talk to us about moving your team to {{plan}}.",
       "contactUs": "Contact us",
       "scim": {
@@ -1701,7 +1727,37 @@
         "keyNote": "The setup page shows the SCIM address and key to enter in your identity provider. Orca never shows or stores the key.",
         "lastChange": "Last change received",
         "lastChangeSummary": "{{what}} · {{when}}"
-      }
+      },
+      "bannerTitleAll": "Single sign-on, two-factor requirements and the audit log are part of {{plan}}"
+    },
+    "teamWorkspaces": {
+      "search": "Search workspaces",
+      "searchPlaceholder": "Search name, repository, person, W-number…",
+      "filterBy": "Filter by person",
+      "byAnyone": "By anyone",
+      "byPerson": "By {{name}}",
+      "filterIn": "Filter by repository",
+      "inAnyRepo": "In any repository",
+      "inRepo": "In {{repo}}",
+      "emptyTeam": "No one on your team has a cloud workspace yet.",
+      "emptyFiltered": "No workspaces match these filters.",
+      "colName": "Workspace",
+      "colNumber": "No.",
+      "colCreatedBy": "Created by",
+      "colState": "State",
+      "colLastActive": "Last active",
+      "colAccess": "Access",
+      "colActions": "Actions",
+      "shared": "Shared",
+      "shownOf_one": "{{shown}} of {{count}} workspace",
+      "shownOf_other": "{{shown}} of {{count}} workspaces",
+      "title": "Cloud workspaces",
+      "searchDescription": "Every cloud workspace on your team, to open, sleep or archive.",
+      "keywordCloud": "cloud workspaces",
+      "keywordTeam": "team workspaces",
+      "keywordSandboxes": "sandboxes",
+      "keywordArchive": "archive",
+      "description": "Every cloud workspace on your team. Only owners and admins can see this page."
     }
   },
   "menu": {
@@ -14190,7 +14246,8 @@
             "connect": "Connect GitHub",
             "title": "GitHub",
             "disconnectError": "Couldn't disconnect GitHub."
-          }
+          },
+          "ssoRequired": "Your team now requires single sign-on. Sign in again and choose Sign in with SSO."
         },
         "automations": {
           "showButtonDescription": "Show the Automations shortcut in the sidebar.",
@@ -21038,7 +21095,8 @@
         "4b7d2e8f1a": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi.",
         "9a4c6b2d7e": "Skill sharing",
         "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
-        "c5b3e8a17d": "Sign in to Orca"
+        "c5b3e8a17d": "Sign in to Orca",
+        "ssoRequired": "Your team now requires single sign-on. Sign in again and choose Sign in with SSO."
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Open chat",
@@ -21369,10 +21427,10 @@
           "makeOwnerTitle": "Make {{value0}} an owner?",
           "members": "Members",
           "membersList": "Team members and invites",
-          "mfaOn": "MFA on",
-          "mfaOff": "MFA off",
-          "mfaPending": "MFA pending",
-          "mfaPendingBy": "MFA due {{value0}}",
+          "mfaOn": "2FA on",
+          "mfaOff": "2FA off",
+          "mfaPending": "2FA pending",
+          "mfaPendingBy": "2FA due {{value0}}",
           "nextInvoice": "Next invoice (est.)",
           "nextInvoiceOn": "{{value0}} · {{value1}}",
           "notAnEmail": "Not an email address",
@@ -21454,7 +21512,10 @@
           "seatRulesShort": "New members above your paid seats are charged now, prorated. Removed seats stay paid until renewal.",
           "inviteSeatRule": "Each invite uses a seat once accepted.",
           "enterpriseRowTitle": "Single sign-on, directory sync and the audit log",
-          "openEnterpriseSettings": "Open Enterprise settings"
+          "openEnterpriseSettings": "Open Enterprise settings",
+          "managedByIdp": "Managed by your identity provider",
+          "managedByIdpNote": "Managed by your identity provider. Add or remove people and change roles there.",
+          "mfaSso": "2FA via SSO"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21884,15 +21945,15 @@
         "grace7": "In 7 days",
         "grace14": "In 14 days",
         "grace30": "In 30 days",
-        "bannerTitle": "{{value0}} requires two-factor authentication. {{value1}}.",
+        "bannerTitle": "{{value0}} requires two-factor authentication from {{value1}}",
         "bannerBody": "Set it up by {{value0}}. After that you can’t use this team’s workspaces until you do.",
         "bannerBlockedTitle": "{{value0}} requires two-factor authentication",
-        "soonTitleNow": "{{value0}} requires MFA now",
-        "soonTitle_one": "{{value0}} requires MFA in {{count}} day",
-        "soonTitle_other": "{{value0}} requires MFA in {{count}} days",
-        "toast": "{{value0}} requires MFA from {{value1}}.",
+        "soonTitleNow": "{{value0}} requires two-factor authentication now",
+        "soonTitle_one": "{{value0}} requires two-factor authentication in {{count}} day",
+        "soonTitle_other": "{{value0}} requires two-factor authentication in {{count}} days",
+        "toast": "{{value0}} requires two-factor authentication from {{value1}}.",
         "bannerBlockedBody": "You can’t use this team’s workspaces until you set it up. Your personal account isn’t affected.",
-        "setUp": "Set up MFA",
+        "setUp": "Set up two-factor",
         "blockedTitle": "Set up two-factor authentication to use {{value0}}",
         "blockedBody": "{{value0}} has required it for all members since {{value1}}. Your workspaces and files are safe, and open again as soon as you add an authenticator app.",
         "recheck": "I’ve set it up",
@@ -21903,7 +21964,7 @@
         "rowEnforced": "Required since {{value0}}. Members without it can’t use this team until they set it up.",
         "rowScheduled": "Required from {{value0}}. {{value1}}.",
         "graceLabel": "When to start requiring it",
-        "require": "Require MFA",
+        "require": "Require two-factor",
         "turnOff": "Stop requiring",
         "ownMfaTitle": "Set up two-factor authentication on your own account first",
         "ownMfaBody": "Only someone who already has it can change this, so nobody locks the team out.",
@@ -21913,14 +21974,25 @@
         "pendingCount_one": "{{count}} member still needs it",
         "pendingCount_other": "{{count}} members still need it",
         "remindAll": "Remind everyone",
-        "pendingList": "Members without MFA",
+        "pendingList": "Members without two-factor authentication",
         "memberBlocked": "No access",
         "memberPending": "Pending",
         "remindOne": "Remind",
         "reminded_one": "Reminder sent to {{count}} member.",
         "reminded_other": "Reminder sent to {{count}} members.",
         "remindedNoEmail": "Reminder recorded, but email delivery is off on this server, so nothing was sent.",
-        "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces."
+        "requiredInline": "Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces.",
+        "groupTitle": "Two-factor authentication",
+        "upsellTitle": "Requiring two-factor authentication is part of {{value0}}",
+        "upsellBody": "Set a date after which members need two-factor authentication to use your team’s workspaces.",
+        "errorActorNeedsMfa": "Set up two-factor authentication on your own account first.",
+        "errorNotEntitled": "Your team’s plan doesn’t include this.",
+        "errorSsoNotice": "Your team uses single sign-on, so pick a date at least 7 days out. Members need time to sign in again.",
+        "errorRateLimited": "Too many changes at once. Wait a minute and try again.",
+        "errorForbidden": "Only owners and admins can change this.",
+        "errorOther": "Couldn’t save the change. Try again.",
+        "memberNotSignedIn": "Hasn’t signed in yet",
+        "groupSsoNote": "Members who sign in with single sign-on use your identity provider’s two-factor settings. This requirement applies only to members who sign in another way."
       }
     },
     "i18n": {
@@ -27737,7 +27809,9 @@
     },
     "header": {
       "active": "New workspaces start from build #{{number}}",
-      "noActive": "No build yet: workspaces start from a fresh sandbox"
+      "noActive": "No build yet: workspaces start from a fresh sandbox",
+      "depsInstalled": "Dependencies installed with {{manager}}",
+      "depsSkipped": "Dependencies weren’t installed because {{manager}} install failed. New workspaces start without them."
     },
     "agent": {
       "hint": "Starts your default agent in a local checkout. It writes the install script and builds until it succeeds.",
@@ -28603,16 +28677,19 @@
       "diskVeryLowMeaning": "Installs and builds may fail. Delete caches or build output you don’t need.",
       "diskLowMeaning": "Large dependency installs may run out of space.",
       "pushRequested": "Orca Cloud can read {{repo}} but can’t push yet. An owner of {{owner}} has been asked to approve the Orca GitHub App.",
-      "copied": "Copied",
-      "copyRequest": "Copy request for an owner",
       "pushCantInstall": "Orca Cloud can read {{repo}} but can’t push to it.",
       "pushCantInstallMeaning": "Pushing needs the Orca GitHub App on {{owner}}. Ask an owner of {{owner}} to install it.",
-      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet.",
-      "pushRequestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
-      "pushRequestCopyFailed": "Couldn’t copy it."
+      "pushNotYet": "Orca Cloud can’t push to {{repo}} yet."
     },
     "toast": {
       "dismiss": "Dismiss"
+    },
+    "ownerRequest": {
+      "messagePush": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to push from workspaces on this repository.",
+      "messageStart": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
+      "copyFailed": "Couldn’t copy it.",
+      "copied": "Copied",
+      "copy": "Copy request for an owner"
     }
   },
   "runActions": {
@@ -29040,6 +29117,8 @@
       "codeExpired": "The code expired · start again",
       "notChatGpt": "That sign-in wasn’t a ChatGPT account. Use the ChatGPT account you use with Codex.",
       "brokerBusy": "A ChatGPT sign-in is already running. Finish it, or try again in a minute.",
+      "deviceAuthDisabled": "Device code sign-in is off for this ChatGPT account",
+      "deviceAuthDisabledDetail": "Turn it on in ChatGPT’s security settings, then try again. On a work or team account, a ChatGPT admin may need to turn it on.",
       "rateLimited": "Too many sign-in attempts. Try again in a few minutes.",
       "invalidToken": "This token isn’t valid · run claude setup-token again",
       "notEnabled": "Orca can’t use your {{product}} account in cloud workspaces right now.",
@@ -29622,12 +29701,8 @@
       "askOwnerBody": "Ask an owner of {{owner}} to give Orca access. Orca tries again once they do. The sandbox was deleted.",
       "body": "The Orca GitHub App on {{owner}} doesn’t include this repository. Give Orca access, and Orca tries again. The sandbox was deleted.",
       "chooseAnother": "Choose another repository",
-      "copyRequest": "Copy request for an owner",
       "waiting": "Waiting for GitHub…",
-      "giveAccess": "Give Orca access",
-      "requestMessage": "Could you give the Orca GitHub App access to {{repo}}? Orca Cloud needs it to start workspaces from this repository.",
-      "requestCopyFailed": "Couldn’t copy it.",
-      "copied": "Copied"
+      "giveAccess": "Give Orca access"
     }
   },
   "renderer": {
@@ -29664,5 +29739,44 @@
     "copyLinkFailed": "Couldn’t copy the link.",
     "linkCopied": "Link copied",
     "signInLinkHint": "Open it in any browser on this computer."
+  },
+  "cloudFollow": {
+    "role": {
+      "creator": "Created this workspace",
+      "follower": "Following"
+    },
+    "state": {
+      "typing": "Typing now",
+      "viewing": "Here now"
+    },
+    "stackLabel": "People on this workspace",
+    "following": "Following",
+    "unfollow": "Unfollow",
+    "follow": "Follow",
+    "unfollowNamed": "Unfollow {{title}}",
+    "followFailed": "Couldn’t follow this workspace",
+    "unfollowFailed": "Couldn’t unfollow this workspace"
+  },
+  "sidebarTeam": {
+    "title": "Team",
+    "typingIn": "Typing in {{workspace}}",
+    "viewing": "In {{workspace}}",
+    "theirWorkspaces": "{{name}}’s workspaces",
+    "showAll": "Show all {{count}}"
+  },
+  "sidebarFollowing": {
+    "asleep": "Asleep",
+    "waking": "Waking",
+    "archived": "Archived",
+    "title": "Following",
+    "hereNow": "{{count}} here now"
+  },
+  "setupScriptImport": {
+    "ubuntuNote": {
+      "title": "Written for dnf",
+      "mixed": "Orca’s sandboxes run Ubuntu, so this script’s dnf install lines now use apt-get. These lines still use dnf. Check them before saving:",
+      "check": "Orca’s sandboxes run Ubuntu, and these lines still use dnf. Check them before saving:",
+      "translated": "Orca’s sandboxes run Ubuntu, so this script’s dnf install lines now use apt-get."
+    }
   }
 }

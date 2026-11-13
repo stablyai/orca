@@ -77,12 +77,51 @@ describe('audit log', () => {
       ...FIXTURE_EVENTS[0]!,
       id: 'aud_new',
       category: 'security',
-      action: 'sso.went_live'
+      action: 'sso.something_new'
     }
     const { container } = render(
       <EnterpriseSettingsView audit={fixtureAuditProps({ log: { ...EMPTY, events: [unknown] } })} />
     )
-    expect(rows(container)).toEqual(['sso.went_live | Security | Grace Hopper | 4 minutes ago'])
+    expect(rows(container)).toEqual(['sso.something_new | Security | Grace Hopper | 4 minutes ago'])
+  })
+
+  it('words every single sign-on and directory sync action auth sends', () => {
+    // The actions in orca-cloud apps/auth/src/audit/sso-audit.ts.
+    const actions = [
+      'sso.setup_link_created',
+      'sso.configured',
+      'sso.went_live',
+      'sso.removed',
+      'sso.sign_in_refused',
+      'sso.sessions_ended',
+      'sso.domain_added',
+      'sso.domain_verified',
+      'sso.domain_removed',
+      'sso.domain_record_missing',
+      'scim.enabled',
+      'scim.disabled',
+      'scim.key_created',
+      'scim.key_revoked',
+      'scim.group_changed',
+      'scim.group_membership_changed'
+    ]
+    for (const action of actions) {
+      expect(isKnownAuditAction(action)).toBe(true)
+      const sentence = auditEventSentence({ ...FIXTURE_EVENTS[0]!, action, target: null })
+      expect(sentence).not.toContain('.')
+      expect(sentence).not.toContain('_')
+    }
+    const about = (action: string, label: string): string =>
+      auditEventSentence({
+        ...FIXTURE_EVENTS[0]!,
+        action,
+        target: { type: 'sso_connection', id: null, label }
+      })
+    expect(about('sso.went_live', 'Okta')).toBe('Turned on single sign-on with Okta')
+    expect(about('sso.domain_verified', 'acme.com')).toBe('Verified email domain acme.com')
+    expect(about('sso.domain_record_missing', 'acme.com')).toBe(
+      'Found the DNS record for acme.com missing'
+    )
   })
 
   it('pages with Show more, and keeps the list when a page fails', () => {
@@ -209,7 +248,11 @@ describe('without the Enterprise plan', () => {
         audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [], onContactSales })}
       />
     )
-    expect(screen.getByText('Single sign-on and the audit log are part of Enterprise')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Single sign-on, two-factor requirements and the audit log are part of Enterprise'
+      )
+    ).toBeTruthy()
     // The blocks keep their titles and say what they are, without a second button.
     expect(screen.getByText('Single sign-on and provisioning')).toBeTruthy()
     expect(screen.getByText('Audit log')).toBeTruthy()
@@ -234,7 +277,11 @@ describe('without the Enterprise plan', () => {
         audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [], onContactSales })}
       />
     )
-    expect(screen.queryByText('Single sign-on and the audit log are part of Enterprise')).toBeNull()
+    expect(
+      screen.queryByText(
+        'Single sign-on, two-factor requirements and the audit log are part of Enterprise'
+      )
+    ).toBeNull()
     expect(screen.getByText('Audit log is part of Enterprise')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Contact sales' }))
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
@@ -251,7 +298,11 @@ describe('without the Enterprise plan', () => {
         })}
       />
     )
-    expect(screen.getByText('Single sign-on and the audit log are part of Scale')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Single sign-on, two-factor requirements and the audit log are part of Scale'
+      )
+    ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Contact sales' }))
     expect(onContactSales).toHaveBeenCalledWith('https://orca.dev/scale')
   })

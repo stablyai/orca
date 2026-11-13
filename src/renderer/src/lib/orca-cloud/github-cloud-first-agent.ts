@@ -149,6 +149,7 @@ function seederShellInFront(
   const active = state.activeTabId
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   return (
+    // Belt-and-braces: a tab from another workspace is never this one's newest tab either.
     state.activeWorktreeId === worktreeId &&
     active !== null &&
     active !== heldTabId &&

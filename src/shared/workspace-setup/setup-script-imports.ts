@@ -32,7 +32,14 @@ export type SetupScriptImportCandidate = {
   runMode?: OrcaRunMode
   autoRunAfterSetup?: boolean | string
   unsupportedFields?: string[]
+  /**
+   * PARITY-DNF: the setup came from an Amazon Linux tool (Conductor). `translated` dnf/yum install
+   * lines now use apt-get; `checkLines` still use dnf or yum (in the setup or a script it runs).
+   */
+  ubuntuNote?: UbuntuNote
 }
+
+export type UbuntuNote = { translated: number; checkLines: string[] }
 
 export type SetupScriptImportFileRead = (relativePath: string) => Promise<string | null>
 export type SetupScriptImportFileExists = (relativePath: string) => Promise<boolean>

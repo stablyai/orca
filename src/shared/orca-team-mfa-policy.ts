@@ -11,8 +11,10 @@ export type OrcaTeamMfaGrace = (typeof ORCA_TEAM_MFA_GRACE_CHOICES)[number]
  * - `pending`: the team requires MFA, they have none, the deadline has not passed.
  * - `blocked`: the deadline passed; the team's workspaces and settings are closed to them.
  * - `unknown`: the identity provider did not say; never treated as blocked.
+ * - `delegated`: the team's single sign-on is live and they sign in through it, so their second
+ *   factor is their identity provider's and the policy does not apply to them.
  */
-export type OrcaTeamMfaSelfState = 'on' | 'off' | 'pending' | 'blocked' | 'unknown'
+export type OrcaTeamMfaSelfState = 'on' | 'off' | 'pending' | 'blocked' | 'unknown' | 'delegated'
 
 export type OrcaTeamMfaPolicy = {
   /** Null when the team has no policy in force. */
@@ -27,6 +29,8 @@ export type OrcaTeamMfaPolicy = {
     pendingMembers: number
     /** A stored policy the plan no longer covers: it enforces nothing. */
     inactiveEnforceAt?: number
+    /** The team's single sign-on is live: members who use it are handled by their provider. */
+    ssoHandled: boolean
   }
 }
 
@@ -49,6 +53,8 @@ export type OrcaTeamMfaPolicySetResult =
   | { status: 'actor-needs-mfa' }
   /** The team's plan does not include MFA enforcement. */
   | { status: 'not-entitled' }
+  /** The team uses single sign-on, so "now" is refused: members need time to sign in again. */
+  | { status: 'sso-needs-notice' }
   | Unavailable
 
 export type OrcaTeamMfaPendingResult =

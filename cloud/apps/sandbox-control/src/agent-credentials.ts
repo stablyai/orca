@@ -12,7 +12,11 @@ import type { SandboxCaller } from './auth'
 import type { Env } from './env'
 import type { Keyring, SecretBinding } from './secrets-crypto'
 
-export type CredentialState = 'none' | 'active' | 'expiring' | 'expired' | 'revoked'
+/**
+ * 'suspect' (RS-2): an auth check failed but no real request has confirmed it yet. Still usable at egress;
+ * shown to the desktop as expired + needsCheck (an older desktop reads a new state as 'none').
+ */
+export type CredentialState = 'none' | 'active' | 'expiring' | 'expired' | 'revoked' | 'suspect'
 const EXPIRING_MS = 30 * 24 * 60 * 60_000
 /** `claude setup-token` issues a one-year token. */
 const CLAUDE_SETUP_TOKEN_TTL_MS = 365 * 24 * 60 * 60_000
@@ -27,6 +31,8 @@ type CredentialRow = {
   label: string | null
   expires_at: number | null
   state: 'active' | 'revoked'
+  /** RS-2: when an auth check said this sign-in is dead; null when not in question. */
+  suspect_at?: number | null
   updated_at: number
 }
 
@@ -73,15 +79,18 @@ export function credentialState(row: Pick<CredentialRow, 'state' | 'expires_at'>
   if (row.expires_at !== null && row.expires_at <= now) {
     return 'expired'
   }
+  if (row.suspect_at !== null && row.suspect_at !== undefined) {
+    return 'suspect'
+  }
   if (row.expires_at !== null && row.expires_at - now <= EXPIRING_MS) {
     return 'expiring'
   }
   return 'active'
 }
 
-/** Usable for a request now: active or expiring (still valid). */
+/** Usable for a request now: active or expiring (still valid), or suspect (a real request must confirm it). */
 export function isUsable(state: CredentialState): boolean {
-  return state === 'active' || state === 'expiring'
+  return state === 'active' || state === 'expiring' || state === 'suspect'
 }
 
 async function rowFor(db: D1Database, userId: string, agent: CredentialAgent): Promise<CredentialRow | null> {
@@ -106,7 +115,7 @@ export async function putAgentCredential(
        ON CONFLICT (user_id, agent) DO UPDATE SET account_id = excluded.account_id, kek_id = excluded.kek_id,
          wrapped_dek = excluded.wrapped_dek, ciphertext = excluded.ciphertext, label = excluded.label,
          expires_at = excluded.expires_at, state = 'active', updated_at = excluded.updated_at,
-         checked_at = NULL, verified_at = NULL`
+         checked_at = NULL, verified_at = NULL, suspect_at = NULL`
     )
     .bind(input.userId, input.accountId, input.agent, sealed.kekId, sealed.wrappedDek, sealed.ciphertext, input.label ?? null, input.expiresAt ?? null, now, now)
     .run()
@@ -114,21 +123,61 @@ export async function putAgentCredential(
 
 /** The real value for egress, or null when there is none or it can't be used now. */
 export async function readUsableAgentCredential(db: D1Database, keyring: Keyring, userId: string, agent: CredentialAgent, now: number): Promise<string | null> {
+  return (await readUsableAgentCredentialState(db, keyring, userId, agent, now)).value
+}
+
+/** The real value for egress, and whether the sign-in is in question (RS-2: a real request confirms it). */
+export async function readUsableAgentCredentialState(
+  db: D1Database,
+  keyring: Keyring,
+  userId: string,
+  agent: CredentialAgent,
+  now: number
+): Promise<{ value: string | null; suspect: boolean }> {
   const row = await rowFor(db, userId, agent)
-  if (!isUsable(credentialState(row, now)) || !row) {
-    return null
+  const state = credentialState(row, now)
+  if (!isUsable(state) || !row) {
+    return { value: null, suspect: false }
   }
   try {
-    return await keyring.open(credentialBinding(userId, agent), { kekId: row.kek_id, wrappedDek: row.wrapped_dek, ciphertext: row.ciphertext })
+    const value = await keyring.open(credentialBinding(userId, agent), { kekId: row.kek_id, wrappedDek: row.wrapped_dek, ciphertext: row.ciphertext })
+    return { value, suspect: state === 'suspect' }
   } catch {
     console.log(JSON.stringify({ event: 'agent_credential_unreadable', agent }))
-    return null
+    return { value: null, suspect: false }
   }
+}
+
+/** RS-2: an auth check failed. Not revoked: a real request must confirm it first. True when newly marked. */
+export async function markAgentCredentialSuspect(db: D1Database, userId: string, agent: CredentialAgent, now: number): Promise<boolean> {
+  const result = await db
+    .prepare(`UPDATE agent_credentials SET suspect_at = ?, updated_at = ? WHERE user_id = ? AND agent = ? AND state = 'active' AND suspect_at IS NULL`)
+    .bind(now, now, userId, agent)
+    .run()
+  return result.meta.changes === 1
+}
+
+/** RS-2: a real request (or an auth check) succeeded: the sign-in is fine. True when it was in question. */
+export async function clearAgentCredentialSuspect(db: D1Database, userId: string, agent: CredentialAgent, now: number): Promise<boolean> {
+  const result = await db
+    .prepare(`UPDATE agent_credentials SET suspect_at = NULL, updated_at = ? WHERE user_id = ? AND agent = ? AND suspect_at IS NOT NULL`)
+    .bind(now, userId, agent)
+    .run()
+  return result.meta.changes === 1
+}
+
+/** RS-2: when this sign-in was put in question, or null. */
+export async function agentCredentialSuspectAt(db: D1Database, userId: string, agent: CredentialAgent): Promise<number | null> {
+  const row = await db
+    .prepare(`SELECT suspect_at FROM agent_credentials WHERE user_id = ? AND agent = ? AND state = 'active'`)
+    .bind(userId, agent)
+    .first<{ suspect_at: number | null }>()
+  return row?.suspect_at ?? null
 }
 
 /** The provider said the credential is no longer valid (401 at egress): stop using it until renewed. */
 export async function markAgentCredentialRevoked(db: D1Database, userId: string, agent: CredentialAgent, now: number): Promise<void> {
-  await db.prepare(`UPDATE agent_credentials SET state = 'revoked', updated_at = ? WHERE user_id = ? AND agent = ?`).bind(now, userId, agent).run()
+  await db.prepare(`UPDATE agent_credentials SET state = 'revoked', suspect_at = NULL, updated_at = ? WHERE user_id = ? AND agent = ?`).bind(now, userId, agent).run()
 }
 
 export async function deleteAgentCredential(db: D1Database, userId: string, agent: CredentialAgent): Promise<boolean> {
@@ -141,10 +190,18 @@ export async function agentCredentialsView(db: D1Database, env: Env, userId: str
   const view = (agent: CredentialAgent) => {
     const row = results.find((r) => r.agent === agent) ?? null
     const state = credentialState(row, now)
-    return { state, ...(row?.label ? { label: row.label } : {}), ...(row?.expires_at ? { expiresAt: row.expires_at } : {}) }
+    // RS-2: "needs check" reads as expired (the Renew strip) on every desktop, old ones included; newer
+    // desktops may read needsCheck. An unknown state would read as 'none' ("isn't set up") on old ones.
+    const wire = state === 'suspect' ? { state: 'expired' as const, needsCheck: true } : { state }
+    // RS-5: credentials saved before the fix carry an email or the Orca name; Claude's always reads true.
+    const label = agent === 'claude' && row ? CLAUDE_CREDENTIAL_LABEL : row?.label
+    return { ...wire, ...(label ? { label } : {}), ...(row?.expires_at ? { expiresAt: row.expires_at } : {}) }
   }
   return { claude: view('claude'), codex: view('codex'), providerEnabled: providerEnabled(env), providerState: providerStates(env) }
 }
+
+/** RS-5: what a stored Claude credential is called (the approved account itself can't be known). */
+export const CLAUDE_CREDENTIAL_LABEL = 'Claude subscription'
 
 // A Claude setup-token: `sk-ant-oat01-` then URL-safe characters. Shape-checked, never logged.
 const CLAUDE_TOKEN = /^sk-ant-oat01-[A-Za-z0-9_-]{20,500}$/
@@ -173,7 +230,10 @@ export async function putClaudeCredential(db: D1Database, keyring: Keyring, env:
       accountId: caller.accountId,
       agent: 'claude',
       value: token,
-      label: body.label?.trim() || caller.name || null,
+      // RS-5 (design-squad): a true label only. Neither this computer's Claude Code email nor the Orca
+      // name says which account approved the setup-token (it prints no email, and its inference-only
+      // scope can't read the profile), so a Claude credential is always "Claude subscription".
+      label: CLAUDE_CREDENTIAL_LABEL,
       expiresAt: Math.min(body.expiresAt ?? now + CLAUDE_SETUP_TOKEN_TTL_MS, now + CLAUDE_SETUP_TOKEN_TTL_MS)
     },
     now

@@ -8,6 +8,7 @@ import { activeTeamRole } from '@/lib/orca-cloud/active-team-role'
 import { useAppStore } from '@/store'
 import { refreshBillingSummary, useBillingState } from '../../billing/billing-summary-store'
 import { canManageMembers } from '../../billing/team/team-roles'
+import { EnterpriseMfaPolicy } from '../../team-mfa/EnterpriseMfaPolicy'
 import { EnterpriseSettingsView } from './EnterpriseSettingsView'
 import { ENTERPRISE_CONTACT_URL, type EnterpriseContact } from './EnterpriseUpsell'
 import { useEnterpriseAuditLog } from './use-enterprise-audit-log'
@@ -39,6 +40,7 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
   const role = activeTeamRole(authStatus)
   const admin = role !== null && canManageMembers(role)
   const contact = useEnterpriseContact()
+  const orgId = authStatus?.cloud?.activeOrgId ?? null
   const audit = useEnterpriseAuditLog(availability?.status === 'ready' && admin)
   const sso = useEnterpriseSso(
     authStatus?.cloud?.activeOrgId ?? null,
@@ -79,6 +81,16 @@ function EnterpriseSettingsPaneBody(): React.JSX.Element | null {
             onCopy: (text) => void window.api.ui.writeClipboardText(text)
           }}
         />
+      }
+      policies={
+        orgId ? (
+          <EnterpriseMfaPolicy
+            orgId={orgId}
+            contact={contact}
+            onContactSales={openUrl}
+            underBanner={ssoLocked === true && audit.log.status === 'upsell'}
+          />
+        ) : undefined
       }
       audit={{
         log: audit.log,

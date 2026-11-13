@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const SHIM = fileURLToPath(new URL('../image/vm/git', import.meta.url).href)
-const NUDGE = "orca: This commit uses Orca Cloud's name. Connect your GitHub in Settings → Account to use yours."
+const NUDGE = "orca: This commit is authored as Orca <noreply@orca.dev>. Connect GitHub in Settings → Account to commit as yourself."
 
 let home = ''
 let cwd = ''

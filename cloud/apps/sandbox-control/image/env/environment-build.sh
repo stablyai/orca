@@ -10,6 +10,7 @@
 # the variable of that name) and ORCA_BUILD_WITHHELD_SECRETS (names it lists that builds never get).
 # `::orca-step:: <name>` lines mark progress.
 # Exit codes: 10 clone, 20 install script, 30 recording the result, 40 a secret's value left on disk.
+# ORCA_AUTO_INSTALL=1 (automatic environments, no install script): install from the lockfile, never failing.
 set -uo pipefail
 umask 022
 # One stream: the provider replays stdout and stderr separately after the fact, so a failed build's
@@ -92,6 +93,65 @@ scan_secrets() {
   return 1
 }
 
+# PARITY-AUTO-ENV-DEPS: an automatic environment (ORCA_AUTO_INSTALL=1, no install script) installs the
+# first repo's JavaScript dependencies from its lockfile, so new workspaces start with them (the deps
+# step below carries node_modules into each worktree). Soft by design: a failure, a lockfile out of date
+# or the time cap leaves the clone as it was (no half-installed node_modules) and the build goes on.
+# Package managers the image doesn't have (bun, uv, bundler, go, cargo) are only named in the log.
+# ORCA_AUTO_INSTALL_TIMEOUT: tests only.
+auto_install() {
+  local dir="$1" pm="" declared="" rc=0 started f
+  local cmd=() others=()
+  for f in bun.lock bun.lockb uv.lock poetry.lock Pipfile.lock Gemfile.lock go.sum Cargo.lock; do
+    [ -f "$dir/$f" ] && others+=("$f")
+  done
+  if [ -f "$dir/package.json" ]; then
+    # package.json's packageManager ("pnpm@9.1.0") wins over the lockfile guess.
+    declared=$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$dir/package.json" | head -n 1)
+    case "$declared" in
+      pnpm | yarn | npm) pm="$declared" ;;
+      *)
+        if [ -f "$dir/pnpm-lock.yaml" ]; then pm=pnpm
+        elif [ -f "$dir/yarn.lock" ]; then pm=yarn
+        elif [ -f "$dir/package-lock.json" ] || [ -f "$dir/npm-shrinkwrap.json" ]; then pm=npm
+        fi
+        ;;
+    esac
+  fi
+  if [ "${#others[@]}" -gt 0 ]; then
+    echo "Not installed automatically: ${others[*]}. Add an install script to the environment to install these."
+  fi
+  if [ -z "$pm" ]; then
+    [ "${#others[@]}" -gt 0 ] || echo "No lockfile found; the build keeps the cloned repos."
+    return 0
+  fi
+  # Through corepack, so pnpm and yarn come at the version the repo pins (Node ships corepack).
+  case "$pm" in
+    pnpm) cmd=(corepack pnpm install --frozen-lockfile) ;;
+    yarn)
+      if [ -f "$dir/.yarnrc.yml" ]; then cmd=(corepack yarn install --immutable)
+      else cmd=(corepack yarn install --frozen-lockfile)
+      fi
+      ;;
+    npm) cmd=(npm ci) ;;
+  esac
+  echo "Installing dependencies automatically: ${cmd[*]}"
+  started=$(date +%s)
+  (cd "$dir" && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 timeout "${ORCA_AUTO_INSTALL_TIMEOUT:-900}" "${cmd[@]}") </dev/null || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    if [ "$rc" -eq 124 ]; then
+      echo "Automatic install skipped: ${cmd[*]} took longer than 15 minutes."
+    else
+      echo "Automatic install skipped: ${cmd[*]} exited with status $rc (often a lockfile out of date)."
+    fi
+    echo "New workspaces start from the cloned repo and run their own setup."
+    # A half-installed tree must never be linked into workspaces.
+    find "$dir" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    return 0
+  fi
+  echo "Installed dependencies in $(($(date +%s) - started))s."
+}
+
 take_secrets
 step() { printf '\n::orca-step:: %s\n' "$1"; }
 started=$(date +%s)
@@ -153,6 +213,8 @@ if [ -s "$OUT/install.sh" ]; then
     echo "::orca-error:: The install script exited with status $rc." 
     exit 20
   fi
+elif [ "${ORCA_AUTO_INSTALL:-}" = 1 ] && [ -n "$first" ]; then
+  auto_install "$first"
 else
   echo "No install script; the build keeps the cloned repos."
 fi

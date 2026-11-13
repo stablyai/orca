@@ -62,7 +62,11 @@ export const CloudWorkspaceSchema = z.object({
   // Older control planes omit it.
   fromRoutine: z.boolean().optional().catch(undefined),
   // The routine that started it, for routine runs (shown as "Routine · <name>").
-  routineName: z.string().max(200).nullable().optional().catch(undefined)
+  routineName: z.string().max(200).nullable().optional().catch(undefined),
+  // Who follows it (oldest first) and whether the caller does (PARITY-FOLLOW). Older control planes
+  // omit them.
+  followers: z.array(Id).max(500).optional().catch(undefined),
+  following: z.boolean().optional().catch(undefined)
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
@@ -84,6 +88,12 @@ export const CloudWorkspaceListResponseSchema = z.object({
   routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
+/** PUT/DELETE /v1/team/workspaces/:id/follow (PARITY-FOLLOW). */
+export const CloudWorkspaceFollowSchema = z.object({
+  following: z.boolean(),
+  followers: z.array(Id)
+})
+export type CloudWorkspaceFollow = z.infer<typeof CloudWorkspaceFollowSchema>
 export const CloudWorkspacePresenceResponseSchema = z.object({
   presence: z.array(CloudWorkspacePresenceSchema)
 })

@@ -121,6 +121,8 @@ describe('a held launch is remembered', () => {
     expect(readHeldCloudLaunches(ENV)).toMatchObject([
       { tabId: TAB, agent: 'claude', prompt: 'fix the test', worktreeId: WT }
     ])
+    // Start, once the account can run it (one that still can't holds again in place).
+    mocks.coverage = 'covered'
     releaseCloudAgentHold(cloudTabHoldKey(TAB), 'proceed')
     await launch
     expect(readHeldCloudLaunches(ENV)).toEqual([])
@@ -172,6 +174,7 @@ describe('after a restart', () => {
       prompt: 'fix the test'
     })
     expect(create).not.toHaveBeenCalled()
+    mocks.coverage = 'covered'
     releaseCloudAgentHold(cloudTabHoldKey(TAB), 'proceed')
     await flush()
     await flush()
@@ -228,6 +231,30 @@ describe('after a restart', () => {
     expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('notSetUp')
     expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.awaiting).toBeUndefined()
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it("V3-01-DOUBLE-SHELL: released while the account still isn't set up, it holds again in the SAME placeholder", async () => {
+    mocks.load = 'loading'
+    remember()
+    setTabs([TAB])
+    const create = vi.fn(async () => created('host-agent'))
+    resumeHeldCloudLaunches(ENV, { create, waitMs: 5_000 })
+    await flush()
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.awaiting).toBe('unread')
+    // The read lands as "not set up", but this 'proceed' was decided before it (a stale Start).
+    mocks.load = 'ready'
+    releaseCloudAgentHold(cloudTabHoldKey(TAB), 'proceed')
+    await flush()
+    await flush()
+    // No second placeholder and no agent: the same tab holds on "Set up once", still remembered.
+    expect(create).not.toHaveBeenCalled()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({ reason: 'notSetUp' })
+    expect(readHeldCloudLaunches(ENV).map((record) => record.tabId)).toEqual([TAB])
+    // Once it can run, Start launches it exactly once.
+    mocks.coverage = 'covered'
+    releaseCloudAgentHold(cloudTabHoldKey(TAB), 'proceed')
+    await vi.waitFor(() => expect(create).toHaveBeenCalledOnce())
   })
 
   it('restored and expired: a Renew turns it awaitingStart and starts nothing', async () => {

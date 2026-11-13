@@ -9,6 +9,7 @@ import { memberChangeTime, recordMemberChange } from './member-changes'
 import { revokeMemberReaderKeys } from './read-snapshots'
 import { disableMemberRoutines } from './routines/runs'
 import { forgetMemberPokes } from './team-presence'
+import { forgetMemberFollows } from './workspace-follows'
 
 export type MemberRemoval = {
   keysRevoked: number
@@ -61,6 +62,8 @@ export async function removeMember(
   const readerKeysRevoked = await revokeMemberReaderKeys(life.db, accountId, userId, now)
   // Their Pokes opt-in goes (it doubles as proof of membership for receiving one).
   await forgetMemberPokes(life.db, accountId, userId, now)
+  // They no longer follow anything here, and stop showing as anyone's follower.
+  await forgetMemberFollows(life.db, accountId, userId)
   const grants = await revokeGrantsForMember(life, accountId, userId)
   // Routines run with their creator's secrets: a departed member's stop, and nothing of theirs keeps running.
   const routines = await disableMemberRoutines({ life }, accountId, userId)

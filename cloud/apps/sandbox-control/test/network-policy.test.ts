@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_EGRESS_PRESET, EDITOR_REMOTE_SERVER_HOSTS, compileNetworkPolicy, gitBasicAuthorization, parseEgressPreset } from '../src/network-policy'
+import {
+  DEFAULT_EGRESS_ALLOWLIST,
+  DEFAULT_EGRESS_PRESET,
+  EDITOR_REMOTE_SERVER_HOSTS,
+  compileNetworkPolicy,
+  egressAllowlistFor,
+  gitBasicAuthorization,
+  parseEgressPreset
+} from '../src/network-policy'
 
 const deny = { response: { statusCode: 403, body: 'orca-egress-denied', contentType: 'text/plain' } }
 
@@ -121,5 +129,28 @@ describe('compileNetworkPolicy', () => {
       expect(allow[host]).toEqual([])
     }
     expect(allow['*']).toBeUndefined()
+  })
+})
+
+describe('ORCA_PLATFORM_HOST_SUFFIXES', () => {
+  it('unset (or blank) keeps the default allowlist exactly as before', () => {
+    const editorAt = DEFAULT_EGRESS_ALLOWLIST.length - EDITOR_REMOTE_SERVER_HOSTS.length
+    expect(DEFAULT_EGRESS_ALLOWLIST).toHaveLength(56)
+    expect(DEFAULT_EGRESS_ALLOWLIST.slice(editorAt - 2, editorAt)).toEqual(['*.githubcopilot.com', '*.onorca.dev'])
+    expect(DEFAULT_EGRESS_ALLOWLIST.slice(editorAt)).toEqual(EDITOR_REMOTE_SERVER_HOSTS)
+    for (const unset of [undefined, '', ' , ']) {
+      expect(egressAllowlistFor(unset)).toEqual(DEFAULT_EGRESS_ALLOWLIST)
+    }
+  })
+
+  it('replaces the platform hosts with the configured suffixes, once each', () => {
+    const allowlist = egressAllowlistFor(' *.onorca.dev , ,*.example.dev,')
+    expect(allowlist.filter((host) => host === '*.onorca.dev')).toHaveLength(1)
+    expect(allowlist).toContain('*.example.dev')
+    expect(allowlist).toHaveLength(DEFAULT_EGRESS_ALLOWLIST.length + 1)
+    expect(egressAllowlistFor('*.example.dev')).not.toContain('*.onorca.dev')
+    const { allow } = compileNetworkPolicy({ mode: 'allowlist', allowlist })
+    expect(allow['*.onorca.dev']).toEqual([])
+    expect(allow['*.example.dev']).toEqual([])
   })
 })

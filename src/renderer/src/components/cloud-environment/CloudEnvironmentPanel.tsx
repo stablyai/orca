@@ -121,6 +121,23 @@ export function CloudEnvironmentPanel(props: CloudEnvironmentPanelProps): React.
           <p className="truncate text-xs text-muted-foreground">
             {environment.repos.map((repo) => repoDisplayName(repo.url)).join(', ')}
           </p>
+          {activeBuild?.autoInstall ? (
+            <p className="text-xs text-muted-foreground" data-auto-install>
+              {activeBuild.autoInstall.outcome === 'installed'
+                ? t(
+                    'cloudEnvironment.header.depsInstalled',
+                    'Dependencies installed with {{manager}}',
+                    {
+                      manager: activeBuild.autoInstall.manager
+                    }
+                  )
+                : t(
+                    'cloudEnvironment.header.depsSkipped',
+                    'Dependencies weren’t installed because {{manager}} install failed. New workspaces start without them.',
+                    { manager: activeBuild.autoInstall.manager }
+                  )}
+            </p>
+          ) : null}
         </div>
         {canAdmin ? (
           <div className="flex shrink-0 items-center gap-2">

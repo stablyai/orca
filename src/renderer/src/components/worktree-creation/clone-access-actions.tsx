@@ -3,6 +3,7 @@
 import { Check, Copy, FolderSearch, Github, Loader2 } from 'lucide-react'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloneAccessPhase } from './use-clone-access-handoff'
+import { ownerRequestLabel } from '@/lib/orca-cloud/owner-request'
 import { repoOwner } from './vm-build-clone-failure-copy'
 
 export type CloneAccessHandlers = {
@@ -84,9 +85,7 @@ export function cloneAccessActions(
       return [
         {
           key: 'copyRequest',
-          label: access.copied
-            ? t('worktreeCreation.cloneAccess.copied', 'Copied')
-            : t('worktreeCreation.cloneAccess.copyRequest', 'Copy request for an owner'),
+          label: ownerRequestLabel(access.copied === true, t),
           icon: access.copied ? <Check /> : <Copy />,
           onClick: access.copyRequest
         },

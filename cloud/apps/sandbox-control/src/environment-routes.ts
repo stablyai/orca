@@ -77,6 +77,7 @@ export function buildView(row: BuildRow, activeBuildId: string | null) {
     }),
     diskUsedBytes: result?.diskUsedBytes ?? null,
     diskTotalBytes: result?.diskTotalBytes ?? null,
+    autoInstall: result?.autoInstall ?? null,
     logBytes: row.log_bytes,
     logTruncated: row.log_truncated === 1
   }

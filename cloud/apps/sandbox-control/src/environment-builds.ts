@@ -94,6 +94,11 @@ export type BuildConfig = {
   machineSize: MachineSize
   /** `git clone --filter`: automatic environments clone blobless (auto-environments.ts). */
   cloneFilter?: 'blob:none'
+  /**
+   * Automatic environments only, with no install script: install the first repo's JavaScript
+   * dependencies from its lockfile, never failing the build (environment-build.sh auto_install).
+   */
+  autoInstall?: boolean
 }
 
 export type BuildResult = {
@@ -101,6 +106,35 @@ export type BuildResult = {
   repos?: { url: string; dir: string; branch: string; commit: string; lockfiles: Record<string, string> }[]
   diskUsedBytes?: number
   diskTotalBytes?: number
+  /** AUTO-ENV-DEPS-LABEL: what an automatic environment's lockfile install did (read from its log). */
+  autoInstall?: AutoInstallOutcome
+}
+
+export type AutoInstallOutcome = { manager: 'pnpm' | 'yarn' | 'npm'; outcome: 'installed' | 'skipped' }
+
+/**
+ * The automatic install's result, from environment-build.sh's own lines in the stored log (JSON lines
+ * of `{ data, stream }`): "Installing dependencies automatically: <cmd>", then "Installed dependencies
+ * in Ns." or "Automatic install skipped: …". Null when the build ran no automatic install.
+ */
+export function autoInstallFromLog(stored: string): AutoInstallOutcome | null {
+  let text = ''
+  for (const line of stored.split('\n')) {
+    try {
+      const parsed = JSON.parse(line) as { data?: unknown }
+      if (typeof parsed.data === 'string') {
+        text += parsed.data
+      }
+    } catch {
+      // A cut marker or a partial line: nothing to read.
+    }
+  }
+  const started = /^Installing dependencies automatically: (?:corepack )?(pnpm|yarn|npm)\b/m.exec(text)
+  if (!started) {
+    return null
+  }
+  const manager = started[1] as AutoInstallOutcome['manager']
+  return { manager, outcome: /^Installed dependencies in \d+s\.$/m.test(text) ? 'installed' : 'skipped' }
 }
 
 export type BuildDeps = {
@@ -368,7 +402,9 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
     ORCA_INSTALL_SCRIPT_B64: base64(config.installScript),
     ORCA_LOCKFILES: LOCKFILES.join(' '),
     ORCA_DEPS_HOOK_B64: base64(ENVIRONMENT_DEPS_HOOK),
-    ...(config.cloneFilter ? { ORCA_CLONE_FILTER: config.cloneFilter } : {})
+    ...(config.cloneFilter ? { ORCA_CLONE_FILTER: config.cloneFilter } : {}),
+    // An admin's own install script always wins: auto_install runs only without one.
+    ...(config.autoInstall && !config.installScript.trim() ? { ORCA_AUTO_INSTALL: '1' } : {})
   }
   // Counts only.
   log('environment_build_secrets', {
@@ -459,7 +495,10 @@ const EXIT_STEPS: Record<number, { step: string; error: string }> = {
 }
 
 async function finalize(deps: BuildDeps, row: BuildRow, exitCode: number): Promise<BuildRow> {
-  await storeLogs(deps, row).catch((error: unknown) => log('environment_build_log_store_failed', { buildId: row.id, error: String(error).slice(0, 200) }))
+  const stored = await storeLogs(deps, row).catch((error: unknown) => {
+    log('environment_build_log_store_failed', { buildId: row.id, error: String(error).slice(0, 200) })
+    return ''
+  })
   if (exitCode !== 0) {
     const mapped = EXIT_STEPS[exitCode] ?? { step: 'install', error: `exit_${exitCode}` }
     return (await failBuild(deps, row, mapped.step, mapped.error)) ?? row
@@ -475,8 +514,11 @@ async function finalize(deps: BuildDeps, row: BuildRow, exitCode: number): Promi
     if (check.exitCode !== 0) {
       return (await failBuild(deps, row, 'record', 'runtime_removed')) ?? row
     }
-    const result = check.stdout.trim().split('\n').at(-1) ?? '{}'
-    JSON.parse(result)
+    const recordedResult = check.stdout.trim().split('\n').at(-1) ?? '{}'
+    const parsedResult = JSON.parse(recordedResult) as BuildResult
+    // The image's result.json predates the automatic install; the Worker reads that from the log.
+    const autoInstall = autoInstallFromLog(stored)
+    const result = autoInstall ? JSON.stringify({ ...parsedResult, autoInstall }) : recordedResult
     // Recorded before the snapshot: if this Worker is cut off mid-snapshot, the next look adopts the
     // snapshot by the build box's name (recoverInterrupted) with the result already in place.
     const recorded = await transition(deps.db, row, { result }, deps.now())
@@ -676,9 +718,10 @@ export async function cancelBuild(deps: BuildDeps, caller: SandboxCaller, row: B
 }
 
 /** Copies the full provider log (bounded: head + tail) into D1 once the build is over. */
-async function storeLogs(deps: BuildDeps, row: BuildRow, options: { live?: boolean } = {}): Promise<void> {
+/** Stores the build's log (redacted, capped) and returns what it stored. */
+async function storeLogs(deps: BuildDeps, row: BuildRow, options: { live?: boolean } = {}): Promise<string> {
   if (!row.session_id || !row.command_id) {
-    return
+    return ''
   }
   // A still-running command (cancel, timeout) never ends its stream: keep what arrives in a few seconds.
   const raw = await readUntil(
@@ -714,6 +757,7 @@ async function storeLogs(deps: BuildDeps, row: BuildRow, options: { live?: boole
     deps.db.prepare('UPDATE environment_builds SET log_bytes = ?, log_truncated = ? WHERE id = ?').bind(text.length, truncated, row.id)
   )
   await deps.db.batch(statements)
+  return stored
 }
 
 /** Reads a stream until it ends or `ms` pass, whichever is first; what arrived is returned. */

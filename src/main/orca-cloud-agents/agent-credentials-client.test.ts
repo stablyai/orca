@@ -67,6 +67,7 @@ describe('createAgentCredentialsClient', () => {
       [409, { error: 'broker_in_progress' }],
       [429, { error: 'rate_limited' }],
       [502, { error: 'broker_unavailable' }],
+      [502, { error: 'device_auth_disabled' }],
       [503, { error: 'no_golden_image' }],
       [503, { error: 'not_configured' }],
       [401, { error: 'unauthorized' }]
@@ -76,7 +77,7 @@ describe('createAgentCredentialsClient', () => {
       return Response.json(body, { status })
     })
     const codes: string[] = []
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       const error = await failure(() =>
         i < 2 ? client.putClaude(TOKEN) : client.startCodexBroker()
       )
@@ -90,6 +91,7 @@ describe('createAgentCredentialsClient', () => {
       'broker_in_progress',
       'rate_limited',
       'broker_unavailable',
+      'device_auth_disabled',
       'no_golden_image',
       'not_configured',
       'signed_out'

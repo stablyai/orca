@@ -20,6 +20,7 @@ import { CloudPredictiveWakeSetting } from './CloudPredictiveWakeSetting'
 import { OrcaCloudMcpServersPane } from './OrcaCloudMcpServersPane'
 import { OrcaCloudLocalCommandsPane } from './OrcaCloudLocalCommandsPane'
 import { OrcaCloudSkillsPane } from './cloud-skills/OrcaCloudSkillsPane'
+import { TeamWorkspacesSettings } from '../cloud-workspaces/TeamWorkspacesSettings'
 
 type OrcaCloudAccount = {
   orgId: string | null
@@ -102,6 +103,15 @@ function OrcaCloudAccountGate({
         sandbox: authStatus.capabilities?.flags?.sandbox === true
       })}
     </Fragment>
+  )
+}
+
+/** Settings › Workspaces (team owners and admins): every team cloud workspace, to manage. */
+export function OrcaCloudWorkspacesPane(): React.JSX.Element {
+  return (
+    <OrcaCloudAccountGate>
+      {(account) => <TeamWorkspacesSettings orgId={account.orgId} />}
+    </OrcaCloudAccountGate>
   )
 }
 

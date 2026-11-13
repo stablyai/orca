@@ -4,6 +4,9 @@ import type {
   OrcaTeamMfaPolicy
 } from '../../../../shared/orca-team-mfa-policy'
 import { CloudToastCard } from '@/components/orca-cloud/cloud-toast-stack'
+import { fixtureAuditProps } from '../settings/enterprise/enterprise-audit.fixtures'
+import { EnterpriseSettingsView } from '../settings/enterprise/EnterpriseSettingsView'
+import { EnterpriseMfaGroup } from './EnterpriseMfaPolicy'
 import { RequireMfaRow, type RequireMfaRowProps } from './RequireMfaRow'
 import { TeamMfaBanner } from './TeamMfaBanner'
 import { TeamMfaBlockedScreen } from './TeamMfaBlockedScreen'
@@ -76,8 +79,8 @@ export const toast = frame(
       lines: [
         {
           key: 'mfa',
-          text: 'Acme Engineering requires MFA from December 2, 2026.',
-          action: { label: 'Set up MFA', primary: true, onClick: noop }
+          text: 'Acme Engineering requires two-factor authentication from December 2, 2026.',
+          action: { label: 'Set up two-factor', primary: true, onClick: noop }
         }
       ]
     }}
@@ -119,7 +122,7 @@ const off: OrcaTeamMfaPolicy = {
   policy: null,
   self: 'on',
   setupUrl,
-  manage: { available: true, pendingMembers: 3 }
+  manage: { available: true, pendingMembers: 3, ssoHandled: false }
 }
 const scheduled: OrcaTeamMfaPolicy = {
   ...off,
@@ -142,7 +145,7 @@ const row = (props: Partial<RequireMfaRowProps>) =>
     />
   )
 
-/** Not required yet: pick when, then Require MFA. */
+/** Not required yet: pick when, then Require two-factor. */
 export const rowOff = row({})
 /** The admin has no MFA themselves: the change is held back until they add it. */
 export const rowAdminNeedsOwnMfa = row({ policy: { ...off, self: 'off' } })
@@ -154,9 +157,11 @@ export const rowEnforced = row({
   pending: pendingMembers.map((member) => ({ ...member, mfa: 'blocked' as const }))
 })
 export const rowEveryoneSet = row({
-  policy: { ...scheduled, manage: { available: true, pendingMembers: 0 } },
+  policy: { ...scheduled, manage: { available: true, pendingMembers: 0, ssoHandled: false } },
   pending: []
 })
+/** An admin who signs in through the team's SSO: no own factor needed to change the policy. */
+export const rowAdminViaSso = row({ policy: { ...off, self: 'delegated' } })
 export const rowSaving = row({ policy: scheduled, pending: pendingMembers, busy: true })
 export const rowReminded = row({
   policy: scheduled,
@@ -173,4 +178,74 @@ export const rowError = row({
   policy: scheduled,
   pending: pendingMembers,
   notice: { kind: 'error', message: 'Couldn’t save the change. Try again.' }
+})
+
+// ---- The whole group in Settings, Enterprise ----
+
+const contact = { planName: 'Enterprise', contactUrl: 'https://orca.dev/enterprise' }
+const group = (
+  manage: { available: boolean; pendingMembers: number; ssoHandled: boolean },
+  underBanner = false
+) =>
+  frame(
+    <EnterpriseMfaGroup
+      underBanner={underBanner}
+      policy={{ ...scheduled, manage }}
+      manage={manage}
+      pending={manage.available ? pendingMembers.slice(0, 1) : null}
+      now={NOW}
+      busy={false}
+      notice={null}
+      contact={contact}
+      onRequire={noop}
+      onTurnOff={noop}
+      onRemind={noop}
+      onSetUpOwn={noop}
+      onContactSales={noop}
+    />
+  )
+
+/** A single sign-on team: the note says who the identity provider handles. */
+export const groupSsoHandled = group({ available: true, pendingMembers: 1, ssoHandled: true })
+export const groupPlain = group({ available: true, pendingMembers: 1, ssoHandled: false })
+/** The plan does not include it: the shared upsell. */
+export const groupUpsell = group({ available: false, pendingMembers: 0, ssoHandled: false })
+/** Under the page banner, which already has Contact sales: a plain line, no second button. */
+export const groupUpsellUnderBanner = group(
+  { available: false, pendingMembers: 0, ssoHandled: false },
+  true
+)
+
+// ---- The Enterprise page on a team without Enterprise: one banner, one Contact sales ----
+
+const lockedManage = { available: false, pendingMembers: 0, ssoHandled: false }
+
+/** The banner names all three features; the two-factor block under it is a plain line. */
+export const enterprisePageWithoutPlan = defineFixture({
+  width: 860,
+  render: () => (
+    <div className="bg-background px-8 py-6">
+      <EnterpriseSettingsView
+        audit={fixtureAuditProps({ log: { status: 'upsell' }, actors: [] })}
+        ssoIncluded={false}
+        policies={
+          <EnterpriseMfaGroup
+            policy={{ ...off, manage: lockedManage }}
+            manage={lockedManage}
+            pending={null}
+            now={NOW}
+            busy={false}
+            notice={null}
+            contact={contact}
+            onRequire={noop}
+            onTurnOff={noop}
+            onRemind={noop}
+            onSetUpOwn={noop}
+            onContactSales={noop}
+            underBanner
+          />
+        }
+      />
+    </div>
+  )
 })

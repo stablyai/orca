@@ -31,7 +31,7 @@ ref="${ORCA_REPO_REF:-}"
 first_commit() {
   if ! git -C "$P" rev-parse --verify --quiet HEAD >/dev/null; then
     git -C "$P" checkout --quiet -B "${ref:-main}" 2>/dev/null || true
-    git -C "$P" -c user.name='Orca' -c user.email='cloud@onorca.dev' \
+    git -C "$P" -c user.name='Orca' -c user.email='noreply@orca.dev' \
       commit --quiet --allow-empty -m 'Initial commit' && echo 'Empty repository: created a first commit.'
   fi
 }

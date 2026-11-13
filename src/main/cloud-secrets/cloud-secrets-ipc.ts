@@ -149,7 +149,9 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
   })
   ipcMain.handle('cloudSecrets:effective', (_event, raw: unknown) => {
     const request = EffectiveRequest.safeParse(raw ?? {})
-    return request.success ? attempt(client, (c) => c.effective(request.data.repo, undefined, request.data.workspace)) : invalid
+    return request.success
+      ? attempt(client, (c) => c.effective(request.data.repo, undefined, request.data.workspace))
+      : invalid
   })
   // One desktop-sealed key, unsealed here and sent once to the user's personal Cloud secrets; the
   // renderer names it (agent + variable) and never sees the value. Each call is one explicit click.

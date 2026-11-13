@@ -29,7 +29,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-const SELF_STATES: readonly OrcaTeamMfaSelfState[] = ['on', 'off', 'pending', 'blocked', 'unknown']
+const SELF_STATES: readonly OrcaTeamMfaSelfState[] = [
+  'on',
+  'off',
+  'pending',
+  'blocked',
+  'unknown',
+  'delegated'
+]
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -80,7 +87,8 @@ export function normalizeTeamMfaPolicy(value: unknown, apiBaseUrl: string): Orca
           manage: {
             available: record.available,
             pendingMembers: pendingMembers ?? 0,
-            ...(inactive !== null ? { inactiveEnforceAt: inactive } : {})
+            ...(inactive !== null ? { inactiveEnforceAt: inactive } : {}),
+            ssoHandled: record.ssoHandled === true
           }
         }
       : {})
@@ -228,6 +236,9 @@ export async function setOrcaTeamMfaPolicy(
     }
     if (errorCode === 'mfa_enforcement_not_entitled') {
       return { status: 'not-entitled' }
+    }
+    if (errorCode === 'sso_team_needs_notice') {
+      return { status: 'sso-needs-notice' }
     }
   }
   return unavailable(result)

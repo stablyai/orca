@@ -86,7 +86,6 @@ describe('orca cloud agents service', () => {
     const service = createOrcaCloudAgentsService({
       client,
       spawnSetupToken: async () => child,
-      readClaudeEmail: () => 'a@acme.dev',
       openExternal,
       broadcast: (setups) => broadcasts.push(setups),
       identity
@@ -102,7 +101,7 @@ describe('orca cloud agents service', () => {
     }
   }
 
-  it('captures the setup-token in main and stores it with the local account as label', async () => {
+  it('captures the setup-token in main and stores it with no label (RS-5: the server names it truly)', async () => {
     const { service, child, broadcasts, client, openExternal } = setup()
     const reply = service.start('claude')
     await tick()
@@ -117,7 +116,8 @@ describe('orca cloud agents service', () => {
     child.emit(`Your OAuth token (valid for 1 year):\n\n${TOKEN}\n\nStore this token`)
     child.exit()
     await tick()
-    expect(client.putClaude).toHaveBeenCalledWith(TOKEN, 'a@acme.dev')
+    // RS-5: never this computer's Claude Code email; it may belong to another account.
+    expect(client.putClaude).toHaveBeenCalledWith(TOKEN, undefined)
     expect(service.setups().claude).toEqual({ phase: 'saved' })
     expectNoToken(reply, broadcasts, service.setups(), await service.status())
   })
@@ -211,7 +211,6 @@ describe('orca cloud agents service', () => {
     const service = createOrcaCloudAgentsService({
       client: null,
       spawnSetupToken: async () => fakeChild(),
-      readClaudeEmail: () => null,
       openExternal: vi.fn(),
       broadcast: vi.fn()
     })

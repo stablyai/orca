@@ -18,6 +18,8 @@ export type TeamRow =
       self: boolean
       /** The viewer may change this member's role or remove them. */
       manageable: boolean
+      /** Their membership and role come from the team's identity provider (directory sync). */
+      managedByDirectory: boolean
     }
   | {
       key: string
@@ -43,8 +45,11 @@ export function teamRows(roster: OrcaOrgMembersRoster, viewerUserId: string | nu
     member,
     status: member.userId === null ? 'pending' : 'active',
     self: isSelf(member),
+    managedByDirectory: roster.directoryManaged === true,
     manageable:
       roster.canManageMembers &&
+      // The directory would undo a change made here on its next sync.
+      roster.directoryManaged !== true &&
       !isSelf(member) &&
       member.userId !== null &&
       canActOnRole(roster.viewerRole, member.role)

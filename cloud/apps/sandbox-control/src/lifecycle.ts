@@ -61,6 +61,7 @@ import { recordSessionEnd } from './session-cpu'
 import { flushUsage, queueUsage } from './usage'
 import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
+import { forgetWorkspaceFollows } from './workspace-follows'
 
 export const LEASE_MS = 30 * 60_000
 /**
@@ -148,6 +149,8 @@ export type LifecycleDeps = {
     snapshotExpirationMs?: number
     /** Warm pool (pool.ts); absent or size 0 means every create boots its own VM. */
     pool?: PoolConfig
+    /** Base egress allowlist (egressAllowlistFor ORCA_PLATFORM_HOST_SUFFIXES); default DEFAULT_EGRESS_ALLOWLIST. */
+    egressAllowlist?: readonly string[]
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
     /** Workspace sandbox egress (SANDBOX_EGRESS_PRESET); default DEFAULT_EGRESS_PRESET ("open"). */
@@ -317,7 +320,7 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
   }
   // Limited: custom model-provider hosts (ANTHROPIC_BASE_URL / OPENAI_BASE_URL secrets) recorded at
   // boot, MCP hosts the desktop declared, plus operator-configured extra hosts.
-  const allowlist = [...new Set([...DEFAULT_EGRESS_ALLOWLIST, ...(deps.config.extraEgressHosts ?? []), ...egressAllowHosts(row)])]
+  const allowlist = [...new Set([...(deps.config.egressAllowlist ?? DEFAULT_EGRESS_ALLOWLIST), ...(deps.config.extraEgressHosts ?? []), ...egressAllowHosts(row)])]
   return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: all })
 }
 
@@ -1134,6 +1137,8 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
+  // Nobody follows a workspace that is gone (PARITY-FOLLOW).
+  await forgetWorkspaceFollows(deps.db, row.id)
   // So does its sealed read snapshot.
   await deleteReadSnapshot(deps.db, row.id)
   // And its per-workspace agent Source overrides.
