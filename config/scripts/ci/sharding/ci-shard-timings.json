@@ -2642,7 +2642,6 @@
       "src/main/plugins/catalog/plugin-update-review-notices.test.ts": 175,
       "src/main/plugins/contributions/plugin-content-pack-registry.test.ts": 589,
       "src/main/plugins/contributions/plugin-icon-theme-registry.test.ts": 268,
-      "src/main/plugins/contributions/plugin-language-pack-registry.test.ts": 587,
       "src/main/plugins/contributions/plugin-syntax-registry.test.ts": 221,
       "src/main/plugins/contributions/plugin-theme-registries.test.ts": 250,
       "src/main/plugins/hooks/plugin-agent-hook-sites.test.ts": 279,
