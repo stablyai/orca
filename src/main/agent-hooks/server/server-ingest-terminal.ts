@@ -221,7 +221,12 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
     }
     if (event.fromProgramStatus && !event.renewsProgramStatusLease && !event.isReplay) {
-      this.producerProgress.observe({ paneKey, connectionId, payload }, now, newRun)
+      const owner = hookOwnsAgent && previous ? previous : { connectionId, payload }
+      this.producerProgress.observe(
+        { paneKey, connectionId: owner.connectionId, payload: owner.payload },
+        now,
+        newRun
+      )
     }
     if (
       hookOwnsCommand ||

@@ -336,3 +336,88 @@ vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
+
+it.each([false, true])(
+  'excludes a host pause from live and recovered reminder clocks (explicit resume: %s)',
+  (explicitResume) => {
+    const sent: { id: string; at: number }[] = []
+    const send = (row: WorkerQuietObservation, notice: { observedAt: number }) => {
+      sent.push({ id: row.dispatchId, at: notice.observedAt })
+      return true
+    }
+    const live = new WorkerQuietSweep(0, () => new Map(), send)
+    const recovered = new WorkerQuietSweep(
+      960_000,
+      () =>
+        new Map([
+          [
+            'recovered',
+            {
+              dispatchId: 'recovered',
+              turnStartedAt: 0,
+              ordinal: 1,
+              observedAt: 900_000,
+              intervalMs: 900_000
+            }
+          ]
+        ]),
+      send
+    )
+    const liveRow = { dispatchId: 'live', turnStartedAt: 0, working: true, lastProducerEventAt: 0 }
+    const recoveredRow = { ...liveRow, dispatchId: 'recovered' }
+    for (let now = 0; now <= 960_000; now += 60_000) {
+      live.sweep([liveRow], now)
+    }
+    recovered.sweep([recoveredRow], 960_000)
+    if (explicitResume) {
+      live.resume(4_560_000)
+      recovered.resume(4_560_000)
+    }
+    for (let now = 4_560_000; now <= 6_240_000; now += 60_000) {
+      live.sweep([liveRow], now)
+      recovered.sweep([recoveredRow], now)
+    }
+    expect(sent).toEqual([{ id: 'live', at: 900_000 }])
+    live.sweep([liveRow], 6_300_000)
+    recovered.sweep([recoveredRow], 6_300_000)
+    expect(sent).toEqual([
+      { id: 'live', at: 900_000 },
+      { id: 'live', at: 6_300_000 },
+      { id: 'recovered', at: 6_300_000 }
+    ])
+  }
+)
+
+it('starts a fresh episode on producer evidence newer than the recovered notice, retaining the ordinal', () => {
+  const sent: { ordinal: number; at: number }[] = []
+  const sweep = new WorkerQuietSweep(
+    960_000,
+    () =>
+      new Map([
+        [
+          'worker',
+          {
+            dispatchId: 'worker',
+            turnStartedAt: 0,
+            ordinal: 1,
+            observedAt: 900_000,
+            intervalMs: 900_000
+          }
+        ]
+      ]),
+    (_row, notice) => {
+      sent.push({ ordinal: notice.ordinal, at: notice.observedAt })
+      return true
+    }
+  )
+  for (let now = 1_020_000; now <= 3_720_000; now += 60_000) {
+    sweep.sweep(
+      [{ dispatchId: 'worker', turnStartedAt: 0, working: true, lastProducerEventAt: 1_020_000 }],
+      now
+    )
+  }
+  expect(sent).toEqual([
+    { ordinal: 2, at: 1_920_000 },
+    { ordinal: 3, at: 3_720_000 }
+  ])
+})

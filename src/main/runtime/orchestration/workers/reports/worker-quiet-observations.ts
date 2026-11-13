@@ -30,10 +30,12 @@ export function readQuietWorkers(deps: QuietWorkerSource, db: OrchestrationDb): 
   const workers = new Map<string, QuietWorker>()
   for (const paneKey of new Set(deps.readPaneKeys())) {
     const pty = deps.readPty(paneKey)
-    if (!pty?.connected) {
+    if (!pty) {
       continue
     }
-    const row = deps.store.getStatusSnapshotForPane(paneKey)[0]
+    const row = deps.store
+      .getStatusSnapshotForPane(paneKey)
+      .find((entry) => !entry.providerSessionOnly)
     if (
       row?.restoredUnconfirmed ||
       row?.structuredHost ||
@@ -70,7 +72,7 @@ export function readQuietWorkers(deps: QuietWorkerSource, db: OrchestrationDb): 
         dispatchId,
         turnStartedAt: row?.turnStartedAt ?? openedAt,
         working: true,
-        connected: true,
+        connected: pty.connected === true,
         connectionId: row?.connectionId,
         workingSince: progress
           ? undefined

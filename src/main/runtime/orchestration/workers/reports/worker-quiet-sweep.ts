@@ -51,15 +51,29 @@ export class WorkerQuietSweep {
   }
 
   resume(now: number): void {
+    for (const episode of this.episodes.values()) {
+      this.pauseReminder(episode, now - this.lastSweepAt)
+    }
+    this.lastSweepAt = now
     this.resumedAt = now
+  }
+
+  private pauseReminder(episode: Episode, elapsed: number): void {
+    if (episode.firstNoticeAt !== undefined) {
+      episode.firstNoticeAt += elapsed
+    }
+    if (episode.previous) {
+      episode.previous = { ...episode.previous, observedAt: episode.previous.observedAt + elapsed }
+    }
   }
 
   sweep(observations: WorkerQuietObservation[], now: number, openDispatchIds?: string[]): void {
     const gap = now - this.lastSweepAt
-    this.lastSweepAt = now
     if (gap < 0 || gap > SWEEP_MS * 3) {
       this.resume(now)
     }
+    const elapsed = now - this.lastSweepAt
+    this.lastSweepAt = now
     const observed = new Set(observations.map((row) => row.dispatchId))
     const open = openDispatchIds ? new Set(openDispatchIds) : observed
     for (const id of this.episodes.keys()) {
@@ -93,23 +107,27 @@ export class WorkerQuietSweep {
       }
       let episode = this.episodes.get(row.dispatchId)
       const connected = row.connected !== false
+      if (episode && !episode.connected) {
+        this.pauseReminder(episode, elapsed)
+      }
       if (!episode || episode.turn !== row.turnStartedAt) {
         const previous = this.history.get(row.dispatchId)
+        const recovered =
+          this.recovered.has(row.dispatchId) &&
+          previous?.turnStartedAt === row.turnStartedAt &&
+          previous.observedAt >= (row.lastProducerEventAt ?? -Infinity)
+        if (!recovered) {
+          this.recovered.delete(row.dispatchId)
+        }
         episode = {
           turn: row.turnStartedAt,
           progress: row.lastProducerEventAt ?? row.workingSince,
           connectionId: row.connectionId,
           connected,
           grace: row.lastProducerEventAt === undefined ? now : this.startedAt,
-          notices:
-            this.recovered.has(row.dispatchId) && previous?.turnStartedAt === row.turnStartedAt
-              ? 1
-              : 0,
+          notices: recovered ? 1 : 0,
           ordinal: previous?.turnStartedAt === row.turnStartedAt ? previous.ordinal : 0,
-          previous:
-            this.recovered.has(row.dispatchId) && previous?.turnStartedAt === row.turnStartedAt
-              ? previous
-              : undefined
+          previous: recovered ? previous : undefined
         }
         this.episodes.set(row.dispatchId, episode)
       }

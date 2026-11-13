@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from '../../../agent-hook-server'
-import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
+import { buildBody, PANE, postHookEvent, ingestProgramStatusOsc } from '../../server.test-fixtures'
 import { readQuietWorkers } from '../../../../../runtime/orchestration/workers/reports/worker-quiet-observations'
 import { WorkerQuietSweep } from '../../../../../runtime/orchestration/workers/reports/worker-quiet-sweep'
 import { OrchestrationDb } from '../../../../../runtime/orchestration/db/orchestration-db'
@@ -116,6 +116,13 @@ it.each([false, true])(
       await post(6)
       expect(calls()).toEqual([WAIT, CHILD])
       expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(1_790_000_006_000)
+      vi.setSystemTime(1_790_000_006_500)
+      // Captured Codex 0.163 idle bytes must yield to the captured live child hooks.
+      ingestProgramStatusOsc(server, '\x1b]7501;state=idle:app=codex\x1b\\')
+      expect(server.getStatusSnapshotForPane(PANE)[0]?.state).toBe('working')
+      expect(calls()).toEqual([WAIT, CHILD])
+      expect(server.producerProgress.get(PANE)?.lastProducerEventAt).toBe(1_790_000_006_500)
+      expect(notices()).toEqual([3_600_000])
       if (!missedChildResult) {
         await post(7)
         expect(calls()).toEqual([WAIT])
