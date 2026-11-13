@@ -1,7 +1,19 @@
 // URLs of the cloud setup pages on Orca Cloud auth (auth.onorca.dev/cloud/setup/...).
 import type { Env } from './env'
 
+/** Thrown when CLOUD_SETUP_PAGES_URL is unset in prod; the index answers 503 billing_misconfigured. */
+export class SetupPagesConfigError extends Error {
+  constructor() {
+    super('cloud_setup_pages_url_missing')
+    this.name = 'SetupPagesConfigError'
+  }
+}
+
 function pagesOrigin(env: Env): string {
+  if (!env.CLOUD_SETUP_PAGES_URL && env.BILLING_ENV === 'prod') {
+    // Prod must name its pages origin; the fallback below is only a dev/staging convenience.
+    throw new SetupPagesConfigError()
+  }
   return (env.CLOUD_SETUP_PAGES_URL ?? 'https://auth.onorca.dev').replace(/\/$/, '')
 }
 

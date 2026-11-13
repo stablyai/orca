@@ -200,6 +200,7 @@ import {
   userAuthorizeUrl
 } from './github-user-tokens'
 import { MEMBER_GIT_WINDOW_MS, memberGitRoutes, memberSentWithin, recordMemberSend } from './member-git'
+import { egressAllowlistFor } from './network-policy'
 import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
 import { getOrgSlug, putOrgSlug } from './org-slugs'
 import {
@@ -937,6 +938,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     config: {
       pool: poolConfigFromEnv(env),
       shareLinkSecret: shareSecret(env),
+      egressAllowlist: egressAllowlistFor(env.ORCA_PLATFORM_HOST_SUFFIXES),
       extraEgressHosts: extraEgressHostsFor(env),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:

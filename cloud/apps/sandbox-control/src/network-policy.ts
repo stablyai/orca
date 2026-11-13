@@ -41,8 +41,11 @@ export const EDITOR_REMOTE_SERVER_HOSTS: readonly string[] = [
   'openvsxorg.blob.core.windows.net'
 ]
 
-/** Registries, git hosting and agent model/sign-in hosts a coding VM needs. */
-export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
+/** Orca's own hosts when ORCA_PLATFORM_HOST_SUFFIXES is unset. */
+export const DEFAULT_PLATFORM_HOST_SUFFIXES: readonly string[] = ['*.onorca.dev']
+
+/** Registries, git hosting and agent model/sign-in hosts a coding VM needs (platform hosts excluded). */
+const BASE_EGRESS_HOSTS: readonly string[] = [
   'registry.npmjs.org',
   'registry.yarnpkg.com',
   'pypi.org',
@@ -94,10 +97,20 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'models.dev',
   // GitHub Copilot CLI: Copilot API (per plan: api.individual., api.business., ...).
   'api.githubcopilot.com',
-  '*.githubcopilot.com',
-  '*.onorca.dev',
-  ...EDITOR_REMOTE_SERVER_HOSTS
+  '*.githubcopilot.com'
 ]
+
+/**
+ * The default allowlist with Orca's platform hosts from ORCA_PLATFORM_HOST_SUFFIXES (comma list, e.g.
+ * `*.onorca.dev`). Unset, blank or only commas: DEFAULT_PLATFORM_HOST_SUFFIXES.
+ */
+export function egressAllowlistFor(platformHostSuffixes?: string): readonly string[] {
+  const configured = (platformHostSuffixes ?? '').split(',').map((host) => host.trim()).filter(Boolean)
+  const platform = configured.length > 0 ? configured : DEFAULT_PLATFORM_HOST_SUFFIXES
+  return [...new Set([...BASE_EGRESS_HOSTS, ...platform, ...EDITOR_REMOTE_SERVER_HOSTS])]
+}
+
+export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = egressAllowlistFor()
 
 export type CredentialRoute = {
   host: string
