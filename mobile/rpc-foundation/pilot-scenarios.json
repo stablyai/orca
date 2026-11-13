@@ -18772,7 +18772,7 @@
       "id": "session-terminal-list-merged",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18811,7 +18811,7 @@
       "id": "session-terminal-list-dedupes-handles",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18850,7 +18850,7 @@
       "id": "session-terminal-list-refused",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18881,7 +18881,7 @@
       "id": "session-terminal-list-empty-guarded",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20449,8 +20449,8 @@
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
       "sites": [
-        "mobile/src/terminal/session/use-mobile-terminal-paste.ts",
-        "mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"
+        "mobile/src/terminal/session/input-controls/use-mobile-terminal-paste.ts",
+        "mobile/src/terminal/session/accessory-keys/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20515,7 +20515,7 @@
       "id": "terminal-paste-refused",
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
-      "sites": ["mobile/src/terminal/session/use-mobile-terminal-paste.ts"],
+      "sites": ["mobile/src/terminal/session/input-controls/use-mobile-terminal-paste.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20576,7 +20576,9 @@
       "id": "terminal-worktree-connection-resolved",
       "operation": "session.terminal-clipboard",
       "family": "session.worktree-connection",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"],
+      "sites": [
+        "mobile/src/terminal/session/accessory-keys/use-mobile-session-accessory-selection.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -20633,7 +20635,9 @@
       "id": "terminal-live-input-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/input-controls/use-mobile-session-terminal-send-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22387,7 +22391,7 @@
       "id": "terminal-gesture-flush-and-clear",
       "operation": "session.terminal-gesture-input",
       "family": "session.terminal-gesture-input",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-input.ts"],
+      "sites": ["mobile/src/terminal/session/input-controls/use-mobile-session-terminal-input.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22741,7 +22745,9 @@
       "id": "session-create-terminal-with-prompt",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22826,7 +22832,9 @@
       "id": "session-create-terminal-refused",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22874,7 +22882,9 @@
       "id": "session-create-terminal-without-handle",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22930,7 +22940,9 @@
       "id": "session-create-terminal-ignores-a-second-create-in-flight",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23002,7 +23014,9 @@
       "id": "session-terminal-display-mode-auto-take-floor",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23059,7 +23073,9 @@
       "id": "session-terminal-display-mode-to-desktop",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23109,7 +23125,9 @@
       "id": "session-terminal-display-mode-drops-second-toggle",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23179,7 +23197,9 @@
       "id": "session-terminal-display-mode-auto-without-viewport",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23228,7 +23248,9 @@
       "id": "session-terminal-display-mode-auto-without-device-token",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
