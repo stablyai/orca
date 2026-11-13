@@ -23,6 +23,7 @@ import { directProbeTimeoutMsForEndpoint } from '../relay/mobile-direct-return-p
 import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import { skipsDirectEndpoint } from './undialable-direct-endpoint'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -100,6 +101,7 @@ function createSupervisor(
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
     directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
+    directUnavailable: skipsDirectEndpoint(host),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
         relay,
