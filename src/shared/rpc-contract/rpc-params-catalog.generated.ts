@@ -734,6 +734,7 @@ import {
 import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
 import {
   WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
 } from './workspace-cleanup-runner-params'
 import { WorkspaceCleanupScanParams } from './workspace-cleanup-scan-params'
@@ -1641,6 +1642,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.install': null,
   'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
   'workspaceCleanup.report': null,
+  'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
   'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspacePorts.kill': WorkspacePortKillParams,

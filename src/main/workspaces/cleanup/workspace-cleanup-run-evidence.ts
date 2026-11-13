@@ -1,4 +1,7 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -8,10 +11,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../shared/execution-host'
-import type {
-  RuntimeWorktreePsResult,
-  RuntimeWorktreePsSummary
-} from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../shared/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
@@ -31,10 +31,6 @@ import type { WorkspaceCleanupPaneAgentStates } from './workspace-cleanup-termin
 const DAY_MS = 24 * 60 * 60 * 1000
 const WORKTREE_PS_LIMIT = 100_000
 const LIVE_AGENT_STATES = new Set(['working', 'blocked', 'waiting'])
-
-export type WorkspaceCleanupEvidenceRuntime = {
-  getWorktreePs(limit?: number): Promise<RuntimeWorktreePsResult>
-}
 
 export type WorkspaceCleanupWorkspace = {
   ref: WorkspaceCleanupWorkspaceRef
@@ -106,13 +102,13 @@ function inputWithoutGit(summary: RuntimeWorktreePsSummary): WorkspaceCleanupEva
   }
 }
 
-/** Unsaved buffers reach the host through the window's persisted session drafts. */
-function dirtyEditorWorktreeIds(store: RuntimeStore): Set<string> {
+/** This host's own window persists its unsaved drafts in the session; remote clients report theirs. Keyed by identity so path spellings match. */
+function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService): Set<string> {
   const session = store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
-  const ids = new Set<string>()
+  const ids = new Set([...listClientUnsavedEditorWorktreeIds(runtime)].map(worktreeIdentityKey))
   for (const [worktreeId, files] of Object.entries(session?.openFilesByWorktree ?? {})) {
     if (files.some((file) => file.dirtyDraftContent !== undefined)) {
-      ids.add(worktreeId)
+      ids.add(worktreeIdentityKey(worktreeId))
     }
   }
   return ids
@@ -169,7 +165,7 @@ function withHostBlockers(
 /** Every workspace this process owns, with the evidence the evaluator reads; one id narrows it for a re-check. */
 export async function collectWorkspaceCleanupWorkspaces(args: {
   store: RuntimeStore
-  runtime: WorkspaceCleanupEvidenceRuntime
+  runtime: OrcaRuntimeService
   globalRules: WorkspaceCleanupRules
   now: number
   worktreeId?: string
@@ -200,7 +196,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     })
     .map((summary) => summary.worktreeId)
   const candidates = await scanTargets(store, gitTargets, signal)
-  const dirtyEditors = dirtyEditorWorktreeIds(store)
+  const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
   return summaries.map((summary) => {
     const repo = repos.get(summary.repoId)!
@@ -225,7 +221,12 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       },
       repo,
       policy: policies.get(summary.repoId)!,
-      input: withHostBlockers(baseInput, summary, agentLive, dirtyEditors.has(summary.worktreeId)),
+      input: withHostBlockers(
+        baseInput,
+        summary,
+        agentLive,
+        dirtyEditors.has(worktreeIdentityKey(summary.worktreeId))
+      ),
       paneAgentStates,
       removing: summary.removing === true
     }
