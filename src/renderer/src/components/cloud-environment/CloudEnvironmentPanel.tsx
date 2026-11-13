@@ -126,14 +126,14 @@ export function CloudEnvironmentPanel(props: CloudEnvironmentPanelProps): React.
               {activeBuild.autoInstall.outcome === 'installed'
                 ? t(
                     'cloudEnvironment.header.depsInstalled',
-                    'Dependencies installed ({{manager}})',
+                    'Dependencies installed with {{manager}}',
                     {
                       manager: activeBuild.autoInstall.manager
                     }
                   )
                 : t(
                     'cloudEnvironment.header.depsSkipped',
-                    'Dependencies not installed ({{manager}} install failed). Workspaces run their own setup.',
+                    'Dependencies weren’t installed because {{manager}} install failed. New workspaces start without them.',
                     { manager: activeBuild.autoInstall.manager }
                   )}
             </p>

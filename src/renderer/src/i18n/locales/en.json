@@ -27793,8 +27793,8 @@
     "header": {
       "active": "New workspaces start from build #{{number}}",
       "noActive": "No build yet: workspaces start from a fresh sandbox",
-      "depsInstalled": "Dependencies installed ({{manager}})",
-      "depsSkipped": "Dependencies not installed ({{manager}} install failed). Workspaces run their own setup."
+      "depsInstalled": "Dependencies installed with {{manager}}",
+      "depsSkipped": "Dependencies weren’t installed because {{manager}} install failed. New workspaces start without them."
     },
     "agent": {
       "hint": "Starts your default agent in a local checkout. It writes the install script and builds until it succeeds.",
