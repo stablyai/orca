@@ -152,6 +152,7 @@ export async function useIpcEventsForCloseRouting({
     api: {
       repos: { onChanged: () => () => {} },
       automations: { onChanged: () => () => {} },
+      workspaceCleanup: { onRunFinished: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
         onBaseStatus: () => () => {},

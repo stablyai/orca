@@ -5,8 +5,8 @@ import { normalizeWorkspaceLinkedItem } from '../../../../shared/workspace-attac
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/meta-persisted-defaults'
-import { normalizeGitHubPRSuppressionUpdate } from '../../../../shared/worktree/github-pr-suppression'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/metadata/meta-persisted-defaults'
+import { normalizeGitHubPRSuppressionUpdate } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {

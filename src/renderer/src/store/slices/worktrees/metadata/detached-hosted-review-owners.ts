@@ -2,7 +2,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   branchHostedReviewOwner,
   type HostedReviewOwner
-} from '../../../../../../shared/worktree/hosted-review-branch-ownership'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-branch-ownership'
 import {
   deleteCopyTombstones,
   moveCopyTombstones,

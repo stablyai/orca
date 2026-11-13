@@ -50,9 +50,9 @@ vi.mock('./editor-runtime-file-watch', () => ({
     _target: unknown,
     _onPayload: unknown,
     _onError: unknown,
-    onFirstReady?: () => void
+    onCatchUp?: () => void
   ) => {
-    harness.runtimeReady.current = onFirstReady
+    harness.runtimeReady.current = onCatchUp
     return harness.runtimeUnsubscribe
   }
 }))

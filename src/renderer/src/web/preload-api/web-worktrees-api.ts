@@ -1,4 +1,4 @@
-import { pickApprovedSetupHashes } from '../../../../shared/worktree/approved-setup-hashes'
+import { pickApprovedSetupHashes } from '../../../../shared/worktree/creation/approved-setup-hashes'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
@@ -10,8 +10,8 @@ import {
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { ForceDeleteWorktreeBranchResult } from '../../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/retired-name-cache'
-import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
+import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/naming/retired-name-cache'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/naming/retired-name-registry'
 import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   getRemoteRuntimeStatus,

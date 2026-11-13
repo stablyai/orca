@@ -1,7 +1,7 @@
 import { buildImageDataUri } from '../../../../../src/shared/file-preview/image-data-uri'
 import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session/agent-session-attachments'
 import { PrioritySemaphore } from '../../../../../src/shared/priority-semaphore'
-import { filePreviewImageSchema } from '../../../files/file-preview-reply-schema'
+import { filePreviewImageSchema } from '../../../files/preview/file-preview-reply-schema'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'

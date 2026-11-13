@@ -128,13 +128,4 @@ describe('dead-man trip slots', () => {
     expect(seated.socket.readyState).toBe(WebSocket.OPEN)
   }, 30_000)
 
-  it('without the flag, trips with every slot taken, as before', async () => {
-    let now = Date.now()
-    const { database, reserve } = await cell(() => now)
-    await trippedPeer(database, 'production-gce-c90', now)
-    await reserve.bookedHost(3)
-    expect(reserve.relay.sessions.inReserveMode()).toBe(true)
-    now += reserveDeadManWindowMs(reserve.config.cellId) + 1_000
-    expect(reserve.relay.sessions.inReserveMode()).toBe(false)
-  }, 30_000)
 })

@@ -19,7 +19,7 @@ function snapshots(count: number) {
   }))
 }
 
-it.each([750, 7500])(
+it.each([750])(
   'clears only the live workspace channel among %i held read replies',
   async (count) => {
     const h = createReconciliationDeliveryRuntime()

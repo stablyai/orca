@@ -14,6 +14,18 @@ export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAd
   return scheduler.acquire({ ...request, tier: resolveGitAdmissionTier(request.tier) })
 }
 
+/** A timed-out caller can settle before its child exits; the slot frees when the child does. */
+export function releaseGitAdmissionAfter(
+  termination: Promise<void> | null,
+  grant: Pick<GitAdmissionGrant, 'release'>
+): void {
+  if (termination) {
+    void termination.then(grant.release)
+  } else {
+    grant.release()
+  }
+}
+
 export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {
   scheduler = replacement
 }

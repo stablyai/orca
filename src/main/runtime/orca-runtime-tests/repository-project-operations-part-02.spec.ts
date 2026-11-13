@@ -8,7 +8,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import {
   clearSubmodulePathsCacheForTests,
   listSubmodulePaths
-} from '../../git/source-control/submodule-paths'
+} from '../../git/source-control/submodules/submodule-paths'
 import { execFileSync } from 'node:child_process'
 import '../orca-runtime-test-mocks/setup.spec'
 import { join } from 'node:path'

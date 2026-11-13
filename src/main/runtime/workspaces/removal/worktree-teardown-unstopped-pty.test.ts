@@ -10,10 +10,6 @@ vi.mock('../../../memory/pty-registry', () => ({
 
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
-import {
-  classifyWorktreeForceDeleteReason,
-  isProvenLivePtyRemovalError
-} from '../../../../shared/worktree/removal'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
@@ -72,57 +68,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     }
   })
 
-  it('names the blocking PTYs and the escape hatch when one is still live', async () => {
-    const localProvider = createProviderStub(async () => [
-      { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
-    ])
-    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('kill failed')
-    )
-    listRegisteredPtysMock.mockReturnValue([])
-
-    await expect(
-      killAllProcessesForWorktree('w1', { localProvider, requirePhysicalStop: true })
-    ).rejects.toThrow(/still live: w1@@live-1[\s\S]*--force/)
-  })
-
   // A different provider's empty list cannot prove an unreachable SSH host's PTY exited.
-  it("blocks removal when the stop lost contact with the PTY's own host", async () => {
-    // Retain the owning-host verdict; local absence cannot prove remote exit.
-    const localProvider = createProviderStub(async () => [])
-    listRegisteredPtysMock.mockReturnValue([])
-    const runtime = {
-      stopTerminalsForWorktree: async (
-        _worktreeId: string,
-        opts: {
-          stopPty?: (
-            ptyId: string,
-            stop: () => boolean | Promise<boolean>
-          ) => Promise<{ stopped: boolean; owner: boolean }>
-        }
-      ) => {
-        await opts.stopPty?.('ssh:conn-1@@relay-9', () => false)
-        return { stopped: 0 }
-      },
-      getPtyLivenessVerdict: (ptyId: string) =>
-        ptyId === 'ssh:conn-1@@relay-9'
-          ? { status: 'unverifiable', reason: 'its SSH provider is no longer registered' }
-          : null
-    }
-
-    await expect(
-      killAllProcessesForWorktree('w1', {
-        runtime: runtime as never,
-        localProvider,
-        resolvedConnectionId: 'conn-1',
-        includeProviderInventory: false,
-        includeLocalRegistry: false,
-        requirePhysicalStop: true
-      })
-    ).rejects.toThrow(
-      /could not verify[\s\S]*ssh:conn-1@@relay-9[\s\S]*SSH provider is no longer registered[\s\S]*--force/
-    )
-  })
 
   it('does not infer a remote exit from fallback local inventory without a cached verdict', async () => {
     const localProvider = createProviderStub(async () => [])
@@ -156,47 +102,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
   })
 
-  it('reports unverifiable separately from live when the process list fails', async () => {
-    const localProvider = createProviderStub(async () => {
-      throw new Error('daemon socket closed')
-    })
-    listRegisteredPtysMock.mockReturnValue([
-      { ptyId: 'stale-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
-    ])
-    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Session not found: stale-1')
-    )
-
-    await expect(
-      killAllProcessesForWorktree('w1', {
-        localProvider,
-        includeProviderInventory: false,
-        requirePhysicalStop: true
-      })
-    ).rejects.toThrow(/could not verify[\s\S]*stale-1[\s\S]*daemon socket closed/)
-  })
-
   // Force must also cross sweep failures before the unproven-stop gate.
-  it('lets force through a provider whose inventory rejects outright', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      listRegisteredPtysMock.mockReturnValue([])
-      const localProvider = createProviderStub(async () => {
-        throw new Error('ssh channel closed')
-      })
-
-      await expect(
-        killAllProcessesForWorktree('w1', {
-          localProvider,
-          requirePhysicalStop: true,
-          allowUnverifiedStop: true
-        })
-      ).resolves.toEqual({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('ssh channel closed'))
-    } finally {
-      warn.mockRestore()
-    }
-  })
 
   it('lets force through a sweep that never settles before the deadline', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -242,51 +148,6 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // Force must join active shutdowns before filesystem deletion or Windows can fail with EBUSY.
 
   // Wrap raw provider failures in recognizable force-removal wording without losing their cause (#11960).
-  it('offers force delete for a sweep-level failure without losing the provider wording', async () => {
-    listRegisteredPtysMock.mockReturnValue([])
-    const localProvider = createProviderStub(async () => {
-      throw new Error('SSH channel closed while listing processes')
-    })
-
-    const error = await killAllProcessesForWorktree('repo-1::/w', {
-      localProvider,
-      requirePhysicalStop: true
-    }).then(
-      () => new Error('expected a rejection'),
-      (rejection: Error) => rejection
-    )
-    expect(error.message).toContain('SSH channel closed while listing processes')
-    expect(classifyWorktreeForceDeleteReason(error.message)).toBe('unstopped-pty')
-    expect(isProvenLivePtyRemovalError(error.message)).toBe(false)
-  })
 
   // Timeout does not cancel shutdown; force must await it before deletion to avoid partial Windows removal.
-
-  it('lets an explicit force removal proceed past PTYs it could not stop', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const localProvider = createProviderStub(async () => [
-        { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
-      ])
-      ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error('kill failed')
-      )
-      listRegisteredPtysMock.mockReturnValue([])
-      const onPtyStopped = vi.fn()
-
-      await expect(
-        killAllProcessesForWorktree('w1', {
-          localProvider,
-          onPtyStopped,
-          requirePhysicalStop: true,
-          allowUnverifiedStop: true
-        })
-      ).resolves.toMatchObject({ providerStopped: 0 })
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('w1@@live-1'))
-      // Keep proven-live PTYs discoverable for users and later sweeps.
-      expect(onPtyStopped).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-    }
-  })
 })

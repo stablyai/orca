@@ -1,5 +1,5 @@
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
-import { SparsePresetValidationError } from '../../../../shared/worktree/sparse-preset-failure'
+import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
   RecipeVmWakeUnavailableError
@@ -14,7 +14,7 @@ import {
   type AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from '../core'
-import { CONNECTOR_REPLY_ERROR_CODES } from '../../../../shared/rpc-contract/connector-params'
+import { CONNECTOR_REPLY_ERROR_CODES } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../../shared/computer-use-error-recovery'
@@ -42,7 +42,7 @@ import {
 import { PLUGIN_CLI_ERROR_CODES } from '../../../../shared/plugins/approval/plugin-cli-approval'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../../shared/git/diff/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../../shared/automations/ownership/automation-owner-conflict'
-import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../shared/worktree/archive-hook-removal-gate'
+import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../../shared/orchestration/workers/nested-worker-depth'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import {

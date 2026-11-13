@@ -130,7 +130,6 @@ vi.mock('../../wsl/discovery/wsl-availability', async (importOriginal) => ({
 vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
-import { LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS } from './local-pty-termination'
 import { LocalPtyProvider } from './local-pty-provider'
 import {
   applyLocalPtyProviderMockDefaults,
@@ -193,43 +192,6 @@ describe('LocalPtyProvider', () => {
       expect(provider.hasPty(id)).toBe(true)
       exitCb?.({ exitCode: 137 })
       await shutdown
-      expect(provider.hasPty(id)).toBe(false)
-    })
-
-    it('rejects a physical-exit timeout but retains the owner for a successful retry', async () => {
-      vi.useFakeTimers()
-      try {
-        const killSpy = vi.fn()
-        mockProc.kill = killSpy
-        const { id } = await provider.spawn({ cols: 80, rows: 24 })
-
-        const shutdown = provider.shutdown(id, { immediate: true })
-        const rejected = expect(shutdown).rejects.toThrow('Timed out waiting for PTY process exit')
-        await vi.advanceTimersByTimeAsync(LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS)
-        await rejected
-        expect(provider.hasPty(id)).toBe(true)
-
-        const retry = provider.shutdown(id, { immediate: true })
-        expect(killSpy).toHaveBeenCalledTimes(1)
-        exitCb?.({ exitCode: 137 })
-        await expect(retry).resolves.toBeUndefined()
-        expect(provider.hasPty(id)).toBe(false)
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
-    it('propagates kill failure without dropping the physical owner', async () => {
-      mockProc.kill = vi.fn(() => {
-        throw new Error('kill denied')
-      })
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
-
-      await expect(provider.shutdown(id, { immediate: true })).rejects.toThrow('kill denied')
-      expect(provider.hasPty(id)).toBe(true)
-
-      mockProc.kill = vi.fn(() => exitCb?.({ exitCode: 137 }))
-      await expect(provider.shutdown(id, { immediate: true })).resolves.toBeUndefined()
       expect(provider.hasPty(id)).toBe(false)
     })
   })

@@ -8,7 +8,7 @@ import {
   isEmptyRetiredNameRegistry,
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../../../shared/worktree/retired-name-registry'
+} from '../../../../../shared/worktree/naming/retired-name-registry'
 import { getRemoteRetirementNamespaceKey } from '../../../../workspaces/removal/retirement/worktree-name-retirement'
 import {
   swapRetirementNamespaceHost,

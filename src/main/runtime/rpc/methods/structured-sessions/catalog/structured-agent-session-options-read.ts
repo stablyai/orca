@@ -14,11 +14,11 @@ import {
   HandoffStatusParams,
   ModelCatalogParams,
   OptionsParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
-import { ContinuationContextParams } from '../../../../../../shared/rpc-contract/structured-agent-session-identifiers'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
+import { ContinuationContextParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-identifiers'
 import { agentSessionPinnedLaunchDirectory } from '../../../../agent-session/records/agent-session-record-launch-directory'
 import {
   clientRequestsCommands,

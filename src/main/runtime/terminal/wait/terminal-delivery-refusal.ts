@@ -158,3 +158,12 @@ export function terminalComposerTextOwnsPointer(
   }
   return offset === expected.length
 }
+
+/** A wait that accepts mid-turn input settles on a working agent exactly where mail would be typed in. */
+export function settlesForMidTurnInput(
+  verdict: TuiIdleVerdict,
+  ptyId: string,
+  source: Pick<TuiIdleEvidenceSource, 'isSettledForDelivery'>
+): boolean {
+  return verdict.kind === 'working' && source.isSettledForDelivery?.(ptyId) === true
+}

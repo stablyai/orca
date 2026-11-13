@@ -4,7 +4,7 @@ import { FileText } from 'lucide-react'
 import type {
   DiagnosticsBundlePayload,
   DiagnosticsStatusPayload
-} from '../../../../../preload/api/telemetry-api'
+} from '../../../../../preload/api/diagnostics/telemetry-api'
 import { Label } from '../../ui/label'
 import {
   getDiagnosticBundleDescription,

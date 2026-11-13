@@ -206,41 +206,79 @@ def choose_window(app, window_id=None, window_index=None):
     return windows[0]
 
 
+RESTORE_HINT = "Ask the user before retrying with --restore-window."
+# Shift, Control, Mod1 (Alt), Mod4 (Super) and Mod5 (AltGr); Lock and NumLock are toggles, not held keys.
+HELD_MODIFIER_MASK = 0x1 | 0x4 | 0x8 | 0x40 | 0x80
+LOCK_MASK = 0x2
+ALL_DESKTOPS = {-1, 0xFFFFFFFF}
+
+
 def restore_window(app, window=None):
     target = window if window is not None else choose_window(app)[1]
     if has_state(target, Atspi.StateType.ACTIVE):
         return
+    xdotool = None if wayland_session() else shutil.which("xdotool")
+    ids = x11_window_ids(app, xdotool) if xdotool else None
+    if ids:
+        windows = windows_for(app)
+        single = len(ids) == 1 and len(windows) == 1 and windows[0][1] == target
+        # Why every id when the target can't be told apart: GrabFocus would also switch to its workspace.
+        refuse_other_desktop(xdotool, ids)
+        if single:
+            attempt(lambda: subprocess.run([xdotool, "windowactivate", "--sync", ids[0]], check=False,
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2))
+            if wait_window_focused(target):
+                return
+    # Why last: GrabFocus is unsupported on GTK4 and only sometimes activates GTK3 windows (agent-desktop L4-16).
     component = attempt(target.get_component_iface)
     if component is not None:
         attempt(lambda: Atspi.Component.grab_focus(component), False)
-    if wait_window_focused(target):
-        return
-    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
-        return
-    windows = windows_for(app)
-    if len(windows) != 1 or windows[0][1] != target:
-        return
+    wait_window_focused(target)
+
+
+def x11_window_ids(app, xdotool):
+    """The managed X11 windows the app's process owns, or None when they can't be read."""
     pid = pid_of(app)
-    xdotool = shutil.which("xdotool")
-    if not pid or not xdotool:
-        return
+    if not pid:
+        return None
     try:
         result = subprocess.run([xdotool, "search", "--pid", str(pid)],
                                 check=False, capture_output=True, text=True, timeout=2)
-        ids = result.stdout.split()
-        if result.returncode != 0 or any(not value.isdigit() or int(value) <= 0 for value in ids):
-            return
-        managed_ids = attempt(lambda: {str(GdkX11.X11Window.get_xid(item))
-                                      for item in Gdk.Screen.get_default().get_window_stack()})
-        if managed_ids is None or any(not value.isdigit() or int(value) <= 0 for value in managed_ids):
-            return
-        ids = [value for value in ids if value in managed_ids]
-        if len(ids) != 1:
-            return
-        subprocess.run([xdotool, "windowactivate", "--sync", ids[0]], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
     except (OSError, subprocess.TimeoutExpired):
+        return None
+    ids = result.stdout.split()
+    if result.returncode != 0 or any(not value.isdigit() or int(value) <= 0 for value in ids):
+        return None
+    managed_ids = attempt(lambda: {str(GdkX11.X11Window.get_xid(item))
+                                  for item in Gdk.Screen.get_default().get_window_stack()})
+    if managed_ids is None or any(not value.isdigit() or int(value) <= 0 for value in managed_ids):
+        return None
+    return [value for value in ids if value in managed_ids]
+
+
+def refuse_other_desktop(xdotool, window_ids):
+    def desktop(*command):
+        try:
+            result = subprocess.run([xdotool, *command], check=False, capture_output=True, text=True, timeout=2)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        value = result.stdout.strip()
+        return int(value) if result.returncode == 0 and re.fullmatch(r"-?\d+", value) else None
+
+    current = desktop("get_desktop")
+    if current is None:
         return
+    # Why: activating a window on another desktop switches the user's whole view there; with desktops in use, an
+    # unreadable one can't be shown safe.
+    if any(target is None or target not in ALL_DESKTOPS and target != current
+           for target in (desktop("get_desktop_for_window", window_id) for window_id in window_ids)):
+        raise RuntimeError("background_unavailable: a window of this app is on another workspace (or its workspace "
+                           "can't be read), and raising the target could switch the user's view there; nothing was sent. Ask the user to move it to "
+                           "the current workspace or switch there themselves")
+
+
+def any_window_active(app):
+    return any(has_state(window, Atspi.StateType.ACTIVE) for _, window in windows_for(app))
 
 
 def wait_window_focused(window):
@@ -252,14 +290,33 @@ def wait_window_focused(window):
     return has_state(window, Atspi.StateType.ACTIVE)
 
 
-def require_keyboard_focus(window, operation):
+def refuse_wayland_input(what):
+    # Why: XTest never reaches native Wayland windows (agent-desktop L13-14, L13-17), so it would report a false success.
+    if wayland_session():
+        raise RuntimeError(f"unsupported capability: {what} on Wayland: native Wayland windows ignore synthetic input, "
+                           "so nothing was sent. Use click --element-index, set-value or type-text --element-index")
+
+
+def require_keyboard_focus(app, window, operation, verb):
+    refuse_wayland_input(verb)
     if has_state(window, Atspi.StateType.ACTIVE):
         return
     if operation.get("restoreWindow"):
+        restore_window(app, window)
         if wait_window_focused(window):
             return
         raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused; bring it forward manually or check desktop permissions")
-    raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window")
+    raise RuntimeError(f"background_unavailable: {verb} sends keys to the focused window, and the target window is "
+                       "not focused; nothing was sent. To enter text use type-text --element-index or set-value, "
+                       f"which work in the background. {RESTORE_HINT}")
+
+
+def require_pointer_route(operation, what, hint):
+    refuse_wayland_input(what)
+    if not operation.get("restoreWindow"):
+        advice = " ".join(part for part in (hint, RESTORE_HINT) if part)
+        raise RuntimeError(f"background_unavailable: {what} needs the real pointer, which would raise the target "
+                           f"window and move the user's cursor; nothing was sent. {advice}")
 
 
 def restore_pointer_window(app, window):
@@ -267,6 +324,53 @@ def restore_pointer_window(app, window):
     if not wait_window_focused(window):
         raise RuntimeError("window_not_focused: window restoration did not focus the target window; no pointer input was sent")
     return screen_rect(window)
+
+
+def x11_pointer_state():
+    """The X11 pointer's root position (None off the default screen) and modifier mask, or None with no X11 display."""
+    try:
+        x = ctypes.CDLL("libX11.so.6")
+    except OSError:
+        return None
+    pointer, window, integer = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int
+    x.XOpenDisplay.restype, x.XOpenDisplay.argtypes = pointer, [ctypes.c_char_p]
+    x.XDefaultRootWindow.restype, x.XDefaultRootWindow.argtypes = window, [pointer]
+    x.XQueryPointer.restype = integer
+    x.XQueryPointer.argtypes = [pointer, window, ctypes.POINTER(window), ctypes.POINTER(window),
+                                *[ctypes.POINTER(integer)] * 4, ctypes.POINTER(ctypes.c_uint)]
+    x.XCloseDisplay.argtypes = [pointer]
+    display = x.XOpenDisplay(None)
+    if not display:
+        return None
+    try:
+        root, child = window(), window()
+        root_x, root_y, window_x, window_y, mask = integer(), integer(), integer(), integer(), ctypes.c_uint()
+        # Why keep the mask on False: that only means the pointer is on another screen; the modifiers are still valid.
+        if not x.XQueryPointer(display, x.XDefaultRootWindow(display), ctypes.byref(root), ctypes.byref(child),
+                               ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(window_x),
+                               ctypes.byref(window_y), ctypes.byref(mask)):
+            return None, None, mask.value
+        return root_x.value, root_y.value, mask.value
+    finally:
+        x.XCloseDisplay(display)
+
+
+@contextmanager
+def pointer_put_back():
+    before = x11_pointer_state()
+    try:
+        yield
+    finally:
+        if before is not None and before[0] is not None:
+            attempt(lambda: Atspi.generate_mouse_event(before[0], before[1], "abs"))
+
+
+def require_idle_keyboard():
+    state = x11_pointer_state()
+    if state is not None and state[2] & HELD_MODIFIER_MASK:
+        raise RuntimeError("unsupported capability: a modifier key (Shift, Ctrl, Alt or Super) is held down and would "
+                           "combine with synthetic keys; nothing was sent. Retry when no keys are held")
+    return None if state is None else state[2]
 
 
 def app_matches(app, query):
@@ -1274,7 +1378,8 @@ def list_windows_response(query):
 
 
 def handshake_response():
-    is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+    # Why: pointer-only verbs have no route on native Wayland, where synthetic input never lands.
+    is_wayland = wayland_session()
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
     has_screenshot = GdkPixbuf is not None and (
@@ -1296,8 +1401,8 @@ def handshake_response():
                 "pressKey": True,
                 "hotkey": has_hotkey,
                 "pasteText": has_clipboard,
-                "scroll": True,
-                "drag": True,
+                "scroll": not is_wayland,
+                "drag": not is_wayland,
                 "setValue": True,
                 "performAction": True,
             },
@@ -1367,6 +1472,90 @@ def perform_action(node, index):
     return bool(index is not None and attempt(lambda: node.do_action(int(index)), False))
 
 
+def action_names(node):
+    count = int(attempt(node.get_n_actions, 0) or 0)
+    return [str(attempt(lambda i=index: node.get_action_name(i), "") or "") for index in range(count)]
+
+
+def compact_action(label):
+    return re.sub(r"[\s_-]", "", str(label or "").lower())
+
+
+def toolkit_kind(app):
+    name = text_attr(app, lambda: app.get_toolkit_name()).lower()
+    if name == "gtk":
+        major = re.match(r"\d+", text_attr(app, lambda: app.get_toolkit_version()))
+        return None if major is None else "gtk3" if int(major.group()) < 4 else "gtk4"
+    return name or None
+
+
+def opens_popup_without_selection(node):
+    states = attempt(node.get_state_set)
+    has_popup = getattr(Atspi.StateType, "HAS_POPUP", None)
+    # Why: a state set that can't be read never proves the action safe.
+    popup = states is None or has_popup is None or state_set_contains(states, has_popup, True)
+    return popup and attempt(lambda: node.get_selection_iface()) is None
+
+
+def popup_owner(node):
+    parent = attempt(lambda: node.get_parent())
+    if parent is not None and role_of(parent).lower() in {"push button", "toggle button", "menu button"}:
+        return parent
+    ancestor = parent
+    for _ in range(MAX_DEPTH):
+        if ancestor is None:
+            return None
+        if role_of(ancestor).lower() == "combo box":
+            return ancestor
+        ancestor = attempt(lambda: ancestor.get_parent())
+    return None
+
+
+def foreground_effect(app, node, action, activates):
+    """Why running action on node would take the foreground, or None (port of agent-desktop actions/foreground.rs@pr-660)."""
+    if any(compact_action(label) == "showmenu" for label in action_names(node)):
+        return "opens a menu over the user's window"
+    if compact_action(action) in {"setfocus", "grabfocus"}:
+        return "moves keyboard focus, which activates the window"
+    # Why: GTK 3 popovers and dialog openers stay below the user's window (agent-desktop C3, L-W0-13).
+    if toolkit_kind(app) == "gtk3":
+        return None
+    name = attempt(lambda: node.get_name())
+    if activates and (name is None or str(name).rstrip().endswith(("…", "..."))):
+        return "opens a dialog (its label ends in an ellipsis), which takes the foreground"
+    if opens_popup_without_selection(node):
+        return "opens a popup that takes the keyboard"
+    owner = popup_owner(node)
+    if owner is not None and opens_popup_without_selection(owner):
+        return "opens its parent's popup, which takes the keyboard"
+    return None
+
+
+def refuse_foreground_effect(app, node, window, action, activates, operation):
+    effect = foreground_effect(app, node, action, activates)
+    if effect is not None and operation.get("restoreWindow"):
+        # Why: the user allowed the takeover, so the menu or dialog opens over its own window, not behind the user's.
+        restore_window(app, window)
+    elif effect is not None:
+        role, name = role_of(node), sanitize_text(name_of(node))
+        raise RuntimeError(f'background_unavailable: the {role} "{name}" {effect}; nothing was sent. {RESTORE_HINT}')
+
+
+def activate_focused_entry(app, window):
+    """Press Return in a GTK text entry through its AT-SPI activate action, which is what Return does there."""
+    if toolkit_kind(app) not in {"gtk3", "gtk4"}:
+        return None
+    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED))
+    multi_line = getattr(Atspi.StateType, "MULTI_LINE", None)
+    if node is None or not has_state(node, Atspi.StateType.EDITABLE) or (multi_line is not None and has_state(node, multi_line)):
+        return None
+    names = [compact_action(label) for label in action_names(node)]
+    if "activate" not in names or not perform_action(node, names.index("activate")):
+        return None
+    return {"path": "accessibility", "actionName": "activate", "fallbackReason": None,
+            "verification": {"state": "unverified", "reason": "accessibility_action_unasserted"}}
+
+
 def screen_point(window_rect, saved_element=None, x=None, y=None, node=None):
     rect = screen_rect(node) if node is not None else None
     if rect is not None:
@@ -1376,6 +1565,15 @@ def screen_point(window_rect, saved_element=None, x=None, y=None, node=None):
     if window_rect is None or x is None or y is None:
         raise RuntimeError("coordinate action requires a visible window and coordinates")
     return window_rect.x + float(x), window_rect.y + float(y)
+
+
+def window_point(window_rect, saved_element=None, x=None, y=None, node=None):
+    point = screen_point(window_rect, saved_element, x, y, node)
+    if (window_rect is None or not window_rect.x <= point[0] < window_rect.x + window_rect.width
+            or not window_rect.y <= point[1] < window_rect.y + window_rect.height):
+        raise RuntimeError("coordinate action target lies outside the target window, so the pointer would land on "
+                           "another window; nothing was sent. Run get-app-state again and target a point inside it")
+    return point
 
 
 def require_positive_integer(value, name):
@@ -1417,9 +1615,16 @@ def click_at(x, y, button, count, modifiers=None):
     down, up = buttons[button]
     for _ in range(parsed_count):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
-        Atspi.generate_mouse_event(round(x), round(y), down)
+        press_and_release(round(x), round(y), down, up)
+
+
+def press_and_release(x, y, down, up):
+    Atspi.generate_mouse_event(x, y, down)
+    try:
         time.sleep(0.03)
-        Atspi.generate_mouse_event(round(x), round(y), up)
+    finally:
+        # Why: an interrupted press must not leave the button held while the pointer is put back.
+        Atspi.generate_mouse_event(x, y, up)
 
 
 def click_modifier_keys(raw):
@@ -1438,7 +1643,7 @@ def click_modifier_keys(raw):
 
 def modified_click_at(x, y, button, count, modifier_keys):
     xdotool = shutil.which("xdotool")
-    is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+    is_wayland = wayland_session()
     if not xdotool or is_wayland:
         raise RuntimeError("modified clicks require xdotool on an X11 session")
     button_number = {"left": "1", "middle": "2", "right": "3"}[button]
@@ -1474,20 +1679,25 @@ def scroll_at(x, y, direction, pages):
     page_count = max(1, math.ceil(require_positive_number(1 if pages is None else pages, "pages")))
     for _ in range(page_count):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
-        Atspi.generate_mouse_event(round(x), round(y), down)
-        time.sleep(0.03)
-        Atspi.generate_mouse_event(round(x), round(y), up)
+        press_and_release(round(x), round(y), down, up)
 
 
 def drag_between(start, end):
     Atspi.generate_mouse_event(round(start[0]), round(start[1]), "abs")
     Atspi.generate_mouse_event(round(start[0]), round(start[1]), "b1p")
-    for step in range(1, 13):
-        x = start[0] + (end[0] - start[0]) * step / 12
-        y = start[1] + (end[1] - start[1]) * step / 12
-        Atspi.generate_mouse_event(round(x), round(y), "abs")
-        time.sleep(0.02)
-    Atspi.generate_mouse_event(round(end[0]), round(end[1]), "b1r")
+    x, y = start
+    try:
+        for step in range(1, 13):
+            x = start[0] + (end[0] - start[0]) * step / 12
+            y = start[1] + (end[1] - start[1]) * step / 12
+            Atspi.generate_mouse_event(round(x), round(y), "abs")
+            time.sleep(0.02)
+    finally:
+        Atspi.generate_mouse_event(round(x), round(y), "b1r")
+
+
+def is_enter_key(raw):
+    return key_name(raw) in {"Return", "KP_Enter"}
 
 
 def key_name(raw):
@@ -1507,6 +1717,7 @@ def press_key(raw, window=None):
         return
     if Gdk is None:
         raise RuntimeError("GDK is required for non-character key synthesis")
+    require_idle_keyboard()
     Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.SYM)
 
 
@@ -1517,6 +1728,7 @@ def hotkey(raw, window=None):
         key_spec = "+".join(part.lower() if len(part) == 1 else part for part in key_spec.split("+"))
     xdotool = shutil.which("xdotool")
     if xdotool:
+        require_idle_keyboard()
         subprocess.run([xdotool, "key", key_spec], check=True)
         return
     if "+" in key_spec:
@@ -1707,11 +1919,14 @@ def wait_for_typed_text(receipt):
     raise RuntimeError("text_input_incomplete: typed text or caret did not match; inspect state before retrying")
 
 
+TYPE_CHUNK_CHARACTERS = 40
+
+
 def type_text(value, window=None):
     text = str(value)
     xdotool = shutil.which("xdotool")
-    if (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
-            or (not xdotool and text.isascii())):
+    if not xdotool and text.isascii():
+        require_idle_keyboard()
         Atspi.generate_keyboard_event(0, text, Atspi.KeySynthType.STRING)
         return
     if not xdotool:
@@ -1720,18 +1935,40 @@ def type_text(value, window=None):
     if len(text) > 600:
         raise RuntimeError("unsupported capability: synthetic text is limited to 600 characters; split the text or use paste_text")
     Atspi.set_timeout(ATSPI_METHOD_TIMEOUT_MS, ATSPI_STARTUP_TIMEOUT_MS)
+    stopped = None
     with temporary_x11_keymap(text, lambda: synthetic_text_receipt(window, text)) as receipt:
-        try:
-            # A fresh xdotool reads the stable mappings, held until the target consumes its keys.
-            subprocess.run(
-                [xdotool, "type", "--clearmodifiers", "--delay", "12", "--file", "-"],
-                input=text, encoding="utf-8", env={**os.environ, "LC_ALL": "C.UTF-8"},
-                check=True, capture_output=True, timeout=10,
-            )
-        except (subprocess.SubprocessError, OSError) as error:
-            raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
-        if receipt is not None:
+        typed = 0
+        for start in range(0, len(text), TYPE_CHUNK_CHARACTERS):
+            chunk = text[start:start + TYPE_CHUNK_CHARACTERS]
+            # Why per chunk: the user can switch windows or hold a key while a long text is typed.
+            if window is not None and not has_state(window, Atspi.StateType.ACTIVE):
+                stopped = RuntimeError(f"text_input_incomplete: the target window lost focus after {typed} of {len(text)} characters; the rest was not typed; inspect state before retrying")
+                break
+            try:
+                mask = require_idle_keyboard()
+            except RuntimeError as error:
+                # Why break, not raise: an exception exit releases newly held keys, which here are the user's.
+                stopped = error if typed == 0 else RuntimeError(f"text_input_incomplete: a modifier key was pressed after {typed} of {len(text)} characters; the rest was not typed; inspect state before retrying")
+                break
+            # Why: --clearmodifiers would release keys the user holds; with none held it only lifts Caps Lock.
+            clear = ["--clearmodifiers"] if mask is not None and mask & LOCK_MASK else []
+            try:
+                # A fresh xdotool reads the stable mappings, held until the target consumes its keys.
+                subprocess.run(
+                    [xdotool, "type", *clear, "--delay", "12", "--file", "-"],
+                    input=chunk, encoding="utf-8", env={**os.environ, "LC_ALL": "C.UTF-8"},
+                    check=True, capture_output=True, timeout=10,
+                )
+            except (subprocess.SubprocessError, OSError) as error:
+                raise RuntimeError("text_input_incomplete: text may be partially typed and keyboard modifiers may have changed; inspect state before retrying") from error
+            typed += len(chunk)
+        if receipt is not None and stopped is None:
             wait_for_typed_text(receipt)
+        elif receipt is not None:
+            # Why: the remapped keycodes must outlive the typed prefix until an input method has read it.
+            time.sleep(CLIPBOARD_PASTE_SETTLE_SECONDS)
+    if stopped is not None:
+        raise stopped
 
 
 def text_selection(text):
@@ -1911,17 +2148,17 @@ def run_operation(operation):
 
     app = find_app(operation.get("app", ""))
     _, window = choose_window(app, operation.get("windowId"), operation.get("windowIndex"))
-    if operation.get("restoreWindow"):
-        restore_window(app, window)
-        _, window = choose_window(app, operation.get("windowId"), operation.get("windowIndex"))
-    if tool in {"press_key", "hotkey"}:
-        require_keyboard_focus(window, operation)
-    bounds = screen_rect(window)
+    was_active = (has_state(window, Atspi.StateType.ACTIVE), any_window_active(app))
     saved = operation.get("element")
     node = find_element(app, saved)
-    from_node = find_element(app, operation.get("fromElement"))
-    to_node = find_element(app, operation.get("toElement"))
     action = None
+
+    def pointer_input(what, hint, points, send):
+        points(screen_rect(window))  # Why first: a stale or off-window target is not a reason to ask for a raise.
+        require_pointer_route(operation, what, hint)
+        restored = restore_pointer_window(app, window)
+        with pointer_put_back():
+            send(*points(restored))
 
     if tool == "click":
         preferred = preferred_action(node)
@@ -1931,41 +2168,50 @@ def run_operation(operation):
             else 1
         )
         has_modifiers = bool(str(operation.get("modifiers") or "").strip())
-        handled = not has_modifiers and operation.get("mouse_button", "left") == "left" and click_count <= 1 and perform_action(node, preferred)
-        if not handled:
-            # Why: pointer clicks are synthetic global input; AT-SPI actions need no focus.
-            bounds = restore_pointer_window(app, window)
-            click_at(
-                *screen_point(bounds, saved, operation.get("x"), operation.get("y"), node),
-                operation.get("mouse_button", "left"),
-                click_count,
-                operation.get("modifiers"),
+        semantic = not has_modifiers and operation.get("mouse_button", "left") == "left" and click_count <= 1 and preferred is not None
+        if semantic:
+            names = action_names(node)
+            name = (names[preferred] if preferred < len(names) else "") or "action"
+            refuse_foreground_effect(app, node, window, name, True, operation)
+        if semantic and perform_action(node, preferred):
+            action = {"path": "accessibility", "actionName": name, "fallbackReason": None}
+        else:
+            pointer_input(
+                "this click", "Click an element by --element-index that has an accessibility action, or use set-value.",
+                lambda bounds: [window_point(bounds, saved, operation.get("x"), operation.get("y"), node)],
+                lambda point: click_at(*point, operation.get("mouse_button", "left"), click_count, operation.get("modifiers")),
             )
             action = {"path": "synthetic", "actionName": None, "fallbackReason": "actionUnsupported"}
-        else:
-            labels = action_labels(node)
-            action = {"path": "accessibility", "actionName": labels[preferred] if preferred is not None and preferred < len(labels) else "action", "fallbackReason": None}
     elif tool == "perform_secondary_action":
+        if node is None:
+            raise RuntimeError("stale element: the element is gone; run get-app-state again and use a fresh element index")
         wanted = str(operation.get("action", "")).lower()
-        for index, label in enumerate(action_labels(node)):
-            if label.lower() == wanted and perform_action(node, index):
-                action = {"path": "accessibility", "actionName": label, "fallbackReason": None}
-                break
-        else:
+        names = action_names(node)
+        index = next((i for i, label in enumerate(names) if (label or attempt(lambda i=i: node.get_action_description(i), "")).lower() == wanted), None)
+        if index is None:
             raise RuntimeError(f'{operation.get("action", "")} is not a valid secondary action')
+        label = names[index] or wanted
+        refuse_foreground_effect(app, node, window, label, compact_action(label) in {"click", "press", "activate", "toggle", "open"}, operation)
+        if not perform_action(node, index):
+            raise RuntimeError(f'{operation.get("action", "")} is not a valid secondary action')
+        action = {"path": "accessibility", "actionName": label, "fallbackReason": None}
     elif tool == "scroll":
-        # Why: pointer wheel events should land in the requested app window even
-        # when another desktop window is currently foregrounded.
-        bounds = restore_pointer_window(app, window)
-        scroll_at(*screen_point(bounds, saved, operation.get("x"), operation.get("y"), node), operation.get("direction"), operation.get("pages"))
+        pointer_input(
+            "scrolling", "",
+            lambda bounds: [window_point(bounds, saved, operation.get("x"), operation.get("y"), node)],
+            lambda point: scroll_at(*point, operation.get("direction"), operation.get("pages")),
+        )
         action = {"path": "synthetic", "actionName": "scroll", "fallbackReason": None}
     elif tool == "drag":
-        # Why: pointer drags are synthetic global input, so activate the target
-        # window before using cached coordinates from its accessibility tree.
-        bounds = restore_pointer_window(app, window)
-        drag_between(
-            screen_point(bounds, operation.get("fromElement"), operation.get("from_x"), operation.get("from_y"), from_node),
-            screen_point(bounds, operation.get("toElement"), operation.get("to_x"), operation.get("to_y"), to_node),
+        from_node = find_element(app, operation.get("fromElement"))
+        to_node = find_element(app, operation.get("toElement"))
+        pointer_input(
+            "dragging", "",
+            lambda bounds: [
+                window_point(bounds, operation.get("fromElement"), operation.get("from_x"), operation.get("from_y"), from_node),
+                window_point(bounds, operation.get("toElement"), operation.get("to_x"), operation.get("to_y"), to_node),
+            ],
+            drag_between,
         )
         action = {"path": "synthetic", "actionName": "drag", "fallbackReason": None}
     elif tool == "type_text":
@@ -1975,20 +2221,26 @@ def run_operation(operation):
         else:
             action = insert_focused_text(window, text)
         if action is None:
-            require_keyboard_focus(window, operation)
+            require_keyboard_focus(app, window, operation, "type-text")
             type_text(text, window)
             action = {"path": "synthetic", "actionName": "typeText", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "press_key":
-        press_key(require_non_empty_string(operation.get("key"), "key"), window)
-        action = {"path": "synthetic", "actionName": "pressKey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
+        key = require_non_empty_string(operation.get("key"), "key")
+        if is_enter_key(key) and (wayland_session() or not has_state(window, Atspi.StateType.ACTIVE)):
+            action = activate_focused_entry(app, window)
+        if action is None:
+            require_keyboard_focus(app, window, operation, "press-key")
+            press_key(key, window)
+            action = {"path": "synthetic", "actionName": "pressKey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "hotkey":
+        require_keyboard_focus(app, window, operation, "hotkey")
         hotkey(require_non_empty_string(operation.get("key"), "key"), window)
         action = {"path": "synthetic", "actionName": "hotkey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "paste_text":
         text = require_non_empty_string(operation.get("text"), "text")
         action = insert_focused_text(window, text)
         if action is None:
-            require_keyboard_focus(window, operation)
+            require_keyboard_focus(app, window, operation, "paste-text")
             paste_text(text)
             action = {"path": "clipboard", "actionName": "paste", "fallbackReason": None, "verification": {"state": "unverified", "reason": "clipboard_paste"}}
     elif tool == "set_value":
@@ -2011,6 +2263,10 @@ def run_operation(operation):
         action.setdefault("verification", {"state": "unverified", "reason": "window_changed"})
         snapshot = make_snapshot(operation.get("app", ""), include_screenshot, None, None)
 
+    # Why measured: synthetic input needs the window in front, and an app can activate itself after an AT-SPI action.
+    took_foreground = ((not was_active[0] and has_state(window, Atspi.StateType.ACTIVE))
+                       or (not was_active[1] and any_window_active(app)))
+    action["delivery"] = "background" if action["path"] == "accessibility" and not took_foreground else "foreground"
     return {"ok": True, "action": action, "snapshot": snapshot}
 
 

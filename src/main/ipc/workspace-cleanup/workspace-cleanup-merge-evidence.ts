@@ -7,9 +7,12 @@ import type { Repo } from '../../../shared/repo-types'
 import {
   readWorkspaceReviewPR,
   type PRCacheView
-} from '../../../shared/sidebar-list/workspace-review-facts'
+} from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { isFullGitObjectId } from '../../git/refs/resolution/commit-object-ref'
-import { resolveWorktreeAddBaseRef, worktreeBaseRefFamily } from '../../../shared/worktree/base-ref'
+import {
+  resolveWorktreeAddBaseRef,
+  worktreeBaseRefFamily
+} from '../../../shared/worktree/base-refs/base-ref'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceCleanupMergeEvidence } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {

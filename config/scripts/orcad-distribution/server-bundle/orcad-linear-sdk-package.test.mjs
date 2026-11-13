@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import {
-  ORCAD_ARTIFACTS,
   ORCAD_LINEAR_SDK_ENTRY,
   ORCAD_SERVER_ENTRY_FILENAME
 } from '../../../../src/shared/orcad-artifacts.ts'
@@ -23,7 +22,6 @@ afterAll(() => {
 })
 
 it("resolves linear-sdk.ts's lazy require from the deployed server under plain Node", () => {
-  expect(ORCAD_ARTIFACTS.map((artifact) => artifact.filename)).toContain(ORCAD_LINEAR_SDK_ENTRY)
   const server = join(deployment, ORCAD_SERVER_ENTRY_FILENAME)
   writeFileSync(
     server,

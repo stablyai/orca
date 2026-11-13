@@ -10,15 +10,16 @@ import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
+  settlesForMidTurnInput,
   mailboxDeliveryRefusal,
   mailboxComposerHoldsDraft,
   terminalComposerTextOwnsPointer
 } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
-import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
 import {
   MailboxDeliveryRecheck,
+  mailboxReadinessRecheckDelay,
   type MailboxDeliveryDecision
 } from '../../orchestration/mailbox/notifications/mailbox-delivery-recheck'
 import type { MailboxForeground } from './launched-agent-foreground'
@@ -30,8 +31,6 @@ import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui
 import { selectExplicitAgentIdentityRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
-
-const DIALOG_HOLD_RECHECK_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
@@ -54,14 +53,21 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
-    const verdict = this.evaluateTuiIdleForPty(pty)
+    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
+      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    )
+    const verdict = evaluateTuiIdle(evidence)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
         this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
-      } else if (verdict.kind === 'ready-strong') {
+      } else if (
+        verdict.kind === 'ready-strong' ||
+        (waiter.acceptsMidTurnInput &&
+          settlesForMidTurnInput(verdict, ptyId, this.tuiIdleEvidenceSource))
+      ) {
         this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
@@ -82,24 +88,17 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
         this.orchestrationMailboxNotifications.settleDelivery(
           this.getOrchestrationMailboxTerminal(ptyId)
         ),
-      readinessDelay: (terminal) => {
-        if (
-          !isMailboxTerminalTakingInput(terminal) &&
-          !this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(terminal.ptyId) &&
-          !(
-            terminal.lastAgentStatusObservedLive &&
-            terminal.lastAgentStatus === null &&
-            this.orchestrationMailboxPointerDelivery.stagedPointerText(terminal.ptyId) !== undefined
-          )
-        ) {
-          return null
-        }
-        const outputAt = this.readOutputClockAt(terminal.ptyId)
-        const remaining = outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
-        return this.ptyDeliveryHold(terminal.ptyId) !== null || remaining <= 0
-          ? DIALOG_HOLD_RECHECK_MS
-          : remaining + 50
-      },
+      readinessDelay: (terminal) =>
+        mailboxReadinessRecheckDelay(terminal, {
+          recovering: this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(
+            terminal.ptyId
+          ),
+          stagedPointerText: this.orchestrationMailboxPointerDelivery.stagedPointerText(
+            terminal.ptyId
+          ),
+          outputAt: this.readOutputClockAt(terminal.ptyId),
+          held: this.ptyDeliveryHold(terminal.ptyId) !== null
+        }),
       deliver: (ptyId) => this.deliverPendingMessagesForPty(ptyId)
     }
   )

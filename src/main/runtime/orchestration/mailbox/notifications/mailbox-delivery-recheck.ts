@@ -1,4 +1,8 @@
-import type { OrchestrationMailboxTerminal } from '../routing/mailbox-owner'
+import {
+  isMailboxTerminalTakingInput,
+  type OrchestrationMailboxTerminal
+} from '../routing/mailbox-owner'
+import { TUI_IDLE_QUIESCENCE_MS } from '../../../terminal/wait/terminal-idle-policy'
 
 export type MailboxDeliveryDecision = { foreground?: boolean; reset?: boolean; settled?: boolean }
 
@@ -112,4 +116,29 @@ export class MailboxDeliveryRecheck {
     }
     this.timers.delete(ptyId)
   }
+}
+
+export function mailboxReadinessRecheckDelay(
+  terminal: OrchestrationMailboxTerminal,
+  evidence: {
+    recovering: boolean
+    stagedPointerText: string | undefined
+    outputAt: number | null
+    held: boolean
+  }
+): number | null {
+  if (
+    !isMailboxTerminalTakingInput(terminal) &&
+    !evidence.recovering &&
+    !(
+      terminal.lastAgentStatusObservedLive &&
+      terminal.lastAgentStatus === null &&
+      evidence.stagedPointerText !== undefined
+    )
+  ) {
+    return null
+  }
+  const remaining =
+    evidence.outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - evidence.outputAt)
+  return evidence.held || remaining <= 0 ? 2000 : remaining + 50
 }
