@@ -76,8 +76,8 @@ function readReplyItems(json: string): [string, number][] {
   }
   return items.flatMap((item): [string, number][] => {
     const id =
-      item && typeof item === 'object' && 'questionItemId' in item
-        ? parseJson(String(item.questionItemId))
+      item && typeof item === 'object' && typeof item.questionItemId === 'string'
+        ? parseJson(item.questionItemId)
         : null
     return Array.isArray(id) &&
       id.length === 3 &&

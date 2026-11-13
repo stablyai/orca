@@ -103,20 +103,20 @@ export function askAnswerQuote(question: AskQuestion): string {
 /** Address async replies by call and question index; older transcripts fall back to quoted questions. */
 export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): string {
   if (prompt.replyAsMessage) {
-    if (prompt.questions.every((question) => question.questionItemId !== undefined)) {
-      const replies = prompt.questions.flatMap((question, index) => {
-        const answer = answerLabels(question, selections[index]).join(', ')
-        return answer
-          ? [{ questionItemId: question.questionItemId, question: question.question, answer }]
-          : []
-      })
+    const answered = prompt.questions.flatMap((question, index) => {
+      const answer = answerLabels(question, selections[index]).join(', ')
+      return answer ? [{ question, answer }] : []
+    })
+    if (answered.every(({ question }) => question.questionItemId !== undefined)) {
+      const replies = answered.map(({ question, answer }) => ({
+        questionItemId: question.questionItemId,
+        question: question.question,
+        answer
+      }))
       return `<send_user_message_question_reply>${JSON.stringify(replies)}</send_user_message_question_reply>`
     }
-    return prompt.questions
-      .flatMap((q, i) => {
-        const answer = answerLabels(q, selections[i]).join(', ')
-        return answer ? [`${askAnswerQuote(q)}${answer}`] : []
-      })
+    return answered
+      .map(({ question, answer }) => `${askAnswerQuote(question)}${answer}`)
       .join('\n\n')
   }
   return prompt.questions.map((q, i) => answerLabels(q, selections[i]).join(', ')).join('\n')

@@ -155,6 +155,16 @@ describe('async questions', () => {
     ).toEqual(['a'])
   })
 
+  it('preserves reply identity when an unanswered question has no call identity', () => {
+    const pending = extractPendingAsk([
+      message('legacy', [call('request_user_input_async', { questions: [{ title: 'Same?' }] })]),
+      message('identified', [asyncCall('second', 'Same?')])
+    ])!
+    expect(formatAskAnswer(pending, [{ indices: [] }, { indices: [1] }])).toBe(
+      '<send_user_message_question_reply>[{"questionItemId":"[\\"request_user_input_async\\",\\"second\\",0]","question":"Same?","answer":"No"}]</send_user_message_question_reply>'
+    )
+  })
+
   it('holds only the addressed part of a queued answer, preserving unanswered siblings', () => {
     const asked = message('a', [
       call('request_user_input_async', {

@@ -83,11 +83,8 @@ function openCall(
 ): void {
   const callId = readString(hookPayload, 'tool_use_id')
   const input = hookPayload['tool_input']
-  const questions =
-    input && typeof input === 'object' && 'questions' in input && Array.isArray(input.questions)
-      ? input.questions
-      : null
-  if (!callId || !questions || !parseCodexAsyncQuestionsInput(input)) {
+  const parsed = parseCodexAsyncQuestionsInput(input)
+  if (!callId || !parsed) {
     return
   }
   let calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
@@ -97,7 +94,7 @@ function openCall(
   }
   calls.set(callId, {
     prompt: JSON.stringify(input),
-    unanswered: new Set(questions.keys())
+    unanswered: new Set(parsed.questions.keys())
   })
 }
 
