@@ -15,7 +15,10 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-termin
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { confirmsMailWake } from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace
+} from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
 import { sendDeliveryHoldWarning } from '../../../rpc/methods/orchestration/messaging/send-delivery-hold'
@@ -594,8 +597,8 @@ it.each([10, 100])(
       expect(inventory).not.toHaveBeenCalled()
       expect(fullRows).not.toHaveBeenCalled()
       expect(newest.mock.calls.filter(([mailbox]) => mailbox !== mailboxes[0])).toEqual([])
-      // One affected Run: refresh, custody validation and each start-stage revalidation; no N-dependent work.
-      expect(newest.mock.calls.length).toBeLessThanOrEqual(8)
+      // One Run: refresh (1), custody validation (2), queue/start admission (4).
+      expect(newest.mock.calls.length).toBeLessThanOrEqual(7)
       expect(newest).toHaveBeenCalled()
       session = {
         ...session,
@@ -718,6 +721,13 @@ it('clears the original workspace hold and custody when another terminal replies
   let written: (host: ExecutionHostId | null) => void = () => {}
   const runtime = new OrcaRuntimeService(
     partialRuntimeStore({
+      getFolderWorkspace: () =>
+        storeFolderWorkspace({
+          id: 'workspace',
+          projectGroupId: 'group',
+          folderPath: '/workspace',
+          executionHostId: 'local'
+        }),
       getWorkspaceSession: () => session,
       getWorkspaceSessionHostIds: () => ['local'],
       setWorkspaceSession: (next) => {
