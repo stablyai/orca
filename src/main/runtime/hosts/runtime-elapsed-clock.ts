@@ -1,31 +1,26 @@
-import { closeSync, openSync, readSync } from 'node:fs'
 import type { ElapsedClockBounds } from '../../../shared/terminal/input/terminal-chat-prompt-budget'
 
-/** A fixed suspend-inclusive clock; changing origins would invalidate already granted expiries. */
+let previous: { monotonic: bigint; wall: bigint; elapsed: bigint } | undefined
+
+// Grants and checks share this process/module epoch; wall corrections can expire them early or hide suspend time.
 export function readRuntimeElapsedClock(): ElapsedClockBounds | null {
   try {
-    if (process.platform !== 'linux') {
-      const lower = Number(process.hrtime.bigint() / 1_000_000n)
-      return Number.isSafeInteger(lower) && lower >= 0 && Number.isSafeInteger(lower + 1)
-        ? { lower, upper: lower + 1 }
-        : null
-    }
-    const fd = openSync('/proc/uptime', 'r')
-    const bytes = Buffer.allocUnsafe(128)
-    let count: number
-    try {
-      count = readSync(fd, bytes, 0, bytes.length, 0)
-    } finally {
-      closeSync(fd)
-    }
-    const match = /^(\d+)\.(\d{2})\s/.exec(bytes.toString('ascii', 0, count))
-    if (!match) {
+    const monotonic = process.hrtime.bigint()
+    const wallMs = Date.now()
+    if (monotonic < 0n || !Number.isSafeInteger(wallMs)) {
       return null
     }
-    const lower = Number(match[1]) * 1000 + Number(match[2]) * 10
-    return Number.isSafeInteger(lower) && lower >= 0 && Number.isSafeInteger(lower + 10)
-      ? { lower, upper: lower + 10 }
-      : null
+    const wall = BigInt(wallMs)
+    const monotonicDelta = previous ? monotonic - previous.monotonic : 0n
+    const wallDelta = previous ? (wall - previous.wall) * 1_000_000n : 0n
+    const delta = monotonicDelta > wallDelta ? monotonicDelta : wallDelta
+    const elapsed = (previous?.elapsed ?? 0n) + (delta > 0n ? delta : 0n)
+    const lower = Number(elapsed / 1_000_000n)
+    if (!Number.isSafeInteger(lower) || !Number.isSafeInteger(lower + 1)) {
+      return null
+    }
+    previous = { monotonic, wall, elapsed }
+    return { lower, upper: lower + 1 }
   } catch {
     return null
   }
