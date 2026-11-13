@@ -79,7 +79,53 @@ export const WORKSPACE_AUDIT_ACTIONS: Record<string, ActionCopy> = {
         'settings.enterprise.audit.action.wsOwnerChangedNamed',
         'Changed the owner of workspace “{{name}}”',
         { name }
-      )
+      ),
+    // Says who got it: themselves, a teammate by name, or someone who has since left. With no
+    // name to give, the plain sentences above are used. The previous owner is left out.
+    detailed: (t, detail, _locale, { name, actorUserId }) => {
+      const owner = typeof detail.toUserId === 'string' ? detail.toUserId : null
+      if (owner && owner === actorUserId) {
+        return name
+          ? t(
+              'settings.enterprise.audit.action.wsOwnerTookNamed',
+              'Took ownership of workspace “{{name}}”',
+              {
+                name
+              }
+            )
+          : t('settings.enterprise.audit.action.wsOwnerTook', 'Took ownership of a workspace')
+      }
+      if (detail.toUserFormer === true) {
+        return name
+          ? t(
+              'settings.enterprise.audit.action.wsOwnerFormerNamed',
+              'Made a former member the owner of workspace “{{name}}”',
+              { name }
+            )
+          : t(
+              'settings.enterprise.audit.action.wsOwnerFormer',
+              'Made a former member the owner of a workspace'
+            )
+      }
+      const person =
+        typeof detail.toUserName === 'string' ? detail.toUserName.trim().slice(0, 80) : ''
+      if (!person) {
+        return null
+      }
+      return name
+        ? t(
+            'settings.enterprise.audit.action.wsOwnerMadeNamed',
+            'Made {{person}} the owner of workspace “{{name}}”',
+            { person, name }
+          )
+        : t(
+            'settings.enterprise.audit.action.wsOwnerMade',
+            'Made {{person}} the owner of a workspace',
+            {
+              person
+            }
+          )
+    }
   },
   'workspace.share_create': {
     plain: (t) =>

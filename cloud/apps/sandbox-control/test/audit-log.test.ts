@@ -22,6 +22,12 @@ type Event = {
   detail: Record<string, unknown> | null
 }
 
+/** Auth tells the control plane a member has gone. */
+async function createRemoval(h: Awaited<ReturnType<typeof createHarness>>, userId: string): Promise<number> {
+  h.env.MEMBER_REMOVED_TOKEN = AUTH_TOKEN
+  return (await h.call('POST', '/v1/internal/org-members/removed', { bearer: AUTH_TOKEN, body: { accountId: 'org:acme', userId } })).status
+}
+
 async function setup(options: { entitled?: boolean } = {}) {
   const h = await createHarness({ SECRETS_KEK: KEK, MEMBER_REMOVED_TOKEN: AUTH_TOKEN, OPERATOR_TOKEN: OPERATOR, CONTROL_PLANE_TOKEN: BILLING_TOKEN, PUBLIC_API_URL: 'https://api.test' })
   h.billing.features = { auditLog: options.entitled ?? true }
@@ -483,6 +489,16 @@ describe('what is recorded', () => {
     expect((await h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer: admin, body: { ownerUserId: 'bob' } })).status).toBe(200)
     const [changed] = (await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[]
     expect(changed).toMatchObject({ action: 'workspace.owner_changed', actor: { userId: 'ada' }, target: { type: 'workspace', id }, detail: { fromUserId: 'ada', toUserId: 'bob' } })
+    // Nobody can name Bob yet (he has never called the API): no name, not marked as gone.
+    expect(changed!.detail).toEqual({ fromUserId: 'ada', toUserId: 'bob' })
+    // Once he has, the same row names him; once he has left, it says so.
+    const bob = await h.token('bob', 'acme', 'sandbox', { org_role: 'member', name: 'Bob Member' })
+    expect((await h.call('GET', '/v1/me', { bearer: bob })).status).toBe(200)
+    const read = async (): Promise<Event> => ((await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Event[])[0]!
+    expect((await read()).detail).toEqual({ fromUserId: 'ada', toUserId: 'bob', toUserName: 'Bob Member' })
+    const removed = await createRemoval(h, 'bob')
+    expect(removed).toBe(200)
+    expect((await read()).detail).toEqual({ fromUserId: 'ada', toUserId: 'bob', toUserName: 'Bob Member', toUserFormer: true })
   })
 
   it('desktop workspace changes: create, share, stop sharing, archive, unarchive and delete, each by the person who did it', async () => {

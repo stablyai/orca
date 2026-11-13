@@ -190,11 +190,13 @@ export function auditEventSentence(
   if (!copy) {
     return event.action
   }
-  const detailed = event.detail ? copy.detailed?.(t, event.detail, locale) : null
+  const name = targetName(event)
+  const detailed = event.detail
+    ? copy.detailed?.(t, event.detail, locale, { name, actorUserId: event.actor.userId })
+    : null
   if (detailed) {
     return detailed
   }
-  const name = targetName(event)
   return name && copy.named ? copy.named(t, name) : copy.plain(t)
 }
 

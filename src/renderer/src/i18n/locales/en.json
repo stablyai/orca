@@ -1624,7 +1624,13 @@
           "wsMakePrivate": "Made a workspace private",
           "wsMakePrivateNamed": "Made workspace “{{name}}” private",
           "wsOwnerChanged": "Changed the owner of a workspace",
-          "wsOwnerChangedNamed": "Changed the owner of workspace “{{name}}”"
+          "wsOwnerChangedNamed": "Changed the owner of workspace “{{name}}”",
+          "wsOwnerTookNamed": "Took ownership of workspace “{{name}}”",
+          "wsOwnerTook": "Took ownership of a workspace",
+          "wsOwnerFormerNamed": "Made a former member the owner of workspace “{{name}}”",
+          "wsOwnerFormer": "Made a former member the owner of a workspace",
+          "wsOwnerMadeNamed": "Made {{person}} the owner of workspace “{{name}}”",
+          "wsOwnerMade": "Made {{person}} the owner of a workspace"
         },
         "interval": {
           "month": "monthly",

@@ -12,7 +12,13 @@ type Detail = Record<string, unknown>
 export type ActionCopy = {
   plain: Sentence
   named?: (t: Translate, name: string) => string
-  detailed?: (t: Translate, detail: Detail, locale: string | undefined) => string | null
+  detailed?: (
+    t: Translate,
+    detail: Detail,
+    locale: string | undefined,
+    /** The target's name when known, and who did it. */
+    about: { name: string | null; actorUserId: string | null }
+  ) => string | null
 }
 
 /** Billing sends plan ids ("team"); the log shows them as names ("Team"). */
