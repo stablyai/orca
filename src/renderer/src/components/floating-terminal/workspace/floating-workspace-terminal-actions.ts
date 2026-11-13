@@ -36,7 +36,7 @@ type FloatingWorkspaceTabSwitchStore = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
 > &
-  Partial<Pick<AppState, 'recordTabInteraction'>>
+  Partial<Pick<AppState, 'recordTabInteraction' | 'getTabCycleOrder'>>
 
 const FLOATING_WORKSPACE_PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
@@ -68,13 +68,16 @@ function getActiveFloatingWorkspaceGroup(store: FloatingWorkspaceTabSwitchStore)
 
 function getFloatingWorkspaceVisibleTabs(
   store: FloatingWorkspaceTabSwitchStore,
-  group: TabGroup
+  group: TabGroup,
+  cycle = false
 ): TypeCyclableTab[] {
   const groupTabs = (store.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
     (tab) => tab.groupId === group.id
   )
   return getGroupVisibleTabOrder(
-    group,
+    cycle && store.getTabCycleOrder
+      ? { ...group, tabOrder: store.getTabCycleOrder(FLOATING_TERMINAL_WORKTREE_ID, group.id) }
+      : group,
     groupTabs,
     new Set((store.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)),
     new Set(
@@ -140,11 +143,12 @@ export function resolveFloatingWorkspaceBrowserWorkspaceId(
 
 export function activateFloatingWorkspaceCyclableTab(
   store: FloatingWorkspaceTabSwitchStore,
-  next: TypeCyclableTab
+  next: TypeCyclableTab,
+  cycle = false
 ): void {
   if (next.tabId) {
     store.activateTab(next.tabId)
-    store.recordTabInteraction?.(next.tabId, { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    store.recordTabInteraction?.(next.tabId, { worktreeId: FLOATING_TERMINAL_WORKTREE_ID, cycle })
   }
 
   if (next.type === 'terminal') {
@@ -235,7 +239,7 @@ export function switchFloatingWorkspaceTab(
   if (!group) {
     return false
   }
-  const visibleTabs = getFloatingWorkspaceVisibleTabs(store, group)
+  const visibleTabs = getFloatingWorkspaceVisibleTabs(store, group, true)
   if (visibleTabs.length <= 1) {
     return false
   }
@@ -269,7 +273,7 @@ export function switchFloatingWorkspaceTab(
     return false
   }
 
-  activateFloatingWorkspaceCyclableTab(store, next)
+  activateFloatingWorkspaceCyclableTab(store, next, true)
   return true
 }
 

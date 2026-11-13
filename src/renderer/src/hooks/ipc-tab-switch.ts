@@ -28,7 +28,7 @@ function resolveCycleContext(): CycleContext | null {
     return null
   }
   // Cycle the visible group’s order so keyboard navigation follows dragged tabs.
-  const allTabIds = getActiveTabNavOrder(store, worktreeId)
+  const allTabIds = getActiveTabNavOrder(store, worktreeId, {}, 'cycle')
   if (allTabIds.length <= 1) {
     return null
   }
@@ -45,7 +45,11 @@ function resolveCycleContext(): CycleContext | null {
 }
 
 /** Activate by unified tab ID after file/browser updates so duplicate entities focus the correct split instance. */
-export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
+export function activateCyclableTab(
+  store: AppStoreState,
+  next: TypeCyclableTab,
+  cycle = false
+): void {
   const worktreeId = store.activeWorktreeId
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
@@ -80,7 +84,7 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
     store.setActiveTabType('editor', worktreeId)
   }
   if (next.tabId) {
-    store.recordTabInteraction?.(next.tabId, { worktreeId: worktreeId ?? undefined })
+    store.recordTabInteraction?.(next.tabId, { worktreeId: worktreeId ?? undefined, cycle })
   }
   activateCycledTabOnOwner(worktreeId, next)
 }
@@ -104,7 +108,7 @@ export function handleSwitchTab(direction: number): boolean {
   if (!next) {
     return false
   }
-  activateCyclableTab(store, next)
+  activateCyclableTab(store, next, true)
   return true
 }
 
@@ -127,7 +131,7 @@ export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
   if (!next) {
     return false
   }
-  activateCyclableTab(store, next)
+  activateCyclableTab(store, next, true)
   return true
 }
 
@@ -278,7 +282,7 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     return false
   }
   // Keep terminal hydration detection separate: native chats are self-backed.
-  const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
+  const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId, {}, 'cycle')
   const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
   const useFallback = shouldUseWorktreeTerminalFallback(
@@ -318,6 +322,6 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   if (!next) {
     return false
   }
-  activateCyclableTab(store, next)
+  activateCyclableTab(store, next, true)
   return true
 }
