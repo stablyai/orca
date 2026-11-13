@@ -4,7 +4,12 @@ import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapsh
 
 const KEYBOARD_LAYOUT_ADDON = 'orca_keyboard_layout.node'
 
-type KeyboardLayoutRead = { snapshot: KeyboardLayoutSnapshot; keyboardType: number }
+type KeyboardLayoutRead = {
+  snapshot: KeyboardLayoutSnapshot
+  keyboardType: number
+  // False when an id or the layout data was unavailable: served, never cached.
+  complete: boolean
+}
 type KeyboardLayoutAddon = {
   read: () => KeyboardLayoutRead | null
   keyboardType: () => number
@@ -17,12 +22,27 @@ let loadFailureLogged = false
 let cacheAuthorized = false
 let cached: KeyboardLayoutRead | null = null
 
+function isKeyboardLayoutAddon(value: unknown): value is KeyboardLayoutAddon {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'read' in value &&
+    typeof value.read === 'function' &&
+    'keyboardType' in value &&
+    typeof value.keyboardType === 'function'
+  )
+}
+
 function loadAddon(): KeyboardLayoutAddon | null {
   if (addon) {
     return addon
   }
   try {
-    addon = requireNative(join(process.resourcesPath, KEYBOARD_LAYOUT_ADDON)) as KeyboardLayoutAddon
+    const loaded: unknown = requireNative(join(process.resourcesPath, KEYBOARD_LAYOUT_ADDON))
+    if (!isKeyboardLayoutAddon(loaded)) {
+      throw new Error('keyboard layout reader has an unexpected shape')
+    }
+    addon = loaded
   } catch (error) {
     // Not memoized: a later request retries the load; log once so focus can't flood the log.
     if (!loadFailureLogged) {
@@ -48,7 +68,7 @@ export function readMacKeyboardLayoutSnapshot(): KeyboardLayoutSnapshot | null {
     }
     cached = null
     const read = reader.read()
-    if (read && cacheAuthorized) {
+    if (read?.complete && cacheAuthorized) {
       cached = read
     }
     return read?.snapshot ?? null

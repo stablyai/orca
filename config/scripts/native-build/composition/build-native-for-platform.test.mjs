@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
-const BUILD_COUNT = 4
+const BUILD_COUNT = 3
 const directories = []
 const children = []
 const buildPids = new Set()
@@ -38,7 +38,7 @@ function startBuild(mode) {
     import { appendFileSync, existsSync } from 'node:fs'
     import { spawn } from 'node:child_process'
     const name = process.argv.at(-1)
-    const delay = name.includes('computer') ? 0 : name.includes('keyboard') ? 200 : 400
+    const delay = name.includes('computer') ? 0 : 400
     const record = (event, extra = {}) => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name, event, pid: process.pid, ...extra }) + '\\n')
     const finish = (signal) => { record(signal); process.exit(process.env.NATIVE_BUILD_MODE === 'failure-status' ? 9 : 0) }
     if (process.env.NATIVE_BUILD_MODE !== 'signal-default') process.on('SIGTERM', () => { if (process.env.NATIVE_BUILD_MODE !== 'ignore') setTimeout(() => finish('SIGTERM'), delay) })

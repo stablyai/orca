@@ -57,13 +57,15 @@ static bool keyCharactersFor(
   napi_env env,
   TISInputSourceRef layoutSource,
   UInt32 keyboardType,
-  napi_value *keyCharacters
+  napi_value *keyCharacters,
+  bool *hasLayoutData
 ) {
   CHECK(napi_create_object(env, keyCharacters));
   CFDataRef data = layoutSource
     ? (CFDataRef)TISGetInputSourceProperty(layoutSource, kTISPropertyUnicodeKeyLayoutData)
     : NULL;
   const UInt8 *bytes = data ? CFDataGetBytePtr(data) : NULL;
+  *hasLayoutData = bytes != NULL;
   if (bytes == NULL) {
     return true;
   }
@@ -87,6 +89,7 @@ static bool keyCharactersFor(
   return true;
 }
 
+/** `complete` is false when an id or the layout data was unavailable; such partial reads are served but never cached. */
 static bool buildResult(
   napi_env env,
   TISInputSourceRef inputSource,
@@ -99,32 +102,38 @@ static bool buildResult(
   napi_value inputSourceValue;
   napi_value layoutSourceValue;
   napi_value type;
-  if (!keyCharactersFor(env, layoutSource, keyboardType, &keyCharacters) ||
+  napi_value complete;
+  bool hasLayoutData = false;
+  if (!keyCharactersFor(env, layoutSource, keyboardType, &keyCharacters, &hasLayoutData) ||
       !stringOrNull(env, inputSourceId(inputSource), &inputSourceValue) ||
       !stringOrNull(env, inputSourceId(layoutSource), &layoutSourceValue)) {
     return false;
   }
+  bool isComplete = hasLayoutData && inputSourceId(inputSource) && inputSourceId(layoutSource);
   CHECK(napi_create_object(env, &snapshot));
   CHECK(napi_set_named_property(env, snapshot, "inputSourceId", inputSourceValue));
   CHECK(napi_set_named_property(env, snapshot, "layoutSourceId", layoutSourceValue));
   CHECK(napi_set_named_property(env, snapshot, "keyCharacters", keyCharacters));
   CHECK(napi_create_uint32(env, keyboardType, &type));
+  CHECK(napi_get_boolean(env, isComplete, &complete));
   CHECK(napi_create_object(env, result));
   CHECK(napi_set_named_property(env, *result, "snapshot", snapshot));
   CHECK(napi_set_named_property(env, *result, "keyboardType", type));
+  CHECK(napi_set_named_property(env, *result, "complete", complete));
   return true;
 }
 
-typedef enum { READ_OK, READ_CHANGED, READ_FAILED } ReadOutcome;
+typedef enum { READ_OK, READ_CHANGED, READ_UNAVAILABLE, READ_ERROR } ReadOutcome;
 
 /** One consistent read; READ_CHANGED when the source or keyboard type moved while translating. */
 static ReadOutcome readStableSnapshot(napi_env env, napi_value *result) {
   UInt32 keyboardType = LMGetKbdType();
   TISInputSourceRef inputSource = TISCopyCurrentKeyboardInputSource();
   TISInputSourceRef layoutSource = TISCopyCurrentKeyboardLayoutInputSource();
-  ReadOutcome outcome = buildResult(env, inputSource, layoutSource, keyboardType, result)
-    ? READ_OK
-    : READ_FAILED;
+  ReadOutcome outcome = READ_UNAVAILABLE;
+  if (inputSource || layoutSource) {
+    outcome = buildResult(env, inputSource, layoutSource, keyboardType, result) ? READ_OK : READ_ERROR;
+  }
   TISInputSourceRef finalInputSource = TISCopyCurrentKeyboardInputSource();
   TISInputSourceRef finalLayoutSource = TISCopyCurrentKeyboardLayoutInputSource();
   if (outcome == READ_OK &&
@@ -140,6 +149,15 @@ static ReadOutcome readStableSnapshot(napi_env env, napi_value *result) {
   return outcome;
 }
 
+/** A failed N-API status need not leave an exception pending; make sure the caller sees one. */
+static napi_value fail(napi_env env, const char *message) {
+  bool pending = false;
+  if (napi_is_exception_pending(env, &pending) != napi_ok || !pending) {
+    napi_throw_error(env, NULL, message);
+  }
+  return NULL;
+}
+
 static napi_value readSnapshot(napi_env env, napi_callback_info info) {
   napi_value result;
   for (int attempt = 0; attempt < 2; attempt++) {
@@ -147,26 +165,36 @@ static napi_value readSnapshot(napi_env env, napi_callback_info info) {
     if (outcome == READ_OK) {
       return result;
     }
-    if (outcome == READ_FAILED) {
+    if (outcome == READ_ERROR) {
+      return fail(env, "keyboard layout read failed");
+    }
+    if (outcome == READ_UNAVAILABLE) {
       break;
     }
   }
-  napi_get_null(env, &result);
-  return result;
+  return napi_get_null(env, &result) == napi_ok ? result : fail(env, "keyboard layout read failed");
 }
 
 static napi_value readKeyboardType(napi_env env, napi_callback_info info) {
   napi_value result;
-  napi_create_uint32(env, LMGetKbdType(), &result);
-  return result;
+  return napi_create_uint32(env, LMGetKbdType(), &result) == napi_ok
+    ? result
+    : fail(env, "keyboard type read failed");
+}
+
+static bool exportFunction(napi_env env, napi_value exports, const char *name, napi_callback callback) {
+  napi_value function;
+  CHECK(napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, NULL, &function));
+  CHECK(napi_set_named_property(env, exports, name, function));
+  return true;
 }
 
 static napi_value initialize(napi_env env, napi_value exports) {
-  napi_value function;
-  napi_create_function(env, "read", NAPI_AUTO_LENGTH, readSnapshot, NULL, &function);
-  napi_set_named_property(env, exports, "read", function);
-  napi_create_function(env, "keyboardType", NAPI_AUTO_LENGTH, readKeyboardType, NULL, &function);
-  napi_set_named_property(env, exports, "keyboardType", function);
+  // An incomplete module must fail to load; main retries the load on a later request.
+  if (!exportFunction(env, exports, "read", readSnapshot) ||
+      !exportFunction(env, exports, "keyboardType", readKeyboardType)) {
+    return fail(env, "keyboard layout reader failed to initialize");
+  }
   return exports;
 }
 

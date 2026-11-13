@@ -38,6 +38,7 @@ describe('macOS keyboard layout snapshot', () => {
   let current: KeyboardLayoutSnapshot | null
   let keyboardType: number
   let nativeReads: number
+  let complete: boolean
 
   beforeEach(() => {
     vi.resetModules()
@@ -50,10 +51,11 @@ describe('macOS keyboard layout snapshot', () => {
     current = US
     keyboardType = 40
     nativeReads = 0
+    complete = true
     nativeRequire.mockReturnValue({
       read: () => {
         nativeReads++
-        return current ? { snapshot: current, keyboardType } : null
+        return current ? { snapshot: current, keyboardType, complete } : null
       },
       keyboardType: () => keyboardType
     })
@@ -114,6 +116,15 @@ describe('macOS keyboard layout snapshot', () => {
     const { read } = await load()
     read()
     keyboardType = 41
+    current = FRENCH
+    expect(read()).toEqual(FRENCH)
+  })
+
+  it('serves a partial read without caching it', async () => {
+    const { read } = await load()
+    complete = false
+    expect(read()).toEqual(US)
+    complete = true
     current = FRENCH
     expect(read()).toEqual(FRENCH)
   })

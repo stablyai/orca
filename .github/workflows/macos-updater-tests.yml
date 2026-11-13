@@ -11,6 +11,9 @@ on:
       - 'native/macos-shipit-scheduling/**'
       - 'config/scripts/macos-shipit-scheduling*'
       - 'config/scripts/desktop-distribution/macos/macos-native-addon.cjs'
+      - 'config/scripts/desktop-distribution/macos/macos-keyboard-layout-addon.test.mjs'
+      - 'native/keyboard-layout-macos/**'
+      - 'src/main/ipc/macos-keyboard-layout-snapshot.ts'
       - 'config/electron-builder.config.cjs'
       - 'src/main/startup/quit/main-process-quit*'
       - 'src/main/window/main-window/main-window-state-lifecycle*'
@@ -52,6 +55,7 @@ jobs:
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/desktop-distribution/macos/macos-shipit-scheduling.test.mjs
+          config/scripts/desktop-distribution/macos/macos-keyboard-layout-addon.test.mjs
           src/main/updater/mac-install/macos-update-running-instances.integration.test.ts
           src/main/updater/mac-install/updater.mac-install.test.ts
           src/main/updater/updater.headless-serve-install.test.ts

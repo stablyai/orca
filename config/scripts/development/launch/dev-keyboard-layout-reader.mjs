@@ -6,7 +6,7 @@ import path from 'node:path'
 const require = createRequire(import.meta.url)
 const { buildMacNativeAddon } = require('../../desktop-distribution/macos/macos-native-addon.cjs')
 
-export const DEV_KEYBOARD_LAYOUT_ADDON = 'orca_keyboard_layout.node'
+const DEV_KEYBOARD_LAYOUT_ADDON = 'orca_keyboard_layout.node'
 const SOURCE_DIR = path.resolve(import.meta.dirname, '../../../../native/keyboard-layout-macos')
 
 /** Identifies the reader source so a dev bundle is rebuilt when it changes. */
@@ -21,7 +21,7 @@ export function hashDevKeyboardLayoutSource() {
   return hash.digest('hex')
 }
 
-/** A failed build only degrades keyboard behavior, as a missing reader does in production. */
+/** A failed build only degrades keyboard behavior and keeps the bundle; a source change or deleting the bundle retries it. */
 export function buildDevKeyboardLayoutReader(resourcesDir) {
   try {
     buildMacNativeAddon({
@@ -32,7 +32,7 @@ export function buildDevKeyboardLayoutReader(resourcesDir) {
     })
   } catch (error) {
     console.warn(
-      `[orca-dev] keyboard layout reader build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
+      `[orca-dev] keyboard layout reader build failed (shifted Option composition stays conservative; to retry, quit this dev instance and delete its out/electron-dev bundle): ${error?.message ?? error}`
     )
   }
 }

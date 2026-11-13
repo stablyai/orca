@@ -252,7 +252,7 @@ function prepareMacDevElectronApp() {
     2
   )
   const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
-  // Require Chromium resources to avoid blank crash; optional keyboard layout reader only degrades keyboard behavior when absent.
+  // Require Chromium resources to avoid blank crash; optional swiftc helper only degrades its feature when absent.
   const chromiumResourcePath = path.join(
     appPath,
     'Contents',
@@ -263,7 +263,6 @@ function prepareMacDevElectronApp() {
   )
   const requiredResourcePaths = [
     chromiumResourcePath,
-    path.join(appPath, 'Contents', 'Resources', devKeyboardLayoutReader.DEV_KEYBOARD_LAYOUT_ADDON),
     path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
   ]
 
