@@ -5,6 +5,7 @@
 // account hold, which asks main when the flag is absent, and opens only the plain placeholder shell.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { setOrcaCloudAgentAccountsStateForTest } from './orca-cloud-agent-accounts-store'
 import {
   cloudTabHoldKey,
@@ -12,9 +13,12 @@ import {
   releaseCloudAgentHold
 } from './cloud-agent-launch-hold'
 
-const host = vi.hoisted(() => ({
-  creates: [] as { launchAgent?: string; environmentId: string | null }[]
-}))
+const host = vi.hoisted(() => {
+  const value: { creates: { launchAgent?: string; environmentId: string | null }[] } = {
+    creates: []
+  }
+  return value
+})
 
 vi.mock('@/components/cloud-workspaces/open-cloud-workspace', () => ({
   openCloudWorkspace: async () => ({ ok: true, worktreeId: 'wt-1', hostId: 'runtime:env-paired' }),
@@ -33,7 +37,7 @@ vi.mock('@/components/agent-tab-launch-context', () => ({
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', async () => {
   const { createWithCloudAgentHold } = await import('./cloud-web-host-launch-hold')
   return {
-    launchAgentInNewTabWithOutcome: (args: { agent: string; worktreeId: string }) => {
+    launchAgentInNewTabWithOutcome: (args: { agent: TuiAgent; worktreeId: string }) => {
       void createWithCloudAgentHold(
         { worktreeId: args.worktreeId, environmentId: 'env-paired', launchAgent: args.agent },
         async (create) => {
