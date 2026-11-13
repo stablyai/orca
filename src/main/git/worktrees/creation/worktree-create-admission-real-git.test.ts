@@ -83,8 +83,12 @@ async function behindCheckoutBudget(command: string, run: () => Promise<unknown>
 }
 
 it('isolates ordinary and sparse creates while honoring the execution host checkout config', async () => {
-  await gitExecFileAsync(['config', 'checkout.workers', 'not-an-integer'], { cwd: repo })
-  await expect(addWorktree(repo, join(root, 'invalid'), 'invalid', 'main')).rejects.toThrow()
+  const { stdout } = await gitExecFileAsync(['--version'], { cwd: repo })
+  const version = stdout.match(/git version (\d+)\.(\d+)/)
+  if (Number(version?.[1]) > 2 || (Number(version?.[1]) === 2 && Number(version?.[2]) >= 32)) {
+    await gitExecFileAsync(['config', 'checkout.workers', 'not-an-integer'], { cwd: repo })
+    await expect(addWorktree(repo, join(root, 'invalid'), 'invalid', 'main')).rejects.toThrow()
+  }
   await gitExecFileAsync(['config', 'checkout.workers', '0'], { cwd: repo })
   const ordinary = join(root, 'ordinary')
   await behindCheckoutBudget('worktree', () => addWorktree(repo, ordinary, 'ordinary', 'main'))
