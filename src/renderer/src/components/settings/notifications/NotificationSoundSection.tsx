@@ -97,7 +97,7 @@ export function NotificationSoundSection({
   const soundOptions = getNotificationSoundOptions(notificationSettings.customSoundPath)
 
   return (
-    <div className="space-y-2 py-2">
+    <div data-settings-row="" className="space-y-2 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           <FileAudio className="size-4" />

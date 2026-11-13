@@ -1,4 +1,5 @@
 import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
+import { resolveTerminalAgentRecipient } from './session-recipient'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
@@ -7,7 +8,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   readMutationReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-receipt'
+} from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
@@ -15,7 +16,7 @@ import { replyAccess } from './reply-access'
 import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
 import { replyOverPeerMail } from './peer-mail-reply'
 import { withAnswerNext } from '../receipt-next'
-import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import {
   completionReportDispatchId,
   reportFollowUpAction
@@ -140,6 +141,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     if (db.getRun(original.run_id)?.home_database === 'remote') {
       return await replyToRemoteRunHome({ runtime, db, original, params, signal })
     }
+    // Await first, so the refusals and routing below read state as it is after the wait.
+    const terminalRecipient = await resolveTerminalAgentRecipient(original.from_handle)
     // A finished task's worker never reads a reply to its report; refuse before marking or storing anything.
     const reportDispatchId = completionReportDispatchId(db, original)
     const followUp = reportDispatchId ? reportFollowUpAction(db, reportDispatchId) : undefined
@@ -154,7 +157,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       runtime,
       db,
       originalFrom: original.from_handle,
-      originalRunId: original.run_id
+      originalRunId: original.run_id,
+      terminalRecipient
     })
     db.markAsRead([original.id])
     const reply = db.insertMessage({

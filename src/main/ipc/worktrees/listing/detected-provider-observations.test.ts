@@ -2,8 +2,12 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RepoWorktrees from '../../../workspaces/catalog/repo-worktrees'
+import type * as ProjectRuntimeGitOptions from '../../../workspaces/execution-host/project-runtime-git-options'
+import type * as RepoWorktreeResolutionScan from '../../../runtime/workspaces/catalog/repo-worktree-resolution-scan'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
+import type { WorktreeCatalogOutcome } from '../../../workspaces/catalog/repo-worktree-catalog-observation'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { holdInFlightWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import {
@@ -11,6 +15,7 @@ import {
   runWorktreeChangeInvalidators
 } from './worktree-change-invalidators'
 import { bumpWorktreeScanGeneration } from '../../../git/worktrees/catalog/worktree-scan-cache'
+import { getLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
 import {
   closeTestStores,
@@ -28,15 +33,28 @@ vi.mock('electron', () => ({
     whenReady: () => Promise.resolve()
   },
   safeStorage: { isEncryptionAvailable: () => false },
-  ipcMain: { on: () => {}, handle: () => {} },
-  BrowserWindow: { getAllWindows: () => [] }
+  ipcMain: { on: () => {}, handle: () => {}, removeListener: () => {}, emit: () => true },
+  BrowserWindow: { getAllWindows: () => [], fromId: () => null },
+  webContents: { fromId: () => null }
 }))
-vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', async (importOriginal) => ({
+  ...(await importOriginal<typeof RepoWorktrees>()),
   listRepoWorktreesForDetectedScan: scanGit
 }))
-vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
-  getLocalProjectWorktreeGitOptions: () => ({})
-}))
+vi.mock(
+  '../../../workspaces/execution-host/project-runtime-git-options',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ProjectRuntimeGitOptions>()),
+    getLocalProjectWorktreeGitOptions: () => ({})
+  })
+)
+vi.mock(
+  '../../../runtime/workspaces/catalog/repo-worktree-resolution-scan',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RepoWorktreeResolutionScan>()),
+    scanLocalRepoWorktreesForResolution: async () => ({ ok: true, worktrees: await scanGit() })
+  })
+)
 vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: vi.fn()
@@ -51,6 +69,15 @@ vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
   })
 }))
 
+const { OrcaRuntimeService } = await import('../../../runtime/orca-runtime')
+const removalListing = await import('../../../workspaces/removal/worktree-removal-listing')
+const prune = await import('./authoritative-local-worktree-metadata-pruning')
+const lineage = await import('../../../workspaces/catalog/worktree-lineage-pruning')
+const { readWorktreeCatalog, invalidateWorktreeCatalogForRepo } =
+  await import('../../../workspaces/catalog/repo-worktree-catalog-owner')
+const { resolveWorktreeScanRuntime } =
+  await import('../../../runtime/workspaces/catalog/runtime-worktree-scan-cache')
+
 const { Store } = await import('../../../persistence/loading-store/store')
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
 const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
@@ -60,10 +87,6 @@ const { listWslStoppedWorktrees } = await import('./wsl-stopped-worktree-listing
 const { captureGitWorktreeObservationCommit } =
   await import('../../../workspaces/catalog/git-worktree-observations')
 const observationOwner = await import('../../../workspaces/catalog/git-worktree-observations')
-const visibilitySources = await import('../../../../shared/worktree/visibility-sources')
-const ownership = await import('../../../../shared/worktree/ownership')
-const { getProjectHostSetupWorktreeMeta } =
-  await import('../../../../shared/project-host-setup-lookup')
 
 const owner: Repo = {
   id: 'observed',
@@ -106,6 +129,7 @@ beforeEach(() => {
 afterEach(async () => {
   await closeTestStores()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('successful Git observations survive unavailable scans', () => {
@@ -342,7 +366,7 @@ describe('successful Git observations survive unavailable scans', () => {
     ])
   })
 
-  it('does not initialize from canceled scans or cache replay and heals all facts on a new success', async () => {
+  it('settles valid host facts despite view cancellation, avoids replay writes, and heals on a new success', async () => {
     const store = openStore()
     store.addRepo(owner)
     metadata(store, '/repo/topic')
@@ -354,13 +378,24 @@ describe('successful Git observations survive unavailable scans', () => {
     expect(await list(store, () => true, controller.signal)).toEqual({
       providerAbortStatus: 'canceled'
     })
-    expect(store.getWorktreeMetaForHost('observed::/repo/topic', 'local')).not.toHaveProperty(
-      'gitWorktree'
-    )
+    expect(store.getWorktreeMetaForHost('observed::/repo/topic', 'local')?.gitWorktree).toEqual({
+      isBare: false,
+      isMainWorktree: false,
+      branch: 'refs/heads/topic',
+      prunable: false
+    })
+    const writes = vi.spyOn(store, 'setWorktreeMeta')
     await list(store)
-    expect(store.getWorktreeMetaForHost('observed::/repo/topic', 'local')).not.toHaveProperty(
-      'gitWorktree'
-    )
+    expect(writes.mock.calls).toEqual([
+      [
+        hostWorktreeTargetForRepo('observed::/repo/topic', owner),
+        { projectId: 'repo:observed', projectHostSetupId: 'observed' }
+      ]
+    ])
+    expect(writes.mock.calls[0][1]).not.toHaveProperty('gitWorktree')
+    writes.mockClear()
+    await list(store)
+    expect(writes).not.toHaveBeenCalled()
     invalidateDetectedWorktreeScanCache(owner.id)
     scanGit.mockResolvedValue([
       git('/repo/topic', { isBare: true, isMainWorktree: true, branch: '', prunable: true })
@@ -381,6 +416,178 @@ describe('successful Git observations survive unavailable scans', () => {
       branch: 'refs/heads/topic',
       prunable: false
     })
+  })
+
+  it('settles desktop facts before a canceled hygiene claimant and runtime reuse, then reloads offline', async () => {
+    const dataFile = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-shared-settlement-'))),
+      'state.json'
+    )
+    const store = openStore(dataFile)
+    store.addRepo(owner)
+    metadata(store, '/repo/.bare', {
+      instanceId: 'original-bare',
+      comment: 'saved content',
+      gitWorktree: {
+        isBare: false,
+        isMainWorktree: false,
+        branch: 'refs/heads/old',
+        prunable: false
+      }
+    })
+    metadata(store, '/repo/topic', { instanceId: 'original-topic' })
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(prune.pruneMetadataMissingFromAuthoritativeLocalScan).mockClear()
+    vi.mocked(lineage.pruneLineageForMissingRepoWorktrees).mockClear()
+    const capture = vi.spyOn(observationOwner, 'captureGitWorktreeObservationCommit')
+    const writes = vi.spyOn(store, 'setWorktreeMeta')
+    const controller = new AbortController()
+    let resume!: () => void
+    let entered!: () => void
+    const overlayEntered = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const overlayGate = new Promise<void>((resolve) => {
+      resume = resolve
+    })
+    const augment = removalListing.withUnregisteredRemovalCheckouts
+    vi.spyOn(removalListing, 'withUnregisteredRemovalCheckouts').mockImplementationOnce(
+      async (id, rows) => {
+        entered()
+        await overlayGate
+        return augment(id, rows)
+      }
+    )
+    const rawRows = [
+      git('/repo/.bare', { isBare: true, isMainWorktree: true, branch: '' }),
+      git('/repo/topic')
+    ]
+    scanGit.mockResolvedValue(rawRows)
+    const scanGeneration = getLocalWorktreeScanGeneration(owner.id)
+    const runtimeLineageArgs = [store, store.getRepo(owner.id), rawRows, { scanGeneration }]
+    const desktop = list(store, () => true, controller.signal)
+    await overlayEntered
+    try {
+      expect(lineage.pruneLineageForMissingRepoWorktrees).not.toHaveBeenCalled()
+      expect(prune.pruneMetadataMissingFromAuthoritativeLocalScan).not.toHaveBeenCalled()
+      controller.abort()
+      const reused = await runtime.listManagedWorktrees()
+      expect(reused.worktrees.map((row) => row.path)).toEqual(['/repo/topic'])
+      expect(capture).toHaveBeenCalledTimes(1)
+      expect(scanGit).toHaveBeenCalledTimes(1)
+      expect(writes.mock.calls.filter(([, update]) => update.gitWorktree)).toHaveLength(2)
+      expect(capture.mock.results[0].value._retainedEntryCountForTests()).toBe(0)
+      expect(vi.mocked(lineage.pruneLineageForMissingRepoWorktrees).mock.calls).toEqual([
+        runtimeLineageArgs
+      ])
+    } finally {
+      resume()
+    }
+    expect(await desktop).toEqual({ providerAbortStatus: 'canceled' })
+    expect(prune.pruneMetadataMissingFromAuthoritativeLocalScan).not.toHaveBeenCalled()
+    expect(vi.mocked(lineage.pruneLineageForMissingRepoWorktrees).mock.calls).toEqual([
+      runtimeLineageArgs
+    ])
+    expect(store.getWorktreeMetaForHost('observed::/repo/.bare', 'local')).toMatchObject({
+      instanceId: 'original-bare',
+      comment: 'saved content',
+      gitWorktree: { isBare: true, isMainWorktree: true, branch: '', prunable: false }
+    })
+    store.flushOrThrow()
+    await store.freezeWritesAsync()
+    const cold = openStore(dataFile)
+    __resetDetectedWorktreeScanCacheForTests()
+    scanGit.mockRejectedValue(new WslDistroStoppedError('Ubuntu'))
+    expect(await list(cold)).toMatchObject({
+      authoritative: false,
+      worktrees: [
+        {
+          path: '/repo/.bare',
+          instanceId: 'original-bare',
+          comment: 'saved content',
+          visible: false,
+          isBare: true
+        },
+        { path: '/repo/topic', instanceId: 'original-topic', visible: true, isMainWorktree: false }
+      ]
+    })
+  })
+
+  it('withholds facts for a real stored-owner conflict and heals on a qualified successor', async () => {
+    const store = openStore()
+    store.addRepo(owner)
+    const remote: Repo = { ...owner, executionHostId: 'ssh:foreign', connectionId: 'foreign' }
+    const target = hostWorktreeTargetForRepo('observed::/repo/topic', remote)
+    store.setWorktreeMeta(target, { instanceId: 'foreign-original', comment: 'foreign content' })
+    expect(store.getWorktreeMeta('observed::/repo/topic')?.hostId).toBe('ssh:foreign')
+    scanGit.mockResolvedValue([git('/repo/topic')])
+    await list(store)
+    expect(store.getWorktreeMeta('observed::/repo/topic')).not.toHaveProperty('gitWorktree')
+    expect(store.getWorktreeMetaForHost(target.id, 'ssh:foreign')?.comment).toBe('foreign content')
+    store.removeWorktreeMeta(target)
+    metadata(store, '/repo/topic', { instanceId: 'qualified-successor' })
+    invalidateDetectedWorktreeScanCache(owner.id)
+    expect(await list(store)).toMatchObject({
+      authoritative: true,
+      worktrees: [{ path: '/repo/topic' }]
+    })
+    expect(
+      store.getWorktreeMetaForHost('observed::/repo/topic', 'local')?.gitWorktree
+    ).toMatchObject({ branch: 'refs/heads/topic' })
+  })
+
+  it('releases empty and exceptional settlements without admitting successful facts', async () => {
+    const store = openStore()
+    store.addRepo(owner)
+    metadata(store, '/repo/topic', { instanceId: 'original' })
+    const runtimeKey = resolveWorktreeScanRuntime(store, owner).runtimeKey
+    const captures: ReturnType<typeof captureGitWorktreeObservationCommit>[] = []
+    const plan = {
+      captureObservation: () => {
+        const capture = captureGitWorktreeObservationCommit(store, owner)
+        captures.push(capture)
+        return capture
+      },
+      scan: vi.fn(async (): Promise<WorktreeCatalogOutcome> => ({ kind: 'true-empty' })),
+      observed: vi.fn()
+    }
+    const read = () =>
+      readWorktreeCatalog(owner, runtimeKey, { kind: 'runtime', maxAgeMs: 1_000 }, plan)
+    expect((await read()).observation?.outcome.kind).toBe('true-empty')
+    expect(captures[0]._retainedEntryCountForTests()).toBe(0)
+    expect(store.getWorktreeMetaForHost('observed::/repo/topic', 'local')).not.toHaveProperty(
+      'gitWorktree'
+    )
+    invalidateWorktreeCatalogForRepo(owner.id)
+    plan.observed.mockClear()
+    plan.scan.mockResolvedValue({ kind: 'rows', worktrees: [git('/repo/topic')] })
+    const writeError = new Error('metadata write failed')
+    const write = vi.spyOn(store, 'setWorktreeMeta').mockImplementationOnce(() => {
+      throw writeError
+    })
+    const failed = await read()
+    expect(failed.observation?.outcome).toEqual({ kind: 'failed', error: writeError })
+    expect(captures[1]._retainedEntryCountForTests()).toBe(0)
+    expect(plan.observed).not.toHaveBeenCalled()
+    expect(store.getWorktreeMetaForHost('observed::/repo/topic', 'local')).not.toHaveProperty(
+      'gitWorktree'
+    )
+    write.mockRestore()
+    invalidateWorktreeCatalogForRepo(owner.id)
+    const detach = store.onWorktreeMetaWritten(() => invalidateWorktreeCatalogForRepo(owner.id))
+    try {
+      // The setter is synchronous: its listener can withdraw authority before cache admission.
+      expect((await read()).superseded).toBe(true)
+      expect(captures[2]._retainedEntryCountForTests()).toBe(0)
+      expect(plan.observed).not.toHaveBeenCalled()
+    } finally {
+      detach()
+    }
+    invalidateWorktreeCatalogForRepo(owner.id)
+    expect((await read()).observation?.outcome.kind).toBe('rows')
+    expect(
+      store.getWorktreeMetaForHost('observed::/repo/topic', 'local')?.gitWorktree
+    ).toMatchObject({ branch: 'refs/heads/topic' })
   })
 
   it('rejects a predecessor observation after path identity or execution-space changes', () => {
@@ -475,96 +682,5 @@ describe('successful Git observations survive unavailable scans', () => {
       ]
     })
     expect(store.getWorktreeMetaForHost('observed::/repo/new', 'local')).toBeUndefined()
-  })
-})
-
-describe.each([750, 7500])('Git observation admission at %i tracked rows', (count) => {
-  it('captures only fresh producers and avoids adoption preparation and writes for existing equal facts', async () => {
-    const store = openStore()
-    store.addRepo(owner)
-    const setup = getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), owner)
-    const facts = {
-      isBare: false,
-      isMainWorktree: false,
-      branch: 'refs/heads/topic',
-      prunable: false
-    }
-    const rows = Array.from({ length: count }, (_, i) => git(`/repo/topic-${i}`))
-    for (const row of rows) {
-      metadata(store, row.path, { ...setup, gitWorktree: facts, comment: 'saved content' })
-    }
-    const remote: Repo = { ...owner, connectionId: 'builder', executionHostId: 'ssh:builder' }
-    store.addRepo(remote)
-    const foreign = hostWorktreeTargetForRepo('observed::/repo/topic-0', remote)
-    store.setWorktreeMeta(foreign, { ...setup, comment: 'foreign content', gitWorktree: facts })
-    store.flushOrThrow()
-    expect(Object.keys(store.getAllWorktreeMetaForHost('local'))).toHaveLength(count)
-    const setter = vi.spyOn(store, 'setWorktreeMeta')
-    const stateWritten = vi.fn()
-    const metaWritten = vi.fn()
-    const detachState = store.onStateWritten(stateWritten)
-    const detachMeta = store.onWorktreeMetaWritten(metaWritten)
-    const matchers = vi.spyOn(visibilitySources, 'createWorktreeVisibilitySourceMatcher')
-    const layouts = vi.spyOn(ownership, 'buildKnownOrcaWorkspaceLayouts')
-    try {
-      captureGitWorktreeObservationCommit(store, owner).commit(rows)
-      expect(setter).not.toHaveBeenCalled()
-      expect(stateWritten).not.toHaveBeenCalled()
-      expect(metaWritten).not.toHaveBeenCalled()
-      expect(matchers).not.toHaveBeenCalled()
-      expect(layouts).not.toHaveBeenCalled()
-      const changedRows = [git('/repo/topic-0', { branch: 'refs/heads/changed' }), ...rows.slice(1)]
-      captureGitWorktreeObservationCommit(store, owner).commit(changedRows)
-      expect(setter).toHaveBeenCalledTimes(1)
-      expect(metaWritten).toHaveBeenCalledTimes(1)
-      expect(stateWritten).toHaveBeenCalledTimes(1)
-      expect(matchers).not.toHaveBeenCalled()
-      expect(layouts).not.toHaveBeenCalled()
-      expect(store.getWorktreeMetaForHost('observed::/repo/topic-0', 'local')).toMatchObject({
-        comment: 'saved content',
-        gitWorktree: { branch: 'refs/heads/changed' }
-      })
-      expect(store.getWorktreeMetaForHost(foreign.id, 'ssh:builder')).toMatchObject({
-        comment: 'foreign content',
-        gitWorktree: { branch: 'refs/heads/topic' }
-      })
-      const newRows = [...changedRows, git('/repo/new')]
-      captureGitWorktreeObservationCommit(store, owner).commit(newRows)
-      expect(matchers.mock.calls.filter(([paths]) => paths.length > 1)).toHaveLength(1)
-      expect(layouts).toHaveBeenCalledTimes(1)
-      expect(store.getWorktreeMetaForHost('observed::/repo/new', 'local')?.gitWorktree).toEqual(
-        facts
-      )
-
-      const capture = vi.spyOn(observationOwner, 'captureGitWorktreeObservationCommit')
-      scanGit.mockResolvedValue(newRows)
-      const fresh = await list(store)
-      expect(fresh && 'worktrees' in fresh ? fresh.worktrees : []).toHaveLength(count + 1)
-      expect(capture).toHaveBeenCalledTimes(1)
-      capture.mockClear()
-      await list(store)
-      expect(capture).not.toHaveBeenCalled()
-      expect(scanGit).toHaveBeenCalledTimes(1)
-      invalidateDetectedWorktreeScanCache(owner.id)
-      let resolveScan!: (value: GitWorktreeInfo[]) => void
-      scanGit.mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveScan = resolve
-          })
-      )
-      const producer = list(store)
-      const joined = list(store)
-      expect(capture).toHaveBeenCalledTimes(1)
-      expect(scanGit).toHaveBeenCalledTimes(2)
-      resolveScan(newRows)
-      const [produced, reused] = await Promise.all([producer, joined])
-      expect(produced && 'worktrees' in produced ? produced.worktrees : []).toHaveLength(count + 1)
-      expect(reused && 'worktrees' in reused ? reused.worktrees : []).toHaveLength(count + 1)
-      expect(capture).toHaveBeenCalledTimes(1)
-    } finally {
-      detachState()
-      detachMeta()
-    }
   })
 })

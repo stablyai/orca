@@ -11,7 +11,7 @@ import type { AiVaultSessionVirtualList } from '../session-list/AiVaultSessionVi
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/visibility/ownership'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { searchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'

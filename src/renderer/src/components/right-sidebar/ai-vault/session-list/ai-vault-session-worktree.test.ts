@@ -11,7 +11,7 @@ import {
 import type { AiVaultHistoryWorktreeState } from '@/lib/agent-session/resume/history/ai-vault-history-worktrees'
 import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/visibility/ownership'
 import {
   buildAiVaultSessionWorktreeMap,
   resolveAiVaultSessionWorktreeInfo

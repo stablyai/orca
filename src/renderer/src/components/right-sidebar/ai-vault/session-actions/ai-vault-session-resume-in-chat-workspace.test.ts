@@ -8,7 +8,7 @@ import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts
 import type { Repo } from '../../../../../../shared/repo-types'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/visibility/ownership'
 
 const mocks = vi.hoisted(() => ({
   owner: vi.fn<() => string | null>(() => 'local'),

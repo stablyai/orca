@@ -57,6 +57,8 @@ import { holdInFlightWorktreeCreate } from '../../../workspaces/creation/worktre
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import { bumpWorktreeScanGeneration } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import * as removalListing from '../../../workspaces/removal/worktree-removal-listing'
+import { _resetWorktreeCatalogOwnerForTests } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+import { isLocalWorktreeMetadataPruneDue } from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/home/me/fileLoc'
@@ -147,6 +149,7 @@ function realStoreRuntime(population: number) {
 describe('worktree scan with a repeated path', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    _resetWorktreeCatalogOwnerForTests()
     localScanMock.mockReset()
     pathPresenceMock.mockImplementation(
       async (paths: readonly string[]) => new Map(paths.map((path) => [path, false]))
@@ -277,9 +280,10 @@ describe('worktree scan with a repeated path', () => {
     const missingId = `${REPO_ID}::${REPO_PATH}/saved-1`
     const capture = vi.spyOn(store, 'captureNativeLocalWorktreeMetadataScanExpectation')
     let attempts = 0
+    let capturedBeforePhase = 0
     localScanMock.mockImplementation(async () => {
       attempts += 1
-      expect(capture).toHaveBeenCalledTimes(attempts)
+      expect(capture).toHaveBeenCalledTimes(attempts - capturedBeforePhase)
       if (attempts === 1) {
         runWorktreeChangeInvalidators(REPO_ID)
       } else {
@@ -297,16 +301,28 @@ describe('worktree scan with a repeated path', () => {
     expect(capture.mock.results[0].value).not.toBe(capture.mock.results[1].value)
     expect(store.getWorktreeMetaForHost(changedId, 'local')?.comment).toBe('changed during scan')
     expect(store.getWorktreeMetaForHost(missingId, 'local')).toBeUndefined()
+    expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(true)
+    const previousExpectation = capture.mock.results[1].value
+    capturedBeforePhase = attempts
     capture.mockClear()
     expect(await runtime.listDetectedManagedWorktrees(REPO_ID)).toMatchObject({
       authoritative: true
     })
-    expect(attempts).toBe(2)
-    // A cached raw graph still needs a new destructive expectation for this request.
+    // Releasing the overtaken claim rearms hygiene; only a fresh pre-scan capture can satisfy it.
+    expect(attempts).toBe(3)
+    expect(localScanMock).toHaveBeenCalledTimes(3)
     expect(capture).toHaveBeenCalledTimes(1)
+    expect(capture.mock.results[0].value).not.toBe(previousExpectation)
+    expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(false)
+    capturedBeforePhase = attempts
     capture.mockClear()
+    expect(await runtime.listDetectedManagedWorktrees(REPO_ID)).toMatchObject({
+      authoritative: true
+    })
     await runtime.listManagedWorktrees()
     expect(capture).not.toHaveBeenCalled()
+    expect(attempts).toBe(3)
+    expect(localScanMock).toHaveBeenCalledTimes(3)
   })
 
   it('keeps the raw held bare entry available to saved chat authority with its existing retry bound', async () => {
@@ -531,6 +547,7 @@ describe('worktree scan with a repeated path', () => {
       gitWorktree: { isBare: true, isMainWorktree: true, branch: '', prunable: false }
     })
     const coldMeta = structuredClone(metaById)
+    _resetWorktreeCatalogOwnerForTests()
     localScanMock.mockResolvedValue({ ok: false, worktrees: [] })
     await expect(listedRows(makeRuntime({}, coldMeta))).resolves.toEqual(expected)
     expect(coldMeta[bareId]).toEqual(metaById[bareId])

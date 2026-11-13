@@ -17,7 +17,7 @@ import type {
   WorktreeLineage
 } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
-import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
+import { getWorkspaceRowKindFacts } from '../worktree/visibility/workspace-kinds'
 import { openEnum } from '../zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import { SMART_TIERS } from './sort-stamps'
@@ -46,6 +46,9 @@ const PairedServerWorkspaceRowSchema = z
     // Server-owned sorting/filter/lineage facts; older desktops omit them. Lineage is the checked edge, not the raw record.
     WorkspaceRowSchema.pick({
       isMainWorktree: true,
+      removing: true,
+      removalRecorded: true,
+      removalError: true,
       isUnread: true,
       instanceId: true,
       lineage: true,
@@ -125,6 +128,9 @@ export function pairedServerRowOfWorktree(
     branch: worktree.branch,
     displayName: worktree.displayName,
     isArchived: worktree.isArchived,
+    ...(worktree.removing ? { removing: true } : {}),
+    ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
+    ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
     isPinned: worktree.isPinned,
     isMainWorktree: worktree.isMainWorktree,
     isBare: worktree.isBare,
@@ -183,6 +189,9 @@ const ServerWorktreePsRowSchema = z.object({
   branch: z.string().catch(''),
   displayName: z.string().catch(''),
   isArchived: z.boolean().catch(false),
+  removing: z.literal(true).optional().catch(undefined),
+  removalRecorded: z.literal(true).optional().catch(undefined),
+  removalError: z.string().optional().catch(undefined),
   isPinned: z.boolean().catch(false),
   isMainWorktree: z.boolean().catch(false),
   unread: z.boolean().optional().catch(undefined),

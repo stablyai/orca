@@ -14,14 +14,14 @@ import {
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
-} from '../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   toDetectedWorktree,
   applyMetadataFallbackVisibility,
-  buildKnownOrcaWorkspaceLayouts,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/worktree/ownership'
+  buildKnownOrcaWorkspaceLayouts
+} from '../../../../shared/worktree/visibility/ownership'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
 import {

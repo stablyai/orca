@@ -18,7 +18,7 @@ import {
   storeProjectGroup,
   storeWorktreeMeta
 } from '../orca-runtime-tests/runtime-store-partial-fixture'
-import { requireSwitchedOn } from './require-switched-on'
+import { requireSwitchedOn } from '../construction/require-sidebar-inputs-enabled'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('../../ssh/config/ssh-config-parser', () => ({

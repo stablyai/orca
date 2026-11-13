@@ -37,6 +37,8 @@ const { registerWorktreeChangeInvalidator, runWorktreeChangeInvalidators } =
   await import('./worktree-change-invalidators')
 const { bumpWorktreeScanGeneration } =
   await import('../../../git/worktrees/catalog/worktree-scan-cache')
+const { setWorktreeCatalogRouteResolver } =
+  await import('../../../workspaces/catalog/repo-worktree-catalog-route')
 await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
 const localRepo: Repo = {
@@ -146,5 +148,34 @@ describe('the catalog version a listing carries', () => {
       epoch: 'e1',
       seq: 5
     })
+  })
+
+  it('answers nothing for rows whose owner route was retired before publication', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: localRepo.path, runtimeKey: 'local:default' } : null
+    )
+    try {
+      listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
+      // The route changes after the scan settles, while the listing finishes its own awaits.
+      let calls = 0
+      const isCurrent = (): boolean => {
+        calls += 1
+        if (calls === 1) {
+          live = false
+        }
+        return true
+      }
+
+      const result = await listDetectedWorktreesForCapturedRepo(
+        createStore(localRepo),
+        localRepo,
+        isCurrent
+      )
+
+      expect(result).toBeNull()
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
   })
 })

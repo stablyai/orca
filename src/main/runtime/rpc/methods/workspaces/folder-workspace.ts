@@ -1,11 +1,11 @@
 import { defineMethod } from '../../core'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   FolderWorkspaceCreate,
   FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
   FolderWorkspaceUpdate
-} from '../../../../../shared/rpc-contract/folder-workspace-params'
+} from '../../../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({

@@ -10,7 +10,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Layout model, persistence and compatibility folders.
   'src/shared/workspace-layout/',
   'src/shared/remote-layout-snapshot.ts',
-  'src/shared/workspace-layout/terminal-leaf-move.ts',
+  'src/shared/workspace-layout/terminal-topology/terminal-leaf-move.ts',
   'src/main/persistence/terminal-topology/',
   'src/main/persistence/restoring-sessions/',
   'src/main/persistence/loading-store/terminal-bindings/pty-binding-',
@@ -49,7 +49,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/main/runtime/workspaces/session-hosts/get-runtime-id.ts',
   'src/renderer/src/components/terminal/terminal-tab-actions.ts',
   'src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts',
-  'src/shared/rpc-contract/workspace-layout-params.ts',
+  'src/shared/rpc-contract/workspace-layout/workspace-layout-params.ts',
   'src/renderer/src/store/slices/tabs/recently-closed-tabs.ts',
   // The client the oracle reads every view through.
   'src/cli/runtime/client.ts',

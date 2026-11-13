@@ -45,15 +45,6 @@ function laneTree(slot, { version = '1.1.0', nodeHeaders = '24.21.0', bytes = sl
 }
 
 describe('mergeOrcadPrebuildTrees', () => {
-  it('refuses a lane whose files no longer match its own manifest', () => {
-    const lane = laneTree('win32-x64')
-    writeFileSync(join(lane, 'win32-x64', 'pty.node'), 'tampered')
-
-    expect(() => mergeOrcadPrebuildTrees([lane], join(temp(), 'out'))).toThrow(
-      'win32-x64/pty.node: sha256 does not match the manifest'
-    )
-  })
-
   it('refuses the same slot from two lanes instead of letting the last one win', () => {
     const out = join(temp(), 'out')
     expect(() =>

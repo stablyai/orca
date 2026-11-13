@@ -11,7 +11,7 @@ import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/wor
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
-} from '../../../../shared/worktree/degraded-repo-worktree-validity'
+} from '../../../../shared/worktree/catalog/degraded-repo-worktree-validity'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { buildRuntimeSessionPlaceholders } from './workspace-terminal-placeholders'
 import {

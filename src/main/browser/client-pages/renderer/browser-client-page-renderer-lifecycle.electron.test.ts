@@ -228,7 +228,12 @@ async function runFixture(): Promise<FixtureResult> {
   const resultPath = join(root, 'result.json')
   writeFileSync(
     preloadSource,
-    preloadEntry(join(process.cwd(), 'src/preload/browser-client-page-renderer-requests.ts'))
+    preloadEntry(
+      join(
+        process.cwd(),
+        'src/preload/renderer/browser-pages/browser-client-page-renderer-requests.ts'
+      )
+    )
   )
   writeFileSync(
     rendererSource,

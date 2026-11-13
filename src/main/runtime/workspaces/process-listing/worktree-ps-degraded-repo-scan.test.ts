@@ -34,6 +34,7 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { _resetWorktreeCatalogOwnerForTests } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -150,6 +151,8 @@ async function advancePastRepoScanBudget<T>(pending: Promise<T>): Promise<T> {
 
 describe('worktree.ps on a degraded repo scan', () => {
   beforeEach(() => {
+    // The catalog owner is process-wide; a previous case's failed scan must not answer this one.
+    _resetWorktreeCatalogOwnerForTests()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([])
   })

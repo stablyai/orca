@@ -4,8 +4,8 @@ import { checksPanelAsyncResultKey } from './refresh/checks-panel-async-result-k
 import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
 import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'

@@ -5,7 +5,7 @@ import { createWorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree
 import type { AppState } from '@/store/types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
-import { normalizeWorktreeVisibilitySourcePreferences } from '../../../../../../shared/worktree/visibility-sources'
+import { normalizeWorktreeVisibilitySourcePreferences } from '../../../../../../shared/worktree/visibility/visibility-sources'
 import type { Worktree, DetectedWorktree } from '../../../../../../shared/worktree/types'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'

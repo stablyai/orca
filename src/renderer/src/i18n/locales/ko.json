@@ -367,8 +367,6 @@
       "otherAgentsPermissionsLabel": "다른 에이전트에 대한 권한",
       "editRowPermissions": "{{agent}} 권한: {{mode}}",
       "customArgsTooltip": "자체 실행 인수를 사용합니다.",
-      "expandAgentSettings": "에이전트 설정 펼치기",
-      "collapseAgentSettings": "에이전트 설정 접기",
       "replaceWithPermissionMode": "{{mode}}로 교체",
       "permissionsTitle": "권한",
       "permissionsChoiceExplanation": "모든 에이전트가 확인 없이 할 수 있는 작업입니다. 아래에서 에이전트별로 다르게 설정할 수 있습니다.",
@@ -1616,9 +1614,6 @@
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
       },
       "useMacosTccPromptNotice": {
-        "title": "“Orca에서 접근하려고 합니다…” 권한 요청이 표시되나요?",
-        "description": "Orca에서 실행 중인 에이전트나 터미널 도구가 보호된 파일에 접근하려고 하면 macOS 권한 메시지가 표시될 수 있습니다. 이러한 요청을 줄이려면 설정에서 전체 디스크 접근 권한을 허용하세요.",
-        "openSettings": "설정 열기",
         "dismiss": "다시 표시하지 않기"
       },
       "useInstalledAgentSkills": {
@@ -3250,7 +3245,6 @@
             "7eee951968": "워크스페이스 안전성 확인 중",
             "191f0bc98e": "닫기",
             "7ae2ad30f4": "새로고침",
-            "b2c1331844": "비활성 워크스페이스 삭제",
             "7f451a3e2c": "정리 제안을 무시할 수 없습니다.",
             "662b8ec3f8": "워크스페이스 정리 검사 실패",
             "9cc26c019d": "제거",
@@ -3260,7 +3254,6 @@
             "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
             "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
             "86ba852118": "{{value0}}, {{value1}}개 실패",
-            "deleteButtonCount": "{{value0}}개 삭제",
             "archivedStatus": "보관됨",
             "74f6c16279": "뒤로"
           },
@@ -3298,7 +3291,6 @@
             "runningTerminalBlocker": "실행 중인 터미널 프로세스",
             "terminalLivenessUnknownBlocker": "터미널 상태 알 수 없음",
             "dirtyEditorBufferBlocker": "저장되지 않은 편집기 버퍼",
-            "volatileLocalContextBlocker": "휘발성 로컬 문맥",
             "recentVisibleContextBlocker": "최근 방문한 탭",
             "liveAgentBlocker": "활성 에이전트",
             "sshDisconnectedBlocker": "원격을 사용할 수 없음",
@@ -3460,6 +3452,8 @@
             "15dd899676": "{{value0}}에 추가…"
           },
           "TerminalErrorToast": {
+            "title": "터미널 문제",
+            "errorTitle": "터미널 오류",
             "e4aa243f8c": "데몬 재시작",
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",
@@ -3842,7 +3836,6 @@
             "1d411fb6a5": "이 repo에 대한 빠른 명령 저장",
             "8f1e971966": "빠른 명령 추가",
             "3220e2da27": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
-            "e8e1a52edb": "'{{value0}}'을 삭제하시겠습니까?",
             "37e1bb90ce": "실행: {{value0}}",
             "77ac113df0": "{{value0}} 시작: {{value1}}",
             "7b1c9d6ae1": "실행",
@@ -5178,7 +5171,6 @@
           "loading": "콘텐츠 로드 중…",
           "deleteFailed": "Orca가 클라우드에서 이 항목을 삭제할 수 없습니다.",
           "deleted": "클라우드에서 삭제됨",
-          "confirmDelete": "삭제 확인",
           "moreActions": "{{name}}에 대한 추가 작업",
           "deletePackage": "클라우드에서 삭제"
         },
@@ -5410,8 +5402,6 @@
           "5cc1a6701c": "설정 열기",
           "2b56b35f53": "설정에서 이를 변경할 수 있습니다.",
           "dd3a45bbbd": "다음번에는 이 확인을 건너뛰겠습니다.",
-          "fc23c4cbdf": "워크스페이스 삭제",
-          "86f0ae1257": "워크스페이스 삭제",
           "removeFolderProjectInstead": "이 워크스페이스를 삭제하는 대신 폴더 프로젝트를 제거하세요.",
           "gitBlocksMainWorktree": "Git에서는 메인 워크트리를 제거할 수 없습니다.",
           "removeBatchFolder_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
@@ -5508,11 +5498,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "취소",
-          "591f330288": "프로젝트 그룹 삭제",
           "2c14ce677a": "삭제 중...",
           "0e0e6764af": "포함된 프로젝트",
           "55f75628c0": "디스크의 프로젝트 폴더는 삭제되지 않습니다.",
-          "fec7e9c8ae": "그룹 삭제",
           "removeContainedProjects_other": "포함된 프로젝트 {{count}}개 제거",
           "deleteGroupDescription": "<name>{{name}}</name> 그룹을 삭제합니다.",
           "moreProjects_other": "+{{count}}개 더"
@@ -6246,9 +6234,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "취소",
           "cf95e3b5bb": "닫기",
-          "deleteWorkspace": "워크스페이스 삭제",
           "deleting": "삭제 중...",
-          "forceDelete": "강제 삭제",
           "forceDeleting": "강제 삭제 중..."
         },
         "local": {
@@ -6550,16 +6536,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "유지된 브랜치 검토",
           "f21976c9a8": "강제 삭제하려는 로컬 브랜치을 선택하세요. 선택되지 않은 브랜치는 저장소에 유지됩니다.",
           "38c947f7c5": "모두 선택",
           "9602129d38": "{{value1}} 중 {{value0}}이(가) 선택됨",
           "ee39e872d5": "병합되지 않을 수 있음",
           "676db406fd": "헤드를 사용할 수 없음",
-          "285e1e4882": "취소",
-          "a0f9863597_one": "강제 삭제 {{count}} 브랜치",
-          "a0f9863597_other": "{{count}} 브랜치 강제 삭제",
-          "a0f9863597": "{{count}} 브랜치 강제 삭제"
+          "285e1e4882": "취소"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "맨 위로 이동"
@@ -6980,14 +6962,11 @@
           "e8da2af684": "설치 가능",
           "ed3e110e61": "감지됨",
           "02e0143be5": "설치됨",
-          "92033495ff": "자동",
           "f9f127d664": "이 agent의 바이너리 경로나 이름을 재정의하고 기본 실행 인수 또는 환경을 편집합니다.",
           "f95b5c79b8": "설치",
           "fe4d630c94": "문서",
-          "8dc0192e48": "비활성",
           "5200dac9da": "재설정",
           "2e45ca29b6": "명령",
-          "d4d2a45d63": "활성화됨",
           "1c9a9679ec": "{{value0}} 사용 가능 여부",
           "0d9e293a02": "새로고침",
           "c9b33eb5c0": "새로고침 중…",
@@ -7006,10 +6985,8 @@
           "25a41a9aad": "이 서버에 설치된 에이전트 다시 감지",
           "remoteDetectionFailed": "설치된 에이전트를 감지하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
           "retryDetection": "다시 시도",
-          "storedDefaultUndetected": "기본값으로 저장되었지만 지금은 감지되지 않습니다.",
           "noAgentsDetected": "감지된 에이전트가 없습니다. 에이전트가 설치되어 있다면 감지 시간이 초과되었을 수 있습니다.",
-          "9f30095d49": "에이전트 권한",
-          "3bddd54c9e": "기본 에이전트"
+          "9f30095d49": "에이전트 권한"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -7036,8 +7013,6 @@
             "df205a675e": "색조 강도",
             "ba1d9a0607": "사이드바 색조"
           },
-          "interfaceDefaultFont": "기본 글꼴",
-          "terminalDefaultFont": "기본 글꼴",
           "interfaceTitle": "인터페이스",
           "terminalTitle": "터미널",
           "windowSidebarSummary": "사이드바, 상태 표시줄 및 파일 탐색기",
@@ -7861,7 +7836,6 @@
           "c6b155911b": "모든 명령",
           "c36912efd5": "탭 표시줄의 빠른 명령 버튼을 사용하여 실행하거나 터미널 내부를 마우스 오른쪽 버튼으로 클릭하세요.",
           "3d9dc558e8": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
-          "3edf3deaf8": "'{{value0}}'을 삭제하시겠습니까?",
           "9fcfc29519": "삽입",
           "9b3e338d62": "Enter로 실행",
           "4ccc63da87": "에이전트",
@@ -7914,16 +7888,12 @@
           "5426ecbdcb": "로컬 스크립트가 실행되지 않습니다.",
           "95a0411b3e": "템플릿",
           "175daba180": "예",
-          "b20c5df6ca": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
-          "56f9a4a1d0": "`orca.yaml` 사용 중",
           "623e0c9f31": "`orca.yaml`을 구문 분석할 수 없습니다",
-          "5a67e4793d": "`orca.yaml`을 찾을 수 없습니다",
           "07ba35bc68": "`scripts:` 아래의 들여쓰기를 확인하세요. 후크 키는 두 칸, 명령 줄은 네 칸을 사용해야 합니다.",
           "787ca433ef": "지원되는 키만 정의하세요: `scripts`, `setup`, `archive`, `issueCommand`.",
           "ecc73d9125": "아래의 작동하는 템플릿과 비교하고 필요한 경우 그 형식을 복사하세요.",
           "0cc712b823": "핵심 구성 파일이 repo 루트에 있지만 Orca가 아직 지원되는 후크 정의를 구문 분석할 수 없습니다.",
           "aba825233f": "파일에는 이 버전의 Orca가 인식하지 못하는 구성 키가 포함되어 있습니다. Orca를 업데이트하거나 파일에 오타가 있는지 확인해야 할 수도 있습니다.",
-          "ca424ff135": "공유 후크 및 이슈 자동화 기본값은 repo에 정의되어 있으며 이를 사용하는 모든 사람이 사용할 수 있습니다.",
           "8bfe65fc60": "로컬 명령 사용",
           "8d6c56bff8": "둘 다 실행",
           "0fa21e19ec": "일반적으로 브랜치 이름을 기반으로 하는 워크스페이스의 이름입니다.",
@@ -8319,8 +8289,7 @@
           "60f8a673a7": "앱으로 돌아가기",
           "6503182299": "온보딩 체크리스트",
           "82db1b7de4": "온보딩 체크리스트, {{value0}}/{{value1}} 완료. 설정 가이드 보기.",
-          "df38d612b7": "아직 추가된 프로젝트가 없습니다.",
-          "3e483e256b": "일치하는 프로젝트 설정이 없습니다."
+          "df38d612b7": "아직 추가된 프로젝트가 없습니다."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "상태",
@@ -10495,7 +10464,7 @@
             "agent": "에이전트",
             "process": "프로세스",
             "prompt": "프롬프트",
-            "stop": "멈추다",
+            "stop": "중지",
             "minimumContrast": {
               "description": "텍스트 가독성을 높이거나 터미널 프로그램에서 선택한 색상을 유지합니다.",
               "contrast": "대비",
@@ -12854,7 +12823,6 @@
             "abf59262fb": "agent를 시작하기 전에 전체 명령 입력을 리뷰하고 편집하세요.",
             "4ede779461": "AI를 통해 리뷰 충돌 해결",
             "3b203c62f8": "이렇게 하면 PR에서 해당 댓글이 영구적으로 제거됩니다.",
-            "ea9b649ce3": "댓글을 삭제하시겠습니까?",
             "5788d1059d": "리뷰 스레드를 업데이트할 수 없습니다. GitHub API 예산을 확인하세요.",
             "07871c0589": "다른 PR 연결",
             "7f4489f370": "새로고침",
@@ -13722,8 +13690,7 @@
                   "5ddd8cac7f": "스테이징된 변경 사항을 모두 삭제하시겠습니까?",
                   "d4df3a61df": "'{{value0}}' 변경사항을 취소하시겠습니까?",
                   "5c0bdbc4cb": "'{{value0}}'을(를) 복원하시겠습니까?",
-                  "d97bf697c9": "이 파일이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
-                  "96c772bee9": "'{{value0}}'을 삭제하시겠습니까?"
+                  "d97bf697c9": "이 파일이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다."
                 },
                 "dialog": {
                   "3bc61dc989": "취소",
@@ -13959,7 +13926,6 @@
             "unresolved": "이 워크스페이스를 소유한 호스트를 확인할 수 없습니다. 연결을 확인한 후 다시 시도하세요."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "'{{value0}}'을(를) 영구적으로 삭제하시겠습니까?",
             "92276aceb7": "삭제",
             "7fb9435c86": "원격 호스트의 디렉터리와 그 안의 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
             "23e98f192f": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
@@ -14140,7 +14106,6 @@
             "resumeInNewCliTooltipChat": "이 채팅은 그대로 유지됩니다."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "이 세션을 삭제할까요?",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
@@ -15820,7 +15785,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
-          "bfc813e909": "링크 열기",
           "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
           "copyLink": "링크 복사"
         },
@@ -16509,6 +16473,14 @@
                     "logins": {
                       "title": "로그인 상태 유지",
                       "body": "기존 로그인 정보를 Orca로 가져와 바로 로그인 상태를 유지하세요."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 확장 프로그램",
+                        "body": "Chrome 웹 스토어에서 설치하고 주소 표시줄 옆에 고정하세요.",
+                        "action": "웹 스토어 열기",
+                        "secondaryAction": "확인"
+                      }
                     }
                   },
                   "tasks": {
@@ -16896,7 +16868,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "접기",
-          "showMore": "더 보기"
+          "showMore": "더 보기",
+          "copied": "복사됨",
+          "copyFailed": "복사하지 못함",
+          "copyPrompt": "프롬프트 복사"
         },
         "AutomationDetail": {
           "host": "호스트",
@@ -16931,7 +16906,12 @@
           "precheckNone": "없음",
           "migrate": "마이그레이션",
           "migrateNotice": "{{host}}이(가) 새 원격 호스트로 업그레이드되었습니다. 계속 실행하려면 이 자동화를 마이그레이션하세요.",
-          "needsMigration": "마이그레이션 필요"
+          "needsMigration": "마이그레이션 필요",
+          "repeats": "반복",
+          "missedRunGrace": "누락된 실행 유예 시간",
+          "execution": "실행",
+          "notRunYet": "아직 실행되지 않음",
+          "usageDetail_other": "토큰 {{tokens}} · 실행 {{known}}/{{count}}회 보고됨"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
@@ -17032,9 +17012,7 @@
           "2faecab10b": "지금 실행",
           "13118faadf": "알 수 없는 프로젝트",
           "73f630b49d": "취소",
-          "9adfab2596": "외부 자동화 삭제",
           "1e2e41392f": "다시 묻지 마세요",
-          "080dcb5fbb": "자동화 삭제",
           "19a6e30eae": "자동화 새로 고침",
           "77c2778945": "자동화",
           "e1bf9b1512": "워크스페이스를 사용할 수 없습니다.",
@@ -17490,7 +17468,7 @@
           "unreadCount_other": "읽지 않음 {{count}}개"
         },
         "clearCompleted": {
-          "undo": "끄르다",
+          "undo": "실행 취소",
           "cleared_other": "완료된 에이전트 {{count}}개를 지웠습니다"
         },
         "standaloneWorktree": {
@@ -17880,7 +17858,6 @@
       },
       "artifacts": {
         "ArtifactsPage": {
-          "deleteTitle": "아티팩트를 삭제할까요?",
           "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
           "delete": "삭제",
           "signInAgain": "아티팩트를 로드하려면 Orca에 다시 로그인하세요.",
@@ -19119,7 +19096,7 @@
       },
       "backgroundTasks": {
         "monitoring": "백그라운드 작업 모니터링",
-        "stop": "멈추다",
+        "stop": "중지",
         "stopTask": "{{value0}} 중지",
         "stopAll": "백그라운드 작업 중지",
         "agent": "백그라운드 에이전트",
@@ -19822,11 +19799,8 @@
           "candidateName": "{{value1}}의 {{value0}}"
         },
         "stopAgents": {
-          "titleMany": "이 agent들을 중지할까요?",
           "descriptionOne": "삭제하면 agent의 현재 작업이 중지됩니다.",
-          "descriptionMany": "삭제하면 이 agent들의 현재 작업이 중지됩니다.",
-          "confirm": "agent 중지 후 삭제",
-          "confirmOne": "agent 중지 후 삭제"
+          "descriptionMany": "삭제하면 이 agent들의 현재 작업이 중지됩니다."
         },
         "candidateRow": {
           "gitChip": {
@@ -20062,6 +20036,7 @@
           "about": {
             "parakeetV3": "빠름. 유럽 {{languages}}개 언어.",
             "parakeetV2": "빠름. 영어 전용이며 영어에서 가장 정확합니다.",
+            "parakeetUnifiedEn": "영어 전용. 말하는 동안 단어가 표시됩니다.",
             "whisperTiny": "가장 작은 다운로드. 받아쓰기를 체험해 보기에 좋습니다.",
             "whisperTurbo": "가장 많은 약 100개 언어. GPU가 없으면 느립니다.",
             "senseVoice": "빠름. 중국어, 일본어, 한국어용.",
@@ -20576,7 +20551,8 @@
       "remove": "제거…",
       "empty": "이 프로필에 켜진 확장 프로그램이 없습니다",
       "visitWebStore": "Chrome 웹 스토어 방문",
-      "manage": "확장 프로그램 관리"
+      "manage": "확장 프로그램 관리",
+      "openWebStoreFailed": "Chrome 웹 스토어를 열 수 없습니다."
     },
     "viewport": {
       "mobile-s": "소형 모바일 — 320 × 568",
@@ -20974,10 +20950,7 @@
       "delete": "삭제",
       "restore": "복원",
       "discard": "버리기",
-      "discardAll": "모두 폐기",
-      "deleteUntrackedTitle_one": "추적되지 않은 파일 {{count}}개를 삭제할까요?",
-      "deleteUntrackedTitle_other": "추적되지 않은 파일 {{count}}개를 삭제할까요?",
-      "deleteCount": "{{count}}개 삭제"
+      "discardAll": "모두 폐기"
     },
     "createReviewFailure": {
       "authRequiredCommand": "{{providerName}}이(가) 인증되지 않았습니다. 다음 단계: 이 환경에서 {{command}}을(를) 실행하세요.",
@@ -21254,7 +21227,7 @@
   "rendererRecovery": {
     "reload": "새로고침",
     "copyCommands": "복사 명령",
-    "quit": "그만두다",
+    "quit": "종료",
     "stalledDetail": "Orca는 충돌 후 창을 다시 로드했지만 로드가 완료되지 않았습니다.",
     "crashLoopDetail": "Orca는 {{recoveryCount}}회 연속 복구를 시도했지만 성공하지 못했습니다.",
     "driverFallback": "그래도 도움이 되지 않으면 일반적으로 원인은 그래픽 드라이버입니다.",
@@ -21401,7 +21374,8 @@
   },
   "common": {
     "retry": "다시 시도",
-    "cancel": "취소"
+    "cancel": "취소",
+    "delete": "삭제"
   },
   "fileExplorer": {
     "root": {
@@ -21421,8 +21395,7 @@
     "trashFailed": {
       "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
       "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
-      "description": "이 작업은 되돌릴 수 없습니다.",
-      "confirm": "영구 삭제"
+      "description": "이 작업은 되돌릴 수 없습니다."
     }
   },
   "sparsePreset": {
@@ -21480,7 +21453,6 @@
       "cancel": "취소"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 채팅",
       "chatSignIn": "로그인",
       "chatChangeAccount": "계정 변경",
       "chatRetry": "로그인 다시 시도",
@@ -21498,23 +21470,13 @@
       "chatFailed": "로그인하지 못했습니다. 다시 시도하세요.",
       "chatOtherClient": "다른 클라이언트에서 로그인이 진행 중입니다.",
       "chatReadFailed": "{{host}}의 로그인을 확인할 수 없습니다.",
-      "signIn": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요.",
-      "docs": "로그인 안내",
       "retry": "다시 시도",
-      "identityUnknown": "로그인한 ID를 사용할 수 없음",
-      "signedOut": "로그인된 agy 자체 계정이 없습니다.",
       "changed": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요.",
-      "save": "현재 계정 저장",
       "refresh": "계정 새로고침",
       "usage": "사용량 새로 고침",
-      "working": "계정 업데이트",
       "usageReading": "세션: {{session}} · 주간: {{weekly}}",
       "saved": "저장된 Google 계정",
-      "nativeActive": "기본 계정",
-      "selected": "선택됨",
-      "select": "선택",
       "remove": "제거",
-      "sessions": "선택한 계정은 이 호스트의 새 agy 세션에 적용됩니다. 기존 세션은 이전 계정을 계속 사용할 수 있습니다.",
       "searchDescription": "실행 호스트에서 기본 agy Google 계정을 저장하고 선택합니다.",
       "title": "Antigravity",
       "keyword": {
@@ -21526,7 +21488,6 @@
       "authMethod": "로그인 방법",
       "personal": "Google 계정",
       "gcpProject": "Google Cloud 프로젝트",
-      "gcpLocation": "Google Cloud 위치",
       "settingsIncomplete": "Antigravity 계정 유형을 선택하고 Google Cloud 프로젝트와 위치를 입력하세요.",
       "settingsLoadFailed": "Orca에서 Antigravity 로그인 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "settingsSaveFailed": "Orca에서 Antigravity 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",
@@ -21592,6 +21553,11 @@
         "reasonSharedSession": "다른 패널에서도 열려 있음",
         "sharedOne": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 1개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다.",
         "sharedOther": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 {{count}}개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다."
+      },
+      "oauthUsage": {
+        "title": "Claude 사용량 주기적 조회",
+        "description": "Claude Code 로그인 정보로 사용량, 크레딧 및 비활성 계정을 확인합니다. 끄면 실행 중인 터미널 세션에서 제공하는 실시간 사용량만 표시합니다.",
+        "about": "Claude 사용량 주기적 조회 정보"
       }
     },
     "hostSignIn": {
@@ -21801,7 +21767,6 @@
     "nestedRemoval": {
       "refreshFailed": "워크스페이스 목록을 새로고침하지 못했습니다",
       "review": "중첩 워크트리와 함께 삭제…",
-      "title": "워크스페이스와 중첩 워크트리를 삭제할까요?",
       "description": "\"{{name}}\", 아래에 나열된 모든 중첩 워크트리, 그리고 커밋되지 않은 변경 사항을 포함한 그 안의 모든 파일이 영구적으로 삭제됩니다. 해당 터미널과 에이전트는 중지됩니다.",
       "detached": "분리된 HEAD",
       "loading": "중첩 워크트리 확인 중…",
@@ -21809,7 +21774,6 @@
       "cancel": "취소",
       "retry": "다시 검토",
       "deleting": "삭제 중…",
-      "confirm": "나열된 모든 워크트리 삭제",
       "preservedBranches": "일부 중첩 워크트리 브랜치가 유지되었습니다"
     },
     "setupTerminalTitle": "초기 설정"
@@ -22849,11 +22813,10 @@
     "setByArguments": "인수로 설정됨",
     "searchModels": "모델 검색",
     "noModels": "검색과 일치하는 모델이 없습니다.",
-    "legacyModels": "이전 모델",
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개",
+    "moreModelsWithCount": "모델 더 보기 ({{total}})",
     "use": "사용",
     "select": "에이전트 선택",
     "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",

@@ -49,6 +49,9 @@ type FeedRowFields = Pick<
     Pick<
       WorkspaceRow,
       | 'isMainWorktree'
+      | 'removing'
+      | 'removalRecorded'
+      | 'removalError'
       | 'isUnread'
       | 'instanceId'
       | 'lineage'
@@ -107,6 +110,9 @@ function readFeedRow(
     linkedLinearIssue: null,
     isMainWorktree: row.isMainWorktree ?? false,
     isArchived: row.isArchived,
+    ...(row.removing ? { removing: true } : {}),
+    ...(row.removalRecorded ? { removalRecorded: true } : {}),
+    ...(row.removalError ? { removalError: row.removalError } : {}),
     isPinned: row.isPinned,
     isUnread: row.isUnread ?? false,
     workspaceStatus: row.workspaceStatus,

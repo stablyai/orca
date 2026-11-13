@@ -1,5 +1,5 @@
 import { getTerminalInputByteLength } from '../input/terminal-input'
-import { structuredAgentSessionBlocksByteLength } from '../../rpc-contract/structured-agent-session-message-params'
+import { structuredAgentSessionBlocksByteLength } from '../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
 import type {
   TerminalQuickCommand,

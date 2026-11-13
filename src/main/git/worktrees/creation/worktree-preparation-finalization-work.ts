@@ -1,5 +1,5 @@
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import type { AddWorktreeOptions } from '../worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from '../worktree-operation-options'
 import {
@@ -12,7 +12,7 @@ import { bumpWorktreeScanGeneration as notifyPreparedWorktreeMutation } from '..
 import type { WorktreePreparationOperation } from './worktree-preparation-operation'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
   unlockWorktreePreparationAtPath,
   verifyWorktreePreparationLock,
@@ -93,7 +93,7 @@ export async function performPreparedWorktreeFinalization(
             '--hard',
             targetHead
           ],
-          gitExecOptions(preparedPath, finalizeGitOptions)
+          { ...gitExecOptions(preparedPath, finalizeGitOptions), admissionClass: 'checkout' }
         )
       }
 

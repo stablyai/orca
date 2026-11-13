@@ -2,9 +2,9 @@ export * from './github-hosted-review-test-harness'
 export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as ResolutionScanModule from '../workspaces/catalog/repo-worktree-resolution-scan'
-import { vi, type Mock } from 'vitest'
+import { beforeEach, vi, type Mock } from 'vitest'
 
-import type * as GitUsernameModule from '../../git/git-username'
+import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
@@ -14,6 +14,12 @@ export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
+import { _resetWorktreeCatalogOwnerForTests } from '../../workspaces/catalog/repo-worktree-catalog-owner'
+
+// Each runtime case once had private scan caches; the process-wide catalog owner starts unobserved instead.
+beforeEach(() => {
+  _resetWorktreeCatalogOwnerForTests()
+})
 
 type TestMock = Mock
 
@@ -339,7 +345,9 @@ vi.mock('../../ipc/filesystem/access/filesystem-auth', () => ({
 }))
 
 vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  getRegisteredWorktreeRootsRevision: () => 0,
+  registerWorktreeRootsForRepo: vi.fn()
 }))
 
 vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
@@ -358,8 +366,10 @@ vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
-vi.mock('../../git/git-username', async () => {
-  const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
+vi.mock('../../git/repositories/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>(
+    '../../git/repositories/git-username'
+  )
   return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 

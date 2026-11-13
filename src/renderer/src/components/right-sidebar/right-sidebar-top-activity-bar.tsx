@@ -1,12 +1,16 @@
 import React from 'react'
 import type { ActiveRightSidebarTab, ActivityBarPosition } from '../../../../shared/ui-chrome-types'
-import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { ActivityBarButton, TopActivityOverflowMenu } from './activity-bar-buttons'
-import type { ActivityBarItem } from './activity-bar-buttons'
+import {
+  ActivityBarButton,
+  TopActivityOverflowMenu,
+  type ActivityBarItem
+} from './activity-bar-buttons'
+
 import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,

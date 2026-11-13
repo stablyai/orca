@@ -54,6 +54,11 @@ export type WorktreeDropCommitContext = {
     pickedCopies: DraggedWorktreeCopies,
     parentIdentity: string
   ) => boolean
+  captureFolderRetention?: (
+    point: WorktreeReorderDropPoint | undefined,
+    pickedCopies: DraggedWorktreeCopies,
+    sourceGroupKey: string
+  ) => WorktreeReorderDropPoint | undefined
   clearReorderedWorktreeParents: (args: {
     draggedIds: readonly string[]
     sourceGroupKey: string

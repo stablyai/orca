@@ -175,14 +175,13 @@ export async function listDetectedWorktreesForCapturedRepo(
       if (aborted) {
         return aborted
       }
-      if (
-        !isCurrent() ||
-        !isLocalWorktreeScanGenerationCurrent(repo.id, scan.generation) ||
-        (scan.observationCommit && !scan.observationCommit.isCurrent())
-      ) {
+      if (!isCurrent() || !isLocalWorktreeScanGenerationCurrent(repo.id, scan.generation)) {
         return null
       }
-      scan.observationCommit?.commit(gitWorktrees)
+    }
+    // The owner may have retired these rows' route during the overlay and hygiene awaits.
+    if (scan.authorityCurrent && !scan.authorityCurrent()) {
+      return abortedResult() ?? null
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     releaseWslStoppedWorktreeRescan(repo.id)

@@ -17,11 +17,9 @@ import {
   normalizeExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import {
-  areRuntimePathsEqual,
-  isLegacyRepoForExternalWorktreeVisibility,
-  shouldShowWorktree
-} from '../../../../../../shared/worktree/ownership'
+import { areRuntimePathsEqual } from '../../../../../../shared/worktree/visibility/ownership'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../../../shared/external-worktree-visibility'
+import { shouldShowWorktree } from '../../../../../../shared/worktree-visibility-resolution'
 import { createRepoRowExecutionHostLookup } from '../../../../../../shared/execution-host/worktree-execution-host-resolution'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type {

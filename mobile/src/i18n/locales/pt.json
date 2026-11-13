@@ -378,8 +378,7 @@
       "pausedState": "Pausado",
       "queuedState": "Na fila",
       "resume": "Retomar",
-      "resumeSending": "Retomar o envio das mensagens na fila",
-      "title": "Mensagens na fila"
+      "resumeSending": "Retomar o envio das mensagens na fila"
     },
     "offlineQueue": {
       "failed": "Não foi possível enviar — toque em Enviar para tentar de novo",
@@ -1716,7 +1715,6 @@
     "desktops": {
       "pairDesktop": "Emparelhe um computador"
     },
-    "jumpBackIn": {},
     "sections": {
       "tasks": "Tarefas",
       "tasksSubtitle": "Explore suas issues e revisões"
@@ -1780,7 +1778,6 @@
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
       "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
-      "deleteWorktree": "Excluir Worktree",
       "pin": "Fixar",
       "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
       "removeHost": "Remover host",
@@ -1788,8 +1785,7 @@
       "sleep": "Suspender",
       "unpin": "Desafixar",
       "rename": "Renomear",
-      "deleteFailed": "Falha ao excluir \"{{name}}\"",
-      "deleteAnyway": "Excluir Mesmo Assim"
+      "deleteFailed": "Falha ao excluir \"{{name}}\""
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -1970,7 +1966,6 @@
       "daysAgo_one": "há {{count}} d",
       "daysAgo_other": "há {{count}} d",
       "deleteConfirmMessage": "Isso exclui permanentemente o comentário no GitHub.",
-      "deleteConfirmTitle": "Excluir comentário?",
       "editPlaceholder": "Edite o comentário…",
       "hoursAgo_many": "há {{count}} h",
       "hoursAgo_one": "há {{count}} h",
@@ -2763,13 +2758,10 @@
       "loadFailed": "Não foi possível carregar o pull request"
     },
     "queuedCardText": {
-      "showLess": "Mostrar menos",
       "showLessHint": "Mostra menos conteúdo da mensagem",
-      "showMore": "Mostrar mais",
       "showMoreHint": "Mostra a mensagem inteira"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Excluir esta mensagem da fila",
       "images_many": "{{count}} imagens",
       "images_one": "{{count}} imagem",
       "images_other": "{{count}} imagens",
@@ -2777,7 +2769,6 @@
       "send": "Enviar",
       "sendAgainHint": "Enviar esta mensagem novamente",
       "sendHint": "Enviar esta mensagem",
-      "showLessHint": "Mostra menos conteúdo da mensagem",
       "steer": "Orientar",
       "steerHint": "Enviar sem interromper o modelo"
     },
@@ -2834,7 +2825,6 @@
       "addTitle": "Adicionar Comando Rápido",
       "chooseAgentTitle": "Escolher Agente",
       "deleteConfirmMessage": "Este comando rápido será removido da sua lista salva.",
-      "deleteConfirmTitle": "Excluir \"{{label}}\"?",
       "editTitle": "Editar Comando Rápido",
       "editorDescription": "Salve comandos de terminal ou prompts de agente para acesso rápido.",
       "title": "Comandos Rápidos",
@@ -2897,8 +2887,7 @@
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
       "newTab": "Nova aba",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
@@ -2941,6 +2930,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Falha ao anexar (reconectando)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Não foi possível fechar a aba. Tente novamente.",
+      "closeFailedDesktopNotReady": "Não foi possível fechar a aba. O Orca ainda está carregando no seu computador. Tente novamente em instantes."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Falha no comando do navegador",
@@ -3220,8 +3213,6 @@
     },
     "presentation": {
       "loadingTabs": "Carregando guias",
-      "oneTab": "1 guia",
-      "tabCount": "{{tabCount}} guias",
       "tapToRetry": "{{status}} — toque para tentar novamente"
     },
     "documentReaders": {
@@ -4801,7 +4792,6 @@
       "outcome": "Resultado",
       "allOutcomes": "Todos os resultados",
       "couldNotStart": "Não foi possível iniciar",
-      "deleteAutomationTitle": "Excluir automação?",
       "deleteRetained": "Excluir “{{name}}” e suas execuções retidas?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Não foi possível verificar o painel original do agente. Reconecte e tente novamente.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "O painel original do agente não pode mais ser aberto. A saída salva permanece aqui.",

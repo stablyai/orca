@@ -16,7 +16,6 @@
     "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-only-resume.test.tsx",
     "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-only-resume.test-fixture.ts",
     "../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-history-candidates.perf.test.tsx",
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {

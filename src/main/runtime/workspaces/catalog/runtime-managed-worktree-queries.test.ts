@@ -38,9 +38,16 @@ vi.mock(
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { runtimeResultForObservation } from './runtime-worktree-catalog-read'
+import {
+  _resetWorktreeCatalogOwnerForTests,
+  readWorktreeCatalog
+} from '../../../workspaces/catalog/repo-worktree-catalog-owner'
+import { setWorktreeCatalogRouteResolver } from '../../../workspaces/catalog/repo-worktree-catalog-route'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   bumpLocalWorktreeScanGeneration,
+  getLocalWorktreeScanGeneration,
   resetLocalWorktreeScanGenerationsForTests
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 
@@ -330,6 +337,31 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(pruneLineageMock.mock.calls[0]?.[2]).toEqual(rows([repo.path, created]))
   })
 
+  // #16654: a create landing during the metadata probe writes lineage the scan never saw.
+  it('gates lineage pruning on the scan-start generation when a change lands during metadata pruning', async () => {
+    const store = gitStore({
+      pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(() => []),
+      getProfileStorageDirectory: () => '/profile',
+      captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(() => ({ repo, metadata: [] }))
+    })
+    const atScanStart = getLocalWorktreeScanGeneration(repo.id)
+    pruneMetadataMock.mockImplementationOnce(async () => {
+      bumpLocalWorktreeScanGeneration(repo.id)
+      return { scanGenerationCurrent: false, preservedMetadataCandidateIds: new Set() }
+    })
+    const scanRepo = vi.fn(async () => ({ ok: true as const, worktrees: rows([repo.path]) }))
+
+    await queries(store, { scanRepo }).listDetected(repo)
+
+    // The prune refuses a generation that has moved on; it must see the scan-start one.
+    expect(pruneMetadataMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scanGeneration: atScanStart
+      })
+    )
+    expect(pruneLineageMock).not.toHaveBeenCalled()
+  })
+
   it('publishes saved rows non-authoritatively once the listing owner spends its re-scan bound', async () => {
     const scanRepo = vi.fn(overtakenScan([repo.path]))
     const savedPath = `${repo.path}/saved`
@@ -379,5 +411,63 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(scanRepo).toHaveBeenCalledOnce()
     expect(pruneLineageMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('never publishes owner rows as authoritative once the owner retired their route', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: repo.path, runtimeKey: 'local:default' } : null
+    )
+    try {
+      const { observation } = await readWorktreeCatalog(
+        repo,
+        'local:default',
+        { kind: 'runtime', maxAgeMs: 30_000 },
+        {
+          scan: async () => ({ kind: 'rows', worktrees: rows([repo.path]) }),
+          // The observation carries the pre-scan hygiene claim a pruning listing consumes.
+          captureWitness: () =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked prune reads only the expectation's presence.
+            ({
+              authorizedRootsRevision: 0,
+              rootsRevision: 0,
+              hygieneDue: true,
+              expectation: { repo, metadata: [] },
+              release: () => {}
+            }) as never
+        }
+      )
+      const ownerRows = runtimeResultForObservation(observation!)
+      const scanRepo = vi.fn(async () => ownerRows)
+      // The route changes while the listing awaits its own metadata prune, after admission.
+      let helperSawCurrent: boolean | undefined
+      pruneMetadataMock.mockImplementationOnce(async (args: { isCallerCurrent: () => boolean }) => {
+        live = false
+        helperSawCurrent = args.isCallerCurrent()
+        return { scanGenerationCurrent: true, preservedMetadataCandidateIds: new Set() }
+      })
+      const saved = metadata({
+        hostId: 'local',
+        gitWorktree: { isBare: false, isMainWorktree: true, branch: 'main', prunable: false }
+      })
+      const store = gitStore({
+        getAllWorktreeMeta: () => ({ [`${repo.id}::${repo.path}`]: saved }),
+        getWorktreeMeta: () => saved,
+        pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(() => []),
+        getProfileStorageDirectory: () => '/profile',
+        captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(() => ({ repo, metadata: [] }))
+      })
+
+      const result = await queries(store, { scanRepo }).listDetected(repo)
+
+      expect(pruneMetadataMock).toHaveBeenCalledTimes(1)
+      expect(helperSawCurrent).toBe(false)
+      expect(result).toMatchObject({ authoritative: false, source: 'metadata-fallback' })
+      expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
+      expect(pruneLineageMock).not.toHaveBeenCalled()
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+      _resetWorktreeCatalogOwnerForTests()
+    }
   })
 })

@@ -25,13 +25,13 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { applyMetadataFallbackVisibility } from '../../../../shared/worktree/ownership'
+import { applyMetadataFallbackVisibility } from '../../../../shared/worktree/visibility/ownership'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
-} from '../../../../shared/worktree/visibility-sources'
+} from '../../../../shared/worktree/visibility/visibility-sources'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
@@ -43,7 +43,7 @@ import { getWorkspaceAttachments } from '../../../../shared/workspace-attachment
 import { currentRuntimeWorktreeScanRepo } from './runtime-witnessed-worktree-scan'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   getRetiredNameRegistryForRepo,
   hasRetiredNameRegistryStore
@@ -194,8 +194,8 @@ export class RuntimeManagedWorktreeQueries {
           isCallerCurrent: scan.isCurrent
         })
       }
-      if (scan.isCurrent()) {
-        pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      if (scan.lineagePrune && scan.isCurrent()) {
+        pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scan.lineagePrune)
       }
     }
     const current = currentRuntimeWorktreeScanRepo(store, repo)
@@ -247,7 +247,7 @@ export class RuntimeManagedWorktreeQueries {
     })
     return {
       repoId: repo.id,
-      authoritative: scan.ok && !scan.superseded,
+      authoritative: scan.ok && !scan.superseded && scan.isCurrent(),
       source: scan.ok ? 'git' : 'metadata-fallback',
       workspaceMetadata: listed.workspaceMetadata,
       // Stamp the scan's starting generation: that is the catalog its rows describe.

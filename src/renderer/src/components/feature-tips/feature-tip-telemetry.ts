@@ -1,4 +1,5 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
+import { isChatUiLaunchTipTargeted } from '../../../../shared/feature-tips'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
@@ -70,32 +71,20 @@ export function trackChatUiFeatureTipAction(
   }
 }
 
-/** Unenrolled profiles retain the original announcement behavior; treatment arms show unless targeting excludes them. */
-export function isChatUiLaunchTipHeldOut(
-  settings: Pick<GlobalSettings, 'telemetry'> | null
-): boolean {
-  const telemetry = settings?.telemetry
-  const cohort = telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort
-  return (
-    cohort === 'control' ||
-    ((cohort === 'treatment' ||
-      cohort === 'treatment-live-switch' ||
-      cohort === 'treatment-swapped-buttons' ||
-      cohort === 'treatment-center') &&
-      (telemetry?.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' ||
-        telemetry?.chatUiLaunchTipTargeting?.mode === 'not-switched') &&
-      telemetry?.chatUiLaunchTipTargeting?.eligible !== true)
-  )
-}
-
+/** Nobody on Chat UI gets the tip; on the terminal, only profiles known to have switched back stay out. */
 export function shouldSuppressAutomaticChatUiLaunchTip(
   settings: Pick<GlobalSettings, 'telemetry' | 'agentDefaultSurface'> | null
 ): boolean {
-  const telemetry = settings?.telemetry
-  if (telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort) {
-    return isChatUiLaunchTipHeldOut(settings)
+  if (normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat') {
+    return true
   }
-  return normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat'
+  // Why: not-switched targeting recorded the profile on Chat UI, so on the terminal now it switched back.
+  const targeting = settings?.telemetry?.chatUiLaunchTipTargeting
+  return (
+    isChatUiLaunchTipTargeted(settings?.telemetry) &&
+    targeting?.mode === 'not-switched' &&
+    targeting.eligible !== true
+  )
 }
 
 export function trackChatUiFeatureTipExposure(

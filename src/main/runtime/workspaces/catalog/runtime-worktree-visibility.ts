@@ -4,7 +4,7 @@ import { readRuntimeWorktreeMetadata } from './runtime-listing-metadata'
 import {
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
-} from '../../../../shared/worktree/ownership'
+} from '../../../../shared/worktree/visibility/ownership'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -14,13 +14,13 @@ import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
-} from '../../../../shared/worktree/visibility-sources'
+} from '../../../../shared/worktree/visibility/visibility-sources'
 import {
   createRepoRowExecutionHostLookup,
   type RepoRowExecutionHostLookup
 } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 
 export function buildRuntimeWorktreeVisibilityMatchers(
   repos: readonly Repo[],

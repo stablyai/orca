@@ -3,8 +3,8 @@ import {
   retiredNamesAfterRefresh,
   selectRetiredNameRegistry,
   type RetiredNamesLoad
-} from '../../../shared/worktree/retired-name-cache'
-import type { RetiredNameRegistry } from '../../../shared/worktree/retired-name-registry'
+} from '../../../shared/worktree/naming/retired-name-cache'
+import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 
 /** Ask the host registry for spent names: deleted workspace paths may retain conversations. Refresh on every list mutation; creation stays ungated because the host also skips retired names. Shared caching rules live in retired-name-cache. */
 export function useRetiredWorktreeNames(

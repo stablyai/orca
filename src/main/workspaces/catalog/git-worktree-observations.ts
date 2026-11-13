@@ -15,12 +15,12 @@ import {
 import {
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
-} from '../../../shared/worktree/ownership'
+} from '../../../shared/worktree/visibility/ownership'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
-} from '../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../shared/worktree/configured-worktree-base-path'
+} from '../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../shared/worktree/paths/configured-worktree-base-path'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import {
   hostWorktreeTargetForRepo,
@@ -66,13 +66,10 @@ export function isAdoptableGitWorktree(git: GitWorktreeInfo): boolean {
   return !git.isBare && !git.prunable && !!git.branch
 }
 
-// Capture before Git yields; a locator reused during the scan must not inherit its predecessor's facts.
-export function captureGitWorktreeObservationCommit(store: ObservationStore, capturedRepo: Repo) {
+function captureObservationAuthority(store: ObservationStore, capturedRepo: Repo) {
   const repo = { ...capturedRepo }
   const hostId = getRepoExecutionHostId(repo)
   const generation = getLocalWorktreeScanGeneration(repo.id)
-  const pendingAtStart = snapshotPendingWorktreeRemovals()
-  const ownership = getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo)
   const runtimeKey = resolveWorktreeScanRuntime(store, repo).runtimeKey
   const setupKey = (current: Repo) => {
     const setup = getProjectHostSetupForRepo(store.getProjectHostSetups?.() ?? [], current)
@@ -86,17 +83,7 @@ export function captureGitWorktreeObservationCommit(store: ObservationStore, cap
     ])
   }
   const capturedSetupKey = setupKey(repo)
-  const atStart = new Map<string, Pick<WorktreeMeta, 'instanceId' | 'projectHostSetupId'>>()
-  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-  for (const [id, meta] of Object.entries(readAllWorktreeMetaForRepo(store, repo))) {
-    if (
-      getRepoIdFromWorktreeId(id) === repo.id &&
-      (meta.hostId ? meta.hostId === hostId : repoOwnerCount === 1)
-    ) {
-      atStart.set(id, { instanceId: meta.instanceId, projectHostSetupId: meta.projectHostSetupId })
-    }
-  }
-  const isCurrent = (): boolean => {
+  return (): boolean => {
     const owners = store
       .getRepos()
       .filter(
@@ -114,76 +101,118 @@ export function captureGitWorktreeObservationCommit(store: ObservationStore, cap
       resolveWorktreeScanRuntime(store, current).runtimeKey === runtimeKey
     )
   }
+}
+
+// Capture before Git yields; a locator reused during the scan must not inherit its predecessor's facts.
+export function captureGitWorktreeObservationCommit(store: ObservationStore, capturedRepo: Repo) {
+  const repo = { ...capturedRepo }
+  const hostId = getRepoExecutionHostId(repo)
+  const isCurrent = captureObservationAuthority(store, repo)
+  const ownership = getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo)
+  let pendingAtStart: ReturnType<typeof snapshotPendingWorktreeRemovals> | undefined =
+    snapshotPendingWorktreeRemovals()
+  const atStart = new Map<string, Pick<WorktreeMeta, 'instanceId' | 'projectHostSetupId'>>()
+  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+  for (const [id, meta] of Object.entries(readAllWorktreeMetaForRepo(store, repo))) {
+    if (
+      getRepoIdFromWorktreeId(id) === repo.id &&
+      (meta.hostId ? meta.hostId === hostId : repoOwnerCount === 1)
+    ) {
+      atStart.set(id, { instanceId: meta.instanceId, projectHostSetupId: meta.projectHostSetupId })
+    }
+  }
+  let released = false
+  let committed = false
+  const release = (): void => {
+    released = true
+    atStart.clear()
+    pendingAtStart = undefined
+  }
   return {
     isCurrent,
-    commit(gitWorktrees: readonly GitWorktreeInfo[]): void {
-      if (!isCurrent()) {
-        return
+    release,
+    // Deterministic reachability at the real capture, including invalidated but still-running Git.
+    _retainedEntryCountForTests: () => atStart.size + (pendingAtStart?.size ?? 0),
+    commit(gitWorktrees: readonly GitWorktreeInfo[]): boolean {
+      if (released || committed) {
+        return false
       }
-      const prepareAdoption = () => {
-        const settings = store.getSettings()
-        return {
-          settings,
-          knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-          worktreeVisibilitySourceMatcher: createWorktreeVisibilitySourceMatcher(
-            [repo.path, ...gitWorktrees.map((git) => git.path)],
-            resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
-            resolveConfiguredWorktreeBasePaths(repo)
-          )
+      committed = true
+      try {
+        if (!isCurrent()) {
+          return false
         }
-      }
-      let adoption: ReturnType<typeof prepareAdoption> | undefined
-      const currentMeta = readAllWorktreeMetaForRepo(store, repo)
-      const pendingNow = snapshotPendingWorktreeRemovals()
-      for (const git of withoutInFlightWorktreeCreates(repo.id, [...gitWorktrees])) {
-        const id = composeWorktreeId(repo.id, git.path)
-        if (pendingAtStart.has(id) || pendingNow.has(id)) {
-          continue
+        const prepareAdoption = () => {
+          const settings = store.getSettings()
+          return {
+            settings,
+            knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
+            worktreeVisibilitySourceMatcher: createWorktreeVisibilitySourceMatcher(
+              [repo.path, ...gitWorktrees.map((git) => git.path)],
+              resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
+              resolveConfiguredWorktreeBasePaths(repo)
+            )
+          }
         }
-        const captured = atStart.get(id)
-        const existing = currentMeta[id]
-        if (
-          captured
-            ? !existing ||
-              existing.instanceId !== captured.instanceId ||
-              existing.projectHostSetupId !== captured.projectHostSetupId
-            : !!existing
-        ) {
-          continue
-        }
-        if (
-          existing?.projectHostSetupId &&
-          existing.projectHostSetupId !== ownership.projectHostSetupId
-        ) {
-          continue
-        }
-        if (!existing) {
-          if (!isAdoptableGitWorktree(git)) {
+        let adoption: ReturnType<typeof prepareAdoption> | undefined
+        const currentMeta = readAllWorktreeMetaForRepo(store, repo)
+        const pendingNow = snapshotPendingWorktreeRemovals()
+        for (const git of withoutInFlightWorktreeCreates(repo.id, [...gitWorktrees])) {
+          if (released) {
+            return false
+          }
+          const id = composeWorktreeId(repo.id, git.path)
+          if (pendingAtStart?.has(id) || pendingNow.has(id)) {
             continue
           }
+          const captured = atStart.get(id)
+          const existing = currentMeta[id]
           if (
-            !toDetectedWorktree({
-              repo,
-              worktree: mergeWorktree(repo.id, git, undefined, repo.displayName),
-              meta: undefined,
-              ...(adoption ??= prepareAdoption())
-            }).visible
+            captured
+              ? !existing ||
+                existing.instanceId !== captured.instanceId ||
+                existing.projectHostSetupId !== captured.projectHostSetupId
+              : !!existing
           ) {
             continue
           }
+          if (
+            existing?.projectHostSetupId &&
+            existing.projectHostSetupId !== ownership.projectHostSetupId
+          ) {
+            continue
+          }
+          if (!existing) {
+            if (!isAdoptableGitWorktree(git)) {
+              continue
+            }
+            if (
+              !toDetectedWorktree({
+                repo,
+                worktree: mergeWorktree(repo.id, git, undefined, repo.displayName),
+                meta: undefined,
+                ...(adoption ??= prepareAdoption())
+              }).visible
+            ) {
+              continue
+            }
+          }
+          const observation = {
+            isBare: git.isBare,
+            isMainWorktree: git.isMainWorktree,
+            branch: git.branch,
+            prunable: git.prunable === true
+          }
+          if (!equalGitWorktreeObservations(existing?.gitWorktree, observation)) {
+            store.setWorktreeMeta(hostWorktreeTargetForRepo(id, repo), {
+              ...(!existing ? { ...ownership, lastActivityAt: Date.now() } : {}),
+              gitWorktree: observation
+            })
+          }
         }
-        const observation = {
-          isBare: git.isBare,
-          isMainWorktree: git.isMainWorktree,
-          branch: git.branch,
-          prunable: git.prunable === true
-        }
-        if (!equalGitWorktreeObservations(existing?.gitWorktree, observation)) {
-          store.setWorktreeMeta(hostWorktreeTargetForRepo(id, repo), {
-            ...(!existing ? { ...ownership, lastActivityAt: Date.now() } : {}),
-            gitWorktree: observation
-          })
-        }
+        return !released && isCurrent()
+      } finally {
+        release()
       }
     }
   }

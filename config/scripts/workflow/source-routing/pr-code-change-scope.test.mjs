@@ -5,10 +5,6 @@ import { describe, expect, it } from 'vitest'
 const projectDir = resolve(import.meta.dirname, '../../../..')
 
 describe('per-job path classification', () => {
-  // Mobile-only edits must run audits that lint mobile; skipped audits let #20702 duplicate imports break later merge refs.
-
-  // The ratchet: adding a tree to an audit command has to widen this trigger on its own.
-
   // Stale-base diffs exceed pipe buffer; one fd-0 read can exit 0 with no pairs, silently skipping every lane.
   it('classifies a path that arrives after the first pipe buffer', async () => {
     const filler = Array.from(

@@ -16,7 +16,7 @@ import {
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
   PluginsPanelActionParams
-} from '../../../../../shared/rpc-contract/plugins-params'
+} from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import {
   approvePluginFromCli,
   pluginCliApprovalRequest

@@ -3,11 +3,15 @@ import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
   isBlankBrowserPopupUrl,
-  normalizeBrowserPopupUrl
+  normalizeBrowserPopupUrl,
+  type NewBrowserTabPopupRequest
 } from '../../guest-lifecycle/popups/browser-popup-new-tab-intent'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
 import { trackBrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
-import type { BrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import type {
+  BrowserGuestInputGesture,
+  ObservedBrowserGuestGesture
+} from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import {
   registerBrowserRouteGuestPopup,
   releaseBrowserRouteGuestPopup
@@ -28,6 +32,12 @@ export type BrowserRouteGuestPopupDependencies = {
   getPartitionForSession: (session: Session) => string | null
   /** Route guests replace the manager's popup handler, so a denial is otherwise entirely silent. */
   reportBlockedPopup?: (input: { openerWebContentsId: number; url: string }) => void
+  /** The manager's new-tab policy; true when it answered the request. */
+  openNewTabPopup?: (
+    source: WebContents,
+    request: NewBrowserTabPopupRequest,
+    observed: ObservedBrowserGuestGesture | null
+  ) => boolean
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -170,15 +180,25 @@ export function createBrowserRouteGuestPopupController(input: {
     gesture: BrowserGuestInputGesture
   ): (details?: PopupRequest) => Electron.WindowOpenHandlerResponse {
     return (details) => {
-      const clicked = gesture.consume()
+      const observed = gesture.consume()
       const normalized = normalizeBrowserPopupUrl(details?.url)
+      const permitted = !disposed && normalized !== null && navigationAllowed(normalized)
       if (
-        disposed ||
-        !normalized ||
-        popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS ||
-        !navigationAllowed(normalized) ||
-        !clicked
+        permitted &&
+        input.dependencies.openNewTabPopup?.(
+          source,
+          {
+            url: details?.url ?? normalized,
+            frameName: details?.frameName ?? '',
+            disposition: details?.disposition ?? '',
+            postBody: details?.postBody
+          },
+          observed
+        )
       ) {
+        return { action: 'deny' }
+      }
+      if (!permitted || popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS || !observed) {
         if (!disposed) {
           reportBlockedPopup(details?.url)
         }
@@ -198,6 +218,7 @@ export function createBrowserRouteGuestPopupController(input: {
           opener: source,
           options,
           background: details?.disposition === 'background-tab',
+          showWhenAppActive: observed.byAgent,
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
           onCreated: (nativeOptions) => openPopup(nativeOptions, details?.url ?? normalized)
         })
@@ -209,6 +230,7 @@ export function createBrowserRouteGuestPopupController(input: {
           openPopup(
             {
               ...options,
+              showWhenAppActive: observed.byAgent,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:
                 !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)

@@ -1,4 +1,4 @@
-import { getWorktreeGitIdentityDisplay } from '../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../shared/worktree/row-display/git-identity-display'
 import { defineFixture } from '../component-fixtures/component-fixture'
 import { DetachedHeadBadge } from './DetachedHeadBadge'
 

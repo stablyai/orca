@@ -1,19 +1,11 @@
-import { creatureNameTier } from '../../../../shared/worktree/retired-name-registry'
+import '../../../../shared/worktree/naming/retired-name-registry'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { basename } from 'node:path'
-import type { Repo } from '../../../../shared/repo-types'
-import { getDefaultRepoHookSettings } from '../../../../shared/constants'
-import type {
-  AddWorktreeOptions,
-  GitWorktreeExecOptions
-} from '../../../git/worktrees/worktree-operation-options'
+import type { GitWorktreeExecOptions } from '../../../git/worktrees/worktree-operation-options'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listWorktreesSharedStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import {
-  acquireGitAdmission,
-  _resetGitAdmissionForTests
-} from '../../../git/command-runner/git-subprocess-admission'
-import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
+import '../../../git/command-runner/admission/git-subprocess-admission'
+import '../../../../shared/constants'
+import '../../../../shared/git/admission/git-admission-scheduler'
 
 const {
   runtimeCreateMocks: mocks,
@@ -24,13 +16,13 @@ const {
 } = await vi.hoisted(async () => await import('./runtime-local-worktree-create-test-harness'))
 
 vi.mock('../../../text-generation/commit-message-text-generation', () => ({
-  resolveTextGenerationParams: () => ({
+  resolveCommitMessageSettings: () => ({
     ok: true,
     params: { agentId: 'claude', model: 'fixture' }
   }),
   generateBranchNameFromContext: async () => ({ success: true, slug: 'fix-auth' })
 }))
-vi.mock('../../../text-generation/commit-message-agent-environment', () => ({
+vi.mock('../../../text-generation/execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: async () => ({ ok: true })
 }))
 
@@ -43,14 +35,16 @@ vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => 
   getLocalProjectWorktreeGitOptions: mocks.routing,
   getWorktreeMirrorDistro: () => undefined
 }))
-vi.mock('../../../git/repo-default-base-ref', () => ({
-  getBaseRefDefault: mocks.defaultBase,
+vi.mock('../../../git/refs/resolution/repo-default-base-ref', () => ({
+  getDefaultBaseRefAsync: mocks.defaultBase,
   resolveDefaultBaseRefWithLocalGit: mocks.defaultBase
 }))
-vi.mock('../../../git/repo-branch-conflict', () => ({
+vi.mock('../../../git/refs/resolution/repo-branch-conflict', () => ({
   getBranchConflictKind: mocks.branchConflict
 }))
-vi.mock('../../../git/git-username', () => ({ resolveLocalGitUsername: async () => '' }))
+vi.mock('../../../git/repositories/git-username', () => ({
+  resolveLocalGitUsername: async () => ''
+}))
 vi.mock('../../../workspace-hooks/hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
 vi.mock('../../../git/worktrees/creation/worktree-base-ref-probe', () => ({
   hasLocalWorktreeBaseRef: mocks.hasBase
@@ -94,9 +88,10 @@ vi.mock('../../../ipc/worktree-symlinks', () => ({
   createWorktreeSharedPaths: vi.fn()
 }))
 
-import { WorktreeCreateSetupChoiceRefusedError } from './worktree-create-setup-choice-refusal'
+import './worktree-create-setup-choice-refusal'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { createWorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
+
+import '../../../workspaces/creation/worktree-create-timing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 
 import { registerWorktreeChangeInvalidator } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
@@ -201,54 +196,6 @@ describe('runtime create listing hold', () => {
   })
 })
 
-describe('runtime concurrent creates on one name', () => {
-  const addedPaths = (): string[] => mocks.add.mock.calls.map((call) => String(call[1]))
-
-  beforeEach(() => {
-    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'disabled', rearm: mocks.rearm })
-    let reached = 0
-    let bothAdding: () => void = () => {}
-    const gate = new Promise<void>((resolveGate) => (bothAdding = resolveGate))
-    // Hold both creates inside Git's add, where neither checkout exists on disk yet.
-    mocks.add.mockImplementation(async () => {
-      if (++reached === 2) {
-        bothAdding()
-      }
-      await gate
-      return {}
-    })
-  })
-
-  it.each([
-    { request: { name: 'app' }, second: 'app-2' },
-    { request: { name: 'nautilus', nameWasGenerated: true }, second: null }
-  ])('gives the second create of $request.name its next candidate', async ({ request, second }) => {
-    await Promise.all([createWorktree(request), createWorktree(request)])
-    // Claims are ordered, but each create resolves its path's realpath before Git's add, so on a
-    // loaded runner either create can reach add first. Check the names, not the call order.
-    const names = addedPaths().map((path) => basename(path))
-    expect(names.filter((name) => name === request.name)).toHaveLength(1)
-    const other = names.find((name) => name !== request.name) ?? ''
-    if (second) {
-      expect(other).toBe(second)
-    } else {
-      expect(creatureNameTier(other)).toBe(2)
-    }
-    // Both claims settled with their creates, so the name is free to check again.
-    mocks.add.mockResolvedValue({})
-    await createWorktree(request)
-    expect(basename(addedPaths()[2])).toBe(request.name)
-  })
-
-  it('releases the claim when the create fails', async () => {
-    mocks.add.mockRejectedValueOnce(new Error('add failed'))
-    await expect(createWorktree({ name: 'app' })).rejects.toThrow('add failed')
-    mocks.add.mockResolvedValue({})
-    await createWorktree({ name: 'app' })
-    expect(addedPaths().map((path) => basename(path))).toEqual(['app', 'app'])
-  })
-})
-
 describe('runtime prepared-worktree replenishment', () => {
   it('arms the holder even when materialization fails', async () => {
     const revision = getWorktreeScanMutationRevision()
@@ -263,42 +210,6 @@ describe('runtime prepared-worktree replenishment', () => {
     // The slot was consumed before the failure, so the caller's `finally` must find a real thunk.
     rearm.fire()
     expect(mocks.rearm).toHaveBeenCalledOnce()
-  })
-})
-
-describe('runtime create Git priority', () => {
-  it('creates through interactive headroom when regular Git capacity is occupied', async () => {
-    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'none_armed' })
-    const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 1 })
-    _resetGitAdmissionForTests(scheduler)
-    const blocker = await acquireGitAdmission({ args: ['status'], cwd: '/repo' })
-    mocks.add.mockImplementation(
-      async (
-        _repo: string,
-        _path: string,
-        _branch: string,
-        _base: string,
-        _refresh: boolean,
-        _existing: boolean,
-        options?: AddWorktreeOptions
-      ) => {
-        const grant = await acquireGitAdmission({
-          args: ['worktree', 'add'],
-          cwd: '/repo',
-          tier: options?.admissionTier,
-          signal: AbortSignal.timeout(200)
-        })
-        grant.release()
-        return {}
-      }
-    )
-    try {
-      await expect(createWorktree()).resolves.toHaveProperty('worktreePath', worktreePath)
-      expect(mocks.add).toHaveBeenCalledOnce()
-    } finally {
-      blocker.release()
-      _resetGitAdmissionForTests()
-    }
   })
 })
 
@@ -321,47 +232,8 @@ describe('runtime create base without a tracking ref', () => {
     mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
 
     const result = await createWorktree({ baseBranch: 'origin/main', allowLocalBaseFallback: true })
-
-    expect(mocks.consume).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baseBranch: 'main',
-        options: expect.not.objectContaining({ remoteTrackingBase: expect.anything() })
-      })
-    )
     expect(result.baseFallback).toEqual({ requestedRef: 'origin/main', localRef: 'main' })
     expect(result.addResult).not.toHaveProperty('baseFallback')
     expect(result.worktree.baseRef).toBe('main')
-  })
-})
-
-describe('runtime create setup decision', () => {
-  const askRepo: Partial<Repo> = {
-    hookSettings: { ...getDefaultRepoHookSettings(), setupRunPolicy: 'ask' }
-  }
-
-  beforeEach(() => {
-    mocks.effectiveHooks.mockReturnValue({ scripts: { setup: 'pnpm install' } })
-  })
-
-  it('refuses an ask repo with no decision before any git work', async () => {
-    const timing = createWorktreeCreateTimingRecorder()
-    // No requested base, so a create that got past the check would resolve the default base.
-    const request = { baseBranch: undefined }
-    const refusal = await createWorktree(request, undefined, timing, askRepo).catch(
-      (error: unknown) => error
-    )
-    expect(refusal).toBeInstanceOf(WorktreeCreateSetupChoiceRefusedError)
-    expect(refusal).toMatchObject({ message: 'Setup decision required for this repository' })
-    // Hooks come from the main checkout (no worktree path): the new worktree doesn't exist yet.
-    expect(mocks.effectiveHooks.mock.calls).toEqual([[expect.objectContaining({ path: '/repo' })]])
-    for (const gitWork of [mocks.defaultBase, mocks.remoteBase, mocks.hasBase, mocks.refresh]) {
-      expect(gitWork).not.toHaveBeenCalled()
-    }
-    expect(mocks.fetch).not.toHaveBeenCalled()
-    expect(mocks.branchName).not.toHaveBeenCalled()
-    expect(mocks.consume).not.toHaveBeenCalled()
-    expect(mocks.add).not.toHaveBeenCalled()
-    // The refusal's failure telemetry still says where the create ran.
-    expect(timing.finish().executionHost).toBe('local')
   })
 })

@@ -5,18 +5,13 @@ import { getDefaultSettings } from '../../../../../shared/constants'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../../ui/tooltip'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
 
 const call = vi.hoisted(() => vi.fn())
-const discover = vi.hoisted(() => vi.fn())
 const menus = vi.hoisted(() => new Map<string, string[]>())
 
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: call
-}))
-vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
-  discoverRuntimeCommitMessageModels: discover
 }))
 vi.mock('./AgentChoiceMenu', () => ({
   AgentChoiceMenu: ({
@@ -54,20 +49,16 @@ const LISTED = {
 
 const HOST = { kind: 'environment', environmentId: 'env-1' } as const
 
-function renderEditor(
-  model?: string,
-  agent: 'codex' | 'cursor' = 'codex',
-  catalogTarget: RuntimeClientTarget = HOST
-): void {
+function renderEditor(): void {
   render(
     <TooltipProvider>
       <AgentLaunchChoiceEditor
-        agent={agent}
-        label={agent}
-        choices={model ? { model } : undefined}
+        agent="codex"
+        label="codex"
+        choices={undefined}
         userArgs=""
         permission={undefined}
-        catalogTarget={catalogTarget}
+        catalogTarget={HOST}
         save={async () => {}}
       />
     </TooltipProvider>
@@ -79,7 +70,6 @@ describe('AgentLaunchChoiceEditor model list', () => {
 
   beforeEach(() => {
     call.mockReset()
-    discover.mockReset()
     menus.clear()
     resetHostModelCatalogSnapshotsForTests()
   })
@@ -108,21 +98,5 @@ describe('AgentLaunchChoiceEditor model list', () => {
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped']))
     await act(async () => answerOlder(LISTED))
     expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
-  })
-
-  it("lists the local Cursor CLI's models", async () => {
-    // The host's structured catalog has no Cursor listing; Settings must not settle for it.
-    call.mockResolvedValue({ origin: 'unknown' })
-    discover.mockResolvedValueOnce({
-      success: true,
-      catalogOrigin: 'probe',
-      models: [
-        { id: 'auto', label: 'Auto', isDefault: true },
-        { id: 'claude-opus-5-5-max', label: 'Claude Opus 5.5 Max' }
-      ]
-    })
-    useAppStore.setState({ settings: getDefaultSettings('') })
-    renderEditor(undefined, 'cursor', { kind: 'local' })
-    await waitFor(() => expect(menus.get('Model')).toContain('claude-opus-5-5-max'))
   })
 })

@@ -8,7 +8,7 @@ import {
   resolveAiVaultResumeStartupShell
 } from './ai-vault-resume-shell'
 import { getAiVaultResumePlatform } from './ai-vault-resume-platform'
-import { toDetectedWorktree } from '../../../../../../shared/worktree/ownership'
+import { toDetectedWorktree } from '../../../../../../shared/worktree/visibility/ownership'
 
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
