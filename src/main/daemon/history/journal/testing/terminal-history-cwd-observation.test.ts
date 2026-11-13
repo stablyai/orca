@@ -30,9 +30,8 @@ import {
   removeReadFixtureRoots
 } from './terminal-history-read-fixture'
 
-const readback = vi.hoisted(() => ({
-  alter: null as ((path: string, bytes: Buffer) => Buffer) | null
-}))
+type ReadbackAlteration = (path: string, bytes: Buffer) => Buffer
+const readback = vi.hoisted((): { alter: ReadbackAlteration | null } => ({ alter: null }))
 // A final readback may find other bytes than its publication wrote.
 vi.mock('../../storage/terminal-history-file-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof FileReaderModule>()

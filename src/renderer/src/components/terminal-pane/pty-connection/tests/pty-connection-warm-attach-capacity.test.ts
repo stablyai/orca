@@ -85,19 +85,18 @@ beforeAll(async () => {
 })
 
 /** The real IPC transport, created with the options connect-pane-pty passes it. */
-function realIpcTransport(): { transport: MockTransport; live: () => LiveTransport } {
+async function realIpcTransport(): Promise<() => LiveTransport> {
+  const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
   let real: LiveTransport | undefined
-  const live = (): LiveTransport =>
-    (real ??= actualTransport.createIpcPtyTransport(transportOptions.at(-1) ?? {}))
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every member to the real transport.
-  const transport = new Proxy({} as MockTransport, {
-    get: (_, key) => {
-      const value: unknown = Reflect.get(live(), key)
-      return typeof value === 'function' ? value.bind(live()) : value
-    },
-    set: (_, key, value) => Reflect.set(live(), key, value)
-  })
-  return { transport, live }
+  vi.mocked(createIpcPtyTransport).mockImplementationOnce(
+    (options) => (real = actualTransport.createIpcPtyTransport(options))
+  )
+  return () => {
+    if (!real) {
+      throw new Error('connect-pane-pty created no IPC transport')
+    }
+    return real
+  }
 }
 
 /** Lets real socket I/O and the client's responsive deadlines advance under fake timers. */
@@ -199,8 +198,7 @@ describe('warm attach while deep-history capacity is full', () => {
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: SAVED_PTY }
     })
-    const { transport, live } = realIpcTransport()
-    transportQueue.push(transport)
+    const live = await realIpcTransport()
     const { connectPanePty } = await import('../connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
       '@/lib/agent-status/aggregation/worktree-agent-status'
