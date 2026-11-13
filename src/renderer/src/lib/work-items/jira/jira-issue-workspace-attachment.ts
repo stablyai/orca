@@ -7,6 +7,12 @@ import {
 import { getWorkspaceAttachments } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment, Worktree } from '../../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 
 export type JiraIssueWorkspaceAttachmentIndex = ReadonlyMap<string, readonly Worktree[]>
 export type LinkedJiraIssueRef = { key: string; siteId: string; sourceContext?: TaskSourceContext }
@@ -21,9 +27,20 @@ function jiraKey(item: WorkspaceAttachment): string | null {
     : (parseJiraIssueUrl(value)?.issueKey ?? null)
 }
 
-// Why host only: the login is matched by siteId below and the label is display-only; legacy links are local.
-function sameSource(item: WorkspaceAttachment, source?: TaskSourceContext | null): boolean {
-  return !source || (item.taskSourceContext?.hostId ?? 'local') === source.hostId
+// Why: links without a taskSourceContext (from `orca reference add`) come from their workspace's
+// runtime Jira; SSH workspaces have no Jira of their own, so they fall back to the desktop.
+function workspaceSourceHostId(workspace: Worktree): ExecutionHostId {
+  const host = parseExecutionHostId(getPaletteWorktreeExecutionHostId(workspace))
+  return host?.kind === 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
+}
+
+// Why host only: the login is matched by siteId below and the label is display-only.
+function sameSource(
+  item: WorkspaceAttachment,
+  source: TaskSourceContext | null | undefined,
+  fallbackHostId: ExecutionHostId
+): boolean {
+  return !source || (item.taskSourceContext?.hostId ?? fallbackHostId) === source.hostId
 }
 
 function itemSite(item: WorkspaceAttachment) {
@@ -40,9 +57,10 @@ function itemSite(item: WorkspaceAttachment) {
 export function jiraAttachmentMatchesIssue(
   item: WorkspaceAttachment,
   issue: JiraIssue,
-  source?: TaskSourceContext | null
+  source?: TaskSourceContext | null,
+  fallbackHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): boolean {
-  if (jiraKey(item) !== issue.key.toUpperCase() || !sameSource(item, source)) {
+  if (jiraKey(item) !== issue.key.toUpperCase() || !sameSource(item, source, fallbackHostId)) {
     return false
   }
   const { identity, parsed } = itemSite(item)
@@ -92,11 +110,12 @@ export function findJiraIssueWorkspaceAttachmentsInIndex(
   source?: TaskSourceContext | null
 ): readonly Worktree[] {
   return (index.get(issue.key.toUpperCase()) ?? [])
-    .filter((workspace) =>
-      getWorkspaceAttachments(workspace).some((item) =>
-        jiraAttachmentMatchesIssue(item, issue, source)
+    .filter((workspace) => {
+      const fallbackHostId = workspaceSourceHostId(workspace)
+      return getWorkspaceAttachments(workspace).some((item) =>
+        jiraAttachmentMatchesIssue(item, issue, source, fallbackHostId)
       )
-    )
+    })
     .toSorted((a, b) => b.lastActivityAt - a.lastActivityAt)
 }
 
@@ -111,9 +130,10 @@ export function collectLinkedJiraIssueRefs(
     if (workspace.isArchived) {
       continue
     }
+    const fallbackHostId = workspaceSourceHostId(workspace)
     for (const item of getWorkspaceAttachments(workspace)) {
       const key = jiraKey(item)
-      if (!key || !sameSource(item, source)) {
+      if (!key || !sameSource(item, source, fallbackHostId)) {
         continue
       }
       const { identity, parsed } = itemSite(item)
