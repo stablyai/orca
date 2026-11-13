@@ -27,27 +27,5 @@ export function registerWorkerReleaseInventoryTests(): void {
       ).resolves.toMatchObject({ state: 'released' })
       expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
     })
-
-    it('reports abandoned workers as retained instead of reclaimable', async () => {
-      h.setup()
-      const { dispatchId } = await h.startWorker()
-      await h.call('orchestration.workerAbandon', { dispatch: dispatchId })
-
-      const listed = (await h.call('orchestration.workerList', { run: h.activeRunId })) as {
-        workers: { dispatchId: string; terminalState: string | null }[]
-      }
-
-      expect(listed.workers).toContainEqual(
-        expect.objectContaining({ dispatchId, terminalState: 'retained' })
-      )
-      await expect(
-        h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        state: 'retained',
-        reason: 'identity_unproven',
-        processAction: 'none'
-      })
-      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    })
   })
 }

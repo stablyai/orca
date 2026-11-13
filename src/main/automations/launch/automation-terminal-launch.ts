@@ -286,17 +286,21 @@ async function resolveLocalExistingWorkspace(
   return selected
 }
 
-/** Reject reused pane handles whose PTY no longer belongs to this run. */
-export function runOwnHandle(
-  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
-  run: AutomationRun
-): string | null {
+export type RunOwnHandleRuntime = Pick<
+  OrcaRuntimeService,
+  'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle' | 'getPtyLivenessVerdict'
+>
+
+/** Reject reused pane handles whose PTY no longer belongs to this run, or has exited. */
+export function runOwnHandle(runtime: RunOwnHandleRuntime, run: AutomationRun): string | null {
   const handle = run.terminalPaneKey
     ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
     : null
+  // A closed pane's handle still resolves to its PTY for exit waits; only the exit verdict tells.
   return handle &&
     run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
+    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId &&
+    runtime.getPtyLivenessVerdict(run.terminalPtyId)?.status !== 'exited'
     ? handle
     : null
 }

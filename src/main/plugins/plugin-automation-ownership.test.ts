@@ -20,13 +20,16 @@ function automation(id: string, pluginKey: string, createdAt = 1): Automation {
 
 function automationStore(initial: Automation[]) {
   let stored = initial
-  const updateAutomation = vi.fn(async (id: string, updates: Partial<Automation>) => {
-    stored = stored.map((entry) => (entry.id === id ? { ...entry, ...updates } : entry))
-    return stored.find((entry) => entry.id === id)!
-  })
+  const updateAutomations = vi.fn(
+    async (entries: readonly { id: string; updates: Partial<Automation> }[]) => {
+      const patches = new Map(entries.map(({ id, updates }) => [id, updates]))
+      stored = stored.map((entry) => ({ ...entry, ...patches.get(entry.id) }))
+      return entries.map(({ id }) => ({ id, automation: stored.find((entry) => entry.id === id)! }))
+    }
+  )
   return {
-    source: { listAutomationsForScope: () => ({ automations: stored }), updateAutomation },
-    updateAutomation,
+    source: { listAutomationsForScope: () => ({ automations: stored }), updateAutomations },
+    updateAutomations,
     get: (id: string) => stored.find((entry) => entry.id === id)
   }
 }
@@ -55,11 +58,45 @@ describe('automations of a plugin the person took away', () => {
       await service.refresh()
       await settle()
       expect(service.getDiscovered()).toEqual([])
-      expect(store.updateAutomation).not.toHaveBeenCalled()
+      expect(store.updateAutomations).not.toHaveBeenCalled()
       expect(store.get('a-installed')).toMatchObject({ enabled: true })
     } finally {
       await service.dispose()
       await rm(userData, { recursive: true, force: true })
     }
+  })
+
+  it('pauses every automation of a disabled plugin in one write', async () => {
+    const store = automationStore([
+      automation('a-1', 'acme.gone'),
+      automation('a-2', 'acme.gone'),
+      automation('a-3', 'acme.gone'),
+      automation('b-1', 'acme.kept')
+    ])
+    installPluginAutomationOwnershipEnd(
+      {
+        options: {
+          isPluginSystemEnabled: () => true,
+          getDisabledPlugins: () => ['acme.gone']
+        },
+        whenReady: () => Promise.resolve(),
+        onChanged: () => () => {}
+      },
+      store.source
+    )
+    await settle()
+    expect(store.updateAutomations).toHaveBeenCalledTimes(1)
+    expect(store.updateAutomations.mock.calls[0][0].map(({ id }) => id)).toEqual([
+      'a-1',
+      'a-2',
+      'a-3'
+    ])
+    for (const id of ['a-1', 'a-2', 'a-3']) {
+      expect(store.get(id)).toMatchObject({
+        enabled: false,
+        createdBy: { endedAt: expect.any(Number) }
+      })
+    }
+    expect(store.get('b-1')).toMatchObject({ enabled: true })
   })
 })

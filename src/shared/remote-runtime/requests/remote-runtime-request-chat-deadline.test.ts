@@ -1,4 +1,4 @@
-import type { RuntimeEnvironmentCall } from '../../../main/ipc/runtime-environments/runtime-environment-call'
+import type { RuntimeEnvironmentCall } from '../../../main/ipc/runtime-environments/requests/runtime-environment-call'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection

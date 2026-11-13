@@ -2,7 +2,7 @@ import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import {
   createWorktreeVisibilitySourceMatcher,
   type WorktreeVisibilitySourceMatcher
-} from './worktree/visibility-sources'
+} from './worktree/visibility/visibility-sources'
 
 /** Restrict agent scratch matches to reserved repo-root paths; broader matches hide user worktrees (#9388). */
 const AGENT_SCRATCH_PATH_PREFIXES: readonly (readonly string[])[] = [

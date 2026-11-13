@@ -8,11 +8,8 @@ import {
   markRuntimeOwnedHiddenRendererPty
 } from '../delivery/pty-hidden-delivery-gate'
 import { attachingRendererViewPtys } from '../delivery/visibility-state'
-import type {
-  IPtyProvider,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 /** A view with no recorded owner may attach only to its named terminal; main owns fresh starts. */
 export async function attachViewWithoutOwner(

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { WorktreeBaseStatusEvent } from '../../../../shared/worktree/base-ref-drift-types'
+import type { WorktreeBaseStatusEvent } from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
 import type {

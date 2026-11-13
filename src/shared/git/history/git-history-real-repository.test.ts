@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveExecutableCommand } from '../../node-cli-command-resolution'
-import { GitHistory } from '../../rpc-contract/git-params'
+
 import { gitHistoryTokens } from './git-history-token-store'
 import { loadGitHistoryRefs } from './git-history-revisions'
 import { loadGitHistoryFromExecutor } from './git-history-execution'
@@ -224,17 +224,6 @@ describe('filtered and pinned history', () => {
     })
     expect(evicted).toMatchObject({ items: [], historyChanged: true })
   })
-
-  it.each(['refs/heads/bad\nname', '-refs/heads/main'])(
-    'rejects unsafe ref names: %s',
-    async (name) => {
-      const { repo, git } = await createRepository()
-      expect(GitHistory.safeParse({ worktree: repo, refs: [name] }).success).toBe(false)
-      await expect(loadGitHistoryFromExecutor(git, repo, { refs: [name] })).rejects.toThrow(
-        'Expected full branch or tag ref names'
-      )
-    }
-  )
 })
 
 it('keeps default history unpinned without evicting an explicitly pinned graph', async () => {

@@ -92,7 +92,8 @@ export function listStoredWorktreeRowsForRepo(
     readAllWorktreeMetaForHost(store, expectedHostId)
   )) {
     const parsed = splitWorktreeId(worktreeId)
-    if (!parsed || parsed.repoId !== repo.id) {
+    // An archived row has no checkout, so it must not come back as a live worktree.
+    if (!parsed || parsed.repoId !== repo.id || meta.archivedCheckout) {
       continue
     }
     // Same repo ids can belong to several hosts; degraded scans must not publish another owner's metadata.

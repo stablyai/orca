@@ -6,11 +6,8 @@ import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/s
 import type { Store } from '../../../persistence/loading-store/store'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type {
-  IPtyProvider,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { getPtySshConnectionId } from '../provider/registry'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'

@@ -8,7 +8,7 @@ import type { AgentStatusState } from '../../../shared/agent-status/contracts/ag
 import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
+import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { NativeChatPromptSubmission } from '../../../shared/native-chat/input/native-chat-prompt-observation'
 

@@ -50,4 +50,4 @@
 1 src/shared/new-workspace-dialog-repo.ts
 1 src/shared/sidebar-list/workspace-review-facts.ts
 1 src/shared/workspace-session/workspace-session-terminal-buffers.ts
-1 src/shared/worktree/ownership.ts
+1 src/shared/worktree/visibility/ownership.ts

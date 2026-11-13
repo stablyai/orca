@@ -4,25 +4,25 @@ import {
   type RuntimeEnvironmentSetupFailure,
   runtimeEnvironmentSetupFailure
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
-import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
+import { assertCrewSourceCurrent } from './subscriptions/runtime-environment-subscription-setup'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
-} from './runtime-environment-managed-tunnel'
+} from './managed-orcad/runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
-import { decodeRuntimeEnvironmentSubscriptionEvents } from './runtime-environment-subscription-events'
+import { withRuntimeUnreachableHint } from './requests/runtime-environment-unreachable-hint'
+import { decodeRuntimeEnvironmentSubscriptionEvents } from './subscriptions/runtime-environment-subscription-events'
 import {
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
-} from './runtime-environment-support-routing'
+} from './requests/runtime-environment-support-routing'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 

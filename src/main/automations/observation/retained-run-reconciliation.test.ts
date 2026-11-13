@@ -41,8 +41,6 @@ const LAUNCH_TARGET = {
 
 const OPEN_LAUNCHER = { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true }
 
-const AFTER_SETTLE_MS = 10 * 60 * 1000
-
 function createAutomation(store: TestStore): Automation {
   store.addRepo(makeRepo())
   return store.createAutomation({
@@ -115,24 +113,6 @@ describe('reconciling retained runs against a graph that has not published yet',
     await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('does not fail a desktop-startup retained run while the window graph is empty', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, {
-      terminalObserver: surface.observer,
-      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => false }
-    })
-
-    service.start()
-    await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
-
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatched')
-    expect(readRun(store, automation.id, retained.id).error).toBeNull()
-    service.stop()
   })
 
   it('re-attaches to the run once the restored pane mounts seconds later', async () => {

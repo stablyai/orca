@@ -10,7 +10,7 @@ import {
   readLocalClaudeCompactTrigger,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
-} from '../providers/claude-compact-completion'
+} from '../providers/claude/lifecycle/claude-compact-completion'
 import { isProcessExitSessionEnd, parseHookEnvelope } from '../hook-envelope'
 import { readFirstString } from '../interactive-tool'
 import type { AgentHookEventPayload } from '../listener-event'
@@ -19,19 +19,19 @@ import type { HookListenerState } from '../listener-state'
 import { extractPromptText } from '../prompt-fields'
 import { normalizeProviderEvent } from '../provider-dispatch'
 import { hasExplicitUserPrompt } from '../provider-event-routing'
-import { hasExplicitAmpPrompt } from '../providers/amp-events'
+import { hasExplicitAmpPrompt } from '../providers/amp/amp-events'
 import {
   isOpenCodeSharedServerPost,
   resolveOpenCodeSharedServerEnvelope,
   suppressOpenCodeSharedServerPost,
   trackOpenCodePaneLaunchToken
 } from '../opencode-session-registry'
-import { claudeRowHasUnlistedLiveWork } from '../providers/claude-pane-hold-evidence'
+import { claudeRowHasUnlistedLiveWork } from '../providers/claude/lifecycle/claude-pane-hold-evidence'
 import { readString } from '../tool-input-preview'
 import { readClaudeBatchSettledRequests } from '../claude-settled-permission-requests'
 import { withClaudeToolRequestId } from '../claude-tool-request-identity'
 import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane-provider-session'
-import { routeJcodeHelperHook } from '../providers/jcode-helper-permission-wait'
+import { routeJcodeHelperHook } from '../providers/jcode/jcode-helper-permission-wait'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 
 export function normalizeHookPayload(

@@ -8,12 +8,12 @@ import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
-} from './runtime-environment-call-failure'
+} from './requests/runtime-environment-call-failure'
 import { desktopChatCreationHistory } from '../../runtime/client/navigation/desktop-chat-creation-history'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { isRuntimeEnvironmentManuallyDisconnected } from './connectivity/runtime-environment-manual-disconnect'
+import { callRuntimeEnvironment } from './requests/runtime-environment-transport-routing'
 import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
 import {
   observeWslOrcadHostResponse,

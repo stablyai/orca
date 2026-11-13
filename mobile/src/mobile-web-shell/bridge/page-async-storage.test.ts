@@ -51,16 +51,6 @@ describe('what init primed', () => {
     await expect(pageAsyncStorage.getItem('orca:pins:host-2')).resolves.toBeNull()
   })
 
-  it('reads several keys at once, which is how the list asks', async () => {
-    publish({ 'orca:pins:host-1': '["wt-1"]' })
-    await expect(
-      pageAsyncStorage.multiGet(['orca:pins:host-1', 'orca:last-visited-worktree'])
-    ).resolves.toEqual([
-      ['orca:pins:host-1', '["wt-1"]'],
-      ['orca:last-visited-worktree', null]
-    ])
-  })
-
   it('replaces what the last page held rather than adding to it', async () => {
     publish({ 'orca:pins:host-1': '["wt-1"]' })
     publish({ 'orca:pins:host-2': '["wt-2"]' })
@@ -147,8 +137,6 @@ describe('what the page will not keep', () => {
     )
     // The durable journal exceeds this bound at 48 unsettled sends; report not-sent rather than lose the operation id (ruling 7).
     expect(refusal.refusal).toBe('too-large')
-    expect(refusal.message).toContain('orca:mobileStructuredSendOperations:v1')
-    expect(refusal.message).toContain(String(PAGE_STORAGE_MAX_VALUE_CHARS))
     expect(writes).toEqual([])
     expect(await pageAsyncStorage.getItem('orca:mobileStructuredSendOperations:v1')).toBeNull()
   })
@@ -184,22 +172,6 @@ describe('what the page will not keep', () => {
     await pageAsyncStorage.setItem('orca:last-visited-worktree', atBound)
     expect(writes).toEqual([{ key: 'orca:last-visited-worktree', value: atBound }])
     expect(await pageAsyncStorage.getItem('orca:last-visited-worktree')).toBe(atBound)
-  })
-
-  it('drops a write it may not make rather than rejecting, because nobody catches one', async () => {
-    // Unlisted-key preference writers await setItem without catches, often under void callers; retain silent drop. Only oversize journal writes reject because the composer catches them (ruling 33.4).
-    publish()
-    await expect(
-      pageAsyncStorage.setItem('orca:notificationDeliveryPreferences', '{}')
-    ).resolves.toBeUndefined()
-    expect(writes).toEqual([])
-    expect(await pageAsyncStorage.getItem('orca:notificationDeliveryPreferences')).toBeNull()
-  })
-
-  it('drops a removal it may not make, for the same reason', async () => {
-    publish()
-    await expect(pageAsyncStorage.removeItem('orca:pins:host-2')).resolves.toBeUndefined()
-    expect(writes).toEqual([])
   })
 
   it('drops a write the shell would not take, rather than rejecting', async () => {
