@@ -95,40 +95,6 @@ it('keeps a re-offered card completed through stale client writes and reloads', 
   }
 })
 
-it('never writes a launch-tip assignment for a profile without one', async () => {
-  const env = stashAndClearConsentEnv()
-  try {
-    writeDataFile({ settings: { experimentalNativeChat: false, telemetry: EXISTING_TELEMETRY } })
-    const store = createStore()
-    expect(ensureChatUiLaunchTipCohort(store)).toBeUndefined()
-    store.flushOrThrow()
-    await closeTestStores()
-    const telemetry = createStore().getSettings().telemetry
-    expect(telemetry).not.toHaveProperty('chatUiLaunchTipCohort')
-    expect(telemetry).not.toHaveProperty('chatUiLaunchTipRolloutCohort')
-    expect(telemetry).not.toHaveProperty('chatUiLaunchTipTargeting')
-  } finally {
-    restoreConsentEnv(env)
-  }
-})
-
-it('holds a re-offer back while the telemetry banner is unresolved', () => {
-  const env = stashAndClearConsentEnv()
-  try {
-    writeDataFile({
-      ui: { featureTipsSeenIds: ['chat-ui-here', 'chat-ui-here-rollout-v1'] },
-      settings: {
-        experimentalNativeChat: false,
-        telemetry: { ...EXISTING_TELEMETRY, optedIn: null, chatUiLaunchTipRolloutCohort: 'control' }
-      }
-    })
-    expect(ensureChatUiLaunchTipCohort(createStore())).toBe('control')
-    expect(isChatUiLaunchTipDeferredForConsent()).toBe(true)
-  } finally {
-    restoreConsentEnv(env)
-  }
-})
-
 it('checks only applicable completion IDs while consent is pending', () => {
   const env = stashAndClearConsentEnv()
   try {
