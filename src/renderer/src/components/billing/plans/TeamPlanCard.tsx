@@ -2,8 +2,6 @@ import { ExternalLink, Lock, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
-import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'
-import { billingPortalLink } from '../billing-link'
 import type { PlanBillingNotice } from '../PlanBillingSection'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -24,7 +22,6 @@ export function TeamPlanCard({
   notice,
   hideManage,
   onCheckout,
-  checkoutLink,
   onManage
 }: {
   team: TeamPlanModel
@@ -37,8 +34,6 @@ export function TeamPlanCard({
   /** A payment banner already offers the same Portal action. */
   hideManage: boolean
   onCheckout: () => void
-  /** "Copy link": mints the Checkout URL the button opens (absent: a plain button). */
-  checkoutLink?: () => Promise<string | null>
   onManage: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -131,41 +126,20 @@ export function TeamPlanCard({
       </p>
     )
   } else if (mode === 'choose') {
-    const checkoutLabel = (
-      <>
-        {busy ? <LoadingSpinner /> : null}
-        {busy
-          ? t('auto.components.billing.plans.waiting', 'Waiting for checkout…')
-          : t('auto.components.billing.plans.checkout', 'Continue to checkout')}
-        {busy ? null : <ExternalLink />}
-      </>
-    )
     footer = (
       <>
-        {checkoutLink ? (
-          <OpenExternalSplitButton
-            groupClassName="w-full"
-            className="flex-1"
-            aria-disabled={busy || undefined}
-            link={checkoutLink}
-            onClick={() => {
-              if (!busy) {
-                onCheckout()
-              }
-            }}
-          >
-            {checkoutLabel}
-          </OpenExternalSplitButton>
-        ) : (
-          <Button
-            type="button"
-            className="w-full"
-            aria-disabled={busy || undefined}
-            onClick={busy ? undefined : onCheckout}
-          >
-            {checkoutLabel}
-          </Button>
-        )}
+        <Button
+          type="button"
+          className="w-full"
+          aria-disabled={busy || undefined}
+          onClick={busy ? undefined : onCheckout}
+        >
+          {busy ? <LoadingSpinner /> : null}
+          {busy
+            ? t('auto.components.billing.plans.waiting', 'Waiting for checkout…')
+            : t('auto.components.billing.plans.checkout', 'Continue to checkout')}
+          {busy ? null : <ExternalLink />}
+        </Button>
         {notice?.kind === 'error' ? (
           <InlineError title={notice.text} />
         ) : (
@@ -189,21 +163,16 @@ export function TeamPlanCard({
       </p>
     ) : (
       <>
-        <OpenExternalSplitButton
+        <Button
+          type="button"
           variant="outline"
-          groupClassName="w-full"
-          className="flex-1"
+          className="w-full"
           aria-disabled={busy || undefined}
-          link={billingPortalLink}
-          onClick={() => {
-            if (!busy) {
-              onManage()
-            }
-          }}
+          onClick={busy ? undefined : onManage}
         >
           {t('auto.components.billing.manageBilling', 'Manage billing')}
           <ExternalLink />
-        </OpenExternalSplitButton>
+        </Button>
         {notice?.kind === 'error' ? (
           <InlineError title={notice.text} />
         ) : (

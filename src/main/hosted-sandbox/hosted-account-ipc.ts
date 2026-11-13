@@ -23,7 +23,6 @@ const SETUP_SESSION_ID = /^cs_[A-Za-z0-9_-]{22}$/
 export const HOSTED_ACCOUNT_CHANNELS = [
   CH.getConfig,
   CH.connectGitHub,
-  CH.gitHubInstallLink,
   CH.getRepoAccess,
   CH.listGitHubRepositories,
   CH.createFromGitHub,
@@ -102,15 +101,6 @@ export function registerHostedAccountHandlers(
     try {
       await shell.openExternal(await mintInstallUrl(args))
       return { ok: true, value: null }
-    } catch (error) {
-      return failure(error)
-    }
-  })
-
-  // "Copy link": the same install page, minted the same way, for another browser or profile.
-  ipcMain.handle(CH.gitHubInstallLink, async (_event, args?: RepoArgs) => {
-    try {
-      return { ok: true, value: await mintInstallUrl(args) }
     } catch (error) {
       return failure(error)
     }

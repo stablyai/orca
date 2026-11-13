@@ -45,7 +45,6 @@ import type {
 } from '../../shared/orca-profiles'
 import type {
   OrcaBillingCheckoutArgs,
-  OrcaBillingLinkResult,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
@@ -130,10 +129,6 @@ export type OrcaProfileApi = {
   cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
-  /** "Copy link": a fresh Customer Portal URL, minted but not opened. */
-  billingPortalLink: () => Promise<OrcaBillingLinkResult>
-  /** "Copy link": the Checkout URL billingOpenCheckout would open, minted but not opened. */
-  billingCheckoutLink: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingLinkResult>
   /** The last 30 days of sandbox hours (breakdowns for owners and admins only). */
   billingUsageHistory: (args: {
     utcOffsetMinutes: number
