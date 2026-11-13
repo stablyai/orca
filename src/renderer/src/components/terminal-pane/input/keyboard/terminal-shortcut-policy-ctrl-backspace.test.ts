@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { isLocalWindowsCmdPrompt } from './terminal-local-windows-cmd-conpty'
+import { describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/headless'
+import { useAppStore } from '@/store'
+import {
+  registerPtySerializer,
+  registerPtyTitleSource
+} from '../../snapshots/pty-buffer-serializer'
+import {
+  isLocalWindowsCmdPrompt,
+  readLocalWindowsCmdPromptPane
+} from './terminal-local-windows-cmd-conpty'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 
 const CTRL_W = '\x17'
@@ -86,6 +95,7 @@ describe('local Windows cmd prompt detection', () => {
   it('accepts cmd idle titles from any cmd.exe path', () => {
     expect(cmdPrompt({ tab: 'cmd.exe', title: 'c:\\windows\\system32\\CMD.EXE' })).toBe(true)
     expect(cmdPrompt({ tab: 'cmd.exe', title: 'D:\\tools\\cmd.exe ' })).toBe(true)
+    expect(cmdPrompt({ tab: 'cmd.exe', title: 'D:\\tools - local\\cmd.exe' })).toBe(true)
     expect(cmdPrompt({ tab: 'cmd.exe', title: 'Administrator: C:\\Windows\\cmd.exe' })).toBe(true)
   })
 
@@ -97,6 +107,10 @@ describe('local Windows cmd prompt detection', () => {
     expect(cmdPrompt({ tab: 'cmd.exe', title: 'neil@host: ~' })).toBe(false)
     expect(cmdPrompt({ tab: 'cmd.exe', title: 'MINGW64:/c/repo' })).toBe(false)
     expect(cmdPrompt({ tab: 'cmd.exe', title: 'notcmd.exe' })).toBe(false)
+    expect(cmdPrompt({ tab: 'cmd.exe', title: `${CMD_IDLE_TITLE} - python -i cmd.exe` })).toBe(
+      false
+    )
+    expect(cmdPrompt({ tab: 'cmd.exe', title: 'Custom dashboard cmd.exe' })).toBe(false)
   })
 
   it('rejects cmd outside a local ConPTY pane', () => {
@@ -106,6 +120,74 @@ describe('local Windows cmd prompt detection', () => {
 })
 
 describe('Ctrl+Backspace bytes', () => {
+  it('uses the current PTY title and launch identity at each keypress, including replacement owners', async () => {
+    const previousState = useAppStore.getState()
+    vi.stubGlobal('window', {
+      api: {
+        pty: {
+          onClearBufferRequest: () => () => {},
+          onResetInputModesRequest: () => () => {},
+          onSerializeBufferRequest: () => () => {}
+        }
+      }
+    })
+    const terminal = new Terminal({ allowProposedApi: true })
+    const unregister = registerPtySerializer('cmd-pty', () => null)
+    const unregisterTitle = registerPtyTitleSource('cmd-pty', (handler) =>
+      terminal.onTitleChange(handler)
+    )
+    const write = (title: string) =>
+      new Promise<void>((resolve) => terminal.write(`\x1b]0;${title}\x07`, resolve))
+    const read = () =>
+      resolveBackspace('win32', 'ctrlKey', () =>
+        readLocalWindowsCmdPromptPane({
+          isWindows: true,
+          tabId: 'cmd-tab',
+          pane: { id: 3, leafId: '00000003-0000-4000-8000-000000000000' },
+          transport: {
+            getPtyId: () => 'cmd-pty',
+            getLocalSessionMetadata: () => ({ shellOverride: 'cmd.exe' })
+          },
+          isLocalWindowsConpty: () => true
+        })
+      )
+    try {
+      useAppStore.setState({
+        runtimePaneTitlesByTabId: { 'cmd-tab': { 2: CMD_IDLE_TITLE, 3: CMD_IDLE_TITLE } },
+        agentStatusByPaneKey: {},
+        paneForegroundAgentByPaneKey: {},
+        agentLaunchConfigByPaneKey: {}
+      })
+      await write(CMD_IDLE_TITLE)
+      expect(read()).toEqual({ type: 'sendInput', data: '\b' })
+      await write(`${CMD_IDLE_TITLE} - python -i cmd.exe`)
+      expect(read()).toEqual({ type: 'sendInput', data: '\x17' })
+      await write(CMD_IDLE_TITLE)
+      useAppStore
+        .getState()
+        .registerAgentLaunchConfig(
+          'cmd-tab:00000003-0000-4000-8000-000000000000',
+          { agentArgs: '', agentEnv: {} },
+          { agentType: 'claude', tabId: 'cmd-tab', leafId: '00000003-0000-4000-8000-000000000000' }
+        )
+      expect(read()).toEqual({ type: 'sendInput', data: '\x17' })
+      useAppStore.getState().clearAgentLaunchConfig('cmd-tab:00000003-0000-4000-8000-000000000000')
+      expect(read()).toEqual({ type: 'sendInput', data: '\b' })
+      const unregisterReplacement = registerPtySerializer('cmd-pty', () => null)
+      try {
+        expect(read()).toEqual({ type: 'sendInput', data: '\x17' })
+      } finally {
+        unregisterReplacement()
+      }
+    } finally {
+      unregisterTitle()
+      unregister()
+      terminal.dispose()
+      useAppStore.setState(previousState, true)
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('sends BS only for a local Windows cmd prompt', () => {
     expect(resolveBackspace('win32', 'ctrlKey', () => true)).toEqual({
       type: 'sendInput',

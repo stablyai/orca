@@ -47,9 +47,6 @@ export function resolvePreviewShortcutAction(
     () => hostPlatform === 'win32',
     // Preserve terminal-first tab.close aliases such as Ctrl+W word-kill, matching the pane.
     normalizeTerminalShortcutPolicy(context.terminalShortcutPolicy),
-    () => context.terminalInput?.ctrlEnterCsiU === true,
-    undefined,
-    undefined,
-    () => context.terminalInput?.localCmdPrompt === true
+    () => context.terminalInput?.ctrlEnterCsiU === true
   )
 }

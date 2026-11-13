@@ -106,6 +106,12 @@ export function hasPtySerializer(ptyId: string): boolean {
   return serializersByPtyId.has(ptyId)
 }
 
+/** Input authority needs the current PTY owner's live title, never replayed numeric pane slots. */
+export function readLivePtyTitle(ptyId: string): string | null {
+  const entry = lastTitleByPtyId.get(ptyId)
+  return entry && serializersByPtyId.get(ptyId)?.owner === entry.owner ? entry.title : null
+}
+
 function ensureSerializerListener(): void {
   if (listenerAttached) {
     return

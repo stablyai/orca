@@ -299,7 +299,6 @@ function isDashboardTerminalInput(value: unknown): boolean {
       (typeof input.windowsInputRecordPasteNewline === 'string' &&
         WINDOWS_INPUT_RECORD_PASTE_NEWLINES.has(input.windowsInputRecordPasteNewline))) &&
     typeof input.ctrlEnterCsiU === 'boolean' &&
-    (input.localCmdPrompt === undefined || input.localCmdPrompt === true) &&
     typeof input.kittyKeyboardAdvertised === 'boolean'
   )
 }

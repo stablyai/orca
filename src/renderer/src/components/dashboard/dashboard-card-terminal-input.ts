@@ -13,8 +13,6 @@ import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-p
 import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/input/keyboard/terminal-ctrl-enter'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/input/paste/terminal-agent-paste-bracketing'
-import { isLocalWindowsCmdPrompt } from '@/components/terminal-pane/input/keyboard/terminal-local-windows-cmd-conpty'
-import { paneHasKnownAgentIdentity } from '@/components/terminal-pane/pty-connection/agent-identity/pane-known-agent-identity'
 
 export type DashboardCardTerminalInputState = Pick<
   AppState,
@@ -73,8 +71,6 @@ export function resolveDashboardCardTerminalInput(
     /** Worktree path — decides WSL vs native Windows for a local pty. */
     cwd: string
     shellOverride: string | null | undefined
-    /** This pane's live terminal title; cmd's idle title marks its own prompt. */
-    paneTitle: string | null | undefined
     launchAgent: TuiAgent | null | undefined
     clientPlatform: NodeJS.Platform
     userAgent: string
@@ -124,17 +120,9 @@ export function resolveDashboardCardTerminalInput(
     foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
     entry: state.agentStatusByPaneKey[args.paneKey]
   })
-  const localWindowsConpty = isLocalNativeWindowsConpty(windowsPtyContext)
-  const localCmdPrompt = isLocalWindowsCmdPrompt({
-    tabShellOverride: args.shellOverride,
-    hostTerminalWindowsShell: state.settings?.terminalWindowsShell,
-    paneTitle: args.paneTitle,
-    paneHasAgent: () => paneHasKnownAgentIdentity(state, args.paneKey),
-    isLocalWindowsConpty: () => localWindowsConpty
-  })
   return {
     hostPlatform,
-    localWindowsConpty,
+    localWindowsConpty: isLocalNativeWindowsConpty(windowsPtyContext),
     ...(args.osRelease === undefined ? {} : { osRelease: args.osRelease }),
     windowsShiftEnterEncoding: resolveWindowsShiftEnterEncodingForPane(state, args.paneKey),
     ...(protectedPaste?.forceBracketedPasteForMultiline
@@ -144,7 +132,6 @@ export function resolveDashboardCardTerminalInput(
       ? { windowsInputRecordPasteNewline: protectedPaste.windowsInputRecordNewline }
       : {}),
     ctrlEnterCsiU: hasCtrlEnterCsiUAuthorityForPane(state, args.paneKey),
-    ...(localCmdPrompt ? { localCmdPrompt: true as const } : {}),
     kittyKeyboardAdvertised: !shouldDisableKittyKeyboardForTerminal({
       ...windowsPtyContext,
       // Use launch identity for Grok’s ConPTY kitty exception, matching its pane.

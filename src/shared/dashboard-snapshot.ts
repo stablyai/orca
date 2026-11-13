@@ -153,8 +153,6 @@ export type DashboardCardTerminalInput = {
   windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
   /** Trusted query-only consumer accepts Ctrl+Enter CSI-u without active flags. */
   ctrlEnterCsiU: boolean
-  /** Local ConPTY cmd with no agent, where Ctrl+Backspace sends BS instead of Ctrl+W. */
-  localCmdPrompt?: true
   /** False withholds the kitty (CSI-u) advertisement, as ConPTY panes do. */
   kittyKeyboardAdvertised: boolean
 }

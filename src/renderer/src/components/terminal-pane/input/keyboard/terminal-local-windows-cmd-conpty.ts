@@ -3,9 +3,11 @@ import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pa
 import { resolveHostAgentStartupShell } from '../../../../../../shared/windows-terminal-shell'
 import { paneHasKnownAgentIdentity } from '../../pty-connection/agent-identity/pane-known-agent-identity'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
+import { readLivePtyTitle } from '../../snapshots/pty-buffer-serializer'
 
-// Why: cmd titles itself with its own path at the prompt and appends " - <command>" while a child runs.
-const CMD_IDLE_TITLE = /(?:^|[\\/\s])cmd\.exe$/i
+// Only an unquoted local cmd path (or basename), optionally prefixed by English Administrator; unknown forms retain Ctrl+W.
+const CMD_IDLE_TITLE =
+  /^(?:Administrator:\s*)?(?:[a-z]:[\\/](?:[^<>:"|?*\\/\r\n]+[\\/])*)?cmd\.exe$/i
 
 function isCmdIdleTitle(title: string | null | undefined): boolean {
   return CMD_IDLE_TITLE.test(title?.trim() ?? '')
@@ -39,20 +41,21 @@ export function readLocalWindowsCmdPromptPane(args: {
   isWindows: boolean
   tabId: string
   pane: { id: number; leafId: string } | undefined
-  transport: Pick<PtyTransport, 'getLocalSessionMetadata'> | undefined
+  transport: Pick<PtyTransport, 'getLocalSessionMetadata' | 'getPtyId'> | undefined
   isLocalWindowsConpty: () => boolean
 }): boolean {
   // Why: null metadata means SSH or no local session, neither of which is a local ConPTY cmd.
   const sessionMetadata = args.isWindows ? args.transport?.getLocalSessionMetadata?.() : null
+  const ptyId = sessionMetadata ? args.transport?.getPtyId() : null
   const pane = args.pane
-  if (!pane || !sessionMetadata) {
+  if (!pane || !sessionMetadata || !ptyId) {
     return false
   }
   const state = useAppStore.getState()
   return isLocalWindowsCmdPrompt({
     tabShellOverride: sessionMetadata.shellOverride,
     hostTerminalWindowsShell: state.settings?.terminalWindowsShell,
-    paneTitle: state.runtimePaneTitlesByTabId[args.tabId]?.[pane.id],
+    paneTitle: readLivePtyTitle(ptyId),
     paneHasAgent: () => paneHasKnownAgentIdentity(state, makePaneKey(args.tabId, pane.leafId)),
     isLocalWindowsConpty: args.isLocalWindowsConpty
   })
