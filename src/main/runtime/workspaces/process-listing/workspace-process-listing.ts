@@ -60,7 +60,7 @@ import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
-import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
+import { prWatchRuntimeWasStopped, startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
@@ -315,7 +315,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
-    // Re-arms watches a chat-runtime teardown stopped; a no-op while they run.
-    this.startPullRequestWatches()
+    // Re-arms watches a chat-runtime teardown stopped; the first run starts after the host serves.
+    if (prWatchRuntimeWasStopped()) {
+      this.startPullRequestWatches()
+    }
   }
 }

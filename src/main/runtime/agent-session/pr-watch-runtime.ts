@@ -74,6 +74,11 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
   return starting
 }
 
+/** Whether a chat-runtime teardown has stopped watches; hosts start the first run themselves. */
+export function prWatchRuntimeWasStopped(): boolean {
+  return generation > 0
+}
+
 /** Before the journal database closes; the next start rebuilds from the saved tables. */
 export function stopPRWatchRuntime(): void {
   generation += 1
