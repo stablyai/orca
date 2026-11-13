@@ -274,6 +274,18 @@ CREATE TABLE IF NOT EXISTS relay_edge_fence_pending (
   PRIMARY KEY (user_id, relay_host_id)
 );
 
+-- Region each relay edge host was last moved or kept there for (edge-relay.ts), read by the
+-- evacuation sweep for hosts whose assignment row names the edge. Written only by edge moves, and
+-- deleted when the host is placed off the edge. No CHECK on region: a new region must not need a
+-- constraint swap before edge moves can record it (readers validate it).
+CREATE TABLE IF NOT EXISTS relay_edge_host_regions (
+  user_id TEXT NOT NULL,
+  relay_host_id TEXT NOT NULL,
+  region TEXT NOT NULL,
+  recorded_at BIGINT NOT NULL,
+  PRIMARY KEY (user_id, relay_host_id)
+);
+
 CREATE TABLE IF NOT EXISTS relay_region_decisions (
   user_id TEXT NOT NULL, relay_host_id TEXT NOT NULL,
   generation BIGINT NOT NULL, expires_at BIGINT NOT NULL,

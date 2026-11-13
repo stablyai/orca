@@ -62,7 +62,7 @@ export function parseIpCountryTable(text: string): IpCountryLookup {
     if (isIPv4(first) && isIPv4(last)) {
       v4.push([ipv4Number(first), ipv4Number(last), index])
     } else if (isIPv6(first) && isIPv6(last)) {
-      v6.push([ipv6Prefix64(first), ipv6Prefix64(last), index])
+      v6.push([ipv6Prefix64(ipv6Groups(first)), ipv6Prefix64(ipv6Groups(last)), index])
     }
   }
   if (v4.length + v6.length === 0) throw new Error('ip_country_table_empty')
@@ -76,13 +76,21 @@ export function parseIpCountryTable(text: string): IpCountryLookup {
   const v6Code = Uint16Array.from(v6, (range) => range[2])
   return {
     country(ip) {
-      const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip)?.[1]
-      if (isIPv4(mapped ?? ip)) {
-        const at = rangeAt(v4First, v4Last, ipv4Number(mapped ?? ip))
+      let v4 = isIPv4(ip) ? ipv4Number(ip) : undefined
+      let groups: number[] | undefined
+      if (v4 === undefined) {
+        if (!isIPv6(ip)) return undefined
+        groups = ipv6Groups(ip)
+        // IPv4-mapped (::ffff:a.b.c.d, or its hex spelling ::ffff:abcd:efgh) is the IPv4 address.
+        if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+          v4 = groups[6]! * 0x1_0000 + groups[7]!
+        }
+      }
+      if (v4 !== undefined) {
+        const at = rangeAt(v4First, v4Last, v4)
         return at === undefined ? undefined : codes[v4Code[at]!]
       }
-      if (!isIPv6(ip)) return undefined
-      const at = rangeAt(v6First, v6Last, ipv6Prefix64(ip))
+      const at = rangeAt(v6First, v6Last, ipv6Prefix64(groups!))
       return at === undefined ? undefined : codes[v6Code[at]!]
     }
   }
@@ -113,18 +121,22 @@ function ipv4Number(ip: string): number {
   return ip.split('.').reduce((value, octet) => value * 256 + Number(octet), 0)
 }
 
-// The first 64 bits of an IPv6 address (a trailing dotted IPv4 part lies in the last 32).
-function ipv6Prefix64(ip: string): bigint {
+// The eight 16-bit groups of a valid IPv6 address (a trailing dotted IPv4 part is the last two).
+function ipv6Groups(ip: string): number[] {
   const [head = '', tail] = ip.toLowerCase().split('::')
-  const headGroups = head ? head.split(':') : []
-  const tailGroups = tail ? tail.split(':') : []
-  // A dotted IPv4 tail is one token for two groups.
-  const width = (tail === undefined ? headGroups : tailGroups).at(-1)?.includes('.') ? 7 : 8
-  const groups =
-    tail === undefined
-      ? headGroups
-      : [...headGroups, ...Array<string>(width - headGroups.length - tailGroups.length).fill('0'), ...tailGroups]
-  return groups
-    .slice(0, 4)
-    .reduce((value, group) => (value << 16n) | BigInt(Number.parseInt(group, 16)), 0n)
+  const tokens = (part: string) =>
+    (part ? part.split(':') : []).flatMap((token) =>
+      token.includes('.')
+        ? [ipv4Number(token) >>> 16, ipv4Number(token) & 0xffff]
+        : [Number.parseInt(token, 16)]
+    )
+  const headGroups = tokens(head)
+  if (tail === undefined) return headGroups
+  const tailGroups = tokens(tail)
+  return [...headGroups, ...Array<number>(8 - headGroups.length - tailGroups.length).fill(0), ...tailGroups]
+}
+
+// The first 64 bits (country data is allocated far coarser than /64).
+function ipv6Prefix64(groups: number[]): bigint {
+  return groups.slice(0, 4).reduce((value, group) => (value << 16n) | BigInt(group), 0n)
 }

@@ -48,6 +48,11 @@ describe('IP country table', () => {
     expect(table.country('192.0.2.128')).toBe('HK')
     expect(table.country('198.51.100.200')).toBe('US')
     expect(table.country('::ffff:192.0.2.200')).toBe('HK')
+    // The hex spelling of the same mapped addresses, and a fully written-out one.
+    expect(table.country('::ffff:c000:2c8')).toBe('HK')
+    expect(table.country('::FFFF:C000:0201')).toBe('CN')
+    expect(table.country('0:0:0:0:0:ffff:c633:6401')).toBe('US')
+    expect(table.country('2001:db8::192.0.2.1')).toBe('CN')
     expect(table.country('2001:db8::1')).toBe('CN')
     expect(table.country('2001:db8:0:ffff::1')).toBe('CN')
     expect(table.country('2001:db8:1:2::')).toBe('JP')

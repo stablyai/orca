@@ -52,7 +52,8 @@ const EdgeControlFlagsSchema = z.object({
   leaveCeilingPermille: permille.optional(),
   regionRolloutPermille: z.partialRecord(regionKey, permille).optional(),
   regionExcludeCountries: z
-    .partialRecord(regionKey, z.array(z.string().regex(/^[A-Z]{2}$/)).max(250))
+    // Upper-cased first, so a lower-case code is not a typo that voids the whole file.
+    .partialRecord(regionKey, z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250))
     .optional(),
   regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional()
 })
@@ -141,8 +142,8 @@ export function edgeRolloutPermille(rolloutPercent: number, flags: EdgeControlFl
   return flags.rolloutPermille ?? rolloutPercent * 10
 }
 
-// Any regional share set: edge moves record their region and the sweep judges recorded regions.
-// None: neither, so a dark rollout adds no database writes.
+// Any regional share set: the evacuation sweep judges each edge host by its recorded region
+// (relay_edge_host_regions). None: it judges every host 'any' with today's query.
 export function edgeRegionalRollout(flags: EdgeControlFlags): boolean {
   return Object.keys(flags.regionRolloutPermille ?? {}).length > 0
 }

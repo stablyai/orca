@@ -39,7 +39,7 @@ describePostgres('relay edge on PostgreSQL', () => {
     await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, ['edge-pg-user'])
     await database.query(`DELETE FROM relay_devices WHERE user_id = ?`, ['edge-pg-user'])
     await database.query(`DELETE FROM relay_edge_fence_pending WHERE user_id = ?`, ['edge-pg-user'])
-    await database.query(`DELETE FROM relay_assignment_region_preferences WHERE user_id = ?`, ['edge-pg-user'])
+    await database.query(`DELETE FROM relay_edge_host_regions WHERE user_id = ?`, ['edge-pg-user'])
     // Leave the shared selector as other files expect it: without this file's cells.
     await database.transaction(async (transaction) => {
       const selector = (
@@ -295,7 +295,8 @@ describePostgres('relay edge on PostgreSQL', () => {
         return { outcome: 'idle' as const }
       }
     }
-    const edge = new EdgeAssignments(database, config, Date.now, admin)
+    let now = Date.now()
+    const edge = new EdgeAssignments(database, config, () => now, admin)
     await edge.ensureEdgeCell()
     const [asia, us, failed] = ['edgepgregion0001', 'edgepgregion0002', 'edgepgregion0003'].map((relayHostId) => ({
       userId: 'edge-pg-user',
@@ -304,16 +305,31 @@ describePostgres('relay edge on PostgreSQL', () => {
     await edge.moveToEdge(asia!, 0, 'asia-east2')
     await edge.moveToEdge(us!, 0, 'us-central1')
     await expect(edge.moveToEdge(failed!, 0, 'asia-east2')).rejects.toBeInstanceOf(EdgeMoveDeferredError)
-    // A kept host re-records (its row was already on the edge: no push).
+    const recordedAt = async (host: { relayHostId: string }) =>
+      Number(
+        (
+          await database.query(`SELECT recorded_at FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`, [
+            'edge-pg-user',
+            host.relayHostId
+          ])
+        )[0]?.recorded_at
+      )
+    // A kept host with the same region writes nothing; a changed region is rewritten.
+    const first = await recordedAt(us!)
+    now += 5_000
+    await edge.moveToEdge(us!, 0, 'us-central1')
+    expect(await recordedAt(us!)).toBe(first)
+    await edge.moveToEdge(us!, 0, 'asia-east2')
+    expect(await recordedAt(us!)).toBe(now)
     await edge.moveToEdge(us!, 0, 'us-central1')
     const recorded = await database.query(
-      `SELECT relay_host_id, preferred_region FROM relay_assignment_region_preferences
+      `SELECT relay_host_id, region FROM relay_edge_host_regions
        WHERE user_id = ? AND relay_host_id LIKE 'edgepgregion%' ORDER BY relay_host_id`,
       ['edge-pg-user']
     )
     expect(recorded).toEqual([
-      { relay_host_id: asia!.relayHostId, preferred_region: 'asia-east2' },
-      { relay_host_id: us!.relayHostId, preferred_region: 'us-central1' }
+      { relay_host_id: asia!.relayHostId, region: 'asia-east2' },
+      { relay_host_id: us!.relayHostId, region: 'us-central1' }
     ])
     // Abort Asia: only its recorded host drains; us-central1 keeps the global share (100%).
     flags.regionRolloutPermille = { 'asia-east2': 0 }

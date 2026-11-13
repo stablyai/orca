@@ -18,7 +18,12 @@ import {
 } from './edge-relay.js'
 import { EdgeEvacuation } from './edge-relay-evacuation.js'
 import { EDGE_REGION_COUNTRY_EVENT, EdgeRegionCountryTally } from './edge-region-country-log.js'
-import type { EdgeAdmin, EdgeDrainResult } from './edge-admin-client.js'
+import {
+  EdgeAdminUnavailableError,
+  type EdgeAdmin,
+  type EdgeAssignBody,
+  type EdgeDrainResult
+} from './edge-admin-client.js'
 
 function config(flags: EdgeControlFlags, overrides: Partial<EdgeRelayConfig> = {}): EdgeRelayConfig {
   return {
@@ -214,6 +219,13 @@ describe('edge control regional flags', () => {
     expect(parseEdgeControl({ v: 1, flags })).toEqual({ flags, ignoredKeys: [] })
   })
 
+  it('upper-cases country codes rather than voiding the file', () => {
+    expect(parseEdgeControl({ v: 1, flags: { mode: 'on', regionExcludeCountries: { 'asia-east2': ['cn', ' Hk '] } } })).toEqual({
+      flags: { mode: 'on', regionExcludeCountries: { 'asia-east2': ['CN', 'HK'] } },
+      ignoredKeys: []
+    })
+  })
+
   it('voids a file whose leave ceiling is below any regional share', () => {
     expect(
       parseEdgeControl({ v: 1, flags: { mode: 'on', leaveCeilingPermille: 50, regionRolloutPermille: { 'asia-east2': 51 } } })
@@ -231,7 +243,8 @@ describe('edge control regional flags', () => {
       { regionRolloutPermille: { 'asia-east2': 1001 } },
       { regionRolloutPermille: { 'asia-east2': 1.5 } },
       { regionRolloutPermille: ['asia-east2'] },
-      { regionExcludeCountries: { 'asia-east2': ['cn'] } },
+      { regionExcludeCountries: { 'asia-east2': ['C'] } },
+      { regionExcludeCountries: { 'asia-east2': ['CHN'] } },
       { regionExcludeCountries: { 'asia-east2': 'CN' } },
       { regionExcludeCountries: { 'mars-north1': ['CN'] } },
       { regionExcludeUnknownCountry: { 'asia-east2': 'yes' } }
@@ -244,67 +257,87 @@ describe('edge control regional flags', () => {
 describe('edge move records the region', () => {
   const databases: RelayDatabase[] = []
   afterEach(async () => {
+    vi.restoreAllMocks()
     for (const database of databases.splice(0)) await database.close()
   })
   const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-  const regional: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { 'asia-east2': 0 } }
 
   async function recorded(database: RelayDatabase) {
     return (
       await database.query(
-        `SELECT preferred_region, observed_at FROM relay_assignment_region_preferences
-         WHERE user_id = ? AND relay_host_id = ?`,
+        `SELECT region, recorded_at FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`,
         [identity.userId, identity.relayHostId]
       )
-    ).map((row) => ({ region: row.preferred_region, at: Number(row.observed_at) }))
+    ).map((row) => ({ region: row.region, at: Number(row.recorded_at) }))
   }
 
-  it('on a first move, a kept host and a move off a cell; no region asked is the default region', async () => {
+  async function setup(admin?: EdgeAdmin) {
     const database = await openInMemoryRelayDatabase()
     databases.push(database)
-    let now = 1_000
-    const edge = new EdgeAssignments(database, config(regional), () => now)
+    const clock = { now: 1_000 }
+    // Dark: no regional flag at all. The record does not depend on flags.
+    const edge = new EdgeAssignments(database, config({ mode: 'on' }), () => clock.now, admin)
     await edge.ensureEdgeCell()
+    return { database, clock, edge }
+  }
+
+  it('on a first move, and on every move off a cell; no region asked is the default region', async () => {
+    const { database, clock, edge } = await setup()
     await edge.moveToEdge(identity, 0, 'asia-east2')
     expect(await recorded(database)).toEqual([{ region: 'asia-east2', at: 1_000 }])
-    now = 2_000
-    await edge.moveToEdge(identity, 0)
-    expect(await recorded(database)).toEqual([{ region: RELAY_DEFAULT_REGION, at: 2_000 }])
-    // Off to a cell row, then moved back on.
+    // Off to a cell row, then moved back on with the same region: rewritten.
     await database.query(`UPDATE relay_assignments SET cell_id = 'us-c1' WHERE user_id = ?`, [identity.userId])
-    now = 3_000
+    clock.now = 2_000
     await edge.moveToEdge(identity, 0, 'asia-east2')
-    expect(await recorded(database)).toEqual([{ region: 'asia-east2', at: 3_000 }])
+    expect(await recorded(database)).toEqual([{ region: 'asia-east2', at: 2_000 }])
+    await database.query(`UPDATE relay_assignments SET cell_id = 'us-c1' WHERE user_id = ?`, [identity.userId])
+    clock.now = 3_000
+    await edge.moveToEdge(identity, 0)
+    expect(await recorded(database)).toEqual([{ region: RELAY_DEFAULT_REGION, at: 3_000 }])
   })
 
-  it('writes nothing without a regional share (dark), in every branch', async () => {
-    const database = await openInMemoryRelayDatabase()
-    databases.push(database)
-    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 1000, regionRolloutPermille: {} }
-    const edge = new EdgeAssignments(database, config(flags), () => 1_000)
-    await edge.ensureEdgeCell()
+  it('on a kept host only when its region changed or was never recorded', async () => {
+    const { database, clock, edge } = await setup()
+    await edge.moveToEdge(identity, 0, 'asia-east2')
+    clock.now = 2_000
+    await edge.moveToEdge(identity, 0, 'asia-east2')
+    expect(await recorded(database)).toEqual([{ region: 'asia-east2', at: 1_000 }])
+    clock.now = 3_000
     await edge.moveToEdge(identity, 0, 'us-central1')
+    expect(await recorded(database)).toEqual([{ region: 'us-central1', at: 3_000 }])
+    // A host moved before records existed is recorded on its next kept ask.
+    await database.query(`DELETE FROM relay_edge_host_regions`)
+    clock.now = 4_000
     await edge.moveToEdge(identity, 0, 'us-central1')
-    await database.query(`UPDATE relay_assignments SET cell_id = 'us-c1' WHERE user_id = ?`, [identity.userId])
-    await edge.moveToEdge(identity, 0)
-    expect(await recorded(database)).toEqual([])
-    // An empty map counts as absent; the first regional key turns recording on.
-    flags.regionRolloutPermille = { 'asia-east2': 0 }
-    await edge.moveToEdge(identity, 0, 'us-central1')
-    expect(await recorded(database)).toEqual([{ region: 'us-central1', at: 1_000 }])
+    expect(await recorded(database)).toEqual([{ region: 'us-central1', at: 4_000 }])
+  })
+
+  it('never writes the cell path region preferences', async () => {
+    const { database, edge } = await setup()
+    await edge.moveToEdge(identity, 0, 'asia-east2')
+    expect(await database.query(`SELECT 1 FROM relay_assignment_region_preferences`)).toEqual([])
   })
 
   it('records nothing for a move that does not commit', async () => {
-    const database = await openInMemoryRelayDatabase()
-    databases.push(database)
     const admin = {
       assign: vi.fn(async () => {
-        throw new (await import('./edge-admin-client.js')).EdgeAdminUnavailableError('status_503')
+        throw new EdgeAdminUnavailableError('status_503')
       })
     } as unknown as EdgeAdmin
-    const edge = new EdgeAssignments(database, config(regional), () => 1_000, admin)
-    await edge.ensureEdgeCell()
+    const { database, edge } = await setup(admin)
     await expect(edge.moveToEdge(identity, 0, 'asia-east2')).rejects.toBeInstanceOf(EdgeMoveDeferredError)
+    expect(await recorded(database)).toEqual([])
+  })
+
+  it('forgets the record once the host is placed off the edge', async () => {
+    const admin = {
+      // Moves and fences are both assign calls.
+      assign: async (body: EdgeAssignBody) => ({ outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch })
+    } as unknown as EdgeAdmin
+    const { database, edge } = await setup(admin)
+    await edge.moveToEdge(identity, 0, 'asia-east2')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await edge.fenceAway(identity, 'us-c1', 9)
     expect(await recorded(database)).toEqual([])
   })
 })
@@ -339,13 +372,19 @@ describe('edge evacuation by recorded region', () => {
       )
       if (region) {
         await database.query(
-          `INSERT INTO relay_assignment_region_preferences (user_id, relay_host_id, preferred_region, observed_at)
-           VALUES ('user-1', ?, ?, 0)`,
+          `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at) VALUES ('user-1', ?, ?, 0)`,
           [relayHostId, region]
         )
       }
     }
-    return { evacuation, drained, onEdge }
+    // What the cell path stores: never read by the sweep.
+    const prefer = async (relayHostId: string, region: RelayRegion) =>
+      await database.query(
+        `INSERT INTO relay_assignment_region_preferences (user_id, relay_host_id, preferred_region, observed_at)
+         VALUES ('user-1', ?, ?, 0)`,
+        [relayHostId, region]
+      )
+    return { database, evacuation, drained, onEdge, prefer }
   }
 
   it('drains an aborted region by its recorded hosts, and keeps the rest', async () => {
@@ -359,7 +398,7 @@ describe('edge evacuation by recorded region', () => {
     expect(h.drained).toEqual([asia])
   })
 
-  it('judges a recorded region by its effective share: global when env-scoped, out when not', async () => {
+  it('judges a recorded region by its effective share: global when env-scoped', async () => {
     // A us-central1 shrink (global 0) while Asia is at 1000: recorded us-central1 hosts drain;
     // an unrecorded host is judged 'any' (Asia's 1000) and stays until its next ask records it.
     const h = await harness({ mode: 'on', rolloutPermille: 0, regionRolloutPermille: { 'asia-east2': 1000 } })
@@ -379,12 +418,31 @@ describe('edge evacuation by recorded region', () => {
     expect(h.drained).toEqual([hosts[40]])
   })
 
-  it('without regional flags ignores recorded regions entirely (a lagging cell-path preference)', async () => {
+  it('ignores a stale cell path preference: only the edge record counts', async () => {
+    const h = await harness({ mode: 'on', rolloutPermille: 1000, regionRolloutPermille: { 'asia-east2': 0 } })
+    // Asked Asia on a cell weeks ago; on the edge now for us-central1.
+    await h.onEdge(hosts[50]!, 'us-central1')
+    await h.prefer(hosts[50]!, 'asia-east2')
+    await h.onEdge(hosts[51]!)
+    await h.prefer(hosts[51]!, 'asia-east2')
+    await h.evacuation.sweep()
+    expect(h.drained).toEqual([])
+  })
+
+  it('without regional flags ignores records and sends the same SQL as before', async () => {
     for (const flags of [{ mode: 'on', rolloutPermille: 1000 }, { mode: 'on', rolloutPermille: 1000, regionRolloutPermille: {} }] as EdgeControlFlags[]) {
       const h = await harness(flags)
       await h.onEdge(hosts[30]!, 'asia-east2')
+      const query = vi.spyOn(h.database, 'query')
       await h.evacuation.sweep()
       expect(h.drained).toEqual([])
+      const page = query.mock.calls.map(([sql]) => sql).find((sql) => sql.includes('FROM relay_assignments a'))
+      expect(page).toBe(`SELECT a.user_id, a.relay_host_id
+       FROM relay_assignments a
+       WHERE a.cell_id = ? AND (a.user_id > ? OR (a.user_id = ? AND a.relay_host_id > ?))
+         
+       ORDER BY a.user_id, a.relay_host_id
+       LIMIT ?`)
     }
   })
 })

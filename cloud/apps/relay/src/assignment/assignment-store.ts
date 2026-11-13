@@ -75,7 +75,6 @@ import {
   type CellConnectionCap
 } from '../cell-connection-cap.js'
 import { AssignmentIdentityQueue } from './assignment-identity-queue.js'
-import { recordRegionPreference } from './region-preference.js'
 import {
   CONTROL_RENEWAL_BATCH_SQL,
   CONTROL_RENEWAL_STATEMENT_OUTCOMES,
@@ -1145,7 +1144,7 @@ export class RelayAssignmentStore {
       )
       if (!existing) return null
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
-      await recordRegionPreference(transaction, identity, preferredRegion, now)
+      await this.recordRegionPreference(transaction, identity, preferredRegion, now)
       // A live reserve cell's hosts hold no activity here, so idle is not evidence they left.
       if (
         !(await this.liveReserveCell(text(existing, 'cell_id'), transaction, now)) &&
@@ -1371,7 +1370,7 @@ export class RelayAssignmentStore {
         throw new AssignmentInventoryScopeChanged()
       }
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
-      await recordRegionPreference(transaction, identity, preferredRegion, now)
+      await this.recordRegionPreference(transaction, identity, preferredRegion, now)
       let forcedDeadReassignment = false
       let connectionHeadroomReassignment = false
       let strandedReassignment = false
@@ -8278,6 +8277,32 @@ export class RelayAssignmentStore {
       const probeOrigins = origins.get(region)
       return probeOrigins?.length ? [{ region, probeOrigins }] : []
     })
+  }
+
+  private async recordRegionPreference(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    preferredRegion: RelayRegion | undefined,
+    observedAt: number
+  ): Promise<void> {
+    if (!preferredRegion) return
+    await database.query(
+      `INSERT INTO relay_assignment_region_preferences
+       (user_id, relay_host_id, preferred_region, observed_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (user_id, relay_host_id) DO UPDATE SET
+         preferred_region = CASE
+           WHEN excluded.observed_at >= relay_assignment_region_preferences.observed_at
+             THEN excluded.preferred_region
+           ELSE relay_assignment_region_preferences.preferred_region
+         END,
+         observed_at = CASE
+           WHEN excluded.observed_at >= relay_assignment_region_preferences.observed_at
+             THEN excluded.observed_at
+           ELSE relay_assignment_region_preferences.observed_at
+         END`,
+      [identity.userId, identity.relayHostId, preferredRegion, observedAt]
+    )
   }
 
   private async cellRegion(database: RelayDatabase, cellId: string): Promise<RelayRegion> {

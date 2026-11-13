@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
-import { recordRegionPreference } from './assignment/region-preference.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database.js'
 import { fenceEdge } from './edge-relay-fence.js'
@@ -20,7 +19,6 @@ import {
   EDGE_CONTROL_DEFAULTS,
   edgeAnyRegionRolloutPermille,
   edgeCountryExcluded,
-  edgeRegionalRollout,
   edgeRegionRolloutPermille,
   edgeRolloutPermille,
   type EdgeControlFlags
@@ -288,16 +286,22 @@ export class EdgeAssignments {
 
   // The host's own ask: moves its row to the edge, minting a strictly newer epoch only when the cell
   // changes (phones accept a move only with a newer epoch; re-asks must not flap the epoch).
-  // While any regional share is set, every committed answer also records the region the cohort was
-  // judged for, so the evacuation sweep can drain a region's hosts (relay_assignment_region_
-  // preferences); with none, nothing extra is written. Written last, under the assignment row lock
-  // (the cell path's order), so its row lock is held only to the commit.
+  // Every committed answer also records the region the cohort was judged for (relay_edge_host_
+  // regions), so the evacuation sweep can drain one region's hosts: always on a move, and on a kept
+  // host only when the region changed (or was never recorded). Written last, under the assignment
+  // row lock, so its row lock is held only to the commit.
   async moveToEdge(identity: Identity, mapFloor: number, region?: RelayRegion): Promise<RelayAssignment> {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
-    const recordRegion = async (transaction: RelayDatabase) => {
-      if (!edgeRegionalRollout(this.config.control?.() ?? EDGE_CONTROL_DEFAULTS)) return
-      await recordRegionPreference(transaction, identity, region ?? RELAY_DEFAULT_REGION, now)
+    const recordRegion = async (transaction: RelayDatabase, onlyIfChanged = false) => {
+      await transaction.query(
+        `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (user_id, relay_host_id) DO UPDATE
+           SET region = excluded.region, recorded_at = excluded.recorded_at
+           ${onlyIfChanged ? 'WHERE relay_edge_host_regions.region IS DISTINCT FROM excluded.region' : ''}`,
+        [identity.userId, identity.relayHostId, region ?? RELAY_DEFAULT_REGION, now]
+      )
     }
     return await this.database.transaction(async (transaction) => {
       let rows: SqlRow[]
@@ -347,7 +351,7 @@ export class EdgeAssignments {
            WHERE user_id = ? AND relay_host_id = ?`,
           [leaseExpiresAt, now, identity.userId, identity.relayHostId]
         )
-        await recordRegion(transaction)
+        await recordRegion(transaction, true)
         return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt)
       }
       if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
@@ -513,6 +517,20 @@ export class EdgeAssignments {
   // is recorded for the evacuation sweep to retry (edge-relay-fence.ts).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) return true
+    // Off the edge: its region record goes (the sweep reads only hosts on the edge anyway).
+    await this.database
+      .query(`DELETE FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`, [
+        identity.userId,
+        identity.relayHostId
+      ])
+      .catch((error: unknown) =>
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_edge_region_forget_failed',
+            reason: error instanceof Error ? error.message : 'unknown'
+          })
+        )
+      )
     // An edge whose exports are failing (or that is marked down) gets one try, so a skipped export
     // is not slowed further.
     const down = this.exportFailingSince !== undefined || this.config.control?.().mode === 'down'
