@@ -50,7 +50,8 @@ function restoreOnHost(args: {
     getWorkspaceSessionForWorktree: () => ({
       sleepingAgentSessionsByPaneKey: { [SOURCE_PANE]: record }
     }),
-    getAgentProviderSessionSnapshotFn: () => [hookRow]
+    getAgentProviderSessionRowsForPaneFn: (paneKey: string) =>
+      paneKey === SOURCE_PANE ? [hookRow] : []
   })
   const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
     handle: 'term_restore',

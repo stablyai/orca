@@ -4,6 +4,7 @@ import { replaceRecordEntries } from '../../keyed-record-transitions'
 import type { AppState } from '../../types'
 import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusUpdate } from './agent-status-contract'
+import { createAgentConversationCapacityIndex } from './agent-conversation-capacity-index'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 function conversation(key: string): AgentPaneConversationIdentity {
@@ -21,112 +22,130 @@ const layout = (root: AppState['terminalLayoutsByTabId'][string]['root']) => ({
   expandedLeafId: null
 })
 
-it.each([100, 1000])(
-  'addresses capacity work across %s workspaces with placed owners above 500',
-  (size) => {
-    const store = createTestStore()
-    const visits: string[] = []
-    const roots: string[] = []
-    const leaf = (id: string, leafId = 'leaf') => ({
-      get type() {
-        visits.push(id)
-        return 'leaf' as const
-      },
-      leafId
-    })
-    const layouts = Object.fromEntries(
-      Array.from({ length: size * 10 }, (_, i) => [`tab-${i}`, layout(leaf(`tab-${i}`))])
-    )
-    for (const [id, snapshot] of Object.entries(layouts)) {
-      const root = snapshot.root
-      Object.defineProperty(snapshot, 'root', {
-        enumerable: true,
-        get: () => {
-          roots.push(id)
-          return root
-        }
-      })
-    }
-    const entries = Object.fromEntries(
-      Array.from({ length: size * 6 }, (_, i) => [`tab-${i}:leaf`, conversation(`tab-${i}:leaf`)])
-    )
-    store.setState({
-      terminalLayoutsByTabId: layouts,
-      agentConversationsByPaneKey: entries,
-      tabsByWorktree: {
-        'wt-order': Object.keys(layouts).map((id) => makeTab({ id, worktreeId: 'wt-order' }))
-      }
-    })
-    const update = (index: number, state: 'working' | 'done', at: number): AgentStatusUpdate => ({
-      paneKey: `tab-${index}:leaf`,
-      payload: { state, prompt: 'task', agentType: 'codex' },
-      timing: { updatedAt: at, stateStartedAt: at, turnStartedAt: 1000 },
-      routing: { worktreeId: 'wt-order' }
-    })
-    store
-      .getState()
-      .setAgentStatuses(Array.from({ length: 100 }, (_, i) => update(i, 'working', 1000)))
-    const unrelatedRoot = layouts[`tab-${size * 10 - 1}`].root
-    visits.length = 0
-    roots.length = 0
-    const original = store.getState().agentConversationsByPaneKey
-    store.getState().setAgentStatuses([update(0, 'working', 2000)])
-    expect(store.getState().agentConversationsByPaneKey).toBe(original)
-    store.getState().setAgentStatuses([update(0, 'done', 3000)])
-    expect(store.getState().agentConversationsByPaneKey['tab-0:leaf'].continuity?.state).toBe(
-      'done'
-    )
-    store
-      .getState()
-      .setAgentStatuses([update(1, 'done', 4000), update(2, 'done', 4000), update(3, 'done', 4000)])
-    const unrelated = `tab-${size * 10 - 1}`
-    store.setState((state) => ({
-      terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
-        state.terminalLayoutsByTabId,
-        [
-          [
-            unrelated,
-            { ...layout(unrelatedRoot), activeLeafId: null, ptyIdsByLeafId: { leaf: 'pty' } }
-          ],
-          ['empty-tab', layout(null)]
-        ]
-      )
-    }))
-    expect(visits).toEqual([])
-    expect(roots).toEqual([])
-    const freshRoot = leaf('fresh-tab')
-    const freshLayout = layout(freshRoot)
-    Object.defineProperty(freshLayout, 'root', {
+function exerciseAddressedCapacity(size: number): number[] {
+  const store = createTestStore()
+  const visits: string[] = []
+  const work: number[] = []
+  const recordWork = () => work.push(visits.length, roots.length)
+  const roots: string[] = []
+  const leaf = (id: string, leafId = 'leaf') => ({
+    get type() {
+      visits.push(id)
+      return 'leaf' as const
+    },
+    leafId
+  })
+  const layouts = Object.fromEntries(
+    Array.from({ length: size * 10 }, (_, i) => [`tab-${i}`, layout(leaf(`tab-${i}`))])
+  )
+  for (const [id, snapshot] of Object.entries(layouts)) {
+    const root = snapshot.root
+    Object.defineProperty(snapshot, 'root', {
       enumerable: true,
       get: () => {
-        roots.push('fresh-tab')
-        return freshRoot
+        roots.push(id)
+        return root
       }
     })
-    store.setState((state) => ({
-      terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
-        state.terminalLayoutsByTabId,
-        [['fresh-tab', freshLayout]]
-      )
-    }))
-    expect(visits).toEqual([])
-    store
-      .getState()
-      .setAgentStatuses([{ ...update(0, 'working', 5000), paneKey: 'fresh-tab:leaf' }])
-    expect(visits).toEqual(['fresh-tab'])
-    expect(roots).toEqual(['fresh-tab'])
-    expect(store.getState().agentConversationsByPaneKey['fresh-tab:leaf']).toBeDefined()
-    visits.length = 0
-    roots.length = 0
-    store
-      .getState()
-      .closeTab('tab-0', { localPtyTeardownOwnedExternally: true, captureRecentlyClosed: false })
-    expect(store.getState().agentConversationsByPaneKey['tab-0:leaf']).toBeUndefined()
-    expect(store.getState().agentConversationsByPaneKey['tab-1:leaf']).toBeDefined()
-    expect(visits.filter((id) => id !== 'tab-0')).toEqual([])
-    expect(roots.filter((id) => id !== 'tab-0')).toEqual([])
   }
-)
+  const entries = Object.fromEntries(
+    Array.from({ length: size * 6 }, (_, i) => [`tab-${i}:leaf`, conversation(`tab-${i}:leaf`)])
+  )
+  store.setState({
+    terminalLayoutsByTabId: layouts,
+    agentConversationsByPaneKey: entries,
+    tabsByWorktree: {
+      'wt-order': Object.keys(layouts).map((id) => makeTab({ id, worktreeId: 'wt-order' }))
+    }
+  })
+  const update = (index: number, state: 'working' | 'done', at: number): AgentStatusUpdate => ({
+    paneKey: `tab-${index}:leaf`,
+    payload: { state, prompt: 'task', agentType: 'codex' },
+    timing: { updatedAt: at, stateStartedAt: at, turnStartedAt: 1000 },
+    routing: { worktreeId: 'wt-order' }
+  })
+  store
+    .getState()
+    .setAgentStatuses(Array.from({ length: 100 }, (_, i) => update(i, 'working', 1000)))
+  const unrelatedRoot = layouts[`tab-${size * 10 - 1}`].root
+  visits.length = 0
+  roots.length = 0
+  const original = store.getState().agentConversationsByPaneKey
+  store.getState().setAgentStatuses([update(0, 'working', 2000)])
+  expect(store.getState().agentConversationsByPaneKey).toBe(original)
+  store.getState().setAgentStatuses([update(0, 'done', 3000)])
+  expect(store.getState().agentConversationsByPaneKey['tab-0:leaf'].continuity?.state).toBe('done')
+  store
+    .getState()
+    .setAgentStatuses([update(1, 'done', 4000), update(2, 'done', 4000), update(3, 'done', 4000)])
+  const updatedTabs = new Set(['tab-0', 'tab-1', 'tab-2', 'tab-3'])
+  expect(visits.filter((id) => !updatedTabs.has(id))).toEqual([])
+  expect(roots.filter((id) => !updatedTabs.has(id))).toEqual([])
+  recordWork()
+  visits.length = 0
+  roots.length = 0
+  const unrelated = `tab-${size * 10 - 1}`
+  store.setState((state) => ({
+    terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
+      state.terminalLayoutsByTabId,
+      [
+        [
+          unrelated,
+          { ...layout(unrelatedRoot), activeLeafId: null, ptyIdsByLeafId: { leaf: 'pty' } }
+        ],
+        ['empty-tab', layout(null)]
+      ]
+    )
+  }))
+  expect(visits.filter((id) => id !== unrelated)).toEqual([])
+  expect(roots.filter((id) => id !== unrelated)).toEqual([])
+  recordWork()
+  visits.length = 0
+  roots.length = 0
+  const freshRoot = leaf('fresh-tab')
+  const freshLayout = layout(freshRoot)
+  Object.defineProperty(freshLayout, 'root', {
+    enumerable: true,
+    get: () => {
+      roots.push('fresh-tab')
+      return freshRoot
+    }
+  })
+  store.setState((state) => ({
+    terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
+      state.terminalLayoutsByTabId,
+      [['fresh-tab', freshLayout]]
+    )
+  }))
+  expect(visits.filter((id) => id !== 'fresh-tab')).toEqual([])
+  expect(roots.filter((id) => id !== 'fresh-tab')).toEqual([])
+  recordWork()
+  visits.length = 0
+  roots.length = 0
+  store.getState().setAgentStatuses([{ ...update(0, 'working', 5000), paneKey: 'fresh-tab:leaf' }])
+  expect(visits.filter((id) => id !== 'fresh-tab')).toEqual([])
+  expect(roots.filter((id) => id !== 'fresh-tab')).toEqual([])
+  expect(store.getState().agentConversationsByPaneKey['fresh-tab:leaf']).toBeDefined()
+  recordWork()
+  visits.length = 0
+  roots.length = 0
+  store
+    .getState()
+    .closeTab('tab-0', { localPtyTeardownOwnedExternally: true, captureRecentlyClosed: false })
+  expect(store.getState().agentConversationsByPaneKey['tab-0:leaf']).toBeUndefined()
+  expect(store.getState().agentConversationsByPaneKey['tab-1:leaf']).toBeDefined()
+  expect(visits.filter((id) => id !== 'tab-0')).toEqual([])
+  expect(roots.filter((id) => id !== 'tab-0')).toEqual([])
+  recordWork()
+  return work
+}
+
+it('keeps changed-target capacity and projection work constant at 100 and 1000 workspaces', () => {
+  const small = exerciseAddressedCapacity(100)
+  const large = exerciseAddressedCapacity(1000)
+  // The same fixed-depth target writes require no extra work when only unrelated layouts grow.
+  expect(large.map((count, index) => count - small[index])).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+})
 
 it('enforces oldest-unplaced order on demotion, restoration and unknown replacement', () => {
   const store = createTestStore()
@@ -175,12 +194,7 @@ it('enforces oldest-unplaced order on demotion, restoration and unknown replacem
 
 it('preserves exact legacy full-key placement and bounds rootless or missing leaves on hydrate', () => {
   const store = createTestStore()
-  const cold = {
-    get type(): 'leaf' {
-      throw new Error('unrelated tree visited')
-    },
-    leafId: 'unused'
-  }
+  const cold = { type: 'leaf' as const, leafId: 'unused' }
   const legacy = 'host:tab:leaf'
   const rootless = 'rootless:leaf'
   const missing = 'rooted:missing'
@@ -230,3 +244,40 @@ it('appends a new integer-shaped key for eviction, then follows record ordering 
   expect(store.getState().agentConversationsByPaneKey['1']).toBeUndefined()
   expect(store.getState().agentConversationsByPaneKey['gone-1:leaf']).toBeDefined()
 })
+
+it.each([100, 1000])(
+  'skips capacity roots without association candidates (%s workspaces)',
+  (size) => {
+    const index = createAgentConversationCapacityIndex()
+    const entries = Object.fromEntries(
+      Array.from({ length: size * 6 }, (_, i) => [`tab-${i}:leaf`, conversation(`tab-${i}:leaf`)])
+    )
+    const layouts: AppState['terminalLayoutsByTabId'] = Object.fromEntries(
+      Array.from({ length: size * 10 }, (_, i) => [
+        `tab-${i}`,
+        layout({ type: 'leaf', leafId: 'leaf' })
+      ])
+    )
+    layouts.unrelated = layout({
+      get type(): 'leaf' {
+        throw new Error('capacity visited a root without candidates')
+      },
+      leafId: 'unused'
+    })
+    const accepted = index.cap(entries, layouts)
+    expect(Object.keys(accepted)).toHaveLength(size * 6)
+    const untouched = {
+      get root(): null {
+        throw new Error('capacity visited an unchanged unrelated layout')
+      },
+      activeLeafId: null,
+      expandedLeafId: null
+    }
+    const candidateFree = `tab-${size * 10 - 1}`
+    const next = replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(layouts, [
+      [candidateFree, untouched],
+      ['empty-tab', untouched]
+    ])
+    expect(index.cap(accepted, next)).toBe(accepted)
+  }
+)

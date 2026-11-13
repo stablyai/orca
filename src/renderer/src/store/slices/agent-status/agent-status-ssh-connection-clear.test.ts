@@ -63,13 +63,11 @@ describe('agent status cleanup for a lost SSH connection', () => {
     })
     const subscriber = vi.fn()
     const unsubscribe = store.subscribe(subscriber)
-    const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask').mockImplementation(() => {})
 
     store.getState().clearTransientAgentStatuses('ssh-a', 30)
 
     unsubscribe()
     expect(subscriber).toHaveBeenCalledOnce()
-    expect(queueMicrotaskSpy).toHaveBeenCalledOnce()
     expect(store.getState().agentStatusByPaneKey.get(oldA)).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey.get(secondA)).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey.get(newerA)).toBeDefined()

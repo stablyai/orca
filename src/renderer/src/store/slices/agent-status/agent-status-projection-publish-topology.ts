@@ -19,7 +19,7 @@ export function publishProjectionTopology(
     data.notices.add(`status\0${change.paneKey}`)
   }
   data.inputs = state
-  data.represented = represented
+  represented.commitInto(data.represented)
   for (const [id, tab] of nextTabs) {
     if (tab) {
       data.tabs.set(id, tab)

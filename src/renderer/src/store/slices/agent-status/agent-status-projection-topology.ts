@@ -3,9 +3,11 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import type { AgentStatusChange } from './agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { AgentStatusStoreDraftTable } from '../../../../../shared/agent-status/store/agent-status-store-table'
 import { readRecordChanges, readTabMapChanges } from '../../keyed-record-change-reads'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/migration-unsupported-agent-entry'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
@@ -61,11 +63,8 @@ export function stageProjectionTopology(
       }
     }
   }
-  const represented =
-    state.unifiedTabsByWorktree !== previous?.unifiedTabsByWorktree
-      ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree ?? {})
-      : data.represented
-  if (represented !== data.represented) {
+  const represented = new AgentStatusStoreDraftTable(data.represented)
+  if (state.unifiedTabsByWorktree !== previous?.unifiedTabsByWorktree) {
     const diff = previous
       ? readTabMapChanges(state.unifiedTabsByWorktree, previous.unifiedTabsByWorktree)
       : null
@@ -83,6 +82,9 @@ export function stageProjectionTopology(
           (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
         ) {
           changedTabs.add(tab.id)
+          const key = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+          changedKeys.add(key)
+          represented.delete(key)
           nextTabOwners.set(tab.id, null)
         }
       }
@@ -92,18 +94,13 @@ export function stageProjectionTopology(
           (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
         ) {
           changedTabs.add(tab.id)
+          const key = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+          changedKeys.add(key)
+          if (isStructuredTab(tab)) {
+            represented.set(key, tab)
+          }
           nextTabOwners.set(tab.id, owner)
         }
-      }
-    }
-    for (const [key, tab] of data.represented) {
-      if (changedTabs.has(tab.id)) {
-        changedKeys.add(key)
-      }
-    }
-    for (const [key, tab] of represented) {
-      if (changedTabs.has(tab.id)) {
-        changedKeys.add(key)
       }
     }
   }

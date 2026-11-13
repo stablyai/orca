@@ -1,10 +1,5 @@
 import type { AgentGroupSummary } from '@/store/slices/agent-status/agent-row-display-index'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
-import {
-  formatAllAgentsInState,
-  formatStateCount,
-  formatSummaryStateLabel
-} from './worktree-card-agent-summary'
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -13,6 +8,9 @@ import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/class-names'
 import {
   buildSummaryAgentGroups,
+  formatAllAgentsInState,
+  formatStateCount,
+  formatSummaryStateLabel,
   selectSummaryGroupIconAgents,
   summarizeAgentIdentities,
   summarizeAgents

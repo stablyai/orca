@@ -10,6 +10,7 @@ import {
   makeCreatedAgentWorktree,
   seedAlreadyActiveWorktree
 } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
@@ -79,7 +80,9 @@ describe('Dashboard and sidebar destination contract', () => {
       const seeded = useAppStore.getState()
       const terminal = { ...seeded.tabsByWorktree[worktree.id][0], executionHostId: owner }
       const tabId = native ? 'native-B' : terminal.id
-      const paneKey = makePaneKey(tabId, LEAF)
+      const paneKey = native
+        ? structuredAgentSessionPaneKey(tabId, 'session-B')
+        : makePaneKey(tabId, LEAF)
       const group = seeded.groupsByWorktree[worktree.id][0]
       const nativeTab: Tab = {
         id: tabId,
@@ -165,6 +168,23 @@ describe('Dashboard and sidebar destination contract', () => {
           })
         )
       })
+
+      if (native) {
+        const unified = useAppStore.getState().unifiedTabsByWorktree
+        useAppStore.setState({
+          unifiedTabsByWorktree: {
+            [worktree.id]: unified[worktree.id].filter((tab) => tab.id !== tabId)
+          }
+        })
+        expect(useAppStore.getState().agentStatusByPaneKey.projection.list(worktree.id)).toEqual([])
+        useAppStore.setState({ unifiedTabsByWorktree: unified })
+        expect(
+          useAppStore
+            .getState()
+            .agentStatusByPaneKey.projection.list(worktree.id)
+            .map((row) => row.paneKey)
+        ).toEqual([paneKey])
+      }
 
       const snapshot = buildDashboardSnapshot(
         { ...useAppStore.getState(), chatNames: new Map() },

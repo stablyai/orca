@@ -9,6 +9,7 @@ import { EMPTY_KEYS } from './agent-status-projection-types'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 import type { ProjectionTopology } from './agent-status-projection-topology'
 import type { ProjectionRows } from './agent-status-projection-rows'
+import { agentRowEntriesEqual } from '@/components/sidebar/workspace-card/activity/worktree-agent-live-index-patch'
 
 export function publishProjectionRows(
   data: AgentStatusProjectionState,
@@ -55,7 +56,11 @@ export function publishProjectionRows(
         arrange.add(next.worktreeId)
       }
       b.keys.add(row.paneKey)
-      if (!prior || !equal(prior, { ...row, lineage: prior.lineage })) {
+      if (
+        !prior ||
+        !agentRowEntriesEqual(prior.entry, row.entry) ||
+        !equal(prior, { ...row, entry: prior.entry, lineage: prior.lineage })
+      ) {
         data.rows.set(row.paneKey, prior?.lineage ? { ...row, lineage: prior.lineage } : row)
         b.revision = ++data.nextRowRevision
         data.notices.add(`row\0${row.paneKey}`)

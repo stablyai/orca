@@ -2,6 +2,7 @@ import {
   acceptedAgentStatuses,
   type AcceptedAgentStatuses
 } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -188,6 +189,15 @@ describe('useWorktreeActivityStatus', () => {
       )
     }
 
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: mockState.tabsByWorktree,
+      ptyIdsByTabId: mockState.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: mockState.runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId: mockState.terminalLayoutsByTabId,
+      agentStatusByPaneKey: mockState.agentStatusByPaneKey
+    })
+    mockState = store.getState()
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
   })
 })

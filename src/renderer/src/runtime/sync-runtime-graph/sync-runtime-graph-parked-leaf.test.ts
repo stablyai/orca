@@ -4,6 +4,7 @@ import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { AppState } from '../../store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 vi.mock(
   '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher',
@@ -27,6 +28,7 @@ const TAB_ID = 'parked-tab-1'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],

@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import {
   parseAgentStatusPaneIdentity,
+  resolveAgentStatusWorktreeId,
   mergeAgentStatusOrchestration
 } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { liveEntryWorktreeId } from '@/components/sidebar/workspace-card/activity/worktree-agent-live-index-patch'
@@ -55,12 +56,14 @@ export function stageProjectionRows(
       if (leaf) {
         keys.push(makePaneKey(legacy!.tabId, leaf))
       }
-      const parent = mergeAgentStatusOrchestration(
+      const orchestration = mergeAgentStatusOrchestration(
         entry,
         state.runtimeAgentOrchestrationByPaneKey[key]
-      )?.parentPaneKey
+      )
+      const parent = orchestration?.parentPaneKey
       const parsed = parent ? parsePaneKey(parent) : null
-      if (entry.state === 'done' && parsed && ownerOf(parsed.tabId) === ownerOf(identity.tabId)) {
+      const owner = resolveAgentStatusWorktreeId(entry, { get: ownerOf }, orchestration)
+      if (entry.state === 'done' && parsed && owner && ownerOf(parsed.tabId) === owner) {
         keys.push(parent!)
       }
     }
@@ -113,7 +116,14 @@ export function stageProjectionRows(
           ? [fallback]
           : []
     let contribution: Contribution | undefined
-    if (entry && worktreeId && identity) {
+    const summaryWorktreeId = entry
+      ? resolveAgentStatusWorktreeId(
+          entry,
+          { get: ownerOf },
+          mergeAgentStatusOrchestration(entry, state.runtimeAgentOrchestrationByPaneKey[key])
+        )
+      : undefined
+    if (entry && summaryWorktreeId && identity) {
       const flags = emptySummary(),
         panes: string[] = [],
         stale: string[] = [],
@@ -134,12 +144,12 @@ export function stageProjectionRows(
                   ?.parentPaneKey
               )
             : null
-        if (parent && ownerOf(parent.tabId) === worktreeId) {
+        if (parent && ownerOf(parent.tabId) === summaryWorktreeId) {
           panes.push(`${parent.tabId}\0${parent.paneId}`)
         }
       }
       contribution = {
-        worktreeId,
+        worktreeId: summaryWorktreeId,
         flags: FLAGS.filter((flag) => flags[flag]),
         panes,
         stale,

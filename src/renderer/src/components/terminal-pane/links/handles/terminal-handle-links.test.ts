@@ -10,27 +10,31 @@ import {
 import { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 
-const mocks = vi.hoisted(() => ({
-  activateTabAndFocusPane: vi.fn(),
-  focusTerminalTabSurface: vi.fn(),
-  revealFloatingWorkspacePanel: vi.fn(),
-  storeState: {
-    tabsByWorktree: {},
-    ptyIdsByTabId: {},
-    terminalLayoutsByTabId: {},
-    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+const mocks = await vi.hoisted(async () => {
+  const { acceptedAgentStatuses } =
+    await import('@/store/slices/agent-status/accepted-agent-statuses')
+  return {
+    activateTabAndFocusPane: vi.fn(),
+    focusTerminalTabSurface: vi.fn(),
+    revealFloatingWorkspacePanel: vi.fn(),
+    storeState: {
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
-    runtimeAgentOrchestrationByPaneKey: {},
-    setActiveWorktree: vi.fn(),
-    markWorktreeVisited: vi.fn(),
-    recordWorktreeVisit: vi.fn(),
-    isNavigatingHistory: false,
-    setActiveView: vi.fn(),
-    setActiveTabType: vi.fn(),
-    revealWorktreeInSidebar: vi.fn(),
-    setActiveTab: vi.fn()
+      runtimeAgentOrchestrationByPaneKey: {},
+      setActiveWorktree: vi.fn(),
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      isNavigatingHistory: false,
+      setActiveView: vi.fn(),
+      setActiveTabType: vi.fn(),
+      revealWorktreeInSidebar: vi.fn(),
+      setActiveTab: vi.fn()
+    }
   }
-}))
+})
 
 vi.mock('@/store/index', () => ({
   useAppStore: {

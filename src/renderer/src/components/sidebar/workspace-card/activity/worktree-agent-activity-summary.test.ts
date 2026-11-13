@@ -1,4 +1,5 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -8,10 +9,7 @@ import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-se
 import type { Tab } from '../../../../../../shared/tab-types'
 
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import {
-  selectWorktreeAgentActivitySummary,
-  type AgentActivityInput
-} from './worktree-agent-activity-summary'
+import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -82,7 +80,8 @@ describe('selectWorktreeAgentActivitySummary', () => {
       createdAt: 0
     }
     const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    const state: AgentActivityInput = {
+    const store = createTestStore()
+    store.setState({
       tabsByWorktree: {},
       unifiedTabsByWorktree: {},
       agentStatusEpoch: 0,
@@ -93,18 +92,22 @@ describe('selectWorktreeAgentActivitySummary', () => {
       ),
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {}
-    }
+    })
 
-    expect(selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking).toBe(false)
-    const represented = { ...state, unifiedTabsByWorktree: { [worktreeId]: [tab] } }
-    expect(selectWorktreeAgentActivitySummary(represented, worktreeId).hasLiveWorking).toBe(true)
-    expect(
-      selectWorktreeAgentActivitySummary({ ...represented, unifiedTabsByWorktree: {} }, worktreeId)
-        .hasLiveWorking
-    ).toBe(false)
+    expect(selectWorktreeAgentActivitySummary(store.getState(), worktreeId).hasLiveWorking).toBe(
+      false
+    )
+    store.setState({ unifiedTabsByWorktree: { [worktreeId]: [tab] } })
+    expect(selectWorktreeAgentActivitySummary(store.getState(), worktreeId).hasLiveWorking).toBe(
+      true
+    )
+    store.setState({ unifiedTabsByWorktree: {} })
+    expect(selectWorktreeAgentActivitySummary(store.getState(), worktreeId).hasLiveWorking).toBe(
+      false
+    )
   })
 
-  it('reuses only summaries whose pane membership is still current', () => {
+  it('reports current pane membership and preserves an explicitly captured summary', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const worktreeId = 'repo::/wt-1'
     const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
@@ -114,7 +117,8 @@ describe('selectWorktreeAgentActivitySummary', () => {
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {}
     }
-    const initial: AgentActivityInput = {
+    const store = createTestStore()
+    store.setState({
       ...sharedInputs,
       tabsByWorktree: {
         [worktreeId]: [makeTab('tab-1', worktreeId), makeTab('tab-2', worktreeId)]
@@ -126,18 +130,14 @@ describe('selectWorktreeAgentActivitySummary', () => {
           [secondPaneKey]: makeAgentStatusEntry({ paneKey: secondPaneKey, state: 'working' })
         })
       )
-    }
-    const reordered: AgentActivityInput = {
-      ...initial,
-      agentStatusEpoch: 1,
-      agentStatusByPaneKey: acceptedAgentStatuses(
-        Object.entries({
-          [secondPaneKey]: initial.agentStatusByPaneKey.get(secondPaneKey)!,
-          [firstPaneKey]: initial.agentStatusByPaneKey.get(firstPaneKey)!
-        })
-      )
-    }
-    const replacement: AgentActivityInput = {
+    })
+    expect(
+      selectWorktreeAgentActivitySummary(store.getState(), worktreeId).agentStatusPaneIdsByTabId
+    ).toEqual({
+      'tab-1': new Set([LEAF_ID]),
+      'tab-2': new Set([LEAF_ID])
+    })
+    store.setState({
       ...sharedInputs,
       tabsByWorktree: { [worktreeId]: [makeTab('tab-3', worktreeId)] },
       agentStatusEpoch: 2,
@@ -149,24 +149,19 @@ describe('selectWorktreeAgentActivitySummary', () => {
           })
         })
       )
-    }
-    const removed: AgentActivityInput = {
-      ...replacement,
+    })
+    const afterReplacement = selectWorktreeAgentActivitySummary(store.getState(), worktreeId)
+    expect(afterReplacement.agentStatusPaneIdsByTabId).toEqual({ 'tab-3': new Set([LEAF_ID]) })
+    const captured = store.getState().agentStatusByPaneKey.capture()
+    store.setState({
       agentStatusEpoch: 3,
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({}))
-    }
+    })
+    const afterRemoval = selectWorktreeAgentActivitySummary(store.getState(), worktreeId)
 
-    const first = selectWorktreeAgentActivitySummary(initial, worktreeId)
-    const afterReorder = selectWorktreeAgentActivitySummary(reordered, worktreeId)
-    const afterReplacement = selectWorktreeAgentActivitySummary(replacement, worktreeId)
-    const afterRemoval = selectWorktreeAgentActivitySummary(removed, worktreeId)
-
-    expect(afterReorder).toBe(first)
-    expect(afterReplacement).not.toBe(first)
-    expect(afterReplacement.agentStatusPaneIdsByTabId).toEqual({
+    expect(captured.projection.summary(worktreeId).agentStatusPaneIdsByTabId).toEqual({
       'tab-3': new Set([LEAF_ID])
     })
-    expect(afterRemoval).not.toBe(afterReplacement)
     expect(afterRemoval).toMatchObject({ hasLiveWorking: false })
     expect(afterRemoval.agentStatusPaneIdsByTabId).toEqual({})
   })
@@ -176,15 +171,16 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })
     vi.spyOn(Date, 'now').mockReturnValue(entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS + 1)
-    const state: AgentActivityInput = {
+    const store = createTestStore()
+    store.setState({
       tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
       agentStatusEpoch: 0,
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry })),
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {}
-    }
+    })
 
-    const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
+    const summary = selectWorktreeAgentActivitySummary(store.getState(), 'repo::/wt-1')
 
     expect(summary.stalePaneIdsByTabId['tab-1']).toEqual(new Set([LEAF_ID]))
     // Staleness still ends the row's authority: no fresh pane id, no liveness flag.

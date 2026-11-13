@@ -36,7 +36,7 @@ export class AgentStatusProjectionState {
   inputs: AppState | null = null
   readonly tabs = new Map<string, TerminalTab>()
   readonly tabWorktrees = new Map<string, string>()
-  represented: ReadonlyMap<string, Tab> = new Map()
+  readonly represented = new Map<string, Tab>()
   readonly orphanOwners = new Map<string, string>()
   readonly orphansByOwner = new Map<string, Set<string>>()
   readonly handleByKey = new Map<string, string>()

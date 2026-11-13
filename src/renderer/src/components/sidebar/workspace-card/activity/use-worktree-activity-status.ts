@@ -76,17 +76,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const terminalLayoutRootsByTabId = useAppStore(
     useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))
   )
-  const {
-    hasPermission,
-    hasLiveWorking,
-    hasLiveMonitoring,
-    hasFailed,
-    hasInterrupted,
-    hasUnconfirmed,
-    hasLiveDone,
-    agentStatusPaneIdsByTabId,
-    stalePaneIdsByTabId
-  } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+  const summary = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
 
   // Use common liveness and agent-row precedence so compact and detailed cards show the same status.
   return useMemo(
@@ -97,16 +87,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasStructuredChat,
         ptyIdsByTabId: ptyIdsForWorktree,
         runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        agentStatusPaneIdsByTabId,
-        stalePaneIdsByTabId,
         terminalLayoutRootsByTabId,
-        hasPermission,
-        hasLiveWorking,
-        hasLiveMonitoring,
-        hasFailed,
-        hasInterrupted,
-        hasUnconfirmed,
-        hasLiveDone
+        ...summary
       }),
     [
       tabs,
@@ -114,16 +96,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasStructuredChat,
       ptyIdsForWorktree,
       runtimePaneTitlesForWorktree,
-      agentStatusPaneIdsByTabId,
-      stalePaneIdsByTabId,
       terminalLayoutRootsByTabId,
-      hasPermission,
-      hasLiveWorking,
-      hasLiveMonitoring,
-      hasFailed,
-      hasInterrupted,
-      hasUnconfirmed,
-      hasLiveDone
+      summary
     ]
   )
 }

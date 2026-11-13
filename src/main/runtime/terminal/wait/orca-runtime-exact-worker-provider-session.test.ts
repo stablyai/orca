@@ -19,16 +19,19 @@ function selectThroughRuntime(statusConnectionId: string | null): unknown {
       [PTY_ID, { connectionId: null, launchToken: 'launch-1', wslDistro: 'Ubuntu' }]
     ]),
     wslDistroByPtyId: new Map([[PTY_ID, 'Ubuntu']]),
-    getAgentStatusSnapshotFn: () => [
-      {
-        paneKey: PANE_KEY,
-        connectionId: statusConnectionId,
-        launchToken: 'launch-1',
-        agentType: 'codex',
-        receivedAt: 500,
-        providerSession: { key: 'session_id', id: 's1', transcriptPath: '/t.jsonl' }
-      }
-    ]
+    publicPaneStatusFn: (paneKey: string) =>
+      paneKey === PANE_KEY
+        ? [
+            {
+              paneKey: PANE_KEY,
+              connectionId: statusConnectionId,
+              launchToken: 'launch-1',
+              agentType: 'codex',
+              receivedAt: 500,
+              providerSession: { key: 'session_id', id: 's1', transcriptPath: '/t.jsonl' }
+            }
+          ]
+        : []
   }
   return (
     OrcaRuntimeWithGetTerminalInteractiveWait.prototype as unknown as ExactWorkerProviderSessionHost

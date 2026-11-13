@@ -21,6 +21,7 @@ const SQLITE_HARNESSES = new Set([
   'journal-host-database-test-support',
   'terminal-topology-profile-fixture',
   'acknowledged-terminal-tab-retirement-fixture',
+  'last-status.test-fixtures',
   // Opens the index read-only after the indexer closes; Bun's macOS SQLite refuses a WAL file then.
   'session-search-indexer-test-fixture',
   'session-search-index-test-fixture',

@@ -78,6 +78,61 @@ function fleet(active: number, sleeping: number) {
 }
 
 describe('accepted keyed owner', () => {
+  it('keeps an aged sleeping completion visible without renewing attention until a new turn', () => {
+    const store = fleet(1, 1)
+    const completedAt = NOW - 31 * 60_000
+    store
+      .getState()
+      .setAgentStatus(keyFor(0), { state: 'done', prompt: 'Awake result' }, undefined, {
+        updatedAt: NOW,
+        stateStartedAt: completedAt
+      })
+    store
+      .getState()
+      .setAgentStatus(
+        keyFor(1),
+        { state: 'done', prompt: 'Sleeping result', paneSleep: { ptyId: 'pty-1' } },
+        undefined,
+        { updatedAt: NOW, stateStartedAt: completedAt }
+      )
+    const projection = () => store.getState().agentStatusByPaneKey.projection
+    expect(
+      projection()
+        .list('worktree')
+        .map((row) => row.state)
+    ).toEqual(['done', 'done'])
+    expect(projection().attention('worktree', 0, NOW)).toEqual({ cls: 5, attentionTimestamp: 0 })
+
+    vi.setSystemTime(NOW + 1_000)
+    store
+      .getState()
+      .setAgentStatus(
+        keyFor(1),
+        { state: 'done', prompt: 'Sleeping result', paneSleep: { ptyId: 'pty-1' } },
+        undefined,
+        { updatedAt: NOW + 1_000, stateStartedAt: completedAt }
+      )
+    expect(projection().attention('worktree', 0, NOW + 1_000)).toEqual({
+      cls: 5,
+      attentionTimestamp: 0
+    })
+    expect(store.getState().agentStatusByPaneKey.get(keyFor(1))?.stateStartedAt).toBe(completedAt)
+    expect(projection().row(keyFor(1))?.state).toBe('done')
+
+    store
+      .getState()
+      .setAgentStatus(keyFor(1), { state: 'working', prompt: 'New turn' }, undefined, {
+        updatedAt: NOW + 1_000,
+        stateStartedAt: NOW + 1_000
+      })
+    expect(store.getState().agentStatusByPaneKey.get(keyFor(1))?.paneSleep).toBeUndefined()
+    expect(projection().row(keyFor(1))?.state).toBe('working')
+    expect(projection().attention('worktree', 0, NOW + 1_000)).toEqual({
+      cls: 3,
+      attentionTimestamp: completedAt
+    })
+  })
+
   it.each([750, 7500])(
     'routes paired presentation updates past %i unrelated sleeping rows',
     (sleeping) => {

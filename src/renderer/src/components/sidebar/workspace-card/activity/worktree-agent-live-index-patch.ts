@@ -1,4 +1,4 @@
-import { shallow } from 'zustand/shallow'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/structural-value-equality'
 import type { Tab } from '../../../../../../shared/tab-types'
 import {
   parseAgentStatusPaneIdentity,
@@ -12,7 +12,7 @@ export function liveEntryWorktreeId(
   paneKey: string,
   entry: AgentStatusEntry,
   tabIdToWorktreeId: Pick<ReadonlyMap<string, string>, 'get'>,
-  representedTabs?: ReadonlyMap<string, Tab>
+  representedTabs?: Pick<ReadonlyMap<string, Tab>, 'get'>
 ): string | undefined {
   const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
   if (!parsed) {
@@ -33,5 +33,5 @@ export function agentRowEntriesEqual(previous: AgentStatusEntry, next: AgentStat
   }
   const { acceptedStatusSeq: _previousSequence, ...previousRow } = previous
   const { acceptedStatusSeq: _nextSequence, ...nextRow } = next
-  return shallow(previousRow, nextRow)
+  return structuralValuesEqualIgnoringUndefined(previousRow, nextRow)
 }

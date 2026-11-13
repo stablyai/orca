@@ -128,7 +128,7 @@ describe('one pane of a terminal tab', () => {
         }
       })
       const state = useAppStore.getState()
-      expect(state.agentStatusByPaneKey).toEqual({})
+      expect(state.agentStatusByPaneKey.size).toBe(0)
       expect(
         resolveCliChatResumeSource(state, {
           tab: { id: 'term-1', worktreeId: WORKTREE_ID },

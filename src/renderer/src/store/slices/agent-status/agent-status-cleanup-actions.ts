@@ -172,7 +172,6 @@ export function createAgentStatusCleanupActions(
       if (connectionId.length === 0 || !Number.isFinite(clearedAt)) {
         return
       }
-      let removed = false
       set((s, changedPaneKeys) => {
         const worktreeIdsOnConnection = collectWorktreeIdsForConnection(s, connectionId)
         let next: typeof s.agentStatusByPaneKey | null = null
@@ -195,7 +194,6 @@ export function createAgentStatusCleanupActions(
         if (!next && alreadyBlocked) {
           return s
         }
-        removed = next !== null
         return {
           ...(next
             ? {
@@ -209,9 +207,6 @@ export function createAgentStatusCleanupActions(
             : { ...s.transientClearedAgentStatusConnectionIds, [connectionId]: true }
         }
       })
-      if (removed) {
-        freshness.scheduleDeferred()
-      }
     }
   }
 }

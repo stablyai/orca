@@ -15,7 +15,9 @@ export function captureProjectionState(
   captured.activeDashboardOwners = new Set(data.activeDashboardOwners)
   captured.dashboardTotals = data.dashboardTotals
   captured.inputs = data.inputs
-  captured.represented = data.represented
+  for (const [key, tab] of data.represented) {
+    captured.represented.set(key, tab)
+  }
   captured.nextRank = data.nextRank
   captured.nextRowRevision = data.nextRowRevision
   captured.freshEvidence = data.freshEvidence
