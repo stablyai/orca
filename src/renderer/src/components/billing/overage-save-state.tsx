@@ -11,8 +11,11 @@ import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
  */
 export type OverageSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
+/** Which control made the change: its status shows next to that control (design-squad). */
+export type OverageAction = 'on' | 'off' | 'cap'
+
 /** What a pending change asks for; a null cap means billing's default (or, when off, none). */
-export type OverageTarget = { optedIn: boolean; capCents: number | null }
+export type OverageTarget = { action: OverageAction; optedIn: boolean; capCents: number | null }
 
 export function overageMatches(
   overage: OrcaBillingEntitlement['overage'],
@@ -40,12 +43,15 @@ export function useOverageSaveState({
   onFailure: () => void
 }): {
   status: OverageSaveState
+  /** The control behind the last change; null before the first one. */
+  action: OverageAction | null
   begin: (target: OverageTarget) => void
   /** Back to no status, e.g. once the field is edited again (review M13). */
   clear: () => void
 } {
   const [saveState, setSaveState] = useState<OverageSaveState>('idle')
   const [target, setTarget] = useState<OverageTarget | null>(null)
+  const [action, setAction] = useState<OverageAction | null>(null)
   // Whether the parent has reported the request in flight since this change began.
   const [sawBusy, setSawBusy] = useState(false)
   const [seenFailures, setSeenFailures] = useState(failures)
@@ -73,8 +79,10 @@ export function useOverageSaveState({
   }
   return {
     status,
+    action,
     begin: (next) => {
       setSaveState('saving')
+      setAction(next.action)
       setSawBusy(false)
       setTarget(next)
     },
@@ -88,9 +96,11 @@ export function useOverageSaveState({
 
 /** One status for both views: a spinner while saving; the check only ever goes with "Saved". */
 export function OverageSaveStatus({
-  status
+  status,
+  action
 }: {
   status: OverageSaveState
+  action: OverageAction | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (status === 'idle') {
@@ -115,6 +125,10 @@ export function OverageSaveStatus({
           <Check className="size-3.5" aria-hidden />
           {t('auto.components.billing.capSaved', 'Saved')}
         </>
+      ) : action === 'off' ? (
+        t('components.billing.overage.turnOffFailed', 'Couldn’t turn off overage.')
+      ) : action === 'on' ? (
+        t('components.billing.overage.turnOnFailed', 'Couldn’t turn on overage.')
       ) : (
         t('auto.components.billing.capNotSaved', 'Couldn’t save')
       )}

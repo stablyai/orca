@@ -17,7 +17,7 @@ import {
 } from './plan-billing-usage-copy'
 import { formatCents, formatRateCents } from './plans/plans-pricing'
 import { capTooHighCopy } from './plan-billing-copy'
-import { OverageSaveStatus, useOverageSaveState } from './overage-save-state'
+import { OverageSaveStatus, useOverageSaveState, type OverageAction } from './overage-save-state'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
 
 /** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
@@ -143,7 +143,7 @@ export function OverageControls({
     setSeededFrom(savedDollars)
     setCapDollars(savedDollars)
   }
-  const { status, begin, clear } = useOverageSaveState({
+  const { status, action, begin, clear } = useOverageSaveState({
     overage,
     busy,
     failures,
@@ -211,8 +211,9 @@ export function OverageControls({
     )
   }
 
-  const save = (enabled: boolean, cents: number | null): void => {
-    begin({ optedIn: enabled, capCents: enabled ? cents : null })
+  const save = (action: OverageAction, cents: number | null): void => {
+    const enabled = action !== 'off'
+    begin({ action, optedIn: enabled, capCents: enabled ? cents : null })
     onSetOverage(
       !enabled
         ? { enabled: false }
@@ -222,7 +223,9 @@ export function OverageControls({
     )
   }
   const blocked = busy || saving || paymentFailed
-  const statusLine = <OverageSaveStatus status={status} />
+  const statusLine = <OverageSaveStatus status={status} action={action} />
+  // Turn off's status sits by its link, so it doesn't read as the cap failing (design-squad).
+  const offStatus = action === 'off'
   const blockedReason = paymentFailed
     ? t(
         'auto.components.billing.overagePaymentFailed',
@@ -252,7 +255,7 @@ export function OverageControls({
       setCapDollars(String(Math.round(defaultCapCents / 100)))
     }
     focusOnSwitch.current = true
-    save(true, defaultCapCents)
+    save('on', defaultCapCents)
   }
 
   // N-09: off is one status line and one action. No cap field and no "$ 0" (which reads as "on").
@@ -306,7 +309,7 @@ export function OverageControls({
         onSubmit={(event) => {
           event.preventDefault()
           if (changed && !blocked) {
-            save(true, parsedCap * 100)
+            save('cap', parsedCap * 100)
             // Save turns into the status in place; keep focus in the card on the field.
             capInputRef.current?.focus()
           }
@@ -352,7 +355,9 @@ export function OverageControls({
           )}
         </div>
         {saving || !changed ? (
-          statusLine
+          offStatus ? null : (
+            statusLine
+          )
         ) : (
           <Button type="submit" variant="outline" aria-disabled={blocked || undefined}>
             {t('auto.components.billing.saveCap', 'Save')}
@@ -371,25 +376,28 @@ export function OverageControls({
         ) : null}
       </form>
       {spent}
-      <SettingsDisabledControlTooltip reason={blockedReason}>
-        <Button
-          type="button"
-          variant="link-muted"
-          size="inline"
-          aria-disabled={blocked || undefined}
-          onClick={() => {
-            if (!blocked) {
-              focusOnSwitch.current = true
-              save(false, null)
-            }
-          }}
-        >
-          {/* Reads as a link at rest, not only on hover (design-squad, as RR-c1). */}
-          <span className="underline underline-offset-4">
-            {t('components.billing.overage.turnOff', 'Turn off overage')}
-          </span>
-        </Button>
-      </SettingsDisabledControlTooltip>
+      <div className="flex flex-wrap items-center gap-3">
+        <SettingsDisabledControlTooltip reason={blockedReason}>
+          <Button
+            type="button"
+            variant="link-muted"
+            size="inline"
+            aria-disabled={blocked || undefined}
+            onClick={() => {
+              if (!blocked) {
+                focusOnSwitch.current = true
+                save('off', null)
+              }
+            }}
+          >
+            {/* Reads as a link at rest, not only on hover (design-squad, as RR-c1). */}
+            <span className="underline underline-offset-4">
+              {t('components.billing.overage.turnOff', 'Turn off overage')}
+            </span>
+          </Button>
+        </SettingsDisabledControlTooltip>
+        {offStatus ? statusLine : null}
+      </div>
       {alertsNote}
     </div>
   )

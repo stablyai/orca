@@ -120,31 +120,49 @@ describe('overage on, off and on again', () => {
 })
 
 describe('overage save state', () => {
-  it('a failed Turn off ends in Couldn’t save and leaves overage on and changeable', () => {
+  // design-squad: the failure sits by the control that failed, not by the cap field.
+  it('a failed Turn off says so by its link and leaves overage on and changeable', () => {
     const { pending } = renderCard({
       ...sampleTeam,
       overage: { ...sampleTeam.overage, optedIn: true, active: true, spendCapCents: 4000 }
     })
     fireEvent.click(screen.getByRole('button', { name: 'Turn off overage' }))
     settleLast(pending, false)
-    expect(statusText()).toBe('Couldn’t save')
-    expect(screen.getByLabelText<HTMLInputElement>('Monthly spend cap').value).toBe('40')
+    expect(statusText()).toBe('Couldn’t turn off overage.')
     const off = screen.getByRole('button', { name: 'Turn off overage' })
+    expect(off.closest('div')?.contains(screen.getByRole('status'))).toBe(true)
+    const field = screen.getByLabelText<HTMLInputElement>('Monthly spend cap')
+    expect(field.value).toBe('40')
+    expect(field.closest('form')?.contains(screen.getByRole('status'))).toBe(false)
     expect(off.getAttribute('aria-disabled')).toBeNull()
     fireEvent.click(off)
     expect(pending).toHaveLength(2)
   })
 
-  it('a failed Turn on ends in Couldn’t save next to a working Turn on', () => {
+  it('a failed Turn on says so next to a working Turn on', () => {
     const { pending } = renderCard()
     fireEvent.click(turnOnButton())
     settleLast(pending, false)
-    expect(statusText()).toBe('Couldn’t save')
+    expect(statusText()).toBe('Couldn’t turn on overage.')
     expect(screen.queryByLabelText('Monthly spend cap')).toBeNull()
     fireEvent.click(turnOnButton())
     expect(pending).toHaveLength(2)
     settleLast(pending, true)
     expect(statusText()).toBe('Saved')
+  })
+
+  it('a failed cap change says Couldn’t save by the field and rolls the value back', () => {
+    const { pending } = renderCard({
+      ...sampleTeam,
+      overage: { ...sampleTeam.overage, optedIn: true, active: true, spendCapCents: 4000 }
+    })
+    const field = screen.getByLabelText<HTMLInputElement>('Monthly spend cap')
+    fireEvent.change(field, { target: { value: '60' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    settleLast(pending, false)
+    expect(statusText()).toBe('Couldn’t save')
+    expect(field.closest('form')?.contains(screen.getByRole('status'))).toBe(true)
+    expect(field.value).toBe('40')
   })
 
   it('never shows the check with Saving…', () => {

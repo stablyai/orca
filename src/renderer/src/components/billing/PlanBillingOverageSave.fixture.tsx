@@ -36,7 +36,7 @@ function OverageCard({
     setTimeout(() => {
       setBusy(false)
       if (outcome === 'failed') {
-        setNotice({ kind: 'error', text: 'Could not reach billing. Try again.' })
+        setNotice({ kind: 'error', text: 'Couldn’t reach billing. Try again.' })
         setFailures((count) => count + 1)
         return
       }
