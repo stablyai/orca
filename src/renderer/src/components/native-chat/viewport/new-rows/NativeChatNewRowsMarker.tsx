@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
 import { nativeChatScrollOffsetWithin } from '../virtualization/use-native-chat-viewport-align'
 
@@ -9,13 +10,16 @@ const NOT_THE_CONVERSATION = '[data-native-chat-typing-redirect-ignore="true"]'
 export function NativeChatNewRowsMarker({
   marker: { arriving, onArrived, onDismiss },
   readerAtEnd,
-  onReveal
+  onReveal,
+  className
 }: {
   marker: NativeChatNewRowsMarkerState
   /** Only a reader who was following the end is taken to the marker; anyone else keeps their place. */
   readerAtEnd: () => boolean
   /** Scrolls a transcript element to the top of the view, and stops following the end. */
   onReveal: (element: HTMLElement) => void
+  /** Margins from the row, which knows what sits above and below the line. */
+  className?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const ref = useRef<HTMLDivElement>(null)
@@ -61,7 +65,10 @@ export function NativeChatNewRowsMarker({
       ref={ref}
       role="separator"
       aria-label={label}
-      className="flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none"
+      className={cn(
+        'flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none',
+        className
+      )}
     >
       <span>{label}</span>
       <span aria-hidden className="h-px flex-1 bg-chat-unread/50" />
