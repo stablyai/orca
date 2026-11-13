@@ -86,12 +86,11 @@ for (const [name, run] of scenarios) {
       await holder.take()
       await run(orcaPage, async (pageId) => {
         // Why: a guest press that activates Orca's window pulls it over the app the user is in.
-        expect(await holder.foreground()).toEqual({ holder: true, pid: expect.any(Number) })
+        expect(await holder.foreground()).toMatchObject({ holder: true })
         // The same check must see Orca once it really is activated, or the one above proves nothing.
+        const orcaPid = await electronApp.evaluate(() => process.pid)
         await ownedWindow.evaluate((window) => window.focus())
-        await expect
-          .poll(() => holder.foreground())
-          .toEqual({ holder: false, pid: electronApp.process().pid })
+        await expect.poll(() => holder.foreground()).toMatchObject({ holder: false, pid: orcaPid })
         await realKeystrokeReachesTerminal(orcaPage, electronApp, holder.press)(pageId)
       })
     } finally {

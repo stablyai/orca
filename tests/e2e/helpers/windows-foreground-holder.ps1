@@ -5,6 +5,7 @@ Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
 using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -15,6 +16,7 @@ public static class OrcaForegroundHolder {
     [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int processId);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint attach, uint attachTo, bool enable);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern short VkKeyScan(char ch);
@@ -76,7 +78,9 @@ public static class OrcaForegroundHolder {
         IntPtr foreground = GetForegroundWindow();
         uint processId;
         GetWindowThreadProcessId(foreground, out processId);
-        return (foreground == form.Handle ? "holder " : "other ") + processId;
+        StringBuilder title = new StringBuilder(256);
+        GetWindowText(foreground, title, title.Capacity);
+        return (foreground == form.Handle ? "holder " : "other ") + processId + " " + title;
     }
 
     static bool Take() {

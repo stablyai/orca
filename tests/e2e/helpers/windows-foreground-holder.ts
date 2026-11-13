@@ -12,8 +12,8 @@ const REPLY_TIMEOUT_MS = 15_000
 export type WindowsForegroundHolder = {
   /** Activates the holder and lifts the foreground lock, so an Orca activation attempt would succeed. */
   take: () => Promise<void>
-  /** Which window has the real foreground: the holder, or another process by pid. */
-  foreground: () => Promise<{ holder: boolean; pid: number }>
+  /** Which window has the real foreground: the holder, or another process's window. */
+  foreground: () => Promise<{ holder: boolean; pid: number; title: string }>
   /** Presses one key through the OS input queue, so it reaches whichever window is in front. */
   press: (key: string) => Promise<void>
   close: () => Promise<void>
@@ -96,8 +96,8 @@ export async function startWindowsForegroundHolder(): Promise<WindowsForegroundH
       await send('take')
     },
     foreground: async () => {
-      const [owner, pid] = (await send('foreground')).split(' ')
-      return { holder: owner === 'holder', pid: Number(pid) }
+      const [owner, pid, ...title] = (await send('foreground')).split(' ')
+      return { holder: owner === 'holder', pid: Number(pid), title: title.join(' ') }
     },
     press: async (key) => {
       await send(`key ${key}`)
