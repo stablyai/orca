@@ -17,7 +17,7 @@ describe('cloudSpendLine', () => {
   const t: Translate = (_key, fallback) => fallback
   it('says an archived workspace uses no hours, not that it is asleep', () => {
     const line = cloudSpendLine({ status: 'archived', sandboxMs: 3_600_000 }, null, false, t)
-    expect(line).toBe('{{hours}} sandbox hours used. Archived workspaces use no sandbox hours.')
+    expect(line).toBe('{{hours}} sandbox hours used. Archived workspaces don’t use sandbox hours.')
   })
 
   it('keeps the asleep and running lines', () => {

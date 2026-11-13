@@ -48,7 +48,7 @@ describe('cloud workspace copy', () => {
   it('names the repo and the fix when Orca can’t access it (github_not_connected)', () => {
     const denied = new CloudRequestError('conflict', 409, 'github_not_connected')
     expect(createErrorMessage(denied, t, null, 'https://github.com/stablyai/orca-cloud')).toBe(
-      'Orca can’t access stablyai/orca-cloud. If it’s private, connect GitHub and give Orca access to it in Orca on your computer. Check the name, then try again. Nothing was created, and you weren’t charged.'
+      'Orca can’t access stablyai/orca-cloud. Check the name. If it’s private, give Orca access to it from Orca on your computer. Nothing was created, and you weren’t charged.'
     )
     expect(createErrorMessage(denied, t)).toContain('Orca can’t access this repository.')
     // Never the generic line it used to fall back to.

@@ -126,11 +126,12 @@ export function cloudSpendLine(
   if (workspace.status === 'archived') {
     return t(
       'cloud.usage.archived',
-      '{{hours}} sandbox hours used. Archived workspaces use no sandbox hours.',
+      '{{hours}} sandbox hours used. Archived workspaces don’t use sandbox hours.',
       {
         count: value,
         hours: label,
-        defaultValue_one: '{{hours}} sandbox hour used. Archived workspaces use no sandbox hours.'
+        defaultValue_one:
+          '{{hours}} sandbox hour used. Archived workspaces don’t use sandbox hours.'
       }
     )
   }

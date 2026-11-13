@@ -154,8 +154,8 @@
       }
     },
     "usage": {
-      "archived_one": "{{hours}} sandbox hour used. Archived workspaces use no sandbox hours.",
-      "archived_other": "{{hours}} sandbox hours used. Archived workspaces use no sandbox hours.",
+      "archived_one": "{{hours}} sandbox hour used. Archived workspaces don’t use sandbox hours.",
+      "archived_other": "{{hours}} sandbox hours used. Archived workspaces don’t use sandbox hours.",
       "asleep_one": "{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.",
       "asleep_other": "{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.",
       "running_one": "{{hours}} sandbox hour so far. Uses sandbox hours while running.",

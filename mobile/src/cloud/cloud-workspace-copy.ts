@@ -194,24 +194,25 @@ export function createErrorMessage(
       return repo
         ? t(
             'cloud.error.repoAccess',
-            'Orca can’t access {{repo}}. If it’s private, connect GitHub and give Orca access to it in Orca on your computer. Check the name, then try again. Nothing was created, and you weren’t charged.',
+            'Orca can’t access {{repo}}. Check the name. If it’s private, give Orca access to it from Orca on your computer. Nothing was created, and you weren’t charged.',
             { repo }
           )
         : t(
             'cloud.error.repoAccessUnnamed',
-            'Orca can’t access this repository. If it’s private, connect GitHub and give Orca access to it in Orca on your computer. Check the name, then try again. Nothing was created, and you weren’t charged.'
+            'Orca can’t access this repository. Check the name. If it’s private, give Orca access to it from Orca on your computer. Nothing was created, and you weren’t charged.'
           )
     }
+    // The clone runs in a sandbox that already booted (and was metered): it's deleted, not "never created".
     if (error.code === 'provider_unavailable' && error.reason === 'orcad_start_failed') {
       return repo
         ? t(
             'cloud.error.cloneNamed',
-            'Couldn’t clone {{repo}}. Check the name, and that the Orca GitHub App can see it (Give Orca access, in Orca on your computer). Nothing was created, and you weren’t charged.',
+            'Couldn’t clone {{repo}}. Check the name, and that Orca has access to it (Give Orca access, in Orca on your computer). The sandbox was deleted.',
             { repo }
           )
         : t(
-            'cloud.error.clone',
-            'Couldn’t clone the repository. Check the name and that the Orca Cloud GitHub app can see it. Nothing was created, and you weren’t charged.'
+            'cloud.error.cloneDeleted',
+            'Couldn’t clone the repository. Check the name, and that Orca has access to it (Give Orca access, in Orca on your computer). The sandbox was deleted.'
           )
     }
     if (error.code === 'timeout' || error.code === 'network_error' || error.status >= 500) {
