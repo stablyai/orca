@@ -1,4 +1,3 @@
-import type { LaunchedAgentForeground } from '../terminal/wait/launched-agent-foreground'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -51,9 +50,9 @@ import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-scr
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
-  abstract readLaunchedAgentForeground(ptyId: string): Promise<LaunchedAgentForeground>
   protected abstract deliverPendingMessagesForPty(ptyId: string): void
-  protected abstract clearDeliveryRecheck(ptyId: string): void
+  protected abstract armDeliveryRecheck(ptyId: string): void
+  protected abstract readMailboxForeground(ptyId: string): Promise<'agent' | 'shell' | 'unknown'>
 
   protected readonly stopRequestedPtyIds = new Set<string>()
 
@@ -248,7 +247,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
-    readForeground: (ptyId) => this.readLaunchedAgentForeground(ptyId),
+    readForeground: (ptyId) => this.readMailboxForeground(ptyId),
+    onDeliveryDecision: (ptyId) => this.armDeliveryRecheck(ptyId),
     isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),

@@ -83,9 +83,9 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
   ): void {
     if (
       fact.kind === 'agent-exited' &&
-      this.orchestrationMailboxPointerDelivery.holdForeground(ptyId, foregroundObservation)
+      this.orchestrationMailboxPointerDelivery.applyForeground(ptyId, foregroundObservation)
     ) {
-      this.clearDeliveryRecheck(ptyId)
+      this.armDeliveryRecheck(ptyId)
     }
     if (!this.terminalSideEffectConsumerAvailable) {
       return

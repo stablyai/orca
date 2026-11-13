@@ -308,6 +308,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   protected repointPendingMessagesForHandle(handle: string): void {
     try {
+      const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(handle)
+      if (terminal && this.orchestrationMailboxPointerDelivery.isForegroundHeld(terminal.ptyId)) {
+        this.armDeliveryRecheck(terminal.ptyId)
+        return
+      }
       this.deliverPendingMessagesForHandle(handle)
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.

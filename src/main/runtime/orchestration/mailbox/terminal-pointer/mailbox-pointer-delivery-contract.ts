@@ -31,7 +31,15 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   readForeground: (ptyId: string) => Promise<'agent' | 'shell' | 'unknown'>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  onDeliveryDecision: (ptyId: string) => void
   redriveTerminal: (ptyId: string) => void
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+}
+
+export type PointerDeliveryOptions = {
+  mailboxHandle: string
+  reservedTypes?: ReadonlySet<string>
+  skipAbsenceProbe?: boolean
+  foregroundProbeIncarnation?: string
 }

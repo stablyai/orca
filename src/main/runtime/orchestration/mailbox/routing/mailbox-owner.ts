@@ -105,8 +105,11 @@ export class OrchestrationMailboxOwner {
   }
 
   /** The terminal's mailbox, then every other Run it coordinates that has mail, so an input edge wakes each. */
-  resolveAll(terminal: OrchestrationMailboxTerminal): string[] {
-    const mailboxHandle = this.resolve(terminal)
+  resolveAll(
+    terminal: OrchestrationMailboxTerminal,
+    options: { routeDirectMail?: boolean } = {}
+  ): string[] {
+    const mailboxHandle = this.resolve(terminal, undefined, options)
     if (!mailboxHandle) {
       return []
     }

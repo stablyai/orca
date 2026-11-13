@@ -37,6 +37,7 @@ function pointerDeps(
     resolveSubmitTarget: () => ({ terminal: TERMINAL, processIncarnation: 'inc-1' }),
     readForeground: async () => 'unknown' as const,
     redriveTerminal: vi.fn(),
+    onDeliveryDecision: vi.fn(),
     isLeafPtyProvenAbsent: async () => false,
     isPtyAwaitingUserInput: () => false,
     redriveMailbox: vi.fn(),

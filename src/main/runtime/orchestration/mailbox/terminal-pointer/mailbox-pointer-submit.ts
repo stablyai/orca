@@ -83,12 +83,10 @@ export function submitOrchestrationMailboxPointer(
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
       if (!terminal || !sameMailbox) {
         clearAndRedrive = true
+      } else if (!deps.state.applyForeground(input.ptyId, foreground, foreground.foreground)) {
+        submitOrchestrationMailboxPointer(deps, input)
+        preserveFlight = true
       } else if (foreground.foreground === 'shell') {
-        if (!deps.state.holdForeground(input.ptyId, foreground)) {
-          submitOrchestrationMailboxPointer(deps, input)
-          preserveFlight = true
-          return
-        }
         clearAndRedrive = true
         redriveClearedPointer = false
       } else if (

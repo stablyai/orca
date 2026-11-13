@@ -7,6 +7,7 @@ import {
   createRuntime,
   insertDirectRunMessage,
   PTY_ID,
+  PANE_KEY,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { sendDeliveryHoldWarning } from '../../../rpc/methods/orchestration/messaging/send-delivery-hold'
@@ -100,12 +101,10 @@ describe('mailbox delivery into a pane awaiting the user', () => {
 
     runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', 3)
     await vi.advanceTimersByTimeAsync(1000)
-    foreground = 'codex'
     runtime.onPtyData(PTY_ID, '\x1b]0;another workspace shell title\x07', 4)
     await vi.advanceTimersByTimeAsync(1000)
     expect(write).not.toHaveBeenCalled()
     expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
-    foreground = 'zsh'
 
     // A shell can reuse the last agent's title without giving it the terminal's input.
     runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 5)
@@ -229,4 +228,110 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     expect(await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)).toBeNull()
     db.close()
   })
+
+  it.each(['plain', 'title-setting'])(
+    'delivers after a silent foreground return in a %s shell and refreshes its receipt',
+    async (shellKind) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-silent-mail-return-')
+      const receivedAt = Date.now()
+      const { runtime } = createRuntime(db, {
+        launchAgent: null,
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: PANE_KEY,
+            connectionId: null,
+            agentType: 'claude',
+            state: 'done',
+            prompt: '',
+            receivedAt,
+            stateStartedAt: 1
+          }
+        ]
+      })
+      let shell = false
+      const write = vi.fn((_ptyId: string, _data: string) => true)
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getForegroundProcess: async () => 'zsh',
+        confirmShellForeground: async () => shell,
+        supportsForegroundObservation: () => true,
+        inspectProcess: async () => ({
+          foregroundProcess: shell ? 'zsh' : 'claude',
+          hasChildProcesses: !shell,
+          foregroundObservation: {
+            ptyId: PTY_ID,
+            ptyIncarnationId: 'mailbox-incarnation',
+            authorityGeneration: 'test',
+            observationEpoch: 1,
+            capturedAgeMs: 0,
+            verdict: 'observed',
+            source: 'pty-master',
+            foregroundKind: shell ? 'shell' : 'non-shell',
+            processName: shell ? 'zsh' : 'claude'
+          }
+        })
+      })
+      const run = createBoundRun(db, 'Silent foreground return')
+      await runtime.listTerminals()
+      runtime.onPtyData(
+        PTY_ID,
+        '\x1b]0;✳ Claude Code\x07\x1b[?2004h╭──────╮\r\n│ ❯  │\r\n╰──────╯',
+        1
+      )
+      await vi.advanceTimersByTimeAsync(1000)
+      shell = true
+      if (shellKind === 'title-setting') {
+        runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', 2)
+        await vi.advanceTimersByTimeAsync(1000)
+      }
+      const message = insertDirectRunMessage(db, run.id, 'Silent resume')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(write).not.toHaveBeenCalled()
+      expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
+        kind: 'not-foreground'
+      })
+      expect(db.getMessageById(message.id)).toMatchObject({
+        read: 0,
+        delivered_at: null,
+        pointer_enter_pending: 0
+      })
+      // Only the physical foreground changes: no new observation or send can release the hold.
+      shell = false
+      await vi.advanceTimersByTimeAsync(7000)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+      expect(db.getMessageById(message.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String),
+        pointer_enter_pending: 0
+      })
+      await vi.advanceTimersByTimeAsync(20000)
+      expect(write).toHaveBeenCalledTimes(2)
+
+      shell = true
+      const second = insertDirectRunMessage(db, run.id, 'Fresh receipt')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
+        kind: 'not-foreground',
+        agentName: 'Claude'
+      })
+      shell = false
+      expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toBeNull()
+      await vi.advanceTimersByTimeAsync(7000)
+      expect(db.getMessageById(second.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String),
+        pointer_enter_pending: 0
+      })
+      expect(write).toHaveBeenCalledTimes(4)
+      db.close()
+    }
+  )
 })

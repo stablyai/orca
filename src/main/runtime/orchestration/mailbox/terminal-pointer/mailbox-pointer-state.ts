@@ -1,3 +1,5 @@
+import { PrioritySemaphore } from '../../../../../shared/priority-semaphore'
+
 export type OrchestrationMailboxDeliveryFlight = {
   enterTimer: ReturnType<typeof setTimeout> | null
   stagedMessageIds: string[]
@@ -36,6 +38,7 @@ export class OrchestrationMailboxPointerState {
   private readonly watermarkMailboxesByPtyId = new Map<string, Set<string>>()
   private readonly parkedTypesByMailbox = new Map<string, ReadonlySet<string> | null>()
 
+  private readonly foregroundInspections = new PrioritySemaphore(4)
   private readonly foregroundObservations = new Map<string, ForegroundObservation>()
   private readonly foregroundProbes = new Map<
     string,
@@ -53,7 +56,16 @@ export class OrchestrationMailboxPointerState {
       return pending
     }
     const probe = Promise.resolve()
-      .then(read)
+      .then(async () => {
+        const release = await this.foregroundInspections.acquire(0)
+        try {
+          return this.foregroundObservations.get(ptyId) === observation.observation
+            ? await read()
+            : ('unknown' as const)
+        } finally {
+          release()
+        }
+      })
       .catch(() => 'unknown' as const)
       .then((foreground) => ({ foreground, ...observation }))
       .finally(() => {
@@ -73,9 +85,10 @@ export class OrchestrationMailboxPointerState {
     return { observation, generation: observation.generation }
   }
 
-  holdForeground(
+  applyForeground(
     ptyId: string,
-    proof: OrchestrationMailboxForegroundObservation | undefined
+    proof: OrchestrationMailboxForegroundObservation | undefined,
+    foreground: 'agent' | 'shell' | 'unknown' = 'shell'
   ): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (
@@ -86,7 +99,7 @@ export class OrchestrationMailboxPointerState {
     ) {
       return false
     }
-    observation.held = true
+    observation.held = foreground === 'shell'
     return true
   }
 
@@ -113,6 +126,10 @@ export class OrchestrationMailboxPointerState {
       this.foregroundObservations.set(ptyId, observation)
     }
     return observation
+  }
+
+  hasForegroundProbe(ptyId: string): boolean {
+    return this.foregroundProbes.has(ptyId)
   }
 
   hasFlight(ptyId: string): boolean {

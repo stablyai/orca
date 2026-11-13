@@ -49,10 +49,13 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   /** Whether delivery has work for this terminal: a pointer reservation to recover, or unread, undelivered mail no waiter or held batch claims. */
   hasDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
-    const db = this.deps.getDb()
-    return (
-      !!db &&
-      this.deps.mailboxOwner.resolveAll(terminal).some((mailboxHandle) => {
+    try {
+      const db = this.deps.getDb()
+      if (!db) {
+        return false
+      }
+      const owned = this.deps.mailboxOwner.resolveAll(terminal, { routeDirectMail: false })
+      return [...new Set([...owned, terminal.handle])].some((mailboxHandle) => {
         const waiters = this.deps.getMessageWaiters(mailboxHandle)
         return (
           // Mirrors deliver(): an unfiltered waiter preempts recovery too.
@@ -63,11 +66,14 @@ export class OrchestrationMailboxNotificationCoordinator<
               mailboxHandle,
               waiters,
               reservedTypes: undefined,
-              excludeRunOwnedDirect: mailboxHandle === terminal.handle
+              excludeRunOwnedDirect: owned[0] === terminal.handle
             }).messages.length > 0)
         )
       })
-    )
+    } catch {
+      // A closed or unavailable database cannot own a live delivery retry.
+      return false
+    }
   }
 
   notifyMessageArrived(handle: string, messageType?: string): void {

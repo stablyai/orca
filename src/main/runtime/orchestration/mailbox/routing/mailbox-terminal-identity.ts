@@ -34,9 +34,17 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationMailboxTerminal | null {
     const paneKeys = this.getMailboxPaneKeysForPty(pty)
-    const { ptyId, lastAgentStatus, lastAgentStatusObservedLive } = pty
+    const { ptyId } = pty
+    const status =
+      pty.lastAgentStatus ?? this.getFreshExplicitAgentStatusForPty(handle, ptyId)?.status ?? null
     return paneKeys.length > 0
-      ? { ptyId, handle, paneKeys, lastAgentStatus, lastAgentStatusObservedLive }
+      ? {
+          ptyId,
+          handle,
+          paneKeys,
+          lastAgentStatus: status,
+          lastAgentStatusObservedLive: pty.lastAgentStatusObservedLive
+        }
       : null
   }
 
