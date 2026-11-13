@@ -3,6 +3,7 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { KIMI_ACP_DIALECT } from '../acp/acp-dialects/kimi-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { KIMI_TRANSCRIPT_IMPORT } from './kimi-transcript-import'
 import {
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
@@ -41,6 +42,6 @@ export const KIMI_LAUNCH_SPEC: AcpLaunchSpec = {
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
   compaction: true,
   compactionInstructions: true,
-  transcriptImport: null,
+  transcriptImport: KIMI_TRANSCRIPT_IMPORT,
   sessionHistory: KIMI_SESSION_HISTORY
 }
