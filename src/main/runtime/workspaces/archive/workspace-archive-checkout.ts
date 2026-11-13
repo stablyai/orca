@@ -7,6 +7,7 @@ import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-p
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { localBranchExists } from '../../../git/worktrees/removal/worktree-removal'
+import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
 import { normalizeLocalBranchRef } from '../../../git/worktrees/worktree-operation-options'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
@@ -95,22 +96,28 @@ export async function unmarkArchiveIfCheckoutRemains(
   }
 }
 
-/** Null when Git still has the checkout on its branch: an archive that stopped before deleting it. */
+/** Recreate the checkout, or finish one a crash left registered on its branch; content paths are idempotent. */
 export async function recreateArchivedCheckout(
   store: RuntimeStore,
   repo: Repo,
   worktreeId: string,
   path: string,
   branch: string
-): Promise<{ includeCopyWarning?: string } | null> {
+): Promise<{ includeCopyWarning?: string }> {
   const gitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-  const registered = await listWorktreesStrict(repo.path, gitOptions)
-  const atPath = registered.find((worktree) => areWorktreePathsEqual(worktree.path, path))
+  let registered = await listWorktreesStrict(repo.path, gitOptions)
+  let atPath = registered.find((worktree) => areWorktreePathsEqual(worktree.path, path))
+  if (atPath && (atPath.prunable || !(await runtimePathExists(path)))) {
+    // A registration whose folder is gone would block `worktree add`; Git drops it on prune.
+    await pruneGitWorktrees({ cwd: repo.path, ...gitOptions })
+    registered = await listWorktreesStrict(repo.path, gitOptions)
+    atPath = registered.find((worktree) => areWorktreePathsEqual(worktree.path, path))
+  }
   if (atPath) {
-    if (normalizeLocalBranchRef(atPath.branch) === branch) {
-      return null
+    if (normalizeLocalBranchRef(atPath.branch) !== branch) {
+      throw new Error(`Another checkout is already at ${path}.`)
     }
-    throw new Error(`Another checkout is already at ${path}.`)
+    return materializeWorktreeContentPaths(repo, path, gitOptions, untimed)
   }
   const holder = registered.find((worktree) => normalizeLocalBranchRef(worktree.branch) === branch)
   if (holder) {

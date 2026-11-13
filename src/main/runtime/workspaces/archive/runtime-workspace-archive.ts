@@ -1,7 +1,7 @@
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import { splitWorktreeId } from '../../../../shared/worktree/id'
+import { splitWorktreeId, worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import {
@@ -11,6 +11,8 @@ import {
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
+import { findPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
+import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { getExplicitWorktreeIdSelector } from '../catalog/runtime-worktree-selection'
 import { prepareRuntimeLocalWorktreeSetup } from '../creation/runtime-local-worktree-setup'
 import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
@@ -35,6 +37,25 @@ export type RestoreArchivedWorktreeResult = {
 }
 
 export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemoval {
+  // The lifecycle queue is off in some builds; archive and restore of one workspace must never overlap.
+  private readonly archiveOperations = new Set<string>()
+
+  private async exclusiveArchiveOperation<T>(
+    worktreeId: string,
+    run: () => Promise<T>
+  ): Promise<T> {
+    const key = worktreeIdentityKey(worktreeId)
+    if (this.archiveOperations.has(key)) {
+      throw new Error('This workspace is already being archived or restored.')
+    }
+    this.archiveOperations.add(key)
+    try {
+      return await run()
+    } finally {
+      this.archiveOperations.delete(key)
+    }
+  }
+
   /** Delete the checkout through the normal removal refusals, keeping the branch and every workspace record. */
   async archiveManagedWorktree(
     worktreeSelector: string,
@@ -43,29 +64,31 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
     const store = this.requireStore()
     const requiredHostId = parseExecutionHostId(options.hostId)?.id
     const target = await this.resolveWorktreeRemovalTarget(worktreeSelector, requiredHostId)
-    const { hostId } = await resolveArchivableCheckout(store, target, requiredHostId)
-    let warning: string | undefined
-    try {
-      ;({ warning } = await this.removeManagedWorktree(`id:${target.id}`, {
-        archive: {
-          markArchived: (worktree) =>
-            markWorktreeCheckoutArchived(store, target.id, hostId, worktree)
-        },
-        runHooks: true,
-        deleteBranch: false,
-        waitForBackgroundRemoval: true,
-        ...(options.hostId ? { hostId: options.hostId } : {})
-      }))
-    } catch (error) {
-      await unmarkArchiveIfCheckoutRemains(store, target, hostId)
-      throw error
-    }
-    return {
-      worktreeId: target.id,
-      path: target.path,
-      branch: readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout?.branch ?? '',
-      ...(warning ? { warning } : {})
-    }
+    return this.exclusiveArchiveOperation(target.id, async () => {
+      const { hostId } = await resolveArchivableCheckout(store, target, requiredHostId)
+      let warning: string | undefined
+      try {
+        ;({ warning } = await this.removeManagedWorktree(`id:${target.id}`, {
+          archive: {
+            markArchived: (worktree) =>
+              markWorktreeCheckoutArchived(store, target.id, hostId, worktree)
+          },
+          runHooks: true,
+          deleteBranch: false,
+          waitForBackgroundRemoval: true,
+          ...(options.hostId ? { hostId: options.hostId } : {})
+        }))
+      } catch (error) {
+        await unmarkArchiveIfCheckoutRemains(store, target, hostId)
+        throw error
+      }
+      return {
+        worktreeId: target.id,
+        path: target.path,
+        branch: readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout?.branch ?? '',
+        ...(warning ? { warning } : {})
+      }
+    })
   }
 
   /** Recreate an archived workspace's checkout at its old path from its kept branch. */
@@ -73,15 +96,26 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
     worktreeSelector: string,
     options: { hostId?: string; setupDecision?: SetupDecision } = {}
   ): Promise<RestoreArchivedWorktreeResult> {
-    const store = this.requireStore()
     const worktreeId = getExplicitWorktreeIdSelector(worktreeSelector) ?? worktreeSelector
     const parsed = splitWorktreeId(worktreeId)
     if (!parsed) {
       throw new Error('selector_not_found')
     }
+    return this.exclusiveArchiveOperation(worktreeId, () =>
+      this.restoreArchivedCheckout(worktreeId, parsed.repoId, parsed.worktreePath, options)
+    )
+  }
+
+  private async restoreArchivedCheckout(
+    worktreeId: string,
+    repoId: string,
+    path: string,
+    options: { hostId?: string; setupDecision?: SetupDecision }
+  ): Promise<RestoreArchivedWorktreeResult> {
+    const store = this.requireStore()
     const owner = resolveWorktreeRemovalRepoOwner(
       store,
-      parsed.repoId,
+      repoId,
       parseExecutionHostId(options.hostId)?.id
     )
     if (owner.kind !== 'resolved' || isFolderRepo(owner.repo)) {
@@ -96,28 +130,37 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
     // The owning host restores; a client never recreates another host's checkout.
     resolveWorktreeRemovalRoute(hostId)
     assertWslMoveRepoWritable(store, repo)
-    const path = parsed.worktreePath
-    const recreated = await recreateArchivedCheckout(store, repo, worktreeId, path, archived.branch)
-    let warning = recreated?.includeCopyWarning
-    // Fresh activity so an inactive-workspace rule doesn't archive it again right away.
-    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId }), {
-      isArchived: false,
-      archivedCheckout: undefined,
-      lastActivityAt: Date.now()
-    })
-    if (recreated) {
+    // A removal still deleting this checkout would purge the row once the mark is cleared.
+    if (findPendingWorktreeRemovalConflict(repo.path, { worktreePath: path })) {
+      throw new Error('This workspace is still being archived or deleted.')
+    }
+    // The create fence keeps the project from being removed while its checkout comes back.
+    const warning = await withProjectWorktreeCreate(repo, async () => {
+      const { includeCopyWarning } = await recreateArchivedCheckout(
+        store,
+        repo,
+        worktreeId,
+        path,
+        archived.branch
+      )
+      // Fresh activity so an inactive-workspace rule doesn't archive it again right away.
+      store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId }), {
+        isArchived: false,
+        archivedCheckout: undefined,
+        lastActivityAt: Date.now()
+      })
+      // Archive ran the teardown hook, so setup runs on every restore; no terminal here, so in-process.
       const setup = await prepareRuntimeLocalWorktreeSetup({
         request: options.setupDecision ? { setupDecision: options.setupDecision } : {},
         repo,
         worktreePath: path,
         settings: store.getSettings(),
         runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
-        // Restore has no terminal to show setup in, so the hook runs in this process.
         shouldUseSetupRunner: false,
-        warning
+        warning: includeCopyWarning
       })
-      warning = setup.warning
-    }
+      return setup.warning
+    })
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
     invalidateAuthorizedRootsCacheForRepo(store, repo)
