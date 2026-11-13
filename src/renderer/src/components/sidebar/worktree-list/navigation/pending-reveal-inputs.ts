@@ -1,3 +1,5 @@
+import { supersedeVirtualizedScrollAnchorRestore } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -152,4 +154,32 @@ export function resolvePendingWorktreeRevealTarget(
         )
       })
   return { targetIndex, outcome }
+}
+
+export function preparePendingSidebarRowReveal(
+  args: PendingSidebarRevealArgs,
+  request: PendingSidebarRowReveal
+): boolean {
+  const isProjectHeaderTarget =
+    request.rowKey.startsWith('project-group:') ||
+    request.rowKey.startsWith('project:') ||
+    request.rowKey.startsWith('repo:')
+  if (isProjectHeaderTarget && args.groupBy !== 'repo') {
+    return false
+  }
+
+  supersedeVirtualizedScrollAnchorRestore(args.scrollRef.current)
+  let toggledAncestor = false
+  for (const groupKey of getSidebarRowRevealAncestorKeys({
+    rowKey: request.rowKey,
+    repoMap: args.repoMap,
+    projectGroups: args.projectGroups,
+    projectGrouping: args.projectGrouping
+  })) {
+    if (args.collapsedGroups.has(groupKey)) {
+      args.toggleGroup(groupKey)
+      toggledAncestor = true
+    }
+  }
+  return !toggledAncestor
 }

@@ -13,7 +13,6 @@ import {
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
-import { useVirtualRowRemovalAnimation } from './use-row-removal-animation'
 
 const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
 
@@ -34,7 +33,6 @@ export function useVirtualRowMeasurementSync(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
-  hasDirectScrollInput: () => boolean
   shouldSkipScrollAnchorRestore: () => boolean
 }) {
   const {
@@ -43,13 +41,15 @@ export function useVirtualRowMeasurementSync(args: {
     scrollRef,
     scrollOffsetRef,
     scrollAnchorRef,
-    hasDirectScrollInput,
     shouldSkipScrollAnchorRestore
   } = args
   const { virtualizer, isCurrentVirtualRowElement } = virtualization
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
-  const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
+  const activeRenderRowKeys = useMemo(
+    () => new Set(virtualization.rowIndexByKey.keys()),
+    [virtualization.rowIndexByKey]
+  )
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -101,18 +101,14 @@ export function useVirtualRowMeasurementSync(args: {
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
     rows: renderRows,
+    rowIndexByKey: virtualization.rowIndexByKey,
+    restoreSignal: virtualization.restoreSignal,
+    programmaticScrollMarks: virtualization.programmaticScrollMarks,
     scrollElementRef: scrollRef,
     scrollOffsetRef,
-    hasDirectScrollInput,
     shouldSkipRestore: shouldSkipScrollAnchorRestore,
     totalSize,
     virtualizer
-  })
-
-  useVirtualRowRemovalAnimation({
-    renderRows,
-    scrollRef,
-    virtualItems
   })
 
   return { virtualItems, measureVirtualRowElement }

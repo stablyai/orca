@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { useTranslate } from '@/i18n/use-translate'
@@ -113,7 +114,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const reveal = useSidebarRevealHighlight()
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
-  const { markDirectScrollInput, markScrollMovement } = scrollSuppression
+  const { markDirectScrollInput } = scrollSuppression
+  const programmaticScrollMarks = useMemo(createProgrammaticScrollMarks, [])
 
   const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
     rows,
@@ -148,8 +150,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef,
     onReorderHostSections: props.onReorderHostSections,
     onHostDragActiveChange: props.onHostDragActiveChange,
-    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef,
-    directScrollInputUntilRef: scrollSuppression.directScrollInputUntilRef
+    onScrollIntent: markDirectScrollInput
   })
 
   const virtualization = useWorktreeListVirtualizer({
@@ -158,7 +159,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     firstHeaderIndex,
     scrollRef,
     scrollOffsetRef,
-    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef
+    programmaticScrollMarks
   })
   const rowGeometry = useWorktreeRowGeometry({ rows, projection, virtualization, scrollRef })
 
@@ -235,7 +236,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef,
     scrollOffsetRef,
     scrollAnchorRef,
-    hasDirectScrollInput: scrollSuppression.hasDirectScrollInput,
     shouldSkipScrollAnchorRestore: scrollSuppression.shouldSkipScrollAnchorRestore
   })
 
@@ -261,7 +261,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     session,
     runtime,
     scrollRef,
-    markScrollMovement,
+    markScrollMovement: scrollSuppression.cancelRevealScroll,
     selectedWorktreeIds: props.selectedWorktreeIds,
     selectedWorktrees: props.selectedWorktrees,
     workspaceBoardOpen: props.workspaceBoardOpen,
@@ -275,7 +275,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     session,
     runtime,
     scrollRef,
-    markScrollMovement
+    markScrollMovement: scrollSuppression.cancelRevealScroll
   })
   useWorktreeDocumentDrop({
     ctx: dropCtx,
@@ -338,9 +338,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     },
     [markDirectScrollInput]
   )
-  const handleScroll = useCallback(() => {
-    markScrollMovement()
-  }, [markScrollMovement])
 
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
   const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
@@ -396,8 +393,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
-        // Why: trackpad momentum fires sparse scroll events after the input stream quiets; suppress correction until the viewport stops.
-        onScroll={handleScroll}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}

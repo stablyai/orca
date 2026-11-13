@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { useMemo } from 'react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { RenderRow } from './render-row'
+import { getRenderRowKey, type RenderRow } from './render-row'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity,
@@ -40,6 +40,8 @@ export function buildLineageRowProjection(
   newCardStyle: boolean,
   statusLane = newCardStyle
 ) {
+  const rowIndexByKey = new Map<string, number>()
+  const rowKeys: string[] = []
   const frames: LineageRowFrame[] = []
   const occurrencesByIdentity = new Map<string, number[]>()
   const stack: number[] = []
@@ -48,6 +50,9 @@ export function buildLineageRowProjection(
     frames[index].end = next - 1
   }
   rows.forEach((row, index) => {
+    const key = getRenderRowKey(row)
+    rowKeys.push(key)
+    rowIndexByKey.set(key, index)
     const isWorkspace = row.type === 'item' || row.type === 'folder-workspace'
     while (stack.length > 0) {
       const parent = rows[stack.at(-1)!]
@@ -145,7 +150,7 @@ export function buildLineageRowProjection(
     const next = frames[index + 1]
     frame.after = next?.root === frame.root ? 0 : 6
   })
-  return { frames, occurrencesByIdentity }
+  return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
 }
 
 export function useDraggedSubtreeRanges(

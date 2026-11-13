@@ -1,4 +1,4 @@
-import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import { revealElementInScrollContainer, type SidebarRevealScroll } from './worktree-sidebar-reveal'
 import { getMountedWorktreeOptions, getWorktreeOptionId } from '../rows/option-dom'
 
 export function revealMountedWorktreeElement(
@@ -6,7 +6,8 @@ export function revealMountedWorktreeElement(
   worktreeId: string,
   behavior: ScrollBehavior,
   optionId?: string,
-  onScrollIssued?: (targetTop: number) => void
+  onScrollIssued?: (targetTop: number) => void,
+  scrollTo?: SidebarRevealScroll
 ): HTMLElement | null {
   const element = optionId
     ? document.getElementById(optionId)
@@ -14,7 +15,7 @@ export function revealMountedWorktreeElement(
   if (!element || !container.contains(element)) {
     return null
   }
-  return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
+  return revealElementInScrollContainer(container, element, behavior, onScrollIssued, scrollTo)
     ? element
     : null
 }
@@ -23,13 +24,14 @@ export function revealMountedSidebarRowElement(
   container: HTMLElement,
   rowKey: string,
   behavior: ScrollBehavior,
-  onScrollIssued?: (targetTop: number) => void
+  onScrollIssued?: (targetTop: number) => void,
+  scrollTo?: SidebarRevealScroll
 ): HTMLElement | null {
   const element = document.getElementById(getWorktreeOptionId(rowKey))
   if (!element || !container.contains(element)) {
     return null
   }
-  return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
+  return revealElementInScrollContainer(container, element, behavior, onScrollIssued, scrollTo)
     ? element
     : null
 }
