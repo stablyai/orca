@@ -1,4 +1,4 @@
-// Archive and unarchive from the team list. Both are lifecycle changes, never just a label:
+// Archive and unarchive from the cloud workspace list ("Open cloud workspace…"). Both are lifecycle changes, never just a label:
 // a workspace this desktop runs goes through the same Sleep → archive (with Undo) as the sidebar;
 // any other one is archived by the control plane, which stops its sandbox and keeps a snapshot.
 import { noteCloudArchiveChanged } from '@/lib/orca-cloud/cloud-archive-changes'
@@ -13,7 +13,6 @@ import {
   runUnarchiveCloudWorkspace
 } from '../orca-cloud/cloud-workspace-actions'
 import { describeError } from './cloud-workspace-errors'
-export { usePendingHomeFilters } from './cloud-workspaces-home-nav'
 import type { Translate } from '@/i18n/use-translate'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
 import type { RowActions } from './CloudWorkspaceRowMenu'
@@ -156,7 +155,7 @@ export async function deleteFromHome(
 export async function destroyFromHome(w: CloudWorkspace, name: string): Promise<void> {
   const result = await window.api.cloudWorkspaces.destroy(w.id)
   if (result.ok) {
-    // It may have been an archived one: Home's archived count reads again.
+    // It may have been an archived one: anything counting archived workspaces reads again.
     noteCloudArchiveChanged()
     toast.success(translate('orcaCloudWorkspace.deletedNamed', 'Deleted {{name}}', { name }))
     return

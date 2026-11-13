@@ -9,6 +9,7 @@ import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tour
 import type { AddRepoDialogEntryRequest } from './project-admission/dialog/add-repo-dialog-types'
 import { AddProjectMenu } from './project-admission/menu/AddProjectMenu'
 import SidebarWorkspaceOptionsMenu from './worktree-list/controls/SidebarWorkspaceOptionsMenu'
+import { useOpenCloudWorkspaceMenuItems } from '../cloud-workspaces/OpenCloudWorkspaceMenuItem'
 
 function AddProjectButton({
   preserveWorkspaceBoardOpen,
@@ -20,6 +21,7 @@ function AddProjectButton({
   const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
   const label = t('auto.components.sidebar.SidebarHeader.addProject', 'Add project')
+  const cloudItems = useOpenCloudWorkspaceMenuItems()
   const handleOpenEntryRequest = useCallback(
     (entryRequest: AddRepoDialogEntryRequest) => {
       openModal('add-repo', { entryRequest })
@@ -36,6 +38,7 @@ function AddProjectButton({
       preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
       onOpenChange={onMenuOpenChange}
       onOpenEntryRequest={handleOpenEntryRequest}
+      extraItems={cloudItems}
     >
       <Button
         variant="ghost"

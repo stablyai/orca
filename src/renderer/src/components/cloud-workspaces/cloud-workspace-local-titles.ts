@@ -71,10 +71,12 @@ export function useBackfillLocalTitles(
 const NONE: readonly CloudWorkspace[] = []
 
 /**
- * What Home lists: a workspace being deleted (or gone) is not something to open or manage, so it
- * is left out; untitled ones this computer started read by its name for them, not the repo.
+ * What the cloud workspace list shows: a workspace being deleted (or gone) is not something to open
+ * or manage, so it is left out; untitled ones this computer started read by its name, not the repo.
  */
-export function useHomeWorkspaces(workspaces: readonly CloudWorkspace[] | null): CloudWorkspace[] {
+export function useListedCloudWorkspaces(
+  workspaces: readonly CloudWorkspace[] | null
+): CloudWorkspace[] {
   const listed = useMemo(
     () => (workspaces ?? NONE).filter((w) => w.status !== 'destroying' && w.status !== 'destroyed'),
     [workspaces]

@@ -1,6 +1,5 @@
 // App-level wiring for team cloud workspaces: orca://cloud links, presence for the workspace in
 // front, and the copy-link shortcut. Installed once from main.tsx; no React tree needed.
-import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
@@ -14,46 +13,19 @@ import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
 import { installCloudWorkspaceSync } from './cloud-workspace-sync'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 
-const HIGHLIGHT_MS = 4_000
 /** No input for this long and the desktop stops reporting presence (and renewing a lease). */
 const IDLE_MS = 15 * 60_000
 const TYPING_REPORT_MS = 3_000
 /** Tab and pane switches settle before the chat in front is re-read (layouts churn while resizing). */
 const CHAT_SYNC_DEBOUNCE_MS = 300
 
-let highlightId: string | null = null
-let highlightTimer: ReturnType<typeof setTimeout> | undefined
-const listeners = new Set<() => void>()
-function setHighlight(id: string | null, clearAfterMs?: number): void {
-  clearTimeout(highlightTimer)
-  highlightTimer =
-    clearAfterMs === undefined ? undefined : setTimeout(() => setHighlight(null), clearAfterMs)
-  highlightId = id
-  listeners.forEach((l) => l())
-}
-
-/** The workspace a link pointed at, so Home can ring it while it opens. */
-export function useCloudWorkspaceHighlight(): string | null {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l)
-      return () => listeners.delete(l)
-    },
-    () => highlightId
-  )
-}
-
 export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   const parsed = parseCloudWorkspaceLink(link)
   if (!parsed || !(await cloudWorkspacesAvailable())) {
     return
   }
-  if (parsed.target.kind === 'id') {
-    setHighlight(parsed.target.workspaceId)
-  }
   const resolved = await window.api.cloudWorkspaces.resolveLink(parsed.target, parsed.chatId)
   if (!resolved.ok) {
-    setHighlight(null)
     reportCloudWorkspaceLinkFailure(parsed.target, resolved, () => {
       void handleCloudWorkspaceLink(link)
     })
@@ -61,14 +33,12 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   }
   const workspace = resolved.value.workspace
   rememberCloudWorkspaces([workspace])
-  setHighlight(workspace.id)
   const outcome = await openCloudWorkspace(workspace)
   if (!outcome.ok) {
     toast.error(outcome.message)
   } else if (resolved.value.chatId) {
     await focusCloudChat(outcome.worktreeId, resolved.value.chatId)
   }
-  setHighlight(workspace.id, HIGHLIGHT_MS)
 }
 
 type Front = {
@@ -80,8 +50,8 @@ type Front = {
 let front: Front = null
 
 /**
- * ⌘⌥⇧L: the workspace's own link (its W-number), like the tab-bar chip and Home's "Copy link to
- * W-n". A link to the focused chat or terminal is a separate menu item, never the shortcut.
+ * ⌘⌥⇧L: the workspace's own link (its W-number), like the tab-bar chip and the cloud workspace
+ * list's "Copy link to W-n". A link to the focused chat or terminal is a separate menu item, never the shortcut.
  */
 export function copyShortcutLink(sandboxId: string): Promise<boolean> {
   return copyCloudWorkspaceLink(sandboxId, null)
@@ -285,6 +255,5 @@ export function installCloudWorkspaceLinks(): () => void {
   const onUnload = (): void => void api.setActive({ sandboxId: null })
   window.addEventListener('beforeunload', onUnload)
   cleanups.push(() => window.removeEventListener('beforeunload', onUnload))
-  cleanups.push(() => setHighlight(null))
   return () => cleanups.forEach((c) => c())
 }
