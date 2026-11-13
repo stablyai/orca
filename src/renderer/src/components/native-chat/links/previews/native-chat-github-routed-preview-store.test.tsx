@@ -6,7 +6,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
-import { clearRepoSlugCacheValues } from '@/lib/workspace/catalog/repo-slug-cache'
+import {
+  clearRepoSlugCacheValues,
+  rememberRepoSlug,
+  repoSlugCacheKey
+} from '@/lib/workspace/catalog/repo-slug-cache'
 import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
 
 const mocks = await vi.hoisted(async () => {
@@ -164,4 +168,30 @@ it('recovers an open fallback when the project slug index retries a failed slug'
   })
   expect(container.textContent).toContain('Recovered preview')
   expect(container.textContent).not.toContain('Link fallback')
+})
+
+it('promotes a warmed clone and keeps its preview across unrelated slug writes', async () => {
+  rememberRepoSlug(repoSlugCacheKey(repos[0])!, 'acme/router')
+  rememberRepoSlug(repoSlugCacheKey(repos[1])!, null)
+  rememberRepoSlug(repoSlugCacheKey(repos[2])!, null)
+  mocks.endpoint.mockImplementation(async ({ repoId }: { repoId: string }) =>
+    preview(45, repoId === 'repo-2' ? 'Clone preview' : 'Host route preview')
+  )
+  const link = parseGitHubIssueOrPRLink('https://github.com/acme/repo-2/pull/45')!
+  await act(async () => {
+    root.render(
+      <NativeChatGitHubPeekBody source={{ kind: 'routed', authorityKey: 'local' }} link={link} />
+    )
+  })
+  expect(container.textContent).toContain('Host route preview')
+  await act(async () => {
+    rememberRepoSlug(repoSlugCacheKey(repos[2])!, 'acme/repo-2')
+  })
+  expect(container.textContent).toContain('Clone preview')
+  await act(async () => {
+    rememberRepoSlug(repoSlugCacheKey(repos[1])!, 'acme/other')
+    rememberRepoSlug('local:unregistered', 'acme/repo-2')
+  })
+  expect(container.textContent).toContain('Clone preview')
+  expect(container.textContent).not.toContain('Host route preview')
 })

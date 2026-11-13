@@ -1,10 +1,5 @@
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
-import { recomputeOn } from '@/lib/recompute-on'
-import {
-  getRepoSlugCacheVersion,
-  subscribeRepoSlugCache
-} from '@/lib/workspace/catalog/repo-slug-cache'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -33,6 +28,13 @@ import {
   type NativeChatGitHubRepo
 } from './native-chat-github-repo'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
+import {
+  createGitHubPreviewRouteStore,
+  type GitHubPreviewRouteStore
+} from './native-chat-github-route-store'
+
+const subscribeNothing = (): (() => void) => () => {}
+const readNoRepo = (): null => null
 
 function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   const t = useTranslate()
@@ -84,7 +86,12 @@ export type GitHubPeekSource =
   | { kind: 'repo'; repo: Repo }
   | { kind: 'routed'; authorityKey: HostAuthorityKey }
 
-function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink, key: string) {
+function peekLookup(
+  source: GitHubPeekSource,
+  link: GitHubIssueOrPRLink,
+  key: string,
+  route: GitHubPreviewRouteStore | null
+) {
   return source.kind === 'repo'
     ? {
         key,
@@ -93,8 +100,9 @@ function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink, key: st
       }
     : {
         key,
-        read: () => readCachedRoutedGitHubLinkPreview(source.authorityKey, link),
-        load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link)
+        read: () =>
+          readCachedRoutedGitHubLinkPreview(source.authorityKey, link, route ?? undefined),
+        load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link, route ?? undefined)
       }
 }
 
@@ -112,22 +120,28 @@ export function NativeChatGitHubPeekBody({
 }): ReactNode {
   // Select the catalog itself so unrelated store updates don't rescan it for a route.
   const routeRepos = useAppStore((state) => (source.kind === 'routed' ? state.repos : null))
-  const slugCacheVersion = useSyncExternalStore(subscribeRepoSlugCache, () =>
-    source.kind === 'routed' ? getRepoSlugCacheVersion() : 0
+  const route = useMemo(
+    () =>
+      source.kind === 'routed'
+        ? createGitHubPreviewRouteStore(routeRepos ?? [], source.authorityKey, link)
+        : null,
+    [source, link, routeRepos]
+  )
+  const routedRepo = useSyncExternalStore(
+    route?.subscribe ?? subscribeNothing,
+    route?.read ?? readNoRepo
   )
   const key = useMemo(
     () =>
-      recomputeOn([slugCacheVersion], () =>
-        source.kind === 'repo'
-          ? githubLinkPreviewKey(source.repo, link)
-          : routedGitHubLinkPreviewKey(source.authorityKey, link, routeRepos ?? [])
-      ),
-    [source, link, routeRepos, slugCacheVersion]
+      source.kind === 'repo'
+        ? githubLinkPreviewKey(source.repo, link)
+        : routedGitHubLinkPreviewKey(source.authorityKey, link, routedRepo),
+    [source, link, routedRepo]
   )
   return (
     <GitHubPeekContent
       key={key}
-      lookup={peekLookup(source, link, key)}
+      lookup={peekLookup(source, link, key, route)}
       link={link}
       otherRepoFallback={otherRepoFallback}
     />
