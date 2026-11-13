@@ -1702,6 +1702,35 @@
         "lastChange": "Last change received",
         "lastChangeSummary": "{{what}} · {{when}}"
       }
+    },
+    "teamWorkspaces": {
+      "search": "Search workspaces",
+      "searchPlaceholder": "Search name, repository, person, W-number…",
+      "filterBy": "Filter by person",
+      "byAnyone": "By anyone",
+      "byPerson": "By {{name}}",
+      "filterIn": "Filter by repository",
+      "inAnyRepo": "In any repository",
+      "inRepo": "In {{repo}}",
+      "emptyTeam": "No one on your team has a cloud workspace yet.",
+      "emptyFiltered": "No workspaces match these filters.",
+      "colName": "Workspace",
+      "colNumber": "No.",
+      "colCreatedBy": "Created by",
+      "colState": "State",
+      "colLastActive": "Last active",
+      "colAccess": "Access",
+      "colActions": "Actions",
+      "shared": "Shared",
+      "shownOf_one": "{{shown}} of {{count}} workspace",
+      "shownOf_other": "{{shown}} of {{count}} workspaces",
+      "title": "Cloud workspaces",
+      "searchDescription": "Every cloud workspace on your team, to open, sleep or archive.",
+      "keywordCloud": "cloud workspaces",
+      "keywordTeam": "team workspaces",
+      "keywordSandboxes": "sandboxes",
+      "keywordArchive": "archive",
+      "description": "Every cloud workspace on your team. Only owners and admins can see this page."
     }
   },
   "menu": {
