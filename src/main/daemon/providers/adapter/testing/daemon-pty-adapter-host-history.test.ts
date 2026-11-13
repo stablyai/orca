@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
@@ -183,46 +184,68 @@ describe('daemon-owned terminal history', () => {
     expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')
   }, 30_000)
 
-  // AIO-C3: a recovery marker lookup that cannot tell used to start the process with no hold.
-  it('starts no process while the recovery marker cannot be checked, then starts normally', async () => {
-    let spawned = 0
-    harness = await startDaemonAdapterHarness(
-      () => {
-        spawned += 1
-        return createMockSubprocess()
-      },
-      {},
-      { hostHistory: true }
-    )
-    const root = join(harness.dir, 'history')
-    adapter = new DaemonPtyAdapter({
-      socketPath: harness.socketPath,
-      tokenPath: harness.tokenPath,
-      historyPath: root
-    })
-    const request = { sessionId: 'host-history-uncertain', cols: 80, rows: 24, cwd: '/tmp' }
-    const dir = join(root, getHistorySessionDirName(request.sessionId))
-    const stat = fsPromises.stat
-    const lookup = vi.spyOn(fsPromises, 'stat').mockImplementation(async (...args) => {
-      if (String(args[0]).endsWith('.unreadable-recovery')) {
-        throw Object.assign(new Error('i/o error'), { code: 'EIO' })
+  // AIO-C3: a hold lookup that cannot tell used to start the process with no hold. Windows
+  // reports some filesystem failures as UNKNOWN, which is not saved content known to be bad.
+  it.each([
+    ['its recovery marker', 'EIO'],
+    ['its saved metadata', 'UNKNOWN']
+  ] as const)(
+    'starts no process while %s cannot be checked, then starts normally',
+    async (lookup, code) => {
+      let spawned = 0
+      harness = await startDaemonAdapterHarness(
+        () => {
+          spawned += 1
+          return createMockSubprocess()
+        },
+        {},
+        { hostHistory: true }
+      )
+      const root = join(harness.dir, 'history')
+      adapter = new DaemonPtyAdapter({
+        socketPath: harness.socketPath,
+        tokenPath: harness.tokenPath,
+        historyPath: root
+      })
+      const request = { sessionId: 'host-history-uncertain', cols: 80, rows: 24, cwd: '/tmp' }
+      const dir = join(root, getHistorySessionDirName(request.sessionId))
+      const failure = () => Object.assign(new Error('lookup failed'), { code })
+      if (lookup === 'its recovery marker') {
+        const stat = fsPromises.stat
+        vi.spyOn(fsPromises, 'stat').mockImplementation(async (...args) => {
+          if (String(args[0]).endsWith('.unreadable-recovery')) {
+            throw failure()
+          }
+          return stat(...args)
+        })
+      } else {
+        const openFile = fsPromises.open
+        vi.spyOn(fsPromises, 'open').mockImplementation(async (...args) => {
+          if (String(args[0]) === join(dir, 'meta.json')) {
+            throw failure()
+          }
+          return openFile(...args)
+        })
+        // The bounded reader imports `open` by name; resync so it reaches the wrapper.
+        syncBuiltinESMExports()
       }
-      return stat(...args)
-    })
-    try {
-      await expect(adapter.spawn(request)).rejects.toThrow('terminal_history_unavailable')
-      expect(spawned).toBe(0)
-      // Nothing was reset, marked or fabricated for the ID.
-      expect(existsSync(join(dir, 'meta.json'))).toBe(false)
-      expect(existsSync(join(dir, '.unreadable-recovery'))).toBe(false)
-    } finally {
-      lookup.mockRestore()
-    }
+      try {
+        await expect(adapter.spawn(request)).rejects.toThrow('terminal_history_unavailable')
+        expect(spawned).toBe(0)
+        // Nothing was reset, marked or fabricated for the ID.
+        expect(existsSync(join(dir, 'meta.json'))).toBe(false)
+        expect(existsSync(join(dir, '.unreadable-recovery'))).toBe(false)
+      } finally {
+        vi.restoreAllMocks()
+        syncBuiltinESMExports()
+      }
 
-    const { id } = await adapter.spawn(request)
-    expect(spawned).toBe(1)
-    expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')
-  }, 30_000)
+      const { id } = await adapter.spawn(request)
+      expect(spawned).toBe(1)
+      expect(new HistoryReader(root).probeRestorableHistory(id).status).toBe('restorable')
+    },
+    30_000
+  )
 
   // A start whose process never existed used to leave an ended predecessor marked restorable.
   it('restores the clean-ended predecessor when the fresh process never forked', async () => {

@@ -1,6 +1,7 @@
 import { existsSync, promises as fsPromises, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
+import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { getHistorySessionDirName } from './history-paths'
 import { isValidTerminalHistorySize } from '../restoration/terminal-history-dimensions'
 import {
@@ -60,8 +61,9 @@ export function readTerminalHistoryMetaInDir(dir: string): SessionMetaRead {
 }
 
 /**
- * Bounded and awaited. Only ENOENT is missing; saved content that cannot be read is unreadable;
- * a filesystem lookup that cannot tell either way throws.
+ * Bounded and awaited. Only ENOENT is missing; saved content positively known to be unusable
+ * (malformed JSON, over the bound) is unreadable; any other failure, Windows UNKNOWN included,
+ * cannot tell either way and throws.
  */
 export async function readTerminalHistoryMetaInDirAsync(dir: string): Promise<SessionMetaRead> {
   let meta: unknown
@@ -71,14 +73,13 @@ export async function readTerminalHistoryMetaInDirAsync(dir: string): Promise<Se
       TERMINAL_HISTORY_META_MAX_BYTES
     )
   } catch (error) {
-    const code = errnoCodeOrUnknown(error)
-    if (code === 'ENOENT') {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
       return { status: 'missing' }
     }
-    if (code !== 'unknown') {
-      throw error
+    if (error instanceof SyntaxError || error instanceof NodeFileReadTooLargeError) {
+      return { status: 'unreadable' }
     }
-    return { status: 'unreadable' }
+    throw error
   }
   return validatedMetaRead(meta)
 }
