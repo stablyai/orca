@@ -42,6 +42,8 @@ function ActivityRow({
   now: number
 }): React.JSX.Element {
   const t = useTranslate()
+  // Every actor is a signed-in person: /v1/secrets refuses API keys and phone sessions. If API keys
+  // ever write secrets, label them "API key · {name}" here (design-squad, SEC-4).
   const who =
     event.actor.userId === people.viewerUserId
       ? t('cloudSecrets.activity.byYou', 'You')
