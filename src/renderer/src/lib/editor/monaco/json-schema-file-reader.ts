@@ -7,7 +7,8 @@ import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  resolveRuntimePath
 } from '../../../../../shared/cross-platform-path'
 
 export async function readJsonSchemaFile(uri: string): Promise<string> {
@@ -33,7 +34,7 @@ export async function readJsonSchemaFile(uri: string): Promise<string> {
       continue
     }
     const root = file.filePath.slice(0, file.filePath.length - file.relativePath.length - 1)
-    const filePath =
+    const requestedPath =
       requested.scheme === 'file'
         ? requested.fsPath
         : !isWindowsAbsolutePathLike(root)
@@ -41,6 +42,8 @@ export async function readJsonSchemaFile(uri: string): Promise<string> {
           : requested.authority.endsWith('-unc')
             ? `/${requested.path}`
             : normalizeRuntimePathSeparators(requested.path.replace(/^\/(?=[a-z]:[\\/]|\\\\)/i, ''))
+    // Resolve `..` first, so a path that only starts with the root cannot leave it.
+    const filePath = root ? resolveRuntimePath(root, requestedPath) : requestedPath
     if (!root || relativePathInsideRoot(root, filePath) === null) {
       continue
     }

@@ -89,6 +89,16 @@ describe('workspace JSON schemas', () => {
     expect(mocks.read).not.toHaveBeenCalled()
   })
 
+  it('rejects schema paths that leave the workspace through dot segments', async () => {
+    const model = URI.parse(toEditorModelUri('/repo/config.json', 'remote-a'))
+    await expect(
+      readJsonSchemaFile(model.with({ path: '/repo/../secrets/schema.json' }).toString())
+    ).rejects.toThrow('outside')
+    mocks.owner.mockReturnValue(undefined)
+    await expect(readJsonSchemaFile('file:///repo/../other/schema.json')).rejects.toThrow('outside')
+    expect(mocks.read).not.toHaveBeenCalled()
+  })
+
   it('does not read after ownership validation fails', async () => {
     mocks.context.mockImplementation(() => {
       throw new Error('host changed')

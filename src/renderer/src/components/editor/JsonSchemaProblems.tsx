@@ -44,8 +44,8 @@ export function JsonSchemaProblems({
         </PopoverTrigger>
         <PopoverContent side="top" align="end" className="w-96">
           <ul className="max-h-64 overflow-y-auto scrollbar-sleek space-y-1">
-            {markers.slice(0, 100).map((marker) => (
-              <li key={`${marker.startLineNumber}:${marker.startColumn}:${marker.message}`}>
+            {markers.slice(0, 100).map((marker, index) => (
+              <li key={`${index}:${marker.startLineNumber}:${marker.startColumn}:${marker.message}`}>
                 <Button
                   variant="ghost"
                   className="h-auto w-full justify-start whitespace-normal text-left"
