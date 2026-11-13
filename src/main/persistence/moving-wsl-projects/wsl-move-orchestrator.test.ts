@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WslMoveOrchestrator } from './wsl-move-orchestrator'
-import { fakePorts } from './wsl-move-orchestrator.test-support'
+import { fakePorts } from './orchestration/wsl-move-orchestrator.test-support'
 
 describe('WslMoveOrchestrator', () => {
   it('keeps Restore offered when the release is refused', async () => {

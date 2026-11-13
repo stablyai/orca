@@ -13,7 +13,7 @@ import {
 } from '../../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
-import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/wsl-move-session-freeze'
+import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
 import { registerPersistedPaneKeyAlias } from '../../restoring-sessions/pane-alias-normalization'
 import {
   normalizeWorkspaceSessionPaneIdentities,
@@ -30,7 +30,7 @@ import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-ses
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from '../profile-writing/write-scheduling'
-import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
+import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,

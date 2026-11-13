@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
-import '../../persistence/moving-wsl-projects/wsl-move-fence'
+import '../../persistence/moving-wsl-projects/quiescence/wsl-move-fence'
 import {
   listWslDriveUncConversions,
   writeWslDriveUncConversion

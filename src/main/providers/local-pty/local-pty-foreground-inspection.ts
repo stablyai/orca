@@ -5,8 +5,8 @@ import {
   getProcessTableSnapshot,
   getStrictProcessTableSnapshotWithAge
 } from '../../../shared/process-table-snapshot-reader'
-import { confirmShellForegroundProcess } from '../agent-foreground-process'
-import { confirmFreshPtyForeground } from '../pty-foreground-confirmation'
+import { confirmShellForegroundProcess } from '../foreground/agent-process'
+import { confirmFreshPtyForeground } from '../foreground/pty-confirmation'
 import {
   createPtyForegroundResolver,
   ptyProcessNameIsSpawnFile
@@ -15,7 +15,7 @@ import {
   inspectSpawnFileChildProcessesFromRows,
   inspectSpawnFileWindowsChildProcesses
 } from '../../daemon/pty-subprocess/spawn-file-child-processes'
-import { buildPaneProcessFingerprint } from '../posix-pane-foreground-fingerprint'
+import { buildPaneProcessFingerprint } from '../foreground/posix-pane-fingerprint'
 import { isRetiredPtyMaster } from '../../pty/process-retirement/node-pty-master-fd-retirement'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { resolveForegroundFallbackProcess } from './local-pty-launch-context'
@@ -26,12 +26,15 @@ import {
   getPtyShellName,
   ptyShellPath
 } from './local-pty-provider-state'
-import { resolveStableForegroundProcess } from '../stable-foreground-process'
+import { resolveStableForegroundProcess } from '../foreground/stable-process'
 import {
   canRevalidateCachedAgentWithoutScan,
   judgeCachedAgentJobEvidence
-} from '../windows-cached-agent-revalidation'
-import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from '../windows-pty-job-membership'
+} from '../foreground/windows/cached-agent-revalidation'
+import {
+  isWindowsPtyJobReadable,
+  readWindowsPtyJobProcessIds
+} from '../foreground/windows/pty-job-membership'
 
 /** Retired masters still report the spawn name; inspect the descriptor first so unreadability cannot prove idle. */
 export async function inspectLocalPtyChildProcesses(

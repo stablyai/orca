@@ -1,4 +1,4 @@
-import type { TerminalPanePlacement } from '../../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import { useAppStore } from '@/store/index'
 import { terminalPanePlacementRow } from '@/components/terminal-pane/layout/ownership/terminal-pane-placement-row'
 import { serializePaneTree } from '../terminal-layout-dom-serialization'

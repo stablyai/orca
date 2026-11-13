@@ -17,7 +17,7 @@ import { makeWorktree } from '../../../src/renderer/src/store/slices/worktrees/w
 import { makeFolderWorkspace } from '../../../src/renderer/src/store/folder-workspaces/folder-workspace.test-fixture'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/runs/automation-run-workspace-action'
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/runs/automation-run-view-state'
-import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
+import { createAutomationRunWriter } from '../../../src/main/automations/run-history/run-writer'
 import { makeRepo } from '../../../src/main/persistence/persistence-test-harness'
 import { structuredAgentSessionTabId } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import '../../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'

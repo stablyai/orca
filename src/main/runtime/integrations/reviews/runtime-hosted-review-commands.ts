@@ -1,29 +1,30 @@
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewForBranchReply
-} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type {
-  GitHubPRRefreshReason,
-  PRRefreshOutcome
-} from '../../../../shared/github/pull-request-refresh-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import {
   getPRForBranchOutcome,
   readRecentPhonePROutcome
 } from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type {
+  GitHubPRRefreshReason,
+  PRRefreshOutcome
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
+import { admissionTierForRefreshReason } from '../../../github/pull-requests/refresh/pr-refresh-candidate-policy'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
-import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
-import { runHostedPRRead } from '../../../github/pr-refresh-coordinator'
+import { runHostedPRRead } from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import {
+  type CreateHostedReviewInput,
+  type CreateHostedReviewResult,
+  type CreateStackedHostedReviewInput,
+  type CreateStackedHostedReviewResult,
+  type HostedReviewCreationEligibility,
+  type HostedReviewCreationEligibilityArgs,
+  type HostedReviewForBranchReply,
+  hostedReviewForBranchReply
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
-import { hostedReviewForBranchReply } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'

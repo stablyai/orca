@@ -90,10 +90,65 @@ export const failed = defineFixture({
     })
 })
 
+export const foldedRun = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: { ...automation, lastRunAt: NOW - 6 * HOUR },
+      runs: [
+        makeRun({
+          id: 'run-4',
+          status: 'skipped_unavailable',
+          error: 'The execution host is offline.',
+          scheduledFor: NOW - 8 * 24 * HOUR - 6 * HOUR,
+          createdAt: NOW - 8 * 24 * HOUR - 6 * HOUR,
+          dispatchedAt: null,
+          startedAt: null,
+          occurrenceCount: 9,
+          lastOccurrenceAt: NOW - 6 * HOUR
+        })
+      ]
+    })
+})
+
 export const paused = defineFixture({
   width: 720,
   render: () =>
     renderDetail({
       automation: { ...automation, enabled: false, prompt: 'Run the nightly sweep.' }
+    })
+})
+
+export const createdByPlugin = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: {
+        ...automation,
+        name: 'Nightly dependency check',
+        prompt: 'Check for outdated dependencies and open a PR with safe upgrades.',
+        precheck: null,
+        createdBy: { kind: 'plugin', pluginKey: 'acme.deps', name: 'Dependency Watch' }
+      }
+    })
+})
+
+export const createdByEndedPlugin = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: {
+        ...automation,
+        name: 'Nightly dependency check',
+        prompt: 'Check for outdated dependencies and open a PR with safe upgrades.',
+        precheck: null,
+        enabled: false,
+        createdBy: {
+          kind: 'plugin',
+          pluginKey: 'acme.deps',
+          name: 'Dependency Watch',
+          endedAt: Date.UTC(2026, 10, 9, 12, 0)
+        }
+      }
     })
 })

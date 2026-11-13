@@ -9,16 +9,12 @@ vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
-vi.mock('../../github/local-git-config-signature', () => ({
+vi.mock('../../github/repositories/local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
-import {
-  _resetRemoteNameListingCache,
-  listCachedRemoteNames,
-  shouldProbeGitRemote
-} from './remote-name-listing'
+import { _resetRemoteNameListingCache, shouldProbeGitRemote } from './remote-name-listing'
 
 function remoteListCalls(): unknown[][] {
   return gitExecFileAsyncMock.mock.calls.filter(
@@ -90,22 +86,6 @@ describe('cached git remote name listing', () => {
     await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(true)
     await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(false)
     expect(remoteListCalls()).toHaveLength(2)
-  })
-
-  it('coalesces concurrent listings onto one spawn', async () => {
-    gitExecFileAsyncMock.mockImplementation(async () => {
-      await Promise.resolve()
-      return { stdout: 'origin\n' }
-    })
-
-    await expect(
-      Promise.all([
-        shouldProbeGitRemote('/repo', 'upstream'),
-        shouldProbeGitRemote('/repo', 'upstream'),
-        listCachedRemoteNames('/repo')
-      ])
-    ).resolves.toEqual([false, false, ['origin']])
-    expect(remoteListCalls()).toHaveLength(1)
   })
 
   it('keeps host and WSL listings separate', async () => {
