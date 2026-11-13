@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { WorkerStartParams } from './orchestration-worker-start-params'
+import { WorkerStartParams } from './orchestration/orchestration-worker-start-params'
 
 it('admits an existing undispatched task while refusing retry and actor reuse intent', () => {
   const request = {

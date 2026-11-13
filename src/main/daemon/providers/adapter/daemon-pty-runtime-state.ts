@@ -33,7 +33,7 @@ import { HistoryManager } from '../../history/storage/history-manager'
 import type { HistoryCheckpointResult } from '../../history/storage/terminal-history-manager-options'
 import type { HistoryRecoveryFreeze } from '../../history/storage/terminal-history-recovery-quarantine'
 import { HistoryReader } from '../../history/restoration/history-reader'
-import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import type {
   DaemonPtyRouterDataEvent,
   DaemonPtyRouterExitEvent

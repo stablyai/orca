@@ -17,7 +17,7 @@ import type {
   AttachParams,
   CreateSupportParams,
   CreateParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import {
   commitStructuredAgentSessionCreate,
   prepareStructuredAgentSessionCreateForWorktree,

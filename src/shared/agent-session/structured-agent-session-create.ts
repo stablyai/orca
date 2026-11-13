@@ -3,7 +3,7 @@ import type { AgentSessionAdvisoryPolicy } from './agent-session-advisory-policy
 import type { AgentSessionExecutionPolicy } from './agent-session-execution-policy'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import type { z } from 'zod'
-import type { SendBody } from '../rpc-contract/structured-agent-session-message-params'
+import type { SendBody } from '../rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint

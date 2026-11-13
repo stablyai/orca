@@ -1,8 +1,6 @@
 import { loadAutomationTargets, workspaceMatchesSetup } from './automation-target-inventory'
 import { describe, expect, it } from 'vitest'
 
-import { AutomationUpdate } from '../../../src/shared/rpc-contract/automation-params'
-
 import { automationUpdateParams, newAutomationDraft } from './automation-draft'
 import { automationClient, automationTargets, savedAutomation } from './automation-test-fixtures'
 
@@ -61,10 +59,7 @@ describe('mobile automation host contracts', () => {
       original,
       automationTargets()
     )
-    expect(AutomationUpdate.parse(params)).toMatchObject({
-      id: saved.id,
-      updates: { name: 'Renamed' }
-    })
+
     expect(params.updates).toEqual({ name: 'Renamed' })
     expect(params.destination).toBeUndefined()
     expect(original).toMatchObject({

@@ -37,6 +37,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   /** Already inside nonreentrant session serialization. */
   stopAgent: (sessionId: string) => Promise<void>
   stopStartingAgent: (sessionId: string) => Promise<void>
+  /** Whether the start's own deadline, which runs on awake time, still times this child. */
+  startTimed: (sessionId: string, child: RunningChild) => boolean
   closeConversation: (sessionId: string) => Promise<boolean>
   logger: StructuredAgentSessionLogger
   intervalMs?: number
@@ -149,6 +151,10 @@ export class StructuredAgentSessionIdleSweep {
   ): Promise<RunningChild | null> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
+      return null
+    }
+    // Wall-clock idle counts sleep, so it never ends a start its own deadline still times.
+    if (session.child?.phase === 'starting' && this.deps.startTimed(sessionId, session.child)) {
       return null
     }
     // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.

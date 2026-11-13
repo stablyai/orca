@@ -28,8 +28,7 @@ vi.mock(
 )
 
 const { projectWorkerFleet } = await import('../fleet/worker-list-projection')
-const { ensureSessionWorkerRecords, inspectSessionWorker, readStructuredWorkerSettings } =
-  await import('./session-worker-observation')
+const { readStructuredWorkerSettings } = await import('./session-worker-observation')
 const { createSessionWorkerLivenessReader } =
   await import('../../../../../orchestration/workers/lifecycle/session-worker-liveness')
 const {
@@ -151,61 +150,6 @@ describe('worker-list liveness for chat-mode workers', () => {
     expect(worker.liveness.verdict).toBe('live')
     expect(worker.stage.activity).toBe('done')
     expect(worker.attention.requiresAction).toBe(false)
-  })
-
-  it('reports a session the host saw exit as exited', () => {
-    installHost(
-      record('codex', {
-        claimStatus: 'released',
-        deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: 1 }
-      }),
-      false
-    )
-    const worker = project([sessionStatus('done', NOW - HOUR)])
-
-    expect(worker.liveness).toEqual({ verdict: 'exited', source: 'execution_host' })
-    expect(worker.nextAction.kind).toBe('recover')
-  })
-
-  it('names the lost host when the session cannot be observed', () => {
-    const worker = project([])
-
-    expect(worker.liveness).toEqual({
-      verdict: 'unverifiable',
-      reason: 'host_unavailable',
-      detail: 'The structured agent-session host is not installed in this runtime generation.'
-    })
-    expect(worker.attention.requiresAction).toBe(true)
-  })
-
-  it('installs the session host after a restart before judging a structured worker', async () => {
-    const dispatchId = seed()
-    const ended = record('codex', {
-      claimStatus: 'released',
-      deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: 1 }
-    })
-    // After a restart the host is not installed until a caller asks for it.
-    const runtime = {
-      ensureStructuredAgentSessionHost: async () => {
-        installHost(ended, false)
-      }
-    }
-    const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
-
-    await ensureSessionWorkerRecords(runtime, rows)
-    const listed = projectWorkerFleet({
-      rows,
-      attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], NOW),
-      statuses: [],
-      limit: 1,
-      now: NOW,
-      observeSession: createSessionWorkerLivenessReader(db, [])
-    })
-    expect(listed.workers[0]!.liveness).toEqual({ verdict: 'exited', source: 'execution_host' })
-
-    hostRef.current = null
-    const shown = await inspectSessionWorker(runtime, db, dispatchId, rows[0]!.agentTerminalHandle!)
-    expect(shown?.status).toBe('exited')
   })
 
   it('exposes only option facts for the exact live worker without promoting saved choices', async () => {

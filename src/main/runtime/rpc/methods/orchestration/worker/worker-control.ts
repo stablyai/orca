@@ -24,7 +24,7 @@ import {
   WorkerDispatchParams,
   WorkerShowParams,
   WorkerReadParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
 import { readStructuredWorkerSettings } from './observation/session-worker-observation'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [

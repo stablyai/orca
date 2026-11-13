@@ -1,4 +1,4 @@
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { isShowRefNoMatchError } from '../../../../shared/git/refs/git-show-ref-no-match'
 import { hasCommitObjectViaGitExec } from '../../refs/resolution/commit-object-ref'

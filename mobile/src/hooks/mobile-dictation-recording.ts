@@ -1,4 +1,4 @@
-import type { DictationCaptureChunk } from '../platform/dictation-capture-contract'
+import type { DictationCaptureChunk } from '../platform/audio-capture/dictation-capture-contract'
 import { MAX_HELD_AUDIO_BYTES, type MobileDictationHeldAudio } from './mobile-dictation-held-audio'
 
 // Everything one dictation heard, from the tap, whichever engine hears it: replayed to the computer when the phone fails, and kept after a failure for Retry.
