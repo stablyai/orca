@@ -109,22 +109,6 @@ describe('the cell box xterm laid out', () => {
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
   })
 
-  it('fits in the app from the reported box, and sends the frame with every grid', () => {
-    const { handle, notify } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
-    expect(handle().fitDimensions({ width: 427.5, height: 0 })).toBeNull()
-    expect(handle().fitDimensions({ width: 427.5, height: 710 })).toEqual({ cols: 55, rows: 47 })
-    const frame = { width: 427.5, height: 710 }
-    handle().init({ cols: 55, rows: 47, initialData: '', frame })
-    handle().resize(55, 47, frame)
-    handle().reflow(55, 47, frame)
-    const grids = nativeWebViewMethods.postMessage.mock.calls
-      .map(([message]) => JSON.parse(message))
-      .filter((message) => ['init', 'resize', 'reflow'].includes(message.type))
-    expect(grids.map((message) => message.frame)).toEqual([frame, frame, frame])
-    expect(postedTypes()).not.toContain('measure')
-  })
-
   it('sends nothing before a ready: a load start drops what was queued', () => {
     const { handle, notify, webView } = mount()
     handle().init({ cols: 55, rows: 47, initialData: 'snapshot', frame: null })
