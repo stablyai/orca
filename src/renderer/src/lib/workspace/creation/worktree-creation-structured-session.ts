@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { claimFirstSurfaceForStructuredCreate } from './structured-create-first-surface-claim'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
@@ -48,6 +49,18 @@ type LaunchStructuredWorktreeSessionArgs = {
 }
 
 export async function launchStructuredWorktreeSession(
+  args: LaunchStructuredWorktreeSessionArgs
+): Promise<WorktreeCreationStructuredSessionResult> {
+  // CLOUD-CHAT-FIRST-TAB: no seeded shell in front of the chat while it opens.
+  const releaseFirstSurface = claimFirstSurfaceForStructuredCreate(args.worktreeId)
+  try {
+    return await launchClaimedStructuredWorktreeSession(args)
+  } finally {
+    releaseFirstSurface()
+  }
+}
+
+async function launchClaimedStructuredWorktreeSession(
   args: LaunchStructuredWorktreeSessionArgs
 ): Promise<WorktreeCreationStructuredSessionResult> {
   let { activation, primaryTabId } = args

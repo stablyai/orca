@@ -52,7 +52,12 @@ export function createInitialTerminalSeeder(
         requestedInitialTerminal ||
         isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, worktreeId),
       snapshotIsFresh: true,
-      localTerminalCount: (state.tabsByWorktree[worktreeId] ?? []).length,
+      // CLOUD-CHAT-FIRST-TAB: a chat is the workspace's first surface too; no shell is seeded beside it.
+      localTerminalCount:
+        (state.tabsByWorktree[worktreeId] ?? []).length +
+        (state.unifiedTabsByWorktree?.[worktreeId] ?? []).filter(
+          (tab) => tab.contentType === 'agent-session'
+        ).length,
       hasPersistedTerminalState: Object.hasOwn(state.tabsByWorktree, worktreeId),
       firstHostAnswer
     })
