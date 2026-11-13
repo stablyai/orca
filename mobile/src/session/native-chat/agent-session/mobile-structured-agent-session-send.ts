@@ -5,7 +5,7 @@ import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
-import { structuredAgentSessionBlocksTooLarge } from '../../../../../src/shared/rpc-contract/structured-agent-session-message-params'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'

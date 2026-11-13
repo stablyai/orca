@@ -3440,7 +3440,7 @@
       "id": "sc-base-ref-default",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3505,7 +3505,7 @@
       "id": "sc-base-ref-worktree-hit",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3550,7 +3550,7 @@
       "id": "sc-base-ref-repo-fallback",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3596,7 +3596,7 @@
       "id": "sc-base-ref-unavailable",
       "operation": "source-control.branch-base-ref",
       "family": "git.base-ref-chain",
-      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "sites": ["mobile/src/source-control/branches/mobile-branch-base-ref.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3651,7 +3651,7 @@
       "id": "sc-history-loaded",
       "operation": "source-control.git-history",
       "family": "git.history-read",
-      "sites": ["mobile/src/source-control/mobile-git-history.ts"],
+      "sites": ["mobile/src/source-control/history/mobile-git-history.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3698,7 +3698,7 @@
       "id": "sc-commit-message-generated",
       "operation": "source-control.commit-message",
       "family": "git.commit-message-ai",
-      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "sites": ["mobile/src/source-control/commits/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3730,7 +3730,7 @@
       "id": "sc-commit-message-canceled",
       "operation": "source-control.commit-message",
       "family": "git.commit-message-ai",
-      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "sites": ["mobile/src/source-control/commits/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3780,7 +3780,7 @@
       "id": "sc-commit-message-cancel-rejected",
       "operation": "source-control.commit-message",
       "family": "git.commit-message-ai",
-      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "sites": ["mobile/src/source-control/commits/mobile-commit-message-ai.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3806,7 +3806,7 @@
       "id": "sc-pr-link-set",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3838,7 +3838,7 @@
       "id": "sc-pr-link-hosted-review",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3886,7 +3886,7 @@
       "id": "sc-pr-link-read",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -3933,7 +3933,9 @@
       "id": "sc-review-status-normalized",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -3982,7 +3984,9 @@
       "id": "sc-review-status-entries-not-array",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4011,7 +4015,9 @@
       "id": "sc-review-commit",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4041,7 +4047,9 @@
       "id": "sc-review-commit-inner-failure",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4071,7 +4079,9 @@
       "id": "sc-review-commit-refused-empty-message",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4101,7 +4111,9 @@
       "id": "sc-review-commit-rejected",
       "operation": "source-control.review-git-preparation",
       "family": "git.review-preparation",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4128,7 +4140,9 @@
       "id": "sc-prerequisite-push",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4167,7 +4181,9 @@
       "id": "sc-prerequisite-publish",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4249,7 +4265,9 @@
       "id": "sc-prerequisite-force-with-lease",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4287,7 +4305,9 @@
       "id": "sc-prerequisite-skipped",
       "operation": "source-control.remote-prerequisite",
       "family": "git.remote-prerequisite",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "sites": [
+        "mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -4306,7 +4326,7 @@
       "id": "sc-eligibility-fetched",
       "operation": "source-control.hosted-review-eligibility",
       "family": "hostedReview.eligibility",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4349,7 +4369,7 @@
       "id": "sc-prefill-unavailable-on-refusal",
       "operation": "source-control.hosted-review-eligibility",
       "family": "hostedReview.eligibility",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4383,7 +4403,7 @@
       "id": "sc-prefill-unavailable-on-rejection",
       "operation": "source-control.hosted-review-eligibility",
       "family": "hostedReview.eligibility",
-      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-hosted-review-service.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4415,8 +4435,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4493,8 +4513,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4549,8 +4569,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4607,8 +4627,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4647,8 +4667,8 @@
       "operation": "source-control.hosted-review-create",
       "family": "hostedReview.create-chain",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/review/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4684,8 +4704,8 @@
       "operation": "source-control.create-intent",
       "family": "hostedReview.create-intent",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
-        "mobile/src/source-control/mobile-hosted-review-create-intent.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent-runner.ts",
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4960,8 +4980,8 @@
       "operation": "source-control.create-intent",
       "family": "hostedReview.create-intent",
       "sites": [
-        "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
-        "mobile/src/source-control/mobile-hosted-review-create-intent.ts"
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent-runner.ts",
+        "mobile/src/source-control/review/creation/mobile-hosted-review-create-intent.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16381,7 +16401,7 @@
       "id": "terminal-query-reply-accepted",
       "operation": "terminal.query-reply",
       "family": "terminal.query-reply",
-      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
+      "sites": ["mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16418,7 +16438,7 @@
       "id": "terminal-query-reply-unsubscribed",
       "operation": "terminal.query-reply",
       "family": "terminal.query-reply",
-      "sites": ["mobile/src/terminal/mobile-terminal-query-reply.ts"],
+      "sites": ["mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16437,7 +16457,7 @@
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
+      "sites": ["mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16473,7 +16493,7 @@
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
+      "sites": ["mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16509,7 +16529,7 @@
       "id": "terminal-viewport-refit-applied",
       "operation": "terminal.viewport-refit",
       "family": "terminal.viewport-refit",
-      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
+      "sites": ["mobile/src/terminal/viewport/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16553,7 +16573,7 @@
       "id": "terminal-viewport-refit-legacy-desktop",
       "operation": "terminal.viewport-refit",
       "family": "terminal.viewport-refit",
-      "sites": ["mobile/src/terminal/terminal-viewport-refit.ts"],
+      "sites": ["mobile/src/terminal/viewport/terminal-viewport-refit.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18772,7 +18792,7 @@
       "id": "session-terminal-list-merged",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18811,7 +18831,7 @@
       "id": "session-terminal-list-dedupes-handles",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18850,7 +18870,7 @@
       "id": "session-terminal-list-refused",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18881,7 +18901,7 @@
       "id": "session-terminal-list-empty-guarded",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20449,8 +20469,8 @@
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
       "sites": [
-        "mobile/src/terminal/session/use-mobile-terminal-paste.ts",
-        "mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"
+        "mobile/src/terminal/session/input-controls/use-mobile-terminal-paste.ts",
+        "mobile/src/terminal/session/accessory-keys/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20515,7 +20535,7 @@
       "id": "terminal-paste-refused",
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
-      "sites": ["mobile/src/terminal/session/use-mobile-terminal-paste.ts"],
+      "sites": ["mobile/src/terminal/session/input-controls/use-mobile-terminal-paste.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20576,7 +20596,9 @@
       "id": "terminal-worktree-connection-resolved",
       "operation": "session.terminal-clipboard",
       "family": "session.worktree-connection",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"],
+      "sites": [
+        "mobile/src/terminal/session/accessory-keys/use-mobile-session-accessory-selection.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -20633,7 +20655,9 @@
       "id": "terminal-live-input-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/input-controls/use-mobile-session-terminal-send-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -21382,7 +21406,7 @@
       "id": "sc-changes-loaded",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
+      "sites": ["mobile/src/source-control/changes/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21493,7 +21517,7 @@
       "id": "sc-changes-return-from-memory",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
+      "sites": ["mobile/src/source-control/changes/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21651,7 +21675,7 @@
       "id": "sc-changes-write-reads-live",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-loaders.ts"],
+      "sites": ["mobile/src/source-control/changes/use-mobile-source-control-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21805,7 +21829,7 @@
       "id": "sc-history-branch-commits",
       "operation": "source-control.history-branch-commits",
       "family": "git.history-branch-commits",
-      "sites": ["mobile/src/source-control/MobileGitHistoryList.tsx"],
+      "sites": ["mobile/src/source-control/history/MobileGitHistoryList.tsx"],
       "schedules": [],
       "steps": [
         {
@@ -22387,7 +22411,7 @@
       "id": "terminal-gesture-flush-and-clear",
       "operation": "session.terminal-gesture-input",
       "family": "session.terminal-gesture-input",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-input.ts"],
+      "sites": ["mobile/src/terminal/session/input-controls/use-mobile-session-terminal-input.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22741,7 +22765,9 @@
       "id": "session-create-terminal-with-prompt",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22826,7 +22852,9 @@
       "id": "session-create-terminal-refused",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22874,7 +22902,9 @@
       "id": "session-create-terminal-without-handle",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -22930,7 +22960,9 @@
       "id": "session-create-terminal-ignores-a-second-create-in-flight",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": [
+        "mobile/src/terminal/session/creation/use-mobile-session-terminal-create-actions.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23002,7 +23034,9 @@
       "id": "session-terminal-display-mode-auto-take-floor",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23059,7 +23093,9 @@
       "id": "session-terminal-display-mode-to-desktop",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23109,7 +23145,9 @@
       "id": "session-terminal-display-mode-drops-second-toggle",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23179,7 +23217,9 @@
       "id": "session-terminal-display-mode-auto-without-viewport",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -23228,7 +23268,9 @@
       "id": "session-terminal-display-mode-auto-without-device-token",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": [
+        "mobile/src/terminal/session/streaming/use-mobile-session-terminal-stream-display.ts"
+      ],
       "schedules": [],
       "steps": [
         {

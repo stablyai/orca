@@ -23,8 +23,8 @@ import {
   StorageKey,
   StorageKeyValue,
   Viewport
-} from '../../../../../shared/rpc-contract/browser-params'
-import { MouseClick } from '../../../../../shared/rpc-contract/browser-extras-params'
+} from '../../../../../shared/rpc-contract/browser/browser-params'
+import { MouseClick } from '../../../../../shared/rpc-contract/browser/browser-extras-params'
 
 export const BROWSER_EXTRA_METHODS = [
   defineMethod({

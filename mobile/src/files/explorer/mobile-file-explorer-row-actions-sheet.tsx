@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Copy } from 'lucide-react-native'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useClipboardWriter } from '../../platform/clipboard'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { TreeNode } from './file-tree'
 
 /** Which row's actions are open, and the sheet that shows them. */

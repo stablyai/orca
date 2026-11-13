@@ -12,7 +12,7 @@ import {
   FileWriteIfUnchanged,
   FileWriteBase64,
   FileWriteBase64Chunk
-} from '../../../../../shared/rpc-contract/files-mutation-params'
+} from '../../../../../shared/rpc-contract/filesystem/files-mutation-params'
 
 type SshMutationParams = {
   expectedExecutionHostId?: string

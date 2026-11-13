@@ -20,7 +20,6 @@
 1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 4 src/renderer/src/components/agent/AgentSettingsDialog.tsx
 1 src/renderer/src/components/automations/authoring/use-automations-page-destination-form.ts
-1 src/renderer/src/components/automations/automations-page-fixtures.ts
 1 src/renderer/src/components/automations/hosts/automation-host-client.ts
 1 src/renderer/src/components/automations/use-automations-page-controller.ts
 1 src/renderer/src/components/browser-pane/ReopenBrowserPageOnServerButton.tsx

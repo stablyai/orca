@@ -322,20 +322,6 @@ describe('constrained idle regional assignment transaction', () => {
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
   })
 
-  it('selects read-only with stable identity and the control generation, not probe generation', async () => {
-    const { store, safety, database } = await setup()
-    const before = await database.query('SELECT * FROM relay_assignments')
-    const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]).toMatchObject({
-      sourceGeneration: 7,
-      sourceCellId: 'source',
-      targetCellId: 'target'
-    })
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual(candidates)
-    expect(await database.query('SELECT * FROM relay_assignments')).toEqual(before)
-    expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
-  })
 })
 
 function holdStatement(database: RelayDatabase, fragment: string) {

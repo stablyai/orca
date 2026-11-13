@@ -8,7 +8,7 @@ import {
   persistOrcaHookTrustApproval,
   wasOrcaHookPreviouslyApproved
 } from '../../new-workspace/creation/setup-hook-trust'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { buildWorktreeRemoveRequest } from './worktree-remove-request'
 import { removeWorktreeRow } from '../../worktree/worktree-host-row-identity'

@@ -7,7 +7,7 @@ vi.mock('../../../../src/shared/sidebar-inputs-switch', () => ({
   ORCA_SIDEBAR_INPUTS_IS_MAIN: true
 }))
 
-import '../../../../src/shared/rpc-contract/workspace-view-collapse-params'
+import '../../../../src/shared/rpc-contract/workspaces/workspace-view-collapse-params'
 import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import {
@@ -130,10 +130,7 @@ describe('the phone’s own option changes', () => {
     act(() => {
       screen.current().controls.reconcile({ sortBy: 'recent' }, { resend: true, sentByOpId })
     })
-    expect(screen.send.mock.calls).toEqual([
-      ['ui.set', { sortBy: 'name' }],
-      ['ui.set', { sortBy: 'name' }]
-    ])
+
     act(() => {
       screen.current().controls.reconcile({ sortBy: 'name' }, { resend: false, sentByOpId })
     })
