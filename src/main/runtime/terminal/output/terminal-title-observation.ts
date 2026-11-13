@@ -53,10 +53,14 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
 
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
-  protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+  protected classifyPtyTitleStatus(
+    ptyId: string,
+    rawTitle: string,
+    { includeProgramActivity = true } = {}
+  ): AgentStatus | null {
     const agent = this.getPaneTerminalAgent(ptyId)
     return (
-      this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
+      (includeProgramActivity ? this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity : null) ??
       hermesNativeTitleStatus(rawTitle, agent) ??
       jcodePaneTitleStatus(rawTitle, agent) ??
       detectAgentStatusFromTitle(rawTitle)
@@ -101,9 +105,6 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
      *  `status`: the agent reported its status some other way, so the title is not classified. */
     { statusOnly = false, status }: { statusOnly?: boolean; status?: AgentStatus } = {}
   ): boolean {
-    if (!meta?.staleWorkingTitleClear) {
-      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId)
-    }
     if (meta?.staleWorkingTitleClear) {
       return this.applyStaleWorkingTitleClear(ptyId, rawTitle, normalizedTitle)
     }
@@ -119,6 +120,14 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
         : normalizedTitle
     const agentStatus =
       status ?? (identityOnlyTitle ? null : this.classifyPtyTitleStatus(ptyId, rawTitle))
+    if (
+      status !== undefined ||
+      (!statusOnly &&
+        !identityOnlyTitle &&
+        this.classifyPtyTitleStatus(ptyId, rawTitle, { includeProgramActivity: false }) !== null)
+    ) {
+      this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId)
+    }
     // Why before retiring the clear: the lifecycle counts a turn from the status the clear showed.
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false

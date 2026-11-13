@@ -72,7 +72,7 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
     case 'not-foreground':
       return `Queued. ${hold.agentName} isn't in the foreground of that terminal; the message will be delivered when it's back.`
     case 'not-live':
-      return `Queued. The message will arrive once ${hold.agentName} is back.`
+      return `Queued. The message will arrive once ${hold.agentName} is ready.`
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
     case 'draft':

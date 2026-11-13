@@ -136,16 +136,20 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!ptyId) {
       return null
     }
-    const incarnation = this.ptysById.get(ptyId)?.incarnationId
-    const foreground = await this.orchestrationMailboxPointerDelivery.probeForeground(ptyId)
+    const processIncarnation = this.getTerminalProcessIncarnation(terminal.handle)
+    const foreground = processIncarnation
+      ? await this.orchestrationMailboxPointerDelivery.probeForeground(ptyId, processIncarnation)
+      : null
     if (
-      this.ptysById.get(ptyId)?.incarnationId !== incarnation ||
+      this.getTerminalProcessIncarnation(terminal.handle) !== processIncarnation ||
       this.orchestrationMailboxDeliveryTarget.resolveTerminal(terminalHandle)?.ptyId !== ptyId
     ) {
       return null
     }
-    if (foreground === 'shell' && incarnation) {
-      this.orchestrationMailboxPointerDelivery.holdForeground(ptyId)
+    if (foreground?.foreground === 'shell' && processIncarnation) {
+      if (!this.orchestrationMailboxPointerDelivery.holdForegroundFromProbe(ptyId, foreground)) {
+        return this.readTerminalMailHold(terminalHandle)
+      }
       this.clearDeliveryRecheck(ptyId)
     }
     const agent = this.getPaneTerminalAgent(ptyId)
@@ -153,11 +157,14 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId)) {
       return { kind: 'not-foreground', agentName }
     }
-    if (!terminal.lastAgentStatusObservedLive) {
-      return { kind: 'not-live', agentName }
-    }
     const refusal = this.deliveryRefusal(ptyId)
-    return refusal === 'no-terminal' ? null : refusal
+    if (refusal === 'no-terminal') {
+      return null
+    }
+    if (refusal && ['prompt', 'draft', 'restoring'].includes(refusal.kind)) {
+      return refusal
+    }
+    return !terminal.lastAgentStatusObservedLive ? { kind: 'not-live', agentName } : refusal
   }
 
   private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {

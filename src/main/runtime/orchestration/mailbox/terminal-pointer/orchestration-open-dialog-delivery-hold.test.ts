@@ -54,29 +54,47 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     const { runtime } = createRuntime(db, { launchAgent: null })
     const write = vi.fn((_ptyId: string, _data: string) => true)
     let foreground: 'codex' | 'zsh' = 'codex'
+    let nextForegroundRead: Promise<void> | undefined
+    const delayNextForegroundRead = (): (() => void) => {
+      let release = (): void => {}
+      nextForegroundRead = new Promise((resolve) => {
+        release = resolve
+      })
+      return release
+    }
+    const sampleForeground = async (): Promise<typeof foreground> => {
+      const sampled = foreground
+      const delayed = nextForegroundRead
+      nextForegroundRead = undefined
+      await delayed
+      return sampled
+    }
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
       kill: vi.fn(),
       getForegroundProcess: async () => 'codex',
       confirmForegroundProcess: async () => foreground,
-      confirmShellForeground: async () => foreground === 'zsh',
+      confirmShellForeground: async () => (await sampleForeground()) === 'zsh',
       supportsForegroundObservation: () => true,
-      inspectProcess: async () => ({
-        foregroundProcess: foreground,
-        hasChildProcesses: foreground !== 'zsh',
-        foregroundObservation: {
-          ptyId: PTY_ID,
-          ptyIncarnationId: 'mailbox-incarnation',
-          authorityGeneration: 'mailbox-test',
-          observationEpoch: 1,
-          capturedAgeMs: 0,
-          verdict: 'observed',
-          source: 'pty-master',
-          foregroundKind: foreground === 'zsh' ? 'shell' : 'non-shell',
-          processName: foreground
+      inspectProcess: async () => {
+        const sampled = await sampleForeground()
+        return {
+          foregroundProcess: sampled,
+          hasChildProcesses: sampled !== 'zsh',
+          foregroundObservation: {
+            ptyId: PTY_ID,
+            ptyIncarnationId: 'mailbox-incarnation',
+            authorityGeneration: 'mailbox-test',
+            observationEpoch: 1,
+            capturedAgeMs: 0,
+            verdict: 'observed',
+            source: 'pty-master',
+            foregroundKind: sampled === 'zsh' ? 'shell' : 'non-shell',
+            processName: sampled
+          }
         }
-      })
+      }
     })
     const run = createBoundRun(db, 'Foreground delivery')
     await runtime.listTerminals()
@@ -94,8 +112,17 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     const receipt = await sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)
     expect(receipt?.code).toBe('recipient_delivery_held')
 
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=idle:app=codex\x07', 3)
+    await vi.advanceTimersByTimeAsync(1000)
+    foreground = 'codex'
+    runtime.onPtyData(PTY_ID, '\x1b]0;another workspace shell title\x07', 4)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
+    foreground = 'zsh'
+
     // A shell can reuse the last agent's title without giving it the terminal's input.
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 3)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 5)
     await vi.advanceTimersByTimeAsync(1000)
     expect(write).not.toHaveBeenCalled()
     expect(db.getMessageById(message.id)).toMatchObject({
@@ -107,10 +134,18 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       'recipient_delivery_held'
     )
 
+    const releaseShell = delayNextForegroundRead()
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 6)
+    await vi.advanceTimersByTimeAsync(300)
+    const delayedReceipt = sendDeliveryHoldWarning(runtime, db, `run:${run.id}`)
+    await vi.advanceTimersByTimeAsync(0)
     foreground = 'codex'
-    // The unchanged title must still clear the mail hold and retry delivery.
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 4)
+    // The return edge must survive an older shell sample that arrives afterward.
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 7)
+    await vi.advanceTimersByTimeAsync(300)
+    releaseShell()
     await vi.advanceTimersByTimeAsync(2000)
+    expect(await delayedReceipt).toBeNull()
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
       '\r'
@@ -140,7 +175,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       pointer_enter_pending: 0
     })
     foreground = 'codex'
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 5)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 8)
     await vi.advanceTimersByTimeAsync(2000)
     expect(write.mock.calls.map(([, data]) => data)).toEqual([
       expect.stringContaining('You have 1 orchestration message'),
@@ -148,6 +183,28 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       '\r'
     ])
     expect(db.getMessageById(nextMessage.id)).toMatchObject({
+      read: 0,
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+
+    write.mockClear()
+    const delayedEnterMessage = insertDirectRunMessage(db, run.id, 'Delayed foreground at Enter')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(100)
+    foreground = 'zsh'
+    const releaseEnterShell = delayNextForegroundRead()
+    await vi.advanceTimersByTimeAsync(500)
+    foreground = 'codex'
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 9)
+    await vi.advanceTimersByTimeAsync(300)
+    releaseEnterShell()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    expect(db.getMessageById(delayedEnterMessage.id)).toMatchObject({
       read: 0,
       delivered_at: expect.any(String),
       pointer_enter_pending: 0
@@ -173,6 +230,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       const run = createBoundRun(db, 'Claude Run')
       await runtime.listTerminals()
 
+      expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toEqual({ kind: 'prompt' })
       runtime.onPtyData(PTY_ID, QUESTION_SCREEN, 1)
       await vi.advanceTimersByTimeAsync(200)
       insertDirectRunMessage(db, run.id, 'Worker heartbeat')
