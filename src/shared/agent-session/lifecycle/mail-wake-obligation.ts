@@ -52,8 +52,18 @@ export function mailWakeEligibility(records: readonly SleepingAgentSessionRecord
       .map((record) => [
         record.paneKey,
         record.mailWake?.capturedAt ?? record.capturedAt,
-        mailWakeObligation(record) === 'manual'
+        mailWakeObligation(record)
       ])
       .sort()
   )
+}
+
+export function undispatchedMailWakeRecord(
+  record: SleepingAgentSessionRecord
+): SleepingAgentSessionRecord | null {
+  if (mailWakeObligation(record) !== 'retained' || !record.mailWake || record.mailWake.attempt) {
+    return null
+  }
+  const { restoreOnTabOpenOnly: _tabOnly, ...resume } = withoutMailWake(record)
+  return { ...resume, origin: 'worktree-sleep', capturedAt: record.mailWake.capturedAt }
 }

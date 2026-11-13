@@ -38,15 +38,7 @@ export async function admitsMailWakeRetry(
     return false
   }
   const inspection = await ports.inspect(attempt.ptyId, attempt.incarnationId)
-  const observation = inspection?.foregroundObservation
-  if (
-    inspection?.childProcessEvidence !== 'no-children' ||
-    inspection.hasChildProcesses ||
-    observation?.verdict !== 'observed' ||
-    observation.ptyId !== attempt.ptyId ||
-    observation.ptyIncarnationId !== attempt.incarnationId ||
-    observation.foregroundKind !== 'shell'
-  ) {
+  if (inspection?.childProcessEvidence !== 'no-children' || inspection.hasChildProcesses) {
     return false
   }
   return (await ports.shellInFront(attempt.ptyId)) && stillOwns()

@@ -1,5 +1,5 @@
 import { storedPaneBinding } from '../../terminal/recovery/restored-pane-binding'
-import { retainMailWakeAttempt } from './retained-mail-wake-attempt'
+import { retainMailWakeAttempt, restoreUndispatchedMailWake } from './retained-mail-wake-attempt'
 // Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -200,6 +200,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
     // After a claimed-record resume starts, mark that record live.
     const paneKey = `${tab.parentTabId}:${tab.leafId}`
+    const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
     const savedRecord =
       this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
     const resumedRecord =
@@ -272,11 +273,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
                 onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
                   if (resumedRecord?.mailWake) {
                     mailWakeWrite = retainMailWakeAttempt(
-                      (edit) =>
-                        this.commitWorkspaceSessionEdit(
-                          this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-                          edit
-                        ),
+                      (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
                       resumedRecord,
                       ptyId,
                       result
@@ -312,7 +309,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       await mailWakeWrite
       // A running resumed agent's record must not remain asleep.
       if (created.tab.ptyId && resumedRecord) {
-        const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
           (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
           paneKey,
@@ -322,6 +318,12 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       return created
     } catch (err) {
       resumeClaim?.settleFailure(dispatched, err)
+      if (!dispatched && resumedRecord) {
+        await restoreUndispatchedMailWake(
+          (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
+          resumedRecord
+        )
+      }
       if (
         !(automatic && isWorktreeTerminalsSleepingError(err)) &&
         sessionId &&

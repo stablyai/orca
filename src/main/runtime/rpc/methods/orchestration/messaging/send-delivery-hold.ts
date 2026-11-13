@@ -31,7 +31,7 @@ async function readDeliveryHoldWarning(
   recipient: string
 ): Promise<SendRecipientWarning | null> {
   const hold =
-    runtime.readSleepingMailHold?.(recipient) ??
+    (await runtime.readSleepingMailHold?.(recipient)) ??
     (await readMailboxDeliveryHold(recipient, {
       chatSessionFor: (mailbox) => {
         const custody = structuredMailboxCustody(mailbox, db)

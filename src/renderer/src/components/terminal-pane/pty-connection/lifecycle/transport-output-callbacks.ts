@@ -1,4 +1,10 @@
 import {
+  currentMailWakeStartup,
+  isColdRestoreStartup,
+  restoreUndispatchedMailWake
+} from '../startup/pane-resume-record'
+import { useAppStore } from '@/store/index'
+import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
 } from '../startup/terminal-launch-result-policy'
@@ -140,6 +146,15 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
           }
         },
         onSpawnDeferred: (reason: SpawnDeferralReason): void => {
+          if (isCurrent() && isColdRestoreStartup(savedStartup)) {
+            const record = currentMailWakeStartup(
+              savedStartup,
+              useAppStore.getState().sleepingAgentSessionsByPaneKey
+            ).sleepingRecordEntry?.record
+            if (record) {
+              restoreUndispatchedMailWake(record)
+            }
+          }
           if (isCurrent()) {
             session.pendingSpawnDeferral = reason
           }

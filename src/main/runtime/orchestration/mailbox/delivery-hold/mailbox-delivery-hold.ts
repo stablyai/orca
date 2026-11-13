@@ -8,6 +8,8 @@ export type MailboxDeliveryHold =
       openTab: boolean
       failed?: boolean
       liveShell?: boolean
+      waking?: boolean
+      resuming?: boolean
       workspaceName?: string
     }
   | { kind: 'not-foreground'; agentName: string }
@@ -78,6 +80,9 @@ export async function readMailboxDeliveryHold(
 export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
   switch (hold.kind) {
     case 'asleep':
+      if (hold.waking || hold.resuming) {
+        return `Queued. Orca is ${hold.waking ? 'waking' : 'resuming'} ${hold.agentName}; the message will be delivered when it's back.`
+      }
       if (hold.liveShell) {
         return `Queued. Re-run ${hold.agentName} in that terminal; the message is waiting.`
       }

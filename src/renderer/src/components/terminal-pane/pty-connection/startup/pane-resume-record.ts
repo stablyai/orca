@@ -1,3 +1,4 @@
+import type { PtyPaneStartup } from './pty-pane-startup'
 import { useAppStore } from '@/store/index'
 import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
@@ -8,10 +9,13 @@ import {
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { ColdRestoreAgentResumeStartup, PendingStartupCommand } from './fresh-spawn-types'
-import { mailWakeObligation } from '../../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import {
+  mailWakeObligation,
+  undispatchedMailWakeRecord
+} from '../../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
 
 export function isColdRestoreStartup(
-  startup: PendingStartupCommand | null | undefined
+  startup: PendingStartupCommand | PtyPaneStartup | undefined
 ): startup is ColdRestoreAgentResumeStartup {
   return Boolean(
     startup &&
@@ -114,7 +118,11 @@ export function installPaneResumeRecord(session: ConnectPanePtySession): void {
         } else {
           recordPaneWakeThroughLayoutOwner(state, session.deps.worktreeId, session.cacheKey)
         }
-        session.clearSleepingRecordProviderDuplicates(state, startup.sleepingRecordEntry)
+        session.clearSleepingRecordProviderDuplicates(
+          state,
+          startup.sleepingRecordEntry,
+          session.cacheKey
+        )
       }
       return
     }
@@ -148,5 +156,14 @@ export function installPaneResumeRecord(session: ConnectPanePtySession): void {
         session.cacheKey
       )
     }
+  }
+}
+
+/** Called only after a definite refusal before dispatch, never after a lost spawn reply. */
+export function restoreUndispatchedMailWake(record: SleepingAgentSessionRecord): void {
+  const state = useAppStore.getState()
+  const next = undispatchedMailWakeRecord(record)
+  if (next && state.sleepingAgentSessionsByPaneKey[record.paneKey] === record) {
+    state.rememberSleepingAgentSession(next, record)
   }
 }

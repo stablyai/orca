@@ -1,3 +1,4 @@
+import { undeliveredInboxQuery, type UndeliveredInboxOptions } from './undelivered-inbox-query'
 import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
@@ -88,49 +89,27 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: {
-    excludeTypes?: readonly string[]
-    excludeIds?: readonly string[]
-    excludeRunOwnedDirect?: boolean
-    newestFirst?: boolean
-    limit?: number
-  }
+  options?: UndeliveredInboxOptions
 ): MessageRow[] {
-  const conditions = [
-    'to_handle = ?',
-    'read = 0',
-    'delivered_at IS NULL',
-    'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'",
-    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : [])
-  ]
-  const params: (string | number)[] = [toHandle]
-  if (types?.length) {
-    conditions.push(`type IN (${types.map(() => '?').join(',')})`)
-    params.push(...types)
-  }
-  if (options?.excludeTypes?.length) {
-    conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
-    params.push(...options.excludeTypes)
-  }
-  if (options?.excludeIds?.length) {
-    conditions.push(`id NOT IN (${options.excludeIds.map(() => '?').join(',')})`)
-    params.push(...options.excludeIds)
-  }
-  const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
-  if (options?.limit !== undefined) {
-    params.push(Math.max(1, Math.floor(options.limit)))
-  }
+  const query = undeliveredInboxQuery(toHandle, types, options)
   return exposeMessageListTimestamps(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this SELECT returns only messages table rows, decoded at this database boundary.
-    this.db
-      .prepare(
-        `SELECT * FROM messages
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY sequence${options?.newestFirst ? ' DESC' : ''}${limitSql}`
-      )
-      .all(...params) as MessageRow[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared predicate changes selection only; SELECT * still returns the messages schema.
+    this.db.prepare(`SELECT * ${query.sql}`).all(...query.params) as MessageRow[]
   )
+}
+
+export function getUndeliveredUnreadSequence(
+  this: OrchestrationDb,
+  toHandle: string,
+  options: UndeliveredInboxOptions
+): number | undefined {
+  const query = undeliveredInboxQuery(toHandle, undefined, {
+    ...options,
+    newestFirst: true,
+    limit: 1
+  })
+  const row = this.db.prepare(`SELECT sequence ${query.sql}`).get(...query.params)
+  return typeof row?.sequence === 'number' ? row.sequence : undefined
 }
 
 export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): string[] {
@@ -289,6 +268,7 @@ export function getThreadMessagesFor(
 export type MessageInboxMethods = {
   getUnreadMessages: typeof getUnreadMessages
   convertLifecycleMessageToRejection: typeof convertLifecycleMessageToRejection
+  getUndeliveredUnreadSequence: typeof getUndeliveredUnreadSequence
   getUndeliveredUnreadMessages: typeof getUndeliveredUnreadMessages
   getUndeliveredUnreadMailboxHandles: typeof getUndeliveredUnreadMailboxHandles
   getAllMessages: typeof getAllMessages
@@ -307,6 +287,7 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getUnreadMessages,
     convertLifecycleMessageToRejection,
+    getUndeliveredUnreadSequence,
     getUndeliveredUnreadMessages,
     getUndeliveredUnreadMailboxHandles,
     getAllMessages,

@@ -1,4 +1,7 @@
-import { mailWakeObligation } from '../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import {
+  mailWakeObligation,
+  undispatchedMailWakeRecord
+} from '../../../../shared/agent-session/lifecycle/mail-wake-obligation'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -45,4 +48,38 @@ export async function retainMailWakeAttempt(
       }
     }
   })
+}
+
+export function replaceMailWakeRecord(
+  session: WorkspaceSessionState,
+  record: SleepingAgentSessionRecord,
+  next: SleepingAgentSessionRecord
+): WorkspaceSessionState | null {
+  const current = session.sleepingAgentSessionsByPaneKey?.[record.paneKey]
+  if (
+    current?.mailWake?.id !== record.mailWake?.id ||
+    current?.capturedAt !== record.capturedAt ||
+    current?.origin !== record.origin ||
+    current?.restoreOnTabOpenOnly !== record.restoreOnTabOpenOnly ||
+    current?.mailWake?.attempt?.launchToken !== record.mailWake?.attempt?.launchToken
+  ) {
+    return null
+  }
+  return {
+    ...session,
+    sleepingAgentSessionsByPaneKey: {
+      ...session.sleepingAgentSessionsByPaneKey,
+      [record.paneKey]: next
+    }
+  }
+}
+
+export async function restoreUndispatchedMailWake(
+  commit: Commit,
+  record: SleepingAgentSessionRecord
+): Promise<void> {
+  const next = undispatchedMailWakeRecord(record)
+  if (next) {
+    await commit((session) => replaceMailWakeRecord(session, record, next))
+  }
 }

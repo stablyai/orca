@@ -235,7 +235,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSlept
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
   withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
-    this.publishSleepingMail()
+    this.publishSleepingMail(mailboxes)
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 

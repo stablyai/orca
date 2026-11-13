@@ -47,7 +47,11 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     consumed: { paneKey: string; record: SleepingAgentSessionRecord },
     keepPaneKey?: string
   ): void => {
-    if (consumed.paneKey !== keepPaneKey) {
+    if (
+      consumed.paneKey !== keepPaneKey &&
+      useAppStore.getState().sleepingAgentSessionsByPaneKey[consumed.paneKey] === consumed.record &&
+      !consumed.record.mailWake
+    ) {
       state.clearSleepingAgentSession(consumed.paneKey)
     }
     for (const [paneKey, record] of sleepingAgentRecordIndex.entries(
@@ -55,6 +59,9 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       consumed.record.worktreeId
     )) {
       if (
+        useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey] === record &&
+        !record.mailWake &&
+        record.capturedAt <= consumed.record.capturedAt &&
         paneKey !== consumed.paneKey &&
         paneKey !== keepPaneKey &&
         record.worktreeId === consumed.record.worktreeId &&

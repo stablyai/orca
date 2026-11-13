@@ -1,3 +1,4 @@
+import { restoreUndispatchedMailWake } from '@/components/terminal-pane/pty-connection/startup/pane-resume-record'
 import { patchWorkspaceSessionByHost } from '../../workspace/persistence/workspace-session-host-persistence'
 import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { waitForAgentPaneSleep } from '@/store/terminals/agent-pane-sleep-in-flight'
@@ -269,14 +270,19 @@ async function wakeSleepingPaneInBackground(
     }
   }
   useAppStore.getState().rememberSleepingAgentSession(captured, record)
-  await patchWorkspaceSessionByHost(
-    window.api.session,
-    {
-      sleepingAgentSessionsByPaneKey: useAppStore.getState().sleepingAgentSessionsByPaneKey
-    },
-    useAppStore.getState()
-  ).written
-  await window.api.session.flush()
+  try {
+    await patchWorkspaceSessionByHost(
+      window.api.session,
+      {
+        sleepingAgentSessionsByPaneKey: useAppStore.getState().sleepingAgentSessionsByPaneKey
+      },
+      useAppStore.getState()
+    ).written
+    await window.api.session.flush()
+  } catch (error) {
+    restoreUndispatchedMailWake(captured)
+    throw error
+  }
   if (useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey] !== captured) {
     return false
   }
