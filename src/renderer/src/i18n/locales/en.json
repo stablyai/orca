@@ -2434,7 +2434,6 @@
         "backgroundFailedCloud": "A new cloud workspace couldn’t start. Open it in the sidebar to continue."
       },
       "orcaCloudSession": {
-        "seePlans": "See plans",
         "workspaceGone": "That workspace is no longer in Orca.",
         "thisWorkspaceLower": "this workspace",
         "sandboxRestartSoonDetail": "Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.",
@@ -21332,7 +21331,6 @@
         "upgrade": {
           "askOwner": "Ask an owner or admin to upgrade.",
           "bodyNoPrice": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop.",
-          "cta": "See plans",
           "menuItem": "Upgrade to Orca Cloud",
           "title": "Upgrade to use Orca Cloud",
           "body3": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month."

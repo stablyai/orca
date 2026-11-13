@@ -116,7 +116,7 @@ function failureActions(
             primary: [
               {
                 key: 'plans',
-                label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
+                label: t('auto.components.billing.comparePlans', 'Compare plans'),
                 onClick: actions.onSeePlans
               },
               // Paying elsewhere (another device, the portal) is picked up by trying again.

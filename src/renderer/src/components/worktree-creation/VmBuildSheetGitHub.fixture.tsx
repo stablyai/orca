@@ -100,6 +100,6 @@ export const refusedPlan = refused('no_subscription')
 export const refusedHoursUsed = refused('included_hours_exhausted')
 export const refusedSpendCap = refused('overage_cap_reached')
 export const refusedPayment = refused('payment_past_due')
-// A member can't fix billing: the card names who can, with no "See plans".
+// A member can't fix billing: the card names who can, with no "Compare plans".
 export const refusedPlanMember = refused('no_subscription', false)
 export const refusedHoursUsedMember = refused('included_hours_exhausted', false)
