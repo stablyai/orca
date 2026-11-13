@@ -1,4 +1,4 @@
-import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -26,9 +26,9 @@ import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hos
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState

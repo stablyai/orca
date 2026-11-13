@@ -2061,9 +2061,6 @@
         "unreadableSkillSource": "技能資料夾沒有回應，因此此狀態可能不完整。"
       },
       "useMacosTccPromptNotice": {
-        "title": "看到「Orca 想要存取…」提示？",
-        "description": "當 Orca 中執行的代理程式或終端機工具嘗試存取受保護的檔案時，macOS 可能會顯示權限訊息。請在「設定」中授予「完整磁碟存取權」，以減少此類提示。",
-        "openSettings": "開啟設定",
         "dismiss": "不再顯示"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -3741,7 +3738,6 @@
             "7eee951968": "掃描工作區",
             "191f0bc98e": "關閉",
             "7ae2ad30f4": "重新整理",
-            "b2c1331844": "刪除閒置工作區",
             "7f451a3e2c": "無法忽略清理建議",
             "662b8ec3f8": "工作區清理掃描失敗",
             "9cc26c019d": "移除",
@@ -3751,7 +3747,6 @@
             "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
             "4c2990886e": "已刪除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 個失敗",
-            "deleteButtonCount": "刪除 {{value0}}",
             "archivedStatus": "已封存",
             "74f6c16279": "返回"
           },
@@ -4334,7 +4329,6 @@
             "1d411fb6a5": "為此存放庫儲存快速命令",
             "8f1e971966": "新增快速命令",
             "3220e2da27": "該快速命令將從您儲存的清單中刪除。",
-            "e8e1a52edb": "刪除「{{value0}}」？",
             "37e1bb90ce": "執行：{{value0}}",
             "77ac113df0": "啟動 {{value0}}: {{value1}}",
             "7b1c9d6ae1": "執行",
@@ -5670,7 +5664,6 @@
           "loading": "正在載入內容...",
           "deleteFailed": "Orca 無法從雲端刪除此內容。",
           "deleted": "已從雲端刪除",
-          "confirmDelete": "確認刪除",
           "moreActions": "{{name}} 的更多操作",
           "deletePackage": "從雲端刪除"
         },
@@ -5933,8 +5926,6 @@
           "5cc1a6701c": "開啟設定",
           "2b56b35f53": "您可以在「設定」中變更此設定。",
           "dd3a45bbbd": "下次我們將跳過此確認。",
-          "fc23c4cbdf": "刪除工作區",
-          "86f0ae1257": "刪除工作區",
           "removeFolderProjectInstead": "請移除資料夾專案，而非刪除此工作區。",
           "gitBlocksMainWorktree": "Git 不允許移除主工作樹。",
           "removeBatchFolder_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。磁碟上的專案資料夾不會被刪除。",
@@ -6030,11 +6021,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "取消",
-          "591f330288": "刪除專案群組",
           "2c14ce677a": "正在刪除...",
           "0e0e6764af": "包含的專案",
           "55f75628c0": "不會刪除磁碟上的專案資料夾。",
-          "fec7e9c8ae": "刪除群組",
           "removeContainedProjects_other": "移除內含的 {{count}} 個專案",
           "deleteGroupDescription": "刪除 <name>{{name}}</name>。",
           "moreProjects_other": "另有 {{count}} 個"
@@ -6747,9 +6736,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "取消",
           "cf95e3b5bb": "關閉",
-          "deleteWorkspace": "刪除工作區",
           "deleting": "正在刪除...",
-          "forceDelete": "強制刪除",
           "forceDeleting": "正在強制刪除..."
         },
         "HostRemoveDialog": {
@@ -7009,15 +6996,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "審查保留的分支",
           "f21976c9a8": "選擇要強制刪除的本機分支。未選擇的分支保留在其存放庫中。",
           "38c947f7c5": "選擇全部",
           "9602129d38": "已選擇 {{value0}} 個，共 {{value1}} 個",
           "ee39e872d5": "可能尚未合併",
           "676db406fd": "無法取得分支頂端提交",
-          "285e1e4882": "取消",
-          "a0f9863597_one": "強制刪除 {{count}} 個分支",
-          "a0f9863597_other": "強制刪除 {{count}} 個分支"
+          "285e1e4882": "取消"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "跳到頂部"
@@ -8396,7 +8380,6 @@
           "c6b155911b": "所有命令",
           "c36912efd5": "從分頁欄中的「快速命令」按鈕執行它們，或者在任何終端機內按一下滑鼠右鍵。",
           "3d9dc558e8": "該快速命令將從您儲存的清單中刪除。",
-          "3edf3deaf8": "刪除「{{value0}}」？",
           "9fcfc29519": "插入",
           "9b3e338d62": "Enter 鍵",
           "4ccc63da87": "代理程式",
@@ -8850,8 +8833,7 @@
           "60f8a673a7": "返回應用程式",
           "6503182299": "入門清單",
           "82db1b7de4": "入門清單，已完成 {{value0}}/{{value1}}。顯示設定指南。",
-          "df38d612b7": "尚未新增專案。",
-          "3e483e256b": "沒有符合的專案設定。"
+          "df38d612b7": "尚未新增專案。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "狀態",
@@ -13319,7 +13301,6 @@
             "abf59262fb": "啟動代理程式前，請檢視並編輯完整的命令輸入內容。",
             "4ede779461": "使用 AI 解決審查衝突",
             "3b203c62f8": "這將從 PR 中永久刪除該評論。",
-            "ea9b649ce3": "刪除評論？",
             "5788d1059d": "無法更新審查討論串。請檢查 GitHub API 配額。",
             "07871c0589": "連結另一個 PR",
             "7f4489f370": "重新整理",
@@ -14187,8 +14168,7 @@
                   "5ddd8cac7f": "放棄所有已暫存的變更？",
                   "d4df3a61df": "放棄對「{{value0}}」的變更？",
                   "5c0bdbc4cb": "恢復「{{value0}}」？",
-                  "d97bf697c9": "這將永久刪除該檔案。此操作無法復原。",
-                  "96c772bee9": "刪除「{{value0}}」？"
+                  "d97bf697c9": "這將永久刪除該檔案。此操作無法復原。"
                 },
                 "dialog": {
                   "3bc61dc989": "取消",
@@ -14424,7 +14404,6 @@
             "unresolved": "無法確定哪個主機擁有此工作區。請檢查連線後重試。"
           },
           "useFileDeletion": {
-            "d979a4fbb5": "永久刪除「{{value0}}」？",
             "92276aceb7": "刪除",
             "7fb9435c86": "這會永久刪除遠端主機上的目錄及其內容。此操作無法復原。",
             "23e98f192f": "這會永久刪除遠端主機上的檔案。此操作無法復原。",
@@ -14605,7 +14584,6 @@
             "resumeInNewCliTooltipChat": "此聊天會維持不變。"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "要刪除此工作階段嗎？",
             "description": "「{{value0}}」將被刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "remoteDescription": "「{{value0}}」將從 {{value2}} 刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "confirm": "刪除"
@@ -16286,7 +16264,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "刪除連結",
           "cdfe166f6f": "編輯連結",
-          "bfc813e909": "開啟連結",
           "7b0b945fdc": "貼上或輸入連結...",
           "copyLink": "複製連結"
         },
@@ -17486,9 +17463,7 @@
           "2faecab10b": "立即執行",
           "13118faadf": "未知專案",
           "73f630b49d": "取消",
-          "9adfab2596": "刪除外部自動化",
           "1e2e41392f": "不要再問",
-          "080dcb5fbb": "刪除自動化",
           "19a6e30eae": "重新整理自動化",
           "77c2778945": "自動化",
           "e1bf9b1512": "工作區不可用。",
@@ -18386,7 +18361,6 @@
         "ArtifactsPage": {
           "signInAgain": "請重新登入 Orca 以載入成品。",
           "loadFailed": "無法載入成品。",
-          "deleteTitle": "刪除成品？",
           "deleteDescription": "刪除後，將無法再透過公開連結存取「{{name}}」。",
           "delete": "刪除",
           "deleteFailed": "無法刪除成品。",
@@ -20230,11 +20204,8 @@
           "candidateName": "{{value0}} 在 {{value1}} 上"
         },
         "stopAgents": {
-          "titleMany": "要停止這些代理程式嗎？",
           "descriptionOne": "刪除時會停止代理程式目前的工作。",
-          "descriptionMany": "刪除時會停止這些代理程式目前的工作。",
-          "confirm": "停止代理程式並刪除",
-          "confirmOne": "停止代理程式並刪除"
+          "descriptionMany": "刪除時會停止這些代理程式目前的工作。"
         },
         "candidateRow": {
           "gitChip": {
@@ -20368,7 +20339,7 @@
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
         "markNewMessagesTitle": "返回聊天時標記新訊息",
-        "markNewMessagesCopy": "返回聊天時，如果錯過的內容很長或有其他人發了訊息，會用「新訊息」分隔線標出你錯過的內容並捲動到那裡。看過之後它會淡出。",
+        "markNewMessagesCopy": "返回聊天時，在你離開期間收到的內容上方顯示「新訊息」分隔線；如果你之前在看最新訊息，會捲動到該處。",
         "markNewMessagesSearchUnread": "未讀",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
@@ -20922,9 +20893,6 @@
       "unstagedSelectionIncludingUntrackedDescription": "這將捨棄尚未暫存的變更，並永久刪除所選內容中所有未追蹤的檔案。此操作無法復原。",
       "unstagedFilesIncludingUntrackedDescription_other": "這將捨棄這 {{count}} 個檔案中尚未暫存的變更，並永久刪除其中所有未追蹤的檔案。此操作無法復原。",
       "delete": "刪除",
-      "deleteCount": "刪除 {{count}} 個",
-      "deleteUntrackedTitle_one": "刪除 {{count}} 個未追蹤的檔案？",
-      "deleteUntrackedTitle_other": "刪除 {{count}} 個未追蹤的檔案？",
       "discard": "捨棄",
       "discardAll": "全部捨棄",
       "restore": "還原"
@@ -21395,7 +21363,8 @@
   },
   "common": {
     "retry": "重試",
-    "cancel": "取消"
+    "cancel": "取消",
+    "delete": "刪除"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -21520,8 +21489,7 @@
     "trashFailed": {
       "titleRecycleBin": "無法將「{{name}}」移至資源回收筒。要永久刪除嗎？",
       "titleTrash": "無法將「{{name}}」移至垃圾桶。要永久刪除嗎？",
-      "description": "此操作無法復原。",
-      "confirm": "永久刪除"
+      "description": "此操作無法復原。"
     }
   },
   "sparsePreset": {
@@ -21665,6 +21633,11 @@
         "reasonSharedSession": "在另一個窗格中也已開啟",
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。"
+      },
+      "oauthUsage": {
+        "title": "Claude 用量輪詢",
+        "description": "使用 Claude Code 登入憑證查詢用量、額度和非使用中帳戶。關閉後，僅顯示執行中終端機工作階段提供的即時用量。",
+        "about": "關於 Claude 用量輪詢"
       }
     },
     "managedData": {
@@ -21730,7 +21703,6 @@
     "nestedRemoval": {
       "refreshFailed": "無法重新整理工作區清單",
       "review": "連同巢狀工作樹一起刪除…",
-      "title": "刪除工作區和巢狀工作樹？",
       "description": "這將永久刪除「{{name}}」、下面列出的每個巢狀工作樹及其中的所有檔案（包括未提交的更改）。它們的終端機和代理程式將被停止。",
       "detached": "分離 HEAD",
       "loading": "正在檢查巢狀工作樹…",
@@ -21738,7 +21710,6 @@
       "cancel": "取消",
       "retry": "重新檢查",
       "deleting": "正在刪除…",
-      "confirm": "刪除所有列出的工作樹",
       "preservedBranches": "部分巢狀工作樹分支已保留"
     },
     "setupTerminalTitle": "初始設定"

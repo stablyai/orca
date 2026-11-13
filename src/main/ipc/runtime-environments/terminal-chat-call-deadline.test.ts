@@ -1,9 +1,9 @@
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './requests/runtime-environment-transport-routing'
 import * as ChatBudget from '../../../shared/terminal/input/terminal-chat-prompt-budget'
 import { TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as EnvironmentCatalog from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type * as AbortableRequests from './runtime-environment-abortable-requests'
+import type * as AbortableRequests from './requests/runtime-environment-abortable-requests'
 
 const environment = vi.hoisted(() => ({
   id: 'chat-deadline-host',
@@ -25,7 +25,7 @@ vi.mock('../../startup/main-process-state', () => ({
 vi.mock('../../runtime/hosts/runtime-elapsed-clock', () => ({
   readRuntimeElapsedClock: () => mocks.clock
 }))
-vi.mock('./runtime-environment-runtime-pinned-send', () => ({
+vi.mock('./requests/runtime-environment-runtime-pinned-send', () => ({
   sendOneShotRequestOnRuntime: mocks.oneShot,
   sendEnvelopedOneShotCall: vi.fn()
 }))
@@ -49,15 +49,15 @@ vi.mock('../../wsl/orcad/wsl-orcad-host-environments', () => ({
   observeWslOrcadHostResponse: () => {},
   wslOrcadHostSupports: () => false
 }))
-vi.mock('./runtime-environment-request-preparation', () => ({
+vi.mock('./requests/runtime-environment-request-preparation', () => ({
   prepareFencedRuntimeRequest: mocks.prepare
 }))
-vi.mock('./runtime-environment-abortable-requests', async (original) => ({
+vi.mock('./requests/runtime-environment-abortable-requests', async (original) => ({
   ...(await original<typeof AbortableRequests>()),
   sendRemoteRuntimeConnectionRequestAbortable: mocks.send
 }))
 
-import { registerRuntimeEnvironmentPassiveHandlers } from './runtime-environment-connectivity-handlers'
+import { registerRuntimeEnvironmentPassiveHandlers } from './connectivity/runtime-environment-connectivity-handlers'
 
 function call(params: unknown, timeoutMs = 65_000): Promise<unknown> {
   const handler = mocks.handle.mock.calls.find(

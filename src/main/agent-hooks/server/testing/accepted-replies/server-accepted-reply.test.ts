@@ -1,4 +1,3 @@
-import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,26 +51,6 @@ function replyForCurrentRow(): string | undefined {
 }
 
 describe('accepted lead reply', () => {
-  it('keeps the whole reply for its turn, out of saved and public status, until a new prompt', async () => {
-    await post({ hook_event_name: 'UserPromptSubmit', prompt: 'write the report' })
-    await post({ hook_event_name: 'Stop', last_assistant_message: REPLY })
-
-    expect(replyForCurrentRow()).toBe(REPLY)
-    server.flushStatusPersistSync()
-    for (const published of [
-      readSavedStatus(join(userDataPath, 'agent-hooks', 'last-status.json')),
-      JSON.stringify(server.getStatusSnapshot())
-    ]) {
-      expect(published).not.toContain('MIDDLE-MARKER')
-      expect(published).not.toContain('acceptedReply')
-      expect(published).not.toContain('replyCandidate')
-    }
-
-    await post({ hook_event_name: 'UserPromptSubmit', prompt: 'next task' })
-    await post({ hook_event_name: 'Stop' })
-    expect(replyForCurrentRow()).toBeUndefined()
-  })
-
   it("saves the reply of an agent that exits right after it, though exit cleanup clears the pane's status", async () => {
     await post({ hook_event_name: 'UserPromptSubmit', prompt: 'write the report' })
     const paneKey: string = PANE

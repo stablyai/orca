@@ -21,7 +21,7 @@ import { previewNestedWorktreeRemoval } from '@/store/slices/worktrees/teardown/
 import { useTranslate } from '@/i18n/use-translate'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function DeleteNestedWorktreesDialog({
@@ -171,9 +171,7 @@ export function DeleteNestedWorktreesDialog({
       >
         <DialogContent surface="security" showCloseButton={!deleting}>
           <DialogHeader>
-            <DialogTitle>
-              {t('worktree.nestedRemoval.title', 'Delete workspace and nested worktrees?')}
-            </DialogTitle>
+            <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
             <DialogDescription>
               {t(
                 'worktree.nestedRemoval.description',
@@ -244,7 +242,7 @@ export function DeleteNestedWorktreesDialog({
                 {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 {deleting
                   ? t('worktree.nestedRemoval.deleting', 'Deleting…')
-                  : t('worktree.nestedRemoval.confirm', 'Delete all listed worktrees')}
+                  : t('common.delete', 'Delete')}
               </Button>
             )}
           </DialogFooter>

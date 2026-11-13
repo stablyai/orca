@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { DaemonSessionOwnerResolution } from '../providers/routing/daemon-session-owner-resolution'
 import type {
   PtyFencedTerminationRequest,

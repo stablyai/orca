@@ -1782,7 +1782,6 @@
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
       "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
-      "deleteWorktree": "Excluir Worktree",
       "pin": "Fixar",
       "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
       "removeHost": "Remover host",
@@ -1790,8 +1789,7 @@
       "sleep": "Suspender",
       "unpin": "Desafixar",
       "rename": "Renomear",
-      "deleteFailed": "Falha ao excluir \"{{name}}\"",
-      "deleteAnyway": "Excluir Mesmo Assim"
+      "deleteFailed": "Falha ao excluir \"{{name}}\""
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -1972,7 +1970,6 @@
       "daysAgo_one": "há {{count}} d",
       "daysAgo_other": "há {{count}} d",
       "deleteConfirmMessage": "Isso exclui permanentemente o comentário no GitHub.",
-      "deleteConfirmTitle": "Excluir comentário?",
       "editPlaceholder": "Edite o comentário…",
       "hoursAgo_many": "há {{count}} h",
       "hoursAgo_one": "há {{count}} h",
@@ -2832,7 +2829,6 @@
       "addTitle": "Adicionar Comando Rápido",
       "chooseAgentTitle": "Escolher Agente",
       "deleteConfirmMessage": "Este comando rápido será removido da sua lista salva.",
-      "deleteConfirmTitle": "Excluir \"{{label}}\"?",
       "editTitle": "Editar Comando Rápido",
       "editorDescription": "Salve comandos de terminal ou prompts de agente para acesso rápido.",
       "title": "Comandos Rápidos",
@@ -4800,7 +4796,6 @@
       "outcome": "Resultado",
       "allOutcomes": "Todos os resultados",
       "couldNotStart": "Não foi possível iniciar",
-      "deleteAutomationTitle": "Excluir automação?",
       "deleteRetained": "Excluir “{{name}}” e suas execuções retidas?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Não foi possível verificar o painel original do agente. Reconecte e tente novamente.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "O painel original do agente não pode mais ser aberto. A saída salva permanece aqui.",

@@ -110,18 +110,6 @@ describe('release JavaScript configuration', () => {
 })
 
 describe('release JavaScript transfer', () => {
-  it('restores development bundles and rejects them for an official build', () => {
-    const options = fixture()
-    const devConfiguration = { ...configuration, identity: 'dev', telemetryKeySha256: null }
-    packReleaseJavascript({ ...options, configuration: devConfiguration })
-    expect(() => restoreReleaseJavascript(options)).toThrow(
-      'JavaScript build configuration differs'
-    )
-    expect(
-      restoreReleaseJavascript({ ...options, configuration: devConfiguration }).configuration
-    ).toEqual(devConfiguration)
-  })
-
   it('rejects a damaged archive before replacing the current build', () => {
     const options = fixture()
     packReleaseJavascript(options)

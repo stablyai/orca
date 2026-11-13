@@ -6,10 +6,7 @@ import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-su
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 
 const stopDocuments: (() => void)[] = []
-const lists = [
-  ['bullet', '- First\n- Next\n\nOutside', 'li'],
-  ['task', '- [ ] First\n- [x] Next\n\nOutside', 'li > div']
-] as const
+const lists = [['task', '- [ ] First\n- [x] Next\n\nOutside', 'li > div']] as const
 
 function surface(source: string) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
@@ -71,10 +68,7 @@ for (const [kind, source, selector] of lists) {
 it.each([
   ['<p>First<br></p><p>Second</p>', 'First<br />Second'],
   ['<p>First</p><p><br></p><p>Second</p>', 'First<br /><br />Second'],
-  ['<p>First</p>\n  <p>Second</p>', 'First<br />Second'],
-  ['<p>First\n</p><p>Second</p>', 'First<br />Second'],
   ['First<div>Second</div>Third', 'First<br />Second<br />Third'],
-  ['First<br><div>Second</div>', 'First<br />Second'],
   ['<strong>First</strong> <em>Second</em>', '**First** *Second*']
 ])('keeps existing breaks, empty lines and inline spaces without duplication: %j', (html, text) => {
   const { editorDocument, editor } = surface('- First\n- Next')

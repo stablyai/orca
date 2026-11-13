@@ -20,6 +20,7 @@ import type {
 import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
 import { BrowserGuestDevToolsDock } from '../devtools/browser-guest-devtools-dock'
+import { createKeyedTrailingEdgeCoalescer } from '../../../runtime/client/events/keyed-trailing-edge-coalescer'
 
 export type BrowserManagerSettings = {
   keybindings?: KeybindingOverrides
@@ -168,6 +169,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // Offscreen pages have no renderer to hold their icon for session-tab rows.
   protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
+  // Title and spinner churn on offscreen pages publishes at most about once a second.
+  protected readonly offscreenGuestStateNotices = createKeyedTrailingEdgeCoalescer(
+    (webContentsId) => this.notifyBrowserGuestStateChanged(Number(webContentsId)),
+    { flushMs: 250, maxWaitMs: 1000 }
+  )
   protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
   protected siteDisplayController: BrowserSiteDisplayController | null = null

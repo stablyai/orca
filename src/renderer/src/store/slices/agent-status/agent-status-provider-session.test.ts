@@ -147,7 +147,7 @@ it('drops a host-assigned agent id when a failed commit leaves a new Pi transcri
   expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBeUndefined()
 })
 
-it('offers Copy Agent ID wherever the host stamped the field, even before it named the agent', () => {
+it('offers Copy Orca Session ID wherever the host stamped the field, even before it named the agent', () => {
   const store = createTestStore()
   const paneKey = 'tab-1:leaf-1'
   const report = (updatedAt: number, orcaSessionId?: string | null) =>

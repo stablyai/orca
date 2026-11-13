@@ -8,11 +8,11 @@ import {
   type SessionTabsApplyOutcome,
   type SessionTabsStreamSource
 } from './mobile-session-tabs-stream-health'
-import { PendingTerminalHandleRecoveryBudget } from '../../terminal/session/pending-terminal-handle-recovery'
+import { PendingTerminalHandleRecoveryBudget } from '../../terminal/session/inventory/pending-terminal-handle-recovery'
 import {
   useMobileTerminalInventoryRecovery,
   type MobileTerminalInventoryRefreshOptions
-} from '../../terminal/session/use-mobile-terminal-inventory-recovery'
+} from '../../terminal/session/inventory/use-mobile-terminal-inventory-recovery'
 
 type Params<Result, Tab> = {
   client: RpcClient | null

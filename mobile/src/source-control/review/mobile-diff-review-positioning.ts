@@ -1,4 +1,4 @@
-import type { MobileGitStagingArea } from '../mobile-git-status'
+import type { GitStagingArea as MobileGitStagingArea } from '../../../../src/shared/git/status/git-status-types'
 import {
   createMobileDiffReviewFileKey,
   type MobileDiffReviewQueueItem,

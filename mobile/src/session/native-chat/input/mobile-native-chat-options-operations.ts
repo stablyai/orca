@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
-import '../../../files/mobile-file-preview-operations'
+import '../../../files/preview/mobile-file-preview-operations'
 import { sessionLaunchUnreadReplySchema } from '../../../transport/rpc/rpc-uninterpreted-reply-schemas'
 import * as z from 'zod'
 import { readTerminalModelControlResult } from '../../../../../src/shared/native-chat/input/native-chat-terminal-model-control'

@@ -6,16 +6,16 @@ import {
   needsHookRootEvidence,
   readHookProcessVerdict
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
-import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex-session-start'
+import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
+import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex/codex-session-start'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status/identity/agent-status-identity'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/contracts/agent-status-observation'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
-import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
+import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
   pairAcceptedClaudeStatusFields,

@@ -3,7 +3,7 @@ import {
   OWN_LINEAGE_STORE_KEY,
   resolveCrossStoreLineageParents,
   type CrossStoreLineageView
-} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+} from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
@@ -15,7 +15,7 @@ import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   pickFolderLineageRecord,
   readInlineFolderLineage
-} from '../../../../../../shared/worktree/folder-lineage-parents'
+} from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
 import { getIndexedAllWorktrees } from '../listing/worktree-catalog-index'
 import {
   selectFolderWorkspaces,

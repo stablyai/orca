@@ -84,6 +84,8 @@ export type AgentChildWorkInput = {
   description?: string
   agentType?: string
   model?: string
+  /** Reasoning effort, in the provider's own words (`high`, `medium`). */
+  effort?: string
   totalTokens?: number
   providerTiming?: AgentChildWorkProviderTiming
   /** Invocation owner (spawner or launching agent); absence identifies the session lead. */

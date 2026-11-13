@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { getWorkspaceAttachments } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../../../shared/worktree/types'

@@ -1,7 +1,7 @@
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { isWorktreeRetiredByRemoval } from '../worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../worktree/removal/removal-visibility'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader,

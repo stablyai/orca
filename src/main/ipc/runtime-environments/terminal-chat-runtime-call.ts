@@ -1,4 +1,4 @@
-import type { RuntimeEnvironmentCall } from './runtime-environment-call'
+import type { RuntimeEnvironmentCall } from './requests/runtime-environment-call'
 import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'

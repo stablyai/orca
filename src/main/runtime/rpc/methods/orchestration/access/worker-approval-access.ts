@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration-approval-answer-params'
+import type { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrchestrationAccessRuleInput } from './orchestration-method-access'
 

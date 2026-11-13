@@ -1,6 +1,6 @@
 import type { TerminalChatPromptSchedule } from '../../../../../shared/terminal/input/terminal-chat-prompt-budget'
 import type { z } from 'zod'
-import type { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import type { TerminalSend } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { TerminalInputSource } from '../../../terminal/input/terminal-input-admission'
 import { InvalidArgumentError } from '../../core'

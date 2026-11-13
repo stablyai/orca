@@ -244,11 +244,11 @@ export function NativeChatMessageList({
     [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
   const navigationRequest = useNativeChatNavigationRequest(slots, messages, subagentSections)
-  const showingLatest = isVisible && session.readCurrent === true
-  const newRows = useNativeChatNewRowsMarker(slots, waitingSlots, showingLatest, {
-    items: journalItems ?? [],
-    latestTurn
-  })
+  const newRows = useNativeChatNewRowsMarker(
+    slots,
+    waitingSlots,
+    isVisible && session.readCurrent === true
+  )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
@@ -416,7 +416,7 @@ export function NativeChatMessageList({
               pendingId={navigation.pendingRailId}
             />
             <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
-            <NativeChatNewRowsAnnouncement arrival={newRows.announcement} />
+            <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
           </div>
           <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
         </div>

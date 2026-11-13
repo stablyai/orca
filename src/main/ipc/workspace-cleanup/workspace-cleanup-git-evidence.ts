@@ -1,4 +1,4 @@
-import { getStatus } from '../../git/source-control/status-read'
+import { getStatus } from '../../git/source-control/status/status-read'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -17,7 +17,7 @@ import {
 import {
   hasWorktreeAtRiskLocalFiles,
   type WorktreeAtRiskLocalFiles
-} from '../../../shared/worktree/at-risk-local-files'
+} from '../../../shared/worktree/removal/at-risk-local-files'
 import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,

@@ -1,8 +1,10 @@
 import {
   WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
-} from '../../../../../shared/rpc-contract/workspace-cleanup-runner-params'
+} from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-runner-params'
 import { requireWorkspaceCleanupRunner } from '../../../../workspaces/cleanup/workspace-cleanup-runner-registry'
+import { reportClientUnsavedEditors } from '../../../../workspaces/cleanup/workspace-cleanup-client-unsaved-editors'
 import { defineMethod } from '../../core'
 
 /** The cleanup runner of the host that owns the repos; clients merge hosts themselves. */
@@ -25,5 +27,18 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
     permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => requireWorkspaceCleanupRunner(runtime).report()
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.reportUnsavedEditors',
+    permission: 'workspace',
+    params: WorkspaceCleanupReportUnsavedEditorsParams,
+    handler: (params, { runtime, connectionId, signal }) => {
+      // Socket-scoped: without a live connection nothing would clear the report.
+      if (!connectionId || signal?.aborted) {
+        return { recorded: false }
+      }
+      reportClientUnsavedEditors(runtime, connectionId, params.reporterId ?? '', params.worktreeIds)
+      return { recorded: true }
+    }
   })
 ]

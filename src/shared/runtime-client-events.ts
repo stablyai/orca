@@ -4,13 +4,13 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from './worktree/launch-types'
+} from './worktree/creation/launch-types'
 import type { SshConnectionState } from './ssh-types'
 import type { TerminalSideEffectBatch } from './terminal/output/terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
-import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
-import type { WorkspaceMetadataSet } from './worktree/workspace-metadata-set'
+import type { WorktreeSortOrderUpdate } from './worktree/metadata/sort-order-update'
+import type { WorkspaceMetadataSet } from './worktree/metadata/workspace-metadata-set'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
 import type { WorkspaceCleanupRunFinishedEvent } from './workspace-cleanup/workspace-cleanup-run'

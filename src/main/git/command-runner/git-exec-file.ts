@@ -3,10 +3,11 @@ import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
+import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-race'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
@@ -75,6 +76,7 @@ async function gitExecFileAsyncUnlocked(
             cwd: options.cwd,
             wslDistro: options.wslDistro,
             tier: options.admissionTier,
+            admissionClass: options.admissionClass,
             signal: options.admissionSignal ?? options.signal
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
@@ -163,6 +165,15 @@ async function gitExecFileAsyncUnlocked(
           throw createAbortError()
         }
         return await runCapturedCommand()
+      } catch (error) {
+        return await retryGitFetchRefRace(
+          args,
+          error,
+          runCapturedCommand,
+          () => terminationState.current,
+          options.signal,
+          options.canStart
+        )
       } finally {
         const termination = terminationState.current
         if (termination) {

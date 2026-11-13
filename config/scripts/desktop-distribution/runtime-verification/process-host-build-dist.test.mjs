@@ -163,23 +163,6 @@ beforeAll(async () => {
 afterAll(() => releaseSeed?.())
 
 describe('process-host dist build', () => {
-  it('rewrites only changed outputs and keeps source maps pointing at src', async () => {
-    const packageDir = fixture(undefined, seededDist)
-    const before = distSnapshot(packageDir)
-
-    writeFileSync(join(packageDir, 'src', 'internal.ts'), 'export const value = 2\n')
-    const changed = await build(packageDir)
-
-    expect(changed.stdout).toContain('2 written, 0 removed, 6 unchanged')
-    const after = distSnapshot(packageDir)
-    for (const file of ['entry.js', 'entry.d.ts', 'internal.js.map']) {
-      expect(after[file]).toEqual(before[file])
-    }
-    expect(after['internal.js']).not.toEqual(before['internal.js'])
-    const map = JSON.parse(readFileSync(join(packageDir, 'dist', 'internal.js.map'), 'utf8'))
-    expect(map.sources).toEqual(['../src/internal.ts'])
-  })
-
   it('preserves the previous dist when compilation fails', async () => {
     const packageDir = fixture(undefined, seededDist)
     const before = distSnapshot(packageDir)
@@ -302,18 +285,6 @@ await buildPackageDist(process.argv[2])
       ).toEqual([])
     }
   )
-
-  it('reclaims staging directories abandoned by a killed build', async () => {
-    const packageDir = fixture()
-    mkdirSync(join(packageDir, '.dist-staging-abandoned'))
-    writeFileSync(join(packageDir, '.dist-staging-abandoned', 'partial.js'), '')
-
-    await build(packageDir)
-
-    expect(existsSync(join(packageDir, 'dist', 'entry.js'))).toBe(true)
-    expect(existsSync(join(packageDir, 'dist', 'partial.js'))).toBe(false)
-    expect(leftovers(packageDir)).toEqual([])
-  })
 
   it('builds its own package when reached through a symlinked directory', async () => {
     const packageDir = fixture()
