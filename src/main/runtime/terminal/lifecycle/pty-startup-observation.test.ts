@@ -9,6 +9,7 @@ import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/
 import { ptyTuiIdleEvidence } from '../wait/tui-idle-evidence-source'
 import { evaluateTuiIdle } from '../wait/tui-idle-evidence'
 import { terminalDeliveryRefusal } from '../wait/terminal-delivery-refusal'
+import { makeTuiIdlePty } from '../wait/tui-idle-wait-test-harness'
 
 function inspection(processName: string | null, ptyId = 'pty-1'): TerminalProcessInspection {
   return {
@@ -35,18 +36,20 @@ function inspection(processName: string | null, ptyId = 'pty-1'): TerminalProces
 function fixture(inspect: () => Promise<TerminalProcessInspection>) {
   const paint = new TerminalCommandPaint()
   paint.observe('\x1b]133;C\x07hook text', 'hook text')
-  const pty = {
+  const pty = makeTuiIdlePty({
     ptyId: 'pty-1',
     incarnationId: 'inc-1',
     connected: true,
     lastOutputAt: 1,
     lastOscTitle: 'claude',
     commandPaint: paint
-  } as unknown as RuntimePtyWorktreeRecord
-  let controller = {
+  })
+  let controller: RuntimePtyController = {
+    write: () => true,
+    kill: () => true,
     getForegroundProcess: async () => 'zsh',
     inspectProcess: inspect
-  } as RuntimePtyController
+  }
   const owner = new RuntimePtyForegroundAgent({
     getController: () => controller,
     getPty: () => pty,
@@ -75,24 +78,29 @@ describe('PTY-owned startup observation', () => {
     for (let i = 0; i < count; i++) {
       const paint = new TerminalCommandPaint()
       paint.observe('\x1b]133;C\x07hook text', 'hook text')
-      ptys.set(`pty-${i}`, {
-        ptyId: `pty-${i}`,
-        incarnationId: 'inc-1',
-        connected: true,
-        lastOutputAt: Date.now(),
-        lastOscTitle: 'claude',
-        lastAgentStatus: 'idle',
-        commandPaint: paint,
-        tailBuffer: ['hook text'],
-        tailPartialLine: '',
-        preview: 'hook text'
-      } as unknown as RuntimePtyWorktreeRecord)
+      ptys.set(
+        `pty-${i}`,
+        makeTuiIdlePty({
+          ptyId: `pty-${i}`,
+          incarnationId: 'inc-1',
+          connected: true,
+          lastOutputAt: Date.now(),
+          lastOscTitle: 'claude',
+          lastAgentStatus: 'idle',
+          commandPaint: paint,
+          tailBuffer: ['hook text'],
+          tailPartialLine: '',
+          preview: 'hook text'
+        })
+      )
     }
     let recover = false
     const admissions = new Map<string, number>()
     const live = new Set<string>()
     let maxLivePerPty = 0
-    const controller = {
+    const controller: RuntimePtyController = {
+      write: () => true,
+      kill: () => true,
       getForegroundProcess: async () => null,
       inspectProcess: async (id: string) => {
         admissions.set(id, (admissions.get(id) ?? 0) + 1)
@@ -114,7 +122,7 @@ describe('PTY-owned startup observation', () => {
           live.delete(id)
         }
       }
-    } as RuntimePtyController
+    }
     const owner = new RuntimePtyForegroundAgent({
       getController: () => controller,
       getPty: (id) => ptys.get(id) ?? null,
@@ -257,9 +265,11 @@ describe('PTY-owned startup observation', () => {
         })
     )
     replaceController({
+      write: () => true,
+      kill: () => true,
       getForegroundProcess: async () => null,
       inspectProcess: nextInspect
-    } as RuntimePtyController)
+    })
     owner.startup.refresh('pty-1')
     resolve(inspection('less'))
     await flush()
@@ -315,10 +325,12 @@ describe('PTY-owned startup observation', () => {
     const inspect = vi.fn(async () => inspection(processName))
     const { owner, pty, replaceController } = fixture(inspect)
     replaceController({
+      write: () => true,
+      kill: () => true,
       getForegroundProcess: async () => null,
       inspectProcess: inspect,
       confirmForegroundProcess: scan
-    } as RuntimePtyController)
+    })
     const changed = vi.fn()
     const stop = owner.startup.watch('pty-1', changed)
     owner.startup.refresh('pty-1')
@@ -347,20 +359,24 @@ describe('PTY-owned startup observation', () => {
     const { owner, replaceController } = fixture(async () => inspection('2.1.322'))
     const confirm = vi.fn(async () => 'claude')
     replaceController({
+      write: () => true,
+      kill: () => true,
       getForegroundProcess: async () => null,
       inspectProcess: async () => inspection('2.1.322'),
       confirmForegroundProcess: confirm
-    } as RuntimePtyController)
+    })
     const stop = owner.startup.watch('pty-1', () => {})
     owner.startup.refresh('pty-1')
     await flush()
     expect(owner.startup.read('pty-1')).toEqual({ kind: 'agent', agent: 'claude' })
     expect(confirm).toHaveBeenCalledTimes(1)
     replaceController({
+      write: () => true,
+      kill: () => true,
       getForegroundProcess: async () => null,
       inspectProcess: async () => inspection('node'),
       confirmForegroundProcess: async () => null
-    } as RuntimePtyController)
+    })
     owner.startup.refresh('pty-1')
     await flush()
     expect(owner.startup.read('pty-1')).toEqual({ kind: 'pending', candidate: 'claude' })
@@ -372,10 +388,12 @@ describe('PTY-owned startup observation', () => {
     const inspect = vi.fn(async () => inspection('less'))
     const { owner, pty, replaceController } = fixture(inspect)
     replaceController({
+      write: () => true,
+      kill: () => true,
       getForegroundProcess: async () => null,
       inspectProcess: inspect,
       supportsForegroundObservation: () => false
-    } as RuntimePtyController)
+    })
     const stop = owner.startup.watch('pty-1', () => {})
     for (let i = 0; i < 30; i++) {
       owner.startup.refresh('pty-1')

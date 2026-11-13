@@ -12,6 +12,7 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
+import type { RuntimePtyController } from '../../../terminal/lifecycle/runtime-pty-controller-contract'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -31,7 +32,8 @@ describe('mailbox delivery with current adopted agent evidence', () => {
   it('delivers working-turn mail only after an adopted wrapper has current composer evidence', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-adopted-working-mail-')
-    const { runtime, write } = createRuntime(db, { launchAgent: null })
+    const { runtime } = createRuntime(db, { launchAgent: null })
+    const write = vi.fn<RuntimePtyController['write']>(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -61,7 +63,8 @@ describe('mailbox delivery with current adopted agent evidence', () => {
   it('preserves adopted OMP identity, readiness and mail across a split recorded app zone', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-adopted-omp-app-zone-')
-    const { runtime, write } = createRuntime(db, { launchAgent: null })
+    const { runtime } = createRuntime(db, { launchAgent: null })
+    const write = vi.fn<RuntimePtyController['write']>(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -112,7 +115,8 @@ describe('mailbox delivery with current adopted agent evidence', () => {
   it('delivers working mail to a current adopted non-TUI terminal agent', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-working-dsb-mail-')
-    const { runtime, write } = createRuntime(db, { launchAgent: null })
+    const { runtime } = createRuntime(db, { launchAgent: null })
+    const write = vi.fn<RuntimePtyController['write']>(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
