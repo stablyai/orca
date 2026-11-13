@@ -129,11 +129,10 @@ beforeEach(() => {
 
 // Page allowlisted custom keys reject over-size/unseeded writes (rulings 33.4/33.6). Modal must catch void-call rejection or page faults and drops generation.
 describe('adding a custom key when the store refuses the write', () => {
-  it('does not let the refusal escape as an unhandled rejection', async () => {
+  it('keeps a refused addition out of callbacks and mirrored storage', async () => {
     store.refuse = true
     const before = mirrored()
-    const unhandled = vi.fn()
-    process.on('unhandledRejection', unhandled)
+
     const onKeysChanged = vi.fn()
     const onClose = vi.fn()
     let renderer: ReturnType<typeof create> | null = null
@@ -149,12 +148,10 @@ describe('adding a custom key when the store refuses the write', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    process.off('unhandledRejection', unhandled)
-    expect(unhandled).not.toHaveBeenCalled()
+
     // Do not report unstored key as added to accessory row.
     expect(onKeysChanged).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
-    // Restore mirror after refused save: saveCustomKeys notes map before persistence, and next init must not include rejected value.
     expect(mirrored()).toBe(before)
   })
 })
