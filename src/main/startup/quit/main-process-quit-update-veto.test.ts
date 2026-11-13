@@ -44,7 +44,7 @@ const dependencyExports: [string, string[]][] = [
   ['../../workspaces/removal/worktree-background-removal', ['stopBackgroundWorktreeRemovals']],
   ['./quit-teardown-deadline', ['settleTeardownWithinDeadline', 'settleWithinMs']],
   ['./quit-teardown-start-gate', ['quitTeardownStartGate']],
-  ['../../dock/unread-badge', ['setUnreadDockBadgeCount']],
+  ['../../dock/unread-badge', ['setUnreadDockBadgeCount', 'disposeUnreadDockBadge']],
   ['../../tray/system-tray', ['destroySystemTray']],
   ['../../telemetry/client', ['shutdownTelemetry']],
   ['../../observability/index', ['shutdownObservability']],

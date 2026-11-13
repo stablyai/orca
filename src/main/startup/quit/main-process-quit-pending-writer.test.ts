@@ -66,7 +66,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../workspaces/removal/worktree-background-removal': {
     stopBackgroundWorktreeRemovals: idle()
   },
-  '../../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
+  '../../dock/unread-badge': { setUnreadDockBadgeCount: idle(), disposeUnreadDockBadge: idle() },
   '../../tray/system-tray': { destroySystemTray: idle() },
   '../../telemetry/client': { shutdownTelemetry: settled() },
   '../../observability/index': { shutdownObservability: settled() },
