@@ -25,6 +25,7 @@ import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-
 import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
+import { ClientHostedBrowserOverflowMenu } from './assemble-chrome/client-hosted-browser-overflow-menu'
 import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from './assemble-chrome/use-browser-page-chrome-focus'
@@ -50,6 +51,7 @@ import { useBrowserDevToolsDockPageFlex } from './devtools-dock/browser-devtools
 
 export function ClientHostedBrowserPagePane({
   browserTab,
+  sessionProfileId = null,
   workspaceId,
   runtimeEnvironmentId,
   worktreeId,
@@ -372,6 +374,14 @@ export function ClientHostedBrowserPagePane({
           reloadShowsStop={reload.reloadButtonLabelKind === 'stop'}
         >
           {markup.drawButton}
+          <ClientHostedBrowserOverflowMenu
+            browserTab={browserTab}
+            sessionProfileId={sessionProfileId}
+            workspaceId={workspaceId}
+            isActive={isActive}
+            onOpenFind={() => setFindOpen(true)}
+            onHardReload={() => reload.runReloadTrigger('hard-reload')}
+          />
         </BrowserNavigationControlRow>
       </div>
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>

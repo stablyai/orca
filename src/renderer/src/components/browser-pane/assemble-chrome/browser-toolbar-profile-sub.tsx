@@ -37,6 +37,20 @@ export type BrowserToolbarProfileSubProps = {
   forceOpen: boolean
 }
 
+/** A surface whose profile follows its host: show the entry disabled instead of a switcher that cannot rebuild the page. */
+export function BrowserToolbarProfileSubUnavailable({ reason }: { reason: string }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <DropdownMenuItem disabled aria-disabled="true">
+      <UserRound className="mr-2 size-3.5" />
+      <span className="min-w-0">
+        <span className="block">{t('browser.toolbar.profile', 'Profile')}</span>
+        <span className="block truncate text-xs text-muted-foreground">{reason}</span>
+      </span>
+    </DropdownMenuItem>
+  )
+}
+
 /** Everything about the page's browsing session: which profile it uses and what it imports. */
 export function BrowserToolbarProfileSub({
   browserPageId,

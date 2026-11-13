@@ -127,6 +127,7 @@ export default function BrowserPane({
         <ClientHostedBrowserPagePane
           key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
           browserTab={activeBrowserPage}
+          sessionProfileId={browserTab.sessionProfileId ?? null}
           workspaceId={browserTab.id}
           runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
           worktreeId={browserTab.worktreeId}
