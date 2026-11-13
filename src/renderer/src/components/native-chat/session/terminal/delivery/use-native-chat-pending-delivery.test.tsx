@@ -7,6 +7,12 @@ import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery
 import { clearPendingSendCacheForTests } from './native-chat-pending'
 import * as pendingOwner from './native-chat-pending'
 import { useNativeChatAssembledMessages } from '../assembly/use-native-chat-assembled-messages'
+import { useAppStore } from '@/store/index'
+
+vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
+  observeAgentHookCompletionForNotification: vi.fn(),
+  syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+}))
 
 const boundary: NativeChatMessage = {
   id: 'boundary',
@@ -30,7 +36,9 @@ function render() {
 beforeEach(() => {
   vi.useFakeTimers()
   clearPendingSendCacheForTests()
+  useAppStore.setState({ agentStatusByPaneKey: {} })
 })
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -251,24 +259,24 @@ it('retains spent receipts and the source frontier across hook remounts and an e
   const survivor = first.result.current.pending[0].id
   first.unmount()
   const remounted = mount([])
-  act(() => {
-    remounted.result.current.record('repeat', undefined, false, 'opencode')
-  })
   remounted.rerender({ messages: [source('receipt', 1), completed('answer', 2)] })
-  expect(remounted.result.current.pending).toHaveLength(2)
-  remounted.rerender({ messages: [source('next', 3), completed('next-answer', 4)] })
-  expect(remounted.result.current.pending).toHaveLength(1)
-  expect(remounted.result.current.pending[0].id).not.toBe(survivor)
-  act(() => {
-    remounted.result.current.cancel(remounted.result.current.pending[0].id, true)
-  })
-  remounted.rerender({ messages: [] })
+  expect(remounted.result.current.pending.map((entry) => entry.id)).toEqual([survivor])
+  const progressed = [
+    source('receipt', 1),
+    completed('answer', 2),
+    source('next', 3),
+    completed('next-answer', 4)
+  ]
+  remounted.rerender({ messages: progressed })
+  expect(remounted.result.current.pending).toEqual([])
   act(() => {
     remounted.result.current.record('repeat', undefined, false, 'opencode')
   })
-  remounted.rerender({ messages: [source('next', 3), completed('next-answer', 4)] })
+  expect(remounted.result.current.pending[0].sourceBoundary?.id).toBe('next-answer')
+  remounted.rerender({ messages: [] })
+  remounted.rerender({ messages: progressed })
   expect(remounted.result.current.pending).toHaveLength(1)
-  remounted.rerender({ messages: [source('last', 5), completed('last-answer', 6)] })
+  remounted.rerender({ messages: [...progressed, source('last', 5), completed('last-answer', 6)] })
   expect(remounted.result.current.pending).toEqual([])
 })
 
@@ -525,3 +533,207 @@ it.each(['repeat', 'repeat '])(
     expect(mounted.result.current.pending).toEqual([])
   }
 )
+
+it.each([false, true])(
+  'reconciles an idle source-before-result send after remount=%s with the earlier composer listener',
+  async (remount) => {
+    const completion = Promise.withResolvers<'submitted'>()
+    let mounted = mountOwned()
+    let id = ''
+    act(() => {
+      id = mounted.result.current.record('repeat', undefined, false, 'opencode', completion.promise)
+      const finish = mounted.result.current.finishDispatch
+      void completion.promise.then((outcome) => finish(id, completion.promise, outcome))
+    })
+    if (remount) {
+      mounted.unmount()
+      mounted = mountOwned()
+    }
+    mounted.rerender({
+      messages: [boundary, sourceRow('repeat', 'receipt'), { ...boundary, id: 'reply' }]
+    })
+    expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
+    await act(async () => {
+      completion.resolve('submitted')
+      await completion.promise
+    })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)
+
+it('keeps the raw original when a source row precedes a definite refusal and cannot settle another scope', async () => {
+  const completion = Promise.withResolvers<'not-submitted'>()
+  const mounted = mountOwned()
+  let id = ''
+  act(() => {
+    id = mounted.result.current.record('repeat ', undefined, false, 'opencode', completion.promise)
+    const finish = mounted.result.current.finishDispatch
+    void completion.promise.then((outcome) => finish(id, completion.promise, outcome))
+  })
+  mounted.rerender({
+    messages: [boundary, sourceRow('repeat ', 'receipt'), { ...boundary, id: 'reply' }]
+  })
+  await act(async () => {
+    completion.resolve('not-submitted')
+    await completion.promise
+  })
+  expect(
+    mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
+  ).toEqual([[id, 'repeat ', 'rejected']])
+})
+
+it.each([false, true])(
+  'does not charge a definitely refused predecessor to its successor, fallback=%s',
+  async (fallback) => {
+    const mounted = mountOwned()
+    const completion = Promise.withResolvers<'not-submitted'>()
+    let rejected = '',
+      successor = ''
+    act(() => {
+      rejected = mounted.result.current.record(
+        'a  b',
+        undefined,
+        false,
+        'opencode',
+        completion.promise
+      )
+      successor = mounted.result.current.record('a b', undefined, false, 'opencode')
+    })
+    await act(async () => {
+      completion.resolve('not-submitted')
+      await completion.promise
+    })
+    if (fallback) {
+      act(() => mounted.result.current.setSourceEvidence(successor, false))
+    }
+    mounted.rerender({
+      messages: [boundary, sourceRow('a b', 'delivered'), { ...boundary, id: 'reply' }]
+    })
+    expect(
+      mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
+    ).toEqual([[rejected, 'a  b', 'rejected']])
+  }
+)
+
+it('keeps a spent normalized row unavailable through source selection and actual-socket legacy fallback', async () => {
+  const mounted = mountOwned()
+  const completion = Promise.withResolvers<'submitted'>()
+  let first = '',
+    second = ''
+  act(() => {
+    first = mounted.result.current.record('a b', undefined, false, 'opencode')
+    second = mounted.result.current.record('a  b', undefined, false, 'opencode', completion.promise)
+    mounted.result.current.setSourceEvidence(first, true)
+    mounted.result.current.setSourceEvidence(second, true)
+  })
+  const spent = [boundary, sourceRow('a b', 'spent'), { ...boundary, id: 'spent-answer' }]
+  mounted.rerender({ messages: spent })
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([second])
+  act(() => mounted.result.current.setSourceEvidence(second, false))
+  await act(async () => {
+    completion.resolve('submitted')
+    await completion.promise
+  })
+  mounted.rerender({ messages: [...spent] })
+  expect(
+    mounted.result.current.pending.map((entry) => [
+      entry.id,
+      entry.text,
+      entry.sourceAgent,
+      entry.dispatchPending
+    ])
+  ).toEqual([[second, 'a  b', undefined, undefined]])
+  mounted.rerender({ messages: [...spent, userRow('a b'), { ...boundary, id: 'legacy-answer' }] })
+  expect(mounted.result.current.pending).toEqual([])
+})
+
+it.each(['submitted', 'uncertain'] as const)(
+  'keeps actual %s disposition distinct while a ready source delays its receipt',
+  async (outcome) => {
+    const mounted = mountOwned()
+    const completion = Promise.withResolvers<typeof outcome>()
+    let id = ''
+    act(() => {
+      id = mounted.result.current.record(
+        'delayed',
+        undefined,
+        false,
+        'opencode',
+        completion.promise
+      )
+      mounted.result.current.setSourceEvidence(id, true)
+    })
+    await act(async () => {
+      completion.resolve(outcome)
+      await completion.promise
+    })
+    act(() => vi.advanceTimersByTime(20001))
+    expect(
+      mounted.result.current.pending.map((entry) => [entry.id, entry.text, entry.delivery])
+    ).toEqual([[id, 'delayed', outcome === 'submitted' ? undefined : 'unconfirmed']])
+    mounted.rerender({
+      messages: [
+        boundary,
+        sourceRow('delayed', 'actual-receipt'),
+        { ...boundary, id: 'actual-answer' }
+      ]
+    })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)
+
+it('starts actual uncertainty after the original composer callback and preserves its deadline through updates and remount', async () => {
+  const completion = Promise.withResolvers<'uncertain'>()
+  let mounted = mountOwned()
+  let id = ''
+  act(() => {
+    id = mounted.result.current.record('waiting', undefined, false, 'opencode', completion.promise)
+    const finish = mounted.result.current.finishDispatch
+    void completion.promise.then((outcome) => finish(id, completion.promise, outcome))
+  })
+  mounted.unmount()
+  mounted = mountOwned()
+  await act(async () => {
+    completion.resolve('uncertain')
+    await completion.promise
+  })
+  act(() => vi.advanceTimersByTime(10000))
+  mounted.rerender({ messages: [boundary] })
+  act(() => mounted.result.current.record('other', undefined, false, 'opencode'))
+  mounted.unmount()
+  mounted = mountOwned()
+  act(() => vi.advanceTimersByTime(10001))
+  expect(mounted.result.current.pending.map((entry) => [entry.text, entry.delivery])).toEqual([
+    ['waiting', 'unconfirmed'],
+    ['other', undefined]
+  ])
+  mounted.rerender({
+    messages: [boundary, sourceRow('waiting', 'receipt'), { ...boundary, id: 'answer' }]
+  })
+  expect(mounted.result.current.pending.map((entry) => entry.text)).toEqual(['other'])
+})
+
+it('settles an empty uncached not-ready owner without publishing observation work', () => {
+  const write = vi.spyOn(pendingOwner, 'writePendingSendCache')
+  const messages: NativeChatMessage[] = []
+  let renders = 0
+  const mounted = renderHook(() => {
+    renders++
+    return useNativeChatPendingDelivery({
+      paneKey: 'uncached',
+      agent: 'opencode',
+      session: { messages, readPhase: 'loading', sessionId: null }
+    })
+  })
+  expect(renders).toBe(1)
+  mounted.rerender()
+  act(() => vi.advanceTimersByTime(20001))
+  expect(renders).toBe(2)
+  expect(mounted.result.current.pending).toEqual([])
+  expect(write).not.toHaveBeenCalled()
+  act(() => mounted.result.current.record('later input'))
+  expect(mounted.result.current.pending.map((entry) => entry.text)).toEqual(['later input'])
+  const settled = renders
+  act(() => vi.advanceTimersByTime(20001))
+  expect(renders).toBe(settled)
+})

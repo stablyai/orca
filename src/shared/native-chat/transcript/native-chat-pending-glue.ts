@@ -1,3 +1,5 @@
+import type { NativeChatPendingSend } from './native-chat-pending-sends'
+import type { NativeChatReceiptRow } from './native-chat-source-receipts'
 import type { NativeChatMessage } from '../native-chat-types'
 import type { NativeChatPendingOccurrence } from './native-chat-pending-occurrence'
 import { nativeChatContinuationSendText } from './native-chat-continuation-send'
@@ -141,4 +143,92 @@ export function selectPendingIndicesRepresentedByUserRows(
     }
   }
   return represented
+}
+
+export function offerNativeChatGluedWitnesses(
+  pending: readonly NativeChatPendingSend[],
+  rows: readonly NativeChatReceiptRow[],
+  onlyRows: ReadonlySet<string> | undefined,
+  legacy: { index: number; entry: NativeChatPendingSend }[],
+  glueWindows: ((row: NativeChatReceiptRow) => boolean)[],
+  hasLegacyImages: boolean,
+  exactLegacyRows: Map<number, Set<number>>,
+  count: number,
+  pendingReceiptBit: (index: number, count: number) => number,
+  offer: (
+    row: NativeChatReceiptRow,
+    members: number[],
+    proof: 'legacy',
+    requires?: number,
+    glue?: boolean,
+    glueMembers?: Set<number>
+  ) => void
+): void {
+  for (const row of rows) {
+    if (
+      row.message.role !== 'user' ||
+      (onlyRows && !onlyRows.has(row.message.id)) ||
+      !legacy.some(({ index }) => glueWindows[index](row))
+    ) {
+      continue
+    }
+    const text = nativeChatPendingGluedRowText(row.message)
+    if (!text) {
+      continue
+    }
+    for (let residual = 1; residual < 1 << legacy.length; residual++) {
+      const remaining = legacy.filter((_, index) => residual & (1 << index))
+      const requires = legacy.reduce(
+        (mask, member, index) =>
+          residual & (1 << index) ? mask : mask | pendingReceiptBit(member.index, count),
+        0
+      )
+      if (hasLegacyImages) {
+        const exact = remaining.filter(({ index }) => exactLegacyRows.get(row.index)?.has(index))
+        const rest = remaining.filter(({ index }) => !exactLegacyRows.get(row.index)?.has(index))
+        if (
+          exact.length &&
+          rest.length &&
+          remaining.some(({ entry }) => entry.imagePaths?.length)
+        ) {
+          const glued = selectPendingIndicesRepresentedByUserRows(
+            rest.map(({ entry }) => entry),
+            [
+              {
+                id: row.message.id,
+                text,
+                representablePendingIndices: new Set(
+                  rest.flatMap(({ index }, at) => (glueWindows[index](row) ? [at] : []))
+                )
+              }
+            ]
+          )
+          const glueMembers = new Set([...glued].map((at) => rest[at].index))
+          const members = remaining.flatMap(({ index }) =>
+            exactLegacyRows.get(row.index)?.has(index) || glueMembers.has(index) ? [index] : []
+          )
+          if (glueMembers.size && members.some((index) => pending[index].imagePaths?.length)) {
+            offer(row, members, 'legacy', requires, false, glueMembers)
+          }
+        }
+      }
+      const represented = selectPendingIndicesRepresentedByUserRows(
+        remaining.map(({ entry }) => entry),
+        [
+          {
+            id: row.message.id,
+            text,
+            representablePendingIndices: new Set(
+              remaining.flatMap(({ index }, at) => (glueWindows[index](row) ? [at] : []))
+            )
+          }
+        ]
+      )
+      if (!represented.size) {
+        continue
+      }
+      const members = [...represented].map((at) => remaining[at].index)
+      offer(row, members, 'legacy', requires, true)
+    }
+  }
 }

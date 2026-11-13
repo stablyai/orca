@@ -1,3 +1,4 @@
+import { readRuntimeElapsedClock } from './runtime-elapsed-clock'
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -30,7 +31,8 @@ import {
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
-  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
+  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
+  TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY
 } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { RuntimeDegradation } from '../../../shared/runtime-capability-degradation'
 
@@ -71,8 +73,10 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     // TEMPORARY compatibility field: older clients otherwise re-probe WSL capabilities indefinitely.
     const windowsProcessStartTimeAvailable =
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
+    const elapsedClock = readRuntimeElapsedClock()
     const capabilities: NonNullable<RuntimeStatus['capabilities']> = RUNTIME_CAPABILITIES.filter(
       (capability) =>
+        (capability !== TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY || elapsedClock !== null) &&
         (capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY ||
           runtimeBrowserCommandsFactorySupportsGoogleCookieClear()) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
@@ -151,6 +155,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     }
     return {
       runtimeId: this.runtimeId,
+      ...(elapsedClock ? { elapsedClockMs: elapsedClock.lower } : {}),
       rendererGraphEpoch: this.rendererGraphEpoch,
       graphStatus: this.graphStatus,
       authoritativeWindowId: this.authoritativeWindowId,

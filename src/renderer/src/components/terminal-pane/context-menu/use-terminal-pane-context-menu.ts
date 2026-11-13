@@ -1,4 +1,7 @@
-import type { UseTerminalPaneContextMenuDeps } from './terminal-pane-context-menu-types'
+import type {
+  TerminalPaneAgentIdCopy,
+  UseTerminalPaneContextMenuDeps
+} from './terminal-pane-context-menu-types'
 import { createTerminalPaneMenuPaste } from '../input/paste/create-terminal-pane-menu-paste'
 import { createTerminalPaneMenuCopyActions } from '../clipboard/create-terminal-pane-menu-copy-actions'
 import { createTerminalPaneMenuLayoutActions } from '../layout/ownership/create-terminal-pane-menu-layout-actions'
@@ -30,6 +33,7 @@ type TerminalMenuState = {
   onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onCopyAgentSessionId: () => Promise<void>
+  agentIdCopy: TerminalPaneAgentIdCopy
   onPaste: () => Promise<void>
   onSplitRight: () => void
   onSplitDown: () => void
@@ -129,8 +133,8 @@ export function useTerminalPaneContextMenu({
     onAgentSessionContinuationReady
   }
 
-  const { onCopy, onSelectAll, onCopyPaneId, onCopyTerminalId, onCopyAgentSessionId } =
-    createTerminalPaneMenuCopyActions({ paneTransportsRef, tabId, resolveMenuPane })
+  const { onCopy, onSelectAll, onCopyPaneId, onCopyTerminalId, onCopyAgentSessionId, agentIdCopy } =
+    createTerminalPaneMenuCopyActions({ paneTransportsRef, tabId, worktreeId, resolveMenuPane })
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
@@ -213,6 +217,7 @@ export function useTerminalPaneContextMenu({
     onCopyTerminalId,
     onCopyPaneId,
     onCopyAgentSessionId,
+    agentIdCopy,
     onPaste,
     onSplitRight,
     onSplitDown,

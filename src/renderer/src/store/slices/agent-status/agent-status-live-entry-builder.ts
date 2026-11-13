@@ -1,4 +1,5 @@
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { reuseNativeChatPromptSubmissions } from '../../../../../shared/native-chat/input/native-chat-prompt-observation'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
@@ -24,19 +25,11 @@ import type {
   AgentStatusRouting,
   AgentStatusTiming
 } from './agent-status-contract'
-import {
-  invocationLaunchConfig,
-  ownerLaunchAttested,
-  registryEntryMatchesStatus
-} from './agent-status-launch-config'
-import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
+import { resolveLiveStatusLaunchContext } from './agent-status-launch-config'
+import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
-import {
-  canReuseStatusProviderSession,
-  statusRetainsResumableIdentity
-} from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -148,56 +141,44 @@ export function buildAgentStatusLiveEntry(
     payloadMergedOrchestration ??
     runtimeMergedOrchestration ??
     (payload.state === 'done' ? existing?.orchestration : undefined)
-  const canReuseExistingProviderSession = canReuseStatusProviderSession(existing, {
-    agentType: identity.agentType,
-    state: payload.state
-  })
-  const providerSession =
-    metadata?.providerSession ??
-    (canReuseExistingProviderSession ? existing.providerSession : undefined)
-  const existingProviderSession = canReuseExistingProviderSession
-    ? existing.providerSession
-    : undefined
-  const providerSessionChanged =
-    Boolean(metadata?.providerSession && existingProviderSession) &&
-    !agentProviderSessionsEqual(
-      identity.agentType,
-      metadata?.providerSession,
-      existingProviderSession
-    )
-  const statusTabId = routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
-  const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
-  const registryEntry = state.agentLaunchConfigByPaneKey[paneKey]
-  const registryMatched = registryEntryMatchesStatus({
-    entry: registryEntry,
-    paneKey,
-    agentType: identity.agentType,
-    tabId: statusTabId,
-    terminalHandle: statusTerminalHandle,
-    launchToken: metadata?.launchToken,
+  const {
     providerSession,
-    existingProviderSession,
-    providerSessionChanged
-  })
-  const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
-  const retainsResumableRecoveryIdentity = statusRetainsResumableIdentity(
-    { agentType: identity.agentType, state: payload.state },
-    providerSession
-  )
-  // Local main's note-or-null or a paired host's frame fact; an OSC update says nothing.
-  const launchAttested = ownerLaunchAttested(metadata?.launchConfig, existing, identity.agentType)
-  const launchConfigSource = invocationLaunchConfig({
-    statement: metadata?.launchConfig,
+    providerSessionChanged,
+    statusTabId,
+    statusTerminalHandle,
+    registryEntry,
+    registryMatched,
+    retainsResumableRecoveryIdentity,
     launchAttested,
-    registry: matchedRegistryLaunchConfig,
-    record: state.sleepingAgentSessionsByPaneKey[paneKey],
-    agentType: identity.agentType,
-    providerSession
-  })
+    launchConfigSource
+  } = resolveLiveStatusLaunchContext(
+    state,
+    paneKey,
+    existing,
+    payload,
+    routing,
+    metadata,
+    identity.agentType
+  )
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
   const sameAgent = existing?.agentType === identity.agentType
+  // Only the host names conversations. Its row naming the conversation is authoritative, a missing
+  // stamp included (a settled miss clears a pending null); an ID-less local update keeps the
+  // id only for the very same agent, owner and provider key (locator included).
+  const keepsExistingId =
+    existing?.orcaSessionId !== undefined &&
+    existing.agentType === identity.agentType &&
+    (routing?.connectionId === undefined ||
+      routing.connectionId === (existing.connectionId ?? null)) &&
+    agentProviderSessionsEqual(identity.agentType, existing.providerSession, providerSession)
+  const orcaSessionId =
+    metadata?.providerSession || metadata?.orcaSessionId !== undefined
+      ? metadata.orcaSessionId
+      : keepsExistingId
+        ? existing?.orcaSessionId
+        : undefined
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -243,6 +224,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(orcaSessionId !== undefined ? { orcaSessionId } : {}),
     ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
@@ -251,6 +233,14 @@ export function buildAgentStatusLiveEntry(
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
+    ...(payload.promptSubmissions
+      ? {
+          promptSubmissions: reuseNativeChatPromptSubmissions(
+            existing?.promptSubmissions,
+            payload.promptSubmissions
+          )
+        }
+      : {}),
     ...(programStatus ? { programStatus } : {}),
     interrupted: payload.interrupted,
     sessionBoundary:

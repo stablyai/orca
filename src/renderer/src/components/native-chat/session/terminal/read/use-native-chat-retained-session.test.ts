@@ -67,6 +67,30 @@ describe('useNativeChatRetainedSession', () => {
     liveSession.mockReset()
   })
   it.each(['loading', 'error'] as const)(
+    'retains display without source proof across a target replacement during %s',
+    async (phase) => {
+      const rows = [message('old')]
+      liveSession.mockReturnValue({
+        ...session('ready', rows),
+        sourceObservation: {
+          messages: rows,
+          generation: Symbol('source'),
+          context: {
+            owner: 'old',
+            sessionId: 'session',
+            targetPtyId: 'pty-A',
+            runtimeEnvironmentId: 'owner-a'
+          }
+        }
+      })
+      await render({ ...ARGS, targetPtyId: 'pty-A' })
+      liveSession.mockReturnValue(session(phase, []))
+      await render({ ...ARGS, targetPtyId: 'pty-B' })
+      expect(latest?.messages).toEqual(rows)
+      expect(latest?.sourceObservation).toBeUndefined()
+    }
+  )
+  it.each(['loading', 'error'] as const)(
     'releases expanded fallback rows during %s',
     async (phase) => {
       const rows = Array.from({ length: 800 }, (_, index) => message(`row-${index}`))

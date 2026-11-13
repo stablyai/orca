@@ -1,6 +1,7 @@
 import type {
   RuntimeOrchestrationEnvelope,
-  RuntimeRequestPreparation
+  RuntimeRequestPreparation,
+  RuntimeRequestSelection
 } from '../../../shared/runtime-rpc-envelope'
 
 /** One RPC as the runtime-environment routes send it, whichever socket carries it. */
@@ -11,4 +12,5 @@ export type RuntimeEnvironmentCall = {
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
+  requestSelection?: RuntimeRequestSelection
 }

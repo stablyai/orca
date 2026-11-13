@@ -230,3 +230,22 @@ export function attachClaudePermissionToolUseId(
     toolUseId: inheritedToolUseId
   }
 }
+
+export function pairAcceptedClaudeStatusFields(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  effectivePayload: AgentHookEventPayload
+): AgentHookEventPayload {
+  // Preserve terminal joins only within one host; settlement lists vouch only for this transition.
+  const {
+    claudeRunningNonAgentTask: _unpaired,
+    claudeSettledRequests: _settled,
+    promptSubmissionDigest: _promptDigest,
+    ...unpairedPayload
+  } = effectivePayload
+  const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)
+  const pairedPayload =
+    runningNonAgentTask === undefined
+      ? unpairedPayload
+      : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
+  return pairedPayload
+}

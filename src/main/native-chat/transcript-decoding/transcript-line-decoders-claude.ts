@@ -83,7 +83,7 @@ export function decodeClaudeTranscriptLine(
   const sourceRecord = claudeQueuedPromptAsUserRecord(parsed) ?? parsed
   const inputContent =
     sourceRecord.type === 'user'
-      ? transcriptInputContent('claude', asRecord(sourceRecord.message)?.content)
+      ? transcriptInputContent('claude', asRecord(sourceRecord.message)?.content, true)
       : undefined
   const record = claudeMessageWithoutSyntheticText(sourceRecord)
   if (!record) {

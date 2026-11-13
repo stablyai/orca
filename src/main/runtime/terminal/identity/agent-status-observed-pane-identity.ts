@@ -70,6 +70,27 @@ export function recordObservedAgentStatusPaneIdentity(
 ): void {
   runtime?.clearSavedTerminalLaunchOnAgentHook?.(event)
   const binding = resolveAgentStatusBinding(event.paneKey, runtime)
+  const presence = event.agentPresence
+  const rootBaseline =
+    event.observation?.origin === 'hook' &&
+    event.observation.kind !== 'snapshot' &&
+    !event.isReplay &&
+    !event.restoredUnconfirmed &&
+    !event.structuredHost &&
+    !event.providerSessionOnly &&
+    !event.toolAgentId &&
+    presence?.process &&
+    presence.sessionOwner &&
+    !presence.fallback &&
+    !presence.ended &&
+    !presence.suspended
+      ? {
+          observation: event.observation,
+          process: presence.process,
+          sessionId: event.providerSession?.id,
+          connectionId: event.connectionId
+        }
+      : undefined
   identities.record(
     event.paneKey,
     binding.kind === 'unresolved'
@@ -78,6 +99,7 @@ export function recordObservedAgentStatusPaneIdentity(
           kind: 'observed',
           terminalHandle: binding.terminalHandle,
           processIncarnation: binding.processIncarnation,
+          ...(rootBaseline ? { rootBaseline } : {}),
           dispatchId: binding.kind === 'worker' ? binding.dispatchId : null
         }
   )

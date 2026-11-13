@@ -1,4 +1,10 @@
 import type { AgentKind } from '../../../shared/telemetry-events'
+import {
+  isSameAgentProcess,
+  type AgentProcessIdentity
+} from '../../../shared/agent-status/process/agent-process-presence'
+import { readNativeChatPromptDigest } from '../../../shared/native-chat/input/native-chat-prompt-observation'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
 import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
@@ -72,9 +78,13 @@ export function toAgentStatusIpcPayload(
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(entry.observation ? { observation: entry.observation } : {}),
+    ...(entry.promptSubmissions ? { promptSubmissions: entry.promptSubmissions } : {}),
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
+    ...(publishedOrcaSessionId(entry.agentIdentity) !== undefined
+      ? { orcaSessionId: publishedOrcaSessionId(entry.agentIdentity) }
+      : {}),
     ...entry.payload
   }
 }
@@ -86,4 +96,52 @@ export function paneCacheKeyTabId(key: string): string | null {
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
+}
+
+export function retainNativeChatPromptSubmissions(
+  current: EnrichedAgentHookEventPayload,
+  previous: EnrichedAgentHookEventPayload | undefined,
+  candidate?: string,
+  sender?: AgentProcessIdentity
+): EnrichedAgentHookEventPayload {
+  const { promptSubmissions: _oldHistory, ...row } = current
+  const presence = current.agentPresence
+  const process = presence?.process
+  const observation = current.observation
+  const sessionId = current.providerSession?.id
+  if (
+    !process ||
+    !observation ||
+    !sessionId ||
+    !presence.sessionOwner ||
+    presence.ended ||
+    presence.fallback ||
+    presence.suspended ||
+    current.structuredHost ||
+    current.providerSessionOnly
+  ) {
+    return row
+  }
+  const retained = previous?.promptSubmissions
+  const filtered = retained?.filter(
+    (entry) =>
+      entry.sessionId === sessionId &&
+      entry.connectionId === current.connectionId &&
+      isSameAgentProcess(entry.process, process) &&
+      entry.observation.authorityId === observation.authorityId &&
+      entry.observation.incarnation === observation.incarnation
+  )
+  const history = filtered?.length === retained?.length ? retained : filtered
+  const textDigest =
+    sender && isSameAgentProcess(sender, process)
+      ? readNativeChatPromptDigest(candidate)
+      : undefined
+  const next =
+    textDigest && !current.toolAgentId
+      ? [
+          ...(history ?? []),
+          { process, observation, sessionId, connectionId: current.connectionId, textDigest }
+        ].slice(-8)
+      : history
+  return next?.length ? { ...row, promptSubmissions: next } : row
 }

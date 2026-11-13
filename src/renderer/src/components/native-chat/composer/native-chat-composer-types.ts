@@ -1,3 +1,4 @@
+import type { NativeChatSendHandle } from '../session/terminal/send/native-chat-runtime-send'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatAfterStopSend } from './submit/native-chat-composer-target'
 import type { NativeChatOptimisticSendOutcome } from '../session/terminal/delivery/native-chat-optimistic-send-outcome'
@@ -33,7 +34,13 @@ export type NativeChatComposerProps = {
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
   /** Render an optimistic echo until the real transcript turn lands. */
-  onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  onOptimisticSend?: (
+    text: string,
+    imagePaths?: string[],
+    recovery?: boolean,
+    sourceAgent?: AgentType,
+    dispatchOutcome?: NativeChatSendHandle['dispatchOutcome']
+  ) => string | undefined
   /** Settle an optimistic echo whose write was refused or never acknowledged. */
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */

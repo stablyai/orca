@@ -7530,8 +7530,6 @@
             "df205a675e": "色調強度",
             "ba1d9a0607": "側邊欄色調"
           },
-          "interfaceDefaultFont": "預設字型",
-          "terminalDefaultFont": "預設字型",
           "interfaceTitle": "介面",
           "terminalTitle": "終端機",
           "windowSidebarSummary": "側邊欄、狀態列和檔案瀏覽器",
@@ -8451,16 +8449,12 @@
           "5426ecbdcb": "本機指令碼將不會執行",
           "95a0411b3e": "範本",
           "175daba180": "例子",
-          "b20c5df6ca": "新增 `orca.yaml` 檔案以啟用此存放庫的共用設定、封存或議題自動化預設值。範例範本：",
-          "56f9a4a1d0": "正在使用 `orca.yaml`",
           "623e0c9f31": "無法解析 `orca.yaml`",
-          "5a67e4793d": "未偵測到 `orca.yaml`",
           "07ba35bc68": "檢查 `scripts:` 下的縮排。掛鉤鍵應使用兩個空格，命令列應使用四個空格。",
           "787ca433ef": "僅定義支援的鍵：`scripts`、`setup`、`archive` 和 `issueCommand`。",
           "ecc73d9125": "將你的檔案與下面可用的範本進行比較，並在需要時複製該結構。",
           "0cc712b823": "核心設定檔存在於存放庫根目錄中，但 Orca 尚無法解析支援的掛鉤定義。",
           "aba825233f": "該檔案包含此版本的 Orca 無法辨識的設定鍵。您可能需要更新 Orca，或檢查檔案是否有拼字錯誤。",
-          "ca424ff135": "共用掛鉤和議題自動化預設值在存放庫中定義，可供所有使用它的人使用。",
           "8bfe65fc60": "使用本機命令",
           "8d6c56bff8": "執行兩者",
           "0fa21e19ec": "工作區的名稱，通常基於分支名稱。",
@@ -17345,7 +17339,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "顯示較少",
-          "showMore": "顯示更多"
+          "showMore": "顯示更多",
+          "copied": "已複製",
+          "copyFailed": "複製失敗",
+          "copyPrompt": "複製提示詞"
         },
         "AutomationDetail": {
           "host": "主機",
@@ -17380,7 +17377,12 @@
           "precheckNone": "無",
           "migrate": "遷移",
           "migrateNotice": "{{host}} 已升級為新的遠端主機。請遷移此自動化以繼續執行。",
-          "needsMigration": "需要遷移"
+          "needsMigration": "需要遷移",
+          "repeats": "重複",
+          "missedRunGrace": "錯過執行寬限期",
+          "execution": "執行",
+          "notRunYet": "尚未執行",
+          "usageDetail_other": "{{tokens}} token · 已回報 {{known}}/{{count}} 次執行"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -20366,7 +20368,7 @@
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
         "markNewMessagesTitle": "返回聊天時標記新訊息",
-        "markNewMessagesCopy": "返回聊天時，在你離開期間收到的內容上方顯示「新訊息」分隔線；如果你之前在看最新訊息，會捲動到該處。",
+        "markNewMessagesCopy": "返回聊天時，如果錯過的內容很長或有其他人發了訊息，會用「新訊息」分隔線標出你錯過的內容並捲動到那裡。看過之後它會淡出。",
         "markNewMessagesSearchUnread": "未讀",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
@@ -20456,6 +20458,7 @@
           "about": {
             "parakeetV3": "速度快。支援 {{languages}} 種歐洲語言。",
             "parakeetV2": "速度快。僅支援英語，英語最準確。",
+            "parakeetUnifiedEn": "僅限英語。說話時即時顯示文字。",
             "whisperTiny": "下載最小。適合試用聽寫。",
             "whisperTurbo": "語言最多，約 100 種。沒有 GPU 時較慢。",
             "senseVoice": "速度快。適用於中文、日語和韓語。",

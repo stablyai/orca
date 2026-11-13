@@ -126,6 +126,7 @@ describe('useNativeChatLiveSession visibility', () => {
       messages: [assistant('before-hide', 1)],
       hasMore: false
     })
+    expect(latest?.sourceObservation?.context?.sessionId).toBe('session-1')
     await render({ ...BASE_ARGS, enabled: false })
     await render(BASE_ARGS)
 
@@ -135,6 +136,7 @@ describe('useNativeChatLiveSession visibility', () => {
     expect(subscriptions[1]?.unsubscribe).not.toHaveBeenCalled()
     expect(latest?.readPhase).toBe('loading')
     expect(latest?.messages.map((message) => message.id)).toEqual(['before-hide'])
+    expect(latest?.sourceObservation).toBeUndefined()
 
     await emit(1, {
       type: 'snapshot',
@@ -154,6 +156,23 @@ describe('useNativeChatLiveSession visibility', () => {
     })
 
     expect(latest?.messages.map((message) => message.id)).toEqual(['fresh'])
+    expect(latest?.sourceObservation?.messages.map((message) => message.id)).toEqual(['fresh'])
+    expect(latest?.sourceObservation?.context?.sessionId).toBe('session-1')
+  })
+
+  it('retains the conversation across PTY replacement but accepts proof only from the new reader', async () => {
+    await render({ ...BASE_ARGS, targetPtyId: 'pty-A' })
+    await emit(0, { type: 'snapshot', messages: [assistant('before-replace', 1)], hasMore: false })
+    expect(latest?.sourceObservation?.context?.targetPtyId).toBe('pty-A')
+    await render({ ...BASE_ARGS, targetPtyId: 'pty-B' })
+    expect(latest?.messages.map((message) => message.id)).toEqual(['before-replace'])
+    expect(latest?.sourceObservation).toBeUndefined()
+    await emit(0, { type: 'replacement', messages: [assistant('stale-A', 2)], hasMore: false })
+    expect(latest?.messages.map((message) => message.id)).toEqual(['before-replace'])
+    expect(latest?.sourceObservation).toBeUndefined()
+    await emit(1, { type: 'snapshot', messages: [assistant('fresh-B', 3)], hasMore: false })
+    expect(latest?.messages.map((message) => message.id)).toEqual(['fresh-B'])
+    expect(latest?.sourceObservation?.context?.targetPtyId).toBe('pty-B')
   })
 
   it('drops retained messages when the hidden transcript identity changes', async () => {

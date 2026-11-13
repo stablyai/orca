@@ -1,6 +1,7 @@
 // Keep transport envelopes separate from status vocabulary; re-export through agent-status-types for existing consumers.
 
 import type { StructuredHostStatus } from '../../agent-hook-listener/listener-event'
+import type { NativeChatPromptSubmission } from '../../native-chat/input/native-chat-prompt-observation'
 import type { ProgramStatusFacet } from '../../program-status/facet'
 import type {
   AgentProviderSessionMetadata,
@@ -68,10 +69,14 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  promptSubmissions?: readonly NativeChatPromptSubmission[]
   /** See AgentStatusEntry.programStatus. Live-only; older peers ignore it. */
   programStatus?: ProgramStatusFacet
   /** Only `programStatus` changed: readers patch the facet and treat nothing else as news. */
   programStatusOnly?: true
+  /** The terminal agent's Orca id on its execution host; null when that host can name this
+   *  conversation but has not yet (Copy retries); absent from older hosts and unnameable rows. */
+  orcaSessionId?: string | null
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
   /** The pane's owning agent session on its execution host; absent from older hosts. */

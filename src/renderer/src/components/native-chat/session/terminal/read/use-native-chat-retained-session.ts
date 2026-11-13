@@ -57,7 +57,15 @@ export function useNativeChatRetainedSession(
     return session
   }
   if (!sessionMatchesIdentity) {
-    return { ...session, messages, readPhase, trimHistory, status: 'loading', error: undefined }
+    return {
+      ...session,
+      messages,
+      sourceObservation: undefined,
+      readPhase,
+      trimHistory,
+      status: 'loading',
+      error: undefined
+    }
   }
   // Retained history beats the full-pane error: a reveal-time read/stream failure is usually transient.
   if (session.status === 'error' && messages.length > 0) {

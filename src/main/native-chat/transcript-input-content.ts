@@ -5,12 +5,13 @@ import { asRecord } from '../ai-vault/parsing/session-record-fields'
 /** Only source readers originate this evidence, before display filtering or trimming. */
 export function transcriptInputContent(
   provider: NativeChatInputContent['provider'],
-  content: unknown
+  content: unknown,
+  retained = false
 ): NativeChatInputContent | undefined {
   const text: string[] = []
   const images: string[] = []
   if (typeof content === 'string') {
-    return completeInputContent(provider, content, images)
+    return completeInputContent(provider, content, images, retained)
   }
   if (!Array.isArray(content)) {
     return undefined
@@ -42,17 +43,19 @@ export function transcriptInputContent(
       return undefined
     }
   }
-  return completeInputContent(provider, text.join(''), images)
+  return completeInputContent(provider, text.join(''), images, retained)
 }
 
 function completeInputContent(
   provider: NativeChatInputContent['provider'],
   text: string,
-  images: string[]
+  images: string[],
+  retained: boolean
 ): NativeChatInputContent {
   let textDigest: string | undefined
   return {
     provider,
+    ...(retained ? { retained: true as const } : {}),
     get textDigest() {
       if (textDigest === undefined) {
         textDigest = crypto.createHash('sha256').update(text).digest('hex')
@@ -93,7 +96,7 @@ export function codexEventInputContent(
       content.push({ type: 'local_image', path })
     }
   }
-  return transcriptInputContent('codex', content)
+  return transcriptInputContent('codex', content, true)
 }
 
 /** Peel only the producer's complete outer envelope, preserving nested tags and whitespace. */

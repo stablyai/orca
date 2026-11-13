@@ -118,6 +118,11 @@ export const TerminalResolvePane = z.object({
   worktreeId: OptionalString
 })
 
+export const TerminalAgentId = z.object({
+  paneKey: requiredString('Missing pane key'),
+  worktreeId: requiredString('Missing worktree ID')
+})
+
 export const TerminalRecoverPane = z.object({
   paneKey: requiredString('Missing pane key'),
   worktreeId: requiredString('Missing worktree ID'),
@@ -334,9 +339,7 @@ export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
 
-export const TerminalCloseAll = TerminalStop
-
-export const TerminalSleep = TerminalStop
+export { TerminalStop as TerminalCloseAll, TerminalStop as TerminalSleep }
 
 export const TerminalStopExact = TerminalStop.extend({
   expectedPtyIds: z.array(requiredString('Missing PTY ID')).min(1),

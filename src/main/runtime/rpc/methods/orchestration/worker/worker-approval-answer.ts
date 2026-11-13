@@ -19,7 +19,7 @@ import {
 } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { z } from 'zod'
 import type { RpcContext } from '../../../core'
-import { workerApprovalAccess, type WorkerApprovalAccess } from './worker-approval-access'
+import { workerApprovalAccess, type WorkerApprovalAccess } from '../access/worker-approval-access'
 import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
 export type WorkerApprovalAnswerReceipt = {

@@ -43,7 +43,7 @@ import {
   normalizeAutomationSessionReuse,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
-import { refuseManagedOrcadHost } from '../../automations/orcad-fenced-automation'
+import { refuseManagedOrcadHost } from '../../automations/ownership/orcad-fenced-automation'
 import {
   automationProjectionContext,
   automationWorkspaceSshPin,

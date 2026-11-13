@@ -56,11 +56,20 @@ export function buildRuntimeMobileAgentStatus(
   if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
     return {}
   }
-  const providerSession = hookRow.providerSession
-    ? { providerSession: hookRow.providerSession }
-    : retained?.providerSession
-      ? { providerSession: retained.providerSession }
-      : {}
+  const providerSession: Pick<AgentStatusEntry, 'providerSession' | 'orcaSessionId'> =
+    hookRow.providerSession
+      ? {
+          providerSession: hookRow.providerSession,
+          ...(hookRow.orcaSessionId !== undefined ? { orcaSessionId: hookRow.orcaSessionId } : {})
+        }
+      : retained?.providerSession
+        ? {
+            providerSession: retained.providerSession,
+            ...(retained.orcaSessionId !== undefined
+              ? { orcaSessionId: retained.orcaSessionId }
+              : {})
+          }
+        : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
   const titleCandidate = pty

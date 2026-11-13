@@ -15,8 +15,8 @@ import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 
-import { registerFederatedAutoReleaseScenarios } from './federation-auto-release-scenarios.test-support'
-import { olderPeerStatusResponse } from './federation-peer-capabilities.test-support'
+import { registerFederatedAutoReleaseScenarios } from './testing/federation-auto-release-scenarios.test-support'
+import { olderPeerStatusResponse } from './testing/federation-peer-capabilities.test-support'
 
 describe('orchestration federated worker output', () => {
   const databases: OrchestrationDb[] = []

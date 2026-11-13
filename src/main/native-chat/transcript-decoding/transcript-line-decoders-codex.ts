@@ -233,7 +233,7 @@ function codexCompletedTurnItem(
       blocks,
       timestamp,
       source: 'transcript',
-      inputContent: transcriptInputContent('codex', item.content)
+      inputContent: transcriptInputContent('codex', item.content, true)
     }
   }
   if (item.type === 'AgentMessage' || item.type === 'agent_message') {

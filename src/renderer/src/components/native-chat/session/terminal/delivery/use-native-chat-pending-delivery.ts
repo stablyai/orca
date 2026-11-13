@@ -1,31 +1,37 @@
+import { useNativeChatUnconfirmedDelivery } from './use-native-chat-unconfirmed-delivery'
+export { NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS } from './use-native-chat-unconfirmed-delivery'
+import {
+  resolvePendingSendEvidence,
+  rejectPendingSend
+} from './native-chat-optimistic-send-outcome'
 import type { NativeChatComposerHandle } from '../../../composer/native-chat-composer-types'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { returnMessageToComposer } from '../../structured/delivery/structured-agent-session-message-hand-back'
-import { useTranslate } from '@/i18n/use-translate'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type {
+  NativeChatPromptDispatch,
+  NativeChatPromptSubmission
+} from '../../../../../../../shared/native-chat/input/native-chat-prompt-observation'
+import { useAppStore } from '@/store/index'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import {
-  pendingSendsAsMessages,
   prunePendingSends,
   releaseEmptyTranscriptClaims,
+  type NativeChatPendingDispatchOutcome,
   type NativeChatPendingSend
 } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   appendPendingSendCache,
-  resolvePendingSendEvidence,
+  associatePendingPromptSubmissions,
   nextNativeChatPendingSendId,
   observePendingSendCache,
   readPendingSendCache,
   writePendingSendCache
 } from './native-chat-pending'
-import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
+import { useNativeChatPendingNotices } from './use-native-chat-pending-notices'
+import { useNativeChatDispatchCompletion } from './use-native-chat-dispatch-completion'
 import type { NativeChatLiveSession, ReadState } from '../read/native-chat-live-session-contract'
 
-/** Wait for transcript evidence after lost write acknowledgment; mobile uses the same hold. */
-export const NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS = 20_000
-
-const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
+const EMPTY_PROMPT_SUBMISSIONS: readonly NativeChatPromptSubmission[] = []
 
 /** Keep optimistic PTY echoes and definite transport outcomes until reconciliation. */
 export function useNativeChatPendingDelivery(args: {
@@ -41,16 +47,25 @@ export function useNativeChatPendingDelivery(args: {
     sourceObservation?: NativeChatLiveSession['sourceObservation']
   }
 }) {
-  const t = useTranslate()
-  const languageRevision = useUiLanguageRevision()
   const { paneKey, agent, composerRef, workingEpoch } = args
   const { messages } = args.session
   const sourceObservation = args.session.sourceObservation
+  const sourceContext = sourceObservation?.context
+  const promptSubmissions = useAppStore(
+    (state) => state.agentStatusByPaneKey[paneKey]?.promptSubmissions ?? EMPTY_PROMPT_SUBMISSIONS
+  )
   const sessionId = args.session.sessionId ?? null
   // Without a sessionId, ready is an unread placeholder.
   const readEmptySessionId =
     args.session.readPhase === 'ready' && messages.length === 0 ? sessionId : null
   const scope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
+  const mountedScope = useRef<typeof scope | null>(scope)
+  useLayoutEffect(() => {
+    mountedScope.current = scope
+    return () => {
+      mountedScope.current = null
+    }
+  }, [scope])
   const [cachedPending, setPending] = useState(() => readPendingSendCache(scope))
   const pending = useMemo(
     () => releaseEmptyTranscriptClaims(cachedPending, sessionId),
@@ -66,8 +81,9 @@ export function useNativeChatPendingDelivery(args: {
       const current = readPendingSendCache(scope)
       const next = update(current)
       // Stream pruning runs frequently; no-op updates must not rerender the list.
-      if (next !== current) {
-        setPending(writePendingSendCache(scope, next))
+      const saved = next !== current ? writePendingSendCache(scope, next) : current
+      if (mountedScope.current === scope) {
+        setPending(saved)
       }
     },
     [scope]
@@ -78,21 +94,59 @@ export function useNativeChatPendingDelivery(args: {
         scope,
         sourceObservation?.messages ?? messages,
         sessionId,
-        sourceObservation?.generation
+        sourceObservation?.generation,
+        sourceContext
       )
     }
-    save((entries) =>
-      prunePendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages, sessionId ?? '')
+    const entries = readPendingSendCache(scope)
+    const next = prunePendingSends(
+      releaseEmptyTranscriptClaims(
+        associatePendingPromptSubmissions(scope, entries, promptSubmissions),
+        sessionId
+      ),
+      messages,
+      sessionId ?? '',
+      sourceContext
     )
-  }, [messages, sourceObservation, save, sessionId, scope, args.session.readPhase])
+    if (next !== cachedPending) {
+      save(() => next)
+    }
+  }, [
+    messages,
+    sourceObservation,
+    sourceContext,
+    promptSubmissions,
+    cachedPending,
+    save,
+    sessionId,
+    scope,
+    args.session.readPhase
+  ])
+  const finishDispatch = useNativeChatDispatchCompletion({
+    scope,
+    pending,
+    save,
+    messages,
+    sessionId,
+    sourceContext
+  })
   const record = useCallback(
-    (text: string, imagePaths?: string[], recovery = false, sourceAgent?: AgentType) => {
+    (
+      text: string,
+      imagePaths?: string[],
+      recovery = false,
+      sourceAgent?: AgentType,
+      dispatchOutcome?: Promise<NativeChatPendingDispatchOutcome>
+    ) => {
       const sentAt = Date.now()
       const boundary = messages.at(-1)
       const entry: NativeChatPendingSend = {
         id: nextNativeChatPendingSendId(sentAt),
         text,
         ...(sourceAgent ? { sourceAgent, evidenceModePending: true } : {}),
+        ...(sourceAgent && sessionId ? { sourceSessionId: sessionId } : {}),
+        ...(sourceAgent && sourceContext?.sessionId ? { sourceContext } : {}),
+        ...(sourceAgent && dispatchOutcome ? { dispatchPending: true, dispatchOutcome } : {}),
         ...(recovery ? { recovery: true } : {}),
         sentAt,
         ...(workingEpoch !== undefined ? { queuedDuringWorkingEpoch: workingEpoch } : {}),
@@ -104,7 +158,18 @@ export function useNativeChatPendingDelivery(args: {
       setPending(appendPendingSendCache(scope, entry, sessionId))
       return entry.id
     },
-    [messages, readEmptySessionId, scope, workingEpoch, sessionId]
+    [messages, readEmptySessionId, scope, workingEpoch, sessionId, sourceContext]
+  )
+  const setPromptBinding = useCallback(
+    (id: string, binding: NativeChatPromptDispatch) =>
+      save((entries) =>
+        entries.map((entry) =>
+          entry.id === id && entry.sourceAgent && entry.dispatchPending
+            ? { ...entry, promptBinding: binding }
+            : entry
+        )
+      ),
+    [save]
   )
   const setSourceEvidence = useCallback(
     (id: string, source: boolean) =>
@@ -125,10 +190,7 @@ export function useNativeChatPendingDelivery(args: {
     [save]
   )
   const reject = useCallback(
-    (id: string) =>
-      save((entries) =>
-        entries.map((entry) => (entry.id === id ? { ...entry, delivery: 'rejected' } : entry))
-      ),
+    (id: string) => save((entries) => rejectPendingSend(entries, id)),
     [save]
   )
   const holdUnconfirmed = useCallback(
@@ -159,133 +221,26 @@ export function useNativeChatPendingDelivery(args: {
     [save]
   )
 
-  const authoritative = args.session.readPhase === 'ready' && sessionId !== null
-  const observing = useCallback(
-    (entry: NativeChatPendingSend) =>
-      authoritative &&
-      !(
-        typeof entry.queuedDuringWorkingEpoch === 'number' &&
-        entry.queuedDuringWorkingEpoch === workingEpoch
-      ),
-    [authoritative, workingEpoch]
-  )
-  useEffect(() => {
-    save((entries) => {
-      let changed = false
-      const next = entries.map((entry) => {
-        if (!entry.sourceAgent || entry.writeUnconfirmedAt === undefined || entry.delivery) {
-          return entry
-        }
-        const owner = observing(entry) ? sessionId : undefined
-        if (entry.writeUnconfirmedSessionId === owner) {
-          return entry
-        }
-        changed = true
-        return {
-          ...entry,
-          writeUnconfirmedSessionId: owner ?? undefined,
-          writeUnconfirmedAt: Date.now()
-        }
-      })
-      return changed ? next : entries
-    })
-  }, [observing, save, sessionId])
+  useNativeChatUnconfirmedDelivery({
+    pending,
+    save,
+    messages,
+    readPhase: args.session.readPhase,
+    sessionId,
+    workingEpoch,
+    sourceContext
+  })
 
-  // Only lost acknowledgments trigger uncertainty; acknowledged/queued sends wait for their transcript row.
-  const nextHoldDeadline = useMemo(() => {
-    const deadlines = pending.flatMap((entry) =>
-      entry.writeUnconfirmedAt !== undefined &&
-      !entry.delivery &&
-      (!entry.sourceAgent || (observing(entry) && entry.writeUnconfirmedSessionId === sessionId))
-        ? [entry.writeUnconfirmedAt + NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS]
-        : []
-    )
-    return deadlines.length > 0 ? Math.min(...deadlines) : null
-  }, [pending, observing, sessionId])
-  useEffect(() => {
-    if (nextHoldDeadline === null) {
-      return
-    }
-    const timer = setTimeout(
-      () => {
-        const now = Date.now()
-        save((entries) => {
-          const due = entries.filter(
-            (entry) =>
-              entry.writeUnconfirmedAt !== undefined &&
-              !entry.delivery &&
-              (!entry.sourceAgent ||
-                (observing(entry) && entry.writeUnconfirmedSessionId === sessionId)) &&
-              entry.writeUnconfirmedAt + NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS <= now
-          )
-          if (due.length === 0) {
-            return entries
-          }
-          const unmatched = new Set(
-            pendingSendsAsMessages(
-              releaseEmptyTranscriptClaims(entries, sessionId),
-              messages,
-              workingEpoch,
-              sessionId ?? ''
-            ).map((message) => message.id)
-          )
-          if (unmatched.size === 0) {
-            return entries
-          }
-          return entries.map((entry) =>
-            due.includes(entry) && unmatched.has(`pending:${entry.id}`)
-              ? { ...entry, delivery: 'unconfirmed' as const }
-              : entry
-          )
-        })
-      },
-      Math.max(0, nextHoldDeadline - Date.now())
-    )
-    return () => clearTimeout(timer)
-  }, [nextHoldDeadline, messages, save, sessionId, observing, workingEpoch])
+  const notices = useNativeChatPendingNotices({ pending, cancel, paneKey, composerRef })
 
-  const notices = useMemo(() => {
-    if (!pending.some((entry) => entry.delivery === 'rejected')) {
-      return NO_NOTICES
-    }
-    const result = new Map<string, NativeChatDeliveryNotice>()
-    for (const entry of pending) {
-      if (entry.delivery !== 'rejected') {
-        continue
-      }
-      result.set(`pending:${entry.id}`, {
-        text: t('components.native-chat.messageNotSent', 'Message not sent'),
-        ...(composerRef
-          ? {
-              onSend: () => {
-                if (composerRef.current?.resend?.(entry.text, entry.imagePaths)) {
-                  cancel(entry.id, true)
-                }
-              }
-            }
-          : {}),
-        onEdit: () => {
-          if (
-            returnMessageToComposer(paneKey, `pending-${entry.id}`, [
-              { type: 'text', text: entry.text },
-              ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path }))
-            ])
-          ) {
-            cancel(entry.id, true)
-          }
-        },
-        onDismiss: () => cancel(entry.id, true)
-      })
-    }
-    return result
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [pending, cancel, paneKey, composerRef, languageRevision, t])
   return {
     pending,
     record,
+    setPromptBinding,
     cancel,
     setSourceEvidence,
     finishSourceEvidence,
+    finishDispatch,
     reject,
     holdUnconfirmed,
     clear,

@@ -190,6 +190,7 @@ export const Drag = ComputerObserveTargetBase.extend({
 })
 
 export const TypeText = ComputerObserveTargetBase.extend({
+  elementIndex: OptionalNonNegativeInt,
   text: requiredString('Missing text')
 }).superRefine(validateComputerTarget)
 

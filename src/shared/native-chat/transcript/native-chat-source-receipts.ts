@@ -1,12 +1,76 @@
 import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatSourceContext } from '../input/native-chat-prompt-observation'
 import type { NativeChatPendingSend } from './native-chat-pending-sends'
 import { nativeChatPendingMatchingAfter } from './native-chat-pending-occurrence'
 
 export type NativeChatSourcePosition = { kind: 'order' | 'offset'; value: number }
-export type NativeChatSourceReceipt = { sessionId: string; id: string }
+export type NativeChatSourceReceipt = { sessionId: string; id: string; owner?: string }
 export type NativeChatSourceBoundary = NativeChatSourceReceipt & {
   timestamp: number | null
   position?: NativeChatSourcePosition
+}
+
+export function canClaimNativeChatReceipt(
+  entry: NativeChatPendingSend,
+  prospective = false
+): boolean {
+  return !(
+    entry.sourceAgent &&
+    (entry.delivery === 'rejected' || (!prospective && entry.dispatchPending))
+  )
+}
+
+export function mayUseLegacyNativeChatReceipt(entry: NativeChatPendingSend): boolean {
+  return !entry.sourceAgent || entry.delivery !== 'rejected'
+}
+
+export function nativeChatReceiptIsCurrent(
+  entry: NativeChatPendingSend,
+  sessionId: string,
+  context?: NativeChatSourceContext
+): entry is NativeChatPendingSend & { sourceReceipt: NativeChatSourceReceipt } {
+  return (
+    entry.sourceReceipt?.sessionId === sessionId &&
+    (entry.receiptProof !== 'source' || (!!context && entry.sourceReceipt.owner === context.owner))
+  )
+}
+
+export function nativeChatSourceContextMatches(
+  entry: NativeChatPendingSend,
+  context?: NativeChatSourceContext
+): boolean {
+  const binding = entry.promptBinding
+  return (
+    !entry.dispatchPending &&
+    !entry.writeUnconfirmedAt &&
+    !entry.delivery &&
+    !!context &&
+    !!binding &&
+    !!entry.promptSubmission &&
+    context.targetPtyId === binding.targetPtyId &&
+    context.runtimeEnvironmentId === binding.runtimeEnvironmentId &&
+    context.sessionId === entry.promptSubmission.sessionId &&
+    (!entry.sourceContext || entry.sourceContext.owner === context.owner)
+  )
+}
+
+function prospectiveSourceContextMatches(
+  entry: NativeChatPendingSend,
+  sessionId: string,
+  context?: NativeChatSourceContext
+): boolean {
+  const original = context ?? entry.sourceContext
+  return (
+    (!original?.sessionId || original.sessionId === sessionId) &&
+    (!context || !entry.sourceContext || entry.sourceContext.owner === context.owner) &&
+    (!context || !entry.sourceBoundary?.owner || entry.sourceBoundary.owner === context.owner) &&
+    (!entry.sourceSessionId || entry.sourceSessionId === sessionId) &&
+    (!entry.promptSubmission || entry.promptSubmission.sessionId === sessionId) &&
+    (!entry.promptBinding ||
+      !original ||
+      ((!original.targetPtyId || entry.promptBinding.targetPtyId === original.targetPtyId) &&
+        entry.promptBinding.runtimeEnvironmentId === original.runtimeEnvironmentId))
+  )
 }
 
 export function nativeChatSourcePosition(
@@ -20,7 +84,7 @@ export function nativeChatSourcePosition(
 }
 
 export function nativeChatSourceReceiptKey(receipt: NativeChatSourceReceipt): string {
-  return `${receipt.sessionId.length}:${receipt.sessionId}${receipt.id}`
+  return JSON.stringify([receipt.owner ?? null, receipt.sessionId, receipt.id])
 }
 
 export type NativeChatReceiptDependency = {
@@ -61,10 +125,25 @@ export function nativeChatReceiptWindow(
   entry: NativeChatPendingSend,
   snapshot: NativeChatReceiptSnapshot,
   sessionId: string,
-  glue = false
+  glue = false,
+  source = false,
+  context?: NativeChatSourceContext,
+  prospective = false
 ): (row: NativeChatReceiptRow) => boolean {
+  if (!source) {
+    return receiptWindowAfter(entry, snapshot, sessionId, glue)
+  }
+  if (
+    !(prospective
+      ? prospectiveSourceContextMatches(entry, sessionId, context)
+      : nativeChatSourceContextMatches(entry, context))
+  ) {
+    return () => false
+  }
   const boundary = entry.sourceBoundary
-  const sameSession = boundary?.sessionId === sessionId
+  const owner =
+    context?.owner ?? (prospective ? (entry.sourceContext?.owner ?? boundary?.owner) : undefined)
+  const sameSession = boundary?.sessionId === sessionId && boundary.owner === owner
   const original = receiptWindowAfter(
     boundary && !sameSession ? { ...entry, afterMessageId: null } : entry,
     snapshot,
@@ -153,10 +232,8 @@ export function liveNativeChatReceiptDependencies(
           const member = byId.get(id)
           return (
             member &&
-            member.sourceReceipt?.sessionId !== dependency.receipt.sessionId &&
-            (dependency.proof === 'source'
-              ? !!member.sourceAgent
-              : !member.sourceAgent || member.evidenceModePending)
+            canClaimNativeChatReceipt(member, true) &&
+            member.sourceReceipt?.sessionId !== dependency.receipt.sessionId
           )
         })
       ) {

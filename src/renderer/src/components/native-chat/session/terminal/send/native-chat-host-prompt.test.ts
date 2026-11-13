@@ -11,9 +11,6 @@ const mocks = vi.hoisted(() => ({
   record: vi.fn()
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.call }))
-vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
-  ensureLocalRuntimeCapabilities: mocks.capabilities
-}))
 vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
   getRemoteRuntimePtyOwner: () => null
 }))
@@ -36,9 +33,23 @@ function send(
 
 beforeEach(() => {
   mocks.call.mockReset()
-  mocks.capabilities.mockResolvedValue(['terminal.chat-prompt.v1'])
+  mocks.capabilities.mockResolvedValue(['terminal.chat-prompt-expiry.v1'])
+  vi.stubGlobal('window', {
+    api: {
+      runtime: {
+        getStatus: async () => ({
+          runtimeId: 'main',
+          elapsedClockMs: 100000 + Math.floor(performance.now()),
+          capabilities: await mocks.capabilities()
+        })
+      }
+    }
+  })
 })
-afterEach(() => resetNativeChatPtySendQueuesForTests())
+afterEach(() => {
+  resetNativeChatPtySendQueuesForTests()
+  vi.unstubAllGlobals()
+})
 
 it('detaches a canceled observer without allowing the next send to overtake its in-flight request', async () => {
   const started = Promise.withResolvers<void>()
@@ -87,6 +98,40 @@ it('does not confirm a send whose host response has no write settlement', async 
       : { send: { accepted: true } }
   )
   await expect(send('body').outcome).resolves.toBe('uncertain')
+})
+
+it('publishes the actual response binding before completing its original dispatch', async () => {
+  const binding = { runtimeId: 'host', ptyId: 'pty', generation: 1, processIncarnation: 'original' }
+  mocks.call.mockImplementation(async (_target, method) =>
+    method === 'terminal.resolvePane'
+      ? { terminal: { ptyId: 'pty', handle: 'terminal', incarnationId: 'process' } }
+      : {
+          send: {
+            handle: 'actual-terminal',
+            accepted: true,
+            chatPromptBinding: binding,
+            writeSettlement: { outcome: 'accepted' }
+          }
+        }
+  )
+  const received: unknown[] = []
+  const sent = sendNativeChatHostPrompt({
+    ptyId: 'pty',
+    paneKey: 'pane',
+    prompt: { agent: 'claude', text: 'body' },
+    onLegacy: vi.fn(),
+    onEvidenceMode: () => {},
+    onBinding: (value) => received.push(value)
+  })
+  await sent.outcome
+  expect(received).toEqual([
+    {
+      ...binding,
+      terminalHandle: 'actual-terminal',
+      targetPtyId: 'pty',
+      runtimeEnvironmentId: null
+    }
+  ])
 })
 
 it('orders host Chat, a legacy composer command and another host Chat in one PTY', async () => {
@@ -143,4 +188,121 @@ it('runs old-host fallback inside its reserved slot before a following composer 
   await expect(first.outcome).resolves.toBe('submitted')
   await command.settled
   expect(writes).toEqual(['first', '/compact'])
+})
+
+it('keeps final dispatch refusal separate from an observer detached after handoff', async () => {
+  const started = Promise.withResolvers<void>()
+  const response = Promise.withResolvers<unknown>()
+  mocks.call.mockImplementation(async (_target, method) => {
+    if (method === 'terminal.resolvePane') {
+      return { terminal: { ptyId: 'pty', handle: 'terminal' } }
+    }
+    started.resolve()
+    return response.promise
+  })
+  const handle = send('repeat ')
+  await started.promise
+  handle.cancel()
+  await expect(handle.outcome).resolves.toBe('uncertain')
+  response.resolve({
+    send: {
+      accepted: false,
+      writeSettlement: { outcome: 'refused', reason: 'provider_refused_write' }
+    }
+  })
+  await expect(handle.dispatchOutcome).resolves.toBe('not-submitted')
+})
+
+it('finishes an unresolved local dispatch at its finite expiry even when IPC never replies', async () => {
+  vi.useFakeTimers()
+  try {
+    const started = Promise.withResolvers<void>()
+    mocks.call.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.resolvePane') {
+        return { terminal: { ptyId: 'pty', handle: 'terminal' } }
+      }
+      started.resolve()
+      return new Promise(() => {})
+    })
+    const handle = send('never replies')
+    await started.promise
+    await vi.advanceTimersByTimeAsync(65002)
+    await expect(handle.dispatchOutcome).resolves.toBe('uncertain')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('holds the physical barrier after an ambiguous transport failure until the original expiry', async () => {
+  vi.useFakeTimers()
+  try {
+    const started = Promise.withResolvers<void>()
+    mocks.call.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.resolvePane') {
+        return { terminal: { ptyId: 'pty', handle: 'terminal' } }
+      }
+      started.resolve()
+      throw new Error('connection lost after possible dispatch')
+    })
+    const first = send('first')
+    await started.promise
+    await expect(first.outcome).resolves.toBe('uncertain')
+    const writes: string[] = []
+    const legacy = enqueueNativeChatPtySend('pty', 0, () => writes.push('legacy'))
+    await vi.advanceTimersByTimeAsync(64000)
+    expect(writes).toEqual([])
+    await vi.advanceTimersByTimeAsync(1002)
+    await legacy.settled
+    expect(writes).toEqual(['legacy'])
+    await expect(first.dispatchOutcome).resolves.toBe('uncertain')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('does not let an expired small follower release a live large predecessor to legacy input', async () => {
+  vi.useFakeTimers()
+  try {
+    const response = Promise.withResolvers<unknown>()
+    const started = Promise.withResolvers<void>()
+    const writes: string[] = []
+    mocks.call.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.resolvePane') {
+        return { terminal: { ptyId: 'pty', handle: 'terminal' } }
+      }
+      writes.push('large')
+      started.resolve()
+      return response.promise
+    })
+    const first = send('x'.repeat(2000000))
+    await started.promise
+    await vi.advanceTimersByTimeAsync(1000)
+    const second = send('small')
+    await vi.advanceTimersByTimeAsync(65002)
+    await expect(second.dispatchOutcome).resolves.toBe('not-submitted')
+    const legacy = enqueueNativeChatPtySend('pty', 0, () => writes.push('legacy'))
+    await vi.advanceTimersByTimeAsync(12998)
+    expect(writes).toEqual(['large'])
+    response.resolve({ send: { accepted: true, writeSettlement: { outcome: 'accepted' } } })
+    await legacy.settled
+    await expect(first.dispatchOutcome).resolves.toBe('submitted')
+    expect(writes).toEqual(['large', 'legacy'])
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('selects successful legacy input only on a same-socket unsupported result before mutation', async () => {
+  mocks.call.mockImplementation(async (_target, method) =>
+    method === 'terminal.resolvePane'
+      ? { terminal: { ptyId: 'pty', handle: 'terminal' } }
+      : { send: { accepted: false, bytesWritten: 0, chatPromptNotDispatched: 'unsupported' } }
+  )
+  const legacy = vi.fn(() => ({
+    cancel: () => {},
+    settleAfterMs: 0,
+    outcome: Promise.resolve('submitted' as const)
+  }))
+  await expect(send('old runtime', legacy).dispatchOutcome).resolves.toBe('submitted')
+  expect(legacy).toHaveBeenCalledOnce()
 })

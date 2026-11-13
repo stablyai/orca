@@ -20,7 +20,8 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number,
-    prompt?: string
+    prompt?: string,
+    now: () => number = Date.now
   ): {
     arm: () => void
     wait: () => Promise<void>
@@ -35,7 +36,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     let settled = false
     let ingested = pasteIngestMs <= 0
     // Arm and marker both set this cap; use an absolute deadline to avoid charging ingest twice.
-    const ingestDeadlineAt = Date.now() + pasteIngestMs
+    const ingestDeadlineAt = now() + pasteIngestMs
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
     let hardTimer: NodeJS.Timeout | null = null
@@ -88,7 +89,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       }
       hardTimer = setTimeout(
         finish,
-        CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
+        CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - now())
       )
     }
     // Child work can repaint forever; a composer that keeps showing exactly this paste proves it
@@ -112,8 +113,8 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
             draftMatchedAt = null
             return
           }
-          draftMatchedAt ??= Date.now()
-          const settleLeftMs = draftMatchedAt + AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS - Date.now()
+          draftMatchedAt ??= now()
+          const settleLeftMs = draftMatchedAt + AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS - now()
           if (settleLeftMs <= 0) {
             finish()
           } else if (!draftSettleTimer) {
@@ -141,7 +142,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
             checkComposerDraft()
           }
         },
-        Math.max(0, ingestDeadlineAt - Date.now())
+        Math.max(0, ingestDeadlineAt - now())
       )
     }
     const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {

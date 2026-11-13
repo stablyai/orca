@@ -1,4 +1,9 @@
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type {
+  NativeChatPromptDispatch,
+  NativeChatPromptSubmission,
+  NativeChatSourceContext
+} from '../input/native-chat-prompt-observation'
 import type { NativeChatMessage } from '../native-chat-types'
 import type {
   NativeChatSourceReceipt,
@@ -13,11 +18,16 @@ export { releaseEmptyTranscriptClaims } from './native-chat-pending-legacy'
 
 // Bounds reconciliation cost; each open send rescans the transcript.
 export const NATIVE_CHAT_PENDING_SEND_LIMIT = 8
+export type NativeChatPendingDispatchOutcome = 'not-submitted' | 'uncertain' | 'submitted'
 
 export type NativeChatPendingSend = {
   id: string
-  /** Source-origin full-content proof required for host-owned retained Chat sends. */
+  /** Host-owned sends can use optional exact evidence alongside text matching. */
   sourceAgent?: AgentType
+  sourceContext?: NativeChatSourceContext
+  sourceSessionId?: string
+  promptBinding?: NativeChatPromptDispatch
+  promptSubmission?: NativeChatPromptSubmission
   sourceBoundary?: NativeChatSourceBoundary
   sourceReceipt?: NativeChatSourceReceipt
   receiptMembers?: string[]
@@ -26,6 +36,9 @@ export type NativeChatPendingSend = {
   receiptDependencies?: NativeChatReceiptDependency[]
   /** Capability can still resolve to the shipped legacy path until the dispatch callback finishes. */
   evidenceModePending?: true
+  /** A source row cannot commit an operation before its final transport disposition. */
+  dispatchPending?: true
+  dispatchOutcome?: Promise<NativeChatPendingDispatchOutcome>
   /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
   delivery?: 'unconfirmed' | 'rejected'
   recovery?: true
@@ -55,17 +68,19 @@ export type NativeChatPendingSend = {
 export function prunePendingSends<T extends NativeChatPendingSend>(
   pending: T[],
   messages: readonly NativeChatMessage[],
-  sessionId = ''
+  sessionId = '',
+  context?: NativeChatSourceContext
 ): T[] {
-  return commitNativeChatPendingReceipts(pending, messages, sessionId)
+  return commitNativeChatPendingReceipts(pending, messages, sessionId, context)
 }
 
 export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
   pending: T[],
   messages: readonly NativeChatMessage[],
-  sessionId = ''
+  sessionId = '',
+  context?: NativeChatSourceContext
 ): T[] {
-  const { represented } = reconcileNativeChatPendingSends(pending, messages, sessionId)
+  const { represented } = reconcileNativeChatPendingSends(pending, messages, sessionId, context)
   return pending.filter((entry) => !represented.has(entry.id))
 }
 
@@ -87,19 +102,22 @@ export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
   existingMessages: readonly NativeChatMessage[] = [],
   workingEpoch?: number | null,
-  sessionId = ''
+  sessionId = '',
+  context?: NativeChatSourceContext
 ): NativeChatMessage[] {
-  return visibleNativeChatPendingSends(pending, existingMessages, sessionId).map((entry) => ({
-    id: `pending:${entry.id}`,
-    role: 'user' as const,
-    blocks: [
-      ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path })),
-      ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
-    ],
-    timestamp: entry.sentAt,
-    pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch),
-    source: 'scrape' as const
-  }))
+  return visibleNativeChatPendingSends(pending, existingMessages, sessionId, context).map(
+    (entry) => ({
+      id: `pending:${entry.id}`,
+      role: 'user' as const,
+      blocks: [
+        ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path })),
+        ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
+      ],
+      timestamp: entry.sentAt,
+      pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch),
+      source: 'scrape' as const
+    })
+  )
 }
 
 export function isPendingMessageId(id: string): boolean {

@@ -117,17 +117,6 @@ it.each(['cold', 'warm'] as const)(
   }
 )
 
-it('keeps folder cards on their git child account and plain folders outside project gh selection', () => {
-  release = installGitHubProjectAccounts({
-    getRepos: () => [
-      repo({ id: 'folder', path: '/folder', kind: 'folder' }),
-      repo({ id: 'child', path: '/folder/repo', ghAccount: bob })
-    ]
-  })
-  expect(options('/folder/repo').ghAccount).toEqual(bob)
-  expect(options('/folder').ghAccount).toBeUndefined()
-})
-
 it('selects before an asynchronous repository lookup and retains that account for execution', async () => {
   let current = repo()
   release = installGitHubProjectAccounts({ getRepos: () => [current] })

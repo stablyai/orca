@@ -31,6 +31,7 @@ import type { NativeChatPickerState } from '../pickers/use-native-chat-picker-st
 import type { NativeChatSendLifecycle } from '../../session/terminal/send/use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from '../../session/terminal/delivery/native-chat-optimistic-send-outcome'
+import type { NativeChatPromptDispatch } from '../../../../../../shared/native-chat/input/native-chat-prompt-observation'
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
@@ -52,7 +53,8 @@ export function useNativeChatPtyComposerSend(args: {
     text: string,
     imagePaths?: string[],
     recovery?: boolean,
-    sourceAgent?: AgentType
+    sourceAgent?: AgentType,
+    dispatchOutcome?: NativeChatSendHandle['dispatchOutcome']
   ) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
@@ -106,6 +108,7 @@ export function useNativeChatPtyComposerSend(args: {
         return false
       }
       let pendingId: string | undefined
+      let capturedBinding: NativeChatPromptDispatch | undefined
       const sendOptions =
         args.agent === 'claude' && classification === 'chat'
           ? {
@@ -137,6 +140,12 @@ export function useNativeChatPtyComposerSend(args: {
             undefined,
           prompt: { agent: args.agent, text },
           onLegacy: legacySend,
+          onBinding: (binding) => {
+            capturedBinding = binding
+            if (pendingId) {
+              args.optimisticSendOutcome?.setPromptBinding?.(pendingId, binding)
+            }
+          },
           onEvidenceMode: (source) => {
             sourceEvidence = source
             if (pendingId) {
@@ -175,16 +184,29 @@ export function useNativeChatPtyComposerSend(args: {
           text,
           imagePaths,
           retry !== undefined,
-          sourceEvidence ? args.agent : undefined
+          sourceEvidence ? args.agent : undefined,
+          sourceEvidence ? pendingHandle?.dispatchOutcome : undefined
         )
+        if (pendingId && capturedBinding) {
+          args.optimisticSendOutcome?.setPromptBinding?.(pendingId, capturedBinding)
+        }
         if (pendingHandle) {
           args.trackPendingSend(pendingHandle, pendingId)
           if (pendingId) {
             const id = pendingId
-            void pendingHandle.settled?.then(() =>
-              args.optimisticSendOutcome?.finishSourceEvidence?.(id)
-            )
-            void pendingHandle.outcome?.then((outcome) => {
+            const dispatchOutcome = pendingHandle.dispatchOutcome
+            if (!dispatchOutcome) {
+              void pendingHandle.settled?.then(() =>
+                args.optimisticSendOutcome?.finishSourceEvidence?.(id)
+              )
+            }
+            void (dispatchOutcome ?? pendingHandle.outcome)?.then((outcome) => {
+              if (dispatchOutcome) {
+                args.optimisticSendOutcome?.finishDispatch?.(id, dispatchOutcome, outcome)
+                if (sourceEvidence) {
+                  return
+                }
+              }
               if (!sourceEvidence && !retry) {
                 return
               }

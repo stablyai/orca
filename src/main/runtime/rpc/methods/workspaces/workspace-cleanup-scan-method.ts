@@ -8,5 +8,8 @@ export const WORKSPACE_CLEANUP_SCAN_METHOD = defineMethod({
   permission: 'workspace',
   params: WorkspaceCleanupScanParams,
   handler: (params, { runtime, signal }) =>
-    scanWorkspaceCleanup(runtime.requireStore(), params, { signal })
+    scanWorkspaceCleanup(runtime.requireStore(), params, {
+      signal,
+      getOrchestrationDb: () => runtime.getExistingOrchestrationDb()
+    })
 })

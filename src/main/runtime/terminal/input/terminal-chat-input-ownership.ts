@@ -1,10 +1,12 @@
+import { readRuntimeElapsedClock } from '../../hosts/runtime-elapsed-clock'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../../../shared/terminal/input/terminal-input'
 import type { TerminalRunFactsRegister } from '../lifecycle/terminal-run-facts'
 
 export type TerminalChatInput = {
   frames: string[] | null
   signal: AbortSignal
-  start: () => void
+  start: (executionMs?: number) => void
+  assertActive: () => void
   finish: () => void
 }
 
@@ -76,13 +78,20 @@ export class TerminalPromptInputQueue {
     generation: number,
     frames: string[],
     retainedBytes: number,
-    lifecycle: AbortSignal
+    lifecycle: AbortSignal,
+    timing?: { expiresAtMs: number; executionMs: number },
+    signal?: AbortSignal
   ): TerminalChatInput | null {
     if (lifecycle.aborted || retainedBytes > TERMINAL_INPUT_MAX_BYTES - this.retainedBytes) {
       return null
     }
     const record = this.record(ptyId, generation)
     if (record.entries.size >= 8) {
+      return null
+    }
+    const clock = timing ? readRuntimeElapsedClock() : null
+    if (timing && (!clock || clock.upper >= timing.expiresAtMs)) {
+      this.releaseRecord(ptyId, generation, record)
       return null
     }
     this.retainedBytes += retainedBytes
@@ -98,6 +107,7 @@ export class TerminalPromptInputQueue {
       this.retainedBytes -= retainedBytes
       clearTimeout(timer)
       lifecycle.removeEventListener('abort', cancel)
+      signal?.removeEventListener('abort', cancel)
       record.entries.delete(entry)
       this.releaseRecord(ptyId, generation, record)
     }
@@ -107,21 +117,66 @@ export class TerminalPromptInputQueue {
         finish()
       }
     }
-    let timer = setTimeout(cancel, 30_000)
+    let deadline = timing ? Math.min(timing.expiresAtMs, clock!.lower + 30_000) : 0
+    const assertActive = (): void => {
+      if (timing) {
+        const now = readRuntimeElapsedClock()
+        if (!now || now.upper >= deadline) {
+          cancel()
+        }
+      }
+      controller.signal.throwIfAborted()
+    }
+    const wake = (): void => {
+      try {
+        assertActive()
+        arm()
+      } catch {
+        /* Expiry retires through the same cancellation owner. */
+      }
+    }
+    let timer: ReturnType<typeof setTimeout>
+    const arm = (): void => {
+      const now = timing ? readRuntimeElapsedClock() : null
+      if (timing && !now) {
+        cancel()
+        return
+      }
+      timer = setTimeout(
+        timing ? wake : cancel,
+        timing ? Math.max(1, deadline - now!.upper) : 30_000
+      )
+    }
     const entry: TerminalChatInput & { cancel: () => void } = {
       frames,
       signal: controller.signal,
-      start: () => {
-        if (!controller.signal.aborted) {
-          started = true
-          clearTimeout(timer)
-          timer = setTimeout(cancel, 30_000)
+      assertActive,
+      start: (executionMs) => {
+        if (controller.signal.aborted) {
+          return
         }
+        try {
+          assertActive()
+        } catch {
+          return
+        }
+        started = true
+        clearTimeout(timer)
+        if (timing) {
+          const now = readRuntimeElapsedClock()
+          if (!now) {
+            cancel()
+            return
+          }
+          deadline = Math.min(timing.expiresAtMs, now.lower + (executionMs ?? timing.executionMs))
+        }
+        arm()
       },
       finish,
       cancel
     }
     record.entries.add(entry)
+    arm()
     record.unsubscribe ??= this.facts.onPtyInput(ptyId, () => {
       if (!record.writingChat) {
         for (const input of record.entries) {
@@ -130,7 +185,8 @@ export class TerminalPromptInputQueue {
       }
     })
     lifecycle.addEventListener('abort', cancel, { once: true })
-    if (lifecycle.aborted) {
+    signal?.addEventListener('abort', cancel, { once: true })
+    if (lifecycle.aborted || signal?.aborted) {
       cancel()
     }
     return entry

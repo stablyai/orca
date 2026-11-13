@@ -112,10 +112,10 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['computer', 'type-text'],
-    summary: 'Type literal text at the current app focus',
+    summary: 'Type literal text at the current app focus or into an element',
     usage:
-      'orca computer type-text --app <app> (--text <text> | --text-stdin) [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'text', 'text-stdin']
+      'orca computer type-text --app <app> (--text <text> | --text-stdin) [--element-index <n>] [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'element-index', 'text', 'text-stdin']
   },
   {
     path: ['computer', 'press-key'],
