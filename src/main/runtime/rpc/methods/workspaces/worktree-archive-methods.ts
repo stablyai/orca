@@ -1,7 +1,7 @@
 import {
   WorktreeArchive,
   WorktreeRestore
-} from '../../../../../shared/rpc-contract/worktree-params'
+} from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import {
   queueWorkspaceArchive,
   queueWorkspaceRestore
