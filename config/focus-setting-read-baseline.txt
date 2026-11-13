@@ -37,12 +37,12 @@
 1 src/renderer/src/components/editor/restored-editor-workspace-runtime-owner.ts
 2 src/renderer/src/components/editor/useEditorPanelContentState.ts
 1 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
-2 src/renderer/src/components/feature-wall/ConnectIntegrationsList.tsx
-1 src/renderer/src/components/feature-wall/FeatureWallBrowserAction.tsx
-1 src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx
+2 src/renderer/src/components/feature-wall/setup/integrations/ConnectIntegrationsList.tsx
+1 src/renderer/src/components/feature-wall/setup/browser/FeatureWallBrowserAction.tsx
+1 src/renderer/src/components/feature-wall/setup/FeatureWallSetupChecklist.tsx
 1 src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx
-2 src/renderer/src/components/feature-wall/use-feature-wall-task-source-presentation.ts
-2 src/renderer/src/components/feature-wall/use-integration-connection-status.ts
+2 src/renderer/src/components/feature-wall/setup/integrations/use-feature-wall-task-source-presentation.ts
+2 src/renderer/src/components/feature-wall/setup/integrations/use-integration-connection-status.ts
 1 src/renderer/src/components/floating-terminal/use-floating-terminal-panel-controller.ts
 1 src/renderer/src/components/floating-terminal/use-floating-terminal-panel-store-state.ts
 1 src/renderer/src/components/integrations/source-control/bitbucket-credentials-dialog.tsx

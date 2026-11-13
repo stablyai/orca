@@ -3,8 +3,8 @@
 # are skipped too. Remove a line once its file is safe to compile.
 
 # Render-time reads of providerRuntimeSessionGeneration (lib/provider-runtime-context.ts; hazard live-read-in-memo-block).
-src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx
-src/renderer/src/components/feature-wall/use-integration-connection-status.ts
+src/renderer/src/components/feature-wall/setup/FeatureWallSetupChecklist.tsx
+src/renderer/src/components/feature-wall/setup/integrations/use-integration-connection-status.ts
 src/renderer/src/components/integrations/task-trackers/jira-integration-card.tsx
 src/renderer/src/components/integrations/task-trackers/linear-integration-card.tsx
 src/renderer/src/components/new-workspace/use-jira-source-connection.ts
