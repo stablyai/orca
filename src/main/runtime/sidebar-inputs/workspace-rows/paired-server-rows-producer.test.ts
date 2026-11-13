@@ -177,7 +177,7 @@ describe('PairedServerRowsProducer', () => {
       h.state.servers = [{ id: 'renamed', live: false }]
       h.publishStatus()
       await vi.advanceTimersByTimeAsync(0)
-      expect((await producer.snapshot()).servers.map((server) => server.host.label)).toEqual([
+      expect((await producer.snapshot()).servers.map((server) => server.host?.label)).toEqual([
         'renamed'
       ])
       expect(producer.revision.value).toBeGreaterThan(before)
