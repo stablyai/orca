@@ -169,3 +169,21 @@ export const wakeRefusedSpendCap = wakeRefused('overage_cap_reached')
 export const wakeRefusedPayment = wakeRefused('payment_past_due')
 export const wakeRefusedTeamLimit = wakeRefused('concurrency_limit')
 export const wakeRefusedPlanEndedMember = wakeRefused('subscription_inactive', false)
+
+// No workspace name: its own sentence ("Couldn’t wake this workspace"), never "This workspace"
+// spliced into the template.
+export const wakeFailedUnnamed = defineFixture({
+  width: 640,
+  render: () => (
+    <Pane>
+      <CloudWakingOverlay
+        wake={startedAgo(26_000, { phase: 'failed' })}
+        workspaceName={null}
+        autoFocus={false}
+        onRetry={noop}
+        onRestart={noop}
+        onDismiss={noop}
+      />
+    </Pane>
+  )
+})
