@@ -22220,7 +22220,8 @@
           "inactiveDescription_one": "No activity for 1 day.",
           "inactiveDescription_other": "No activity for {{count}} days.",
           "matchesCount_one": "Matches 1 workspace now",
-          "matchesCount_other": "Matches {{count}} workspaces now"
+          "matchesCount_other": "Matches {{count}} workspaces now",
+          "checking": "Checking which workspaces match…"
         },
         "protection": {
           "title": "Protection",
@@ -22334,7 +22335,9 @@
           "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
           "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it.",
           "apply": "Apply"
-        }
+        },
+        "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
+        "retry": "Try again"
       }
     },
     "agentChildRow": {

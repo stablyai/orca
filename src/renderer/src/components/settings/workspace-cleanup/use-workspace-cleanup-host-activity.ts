@@ -139,9 +139,8 @@ export function useWorkspaceCleanupHostActivity(
         description: errorMessage(error)
       })
     }
+    // The host's finished-run event refreshes the report and the matches.
     setCleaningUp(false)
-    // The finished-run event can arrive before this reply or not at all from an older host.
-    setRevision((value) => value + 1)
   }, [owner, t])
 
   const previewRules = useCallback(

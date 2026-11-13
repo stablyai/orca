@@ -18,12 +18,12 @@ export const WORKSPACE_CLEANUP_RULE_REASON: Record<
   orchestrationWorkers: 'orchestration-worker'
 }
 
-/** Flips one rule; turning the inactive rule on picks delete while Orca cannot archive. */
-export function toggleWorkspaceCleanupRule(
+/** Turns one rule on or off; turning the inactive rule on picks delete while Orca cannot archive. */
+export function setWorkspaceCleanupRuleEnabled(
   rules: WorkspaceCleanupRules,
-  key: WorkspaceCleanupRuleKey
+  key: WorkspaceCleanupRuleKey,
+  enabled: boolean
 ): WorkspaceCleanupRules {
-  const enabled = !rules[key].enabled
   if (key === 'inactive') {
     return {
       ...rules,

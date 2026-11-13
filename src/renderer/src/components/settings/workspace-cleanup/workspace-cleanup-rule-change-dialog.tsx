@@ -40,13 +40,14 @@ export function WorkspaceCleanupRuleChangeDialog({
   const t = useTranslate()
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set())
   const [confirming, setConfirming] = useState(false)
+  // The last request stays on screen while the dialog animates out.
   const [shownRequest, setShownRequest] = useState(request)
-  if (request !== shownRequest) {
+  if (request && request !== shownRequest) {
     setShownRequest(request)
     setKept(new Set())
   }
-  const rows = request?.rows ?? []
-  const enabling = request?.kind !== 'change'
+  const rows = shownRequest?.rows ?? []
+  const enabling = shownRequest?.kind !== 'change'
   const deleted = rows.filter((row) => !kept.has(rowKey(row)))
   const deletedBytes = deleted.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0)
 
@@ -66,16 +67,20 @@ export function WorkspaceCleanupRuleChangeDialog({
   }
 
   return (
-    <Dialog open={request !== null} onOpenChange={(open) => (!open ? onCancel() : undefined)}>
-      <DialogContent className="sm:max-w-xl">
+    <Dialog
+      open={request !== null}
+      // Pins may already be written; backing out mid-confirm would leave the change half done.
+      onOpenChange={(open) => (!open && !confirming ? onCancel() : undefined)}
+    >
+      <DialogContent surface="security" showCloseButton={!confirming} className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
             {enabling
               ? t('components.settings.workspaceCleanup.enable.title', 'Turn on {{rule}}?', {
-                  rule: request?.ruleTitle ?? ''
+                  rule: shownRequest?.ruleTitle ?? ''
                 })
               : t('components.settings.workspaceCleanup.change.title', 'Change {{rule}}?', {
-                  rule: request?.ruleTitle ?? ''
+                  rule: shownRequest?.ruleTitle ?? ''
                 })}
           </DialogTitle>
           <DialogDescription>
@@ -152,7 +157,7 @@ export function WorkspaceCleanupRuleChangeDialog({
             })}
             {deletedBytes > 0 ? ` · ${formatBytes(deletedBytes)}` : null}
           </p>
-          <Button variant="outline" onClick={onCancel} disabled={confirming}>
+          <Button variant="ghost" onClick={onCancel} disabled={confirming}>
             {t('components.settings.workspaceCleanup.enable.cancel', 'Cancel')}
           </Button>
           <Button onClick={confirm} disabled={confirming}>

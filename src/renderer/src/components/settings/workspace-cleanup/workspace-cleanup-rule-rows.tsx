@@ -32,11 +32,14 @@ export type WorkspaceCleanupRuleMatches = {
 type RuleRowsProps = {
   rules: WorkspaceCleanupRules
   onToggle: (key: WorkspaceCleanupRuleKey) => void
-  onChange: (rules: WorkspaceCleanupRules) => void
+  /** Gets a change as a function so it applies to the rules as they are when it is saved. */
+  onChange: (change: (rules: WorkspaceCleanupRules) => WorkspaceCleanupRules) => void
   /** What each rule that is on would remove now; omitted where no preview is read. */
   matches?: Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>>
-  /** A rule whose switch is waiting on a preview or a write. */
+  /** A rule whose change is waiting on a preview or a write. */
   pendingRule?: WorkspaceCleanupRuleKey | null
+  /** Set while any change is in flight, so a second change cannot start from stale rules. */
+  disabled?: boolean
   forceVisible?: boolean
 }
 
@@ -47,6 +50,7 @@ export function WorkspaceCleanupRuleRows({
   onChange,
   matches,
   pendingRule,
+  disabled = false,
   forceVisible = false
 }: RuleRowsProps): React.JSX.Element {
   const t = useTranslate()
@@ -68,7 +72,14 @@ export function WorkspaceCleanupRuleRows({
         description={
           <>
             {description}
-            {matches?.[key] && rules[key].enabled ? (
+            {pendingRule === key ? (
+              <span className="mt-1 block">
+                {t(
+                  'components.settings.workspaceCleanup.rules.checking',
+                  'Checking which workspaces match…'
+                )}
+              </span>
+            ) : matches?.[key] && rules[key].enabled ? (
               <RuleMatchesLine matches={matches[key]} />
             ) : null}
           </>
@@ -76,14 +87,14 @@ export function WorkspaceCleanupRuleRows({
         control={
           <Switch
             checked={rules[key].enabled}
-            disabled={pendingRule === key}
+            disabled={disabled}
             onCheckedChange={() => onToggle(key)}
             aria-label={search[key].title}
           />
         }
       />
       {key === 'inactive' && rules.inactive.enabled ? (
-        <InactiveRuleOptions rules={rules} onChange={onChange} />
+        <InactiveRuleOptions rules={rules} onChange={onChange} disabled={disabled} />
       ) : null}
     </SearchableSetting>
   )
@@ -120,14 +131,16 @@ export function WorkspaceCleanupRuleRows({
 
 function InactiveRuleOptions({
   rules,
-  onChange
+  onChange,
+  disabled
 }: {
   rules: WorkspaceCleanupRules
-  onChange: (rules: WorkspaceCleanupRules) => void
+  onChange: RuleRowsProps['onChange']
+  disabled: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const setInactive = (patch: Partial<WorkspaceCleanupRules['inactive']>): void =>
-    onChange({ ...rules, inactive: { ...rules.inactive, ...patch } })
+    onChange((latest) => ({ ...latest, inactive: { ...latest.inactive, ...patch } }))
   return (
     <div className="mb-2 ml-4 border-l border-border pl-4">
       <NumberField
@@ -137,6 +150,7 @@ function InactiveRuleOptions({
         max={WORKSPACE_CLEANUP_POLICY_MAX_DAYS}
         integer
         suffix={t('components.settings.workspaceCleanup.rules.days', 'days')}
+        disabled={disabled}
         onChange={(afterDays) => setInactive({ afterDays })}
       />
       {WORKSPACE_ARCHIVE_SUPPORTED ? (
@@ -162,10 +176,12 @@ function InactiveRuleOptions({
               options={[
                 {
                   value: 'archive',
+                  disabled,
                   label: t('components.settings.workspaceCleanup.rules.archive', 'Archive')
                 },
                 {
                   value: 'delete',
+                  disabled,
                   label: t('components.settings.workspaceCleanup.rules.delete', 'Delete')
                 }
               ]}

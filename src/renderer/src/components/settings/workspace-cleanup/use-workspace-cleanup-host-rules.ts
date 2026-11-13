@@ -15,6 +15,7 @@ import { errorMessage } from '../../../../../shared/error-message'
 export type WorkspaceCleanupHostRules =
   | { state: 'loading' }
   | { state: 'unsupported' }
+  | { state: 'error'; message: string }
   | { state: 'ready'; rules: WorkspaceCleanupRules }
 
 type HostSettings = { settings: Partial<GlobalSettings> }
@@ -28,6 +29,23 @@ function readHostRules(settings: Partial<GlobalSettings>): WorkspaceCleanupHostR
     : { state: 'unsupported' }
 }
 
+function readEnvironmentRules(environmentId: string): Promise<WorkspaceCleanupHostRules> {
+  return callRuntimeRpc<HostSettings>(
+    { kind: 'environment', environmentId },
+    'settings.get',
+    undefined,
+    {
+      timeoutMs: HOST_SETTINGS_TIMEOUT_MS
+    }
+  ).then(
+    (result) => readHostRules(result.settings),
+    (error: unknown): WorkspaceCleanupHostRules => ({
+      state: 'error',
+      message: errorMessage(error)
+    })
+  )
+}
+
 /** The rules belong to the host that owns the repos, so this reads and writes that host's settings. */
 export function useWorkspaceCleanupHostRules(
   owner: RuntimeClientTarget,
@@ -35,6 +53,9 @@ export function useWorkspaceCleanupHostRules(
   updateLocalSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
 ): {
   hostRules: WorkspaceCleanupHostRules
+  /** The host's rules as they are now; another client may have changed them since the last read. */
+  readLatest: () => Promise<WorkspaceCleanupRules | null>
+  reload: () => void
   update: (rules: WorkspaceCleanupRules) => Promise<boolean>
 } {
   const t = useTranslate()
@@ -43,31 +64,22 @@ export function useWorkspaceCleanupHostRules(
     environmentId: string
     hostRules: WorkspaceCleanupHostRules
   } | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!environmentId) {
       return
     }
     let current = true
-    void callRuntimeRpc<HostSettings>(
-      { kind: 'environment', environmentId },
-      'settings.get',
-      undefined,
-      {
-        timeoutMs: HOST_SETTINGS_TIMEOUT_MS
+    void readEnvironmentRules(environmentId).then((hostRules) => {
+      if (current) {
+        setRemote({ environmentId, hostRules })
       }
-    ).then(
-      (result) => {
-        if (current) {
-          setRemote({ environmentId, hostRules: readHostRules(result.settings) })
-        }
-      },
-      (error: unknown) => console.error('Failed to load the host cleanup rules:', error)
-    )
+    })
     return () => {
       current = false
     }
-  }, [environmentId])
+  }, [environmentId, attempt])
 
   const reportFailure = (error: unknown): void => {
     toast.error(
@@ -75,15 +87,17 @@ export function useWorkspaceCleanupHostRules(
       { description: errorMessage(error) }
     )
   }
+  const reload = (): void => setAttempt((value) => value + 1)
 
   if (!environmentId) {
+    const localRules = localSettings
+      ? (localSettings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules())
+      : null
     return {
-      hostRules: localSettings
-        ? {
-            state: 'ready',
-            rules: localSettings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules()
-          }
-        : { state: 'loading' },
+      hostRules: localRules ? { state: 'ready', rules: localRules } : { state: 'loading' },
+      // The store follows this app's settings as they change, so its copy is current.
+      readLatest: () => Promise.resolve(localRules),
+      reload,
       update: async (rules) => {
         try {
           await updateLocalSettings({ workspaceCleanupPolicy: rules })
@@ -97,6 +111,12 @@ export function useWorkspaceCleanupHostRules(
   }
   return {
     hostRules: remote?.environmentId === environmentId ? remote.hostRules : { state: 'loading' },
+    readLatest: async () => {
+      const hostRules = await readEnvironmentRules(environmentId)
+      setRemote({ environmentId, hostRules })
+      return hostRules.state === 'ready' ? hostRules.rules : null
+    },
+    reload,
     update: async (rules) => {
       try {
         const result = await callRuntimeRpc<HostSettings>(
