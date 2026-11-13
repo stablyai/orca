@@ -134,6 +134,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Chats:',
   '  chat rename               Rename a chat tab',
+  '  chat send                 Send a message to a chat, as if typed in its tab',
+  '  chat close                Close a chat tab and stop its agent',
   '',
   'Files:',
   '  file open                 Open a file as a tab, view stays put (--focus brings you to it)',
