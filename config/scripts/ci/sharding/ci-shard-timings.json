@@ -1745,7 +1745,6 @@
       "src/main/git/source-control/submodules/status-submodule.test.ts": 306,
       "src/main/git/source-control/upstream/status-upstream-ref.test.ts": 52,
       "src/main/git/source-control/upstream/upstream-deferred-fork-remote-real.test.ts": 319,
-      "src/main/git/source-control/upstream/upstream.test.ts": 406,
       "src/main/git/worktrees/creation/worktree-add-local-base-refresh.test.ts": 362,
       "src/main/git/worktrees/creation/worktree-add-pending-removal.test.ts": 346,
       "src/main/git/worktrees/creation/worktree-add-remote-branch-upstream-real-git.test.ts": 786,
