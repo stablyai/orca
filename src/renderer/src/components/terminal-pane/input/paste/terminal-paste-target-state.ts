@@ -63,7 +63,8 @@ export function isTerminalPanePasteFocusCurrent({
   if (!requireSameFocusedElement || activeElementAtDispatch === null) {
     return true
   }
-  if (!paneContainer.contains(activeElementAtDispatch)) {
+  // Why: a removed dispatch element (xterm re-opens its textarea while a pane starts) is app churn; judge the current focus instead.
+  if (activeElementAtDispatch.isConnected && !paneContainer.contains(activeElementAtDispatch)) {
     return false
   }
   if (activeElement === activeElementAtDispatch) {
