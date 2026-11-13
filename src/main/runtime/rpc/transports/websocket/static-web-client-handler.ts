@@ -27,12 +27,21 @@ const WEB_MANIFEST_ROUTE = '/manifest.webmanifest'
 const WEB_ICON_ENV_VAR = 'ORCA_WEB_ICON'
 const WEB_ICON_EXTENSIONS = new Set(['.png', '.svg', '.ico', '.webp'])
 
+type StaticWebIconEntry = {
+  src: string
+  // Declared slots the image can serve: its real dimensions plus the
+  // installability sizes no larger than them (browsers scale down).
+  sizes: string
+  type: string
+}
+
 type StaticWebIcon = {
   absolutePath: string
   contentType: string
-  // PNG dimensions for the manifest; "any" marks scalable sources.
-  sizes: string
+  manifestIcons: StaticWebIconEntry[]
 }
+
+const INSTALLABILITY_ICON_EDGES = [192, 512]
 
 /** A server without a web client still answers plain HTTP, so callers fail fast instead of hanging. */
 export const answerWithoutWebClient: RequestListener = (_request, response) => {
@@ -181,14 +190,7 @@ function buildWebManifest(icon: StaticWebIcon): unknown {
     // Relative URLs resolve against the manifest URL so prefix proxies keep working.
     start_url: 'web-index.html',
     display: 'standalone',
-    icons: [
-      {
-        src: WEB_ICON_ROUTE.slice(1),
-        sizes: icon.sizes,
-        type: icon.contentType,
-        purpose: 'any'
-      }
-    ]
+    icons: icon.manifestIcons.map((entry) => ({ ...entry, purpose: 'any' }))
   }
 }
 
@@ -323,7 +325,18 @@ function resolveStaticWebIcon(
     } else {
       try {
         if (statSync(override).isFile()) {
-          return { absolutePath: override, contentType, sizes: readPngSizes(override) }
+          // Custom branding replaces the manifest icon list entirely.
+          return {
+            absolutePath: override,
+            contentType,
+            manifestIcons: [
+              {
+                src: WEB_ICON_ROUTE.slice(1),
+                sizes: manifestIconSizes(override),
+                type: contentType
+              }
+            ]
+          }
         }
       } catch {
         // fall through to the bundled icon
@@ -331,46 +344,69 @@ function resolveStaticWebIcon(
       console.warn(`[ws-transport] ${WEB_ICON_ENV_VAR} ignored: cannot read ${override}`)
     }
   }
-  const bundled = findBundledWebIcon(staticRoot, files)
-  if (!bundled) {
+  const bundled = findBundledWebIcons(staticRoot, files)
+  if (bundled.length === 0) {
     return undefined
   }
+  const primary = bundled.find((file) => /^assets\/icon-[^/]*\.png$/.test(file)) ?? bundled[0]
   return {
-    absolutePath: join(staticRoot, bundled),
+    absolutePath: join(staticRoot, primary),
     contentType: 'image/png',
-    sizes: readPngSizes(join(staticRoot, bundled))
+    // Larger alternates ship beside the default icon; listing each at its own
+    // path gives the manifest the 192/512 entries installability needs.
+    manifestIcons: bundled.map((file) => ({
+      src: file,
+      sizes: manifestIconSizes(join(staticRoot, file)),
+      type: 'image/png'
+    }))
   }
 }
 
-function findBundledWebIcon(
+/** Every branded icon the web bundle emits: icon-*.png plus the alternate app icons. */
+function findBundledWebIcons(
   staticRoot: string,
   files: ReadonlySet<string> | undefined
-): string | undefined {
+): string[] {
+  const matches = (file: string) => /^assets\/(?:icon|orca)-[^/]*\.png$/.test(file)
   if (files) {
-    return [...files].find((file) => /^assets\/icon-[^/]*\.png$/.test(file))
+    return [...files].filter(matches).sort()
   }
   try {
-    const name = readdirSync(join(staticRoot, 'assets'))
-      .filter((entry) => /^icon-[^/]*\.png$/.test(entry))
-      .sort()[0]
-    return name === undefined ? undefined : `assets/${name}`
+    return readdirSync(join(staticRoot, 'assets'))
+      .filter((entry) => matches(`assets/${entry}`))
+      .sort()
+      .map((entry) => `assets/${entry}`)
   } catch {
-    return undefined
+    return []
   }
 }
 
-function readPngSizes(absolutePath: string): string {
+function manifestIconSizes(absolutePath: string): string {
+  const dimensions = readPngDimensions(absolutePath)
+  if (!dimensions) {
+    return 'any'
+  }
+  const sizes = new Set([`${dimensions.width}x${dimensions.height}`])
+  for (const edge of INSTALLABILITY_ICON_EDGES) {
+    if (edge <= Math.min(dimensions.width, dimensions.height)) {
+      sizes.add(`${edge}x${edge}`)
+    }
+  }
+  return [...sizes].sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).join(' ')
+}
+
+function readPngDimensions(absolutePath: string): { width: number; height: number } | undefined {
   let fd: number | undefined
   try {
     const header = Buffer.alloc(24)
     fd = openSync(absolutePath, 'r')
     readSync(fd, header, 0, 24, 0)
     if (header.readUInt32BE(0) !== 0x89504e47) {
-      return 'any'
+      return undefined
     }
-    return `${header.readUInt32BE(16)}x${header.readUInt32BE(20)}`
+    return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }
   } catch {
-    return 'any'
+    return undefined
   } finally {
     if (fd !== undefined) {
       closeSync(fd)

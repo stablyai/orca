@@ -6,11 +6,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createStaticWebClientHandler } from './static-web-client-handler'
 
-const PNG_96 = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]),
-  Buffer.from('IHDR'),
-  Buffer.from([0, 0, 0, 96, 0, 0, 0, 96])
-])
+function pngFixture(edge: number): Buffer {
+  const dimensions = Buffer.alloc(8)
+  dimensions.writeUInt32BE(edge, 0)
+  dimensions.writeUInt32BE(edge, 4)
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]),
+    Buffer.from('IHDR'),
+    dimensions
+  ])
+}
+
+const PNG_96 = pngFixture(96)
+const PNG_1024 = pngFixture(1024)
 
 let root: string
 let savedIconEnv: string | undefined
@@ -115,6 +123,39 @@ it('falls back to the bundled assets/icon-*.png when ORCA_WEB_ICON is unset', as
   expect(await (await fetch(`${url}/`)).text()).toContain('href="./orca-web-icon"')
   const iconResponse = await fetch(`${url}/orca-web-icon`)
   expect(iconResponse.status).toBe(200)
+  expect(Buffer.from(await iconResponse.arrayBuffer())).toEqual(PNG_96)
+})
+
+it('lists the installability sizes bundled icon alternates can serve', async () => {
+  writeFileSync(join(root, 'assets', 'icon-bundled.png'), PNG_96)
+  writeFileSync(join(root, 'assets', 'orca-blue-large.png'), PNG_1024)
+  writeFileSync(
+    join(root, '.orca-web-client-files.json'),
+    JSON.stringify([
+      'web-index.html',
+      'assets/icon-bundled.png',
+      'assets/orca-blue-large.png'
+    ])
+  )
+  const url = await startServer()
+
+  const manifest = await (await fetch(`${url}/manifest.webmanifest`)).json()
+  expect(manifest.icons).toEqual([
+    {
+      src: 'assets/icon-bundled.png',
+      sizes: '96x96',
+      type: 'image/png',
+      purpose: 'any'
+    },
+    {
+      src: 'assets/orca-blue-large.png',
+      sizes: '192x192 512x512 1024x1024',
+      type: 'image/png',
+      purpose: 'any'
+    }
+  ])
+  // The favicon route keeps serving the default icon, not the large alternate.
+  const iconResponse = await fetch(`${url}/orca-web-icon`)
   expect(Buffer.from(await iconResponse.arrayBuffer())).toEqual(PNG_96)
 })
 
