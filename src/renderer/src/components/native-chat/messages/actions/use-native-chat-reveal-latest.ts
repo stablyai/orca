@@ -60,6 +60,8 @@ export type NativeChatMessageListHandle = {
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
   /** What the row drawing this message copies from its Copy button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
+  /** Scroll as the reader would; false when the transcript could not move. */
+  scrollBy: (deltaY: number) => boolean
 }
 
 /** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
@@ -94,9 +96,11 @@ export function useNativeChatMessageListHandle(
     beginNavigation,
     scrollToBottom,
     onSent,
-    revealFindMatch,
+    readerInput: { revealFindMatch, scrollBy },
     slots
-  }: Pick<NativeChatMessageListHandle, 'readerAtEnd' | 'revealFindMatch'> & {
+  }: Pick<NativeChatMessageListHandle, 'readerAtEnd'> & {
+    /** The reader's own scroll paths: find steps and outside scroll requests move the view as the reader. */
+    readerInput: Pick<NativeChatMessageListHandle, 'revealFindMatch' | 'scrollBy'>
     beginNavigation: () => void
     scrollToBottom: (reason: 'send') => void
     /** The reader answered, whether or not the view moves. */
@@ -121,8 +125,9 @@ export function useNativeChatMessageListHandle(
       revealLatest,
       readerAtEnd,
       revealFindMatch,
-      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
+      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId),
+      scrollBy
     }),
-    [readerAtEnd, revealLatest, revealFindMatch, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, scrollBy, slots]
   )
 }

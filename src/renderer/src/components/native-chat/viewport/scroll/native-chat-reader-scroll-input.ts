@@ -167,6 +167,8 @@ export function useNativeChatReaderScrollInput(
   forwardedGesture: (gesture: ReaderGesture) => void
   /** A find step moves the transcript for the reader, so it ends following like a gesture. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
+  /** Scroll for the reader from outside the window (a remote control); false when nothing moved. */
+  scrollBy: (deltaY: number) => boolean
 } {
   const onReaderScroll = useCallback(() => {
     onScrollInput()
@@ -230,5 +232,24 @@ export function useNativeChatReaderScrollInput(
     },
     [onLeaveEnd, onReaderScroll, scrollRef]
   )
-  return { scrollerProps, railWheel, forwardedGesture, revealFindMatch }
+  const scrollBy = useCallback(
+    (deltaY: number) => {
+      const transcript = scrollRef.current
+      if (!transcript) {
+        return false
+      }
+      const maxScrollTop = transcript.scrollHeight - transcript.clientHeight
+      const target = Math.min(Math.max(transcript.scrollTop + deltaY, 0), maxScrollTop)
+      // A scroll that cannot move fires no scroll event, so nothing would re-arm following.
+      if (Math.abs(target - transcript.scrollTop) < 1) {
+        return false
+      }
+      // Classified as the reader's wheel so leaving the end stops following the latest.
+      railWheel(deltaY)
+      transcript.scrollTop = target
+      return true
+    },
+    [railWheel, scrollRef]
+  )
+  return { scrollerProps, railWheel, forwardedGesture, revealFindMatch, scrollBy }
 }
