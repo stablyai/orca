@@ -58,6 +58,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
           const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
           if (
             !source ||
+            saved?.mailWake ||
             !refused.expectedSavedRecord ||
             saved?.paneKey !== refused.expectedSavedRecord.paneKey ||
             saved.capturedAt !== refused.expectedSavedRecord.capturedAt ||

@@ -6,6 +6,7 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
     this.notifier = notifier
     if (notifier) {
       this.repositoryForkBackfill.start()
+      queueMicrotask(() => this.retrySleptMailboxWakes())
     }
   }
 

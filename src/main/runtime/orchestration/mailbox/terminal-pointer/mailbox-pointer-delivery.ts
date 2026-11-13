@@ -19,13 +19,9 @@ import {
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
-const DEFAULT_POINTER_ENTER_DELAY_MS = 500
-
 function pointerEnterDelayMs(): number {
   const configured = Number(process.env.ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS)
-  return Number.isFinite(configured) && configured >= 1 && configured <= 60_000
-    ? configured
-    : DEFAULT_POINTER_ENTER_DELAY_MS
+  return Number.isFinite(configured) && configured >= 1 && configured <= 60_000 ? configured : 500
 }
 
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
@@ -40,6 +36,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     try {
       const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
+      this.deps.wakeSleepingRecipient?.(handle, reservedTypes)
       // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
       if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
         return

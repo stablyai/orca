@@ -1,3 +1,5 @@
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   isPaneSleepRecord,
@@ -70,7 +72,7 @@ export async function markResumedRecordLive(
 ): Promise<void> {
   await commit((session) => {
     const stored = session.sleepingAgentSessionsByPaneKey?.[paneKey]
-    if (!stored || !isPaneSleepRecord(stored) || !sameRecord(stored, resumed)) {
+    if (!stored || stored.mailWake || !isPaneSleepRecord(stored) || !sameRecord(stored, resumed)) {
       return null
     }
     return {
@@ -80,5 +82,18 @@ export async function markResumedRecordLive(
         [paneKey]: { ...stored, origin: 'live' }
       }
     }
+  })
+}
+
+export function unclaimedRunningSleepPanes(
+  session: WorkspaceSessionState | null | undefined,
+  worktreeId: string
+) {
+  return Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).flatMap((record) => {
+    const pane =
+      worktreeIdsEqual(record.worktreeId, worktreeId) && isUnclaimedRunningSleepRecord(record)
+        ? parsePaneKey(record.paneKey)
+        : null
+    return pane ? [{ worktreeId, tabId: pane.tabId, leafId: pane.leafId }] : []
   })
 }

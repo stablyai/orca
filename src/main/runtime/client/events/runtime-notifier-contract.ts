@@ -177,7 +177,12 @@ export type RuntimeNotifier = {
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
-  resumeSleepingAgents?(worktreeId: string): void
+  sleepingMailChanged?(worktreeIds: string[], settledMailWakeIds?: string[]): void
+  resumeSleepingAgents?(
+    worktreeId: string,
+    paneKey?: string,
+    prepareOnly?: boolean
+  ): void | Promise<boolean>
   /** The window applies a client's Agents-list change with its own actions and answers with the verdicts it leaves. */
   applyAgentPaneActivity?(change: AgentPaneActivityChange): Promise<AgentListPublication>
   terminalFitOverrideChanged(

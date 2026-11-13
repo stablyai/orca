@@ -81,12 +81,14 @@ export type SetTerminalPaneTitleDetail = {
 
 export type BackgroundMountTerminalWorktreeDetail = {
   worktreeId: string
+  wakePaneKey?: string
   /** Target background mounts to exact tabs to avoid connecting every saved pane; omitted IDs preserve legacy whole-worktree mount, lifted by real activation. */
   tabIds?: readonly string[]
 }
 
 export type WakeHibernatedAgentsWorktreeDetail = {
   worktreeId: string
+  paneKey?: string
   /** Collect provider-session claims from panes consuming/latching wake so generic resume cannot launch those sessions twice. */
   wokenClaimKeys?: Set<string>
 }

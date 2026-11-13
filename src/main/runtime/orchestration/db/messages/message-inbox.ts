@@ -92,6 +92,7 @@ export function getUndeliveredUnreadMessages(
     excludeTypes?: readonly string[]
     excludeIds?: readonly string[]
     excludeRunOwnedDirect?: boolean
+    newestFirst?: boolean
     limit?: number
   }
 ): MessageRow[] {
@@ -121,11 +122,12 @@ export function getUndeliveredUnreadMessages(
     params.push(Math.max(1, Math.floor(options.limit)))
   }
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this SELECT returns only messages table rows, decoded at this database boundary.
     this.db
       .prepare(
         `SELECT * FROM messages
          WHERE ${conditions.join(' AND ')}
-         ORDER BY sequence${limitSql}`
+         ORDER BY sequence${options?.newestFirst ? ' DESC' : ''}${limitSql}`
       )
       .all(...params) as MessageRow[]
   )

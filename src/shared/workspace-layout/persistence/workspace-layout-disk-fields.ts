@@ -245,6 +245,7 @@ const SLEEPING = {
   connectionId: resumeRecord('connectionId'),
   launchConfig: resumeRecord('launchConfig'),
   origin: resumeRecord('origin'),
+  mailWake: resumeRecord('mailWake'),
   restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
 } as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>
 

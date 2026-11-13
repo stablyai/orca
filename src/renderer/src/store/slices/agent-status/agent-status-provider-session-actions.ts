@@ -103,31 +103,33 @@ export function createAgentStatusProviderSessionActions(
             agentType: agent,
             providerSession
           })
-          const record: SleepingAgentSessionRecord = {
-            paneKey,
-            ...(tabId ? { tabId } : {}),
-            worktreeId,
-            agent,
-            providerSession,
-            prompt: '',
-            // Why: durable process/session identity, not visible turn state; a non-done value keeps cold restore eligible.
-            state: preservesCompletedRecoveryRecord ? 'done' : 'working',
-            capturedAt: updatedAt,
-            updatedAt,
-            ...(existingStatus?.terminalTitle
-              ? { terminalTitle: existingStatus.terminalTitle }
-              : existingRecord?.terminalTitle
-                ? { terminalTitle: existingRecord.terminalTitle }
-                : {}),
-            ...(routing?.connectionId !== undefined
-              ? { connectionId: routing.connectionId }
-              : existingRecord?.connectionId !== undefined
-                ? { connectionId: existingRecord.connectionId }
-                : {}),
-            ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
-            ...(preservesCompletedRecoveryRecord ? agentVerdictFields(existingRecord) : {}),
-            origin: preservesQuitOrigin ? 'quit' : 'live'
-          }
+          const record: SleepingAgentSessionRecord = existingRecord?.mailWake
+            ? existingRecord
+            : {
+                paneKey,
+                ...(tabId ? { tabId } : {}),
+                worktreeId,
+                agent,
+                providerSession,
+                prompt: '',
+                // Why: durable process/session identity, not visible turn state; a non-done value keeps cold restore eligible.
+                state: preservesCompletedRecoveryRecord ? 'done' : 'working',
+                capturedAt: updatedAt,
+                updatedAt,
+                ...(existingStatus?.terminalTitle
+                  ? { terminalTitle: existingStatus.terminalTitle }
+                  : existingRecord?.terminalTitle
+                    ? { terminalTitle: existingRecord.terminalTitle }
+                    : {}),
+                ...(routing?.connectionId !== undefined
+                  ? { connectionId: routing.connectionId }
+                  : existingRecord?.connectionId !== undefined
+                    ? { connectionId: existingRecord.connectionId }
+                    : {}),
+                ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
+                ...(preservesCompletedRecoveryRecord ? agentVerdictFields(existingRecord) : {}),
+                origin: preservesQuitOrigin ? 'quit' : 'live'
+              }
           removedLiveStatus = existingStatus !== undefined
           const nextLive = removedLiveStatus
             ? { ...s.agentStatusByPaneKey }

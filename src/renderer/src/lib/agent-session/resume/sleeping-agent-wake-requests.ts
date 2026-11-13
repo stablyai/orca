@@ -8,7 +8,6 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 
 // Why record identity: a replaced or cleared record drops its request, so a stale ask never wakes a later sleep.
 const requestedRecords = new WeakSet<SleepingAgentSessionRecord>()
-
 export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
   return (
     record.tabId ??
@@ -21,7 +20,8 @@ export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): stri
 /** Asks the named tabs' sleeping agents to start when their panes mount hidden. */
 export function requestSleepingAgentWakeOnMount(
   worktreeId: string,
-  tabIds: readonly string[]
+  tabIds: readonly string[],
+  paneKey?: string
 ): void {
   const wanted = new Set(tabIds)
   for (const [, record] of sleepingAgentRecordIndex.entries(
@@ -29,7 +29,12 @@ export function requestSleepingAgentWakeOnMount(
     worktreeId
   )) {
     const tabId = getSleepingRecordTabId(record)
-    if (record.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
+    if (
+      record.worktreeId === worktreeId &&
+      tabId !== null &&
+      wanted.has(tabId) &&
+      (!paneKey || record.paneKey === paneKey)
+    ) {
       requestedRecords.add(record)
     }
   }
