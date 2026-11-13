@@ -1,11 +1,15 @@
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRRefreshOutcome,
+  PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import { deliverLocalPRRead } from './pr-refresh-local-delivery'
 import {
   aliasFromCandidate,
+  bypassesFreshnessDelay,
   candidateReadRequest,
   refreshKey,
   validateCandidate,
@@ -35,7 +39,7 @@ export async function runImmediatePRRefresh(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
-): Promise<PRRefreshOutcome> {
+): Promise<PRSnapshotReply> {
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
   const existing = queue.get(key)
@@ -107,11 +111,8 @@ export async function runImmediatePRRefresh(
   queue.noteRequestStarted(key, requestSequence)
   events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
   const prepared = await preparePRBranchRead(...candidateReadRequest(candidate, reason, options))
-  // A read a newer read of its request replaced while it ran plans nothing for its row.
-  let replaced = false
   try {
-    const outcome = await prepared.read((outcome, producer) => {
-      replaced = producer.current?.() === false
+    const result = await prepared.readResult((outcome, producer) => {
       if (!prepared.isCurrent()) {
         return outcome
       }
@@ -127,9 +128,34 @@ export async function runImmediatePRRefresh(
       events.observe(candidate, settled, aliases)
       return settled
     })
-    if (!queue.ownsRequest(key, requestSequence) || replaced) {
-      events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
-      return outcome
+    const read = {
+      key,
+      candidate,
+      aliases,
+      reason,
+      priority: 40,
+      // A user's action (manual, active, post-push) stays owed if a newer read replaced its own.
+      foreground: bypassesFreshnessDelay(reason),
+      requestSequence,
+      requestStartedAt
+    }
+    const outcome = deliverLocalPRRead(
+      { queue, events, scheduler: drainer.scheduler },
+      read,
+      prepared,
+      result!
+    )
+    if (!outcome) {
+      // A replaced read answers its caller with the newer accepted result, or with no data: the
+      // shown data stays, and the row's queued demand delivers the newer result.
+      return (
+        deliverablePRBranchOutcome(prepared, result!) ?? {
+          revalidation: {
+            invalidated: true,
+            retryAfterMs: drainer.hostedJobs.retryAfterMs(prepared)
+          }
+        }
+      )
     }
     const plannedRetryAt = visibility.has(key)
       ? retry.errorFollowUpAt(key, visibility.candidate(key, candidate), outcome, true)

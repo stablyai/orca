@@ -72,9 +72,17 @@ export function hostPRAutoRefreshCadence(environmentId: string | null): PRAutoRe
   return getPRAutoRefreshCadenceForHost(environmentId)
 }
 
-/** A value just read from or written to the host (Settings control, settings.get) is authoritative. */
-export function rememberHostPRAutoRefreshCadence(environmentId: string, value: unknown): void {
-  revokePendingRead(environmentId)
+/** A value just read from or written to the host (Settings control, settings.get) is authoritative.
+ *  A write's answer may be older than a read already asked for (another client's later change
+ *  started it), so the write keeps that read and its owner checks it again (`keepPendingRead`). */
+export function rememberHostPRAutoRefreshCadence(
+  environmentId: string,
+  value: unknown,
+  { keepPendingRead = false }: { keepPendingRead?: boolean } = {}
+): void {
+  if (!keepPendingRead) {
+    revokePendingRead(environmentId)
+  }
   setHostLacksSetting(environmentId, false)
   setPRAutoRefreshCadenceForHost(environmentId, value)
 }

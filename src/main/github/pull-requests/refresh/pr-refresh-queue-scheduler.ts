@@ -121,51 +121,36 @@ export class PRRefreshQueueScheduler {
 
   /** Queues the automatic follow-up the current cadence gives a visible row whose timed work came
    *  back, due now if its data is already stale; none when the cadence gives it no timer. It stays
-   *  an automatic follow-up while it waits, so the next Off retires it. */
+   *  an automatic follow-up while it waits, so the next Off retires it. A `foreground` row (a
+   *  return or a user's refresh whose read a newer read replaced) queues its return again instead,
+   *  which a kept newer result answers from the exact cache. Both wait for the key's gates. */
   restoreFollowUp(
     key: string,
     candidate: GitHubPRRefreshCandidate,
     priority: number,
     aliases: GitHubPRRefreshAlias[],
-    windowId?: number
+    windowId?: number,
+    foreground = false
   ): void {
-    const dueAt = automaticDueAt(candidate)
+    const current = this.visibility.candidate(key, candidate)
+    const dueAt = foreground ? Date.now() : automaticDueAt(current)
     if (dueAt === null || !this.visibility.has(key)) {
       return
     }
+    const gatedDueAt = Math.max(dueAt, this.queue.backgroundGateUntil(key))
     this.queue.setVisibleFollowUp({
       key,
-      candidate,
+      candidate: current,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
       reason: 'visible',
-      priority: visibleFollowUpPriority(candidate, priority),
-      dueAt: Math.max(dueAt, this.queue.backgroundGateUntil(key)),
+      priority: visibleFollowUpPriority(current, priority),
+      dueAt: gatedDueAt,
       queuedAt: this.queue.nextOrder(),
-      followUp: true,
+      followUp: !foreground,
+      foreground,
       windowId
     })
-    this.schedule(Math.max(0, dueAt - Date.now()))
-  }
-
-  /** When an automatic attempt still in its own reason (a follow-up or a failure's retry, not a
-   *  return, an action or a forced reread) is due under the current cadence, from the failure that
-   *  still owns it or else its row's data; null once that no longer gives it. Checked again once it has
-   *  waited for quota, before it may start. Other work is due as queued (0). */
-  automaticPlan(entry: PRRefreshQueueEntry): number | null {
-    if (entry.reason !== 'visible' || entry.hosted || entry.watch || entry.bypassBackgroundBudget) {
-      return 0
-    }
-    const candidate = this.visibility.candidate(entry.key, entry.candidate)
-    if (entry.errorRetry) {
-      const retryAt = this.retry.retimedVisibleErrorRetryAt(entry.key, candidate)
-      if (retryAt !== null) {
-        return Number.isFinite(retryAt) ? retryAt : null
-      }
-      // No failure owns it any more: it is the row's ordinary automatic work.
-      entry.errorRetry = false
-      entry.followUp = true
-    }
-    return entry.followUp ? automaticDueAt(candidate) : 0
+    this.schedule(Math.max(0, gatedDueAt - Date.now()))
   }
 
   /** A full provider read of a visible row's exact request that the row's own queue did not run
@@ -184,12 +169,13 @@ export class PRRefreshQueueScheduler {
     if (
       !shown ||
       !producer.current?.() ||
-      (pending && !pending.followUp && !pending.errorRetry) ||
       prBranchReadKeys(...candidateReadRequest(shown, 'visible'))[1] !== prepared.key
     ) {
       return outcome
     }
     const candidate = this.visibility.candidate(key, shown)
+    // The row's failure is settled whatever is queued for it, so the last check before any read
+    // of the row (`admitPreparedRead`) finds it, even when the exact cache had no room for it.
     const settled = this.retry.settleProducerError(
       outcome,
       key,
@@ -198,10 +184,26 @@ export class PRRefreshQueueScheduler {
       this.queue,
       producer
     )
+    // A rate limit the read reported holds the row's retries, as a local read's would.
+    this.retry.noteManualGate(key, settled)
+    if (pending && !pending.followUp && !pending.errorRetry) {
+      // A return or an action queued for the row keeps its own plan; a success ends any failure.
+      if (settled.kind !== 'upstream-error') {
+        this.retry.reset(key)
+      }
+      return settled
+    }
     const aliases = pending ? Array.from(pending.aliases.values()) : [aliasFromCandidate(shown)]
     this.scheduleVisibleFollowUp(key, candidate, settled, 40, aliases, pending?.windowId, {
       plannedRetryAt: this.retry.errorFollowUpAt(key, candidate, settled, true)
     })
+    // A follow-up already due sooner (one a replaced read kept for its row) still runs then: it
+    // shows this result from the exact cache, which this read alone never sends to the row.
+    const planned = this.queue.get(key)
+    if (settled.kind !== 'upstream-error' && pending?.followUp && planned?.followUp) {
+      planned.dueAt = Math.min(planned.dueAt, pending.dueAt)
+      this.schedule(Math.max(0, planned.dueAt - Date.now()))
+    }
     return settled
   }
 

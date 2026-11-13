@@ -5,14 +5,14 @@ import {
 } from '../../client/lookup/pr-for-branch-outcome'
 import { completePRBranchRead } from '../../client/lookup/pr-branch-read-resources'
 import {
+  bypassesFreshnessDelay,
   candidateReadRequest,
   freshQueuedPROutcome,
   isBackground,
-  isBudgetedBackground,
   validateCandidate
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
-import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
+import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue } from './pr-refresh-queue'
 import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
@@ -24,6 +24,8 @@ import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 import { HostedPRReadJobs } from './hosted-pr-read-jobs'
 import { PRRefreshQueueScheduler } from './pr-refresh-queue-scheduler'
+import { deliverLocalPRRead } from './pr-refresh-local-delivery'
+import { PRRefreshAdmission } from './pr-refresh-admission'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
@@ -33,6 +35,7 @@ export class PRRefreshQueueDrainer {
   readonly watchJobs: PRWatchJobRunner
   readonly hostedJobs: HostedPRReadJobs
   readonly scheduler: PRRefreshQueueScheduler
+  private readonly admission: PRRefreshAdmission
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -51,6 +54,7 @@ export class PRRefreshQueueDrainer {
       this.watchJobs,
       () => this.drain()
     )
+    this.admission = new PRRefreshAdmission(queue, pacing, visibility, retry, events, this)
     this.hostedJobs = new HostedPRReadJobs(
       queue,
       pacing,
@@ -70,8 +74,13 @@ export class PRRefreshQueueDrainer {
     }
     this.draining = true
     try {
-      while (this.queue.size > 0) {
-        let next = this.scheduler.ordered()[0]
+      for (;;) {
+        // One selection per decision: pruning closed windows may leave no work at all.
+        const ordered = this.scheduler.ordered()
+        let next = ordered[0]
+        if (!next) {
+          return
+        }
         if (this.hostedJobs.completeFromCache(next)) {
           continue
         }
@@ -83,9 +92,9 @@ export class PRRefreshQueueDrainer {
 
         let delay = this.pacing.entryDelay(next)
         if (delay > 0) {
-          const runnable = this.scheduler
-            .ordered()
-            .find((entry) => entry.dueAt <= Date.now() && this.pacing.entryDelay(entry) === 0)
+          const runnable = ordered.find(
+            (entry) => entry.dueAt <= Date.now() && this.pacing.entryDelay(entry) === 0
+          )
           if (runnable && runnable.key !== next.key) {
             next = runnable
             delay = 0
@@ -170,45 +179,20 @@ export class PRRefreshQueueDrainer {
             next.hosted?.finish(null)
             continue
           }
-          // A job retired or replaced, or automatic work the cadence no longer gives, while quota
-          // was checked never starts; automatic work the cadence now gives later waits for that
-          // plan and the pause it learned, without displacing work queued since.
-          const planned = this.hostedJobs.completeFromCache(next)
-            ? null
-            : this.scheduler.automaticPlan(next)
-          if (pausedUntil !== null) {
-            this.queue.protectBackgroundUntil(next.key, pausedUntil)
-          }
-          if (planned === null) {
+          // A job retired or replaced while quota was checked never starts.
+          if (
+            !this.admission.admitAfterQuota(
+              next,
+              pausedUntil,
+              this.hostedJobs.completeFromCache(next),
+              requestSequence
+            )
+          ) {
             continue
           }
-          const dueAt = Math.min(
-            Math.max(planned, pausedUntil ?? 0),
-            next.hosted?.expiresAt ?? Infinity
-          )
-          if (pausedUntil !== null || dueAt > Date.now()) {
-            next.dueAt = dueAt
-            if (next.hosted || !this.queue.get(next.key)) {
-              this.queue.set(next.key, next)
-            }
-            if (!next.hosted && pausedUntil !== null) {
-              this.events.broadcast({
-                aliases,
-                reason: next.reason,
-                status: 'paused',
-                pausedUntil,
-                skippedReason: 'rate-limit'
-              })
-            }
-            this.schedule(Math.max(1_000, dueAt - Date.now()))
-            continue
-          }
-          if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
-            this.pacing.noteBackgroundStart(next)
-            this.watchJobs.noteBudgetedStart(next)
-          }
-          if (usesActiveRefreshPacing(next)) {
-            this.pacing.noteActiveStart(next)
+          // A watch's earlier-head read starts next; every other read is charged at its start.
+          if (next.watch) {
+            this.admission.chargeBudget(next)
           }
         }
 
@@ -223,10 +207,7 @@ export class PRRefreshQueueDrainer {
           (await preparePRBranchRead(
             ...candidateReadRequest(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
           ))
-        // A read a newer read of its request replaced while it ran plans nothing for its row.
-        let replaced = false
         const settle: PRReadSettlement = (outcome, producer) => {
-          replaced = producer.current?.() === false
           if (!prepared.isCurrent()) {
             return outcome
           }
@@ -250,25 +231,41 @@ export class PRRefreshQueueDrainer {
           }
           return settled
         }
-        const outcome = await (joinedRead ??
-          (next.hosted ? prepared.readRetained(settle) : prepared.read(settle)))
-        if (!outcome) {
-          next.hosted?.finish(null)
-          continue
-        }
+        // Nothing is awaited from this check to the provider start, so it sees current state.
         if (
-          next.hosted &&
-          (!next.hosted.prepared.isCurrent() || !next.hosted.prepared.accepts(outcome))
+          !next.hosted &&
+          !this.admission.admitPreparedRead(next, prepared, requestSequence, requestStartedAt)
         ) {
-          next.hosted.finish(null)
           continue
         }
-        if (!this.queue.ownsRequest(next.key, requestSequence) || (!next.hosted && replaced)) {
+        if (!next.watch && isBackground(next.reason) && !joinedRead) {
+          this.admission.chargeBudget(next)
+        }
+        const result = await (joinedRead ?? prepared.readResult(settle, Boolean(next.hosted)))
+        if (
+          !result ||
+          (next.hosted &&
+            (!next.hosted.prepared.isCurrent() ||
+              !next.hosted.prepared.accepts(result.outcome) ||
+              !this.queue.ownsRequest(next.key, requestSequence)))
+        ) {
           next.hosted?.finish(null)
-          this.events.broadcast(
-            { aliases, reason: next.reason, outcome, requestStartedAt },
-            requestSequence
-          )
+          continue
+        }
+        const read = {
+          ...next,
+          // A user's action or a validated return stays owed; automatic work follows the cadence.
+          foreground: next.foreground === true || bypassesFreshnessDelay(next.reason),
+          aliases,
+          requestSequence,
+          requestStartedAt
+        }
+        const owners = { queue: this.queue, events: this.events, scheduler: this.scheduler }
+        const outcome =
+          next.hosted || next.watch
+            ? result.outcome
+            : deliverLocalPRRead(owners, read, prepared, result)
+        if (!outcome || !this.queue.ownsRequest(next.key, requestSequence)) {
           continue
         }
         const plannedRetryAt = this.retry.errorFollowUpAt(

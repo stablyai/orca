@@ -10,8 +10,10 @@ export function noteAppForegrounded(now = Date.now()): void {
   lastForegroundAt = now
 }
 
+/** A clock set back before the last foreground says nothing about a recent return. */
 export function wasAppForegroundedRecently(now = Date.now()): boolean {
-  return now - lastForegroundAt < FOREGROUND_READ_WINDOW_MS
+  const elapsed = now - lastForegroundAt
+  return elapsed >= 0 && elapsed < FOREGROUND_READ_WINDOW_MS
 }
 
 /**

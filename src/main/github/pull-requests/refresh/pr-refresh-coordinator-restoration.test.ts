@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
@@ -27,7 +27,16 @@ beforeEach(() => {
   provider.gate.mockReset().mockResolvedValue(null)
   provider.resolve.mockReset().mockImplementation(async () => found('first'))
 })
-afterEach(() => vi.useRealTimers())
+// Transforming the coordinator's module graph is the slow first step on a loaded machine: do it
+// once under the hook limit, so each test still imports its own fresh instance, quickly.
+beforeAll(async () => {
+  await import('./pr-refresh-coordinator')
+})
+afterEach(() => {
+  // A body that failed must not leave its timers to run on the next test's clock.
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
 
 function found(title: string): PRRefreshOutcome {
   return {
@@ -57,7 +66,7 @@ async function load() {
   const lookup = await import('../../client/lookup/pr-for-branch-outcome')
   const resources = await import('../../client/lookup/pr-branch-read-resources')
   const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
-  const switchTo = async (cadence: 'default' | 'reduced' | 'off', at: number) => {
+  const switchTo = async (cadence: 'default' | 'reduced' | 'minimal' | 'off', at: number) => {
     await vi.advanceTimersByTimeAsync(at - Date.now())
     policy.setPRAutoRefreshCadence(cadence)
     coordinator.retimePRRefreshesForCadence()
@@ -91,7 +100,7 @@ async function load() {
       null,
       hostedReviewOptionArgs(candidate, 'active')[0] ?? {}
     )
-    return coordinator.runHostedPRRead(candidate, prepared.read, prepared.didRead, prepared.release)
+    return coordinator.runHostedPRRead(candidate, prepared)
   }
   const claims = () => resources._prBranchReadResourceCountForTests()
   return { coordinator, lookup, switchTo, fillExactCache, directRead, claims }
@@ -166,6 +175,15 @@ it.each(['default', 'off'] as const)(
     late.resolve(failed())
     await vi.advanceTimersByTimeAsync(0)
     expect(claims()).toBe(0)
+    // The newer read kept nothing to show, so the old read only ends its loading state; its
+    // replaced failure is never published.
+    const targetEvents = coordinatorMocks.sendToTrustedUIRendererMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.aliases.some((alias) => alias.branch === 'target'))
+    expect(targetEvents.map((event) => event.status ?? event.outcome.kind)).toEqual([
+      'in-flight',
+      'skipped'
+    ])
     // Default: the ordinary follow-up two minutes after the newer read, not the old error's retry.
     await expectNextAutomaticRead(cadence, 125_000, switchTo)
   }
@@ -409,3 +427,111 @@ it.each([750, 7_500])(
     expect(coordinator._getPRRefreshErrorBackoffCountForTests()).toBe(0)
   }
 )
+
+it('a drain that finds every queued row’s window closed ends quietly; a row still shown reads on', async () => {
+  const { coordinator, claims } = await load()
+  const close = openWindows(1, 2)
+  coordinator.reportVisiblePRRefreshCandidates([row('a')], 1, 1)
+  coordinator.reportVisiblePRRefreshCandidates([row('b')], 1, 2)
+  await vi.advanceTimersByTimeAsync(20_000)
+  expect([readsOf('a'), readsOf('b')]).toEqual([1, 1])
+  provider.resolve.mockImplementation(async () => found('changed'))
+  // Window 1 closes with no cleanup call: its follow-up at 121 s finds it gone when the drain runs.
+  close(1)
+  await vi.advanceTimersByTimeAsync(131_000 - Date.now())
+  expect([readsOf('a'), readsOf('b')]).toEqual([1, 2])
+  expect(deliveredTo('b')).toBe('changed')
+  // The last window closes too: its row's next follow-up is the only queued work, and goes.
+  close(2)
+  await vi.advanceTimersByTimeAsync(251_000 - Date.now())
+  expect([readsOf('a'), readsOf('b')]).toEqual([1, 2])
+  expect(coordinator._getPRRefreshQueueSizeForTests()).toBe(0)
+  expect(coordinator._getVisiblePRRefreshWindowCountForTests()).toBe(0)
+  expect(claims()).toBe(0)
+})
+
+it.each(['a routine report', 'another HEAD'] as const)(
+  'an action that waited for quota keeps its turn when %s queues the row again meanwhile',
+  async (change) => {
+    const { coordinator } = await load()
+    const x = makeCandidate({ branch: 'x', isSelected: true, currentHeadOid: 'head-sha' })
+    coordinator.reportVisiblePRRefreshCandidates([x], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    const shownX = {
+      ...x,
+      cachedFetchedAt: 1_000,
+      cachedHeadOid: 'head-sha',
+      cachedHasPR: true,
+      cachedPRState: 'open' as const,
+      cachedChecksStatus: 'pending' as const
+    }
+    // At 2 s the user's action reads X; quota is still being checked when the row is reported.
+    await vi.advanceTimersByTimeAsync(1_000)
+    const quota = Promise.withResolvers<number | null>()
+    provider.gate.mockReturnValueOnce(quota.promise)
+    coordinator.enqueuePRRefresh(shownX, 'active', 80, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    const head = change === 'another HEAD' ? 'head-b' : 'head-sha'
+    coordinator.reportVisiblePRRefreshCandidates([{ ...shownX, currentHeadOid: head }], 2, 1)
+    // Quota answers with a pause until 22 s.
+    await vi.advanceTimersByTimeAsync(1_000)
+    quota.resolve(22_000)
+    provider.resolve.mockImplementation(async () => found('changed'))
+    await vi.advanceTimersByTimeAsync(21_999 - Date.now())
+    expect(readsOf('x')).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(readsOf('x')).toBe(2)
+    // Another HEAD queued since is a newer request; the old captured one does not replace it.
+    expect(provider.resolve.mock.calls.at(-1)?.[0].options.currentHeadOid).toBe(head)
+    expect(deliveredTo('x')).toBe('changed')
+  }
+)
+
+it.each(['its read', 'its failure', 'an earlier head’s read'] as const)(
+  'a queued watch planned from %s follows a cadence change from that same anchor',
+  async (anchor) => {
+    const { coordinator, switchTo } = await load()
+    const headReads = vi.fn(async () => Date.now())
+    coordinator.setPRWatchJobHooks({ isWatched: () => true, readHeadChecks: headReads })
+    if (anchor === 'its failure') {
+      provider.resolve.mockImplementation(async () => failed())
+    }
+    const watched = makeCandidate({ branch: 'watched', linkedPRNumber: 12 })
+    const job =
+      anchor === 'an earlier head’s read'
+        ? { prKey: 'github.com/acme/repo#12', headSha: 'old-head' }
+        : { prKey: 'github.com/acme/repo#12' }
+    const watchReads = () =>
+      anchor === 'an earlier head’s read' ? headReads.mock.calls.length : readsOf('watched')
+    await switchTo('minimal', 1_000)
+    coordinator.schedulePRWatchRead(job, watched, 1_000)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(watchReads()).toBe(1)
+    // Minimal put the next read at 1 201 s; Default, set at 2 s, puts it at 121 s from the same read.
+    await switchTo('default', 2_000)
+    await vi.advanceTimersByTimeAsync(120_999 - Date.now())
+    expect(watchReads()).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(watchReads()).toBe(2)
+  }
+)
+
+it('a watch that waited for quota while Off slowed it to Minimal reads at the Minimal time', async () => {
+  const { coordinator, switchTo } = await load()
+  coordinator.setPRWatchJobHooks({ isWatched: () => true, readHeadChecks: async () => null })
+  const watched = makeCandidate({ branch: 'watched', linkedPRNumber: 12 })
+  coordinator.schedulePRWatchRead({ prKey: 'github.com/acme/repo#12' }, watched, 1_000)
+  await vi.advanceTimersByTimeAsync(0)
+  // Due at 121 s on Default; quota is still being checked when Off (Minimal for watches) arrives.
+  await vi.advanceTimersByTimeAsync(121_000 - Date.now() - 1)
+  const quota = Promise.withResolvers<number | null>()
+  provider.gate.mockReturnValueOnce(quota.promise)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(provider.gate).toHaveBeenLastCalledWith(watched, true)
+  await switchTo('off', 121_500)
+  quota.resolve(null)
+  await vi.advanceTimersByTimeAsync(1_200_999 - Date.now())
+  expect(readsOf('watched')).toBe(1)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(readsOf('watched')).toBe(2)
+})

@@ -69,8 +69,16 @@ export const createRefreshEventActions = (
           nextSequences[alias.cacheKey] ?? 0,
           prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
         )
+        // Why: a request main ends without data closes at its own sequence, while it is still the
+        // one shown loading; an older request or a repeat never overwrites a newer state.
+        const endsOwnRequest =
+          event.status === 'skipped' &&
+          event.sequence === previousSequence &&
+          nextStates[alias.cacheKey]?.status === 'in-flight'
         if (
-          event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
+          event.outcome
+            ? event.sequence < previousSequence
+            : event.sequence <= previousSequence && !endsOwnRequest
         ) {
           if (event.outcome || event.status !== 'in-flight') {
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)

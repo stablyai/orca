@@ -24,13 +24,18 @@ import {
   prWatchQueueKey,
   schedulePRWatchEntry,
   type PRWatchJob,
-  type PRWatchJobHooks
+  type PRWatchJobHooks,
+  type PRWatchPlan
 } from './pr-refresh-watch-jobs'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
-import { setPRBranchReadCompletion } from '../../client/lookup/pr-branch-read-resources'
+import {
+  deliverablePRBranchOutcome,
+  setPRBranchReadCompletion
+} from '../../client/lookup/pr-branch-read-resources'
+import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
 
 const retry = new PRRefreshRetryState()
 // Dropping an old gate index entry must not forget a visible row's current failure.
@@ -78,9 +83,9 @@ export function schedulePRWatchRead(
   job: PRWatchJob,
   candidate: GitHubPRRefreshCandidate,
   dueAt: number,
-  options: { defer?: boolean } = {}
+  options: { defer?: boolean; plan?: PRWatchPlan } = {}
 ): void {
-  schedulePRWatchEntry(queue, job, candidate, dueAt, options.defer === true)
+  schedulePRWatchEntry(queue, job, candidate, dueAt, options.defer === true, options.plan)
   drainer.schedule()
 }
 
@@ -89,13 +94,24 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
 }
 
 /** A read a paired server made for a client reaches every observer. It takes no queue ownership,
- *  so a desktop read in flight for the same checkout keeps its follow-up. */
+ *  so a desktop read in flight for the same checkout keeps its follow-up. A prepared read is
+ *  observed once, by its actual read while that is the newest in scope, and plans a visible row of
+ *  its request; its caller still gets its own outcome. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
-  read: () => Promise<PRRefreshOutcome>,
+  read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead,
   didRead: () => boolean = () => true,
   release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
+  if (typeof read !== 'function') {
+    const owners = { queue, retry, observe: events.observe.bind(events) }
+    const settle = hostedPRReadSettlement(owners, candidate, read, false)
+    try {
+      return (await read.readResult(settle))!.outcome
+    } finally {
+      read.release()
+    }
+  }
   try {
     const outcome = await read()
     if (didRead()) {
@@ -122,7 +138,12 @@ export async function runHostedPRSnapshot(
   }
   const pending = prepared.pending()
   if (pending) {
-    return drainer.hostedJobs.complete(prepared, candidate, await pending, acceptRevalidationOnly)
+    // A client that takes receipts gets only the request's current result; another gets its own.
+    const result = await pending
+    const outcome = acceptRevalidationOnly
+      ? deliverablePRBranchOutcome(prepared, result)
+      : result.outcome
+    return drainer.hostedJobs.complete(prepared, candidate, outcome, acceptRevalidationOnly)
   }
   return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
 }
@@ -146,6 +167,7 @@ export function retimePRRefreshesForCadence(): void {
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
   drainer.hostedJobs.retime()
+  drainer.watchJobs.retime()
   const timed = getPRAutoRefreshCadence() !== 'off'
   for (const [windowId, reported] of timed ? visibility.reported() : []) {
     const key = refreshKey(reported)
@@ -252,7 +274,7 @@ export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
-): Promise<PRRefreshOutcome> {
+): Promise<PRSnapshotReply> {
   return runImmediatePRRefresh(
     { queue, retry, visibility, events, drainer },
     candidate,

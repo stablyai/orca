@@ -12,11 +12,13 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import {
-  rememberHostPRAutoRefreshCadence,
   useHostLacksPRAutoRefresh,
   useHostPRAutoRefreshCadence
 } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
-import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
+import {
+  readHostPRAutoRefreshCadence,
+  rememberHostPRAutoRefreshWrite
+} from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 import { PRAutoRefreshControl } from './PRAutoRefreshControl'
 
 /** The cadence belongs to the host that runs the GitHub reads, so a remote host is read and
@@ -69,7 +71,7 @@ function usePRAutoRefreshHostCadence(
           { timeoutMs: 15_000 }
         )
         // Remembered for the host it was written to, even if Settings has moved on to another host.
-        rememberHostPRAutoRefreshCadence(environmentId, result.settings.prAutoRefresh)
+        rememberHostPRAutoRefreshWrite(environmentId, result.settings.prAutoRefresh)
       } catch (error) {
         toast.error(
           t(

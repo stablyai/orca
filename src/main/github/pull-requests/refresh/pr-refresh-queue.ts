@@ -1,5 +1,6 @@
 import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../shared/review-refresh-policy'
 import type { HostedPRReadJob } from './hosted-pr-read-jobs'
+import type { PRWatchPlan } from './pr-refresh-watch-jobs'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -36,6 +37,8 @@ export type PRRefreshQueueEntry = {
   windowId?: number
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
+  /** What the watch's due time was planned from, so a cadence change can derive it again. */
+  watchPlan?: PRWatchPlan
   hosted?: HostedPRReadJob
 }
 
@@ -53,6 +56,7 @@ import {
   mergeFollowUpAlias,
   dropSupersededWorktreeAliases
 } from './pr-refresh-queue-aliases'
+import { mergeCapturedRequest } from './pr-refresh-request-merge'
 
 export class PRRefreshQueue {
   private readonly entries = new Map<string, PRRefreshQueueEntry>()
@@ -254,6 +258,16 @@ export class PRRefreshQueue {
           this.removeInvalidAlias(key, alias)
         }
       }
+    }
+  }
+
+  /** Puts back work that waited for quota and may not start yet, merged with what was queued for
+   *  its key meanwhile. A host job keeps its own entry. */
+  requeueCaptured(entry: PRRefreshQueueEntry): void {
+    const current = this.entries.get(entry.key)
+    const kept = current && !entry.hosted ? mergeCapturedRequest(current, entry) : entry
+    if (kept) {
+      this.set(entry.key, kept)
     }
   }
 

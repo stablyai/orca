@@ -6,7 +6,8 @@ import type {
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import { freshTimedPROutcome } from './pr-refresh-candidate-policy'
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
-import { completePRBranchRead } from '../../client/lookup/pr-branch-read-resources'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
@@ -41,6 +42,10 @@ export class HostedPRReadJobs {
     ) => void
   ) {}
 
+  private get owners(): Parameters<typeof hostedPRReadSettlement>[0] {
+    return { queue: this.queue, retry: this.retry, observe: this.observe }
+  }
+
   has(prepared: PreparedPRBranchRead): boolean {
     return this.jobs.has(`hosted::${prepared.key}`)
   }
@@ -55,11 +60,8 @@ export class HostedPRReadJobs {
   ): Promise<PRRefreshOutcome> {
     const current = await prepared.reprepare()
     try {
-      const outcome = await current.read()
-      if (current.didRead()) {
-        this.observe(candidate, outcome)
-      }
-      return outcome
+      const settle = hostedPRReadSettlement(this.owners, candidate, current, false)
+      return (await current.readResult(settle))!.outcome
     } finally {
       current.release()
     }
@@ -72,6 +74,15 @@ export class HostedPRReadJobs {
       outcome?.kind === 'upstream-error'
         ? Math.max(outcome.nextAutoRetryAt ?? 0, outcome.retryDisabledUntil ?? 0)
         : 0
+    )
+  }
+
+  /** When a client should ask again for this request: the next budgeted start, or its gate. */
+  retryAfterMs(prepared: PreparedPRBranchRead): number {
+    return Math.max(
+      RETRY_MS,
+      this.pacing.nextBudgetDelay(),
+      prepared.isCurrent() ? this.gateUntil(prepared) - Date.now() : 0
     )
   }
 
@@ -94,11 +105,7 @@ export class HostedPRReadJobs {
         return fresh
       }
     }
-    const delay = Math.max(
-      RETRY_MS,
-      this.pacing.nextBudgetDelay(),
-      current ? this.gateUntil(prepared) - Date.now() : 0
-    )
+    const delay = this.retryAfterMs(prepared)
     const cached = current ? prepared.cached()?.outcome : null
     if (cached) {
       return cached.kind === 'upstream-error'
@@ -116,31 +123,16 @@ export class HostedPRReadJobs {
     acceptRevalidationOnly: boolean
   ): Promise<PRSnapshotReply> {
     try {
-      const outcome = await (acceptRevalidationOnly
-        ? // The job's failure keeps its own retry; the read also plans a visible row of its request.
-          prepared.readRetained((outcome, producer) =>
-            completePRBranchRead(
-              outcome.kind === 'upstream-error' && prepared.isCurrent() && prepared.accepts(outcome)
-                ? this.retry.settleProducerError(
-                    outcome,
-                    `hosted::${prepared.key}`,
-                    { ...candidate, isSelected: false },
-                    prepared,
-                    this.queue
-                  )
-                : outcome,
-              { ...producer, retained: false },
-              prepared,
-              candidate
-            )
-          )
-        : prepared.read())
-      if (!outcome) {
-        return await this.complete(prepared, candidate, null, acceptRevalidationOnly)
-      }
-      if (prepared.didRead()) {
-        this.observe(candidate, outcome)
-      }
+      const result = await prepared.readResult(
+        hostedPRReadSettlement(this.owners, candidate, prepared, acceptRevalidationOnly),
+        acceptRevalidationOnly
+      )
+      // A client that takes receipts gets only the request's current result; another gets its own.
+      const outcome = !result
+        ? null
+        : acceptRevalidationOnly
+          ? deliverablePRBranchOutcome(prepared, result)
+          : result.outcome
       return await this.complete(prepared, candidate, outcome, acceptRevalidationOnly)
     } finally {
       prepared.release()

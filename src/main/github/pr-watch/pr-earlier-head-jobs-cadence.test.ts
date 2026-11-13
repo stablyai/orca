@@ -13,6 +13,7 @@ vi.mock('./pr-check-event-tables', () => ({
 vi.mock('./pr-head-check-read', () => ({ readPRHeadCheckRollup: mocks.read }))
 
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
+import { prWatchPlanDueAt } from '../pull-requests/refresh/pr-refresh-watch-jobs'
 
 afterEach(() => setPRAutoRefreshCadence('default'))
 
@@ -33,10 +34,11 @@ it.each([
       logger: { warn: vi.fn() },
       now: () => 1_000
     })
-    const next = await jobs.read(
+    const readAt = await jobs.read(
       { prKey: 'github.com/acme/repo#7', headSha: 'old-head' },
       { repoId: 'r', repoPath: '/repo', branch: 'topic', repoKind: 'git', cacheKey: 'k' }
     )
-    expect(next).toBe(1_000 + interval)
+    expect(readAt).toBe(1_000)
+    expect(prWatchPlanDueAt({ kind: 'head', at: readAt! })).toBe(1_000 + interval)
   }
 )

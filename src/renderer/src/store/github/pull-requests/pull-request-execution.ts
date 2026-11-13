@@ -147,7 +147,10 @@ export function startPullRequestLookup(args: {
                   ...requestOptions,
                   repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
                 })
-            return normalizeGitHubPRForBranchOutcome(response)
+            // Why: a reply without data leaves the shown PR as it is; queued work delivers the newer one.
+            return isPRRevalidationOnly(response)
+              ? response
+              : normalizeGitHubPRForBranchOutcome(response)
           })()
       const outcome = await response.catch(() => {
         transportFailed = true

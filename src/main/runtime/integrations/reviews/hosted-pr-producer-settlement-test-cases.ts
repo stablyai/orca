@@ -94,7 +94,7 @@ export function registerPRProducerSettlementTests({
         await vi.advanceTimersByTimeAsync(0)
         expect(mocks.resolve).not.toHaveBeenCalled()
         mocks.gate.mockResolvedValue(null)
-        let producer: Promise<PRRefreshOutcome> | undefined
+        let producer: Promise<PRSnapshotReply> | undefined
         if (origin === 'queued') {
           enqueuePRRefresh(candidate, 'active', 80)
         } else {

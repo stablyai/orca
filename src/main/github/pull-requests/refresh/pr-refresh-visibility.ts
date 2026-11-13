@@ -101,6 +101,18 @@ export class PRRefreshVisibility {
     return this.shown(key) !== undefined
   }
 
+  /** Whether any window still shows a row of the key that `matches` (the same exact request, from
+   *  whichever of its aliases). */
+  hasDemand(key: string, matches: (shown: GitHubPRRefreshCandidate) => boolean): boolean {
+    for (const window of this.visibleByWindow.values()) {
+      const shown = window.candidates.get(key)
+      if (shown && matches(shown)) {
+        return true
+      }
+    }
+    return false
+  }
+
   /** The row a window reports for the key. */
   shown(key: string): GitHubPRRefreshCandidate | undefined {
     for (const window of this.visibleByWindow.values()) {

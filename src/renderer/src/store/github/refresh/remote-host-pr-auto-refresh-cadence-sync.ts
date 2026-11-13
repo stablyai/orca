@@ -100,6 +100,20 @@ function startHostRead(environmentId: string, reader: Reader): HostRead {
 }
 
 /**
+ * The host's answer to this client's own write. It shows at once, but it is the host's value when
+ * the write finished, which can be older than a change another client made since: a read that
+ * change already started is therefore not dropped; it is marked dirty, so its own answer is not
+ * trusted either and one trailing read settles the host's current value.
+ */
+export function rememberHostPRAutoRefreshWrite(environmentId: string, value: unknown): void {
+  const pending = inFlight.get(environmentId)
+  if (pending && !pending.authority.retired) {
+    pending.dirty = true
+  }
+  rememberHostPRAutoRefreshCadence(environmentId, value, { keepPendingRead: Boolean(pending) })
+}
+
+/**
  * Keeps every paired host's PR auto-refresh cadence current: read when the host is first seen live
  * and on each regained contact (a restarted host may have another setting), forgotten when the
  * host is unpaired. A host's `settingsChanged` event re-reads it between contacts.

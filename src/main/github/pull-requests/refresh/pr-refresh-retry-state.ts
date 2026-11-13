@@ -22,8 +22,10 @@ import type { PRRefreshQueue } from './pr-refresh-queue'
 type ErrorBackoff = {
   failures: number
   failedAt: number
-  /** The schedule a producer settlement attached to this failure, and how to re-plan it: the gate
-   *  that holds its key and whether a timed retry is planned; null once a newer read replaced it. */
+  /** The failure's one current scheduled outcome: what a producer settled, with the automatic
+   *  retry the current cadence gives it (none under Off). Retiming, the current check, admission
+   *  and delivery all read this; `retime` re-plans it and returns the key's gate, or null once a
+   *  newer read replaced it. */
   settled?: PRRefreshOutcome
   retime?: () => { gate: number; timed: boolean } | null
   /** Whether the settled failure still owns its request: no newer provider read started, its scope
@@ -106,6 +108,47 @@ export class PRRefreshRetryState {
     return planErrorRetry(candidate, state.failures, state.failedAt, cadence)
   }
 
+  /** The failure that still owns the row's request, and when it lets the row read again: this
+   *  owner's settled failure while its read is the newest in scope (whether or not the exact cache
+   *  kept it), else the exact record's accepted error. Its time is its plan under the current
+   *  cadence (Default's when the cadence plans none) and any rate limit the host reported. Nothing
+   *  is recorded: the failure was settled once, by its read. */
+  currentFailure(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    exact?: PRRefreshOutcome
+  ): { gateAt: number; outcome?: PRRefreshOutcome } | null {
+    const state = this.errorBackoff.get(key)
+    // Only a failure a producer settled and still owns counts; a bare backoff entry does not.
+    if (
+      state?.current?.() === true &&
+      !state.revoked &&
+      state.candidate !== undefined &&
+      sameRequest(state.candidate, candidate)
+    ) {
+      const cadence = getPRAutoRefreshCadence()
+      const planned = planErrorRetry(
+        candidate,
+        state.failures,
+        state.failedAt,
+        cadence === 'off' ? 'default' : cadence
+      )
+      const limited =
+        state.settled?.kind === 'upstream-error' ? (state.settled.retryDisabledUntil ?? 0) : 0
+      return {
+        gateAt: Math.max(planned, limited, this.manualGateUntil(key)),
+        outcome: state.settled
+      }
+    }
+    if (exact?.kind === 'upstream-error') {
+      return {
+        gateAt: Math.max(exact.nextAutoRetryAt ?? 0, exact.retryDisabledUntil ?? 0),
+        outcome: exact
+      }
+    }
+    return null
+  }
+
   /** How long a failed key stays closed to background reads. Off plans no retry, yet holds the key
    *  as long as Default would, so a repeated report never re-reads a failure faster than Default. */
   errorGateAt(key: string, candidate: GitHubPRRefreshCandidate, retryAt: number): number {
@@ -171,8 +214,15 @@ export class PRRefreshRetryState {
     if (outcome.kind !== 'upstream-error') {
       return undefined
     }
-    if (this.errorBackoff.get(key)?.settled === outcome) {
-      return outcome.nextAutoRetryAt ?? Number.POSITIVE_INFINITY
+    // Already settled (its schedule may have moved since): the current one, never counted again.
+    const settled = this.errorBackoff.get(key)?.settled
+    if (
+      settled === outcome ||
+      (settled?.kind === 'upstream-error' &&
+        settled.fetchedAt === outcome.fetchedAt &&
+        settled.errorType === outcome.errorType)
+    ) {
+      return settled.nextAutoRetryAt ?? Number.POSITIVE_INFINITY
     }
     const scheduled = getPRAutoRefreshCadence() === 'off' ? undefined : outcome.nextAutoRetryAt
     return scheduled ?? (visible ? this.nextVisibleErrorRetryAt(key, candidate) : undefined)
@@ -213,9 +263,8 @@ export class PRRefreshRetryState {
     state.settled = result
     state.hold = hold
     state.candidate = candidate
-    let scheduled = result
     state.current = () =>
-      !(hold && !hold.current()) && !(producer.retained && !prepared.accepts(scheduled))
+      !(hold && !hold.current()) && !(producer.retained && !prepared.accepts(state.settled!))
     hold?.onSuperseded(() => {
       if (this.errorBackoff.get(key) === state) {
         revoke(state)
@@ -224,7 +273,9 @@ export class PRRefreshRetryState {
         }
       }
     })
-    // Replaces only the error this settlement scheduled; a newer read's result stays.
+    // Re-plans from the original failure (its time, count and reported limit). A kept error is
+    // replaced only where the exact record still holds this one; when it does not, the failure no
+    // longer owns its request. A claimed one needs no room in the cache.
     state.retime = () => {
       if (!state.current!()) {
         return null
@@ -235,13 +286,14 @@ export class PRRefreshRetryState {
         state.failedAt,
         getPRAutoRefreshCadence()
       )
+      const next = this.withErrorSchedule(outcome, planned)
       if (producer.retained) {
-        const next = this.withErrorSchedule(outcome, planned)
-        prepared.scheduleError(scheduled, next)
-        if (prepared.accepts(next)) {
-          scheduled = next
+        prepared.scheduleError(state.settled!, next)
+        if (!prepared.accepts(next)) {
+          return null
         }
       }
+      state.settled = next
       return {
         gate: Math.max(this.errorGateAt(key, candidate, planned), rateLimitedUntil),
         timed: Number.isFinite(planned)

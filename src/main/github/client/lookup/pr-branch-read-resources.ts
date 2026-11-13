@@ -3,7 +3,7 @@ import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { PreparedPRBranchRead } from './pr-for-branch-outcome'
+import type { readTimedPROutcome } from './pr-last-outcome'
 
 /**
  * One exact PR read (scope, branch, links, options) and what reads it: its coalesced timed and
@@ -12,10 +12,46 @@ import type { PreparedPRBranchRead } from './pr-for-branch-outcome'
  * It lives until none of those remain.
  */
 export type PRBranchReadResource = {
-  probes: CoalescedProbes<PRRefreshOutcome>
+  probes: CoalescedProbes<PRBranchReadResult>
   running: number
   latestStart: number
   failures: Set<() => void>
+}
+
+export type PRReadSettlement = (
+  outcome: PRRefreshOutcome,
+  producer: PRBranchReadProducer
+) => PRRefreshOutcome
+
+export type PreparedPRBranchRead = {
+  key: string
+  reprepare: () => Promise<PreparedPRBranchRead>
+  cached: () => ReturnType<typeof readTimedPROutcome>
+  isCurrent: () => boolean
+  accepts: (outcome: PRRefreshOutcome) => boolean
+  didRead: () => boolean
+  release: () => void
+  hold: () => () => void
+  /** The read's shared result; null only when it had to keep its result and found no room. */
+  readResult: (
+    settle?: PRReadSettlement,
+    requireRetention?: boolean
+  ) => Promise<PRBranchReadResult | null>
+  canRetain: () => boolean
+  scheduleError: (expected: PRRefreshOutcome, outcome: PRRefreshOutcome) => void
+  pending: () => Promise<PRBranchReadResult> | null
+  withExecution: <T>(operation: () => Promise<T>) => Promise<T>
+  /** The read's own outcome, for callers that reply with it as it is. */
+  read: (settle?: PRReadSettlement) => Promise<PRRefreshOutcome>
+}
+
+/** What a provider read finished with, shared by everything that joined it: its outcome (settled
+ *  once, by the read itself), its start and whether it is still the newest read of its request in
+ *  scope. Each consumer decides what it may publish from this, not from whether it settled. */
+export type PRBranchReadResult = {
+  outcome: PRRefreshOutcome
+  sequence: number
+  current: () => boolean
 }
 
 /** A failed provider read's claim on its resource while a retry owes it: current until a newer
@@ -88,7 +124,7 @@ export function prBranchReadResource(key: string): PRBranchReadResource {
 export function pendingPRBranchRead(
   key: string,
   intent: 'fresh' | 'timed'
-): Promise<PRRefreshOutcome> | null {
+): Promise<PRBranchReadResult> | null {
   const pending = resources.get(key)?.probes.get(intent)
   return pending && Date.now() - pending.startedAt < 2 * 60_000 ? pending.promise : null
 }
@@ -122,6 +158,30 @@ export function startPRBranchRead(
   }
 }
 
+/** No provider read of the request started after this one, even once its resource was retired and
+ *  a new one created for later reads. */
+function newestPRBranchRead(
+  key: string,
+  resource: PRBranchReadResource,
+  sequence: number
+): boolean {
+  return Math.max(resource.latestStart, resources.get(key)?.latestStart ?? 0) <= sequence
+}
+
+/** What a consumer of a finished read may publish as its request's current state: the read's own
+ *  outcome while it is still the newest read in scope; otherwise a newer read's accepted exact
+ *  result once one finished, or nothing while that read runs or kept no result. */
+export function deliverablePRBranchOutcome(
+  prepared: Pick<PreparedPRBranchRead, 'isCurrent' | 'cached'>,
+  result: PRBranchReadResult
+): PRRefreshOutcome | null {
+  if (result.current()) {
+    return result.outcome
+  }
+  const cached = prepared.isCurrent() ? prepared.cached() : null
+  return cached && cached.sequence > result.sequence ? cached.outcome : null
+}
+
 /** The settlement context of an actual provider read: whether the exact cache kept its outcome, a
  *  full read's failure claim, and whether it is still the newest read of its request in scope. */
 export function prBranchReadProducer(
@@ -134,7 +194,7 @@ export function prBranchReadProducer(
   return {
     retained,
     hold: full ? () => holdPRBranchReadFailure(key, resource, sequence, inScope) : undefined,
-    current: () => resource.latestStart === sequence && inScope()
+    current: () => newestPRBranchRead(key, resource, sequence) && inScope()
   }
 }
 
@@ -148,7 +208,8 @@ function holdPRBranchReadFailure(
   const notice = (): void => retire()
   resource.failures.add(notice)
   return {
-    current: () => resource.failures.has(notice) && resource.latestStart === sequence && inScope(),
+    current: () =>
+      resource.failures.has(notice) && newestPRBranchRead(key, resource, sequence) && inScope(),
     release: () => {
       if (resource.failures.delete(notice)) {
         retirePRBranchReadResource(key, resource)
