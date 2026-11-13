@@ -6,24 +6,20 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatAccountUsageCard } from './NativeChatAccountUsageCard'
 import {
-  readNativeChatAccountUsageModalRequest,
-  type NativeChatAccountUsageModalRequest
-} from './native-chat-account-usage-modal'
+  readNativeChatSessionModalRequest,
+  type NativeChatSessionModalRequest
+} from '../session/native-chat-session-modal-request'
 import { useNativeChatAccountUsage } from './use-native-chat-account-usage'
 
 /** `/usage`'s modal: each opening mounts a fresh read of the chat's account. */
 export default function NativeChatAccountUsageDialog(): React.JSX.Element | null {
   const modalData = useAppStore((s) => s.modalData)
   // The opening's chat is fixed; a fresh object per render would restart its read.
-  const [request] = useState(() => readNativeChatAccountUsageModalRequest(modalData))
+  const [request] = useState(() => readNativeChatSessionModalRequest(modalData))
   return request ? <UsageDialog request={request} /> : null
 }
 
-function UsageDialog({
-  request
-}: {
-  request: NativeChatAccountUsageModalRequest
-}): React.JSX.Element {
+function UsageDialog({ request }: { request: NativeChatSessionModalRequest }): React.JSX.Element {
   const t = useTranslate()
   const closeModal = useAppStore((s) => s.closeModal)
   const usage = useNativeChatAccountUsage(request.sessionId, request.target)

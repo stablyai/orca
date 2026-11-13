@@ -1,3 +1,7 @@
+import type {
+  AgentSessionMcpOperation,
+  AgentSessionMcpResult
+} from '../../../../shared/agent-session/agent-session-mcp'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -175,6 +179,11 @@ export type StructuredAgentSessionSetOptionInput = {
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
+  /** The `/mcp` panel's read or action on the chat's MCP servers; never enters the mutation queue. */
+  manageMcp?(
+    record: AgentSessionRecord,
+    operation: AgentSessionMcpOperation
+  ): Promise<AgentSessionMcpResult>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */

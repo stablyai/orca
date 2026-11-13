@@ -660,6 +660,7 @@ import { CurrentRequestsParams } from './structured-agent-session/agent-session-
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
+import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
@@ -878,6 +879,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
   'agentSession.item': ItemParams,
+  'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
   'agentSession.queuedMessageDelete': QueuedMessageActionParams,

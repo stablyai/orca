@@ -21375,7 +21375,8 @@
         "export": "Export the session to HTML",
         "settings": "Open settings in Terminal",
         "extensions": "Open the extension dashboard in Terminal",
-        "hotkeys": "Show keyboard shortcuts in Terminal"
+        "hotkeys": "Show keyboard shortcuts in Terminal",
+        "mcpManage": "Manage MCP servers"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI's latest frontier model",
@@ -21489,6 +21490,51 @@
           "nothingToReset": "Nothing to reset right now.",
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
+        }
+      },
+      "mcp": {
+        "title": "MCP servers",
+        "loading": "Loading MCP servers…",
+        "notRunning": "MCP servers connect when you send your next message.",
+        "unsupported": "Update Orca on this chat’s host to manage MCP servers here.",
+        "readFailed": "MCP servers couldn’t be loaded. Try again.",
+        "retry": "Retry",
+        "empty": "No MCP servers are set up for this chat.",
+        "cancel": "Cancel",
+        "reconnect": "Reconnect",
+        "toggle": "Use {{name}}",
+        "actionFailed": "Couldn’t do that. Try again.",
+        "source": {
+          "project": "Project",
+          "local": "Local",
+          "user": "User",
+          "plugin": "Plugin",
+          "session": "Session"
+        },
+        "status": {
+          "connected": "Connected",
+          "connectedTools_one": "Connected · {{count}} tool",
+          "connectedTools_other": "Connected · {{count}} tools",
+          "pending": "Connecting…",
+          "needsAuth": "Needs sign-in",
+          "failed": "Failed",
+          "failedReason": "Failed: {{error}}",
+          "disabled": "Disabled",
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+        },
+        "signIn": {
+          "action": "Sign in",
+          "waiting": "Waiting for sign-in…",
+          "waitingBrowser": "Waiting for sign-in in your browser…",
+          "local": "Opened the sign-in page in your browser. This updates when you finish.",
+          "remote": "After you sign in, the browser lands on a page that won’t load. Copy that page’s address and paste it here.",
+          "external": "Finish signing in on the page that opened, then press Done.",
+          "done": "Done",
+          "finish": "Finish",
+          "openAgain": "Open again",
+          "addressLabel": "Sign-in page address",
+          "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
+          "pastePlaceholder": "http://localhost:…"
         }
       },
       "cardKindHidden": {
