@@ -15,7 +15,13 @@ import {
   CheckCircle2,
   ScrollText,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  WifiOff,
+  Shield,
+  Monitor,
+  Clock,
+  Globe,
+  Bell
 } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -30,6 +36,16 @@ export type CheckResult = {
   label: string
   status: 'pass' | 'fail' | 'warn'
   detail: string
+}
+
+const issueIcons = {
+  notifications: Bell,
+  wifi: WifiOff,
+  firewall: Shield,
+  desktop: Monitor,
+  timeout: Clock,
+  tailscale: Globe,
+  vpn: Shield
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
@@ -151,32 +167,35 @@ export function TroubleshootView({
         />
 
         <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-          {troubleshootCommonIssues(t, hostEndpoints).map((section) => (
-            <View key={section.id}>
-              <ListRow
-                title={section.title}
-                leading={<section.icon size={16} color={colors.textSecondary} />}
-                accessory={
-                  expandedId === section.id ? (
-                    <ChevronUp size={16} color={colors.textMuted} />
-                  ) : (
-                    <ChevronDown size={16} color={colors.textMuted} />
-                  )
-                }
-                onPress={() => toggleSection(section.id)}
-              />
-              {expandedId === section.id && (
-                <View style={styles.accordionBody}>
-                  {section.steps.map((step, j) => (
-                    <View key={j} style={styles.stepRow}>
-                      <Text style={styles.bullet}>•</Text>
-                      <Text style={styles.stepText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          ))}
+          {troubleshootCommonIssues(t, hostEndpoints).map((section) => {
+            const Icon = issueIcons[section.kind]
+            return (
+              <View key={section.id}>
+                <ListRow
+                  title={section.title}
+                  leading={<Icon size={16} color={colors.textSecondary} />}
+                  accessory={
+                    expandedId === section.id ? (
+                      <ChevronUp size={16} color={colors.textMuted} />
+                    ) : (
+                      <ChevronDown size={16} color={colors.textMuted} />
+                    )
+                  }
+                  onPress={() => toggleSection(section.id)}
+                />
+                {expandedId === section.id && (
+                  <View style={styles.accordionBody}>
+                    {section.steps.map((step, j) => (
+                      <View key={j} style={styles.stepRow}>
+                        <Text style={styles.bullet}>•</Text>
+                        <Text style={styles.stepText}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )
+          })}
         </ListGroup>
       </ScrollView>
     </View>

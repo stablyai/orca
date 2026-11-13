@@ -1,0 +1,15 @@
+Orca Mobile for HarmonyOS is an experimental port of stablyai/orca.
+Upstream copyright (c) 2026 Lovecast Inc.; MIT license retained in LICENSE.
+
+Vendored dependencies:
+- TweetNaCl 1.0.3: tools/vendor/tweetnacl/LICENSE
+- fflate 0.8.3: tools/vendor/fflate/LICENSE and UMD-LICENSE
+
+TweetNaCl's runtime adapter replaces the Node crypto fallback with HarmonyOS
+secure randomness.
+Full notices are also packaged under rawfile/licenses/THIRD_PARTY_NOTICES.txt.
+
+Native UI assets: Geist 1.9.2 (SIL Open Font License) and lucide-static 0.577.0
+(ISC). Exact source/integrity/hashes: rawfile/licenses/UI_ASSETS.json.
+Mobile translation labels are derived from the upstream mobile locale catalogs,
+covered by the retained MIT license; provenance is in rawfile/i18n/provenance.json.

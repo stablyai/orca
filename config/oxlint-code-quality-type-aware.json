@@ -26,11 +26,21 @@
   },
   "overrides": [
     {
+      "files": ["**/harmonyos/tools/vendor/**/*.js", "**/harmonyos/entry/src/main/ets/vendor/*.js"],
+      "rules": { "typescript/restrict-plus-operands": "off" }
+    },
+    {
       "files": ["**/*.test.*", "**/*.spec.*"],
       "rules": {
         "typescript/await-thenable": "off"
       }
     }
   ],
-  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+  "ignorePatterns": [
+    "**/harmonyos/tools/vendor/**",
+    "**/harmonyos/entry/src/main/ets/vendor/**",
+    "**/node_modules",
+    "**/dist",
+    "**/out"
+  ]
 }

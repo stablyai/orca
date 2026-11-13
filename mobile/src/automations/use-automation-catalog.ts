@@ -7,7 +7,7 @@ import {
   useState,
   type SetStateAction
 } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
@@ -19,13 +19,13 @@ import { isHostNotConnectedError } from '../query/host-query-errors'
 import { readViewBase } from '../query/host-read-client'
 import { automationListRead } from './automation-operations'
 import { automationOutcomeUnknownMessage, automationErrorMessage } from './automation-error'
-import type { MobileAutomationRow } from './automation-reply-schema'
+import { automationListSchema, type MobileAutomationRow } from './automation-reply-schema'
 
 type AutomationCatalog = {
   rows: MobileAutomationRow[]
   capabilities: readonly string[]
   // The connection the rows were read on.
-  epoch: string
+  epoch: string | null
 }
 
 const NO_INPUT = {}
@@ -61,6 +61,25 @@ const serverAutomationCatalogQuery = defineHostQuery<typeof NO_INPUT, Automation
   ...automationCatalogQuery,
   signal: undefined
 })
+
+export function restoreAutomationCatalog(
+  queryClient: QueryClient,
+  hostId: string,
+  snapshot: { result: unknown; readAt: number }
+): void {
+  const queryKey = hostQueryKey(hostId, automationCatalogQuery.family, PAIRED_TARGET, NO_INPUT)
+  if (queryClient.getQueryData(queryKey) !== undefined) {
+    return
+  }
+  const parsed = automationListSchema.safeParse(snapshot.result)
+  if (parsed.success) {
+    queryClient.setQueryData<AutomationCatalog>(
+      queryKey,
+      { rows: parsed.data, capabilities: [], epoch: null },
+      { updatedAt: snapshot.readAt }
+    )
+  }
+}
 
 export function useAutomationCatalog(
   hostId: string,

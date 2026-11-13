@@ -40,6 +40,8 @@
 /mobile/src/** text eol=lf
 /mobile/app/** text eol=lf
 /mobile/web-entry/** text eol=lf
+# HarmonyOS verifies vendor and export bytes on Windows as well as Unix.
+/mobile/harmonyos/** text=auto eol=lf
 # Preserve binary assets under the text-pinned mobile directories.
 /mobile/src/**/*.png -text
 /mobile/src/**/*.jpg -text

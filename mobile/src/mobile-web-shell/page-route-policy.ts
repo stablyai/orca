@@ -2,7 +2,10 @@ import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile
 import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/bridge-terminal-key'
 import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
 import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
-import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
+import {
+  BRIDGE_AUTOMATION_CATALOG_VERB,
+  BRIDGE_NATIVE_VERB_NAMES
+} from './bridge/bridge-native-verbs'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 
 export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes']>[number]
@@ -19,9 +22,8 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   // The iPhone Duo key rail: the shell draws terminal keys in a side inset strip and forwards each
   // press as a frame, which only a page declaring this knows.
   BRIDGE_TERMINAL_KEY_RAIL_GRANT,
-  // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
-  // advertised without a row and a row cannot exist without being advertised.
-  ...BRIDGE_NATIVE_VERB_NAMES
+  // HarmonyOS owns the native Home catalog. iOS and Android share a query client with Home.
+  ...BRIDGE_NATIVE_VERB_NAMES.filter((verb) => verb !== BRIDGE_AUTOMATION_CATALOG_VERB)
 ] as const
 
 export type MobileWebShellGrant = (typeof MOBILE_WEB_SHELL_GRANTS)[number]

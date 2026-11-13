@@ -29,7 +29,7 @@ export function MobileTerminalMoreKeysSheet({
   const {
     activeHandle,
     activeSessionTab,
-    customKeys,
+    visibleCustomKeys,
     setShowCustomKeyModal,
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
@@ -55,7 +55,7 @@ export function MobileTerminalMoreKeysSheet({
       phoneDisplay={isTerminalPhoneDisplayMode(activeHandle, terminalModes)}
       rowKeyIds={runsAgent ? AGENT_ROW_KEY_IDS : SHELL_ROW_KEY_IDS}
       builtInKeys={visibleBuiltInAccessoryKeys}
-      customKeys={customKeys}
+      customKeys={visibleCustomKeys}
       onPaste={() => void handlePaste()}
       onAttachImage={() => void attachImage('library')}
       onAttachFile={() => void attachImage('files')}

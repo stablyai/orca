@@ -26,6 +26,7 @@ import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/media/mobile-fil
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
 export const BRIDGE_NATIVE_METHOD_PREFIX = 'native.'
+export const BRIDGE_AUTOMATION_CATALOG_VERB = 'native.automation.catalog.read'
 
 export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.write',
@@ -42,6 +43,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.image.act',
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
+  BRIDGE_AUTOMATION_CATALOG_VERB,
   'native.a11y.announce'
 ] as const
 
@@ -75,6 +77,10 @@ export const storageReadParamsSchema = z.strictObject({
   key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS)
 })
 export const storageReadResultSchema = z.strictObject({ value: z.string().nullable() })
+
+export const automationCatalogReadResultSchema = z
+  .strictObject({ result: z.looseObject({}), readAt: z.number().int().positive() })
+  .nullable()
 
 // The shell downloads the file itself; page bytes would need staging verbs and exceed the frame cap.
 // Bridge requests cannot be cancelled, so a preview the user left sends cancel; one verb keeps routes within the grant ceiling.
@@ -156,6 +162,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   [BRIDGE_STORE_VERB]: {
     params: storeParamsSchema,
     result: storeResultSchema
+  },
+  [BRIDGE_AUTOMATION_CATALOG_VERB]: {
+    params: z.strictObject({}),
+    result: automationCatalogReadResultSchema
   },
   'native.a11y.announce': {
     params: a11yAnnounceParamsSchema,

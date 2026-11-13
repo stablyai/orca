@@ -1,0 +1,25 @@
+name: HarmonyOS source checks
+on:
+  pull_request:
+    paths:
+      - 'mobile/harmonyos/**'
+      - '.github/workflows/harmonyos.yml'
+      - '.gitattributes'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Verify public-entry contracts and vendor sources
+        working-directory: mobile/harmonyos
+        run: node tools/check.mjs

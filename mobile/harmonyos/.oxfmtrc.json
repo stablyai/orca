@@ -1,0 +1,11 @@
+{
+  "singleQuote": true,
+  "semi": false,
+  "printWidth": 100,
+  "trailingComma": "none",
+  "ignorePatterns": [
+    "tools/vendor/**",
+    "entry/src/main/ets/vendor/**",
+    "entry/src/main/resources/rawfile/spike/**"
+  ]
+}

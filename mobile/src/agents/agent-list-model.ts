@@ -213,13 +213,21 @@ export function buildAgentList(
   const drafts =
     view.groupBy === 'workspace'
       ? groupRows(rows, (row) => ({
-          key: `${row.hostId}:${row.entry.worktreeId}`,
+          key: JSON.stringify([
+            row.hostId,
+            row.entry.executionHostId ?? 'local',
+            row.entry.workspaceIdentityKey ?? row.entry.worktreeId
+          ]),
           title: row.entry.workspaceName,
           hostId: row.hostId
         }))
       : view.groupBy === 'project'
         ? groupRows(rows, (row) => ({
-            key: `${row.hostId}:${row.entry.repo}`,
+            key: JSON.stringify([
+              row.hostId,
+              row.entry.executionHostId ?? 'local',
+              row.entry.repoId ?? row.entry.repo
+            ]),
             title: row.entry.repo,
             hostId: row.hostId
           }))

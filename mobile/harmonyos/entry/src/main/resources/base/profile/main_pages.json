@@ -1,0 +1,20 @@
+{
+  "src": [
+    "pages/Home",
+    "pages/PairScan",
+    "pages/HostDetail",
+    "pages/ShellScreen",
+    "pages/Settings",
+    "pages/AppearanceSettings",
+    "pages/TerminalSettings",
+    "pages/VoiceSettings",
+    "pages/NotificationSettings",
+    "pages/ConnectionLog",
+    "pages/About",
+    "pages/Troubleshoot",
+    "pages/VoicePanel",
+    "pages/BrowserSettings",
+    "pages/NativeChatSettings",
+    "pages/MobileOnboarding"
+  ]
+}

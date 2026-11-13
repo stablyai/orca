@@ -1,6 +1,6 @@
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 
-const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://orca.dev/v1/feedback'
+export const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://orca.dev/v1/feedback'
 const SUBMISSION_TIMEOUT_MS = 10_000
 const MAX_SUBMISSION_BYTES = 64 * 1024
 
@@ -12,28 +12,33 @@ export type ConnectionDiagnosticsSubmission = {
 
 export type ConnectionDiagnosticsSubmissionResult = { ok: true } | { ok: false; error: string }
 
+export function serializeConnectionDiagnosticsSubmission(
+  submission: ConnectionDiagnosticsSubmission
+): string {
+  return JSON.stringify({
+    feedback: boundConnectionDiagnosticsReport(submission.report),
+    submissionType: 'connection_diagnostics',
+    githubLogin: null,
+    githubEmail: null,
+    appVersion: submission.appVersion,
+    platform: `mobile-${submission.platform}`,
+    osRelease: 'unknown',
+    arch: 'unknown'
+  })
+}
+
 /** Sends only the already-redacted, bounded report after an explicit user tap. */
 export async function submitConnectionDiagnostics(
   submission: ConnectionDiagnosticsSubmission,
   fetchImpl: (url: string, init: RequestInit) => Promise<Response> = fetch
 ): Promise<ConnectionDiagnosticsSubmissionResult> {
-  const report = boundConnectionDiagnosticsReport(submission.report)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), SUBMISSION_TIMEOUT_MS)
   try {
     const response = await fetchImpl(CONNECTION_DIAGNOSTICS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        feedback: report,
-        submissionType: 'connection_diagnostics',
-        githubLogin: null,
-        githubEmail: null,
-        appVersion: submission.appVersion,
-        platform: `mobile-${submission.platform}`,
-        osRelease: 'unknown',
-        arch: 'unknown'
-      }),
+      body: serializeConnectionDiagnosticsSubmission(submission),
       signal: controller.signal
     })
     return response.ok ? { ok: true } : { ok: false, error: `status ${response.status}` }

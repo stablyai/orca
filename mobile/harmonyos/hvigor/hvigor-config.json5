@@ -1,0 +1,12 @@
+{
+  modelVersion: '26.0.0',
+  dependencies: {},
+  execution: {},
+  logging: {
+    level: 'info'
+  },
+  debugging: {
+    stackTrace: false
+  },
+  nodeOptions: {}
+}

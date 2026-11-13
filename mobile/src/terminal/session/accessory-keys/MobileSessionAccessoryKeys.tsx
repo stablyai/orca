@@ -43,7 +43,7 @@ export function MobileSessionAccessoryKeys({
   const t = useMobileTranslation()
   const {
     activeHandle,
-    customKeys,
+    visibleCustomKeys,
     setShowCustomKeyModal,
     setDeleteKeyTarget,
     visibleBuiltInIds,
@@ -284,7 +284,7 @@ export function MobileSessionAccessoryKeys({
           </Pressable>,
           index + 1 === latchIndex ? latchKeys : null
         ])}
-        {customKeys.map((key) => (
+        {visibleCustomKeys.map((key) => (
           <Pressable
             key={key.id}
             style={({ pressed }) => [...keyStyle({ pressed }), styles.customKey]}

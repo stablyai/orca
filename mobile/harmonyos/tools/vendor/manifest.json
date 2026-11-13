@@ -1,0 +1,121 @@
+{
+  "packages": [
+    {
+      "name": "tweetnacl",
+      "version": "1.0.3",
+      "tarball": "https://registry.npmjs.org/tweetnacl/-/tweetnacl-1.0.3.tgz",
+      "integrity": "sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw=="
+    },
+    {
+      "name": "fflate",
+      "version": "0.8.3",
+      "tarball": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz",
+      "integrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA=="
+    }
+  ],
+  "sha256": {
+    "tools/vendor/fflate/LICENSE": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+    "tools/vendor/fflate/UMD-LICENSE": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+    "tools/vendor/fflate/fflate-umd.js": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
+    "tools/vendor/tweetnacl/LICENSE": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
+    "tools/vendor/tweetnacl/nacl-fast.min.js": "3ec535c004aeeb225785d8e93fb33bf99f52e399bd7dfc01969b5629baea5131",
+    "entry/src/main/ets/vendor/agent-list.js": "2e50780c5d0cca4898d6e53d08e3d74249a5b7510f787974843c9ab02acd65e0",
+    "entry/src/main/ets/vendor/connection-diagnostics.js": "5f2724df126c5bff3fb3a1f7158b718a20779c4993bf607b4d2face2adb99a91",
+    "entry/src/main/ets/vendor/terminal-rail.js": "9365e0dda9f5299a912b5ef27ee799d54869883e69b6c400b4af16acd78ab4a4",
+    "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162",
+    "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb",
+    "entry/src/main/ets/vendor/dictation-shortcut-mode.js": "17daa29155497ff7120bda3436fe3f2b3d27fd720ba6fd168cc8205b72b04d48",
+    "entry/src/main/ets/vendor/terminal-shortcuts.js": "77f3c6d02ea3f583fb233669082860b270323e0291d8e2f49c8e9504724942d4"
+  },
+  "orcaAgentList": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/agents/agent-list-model.ts",
+      "mobile/src/agents/agent-list-row-text.ts",
+      "mobile/src/agents/agent-list-rows.ts",
+      "mobile/src/worktree/agent-row-display.ts",
+      "mobile/src/worktree/agent-row-lineage.ts",
+      "src/shared/agent-status/contracts/agent-status-freshness.ts",
+      "src/shared/agent-status/lifecycle/agent-main-agent-verdict.ts",
+      "src/shared/agent-status/lifecycle/agent-turn-outcome.ts",
+      "src/shared/agent-status/presentation/agent-list-status.ts",
+      "src/shared/agent-status/presentation/agent-row-decay-state.ts",
+      "src/shared/agent-status/presentation/agent-row-primary-text.ts",
+      "src/shared/agent-status/presentation/agent-tool-preview.ts",
+      "src/shared/agent-status/presentation/agent-type-label.ts",
+      "src/shared/cross-platform-path.ts",
+      "src/shared/native-chat/native-chat-visual-directive.ts",
+      "src/shared/orca-dispatch-status-prompt.ts",
+      "src/shared/wsl-paths.ts"
+    ]
+  },
+  "orcaConnectionDiagnostics": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/diagnostics/connection-diagnostics-analysis.ts",
+      "mobile/src/diagnostics/connection-diagnostics-report.ts",
+      "mobile/src/diagnostics/connection-diagnostics-submission.ts",
+      "mobile/src/diagnostics/connection-log-redaction.ts",
+      "mobile/src/diagnostics/host-reachability.ts",
+      "mobile/src/diagnostics/troubleshoot-common-issues.ts",
+      "mobile/src/host-descriptors/host-app-version.ts",
+      "mobile/src/transport/connection/connection-health.ts",
+      "mobile/src/transport/hosts/host-endpoint-copy.ts",
+      "mobile/src/transport/hosts/host-endpoint-edit.ts",
+      "mobile/src/transport/hosts/host-endpoint.ts",
+      "mobile/src/transport/relay/relay-host-reachability-latch.ts",
+      "mobile/src/transport/relay/relay-host-reachability.ts",
+      "src/shared/relay-host-close-reason.ts",
+      "src/shared/remote-runtime/relay/mobile-relay-close-codes.ts",
+      "src/shared/remote-runtime/remote-runtime-tailscale-hint.ts",
+      "src/shared/utf8-byte-limits.ts"
+    ]
+  },
+  "orcaTerminalRail": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/layout/side-rail-strip.ts",
+      "mobile/src/terminal/key-input/terminal-accessory-repeat.ts"
+    ]
+  },
+  "orcaBundleCompat": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/transport/connection/protocol-compat.ts",
+      "mobile/src/transport/connection/protocol-version.ts",
+      "mobile/src/transport/web-bundle/mobile-web-bundle-compat.ts",
+      "src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts"
+    ]
+  },
+  "orcaHostMachine": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/transport/connection/mobile-runtime-host-platform.ts",
+      "src/shared/host-machine-line.ts",
+      "src/shared/host-platform-label.ts",
+      "src/shared/zod-salvage.ts"
+    ]
+  },
+  "orcaDictationShortcutMode": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "src/shared/dictation-shortcut-mode.ts"
+    ]
+  },
+  "orcaTerminalShortcuts": {
+    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/terminal/key-input/terminal-accessory-keys.ts",
+      "mobile/src/terminal/key-input/terminal-accessory-layout.ts",
+      "mobile/src/terminal/key-input/terminal-key-definitions.ts",
+      "src/shared/terminal/protocol/input-modes/terminal-modified-enter-encoding.ts"
+    ]
+  }
+}

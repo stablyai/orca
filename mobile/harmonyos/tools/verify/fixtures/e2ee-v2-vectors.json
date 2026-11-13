@@ -1,0 +1,115 @@
+{
+  "source": "stablyai/orca",
+  "base": "10c01509de6769f5a8baef080c993d77ac493127",
+  "sources": [
+    "paired-e2ee-v2-client-session.ts",
+    "mobile-e2ee-v2-contract.ts",
+    "mobile-e2ee-v2-framing.ts",
+    "node/mobile-e2ee-v2-node-key-schedule.ts"
+  ],
+  "clientSecretHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "clientPublicKeyB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9/AsrhtHHw=",
+  "clientNonceB64": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4Q=",
+  "vectors": [
+    {
+      "transport": "direct",
+      "hello": {
+        "type": "e2ee_hello",
+        "v": 2,
+        "clientPublicKeyB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9/AsrhtHHw=",
+        "clientNonceB64": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4Q=",
+        "capabilities": {
+          "framing": [2],
+          "payloadKinds": ["text", "binary"]
+        },
+        "context": {
+          "protocol": "orca-mobile-e2ee",
+          "initiator": "mobile",
+          "responder": "desktop",
+          "transport": "direct"
+        }
+      },
+      "ready": {
+        "type": "e2ee_ready",
+        "v": 2,
+        "desktopPublicKeyB64": "ZLEBsdC+WocEvQePmJUAH8A+jp+VIvGI3RKNmEbUhGY=",
+        "clientNonceB64": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4Q=",
+        "desktopNonceB64": "l5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tbY=",
+        "selection": {
+          "framing": 2,
+          "payloadKinds": ["text", "binary"]
+        },
+        "context": {
+          "protocol": "orca-mobile-e2ee",
+          "initiator": "mobile",
+          "responder": "desktop",
+          "transport": "direct"
+        }
+      },
+      "transcriptHashB64": "Zi2dDbTG4lktFAsNeh4m9zM27d2gwBTHRacsHzRMVhM=",
+      "auth": {
+        "type": "e2ee_auth",
+        "v": 2,
+        "transcriptHashB64": "Zi2dDbTG4lktFAsNeh4m9zM27d2gwBTHRacsHzRMVhM=",
+        "deviceToken": "vector-device-token"
+      },
+      "sealedAuthB64": "8efV5d7QsNWBTpHbAgAAAAAAAAAAAAAA9rfe8aEHDGXkeZsy7PNUE5P2wiBMBY3Eab74K6+Gn9IVm2wSKV17q++ZpN3J+aSN1Vl4MUZgLn0sKl/+cKlnXaWs8ckNSMQSWQcOTtPL6+A07I8+6YDaQ3fCVuzldOSXg2MDJiNFE+zcjzJFe5SZ7yp3c4TR/sriZxYNGJBZR69dL0AsA39q/JvZOmzSR54dTyT8W50a8l3UihiFHTlGZR5Ps9m+hqqHodP32qbwb6LtRGqZEp8XU3pTdg==",
+      "sealedBinaryB64": "8efV5d7QsNWBTpHbAgABAAAAAAAAAAABlWZQ9BVPiPvH6CmufhF+ZYKlmVcz0NxsPSpEUXTrnuGL3h+SmXYkF3BjKjkN4GG5nrnMsEcQxXqJAkPyl+lh9NY=",
+      "serverText": "{\"id\":\"fixture-rpc\",\"ok\":true,\"result\":{\"name\":\"桌面\"}}",
+      "serverTextB64": "8efV5d7QsNWBTpHbAgEAAAAAAAAAAAAA2Vc4xmZnZqVqFmlpBfbV/FjBuDBF/496xhpy1gAyZTxUzKGjOF1/clms3rwCZ3kSB5VubCh+Ri3uFT3l5UTL3QlyuXjYM+AMkkLtm89n33NovD74H+A6ld2Wfka9dTWMNTMtx1POoOMAgYauZFlFLCvzVA==",
+      "serverBinaryB64": "8efV5d7QsNWBTpHbAgEBAAAAAAAAAAAB05ATQ7r/k7bgpx5TLPbACC+SFfHZQ6GudnVW2J3ZCBOGOa6tNaSGVlvruwfBgiVBUV/c2lOkYEoas1uZ3nkqugc=",
+      "binaryHex": "740100ff110001"
+    },
+    {
+      "transport": "relay",
+      "hello": {
+        "type": "e2ee_hello",
+        "v": 2,
+        "clientPublicKeyB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9/AsrhtHHw=",
+        "clientNonceB64": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4Q=",
+        "capabilities": {
+          "framing": [2],
+          "payloadKinds": ["text", "binary"]
+        },
+        "context": {
+          "protocol": "orca-mobile-e2ee",
+          "initiator": "mobile",
+          "responder": "desktop",
+          "transport": "relay",
+          "relayHostId": "AbCdEf0123_-xyZ9"
+        }
+      },
+      "ready": {
+        "type": "e2ee_ready",
+        "v": 2,
+        "desktopPublicKeyB64": "ZLEBsdC+WocEvQePmJUAH8A+jp+VIvGI3RKNmEbUhGY=",
+        "clientNonceB64": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4Q=",
+        "desktopNonceB64": "l5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tbY=",
+        "selection": {
+          "framing": 2,
+          "payloadKinds": ["text", "binary"]
+        },
+        "context": {
+          "protocol": "orca-mobile-e2ee",
+          "initiator": "mobile",
+          "responder": "desktop",
+          "transport": "relay",
+          "relayHostId": "AbCdEf0123_-xyZ9"
+        }
+      },
+      "transcriptHashB64": "i3OVFnrSK4NKmygRiqgieEv37PdJcdcMoifxINu+aTk=",
+      "auth": {
+        "type": "e2ee_auth",
+        "v": 2,
+        "transcriptHashB64": "i3OVFnrSK4NKmygRiqgieEv37PdJcdcMoifxINu+aTk=",
+        "deviceToken": "vector-device-token"
+      },
+      "sealedAuthB64": "cjkOL5Sr3Ct4+VmGAgAAAAAAAAAAAAAAJrGKr4rMFRuZP2KjxUdda4UJjtNfsEHmUJPM+qUxvwz5aZhBo33qYgxJL0bQhOACY9kUAzWvvsfs2jCDVYPfHnXLjcveWxBruTtvRXnxpTR0PEauyuZCuCfiyFQIjoPd+ZAyeNdH0CB/j209BXTo/wD0uwhScGnLNc2VhLSKazq87Dj2nhZMgmAgSaZIX2ReZDkK3s2TQiTnsMGDSTfvKYNz8SpYlysNkdoQP52L5uK26hr/oRxD7AKUzg==",
+      "sealedBinaryB64": "cjkOL5Sr3Ct4+VmGAgABAAAAAAAAAAAB64/ZVAGQl1XeCB7+yHAI3TmymqWrzQfjv2JB7Gfl0KeabtcTlH5MlFwxIgpHwu3ZEubWpAFQuOuboSBIGe1DOBY=",
+      "serverText": "{\"id\":\"fixture-rpc\",\"ok\":true,\"result\":{\"name\":\"桌面\"}}",
+      "serverTextB64": "cjkOL5Sr3Ct4+VmGAgEAAAAAAAAAAAAA2LD/K2/gxfwsM/ZC1y70DHofQuWspl5dJU++E2kakjDVWo9qW1ecMZ4TUQuZICeGH8plURS6Ly5IyvhsIT3oCSQrBon7L24mEHivmq7hl06IXTrSjce+70dc8WrXmltCffUeU8gNTgUTTgqLhKd1uAkKww==",
+      "serverBinaryB64": "cjkOL5Sr3Ct4+VmGAgEBAAAAAAAAAAABPw7XN1aDuXSipobI/GsGT3LRB9Yi9X5yxrh/9ghZahylOST1PbesZs9jefT26aXQMHGhJlMyuG1CPEjPRUCJRjk=",
+      "binaryHex": "740100ff110001"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  module: {
+    name: 'entry',
+    type: 'entry',
+    description: '$string:module_desc',
+    mainElement: 'EntryAbility',
+    deviceTypes: ['phone', 'tablet'],
+    deliveryWithInstall: true,
+    installationFree: false,
+    pages: '$profile:main_pages',
+    abilities: [
+      {
+        name: 'EntryAbility',
+        srcEntry: './ets/entryability/EntryAbility.ets',
+        description: '$string:ability_desc',
+        icon: '$media:icon',
+        label: '$string:EntryAbility_label',
+        startWindowIcon: '$media:startIcon',
+        startWindowBackground: '$color:start_window_background',
+        exported: true,
+        skills: [
+          {
+            entities: ['entity.system.home'],
+            actions: ['action.system.home']
+          },
+          {
+            actions: ['ohos.want.action.viewData'],
+            uris: [
+              {
+                scheme: 'orca'
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    requestPermissions: [
+      { name: 'ohos.permission.VIBRATE' },
+      {
+        name: 'ohos.permission.INTERNET'
+      },
+      {
+        name: 'ohos.permission.GET_NETWORK_INFO'
+      },
+      {
+        name: 'ohos.permission.CAMERA',
+        reason: '$string:camera_permission_reason',
+        usedScene: {
+          abilities: ['EntryAbility'],
+          when: 'inuse'
+        }
+      },
+      {
+        name: 'ohos.permission.MICROPHONE',
+        reason: '$string:microphone_permission_reason',
+        usedScene: {
+          abilities: ['EntryAbility'],
+          when: 'inuse'
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Orca Mobile HarmonyOS entry module"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Orca"
+    },
+    {
+      "name": "ability_desc",
+      "value": "Orca companion app for HarmonyOS"
+    },
+    {
+      "name": "camera_permission_reason",
+      "value": "扫描桌面端 Orca 配对二维码"
+    },
+    {
+      "name": "microphone_permission_reason",
+      "value": "语音听写：录制音频发送到配对的桌面端转写"
+    }
+  ]
+}

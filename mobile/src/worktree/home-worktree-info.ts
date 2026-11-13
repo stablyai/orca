@@ -6,6 +6,9 @@ export type HomeWorktreeSummary = {
   repo: string
   branch: string
   displayName: string
+  repoId?: string
+  hostId?: string
+  identity?: { key: string }
   liveTerminalCount: number
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
   hasHostSidebarActivity?: boolean
@@ -21,6 +24,9 @@ export type HomeWorktreeSummary = {
 /** One agent on a desktop, with the workspace it runs in. */
 export type HomeAgentEntry = Readonly<{
   worktreeId: string
+  workspaceIdentityKey?: string
+  executionHostId?: string
+  repoId?: string
   workspaceName: string
   repo: string
   branch: string
@@ -47,6 +53,9 @@ export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): Hom
     Array.isArray(worktree.agents)
       ? worktree.agents.map((agent) => ({
           worktreeId: worktree.worktreeId,
+          workspaceIdentityKey: worktree.identity?.key,
+          executionHostId: worktree.hostId,
+          repoId: worktree.repoId,
           workspaceName: worktree.displayName || worktree.repo,
           repo: worktree.repo,
           branch: worktree.branch,

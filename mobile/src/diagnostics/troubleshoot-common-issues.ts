@@ -1,10 +1,18 @@
-import { WifiOff, Shield, Monitor, Clock, Globe, Bell, type LucideIcon } from 'lucide-react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { endpointPort } from '../transport/hosts/host-endpoint'
 
+export type TroubleshootIssueKind =
+  | 'notifications'
+  | 'wifi'
+  | 'firewall'
+  | 'desktop'
+  | 'timeout'
+  | 'tailscale'
+  | 'vpn'
+
 export type TroubleshootSection = {
   id: string
-  icon: LucideIcon
+  kind: TroubleshootIssueKind
   title: string
   steps: string[]
 }
@@ -39,7 +47,7 @@ export function troubleshootCommonIssues(
   return [
     {
       id: 'notifications',
-      icon: Bell,
+      kind: 'notifications',
       title: t('diagnostics.troubleshootCommonIssues.notificationsTitle', 'Push Notifications'),
       steps: [
         t(
@@ -55,7 +63,7 @@ export function troubleshootCommonIssues(
 
     {
       id: 'wifi',
-      icon: WifiOff,
+      kind: 'wifi',
       title: t('diagnostics.troubleshootCommonIssues.wifiTitle', 'Different WiFi Networks'),
       steps: [
         t(
@@ -74,7 +82,7 @@ export function troubleshootCommonIssues(
     },
     ...Array.from(ports, (port) => ({
       id: `firewall-${port}`,
-      icon: Shield,
+      kind: 'firewall' as const,
       title: t(
         'diagnostics.troubleshootCommonIssues.firewallTitle',
         'Firewall Blocking Port {{port}}',
@@ -102,7 +110,7 @@ export function troubleshootCommonIssues(
     })),
     {
       id: 'desktop',
-      icon: Monitor,
+      kind: 'desktop',
       title: t('diagnostics.troubleshootCommonIssues.desktopTitle', 'Desktop App Not Running'),
       steps: [
         t(
@@ -121,7 +129,7 @@ export function troubleshootCommonIssues(
     },
     {
       id: 'timeout',
-      icon: Clock,
+      kind: 'timeout',
       title: t('diagnostics.troubleshootCommonIssues.timeoutTitle', 'Connection Timeout'),
       steps: [
         t(
@@ -140,7 +148,7 @@ export function troubleshootCommonIssues(
     },
     {
       id: 'tailscale',
-      icon: Globe,
+      kind: 'tailscale',
       title: t('diagnostics.troubleshootCommonIssues.tailscaleTitle', 'Tailscale Host Unreachable'),
       steps: [
         t(
@@ -163,7 +171,7 @@ export function troubleshootCommonIssues(
     },
     {
       id: 'vpn',
-      icon: Shield,
+      kind: 'vpn',
       title: t('diagnostics.troubleshootCommonIssues.vpnTitle', 'Other VPN Interference'),
       steps: [
         t(

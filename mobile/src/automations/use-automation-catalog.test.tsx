@@ -1,10 +1,12 @@
 import { createElement } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 // Also tells TanStack observers on a microtask, so act() sees replies.
 import '../test-support/query-client-test-renderer'
 import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
-import { useAutomationCatalog } from './use-automation-catalog'
+import { createOrcaQueryClient } from '../query/orca-query-client'
+import { restoreAutomationCatalog, useAutomationCatalog } from './use-automation-catalog'
 import { automationClient, deferred, savedAutomation } from './automation-test-fixtures'
 
 let tree: ReactTestRenderer | null = null
@@ -52,6 +54,44 @@ function catalogHarness(respond: () => unknown) {
 }
 
 describe('automation catalog', () => {
+  it('opens a restored desktop list offline and replaces it with the live list on reconnect', async () => {
+    const queryClient = createOrcaQueryClient()
+    const port = automationClient((method) =>
+      method === 'status.get' ? { capabilities: [] } : listReply('Box nightly')
+    )
+    const saved = { result: listReply('Box review'), readAt: 1_000 }
+    port.state('disconnected')
+    restoreAutomationCatalog(queryClient, 'desktop', saved)
+    const states: ReturnType<typeof useAutomationCatalog>[] = []
+    function Probe() {
+      states.push(useAutomationCatalog('desktop', port.client))
+      return null
+    }
+    try {
+      await act(async () => {
+        tree = create(
+          createElement(QueryClientProvider, { client: queryClient }, createElement(Probe))
+        )
+      })
+      expect(states[0]?.rows.map((row) => row.automation.name)).toEqual([
+        'Local review',
+        'Box review'
+      ])
+      expect(states.at(-1)?.connected).toBe(false)
+
+      await act(async () => port.state('connected'))
+      restoreAutomationCatalog(queryClient, 'desktop', saved)
+      expect(states.at(-1)?.rows.map((row) => row.automation.name)).toEqual([
+        'Local review',
+        'Box nightly'
+      ])
+    } finally {
+      act(() => tree?.unmount())
+      tree = null
+      queryClient.clear()
+    }
+  })
+
   it('shows the last list at once when the screen reopens, then the host’s newer one', async () => {
     let reply: ReturnType<typeof deferred<unknown>> | null = null
     const { read, mount } = catalogHarness(() => reply?.promise ?? listReply('Box review'))

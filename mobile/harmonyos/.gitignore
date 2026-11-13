@@ -1,0 +1,35 @@
+# Local toolchains, credentials and IDE state
+/build-profile.json5
+/local.properties
+/.idea/
+/.codegenie/
+/.zcode/
+/.staging/
+/.local/
+**/signature/
+**/signing/
+*.p12
+*.pfx
+*.cer
+*.p7b
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# Generated build and dependency artifacts
+node_modules/
+oh_modules/
+**/build/
+**/.hvigor/
+**/.preview/
+.cxx/
+.obj/
+/dist/
+*.har
+*.hap
+*.app
+*.log
+*.json5.bak
+.DS_Store

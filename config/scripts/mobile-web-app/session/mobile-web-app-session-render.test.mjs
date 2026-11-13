@@ -83,7 +83,7 @@ afterAll(async () => {
 })
 
 async function openPage(route, replies = {}, { domStorageOff = false } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 390, height: 844 } })
   if (domStorageOff) {
     // Match Android WebView storage-off behavior: localStorage is null, not undefined; import-time push storage reads once threw getItem here.
     await page.addInitScript(() => {

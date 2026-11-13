@@ -5,6 +5,9 @@
   "printWidth": 100,
   "trailingComma": "none",
   "ignorePatterns": [
+    "**/harmonyos/tools/vendor/**",
+    "**/harmonyos/entry/src/main/ets/vendor/**",
+    "**/harmonyos/entry/src/main/resources/rawfile/spike/**",
     "cloud/**",
     "resources/licenses/**",
     "resources/plugins/launch/*/**",

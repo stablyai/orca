@@ -212,6 +212,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             client,
             repoId: selectedRepo.id,
             baseName,
+            branchNameOverride:
+              selectedRepo.kind === 'folder' ? undefined : args.composer.branchNameOverride,
             nameWasGenerated: !trimmedName,
             createdWithAgentId,
             comment: trimmedNote,

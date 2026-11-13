@@ -306,6 +306,8 @@
     }
   ],
   "ignorePatterns": [
+    "**/harmonyos/tools/vendor/**",
+    "**/harmonyos/entry/src/main/ets/vendor/**",
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
     "src/cli/skills/bundled-skill-guides.ts",

@@ -1,12 +1,27 @@
+import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
+import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 import { RelayHostReachabilityLatch } from './relay-host-reachability-latch'
 import { RelayPairingRejectionLatch } from './relay-pairing-rejection-latch'
-import type { RelayHostReachability } from './relay-host-reachability'
+import {
+  relayHostReachabilityForCloseCode,
+  type RelayHostReachability
+} from './relay-host-reachability'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 
 export type RelayRecoveryReporter = Pick<
   StableLogicalRpcClient,
   'setRecoveryAttempt' | 'setPairingRejected' | 'setRelayHostReachability'
 >
+
+function relayHostReachabilityForFailure(error: Error | null): RelayHostReachability {
+  if (error instanceof RelayOuterError) {
+    return relayHostReachabilityForCloseCode(error.code)
+  }
+  if (error instanceof RelayDirectorHttpError && error.status === 401) {
+    return 'credential-refused'
+  }
+  return 'connecting'
+}
 
 // Clear pairing rejection and host reachability together only after authenticated success on either path.
 export class RelayRecoveryEvidence {
@@ -22,7 +37,7 @@ export class RelayRecoveryEvidence {
 
   record(error: Error | null): void {
     this.pairingRejection.record(error)
-    this.hostReachability.record(error)
+    this.hostReachability.record(relayHostReachabilityForFailure(error))
   }
 
   assert(reachability: RelayHostReachability): void {
