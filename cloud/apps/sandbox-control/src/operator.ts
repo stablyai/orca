@@ -23,6 +23,7 @@ import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { removeMember } from './member-removal'
 import type { Keyring } from './secrets-crypto'
+import { SecretsKmsError } from './secrets-kms'
 import { kekStatus, rewrapBatch, RewrapError, REWRAP_MAX_LIMIT } from './secrets-rewrap'
 import { fairUseReport, FAIR_USE_WINDOW_DAYS, sweepSessionCpu } from './session-cpu'
 import { listByStatus } from './store'
@@ -172,7 +173,10 @@ export async function handleOperator(
       let keyring: Keyring | null
       try {
         keyring = (await deps.keyring?.()) ?? null
-      } catch {
+      } catch (error) {
+        if (error instanceof SecretsKmsError) {
+          return Response.json({ error: 'secrets_unavailable', reason: error.reason }, { status: 503, headers: noStore })
+        }
         // A malformed SECRETS_KEK* value. The cause is not echoed: it could quote key material.
         return Response.json({ error: 'secrets_misconfigured' }, { status: 503, headers: noStore })
       }
