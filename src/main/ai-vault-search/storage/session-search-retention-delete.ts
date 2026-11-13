@@ -14,6 +14,7 @@ type ExpiredFile = { path: string; mtime_ms: number; row_id: number }
 
 function expiredFilePage(db: SyncDatabase, cutoffMs: number, after?: ExpiredFile): ExpiredFile[] {
   if (!after) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: files defines path/mtime_ms; rowid is SQLite's numeric row key.
     return db
       .prepare(
         `SELECT path,mtime_ms,rowid AS row_id FROM files WHERE mtime_ms < ?
@@ -22,6 +23,7 @@ function expiredFilePage(db: SyncDatabase, cutoffMs: number, after?: ExpiredFile
       .all(cutoffMs, RETENTION_DELETE_ROWS_PER_STEP) as ExpiredFile[]
   }
   // Split ties so SQLite seeks by both index keys instead of filtering the equal-time prefix.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This projection reads the same schema-defined columns as the first page.
   const page = db
     .prepare(
       `SELECT path,mtime_ms,rowid AS row_id FROM files WHERE mtime_ms = ? AND rowid > ?
@@ -30,6 +32,7 @@ function expiredFilePage(db: SyncDatabase, cutoffMs: number, after?: ExpiredFile
     .all(after.mtime_ms, after.row_id, RETENTION_DELETE_ROWS_PER_STEP) as ExpiredFile[]
   if (page.length < RETENTION_DELETE_ROWS_PER_STEP) {
     page.push(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This projection reads the same schema-defined columns as the first page.
       ...(db
         .prepare(
           `SELECT path,mtime_ms,rowid AS row_id FROM files WHERE mtime_ms > ? AND mtime_ms < ?
