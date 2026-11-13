@@ -3,7 +3,7 @@ import { supportsSupervisedProviderChildLocation } from '../../provider-process/
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 
 export function supportsAcpStructuredLocation(
-  spec: AcpLaunchSpec,
+  spec: Pick<AcpLaunchSpec, 'managedRuntime' | 'hostBackend'>,
   location: AgentSessionExecutionLocation,
   hasWindowsProcessStartTimeProof?: () => boolean
 ): boolean {
