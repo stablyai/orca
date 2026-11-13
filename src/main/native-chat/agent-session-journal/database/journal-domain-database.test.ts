@@ -1,3 +1,7 @@
+import {
+  captureJournalLegacySourceReceipt,
+  JOURNAL_LEGACY_SOURCE_RECEIPT
+} from './journal-legacy-source-receipt'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
@@ -348,4 +352,44 @@ it('upgrades schema one atomically without trusting old forms or changing source
     payload_json: 'authoritative source',
     wire_version: null
   })
+})
+
+it('binds the initial profile copy to its source without refreshing an authoritative winner', async () => {
+  const root = directory()
+  const filename = journalDatabasePath(root)
+  const source = new Database(filename)
+  source.exec(createJournalTablesSql() + createAgentSessionRecordTablesSql())
+  source.pragma('user_version=4')
+  source
+    .prepare('INSERT INTO agent_session_store_meta VALUES (?, ?)')
+    .run(JOURNAL_LEGACY_SOURCE_RECEIPT, 'untrusted legacy value')
+  source.close()
+  const original = captureJournalLegacySourceReceipt(filename)
+  expect(original.disposition).toBe('copied-source')
+  const destination = open(await initializeJournalDomainDatabase(root))
+  const receipt = () =>
+    destination
+      .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+      .get(JOURNAL_LEGACY_SOURCE_RECEIPT)?.value
+  expect(JSON.parse(String(receipt()))).toEqual(original)
+  const old = new Database(filename)
+  old
+    .prepare('INSERT INTO agent_session_store_meta VALUES (?, ?)')
+    .run('old-build-append', 'history still owed')
+  old.close()
+  expect(captureJournalLegacySourceReceipt(filename)).not.toEqual(original)
+  await initializeJournalDomainDatabase(root)
+  expect(JSON.parse(String(receipt()))).toEqual(original)
+  expect(
+    destination
+      .prepare("SELECT value FROM agent_session_store_meta WHERE key='old-build-append'")
+      .get()
+  ).toBeUndefined()
+  const reopened = new Database(filename, { readonly: true })
+  expect(
+    reopened
+      .prepare("SELECT value FROM agent_session_store_meta WHERE key='old-build-append'")
+      .get()
+  ).toEqual({ value: 'history still owed' })
+  reopened.close()
 })

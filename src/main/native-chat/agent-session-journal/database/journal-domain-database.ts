@@ -15,6 +15,10 @@ import {
   migrateJournalDomainSchema
 } from './journal-domain-migrations'
 import { importJournalDomainProfile } from './journal-domain-profile-import'
+import {
+  captureJournalLegacySourceReceipt,
+  JOURNAL_LEGACY_SOURCE_RECEIPT
+} from './journal-legacy-source-receipt'
 
 export function journalDomainDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, 'agent-session-domain.db')
@@ -37,6 +41,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     const filename = join(temporary, 'snapshot.db')
     const { db } = openJournalDomainDatabase(filename)
     const sourcePath = journalDatabasePath(stateDirectory)
+    const sourceReceipt = captureJournalLegacySourceReceipt(sourcePath)
     try {
       if (existsSync(sourcePath)) {
         const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
@@ -46,6 +51,10 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
           source.close()
         }
       }
+      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
+        JOURNAL_LEGACY_SOURCE_RECEIPT,
+        JSON.stringify(sourceReceipt)
+      )
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')
