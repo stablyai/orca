@@ -62,7 +62,7 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
   return selectExplicitAgentRow(args, true)
 }
 
-/** Historical live rows identify the intended agent, without renewing their status evidence. */
+/** Scoped session identity survives status cleanup, without renewing its readiness evidence. */
 export function selectExplicitAgentIdentityRow(args: HookRowJoin): AgentStatusIpcPayload | null {
   return selectExplicitAgentRow(args, false)
 }
@@ -80,7 +80,9 @@ function selectExplicitAgentRow(args: HookRowJoin, fresh: boolean): AgentStatusI
       !row.state ||
       typeof row.receivedAt !== 'number' ||
       (fresh && now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) ||
-      !(isLiveObservation(row) || (fresh && isHeldRestoredPermission(row, args)))
+      (fresh
+        ? !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
+        : row.restoredUnconfirmed === true)
     ) {
       continue
     }

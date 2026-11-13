@@ -42,6 +42,100 @@ describe('mail-local foreground recovery readiness', () => {
     }
   })
 
+  it.each(['before staging', 'before Enter'])(
+    'recovers after shell cleanup retains only the provider identity (%s)',
+    async (cleanup) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-mail-shell-cleanup-')
+      const row: AgentStatusIpcPayload = {
+        paneKey: PANE_KEY,
+        connectionId: null,
+        agentType: 'claude',
+        state: 'done',
+        prompt: '',
+        receivedAt: Date.now(),
+        stateStartedAt: 1,
+        providerSession: { key: 'session_id', id: 'shell-cleanup-session' }
+      }
+      const { runtime, write } = createRuntime(db, {
+        launchAgent: null,
+        getAgentStatusSnapshot: () => [row],
+        getAgentStatusSnapshotForPane: () => [row]
+      })
+      let process = 'zsh'
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getSize: () => ({ cols: 100, rows: 30 }),
+        getForegroundProcess: async () => '2.1.323',
+        supportsForegroundObservation: () => true,
+        inspectProcess: async () => ({
+          foregroundProcess: process,
+          hasChildProcesses: process !== 'zsh',
+          foregroundObservation: {
+            ptyId: PTY_ID,
+            ptyIncarnationId: 'mailbox-incarnation',
+            authorityGeneration: 'test',
+            observationEpoch: 1,
+            capturedAgeMs: 0,
+            verdict: 'observed',
+            source: 'pty-master',
+            foregroundKind: process === 'zsh' ? 'shell' : 'non-shell',
+            processName: process
+          }
+        })
+      })
+      try {
+        await runtime.listTerminals()
+        runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${COMPOSER}`, Date.now())
+        runtime.onPtyData(PTY_ID, '\x1b]0;workspace shell\x07', Date.now())
+        const run = createBoundRun(db, 'Shell program while Claude is stopped')
+        const message = insertDirectRunMessage(db, run.id, 'Resume silently')
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(write).not.toHaveBeenCalled()
+        process = 'vim'
+        runtime.onPtyData(PTY_ID, '\x1b[?1049h\x1b[2J\x1b[Hediting\x1b]0;vim\x07', Date.now())
+        await vi.advanceTimersByTimeAsync(65000)
+        expect(write).not.toHaveBeenCalled()
+        runtime.onPtyData(PTY_ID, '\x1b[?1049l\x1b]0;workspace shell\x07', Date.now())
+        if (cleanup === 'before staging') {
+          row.providerSessionOnly = true
+        }
+        process = 'claude'
+        runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
+        write.mockImplementation((_ptyId, data) => {
+          if (data === '\r') {
+            runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
+          } else {
+            row.providerSessionOnly = true
+            // A pasted pointer has the empty first/last input lines seen in QA.
+            runtime.onPtyData(
+              PTY_ID,
+              `\x1b[2J\x1b[H${'─'.repeat(100)}\r\n❯ \r\n  ${data.trim()}\r\n  \r\n${'─'.repeat(100)}\r\n  auto mode on\x1b[4;3H\x1b[?25l`,
+              Date.now()
+            )
+          }
+          return true
+        })
+        await vi.advanceTimersByTimeAsync(65000)
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([
+          expect.stringContaining('You have 1 orchestration message'),
+          '\r'
+        ])
+        expect(db.getMessageById(message.id)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String),
+          pointer_enter_pending: 0
+        })
+        await vi.advanceTimersByTimeAsync(65000)
+        expect(write).toHaveBeenCalledTimes(2)
+      } finally {
+        db.close()
+      }
+    }
+  )
   it.each([
     {
       veto: 'login',
