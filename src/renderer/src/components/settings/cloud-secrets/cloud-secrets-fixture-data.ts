@@ -131,6 +131,20 @@ function withoutPersonal(
   })
 }
 
+/** Like the server's `hintVisible`: only people who may write a scope get its hints. */
+function hintsFor(
+  caller: CloudSecretsCaller,
+  secrets: CloudSecretsEffective['secrets']
+): CloudSecretsEffective['secrets'] {
+  const seen = (scope: CloudSecretScope, hint: string | null): string | null =>
+    caller.canWrite[scope] ? hint : null
+  return secrets.map((secret) => ({
+    ...secret,
+    hint: seen(secret.scope, secret.hint),
+    shadowed: secret.shadowed.map((entry) => ({ ...entry, hint: seen(entry.scope, entry.hint) }))
+  }))
+}
+
 export function fixtureCloudSecretsApi(options: {
   caller?: CloudSecretsCaller
   secrets?: Partial<Record<CloudSecretScope, CloudSecretView[]>>
@@ -152,7 +166,11 @@ export function fixtureCloudSecretsApi(options: {
         ? never()
         : options.listError
           ? Promise.resolve({ ok: false as const, error: options.listError })
-          : ok(secrets[target.scope] ?? []),
+          : ok(
+              (secrets[target.scope] ?? []).map((secret) =>
+                caller.canWrite[target.scope] ? secret : { ...secret, hint: null }
+              )
+            ),
     put: ({ target, name }) =>
       options.pendingWrites ? never() : ok(view(target.scope, name, 'env', null, 0, caller.userId)),
     remove: () => (options.pendingWrites ? never() : ok(true as const)),
@@ -177,10 +195,12 @@ export function fixtureCloudSecretsApi(options: {
               env: ['repo', 'personal', 'org'],
               agent_key: ['org', 'repo', 'personal']
             },
-            secrets:
+            secrets: hintsFor(
+              caller,
               workspace === 'shared'
                 ? withoutPersonal(options.effective ?? FIXTURE_EFFECTIVE_SECRETS)
                 : (options.effective ?? FIXTURE_EFFECTIVE_SECRETS)
+            )
           }),
     refreshEnv: () => ok(true),
     saveDesktopKey: ({ envName }) =>

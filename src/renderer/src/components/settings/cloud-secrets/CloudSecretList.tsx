@@ -16,6 +16,7 @@ import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEd
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
 import { CloudSecretChips } from './CloudSecretVmBadge'
+import { CloudSecretHint } from './CloudSecretHint'
 import type { CloudSecretListModel } from './use-cloud-secrets'
 
 export type CloudSecretPeople = {
@@ -32,10 +33,6 @@ export type CloudSecretListMode =
 const SAVED_FLASH_MS = 4000
 const IDLE: CloudSecretListMode = { kind: 'idle' }
 const NONE_SAVED: readonly string[] = []
-
-export function maskedHint(hint: string | null): string {
-  return hint ? `••••${hint}` : '••••'
-}
 
 function SecretRow({
   secret,
@@ -85,14 +82,8 @@ function SecretRow({
           <CloudSecretChips name={secret.name} />
         </span>
         <span className="w-[9ch] shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground">
-          <span aria-hidden>{maskedHint(secret.hint)}</span>
-          <span className="sr-only">
-            {secret.hint
-              ? t('cloudSecrets.list.hintLabel', 'Value hidden, ends in {{hint}}', {
-                  hint: secret.hint
-                })
-              : t('cloudSecrets.list.hiddenLabel', 'Value hidden')}
-          </span>
+          {/* The server sends hints to exactly the people who may write the scope. */}
+          <CloudSecretHint hint={secret.hint} canSeeHints={canWrite} />
         </span>
         <span
           className="w-40 shrink-0 truncate text-xs text-muted-foreground"

@@ -10,7 +10,7 @@ import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { cloudSecretScopeLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
-import { maskedHint } from './CloudSecretList'
+import { CloudSecretHint } from './CloudSecretHint'
 import type { Loadable } from './use-cloud-secrets'
 
 const DEFAULT_PRECEDENCE: CloudSecretsEffective['precedence'] = {
@@ -85,7 +85,7 @@ export function CloudSecretsEffectiveView({
       />
     )
   }
-  const { secrets, precedence } = effective.value
+  const { secrets, precedence, caller } = effective.value
   return (
     <div className="space-y-3">
       <CloudSecretsPrecedence precedence={precedence} />
@@ -130,7 +130,10 @@ export function CloudSecretsEffectiveView({
                     <Badge variant="outline">{cloudSecretScopeLabel(secret.scope, t)}</Badge>
                   </td>
                   <td className="px-3 py-2 font-mono whitespace-nowrap text-muted-foreground">
-                    {maskedHint(secret.hint)}
+                    <CloudSecretHint
+                      hint={secret.hint}
+                      canSeeHints={caller.canWrite[secret.scope]}
+                    />
                   </td>
                   <td className="truncate px-3 py-2 text-muted-foreground">
                     {secret.shadowed.length > 0

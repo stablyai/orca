@@ -28360,6 +28360,10 @@
       "agentKey": "Agent key",
       "keptOutOfSandbox": "Kept out of sandbox"
     },
+    "hint": {
+      "adminsOnly": "Only owners and admins see the last characters",
+      "tooShort": "Short values are fully hidden"
+    },
     "precedence": {
       "envSentence": "Variables set in more than one place: {{first}} wins over {{second}}, which wins over {{third}}.",
       "agentSentence": "Agent keys: {{first}} wins over {{second}}, which wins over {{third}}, so a team key covers everyone."

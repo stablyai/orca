@@ -2,6 +2,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { CloudSecretView } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { CloudSecretList, type CloudSecretListMode } from './CloudSecretList'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
+import { CloudSecretHint } from './CloudSecretHint'
 import { CloudSecretsPane, type CloudSecretRepoChoice } from './CloudSecretsPane'
 import {
   FIXTURE_MEMBER,
@@ -154,6 +155,66 @@ export const effectiveSolo = defineFixture({
         onSetUpAgent={noop}
         initialTab="effective"
       />
+    </Frame>
+  )
+})
+
+export const effectiveMember = defineFixture({
+  width: 760,
+  render: () => (
+    <Frame>
+      <CloudSecretsPane
+        api={fixtureCloudSecretsApi({ caller: FIXTURE_MEMBER })}
+        repos={REPOS}
+        people={people}
+        onSetUpAgent={noop}
+        initialTab="effective"
+      />
+    </Frame>
+  )
+})
+
+export const repoMember = defineFixture({
+  width: 760,
+  render: () => (
+    <Frame>
+      <CloudSecretsPane
+        api={fixtureCloudSecretsApi({ caller: FIXTURE_MEMBER })}
+        repos={REPOS}
+        people={people}
+        onSetUpAgent={noop}
+        initialTab="repo"
+      />
+    </Frame>
+  )
+})
+
+/** EP-4: the tooltip on a bare "••••", one row per reason. */
+function HintRow({ name, canSeeHints }: { name: string; canSeeHints: boolean }): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 pt-12">
+      <code className="flex-1 font-mono text-xs">{name}</code>
+      <span className="w-[9ch] shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground">
+        <CloudSecretHint hint={null} canSeeHints={canSeeHints} defaultOpen />
+      </span>
+    </div>
+  )
+}
+
+export const hintTooShort = defineFixture({
+  width: 520,
+  render: () => (
+    <Frame>
+      <HintRow name="SENTRY_ENV" canSeeHints />
+    </Frame>
+  )
+})
+
+export const hintAdminsOnly = defineFixture({
+  width: 520,
+  render: () => (
+    <Frame>
+      <HintRow name="AI_GATEWAY_API_KEY" canSeeHints={false} />
     </Frame>
   )
 })

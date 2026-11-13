@@ -2,7 +2,7 @@ import React from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
-import { maskedHint } from '@/components/settings/cloud-secrets/CloudSecretList'
+import { maskedHint } from '@/components/settings/cloud-secrets/CloudSecretHint'
 import {
   cloudSecretScopeLabel,
   cloudSecretsErrorCopy
