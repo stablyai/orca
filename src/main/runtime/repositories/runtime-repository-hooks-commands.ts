@@ -3,6 +3,7 @@ import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
+import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   getEffectiveHooks,
@@ -29,7 +30,7 @@ type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
   ) => Promise<{ hooks: OrcaHooks | null } | undefined>
 }
 
-export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner> {
+export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = Repo> {
   constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps<TRepo>) {}
 
   async getRepoHooks(repoSelector: string) {
