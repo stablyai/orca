@@ -31,8 +31,6 @@ public enum BackgroundInputTransport {
     public enum PointerHit: Equatable, Sendable {
         /// WebKit content (Safari, WKWebView): drops clicks into a window that is not key.
         case webKitContent
-        /// A popup menu or web `<select>`: a background click opens menu tracking off screen or wedges Chromium input.
-        case popupMenu
         case other
     }
 
@@ -131,12 +129,8 @@ public enum BackgroundInputTransport {
 
     public static func classifyPointerHit(_ element: AXUIElement) -> PointerHit {
         var current = element
-        for depth in 0..<48 {
+        for _ in 0..<48 {
             let role = stringAttribute(current, kAXRoleAttribute as String)
-            // Why: the hit lands on a popup's label or the popup itself, never deeper than its parent.
-            if depth < 2, role == kAXPopUpButtonRole as String || role == kAXMenuButtonRole as String {
-                return .popupMenu
-            }
             if role == "AXWebArea" {
                 // Why: Chromium accepts window-stamped clicks as is; only WebKit needs the key-window scope,
                 // which fires the app's own did-become-active code (Slack, for one, marks messages read).
@@ -154,6 +148,24 @@ public enum BackgroundInputTransport {
             current = parent as! AXUIElement
         }
         return .other
+    }
+
+    /// The element and its parent as `ForegroundEffect` reads them.
+    public static func pressTarget(_ element: AXUIElement) -> [(role: String?, labels: [String?])] {
+        var chain: [(role: String?, labels: [String?])] = []
+        var current: AXUIElement? = element
+        while let node = current, chain.count < 2 {
+            chain.append((
+                role: stringAttribute(node, kAXRoleAttribute as String),
+                labels: [stringAttribute(node, kAXTitleAttribute as String), stringAttribute(node, kAXDescriptionAttribute as String)]
+            ))
+            var parent: CFTypeRef?
+            current = AXUIElementCopyAttributeValue(node, kAXParentAttribute as CFString, &parent) == .success
+                && parent.map { CFGetTypeID($0) == AXUIElementGetTypeID() } == true
+                // SAFETY: the CFTypeID check above proves parent is an AXUIElement.
+                ? (parent as! AXUIElement) : nil
+        }
+        return chain
     }
 
     // MARK: Keys

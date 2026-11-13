@@ -879,7 +879,7 @@ final class Provider {
             let record = try element(snapshot, elementIndex)
             try requireEnabled(record, snapshot: snapshot)
             if !foreground {
-                try requireBackgroundClickAllowed(backgroundClickHit(record.element, snapshot: snapshot))
+                try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: record.element))
             }
             let rowSelection = AccessibilityRowSelection()
             let unselectedRow = modifiers.isEmpty && count <= 1 && button == .left
@@ -992,6 +992,9 @@ final class Provider {
         if action != "AXScrollToVisible" {
             try requireEnabled(record, snapshot: snapshot)
         }
+        if !isForegroundRequest(params) {
+            try requireNoForegroundEffect(ForegroundEffect.ofAction(action, target: BackgroundInputTransport.pressTarget(record.element)))
+        }
         guard try performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
         }
@@ -1003,6 +1006,7 @@ final class Provider {
         let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let expected = try requiredStringAllowingEmpty(params, "value")
         try requireEnabled(record, snapshot: snapshot)
+        try requireNotFileNameField(record)
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
@@ -1065,6 +1069,7 @@ final class Provider {
     }
 
     private func typeTextIntoElement(_ record: ElementRecord, text: String) throws -> [String: Any] {
+        try requireNotFileNameField(record)
         // Why: typing at focus instead would put the text in whatever field has focus, not the requested one.
         if BackgroundInputTransport.isChromiumNode(record.element) {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is web content, which ignores accessibility text insertion; click it, then run type-text without --element-index")
@@ -1335,8 +1340,14 @@ private func enableManualAccessibilityIfNeeded(_ appElement: AXUIElement, app: A
     guard app.needsManualAccessibilityMode else {
         return
     }
-    _ = AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-    _ = AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    if isSettable(appElement, "AXManualAccessibility") {
+        _ = AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        return
+    }
+    // Why: the older, broader switch, so only for apps that lack AXManualAccessibility and only when it is off.
+    if boolAttribute(appElement, "AXEnhancedUserInterface") != true {
+        _ = AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    }
 }
 
 private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleWindowCount: Int, allowRecovery: Bool) throws -> AXUIElement {
@@ -1623,7 +1634,7 @@ private func withTransportErrors<T>(_ body: () throws -> T) throws -> T {
         case .eventCreationFailed:
             throw ProviderError.coded("accessibility_error", "failed to create input event")
         case .targetWindowNotKey:
-            throw ProviderError.coded("background_unavailable", "background input cannot change the key window of the active app; retry with --restore-window to target this window explicitly")
+            throw ProviderError.coded("background_unavailable", "the user is working in another window of this app, and input to this window would move their typing here, so nothing was sent; use an element action (click --element-index, set-value) or wait until the user leaves the app. Ask the user before retrying with --restore-window.")
         case let .focusRecordFailed(status):
             throw ProviderError.coded("window_not_focused", "background key-window focus record failed (status \(status)); input may already have been delivered, so inspect current state before retrying")
         }
@@ -1656,8 +1667,8 @@ private func clickPointer(
         }
         hitElement = found
     }
+    try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: hitElement))
     let hit = try backgroundClickHit(hitElement, snapshot: snapshot)
-    try requireBackgroundClickAllowed(hit)
     try withTransportErrors {
         try BackgroundInputTransport.click(
             backgroundTarget(snapshot),
@@ -1680,9 +1691,23 @@ private func backgroundClickHit(_ element: AXUIElement, snapshot: Snapshot) thro
     return BackgroundInputTransport.classifyPointerHit(element)
 }
 
-private func requireBackgroundClickAllowed(_ hit: BackgroundInputTransport.PointerHit) throws {
-    guard hit != .popupMenu else {
-        throw ProviderError.coded("background_unavailable", "a background click on a popup menu or web <select> opens the menu off screen or wedges the app's input; set the option with set-value on the popup element, or retry with --restore-window for a foreground click")
+private func clickEffect(button: MouseButtonSelection, modifiers: [KeyModifier], on element: AXUIElement) -> ForegroundEffect? {
+    ForegroundEffect.ofClick(
+        button: button,
+        control: modifiers.contains { $0.flag == .maskControl },
+        target: BackgroundInputTransport.pressTarget(element)
+    )
+}
+
+/// Refuses, before anything is sent, an action that would put a menu or dialog in front of the user.
+private func requireNoForegroundEffect(_ effect: ForegroundEffect?) throws {
+    switch effect {
+    case nil:
+        return
+    case .showsMenu:
+        throw ProviderError.coded("background_unavailable", "this would open a menu over the user's screen and take their keyboard, so nothing was sent; for a popup menu, combo box or web <select>, set the option with set-value on that element. Ask the user before retrying with --restore-window.")
+    case .opensDialog:
+        throw ProviderError.coded("background_unavailable", "this button's title ends in an ellipsis, so it most likely opens a dialog or sheet that brings the app to the front; nothing was sent. Ask the user before retrying with --restore-window.")
     }
 }
 
@@ -2043,6 +2068,16 @@ private func performAction(_ element: AXUIElement, _ action: String) throws -> B
         throw AccessibilityMessaging.unanswered(action)
     }
     return result == .success
+}
+
+/// A file-name field (a Finder name cell) shows and reads back an AX write, but the file keeps its old name.
+private func isFileNameField(_ element: AXUIElement) -> Bool {
+    rawStringAttribute(element, "AXFilename") != nil
+}
+
+private func requireNotFileNameField(_ record: ElementRecord) throws {
+    guard isFileNameField(record.element) else { return }
+    throw ProviderError.coded("value_not_settable", "element \(record.index) shows a file's name; an accessibility write changes what it shows but does not rename the file, so nothing was written; with the field in edit mode, type the name with type-text without --element-index and press-key Return, or rename the file on disk")
 }
 
 private func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
@@ -3290,6 +3325,7 @@ private enum TextInput {
     static func replaceSelection(_ element: AXUIElement, with text: String, property: String = "focusedText") throws -> [String: Any]? {
         // Why: Chromium applies AX value writes without the input events pages listen to; a contenteditable gets none, so editors like Discord's never see the text.
         guard !BackgroundInputTransport.isChromiumNode(element),
+              !isFileNameField(element),
               isSettable(element, kAXValueAttribute as String),
               let current = rawStringAttribute(element, kAXValueAttribute as String)
         else {
