@@ -1,6 +1,7 @@
 import type React from 'react'
 import { useWorktreeListKeyboardNavigation } from '../navigation/use-keyboard'
 import { resolveSidebarWorkspaceDeleteIntent } from '../navigation/sidebar-workspace-delete'
+import { useListPointerFocusOrigin } from '../navigation/use-pointer-focus-origin'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 
 export function useWorktreeViewportKeyboardNavigation(args: {
@@ -9,6 +10,7 @@ export function useWorktreeViewportKeyboardNavigation(args: {
   markDirectScrollInput: () => void
 }) {
   const { props, scrollRef, markDirectScrollInput } = args
+  useListPointerFocusOrigin(scrollRef)
   return useWorktreeListKeyboardNavigation({
     rows: props.rows,
     activeWorktreeId: props.activeWorktreeId,
