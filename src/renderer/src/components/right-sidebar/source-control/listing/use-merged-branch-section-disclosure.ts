@@ -1,10 +1,12 @@
 import { useEffect, useState, type RefObject } from 'react'
 import {
+  mergedBranchSectionOwnerKey,
   readMergedBranchSectionRecord,
   resolveMergedBranchProof,
   stepMergedBranchSection,
   writeMergedBranchSectionRecord,
   type MergedBranchProof,
+  type MergedBranchSectionOwner,
   type MergedBranchSectionReview
 } from './merged-branch-section-disclosure'
 
@@ -22,32 +24,36 @@ function moveFocusOutOfBranchRows(section: HTMLElement | null): void {
 
 /** Marks the branch compare section merged and owns its one automatic collapse per session. */
 export function useMergedBranchSectionDisclosure({
-  worktreeId,
+  owner,
   isMainWorktree,
   review,
   statusHeadOid,
   uncommittedCount,
   branchDiffEditorActive,
-  setBranchSectionCollapsed,
+  setBranchSectionAutoCollapsed,
   sectionRef
 }: {
-  worktreeId: string
+  owner: MergedBranchSectionOwner
   isMainWorktree: boolean
   review: MergedBranchSectionReview | null
   statusHeadOid: string | null
   uncommittedCount: number
   branchDiffEditorActive: boolean
-  setBranchSectionCollapsed: (collapsed: boolean) => void
+  setBranchSectionAutoCollapsed: (collapsed: boolean) => void
   sectionRef: RefObject<HTMLElement | null>
 }): { mergedReview: MergedBranchProof | null } {
+  const ownerKey = mergedBranchSectionOwnerKey(owner)
+  const ownerId = owner.id
+  const ownerHostId = owner.hostId
+  const ownerInstanceId = owner.instanceId
   const [memory, setMemory] = useState(() => ({
-    worktreeId,
-    merged: readMergedBranchSectionRecord(worktreeId).merged
+    ownerKey,
+    merged: readMergedBranchSectionRecord(owner).merged
   }))
-  if (memory.worktreeId !== worktreeId) {
-    setMemory({ worktreeId, merged: readMergedBranchSectionRecord(worktreeId).merged })
+  if (memory.ownerKey !== ownerKey) {
+    setMemory({ ownerKey, merged: readMergedBranchSectionRecord(owner).merged })
   }
-  const lastMerged = memory.worktreeId === worktreeId ? memory.merged : null
+  const lastMerged = memory.ownerKey === ownerKey ? memory.merged : null
 
   const reviewProvider = review?.provider
   const reviewNumber = review?.number
@@ -55,7 +61,8 @@ export function useMergedBranchSectionDisclosure({
   const reviewHeadSha = review?.headSha
   const reviewContainedHeadOid = review?.confirmedContainedHeadOid
   useEffect(() => {
-    const record = readMergedBranchSectionRecord(worktreeId)
+    const effectOwner = { id: ownerId, hostId: ownerHostId, instanceId: ownerInstanceId }
+    const record = readMergedBranchSectionRecord(effectOwner)
     const step = stepMergedBranchSection(record, {
       review:
         reviewProvider && reviewNumber !== undefined && reviewState
@@ -75,27 +82,29 @@ export function useMergedBranchSectionDisclosure({
     if (step.record === record) {
       return
     }
-    writeMergedBranchSectionRecord(worktreeId, step.record)
-    setMemory({ worktreeId, merged: step.record.merged })
+    writeMergedBranchSectionRecord(effectOwner, step.record)
+    setMemory({ ownerKey: mergedBranchSectionOwnerKey(effectOwner), merged: step.record.merged })
     if (step.action === 'collapse') {
       moveFocusOutOfBranchRows(sectionRef.current)
-      setBranchSectionCollapsed(true)
+      setBranchSectionAutoCollapsed(true)
     } else if (step.action === 'expand') {
-      setBranchSectionCollapsed(false)
+      setBranchSectionAutoCollapsed(false)
     }
   }, [
     branchDiffEditorActive,
     isMainWorktree,
+    ownerHostId,
+    ownerId,
+    ownerInstanceId,
     reviewContainedHeadOid,
     reviewHeadSha,
     reviewNumber,
     reviewProvider,
     reviewState,
     sectionRef,
-    setBranchSectionCollapsed,
+    setBranchSectionAutoCollapsed,
     statusHeadOid,
-    uncommittedCount,
-    worktreeId
+    uncommittedCount
   ])
 
   return { mergedReview: resolveMergedBranchProof(lastMerged, review, statusHeadOid) }

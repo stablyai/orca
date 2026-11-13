@@ -31,7 +31,14 @@ export function SectionHeader({
   const compact = useSourceControlScope() !== null
   // Share the rounded container so hover styling spans the whole row.
   return (
-    <div className={cn('pl-1 pr-3 pt-3', compact ? 'pb-0' : 'pb-1')}>
+    <div
+      className={cn(
+        'pl-1 pr-3 pt-3',
+        compact ? 'pb-0' : 'pb-1',
+        // Status chips size against the whole row, so long action labels don't shrink them early.
+        status && '@container/section-header'
+      )}
+    >
       <div className="group/section flex items-center gap-x-1 rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
         <Button
           type="button"
@@ -47,12 +54,7 @@ export function SectionHeader({
           <ChevronDown
             className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
-          <span
-            className={cn(
-              'min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground',
-              status && '@container'
-            )}
-          >
+          <span className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
             <span className="flex min-w-0 items-center gap-1">
               <span className="min-w-0 truncate" title={label}>
                 {label}

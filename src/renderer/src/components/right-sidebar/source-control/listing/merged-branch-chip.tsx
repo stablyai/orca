@@ -21,7 +21,7 @@ export function MergedBranchChip({
     // Title is for mouse hover; screen readers get the sr-only text in the toggle's name.
     <Badge variant="mergedState" title={reviewMerged}>
       <GitMerge aria-hidden="true" />
-      <span className="@max-[9rem]:sr-only">
+      <span className="@max-[15rem]/section-header:sr-only">
         {t('auto.components.right.sidebar.SourceControl.branchSectionMerged', 'Merged')}
       </span>
       <span className="sr-only">{` · ${reviewMerged}`}</span>

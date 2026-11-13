@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
-import { getWorktreeLookupIndex } from '@/store/github/refresh/worktree-refresh'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   mergedReviewIncludesHead,
@@ -93,15 +95,19 @@ export function stepMergedBranchSection(
   } else if (
     disclosure.kind === 'untouched' &&
     !observation.isMainWorktree &&
-    !observation.branchDiffEditorActive &&
     resolveMergedReviewWorkspaceReadiness({
       review: observation.review,
       headOid: head,
       uncommittedCount: observation.uncommittedCount
     })?.kind === 'safe-to-delete'
   ) {
-    disclosure = { kind: 'auto-collapsed', headOid: head }
-    action = 'collapse'
+    // A diff the user is reading from this section wins for the rest of the session.
+    if (observation.branchDiffEditorActive) {
+      disclosure = { kind: 'auto-released' }
+    } else {
+      disclosure = { kind: 'auto-collapsed', headOid: head }
+      action = 'collapse'
+    }
   }
   if (merged === record.merged && disclosure === record.disclosure) {
     return { record, action: null }
@@ -109,41 +115,63 @@ export function stepMergedBranchSection(
   return { record: { merged, disclosure }, action }
 }
 
+/** One host's copy of a workspace in one checkout lifetime; a recreated workspace starts fresh. */
+export type MergedBranchSectionOwner = Pick<Worktree, 'id' | 'hostId' | 'instanceId'>
+
+export function mergedBranchSectionOwnerKey(owner: MergedBranchSectionOwner): string {
+  return JSON.stringify([getWorktreeHostIdentity(owner), owner.instanceId ?? null])
+}
+
 // Session-only: a restart starts fresh. Records are dropped only for workspaces that no longer exist,
 // so a count cap can never forget a live workspace's choice and collapse it again.
-const RECORD_PRUNE_THRESHOLD = 512
-const recordsByWorktree = new Map<string, MergedBranchSectionRecord>()
+const MIN_PRUNE_THRESHOLD = 512
+let pruneThreshold = MIN_PRUNE_THRESHOLD
+const recordsByOwner = new Map<string, MergedBranchSectionRecord>()
 
-export function readMergedBranchSectionRecord(worktreeId: string): MergedBranchSectionRecord {
-  return recordsByWorktree.get(worktreeId) ?? UNTOUCHED_RECORD
+function pruneRecordsOfRemovedWorkspaces(keep: string): void {
+  const live = new Set<string>()
+  for (const worktrees of Object.values(selectWorktreesByRepo(useAppStore.getState()) ?? {})) {
+    for (const worktree of worktrees) {
+      live.add(mergedBranchSectionOwnerKey(worktree))
+    }
+  }
+  for (const key of recordsByOwner.keys()) {
+    if (key !== keep && !live.has(key)) {
+      recordsByOwner.delete(key)
+    }
+  }
+  // Doubling the bar keeps scans amortized O(1) per write when most records belong to live workspaces.
+  pruneThreshold = Math.max(MIN_PRUNE_THRESHOLD, recordsByOwner.size * 2)
+}
+
+export function readMergedBranchSectionRecord(
+  owner: MergedBranchSectionOwner
+): MergedBranchSectionRecord {
+  return recordsByOwner.get(mergedBranchSectionOwnerKey(owner)) ?? UNTOUCHED_RECORD
 }
 
 export function writeMergedBranchSectionRecord(
-  worktreeId: string,
+  owner: MergedBranchSectionOwner,
   record: MergedBranchSectionRecord
 ): void {
+  const key = mergedBranchSectionOwnerKey(owner)
   if (record.merged === null && record.disclosure.kind === 'untouched') {
-    recordsByWorktree.delete(worktreeId)
+    recordsByOwner.delete(key)
     return
   }
-  recordsByWorktree.set(worktreeId, record)
-  if (recordsByWorktree.size > RECORD_PRUNE_THRESHOLD) {
-    const liveWorktreeIds = getWorktreeLookupIndex(useAppStore.getState()).byId
-    for (const id of recordsByWorktree.keys()) {
-      if (id !== worktreeId && !liveWorktreeIds.has(id)) {
-        recordsByWorktree.delete(id)
-      }
-    }
+  recordsByOwner.set(key, record)
+  if (recordsByOwner.size > pruneThreshold) {
+    pruneRecordsOfRemovedWorkspaces(key)
   }
 }
 
-export function markBranchSectionToggledByUser(worktreeId: string): void {
-  writeMergedBranchSectionRecord(worktreeId, {
-    ...readMergedBranchSectionRecord(worktreeId),
+export function markBranchSectionToggledByUser(owner: MergedBranchSectionOwner): void {
+  writeMergedBranchSectionRecord(owner, {
+    ...readMergedBranchSectionRecord(owner),
     disclosure: { kind: 'user' }
   })
 }
 
-export function isBranchSectionAutoCollapsed(worktreeId: string): boolean {
-  return readMergedBranchSectionRecord(worktreeId).disclosure.kind === 'auto-collapsed'
+export function isBranchSectionAutoCollapsed(owner: MergedBranchSectionOwner): boolean {
+  return readMergedBranchSectionRecord(owner).disclosure.kind === 'auto-collapsed'
 }
