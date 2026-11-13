@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import { findFirstIndexedWorktree } from '../../../lib/workspace/ownership/worktree-runtime-owner-index'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'

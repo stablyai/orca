@@ -1,6 +1,6 @@
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 
-export const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://www.onorca.dev/v1/feedback'
+export const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://orca.dev/v1/feedback'
 const SUBMISSION_TIMEOUT_MS = 10_000
 const MAX_SUBMISSION_BYTES = 64 * 1024
 

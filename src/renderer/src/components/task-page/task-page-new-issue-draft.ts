@@ -1,4 +1,4 @@
-import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { NewIssueDraft } from '@/store/slices/task-creation/new-issue-draft'
 
 export type NewIssueOpenSeed = {

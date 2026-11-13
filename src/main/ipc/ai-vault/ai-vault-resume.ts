@@ -1,5 +1,5 @@
 import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault-params'
-import { prepareStructuredChatCliFork } from '../../ai-vault/structured-chat-cli-fork'
+import { prepareStructuredChatCliFork } from '../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { ipcMain } from 'electron'
 import type {
   AiVaultPrepareSessionResumeRequest,
@@ -8,11 +8,13 @@ import type {
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-session-ownership'
+import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
 import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/structured-agent-session-host-refusal'
-import { copyStructuredChatConversation } from '../../ai-vault/structured-chat-conversation-copy'
-import { wakeNativeChatTranscriptDistro } from '../../native-chat/native-chat-open-wake'
+import { copyStructuredChatConversation } from '../../ai-vault/structured-sessions/structured-chat-conversation-copy'
+import { wakeNativeChatTranscriptDistro } from '../../native-chat/transcript-discovery/native-chat-open-wake'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { prepareAiVaultSessionHandoff } from './ai-vault-handoff'
+import type { AiVaultSessionHandoffArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 
 export type AiVaultResumeHandlerOptions = {
   ensureStructuredSessionOwnership?: () => Promise<void>
@@ -27,6 +29,9 @@ export function registerAiVaultResumeHandler(options: AiVaultResumeHandlerOption
   ipcMain.handle(
     'aiVault:prepareSessionResume',
     (_event, args: AiVaultPrepareSessionResumeRequest) => prepareAiVaultSessionResume(args, options)
+  )
+  ipcMain.handle('aiVault:prepareSessionHandoff', (_event, args: AiVaultSessionHandoffArgs) =>
+    prepareAiVaultSessionHandoff(args)
   )
 }
 

@@ -1,10 +1,10 @@
-import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { projectPRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { useAppStore } from '@/store'
 import { useGitHubItemTargetContext } from './github-work-item-target-context'
 import {
   GitHubWorkItemTargetError,
   matchesGitHubWorkItemTarget
-} from '../../../../../shared/github/work-item-target'
+} from '../../../../../shared/github/work-items/work-item-target'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
@@ -13,11 +13,11 @@ import {
   normalizeItemDialogTab,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubWorkItemDetailsArgs } from './github-item-dialog-types'
 import {
   invalidateWorkItemDetailsCacheByMatch,

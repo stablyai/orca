@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from 'lucide-react-native'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
@@ -11,9 +18,9 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { translate } from '../i18n/mobile-i18n'
-import { useClipboardWriter } from '../platform/clipboard'
-import { openExternalLink } from '../platform/external-link'
-import { triggerSuccess } from '../platform/haptics'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { openExternalLink } from '../platform/external-links/external-link'
+import { triggerSuccess } from '../platform/haptics/haptics'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { STATUS_LABELS } from '../../../src/shared/git/status/git-status-labels'
@@ -65,7 +72,7 @@ export function MobileCommitDetailPage({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [files, setFiles] = useState<FilesState>({ files: null, error: null })
   const [filesReload, setFilesReload] = useState(0)

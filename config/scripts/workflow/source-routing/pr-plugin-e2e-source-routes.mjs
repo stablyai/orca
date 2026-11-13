@@ -120,12 +120,12 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.isolated-frames',
     ['plugin-isolated-frame', 'plugin-panel-containment'],
     [
-      'src\\/main\\/plugins\\/panels\\/plugin-frame-',
+      'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/|guest-isolation\\/|desktop-actions\\/)?plugin-frame-',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:frame-guest|panel-shell)',
       'src\\/preload\\/plugin-frame-guest',
-      'src\\/main\\/window\\/(?:main-window-webview-security|attach-main-window-services|host-frame-permission-policy)',
+      'src\\/main\\/window\\/(?:security/(?:main-window-webview-security|host-frame-permission-policy)|attach-main-window-services)',
       'src\\/main\\/ipc\\/(?:plugins|plugin-frame-entry-ipc)\\.ts$',
-      'src\\/main\\/startup\\/main-process-plugins',
+      'src\\/main\\/startup\\/plugin-startup\\/main-process-plugins',
       'config\\/build-plugins\\/main-build-entry-points',
       'src\\/main\\/browser\\/guest-lifecycle\\/input\\/browser-guest-shortcut-(?:forwarding|dispatch)',
       'src\\/renderer\\/src\\/components\\/(?:plugins\\/frames\\/|right-sidebar\\/plugin-panels\\/PluginPanel\\.tsx$)',
@@ -152,7 +152,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${UI}declarative\\/`,
       'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
       'resources\\/plugins\\/declarative\\/orca-components',
-      'src\\/main\\/plugins\\/panels\\/plugin-panel-image',
+      'src\\/main\\/plugins\\/panels\\/panel-lifetime\\/plugin-panel-image',
       'examples\\/plugins\\/components-gallery\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -162,10 +162,10 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.buildless-tsx',
     ['plugin-buildless-tsx'],
     [
-      'src\\/main\\/plugins\\/panels\\/plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
+      'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/)?plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
       'src\\/main\\/plugins\\/plugin-content-hash',
       'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
-      'src\\/cli\\/plugin-authoring\\/plugin-(?:type-files|components-template)',
+      'src\\/cli\\/plugins\\/authoring\\/plugin-(?:type-files|components-template)',
       'examples\\/plugins\\/hello-tsx\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -178,7 +178,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/shared\\/plugins\\/declarative\\/(?:plugin-declarative-message|runtime\\/declarative-(?:atoms|memory-retention|error-location|panel-context|renderer))',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:declarative-host-document|frame-bridge)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/(?:PluginPanel\\.tsx$|declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory))',
-      'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/plugin-frame-guest-sessions)',
+      'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/guest-isolation\\/plugin-frame-guest-sessions)',
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -188,7 +188,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.panel-agents',
     ['plugin-panel-agents'],
     [
-      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/plugin-workspace-projection)',
+      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/host-api\\/plugin-workspace-projection)',
       'src\\/shared\\/plugins\\/events\\/plugin-events'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke|agent-hook-endpoint'
@@ -199,7 +199,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ['plugin-worker-panel'],
     [
       'src\\/main\\/plugins\\/panels\\/plugin-panel-bridge',
-      'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/plugin-(?:worker-orca-api|host-panel-method-bindings|worker-requests))',
+      'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/(?:plugin-worker-orca-api|host-api\\/plugin-host-panel-method-bindings|parent-process\\/plugin-worker-requests))',
       'src\\/main\\/ipc\\/plugin-(?:panel-push|settings)-ipc',
       'src\\/shared\\/plugins\\/(?:workers\\/plugin-panel-bridge-protocol|frames\\/plugin-panel-shell-facades|contributions\\/plugin-settings-)',
       'src\\/shared\\/plugins\\/declarative\\/runtime\\/declarative-(?:data-sdk|storage-sync)',
@@ -218,7 +218,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/(?:main\\/plugins\\/view\\/(?!plugin-view-replay)|shared\\/plugins\\/view\\/)',
       'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
       // Every `plugin shot` checks for a chrome region and resolves the default shots folder.
-      'src\\/cli\\/(?:handlers\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
+      'src\\/cli\\/(?:plugins\\/view\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
       'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panels\\/health\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report)|right-sidebar-panel-content)'
     ].join('|'),
@@ -233,14 +233,14 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${STORE}shot-replay`,
       'src\\/main\\/plugins\\/view\\/plugin-view-replay',
       'src\\/main\\/plugins\\/testing\\/plugin-test-(?:hooks|register)',
-      'src\\/cli\\/(?:handlers|specs)\\/plugin-shot-scenario',
-      'src\\/cli\\/plugin-authoring\\/plugin-(?:panel-check|test-runner|test-node)'
+      'src\\/cli\\/(?:plugins\\/view|specs)\\/plugin-shot-scenario',
+      'src\\/cli\\/plugins\\/authoring\\/plugin-(?:panel-check|test-runner|test-node)'
     ].join('|')
   ),
   pluginRoute(
     'plugins.view-shot-editor',
     ['plugin-shot-editor'],
-    'src\\/cli\\/handlers\\/plugin-shot-editor'
+    'src\\/cli\\/plugins\\/view\\/plugin-shot-editor'
   ),
   pluginRoute(
     'plugins.startup-and-manifest',

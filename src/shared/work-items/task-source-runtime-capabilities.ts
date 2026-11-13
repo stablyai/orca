@@ -1,4 +1,4 @@
-import { GITHUB_IMAGE_ATTACHMENT_CAPABILITY } from '../github/image-attachment'
+import { GITHUB_IMAGE_ATTACHMENT_CAPABILITY } from '../github/attachments/image-attachment'
 import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../jira/jira-agent-capability'
 import {
   JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,

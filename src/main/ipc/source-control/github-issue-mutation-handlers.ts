@@ -1,12 +1,12 @@
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github-repo-target-params'
 import { ipcMain } from 'electron'
-import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubIssueUpdate } from '../../../shared/issue-mutation-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import { addIssueComment } from '../../github/issue-comment'
-import { listAssignableUsers, listLabels } from '../../github/issue-field-options'
-import { updateIssue } from '../../github/issue-update'
+import { addIssueComment } from '../../github/issues/issue-comment'
+import { listAssignableUsers, listLabels } from '../../github/issues/issue-field-options'
+import { updateIssue } from '../../github/issues/issue-update'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   assertRegisteredGitHubRepo,

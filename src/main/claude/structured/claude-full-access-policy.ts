@@ -1,5 +1,5 @@
 import { StringDecoder } from 'node:string_decoder'
-import { isRootClaudeFrame } from '../claude-turn-opening'
+import { isRootClaudeFrame } from './turns/claude-turn-opening'
 import {
   readClaudeFrameString,
   readClaudeReportedPermissionMode

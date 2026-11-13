@@ -5,7 +5,7 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import { resolveGitAdmissionTier } from '../../../git/command-runner/git-operation-executor'
+import { resolveGitAdmissionTier } from '../../../git/command-runner/admission/git-operation-executor'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
 import {
   createWorktreeCreateTimingRecorder,

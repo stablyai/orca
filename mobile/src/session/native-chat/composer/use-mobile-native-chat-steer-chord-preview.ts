@@ -1,11 +1,11 @@
 import type { RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { NativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
 
 export type MobileNativeChatSteerChordPreviewInput = {
-  fieldRef: RefObject<TextInput | null>
+  fieldRef: RefObject<TextInputInstance | null>
   hasDraft: boolean
   followUp: NativeChatSendFollowUp | null
   /** False for a typed chat command, which runs as itself rather than queue or steer. */

@@ -75,9 +75,24 @@ export type PendingHostStackNavigation = Readonly<{
 export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
 const HOST_INDEX_ROUTE = '[hostId]/index'
 
-// A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
-function opensOverHostList(target: HostStackRouteTarget): boolean {
+// A session opened in its host list's place (Home's agent rows), so Back leaves the host instead of showing the list.
+export const STANDALONE_SESSION_PARAM = 'standalone'
+
+export function isStandaloneSessionHref(href: string): boolean {
+  const [path = '', query = ''] = (href.split('#')[0] ?? '').split('?')
+  return (
+    /^\/h\/[^/]+\/session\//.test(path) &&
+    query.split('&').includes(`${STANDALONE_SESSION_PARAM}=1`)
+  )
+}
+
+function isSessionRoute(target: HostStackRouteTarget): boolean {
   return target.name === HOST_SESSION_ROUTE
+}
+
+// A session keeps its host's list beneath it so Back lands there, unless it is standalone; other targets take the list's place.
+function opensOverHostList(target: HostStackRouteTarget): boolean {
+  return isSessionRoute(target) && target.params[STANDALONE_SESSION_PARAM] !== '1'
 }
 
 const SETTLED_NAVIGATION: HostStackNavigationController = {
@@ -109,7 +124,7 @@ function focusedRouteOf(state: HostStackNavigationState): HostStackNavigationRou
 }
 
 // Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
-function hostParamMatches(param: unknown, expectedHostId: string): boolean {
+export function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
   }
@@ -183,7 +198,7 @@ export function navigateToHostStackRoute(
     return SETTLED_NAVIGATION
   }
   // The host screen opens the session inside its document when the page it activates can, else pushes it as before.
-  const href = openInHostDocument && opensOverHostList(target) ? sessionOpenHref(target) : null
+  const href = openInHostDocument && isSessionRoute(target) ? sessionOpenHref(target) : null
   // useLocalSearchParams decodes every value once more, which would undo the target's own escapes.
   const open = href === null ? null : encodeURIComponent(href)
   const inThisHost = hostState?.key && hostParamMatches(focused?.params?.hostId, hostId)
@@ -197,8 +212,17 @@ export function navigateToHostStackRoute(
     return SETTLED_NAVIGATION
   }
   // Already inside this host: pushing the host route again would stack a second list.
-  if (opensOverHostList(target) && inThisHost) {
-    navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+  if (isSessionRoute(target) && inThisHost) {
+    if (!opensOverHostList(target) && focused?.key && focused.name === HOST_INDEX_ROUTE) {
+      navigation.dispatch({
+        type: 'REPLACE',
+        target: hostState.key,
+        source: focused.key,
+        payload: target
+      })
+    } else {
+      navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+    }
     return SETTLED_NAVIGATION
   }
   return open === null
@@ -261,7 +285,7 @@ function openWhenHostStackCommits(
       return
     }
     dispose()
-    if (latest && opensOverHostList(latest[0])) {
+    if (latest && isSessionRoute(latest[0])) {
       navigateToHostStackRoute(navigation, router, hostId, ...latest)
     } else if (latest) {
       navigation.dispatch({

@@ -28,7 +28,7 @@ import type {
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
-import { getPRForBranch } from '../github/client'
+import { getPRForBranch } from '../github/client/lookup/get-pr-for-branch'
 import { addWorktree } from '../git/worktrees/creation/worktree-add'
 import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
 import type {
@@ -41,17 +41,17 @@ import {
 } from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   getBranchConflictKind,
-  getBranchConflictKindStrict,
-  resolveDefaultBaseRefWithLocalGit
-} from '../git/repo'
+  getBranchConflictKindStrict
+} from '../git/refs/resolution/repo-branch-conflict'
+import { resolveDefaultBaseRefWithLocalGit } from '../git/refs/resolution/repo-default-base-ref'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
-import { resolveLocalGitUsername } from '../git/git-username'
+import { resolveLocalGitUsername } from '../git/repositories/git-username'
 import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
 import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
-import { validateGitPushTarget } from '../git/push-target-validation'
-import { gitExecFileAsync } from '../git/runner'
+import { validateGitPushTarget } from '../git/remotes/push-target-validation'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RemoteFetchResult,
@@ -172,7 +172,10 @@ import {
   retireGeneratedWorktreeName
 } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
+import {
+  assertNoPendingWorktreeRemovalConflict,
+  findPendingWorktreeRemovalConflict
+} from '../workspaces/removal/worktree-removal-table'
 import {
   exactNameBranchConflict,
   exactNameLateCollision,
@@ -1221,6 +1224,27 @@ async function performLocalWorktreeCreate(
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
   const exactName = args.branchIntent === 'create-exact'
+  if (args.nameWasGenerated !== true || args.branchNameOverride) {
+    assertNoPendingWorktreeRemovalConflict(repo.path, {
+      worktreePath:
+        args.nameWasGenerated === true
+          ? undefined
+          : ensurePathWithinWorkspace(
+              computeWorktreePath(sanitizedName, repo.path, worktreePathSettings, workspaceRoot),
+              workspaceRoot
+            ),
+      branch:
+        args.branchNameOverride ||
+        (await resolveCreateBranchName(
+          repo.path,
+          undefined,
+          sanitizedName,
+          settings,
+          username,
+          localWorktreeGitOptions
+        ))
+    })
+  }
   if (
     args.branchIntent === 'open-existing' &&
     args.branchNameOverride &&

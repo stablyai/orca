@@ -4,6 +4,7 @@ import { cn } from '../../../lib/class-names'
 import { ShortcutCommandBlock } from './ShortcutCommandBlock'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
 import { useTranslate } from '@/i18n/use-translate'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { translateShortcutGroupTitle } from './shortcut-action-copy'
 
 const EMPTY_BINDINGS: readonly string[] = []
@@ -63,39 +64,34 @@ export function ShortcutRowsList({
   return (
     <div className={cn('flex flex-col gap-8', className)}>
       {groups.map((group) => (
-        <div key={group.title} className="space-y-3">
-          <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
-            {translateShortcutGroupTitle(group.title)}
-          </h3>
-          <div className="flex flex-col gap-3">
-            {group.rows.map((row) => (
-              <ShortcutCommandBlock
-                key={row.item.id}
-                item={row.item}
-                groupTitle={group.title}
-                platform={platform}
-                effective={row.effective}
-                modified={row.modified}
-                error={errors[row.item.id]}
-                warnings={row.warnings}
-                terminalStatus={row.terminalStatus}
-                previousBindings={disableMemory[row.item.id] ?? EMPTY_BINDINGS}
-                recordingBindingIndex={
-                  recordingActionId === row.item.id ? recordingBindingIndex : null
-                }
-                onStartRecordingAt={onStartRecordingAt}
-                onAppendBinding={onAppendBinding}
-                onCancelRecording={onCancelRecording}
-                onCapture={onCapture}
-                onClearError={onClearError}
-                onRemoveBindingAt={onRemoveBindingAt}
-                onResetAction={onResetAction}
-                onDisableAction={onDisableAction}
-                onEnableAction={onEnableAction}
-              />
-            ))}
-          </div>
-        </div>
+        <SettingsGroup key={group.title} title={translateShortcutGroupTitle(group.title)}>
+          {group.rows.map((row) => (
+            <ShortcutCommandBlock
+              key={row.item.id}
+              item={row.item}
+              groupTitle={group.title}
+              platform={platform}
+              effective={row.effective}
+              modified={row.modified}
+              error={errors[row.item.id]}
+              warnings={row.warnings}
+              terminalStatus={row.terminalStatus}
+              previousBindings={disableMemory[row.item.id] ?? EMPTY_BINDINGS}
+              recordingBindingIndex={
+                recordingActionId === row.item.id ? recordingBindingIndex : null
+              }
+              onStartRecordingAt={onStartRecordingAt}
+              onAppendBinding={onAppendBinding}
+              onCancelRecording={onCancelRecording}
+              onCapture={onCapture}
+              onClearError={onClearError}
+              onRemoveBindingAt={onRemoveBindingAt}
+              onResetAction={onResetAction}
+              onDisableAction={onDisableAction}
+              onEnableAction={onEnableAction}
+            />
+          ))}
+        </SettingsGroup>
       ))}
     </div>
   )

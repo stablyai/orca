@@ -23,6 +23,7 @@ import {
   getWorkerAutoCloseState,
   keepWorkerTerminalOpen
 } from './worker-terminal-user-keep'
+import { listWorkerReportWaitCandidates } from './worker-report-wait-candidates'
 
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
 export type WorkerTerminalOrderingKey = {
@@ -288,6 +289,7 @@ export type WorkerTerminalListingMethods = {
   countWorkerTerminalInventory: typeof countWorkerTerminalInventory
   getWorkerAttentionFacts: typeof getWorkerAttentionFacts
   getWorkerAttentionFactsForDispatches: typeof getWorkerAttentionFactsForDispatches
+  listWorkerReportWaitCandidates: typeof listWorkerReportWaitCandidates
 }
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
@@ -301,6 +303,7 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     getWorkerTerminalOrderingKey,
     countWorkerTerminalInventory,
     getWorkerAttentionFacts,
-    getWorkerAttentionFactsForDispatches
+    getWorkerAttentionFactsForDispatches,
+    listWorkerReportWaitCandidates
   })
 }

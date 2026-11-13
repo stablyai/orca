@@ -1,9 +1,8 @@
-import { githubProjectHost } from '../../../../shared/github/project-identity'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { githubProjectHost } from '../../../../shared/github/projects/project-identity'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
-import { parseGitHubItemRepository } from '../../../../shared/github/work-item-target'
-export { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../shared/github/work-item-target'
+import { parseGitHubItemRepository } from '../../../../shared/github/work-items/work-item-target'
 
 /** Project rows may belong to another repo; route mutations by their slug instead of the active workspace. */
 export type GitHubWorkItemProjectOrigin = {

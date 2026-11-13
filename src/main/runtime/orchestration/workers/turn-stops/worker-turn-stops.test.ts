@@ -14,6 +14,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
+import { reportWorkerTurnStop } from './worker-turn-stop-report'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -65,7 +66,16 @@ function moved(from: 'working' | 'done', to: 'done' | 'needs-you'): AgentPaneCha
   }
 }
 
-function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcPayload }) {
+function terminal(
+  ctx: ReturnType<typeof setup>,
+  current: { row: AgentStatusIpcPayload },
+  approvals: Partial<
+    Pick<
+      ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
+      'takeOpenApproval' | 'markApprovalReported'
+    >
+  > = {}
+) {
   return new TerminalWorkerTurnStops({
     ...ctx.deps,
     readHookRow: () => current.row,
@@ -75,7 +85,9 @@ function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcP
     },
     getHandle: () => HANDLE,
     getProcessIncarnation: () => null,
-    takeOpenApproval: () => null,
+    takeOpenApproval: async () => null,
+    markApprovalReported: () => {},
+    ...approvals,
     readScreen: async () => ({
       handle: HANDLE,
       status: 'running',
@@ -108,6 +120,106 @@ describe('terminal worker turn stops', () => {
     createRootDispatch(ctx.db, followUp.id, HANDLE, PANE)
     await settle()
     expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it.each([
+    { waitingForMail: false, marked: ['apr_1'] },
+    { waitingForMail: true, marked: [] }
+  ])(
+    'marks an approval reported only when its escalation went out (%o)',
+    async ({ waitingForMail, marked }) => {
+      const ctx = setup()
+      if (waitingForMail) {
+        ctx.waiting.add(`dispatch:${ctx.dispatch.id}`)
+      }
+      const markApprovalReported = vi.fn()
+      const current = { row: hookRow({ state: 'working', agentType: 'claude' }) }
+      const stops = terminal(ctx, current, {
+        takeOpenApproval: async () => ({
+          v: 1,
+          approvalId: 'apr_1',
+          state: 'open',
+          worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
+          summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+          allowedActions: ['allow', 'deny']
+        }),
+        markApprovalReported
+      })
+      current.row = hookRow({ state: 'blocked', agentType: 'claude' })
+      stops.observe(moved('working', 'needs-you'))
+      await settle()
+
+      expect(ctx.mail()).toHaveLength(marked.length)
+      expect(markApprovalReported.mock.calls.flat()).toEqual(marked)
+    }
+  )
+
+  it('never mails a capability or credential carried in why a worker went away', () => {
+    const ctx = setup()
+    const capability = 'dcap_0123456789abcdefghijKLMN'
+    reportWorkerTurnStop(
+      ctx.db,
+      { kind: 'local', dispatch: ctx.dispatch },
+      {
+        from: HANDLE,
+        reason: 'lost',
+        lastOutput: undefined,
+        cause: `it never started: refused ${capability} at https://user:hunter2@git.example.com/repo`,
+        leftover: `workspace ${capability}`
+      },
+      ctx.deps
+    )
+    const [mail] = ctx.mail()
+    expect(mail?.body).toContain('refused [dispatch capability redacted]')
+    expect(mail?.body).not.toContain(capability)
+    expect(mail?.body).not.toContain('hunter2')
+  })
+
+  it('stays quiet for the turn whose worker_done was rejected, not for later turns', () => {
+    const ctx = setup()
+    const writeToWorker = () => {
+      const mail = ctx.db.insertMessage({
+        from: 'term_coordinator',
+        to: `dispatch:${ctx.dispatch.id}`,
+        subject: 'Start',
+        runId: ctx.run.id
+      })
+      ctx.db.markAsRead([mail.id])
+    }
+    const report = (type: 'worker_done' | 'heartbeat') => {
+      const sent = ctx.db.insertMessage({
+        from: HANDLE,
+        to: `run:${ctx.run.id}`,
+        subject: 'Done',
+        type,
+        payload: JSON.stringify({ taskId: ctx.dispatch.task_id, dispatchId: ctx.dispatch.id }),
+        runId: ctx.run.id
+      })
+      ctx.db.convertLifecycleMessageToRejection(sent.id, 'worker_identity_changed', 'not the owner')
+    }
+    const stop = (stopKey: string, turnStartedAt: number) =>
+      reportWorkerTurnStop(
+        ctx.db,
+        { kind: 'local', dispatch: ctx.dispatch },
+        { from: HANDLE, stopKey, reason: 'finished', lastOutput: undefined, turnStartedAt },
+        ctx.deps
+      )
+    // The rejection is stored on the real clock: after 1970, before 2100.
+    const before = 1_000
+    const after = 4_102_444_800_000
+    writeToWorker()
+    report('heartbeat')
+    stop('turn-1', before)
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+
+    writeToWorker()
+    report('worker_done')
+    stop('turn-2', before)
+    expect(ctx.mail()).toHaveLength(1)
+
+    // A later idle turn that sent nothing is news, though the coordinator has not written since.
+    stop('turn-3', after)
+    expect(ctx.mail()).toHaveLength(2)
   })
 })
 
@@ -156,10 +268,15 @@ describe('chat worker turn stops', () => {
   function chatWithTimers(ctx: ReturnType<typeof setup>) {
     const timers: (() => void)[] = []
     const status = 'idle' as const
-    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => {
+      timers.push(run)
+    })
     return {
       finish: (turnId: string) =>
-        report(completion('success', turnId), () => ({ status, lastAssistantMessage: 'Done.' })),
+        report.onTurnAttention(completion('success', turnId), () => ({
+          status,
+          lastAssistantMessage: 'Done.'
+        })),
       runTimers: () => {
         for (const run of timers.splice(0)) {
           run()
@@ -182,5 +299,56 @@ describe('chat worker turn stops', () => {
     expect(ctx.mail()).toMatchObject([
       { subject: 'Worker stopped without reporting', payload: expect.stringContaining(followUp) }
     ])
+  })
+  it('retiring the owner suppresses pending reports and permits a fresh owner to report', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    let finishRead!: (value: null) => void
+    const queued: (() => void)[] = []
+    const owner = chatWorkerTurnStopReporter(
+      ctx.deps,
+      (run) => {
+        queued.push(run)
+      },
+      () =>
+        new Promise((resolve) => {
+          finishRead = resolve
+        })
+    )
+    const edge = completion('success')
+    if (edge.type !== 'completion') {
+      throw new Error('Expected completion')
+    }
+    owner.onTurnAttention(edge, () => ({ status: 'idle' }))
+    owner.onTurnAttention(
+      {
+        type: 'prompt',
+        prompt: {
+          scope: edge.completion.scope,
+          sessionId: CHAT_SESSION,
+          promptId: 'approval-retired',
+          raisedAt: 1
+        }
+      },
+      () => ({ status: 'attention' })
+    )
+    owner.stop()
+    finishRead(null)
+    for (const run of queued) {
+      run()
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(ctx.mail()).toEqual([])
+    expect(ctx.notify).not.toHaveBeenCalled()
+
+    const live = chatWorkerTurnStopReporter(ctx.deps, (run) => {
+      queued.push(run)
+    })
+    live.onTurnAttention(completion('success', 'fresh-turn'), () => ({ status: 'idle' }))
+    for (const run of queued.splice(0)) {
+      run()
+    }
+    expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
+    live.stop()
   })
 })

@@ -5,9 +5,9 @@ import {
   type GitHubRuntimeHost
 } from '@/lib/work-items/github/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubChecksTabState } from '../../github-checks-tab-state'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'

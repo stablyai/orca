@@ -129,8 +129,17 @@ export class WorkerThreadRequestQueue<
     }
   }
 
+  retired(): Promise<void> {
+    return this.host.retired()
+  }
+
+  /** A terminated worker that has not exited yet; nothing new can start until it does. */
+  get isRetiring(): boolean {
+    return this.host.isRetiring
+  }
+
   private pump(): void {
-    if (this.active || this.queue.length === 0) {
+    if (this.disposed || this.active || this.queue.length === 0) {
       return
     }
     // A shared signal is already aborted before its remaining listeners run.
