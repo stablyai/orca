@@ -54,6 +54,14 @@ function slotsOf(
   })
 }
 
+/** The host's journal as far as the marker reads it: whether its newest turn record is running. */
+const hostTurn = (running: boolean) => ({
+  items: [],
+  latestTurn: running
+    ? { itemId: 'turn', observedAt: 0, turn: { turnId: 'turn', state: 'running' as const } }
+    : null
+})
+
 const SEEN = [row('prompt', 1, 'user'), row('reply', 2)]
 const LATER = [...SEEN, row('answer', 3), row('more', 4)]
 const ASKED = [row('prompt', 1, 'user')]
@@ -116,7 +124,8 @@ describe('useNativeChatNewRowsMarker', () => {
         useNativeChatNewRowsMarker(
           slotsOf(props.messages, props.turn ?? turn),
           slotsOf(props.waiting ?? []),
-          props.showing
+          props.showing,
+          hostTurn((props.turn ?? turn)?.working === true)
         ),
       { initialProps }
     )
@@ -293,6 +302,179 @@ describe('useNativeChatNewRowsMarker', () => {
         }
         // Seen while it waited, it is not news once the turn ends and it joins the transcript.
         expect(markedWith(fromAgent, [...begun, fromAgent])).toBeUndefined()
+      })
+    })
+  })
+
+  describe('whether it draws a line', () => {
+    const fromAgent = (id: string, sequence: number): NativeChatMessage => ({
+      ...row(id, sequence, 'user'),
+      from: {
+        kind: 'agent',
+        senders: [
+          {
+            party: { address: 'term_peer', terminalHandle: 'term_peer', orcaSessionId: null },
+            name: 'Claude'
+          }
+        ],
+        orchestration: null
+      }
+    })
+
+    it('weighs by height a short reply under the prompt the reader just sent', () => {
+      const sent = [...SEEN, row('next-prompt', 3, 'user')]
+      const view = leaveAndReturn(sent, [...sent, row('answer', 4)])
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'measure' })
+    })
+
+    it('draws when another agent posted', () => {
+      const view = leaveAndReturn(SEEN, [...SEEN, fromAgent('peer', 3), row('answer', 4)])
+      expect(view.result.current.marker).toMatchObject({ key: 'peer', look: 'line' })
+    })
+
+    it('draws when a queued send was handed over', () => {
+      const queued: NativeChatMessage = { ...row('held', 3, 'user'), queued: true }
+      const view = chat(SEEN)
+      view.rerender({ messages: SEEN, showing: true, waiting: [queued] })
+      view.rerender({ messages: SEEN, showing: false, waiting: [queued] })
+      view.rerender({
+        messages: [...SEEN, row('done', 4), row('held', 5, 'user'), row('answer', 6)],
+        showing: true
+      })
+      expect(view.result.current.marker).toMatchObject({ key: 'done', look: 'line' })
+    })
+
+    it('draws when a queued send ran after the turn the reader had watched to its end', () => {
+      const begun = [row('prompt', 1, 'user'), row('reply', 2)]
+      const queued: NativeChatMessage = { ...row('held', 3, 'user'), queued: true }
+      const view = chat(begun, { working: true })
+      view.rerender({ messages: begun, showing: true, waiting: [queued] })
+      view.rerender({ messages: begun, showing: false, waiting: [queued] })
+      view.rerender({
+        messages: [...begun, row('held', 4, 'user'), row('answer', 5)],
+        showing: true,
+        turn: { worked: 3 }
+      })
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
+    })
+
+    it('draws when a queued send ran behind a turn that had drawn no reply when the reader left', () => {
+      const asked = [row('prompt', 1, 'user')]
+      const queued: NativeChatMessage = { ...row('held', 2, 'user'), queued: true }
+      const view = chat(asked, { working: true })
+      view.rerender({ messages: asked, showing: true, waiting: [queued] })
+      view.rerender({ messages: asked, showing: false, waiting: [queued] })
+      // The running turn settles with nothing to show; the held send runs and gets a short answer.
+      view.rerender({
+        messages: [...asked, row('held', 3, 'user'), row('answer', 4)],
+        showing: true,
+        turn: { worked: 3 }
+      })
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
+    })
+
+    it('weighs by height a short reply to a turn that had drawn no reply when the reader left', () => {
+      const asked = [row('prompt', 1, 'user')]
+      const view = chat(asked, { working: true })
+      view.rerender({ messages: asked, showing: false })
+      view.rerender({
+        messages: [...asked, row('answer', 2)],
+        showing: true,
+        turn: { worked: 3 }
+      })
+      // Drawn above the turn bar that parts the answer from the reader's prompt.
+      expect(view.result.current.marker).toMatchObject({ key: 'prompt', look: 'measure' })
+    })
+
+    it('draws when a prompt this pane never sent ran, such as an auto-continue', () => {
+      const view = leaveAndReturn(SEEN, [...SEEN, row('continue', 3, 'user'), row('answer', 4)])
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'line' })
+    })
+
+    it('does not draw for the send journalled after the reader looked away', () => {
+      // Drawn before the journal places it, just after the newest row; placed later than that.
+      const sending = [...SEEN, { ...row('next-prompt', null, 'user'), journalPosition: at(2.5) }]
+      const view = leaveAndReturn(sending, [...SEEN, row('next-prompt', 3, 'user'), row('a', 4)])
+      expect(view.result.current.marker).toMatchObject({ key: 'a', look: 'measure' })
+    })
+
+    it('does not draw for a first send the host held while the chat opened', () => {
+      const sent: NativeChatMessage = { ...row('prompt', null, 'user'), queued: true }
+      const view = chat([])
+      view.rerender({ messages: [], showing: true, waiting: [sent] })
+      view.rerender({ messages: [], showing: false, waiting: [sent] })
+      const ran = row('prompt', 1, 'user')
+      view.rerender({ messages: [ran, row('answer', 2)], showing: true })
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'measure' })
+    })
+
+    it('tells of the rows but draws nothing when they measure short', () => {
+      const view = leaveAndReturn(SEEN, LATER)
+      const { announcement } = view.result.current
+      act(() => view.result.current.marker?.onMeasured(false))
+      expect(view.result.current).toMatchObject({ marker: undefined, index: -1, announcement })
+    })
+
+    it('weighs the next return afresh once faded, and announces it again', () => {
+      const view = leaveAndReturn(SEEN, LATER)
+      const first = view.result.current.announcement
+      act(() => view.result.current.marker?.onMeasured(true))
+      act(() => view.result.current.marker?.onFaded())
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'faded' })
+
+      view.rerender({ messages: LATER, showing: false })
+      expect(view.result.current.marker).toMatchObject({ key: 'answer', look: 'faded' })
+      const newer = [...LATER, fromAgent('peer', 5)]
+      view.rerender({ messages: newer, showing: true })
+      expect(view.result.current.marker).toMatchObject({
+        key: 'peer',
+        look: 'line',
+        arriving: true
+      })
+      expect(view.result.current.announcement).not.toBe(first)
+    })
+
+    it('keeps a faded line in place when the next return needs none', () => {
+      const view = leaveAndReturn(SEEN, LATER)
+      act(() => view.result.current.marker?.onMeasured(true))
+      act(() => view.result.current.marker?.onFaded())
+      const first = view.result.current.announcement
+
+      view.rerender({ messages: LATER, showing: false })
+      view.rerender({ messages: [...LATER, row('short', 5)], showing: true })
+      expect(view.result.current.marker).toMatchObject({ key: 'short', look: 'measure' })
+      act(() => view.result.current.marker?.onMeasured(false))
+      expect(view.result.current.marker).toMatchObject({
+        key: 'answer',
+        look: 'faded',
+        arriving: false
+      })
+      expect(view.result.current.announcement).not.toBe(first)
+    })
+
+    it('stays faded through a look away that brings nothing new', () => {
+      const view = leaveAndReturn(SEEN, LATER)
+      act(() => view.result.current.marker?.onMeasured(true))
+      act(() => view.result.current.marker?.onFaded())
+      view.rerender({ messages: LATER, showing: false })
+      view.rerender({ messages: LATER, showing: true })
+      expect(view.result.current.marker).toMatchObject({
+        key: 'answer',
+        look: 'faded',
+        arriving: false
+      })
+    })
+
+    it('keeps a line not yet faded through a look away', () => {
+      const view = leaveAndReturn(SEEN, LATER)
+      act(() => view.result.current.marker?.onMeasured(true))
+      act(() => view.result.current.marker?.onArrived())
+      view.rerender({ messages: LATER, showing: false })
+      view.rerender({ messages: [...LATER, fromAgent('peer', 5)], showing: true })
+      expect(view.result.current.marker).toMatchObject({
+        key: 'answer',
+        look: 'line',
+        arriving: false
       })
     })
   })

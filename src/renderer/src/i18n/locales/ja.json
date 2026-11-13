@@ -19973,7 +19973,7 @@
         "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",
         "scrollToLatestOnSendSearchPosition": "位置",
         "markNewMessagesTitle": "チャットに戻ったときに新着メッセージを示す",
-        "markNewMessagesCopy": "チャットに戻ると、離れている間に届いたメッセージの上に「新着」の線を表示します。最新のメッセージを読んでいた場合は、そこまでスクロールします。",
+        "markNewMessagesCopy": "チャットに戻ったとき、見逃した内容が長い場合や他の人が書き込んだ場合は、「新着」の線でその位置を示し、そこまでスクロールします。線は一度見るとフェードアウトします。",
         "markNewMessagesSearchUnread": "未読",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られず、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になり、何も入力されていない場合は最初の待機カードを実行中のターンに送ります。画像付きメッセージもカードとして待機します。",
         "inlineVisualsTitle": "インライン表示",
