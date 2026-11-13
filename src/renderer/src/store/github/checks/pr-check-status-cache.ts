@@ -1,11 +1,11 @@
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import type { AppState } from '../../types'
-import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { derivePRCheckStatus as deriveCheckStatusFromChecks } from '../../../../../shared/source-control/checks/pr-check-status'
 import { getPRChecksCacheTtl, prChecksCacheSuffix } from '../cache/cache-identity'
-import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 
 export function applyCachedChecksStatus(
   state: AppState,

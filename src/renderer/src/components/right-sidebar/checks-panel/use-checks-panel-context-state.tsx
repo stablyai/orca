@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
-import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'
 import { selectReviewCacheEntry } from '../source-control/review/review-cache-entry-selection'
@@ -16,8 +16,8 @@ import {
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import { recordChecksPanelPRRefreshBreadcrumb } from './refresh/checks-panel-pr-refresh-breadcrumb'
 import { isChecksPanelHardRefreshErrorType } from './review-actions/checks-panel-review-creation'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
-import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { PRRefreshErrorType } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 type ChecksPanelContextStateInput = Pick<
   ChecksPanelControllerState,

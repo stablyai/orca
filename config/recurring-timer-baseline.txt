@@ -3,17 +3,17 @@
 # collector (file-wide). Not counted: destructuring off a global object, a self-rescheduling setTimeout (it must back off or pause while hidden).
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune
-1 src/cli/handlers/orchestration/check-keepalive.ts
+1 src/cli/orchestration/messages/check-keepalive.ts
 1 src/cli/runtime/mac-app-update-bundle.ts
 1 src/cli/runtime/serve-supervised-service.ts
 1 src/main/agent-hooks/server/server-opencode-binder.ts
-1 src/main/automations/retained-run-reconciliation.ts
-1 src/main/automations/service.ts
+1 src/main/automations/observation/retained-run-reconciliation.ts
+1 src/main/automations/automation-service.ts
 1 src/main/browser/extensions/native-messaging/browser-extension-native-ports.ts
 1 src/main/browser/extensions/web-store/browser-extension-webstore-updater.ts
 1 src/main/claude/agent-view/agent-view-bridge.ts
 1 src/main/cli/appimage/appimage-serve-preparation.ts
-1 src/main/codex-accounts/codex-login-session.ts
+1 src/main/codex-accounts/login/codex-login-session.ts
 1 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/crash-reporting/memory/pre-gone-host-memory.ts
 1 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
@@ -38,10 +38,10 @@
 1 src/main/native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-continue.ts
 1 src/main/native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep.ts
 1 src/main/notifications/desktop-presence-reporter.ts
-1 src/main/orcad/orcad-browser-install-park.ts
-1 src/main/orcad/orcad-event-loop-watchdog.ts
-1 src/main/orcad/orcad-lock-clone-machine.ts
-1 src/main/orcad/orcad-stop-request-listener.ts
+1 src/main/orcad/browser-providers/orcad-browser-install-park.ts
+1 src/main/orcad/diagnostics/orcad-event-loop-watchdog.ts
+1 src/main/orcad/instance-lock/orcad-lock-clone-machine.ts
+1 src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-listener.ts
 1 src/main/plugins/catalog/plugin-auto-updater.ts
 1 src/main/plugins/catalog/plugin-kill-list-service.ts
 1 src/main/plugins/installation/plugin-git-repository.ts
@@ -49,13 +49,13 @@
 1 src/main/rate-limits/service/service-polling.ts
 1 src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
-3 src/main/runtime/mobile-cloud-relay/relay-control-liveness.ts
+3 src/main/runtime/mobile-cloud-relay/control-channel/relay-control-liveness.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-run.ts
-1 src/main/runtime/rpc/mobile-socket-wiring.ts
-1 src/main/runtime/rpc/remote-runtime-server-heartbeat.ts
+1 src/main/runtime/rpc/mobile/mobile-socket-wiring.ts
+1 src/main/runtime/rpc/transports/websocket/remote-runtime-server-heartbeat.ts
 1 src/main/runtime/rpc/server/runtime-metadata-ownership-watch.ts
-1 src/main/runtime/rpc/unix-socket-transport.ts
-1 src/main/runtime/sidebar-inputs/paired-server-rows-producer.ts
+1 src/main/runtime/rpc/transports/unix-socket-transport.ts
+1 src/main/runtime/sidebar-inputs/workspace-rows/paired-server-rows-producer.ts
 1 src/main/runtime/terminal/input/agent-prompt-permission-hold.ts
 1 src/main/runtime/terminal/output/terminal-derived-agent-facts.ts
 1 src/main/runtime/terminal/wait/terminal-idle-polls.ts
@@ -64,8 +64,8 @@
 1 src/main/ssh/port-forwarding/ssh-tcp-forwarding-probe.ts
 1 src/main/ssh/protocol/ssh-channel-multiplexer.ts
 1 src/main/startup/configure-process.ts
-1 src/main/startup/event-loop-stall-probe.ts
-1 src/main/startup/synthetic-title-runtime.ts
+1 src/main/startup/diagnostics/event-loop-stall-probe.ts
+1 src/main/startup/main-window/synthetic-title-runtime.ts
 1 src/main/telemetry/wsl-usage-reporter.ts
 1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/orcad/wsl-orcad-connect-stop-fence.ts

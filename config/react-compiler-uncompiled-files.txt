@@ -3,8 +3,8 @@
 # are skipped too. Remove a line once its file is safe to compile.
 
 # Render-time reads of providerRuntimeSessionGeneration (lib/provider-runtime-context.ts; hazard live-read-in-memo-block).
-src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx
-src/renderer/src/components/feature-wall/use-integration-connection-status.ts
+src/renderer/src/components/feature-wall/setup/FeatureWallSetupChecklist.tsx
+src/renderer/src/components/feature-wall/setup/integrations/use-integration-connection-status.ts
 src/renderer/src/components/integrations/task-trackers/jira-integration-card.tsx
 src/renderer/src/components/integrations/task-trackers/linear-integration-card.tsx
 src/renderer/src/components/new-workspace/use-jira-source-connection.ts
@@ -28,6 +28,8 @@ src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-s
 src/renderer/src/components/editor/markdown-preview/search/use-markdown-preview-search-reveal.ts
 src/renderer/src/components/editor/markdown-preview/viewport/use-markdown-preview-scroll-anchor.ts
 src/renderer/src/components/github-item-dialog/inspect-pull-request/pr-files-combined-diff-body.tsx
+src/renderer/src/components/native-chat/tools/runs/NativeChatToolRunMembers.tsx
+src/renderer/src/components/native-chat/tools/runs/use-native-chat-tool-run-window.ts
 src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorerVirtualRows.tsx
 src/renderer/src/components/right-sidebar/file-explorer/tree/FileExplorerFilesTreePane.tsx
 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx

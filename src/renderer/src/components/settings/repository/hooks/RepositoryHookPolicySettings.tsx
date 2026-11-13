@@ -250,7 +250,7 @@ export function RepositoryHookCommandSourceSetting({
           {getCommandSourceLabel(selectedPolicy, t)}
         </span>
       </summary>
-      <div className="space-y-5 pt-4">
+      <div className="space-y-5 pt-4 pl-5.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">

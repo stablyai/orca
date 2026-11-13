@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
+import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { isFrozenOrcadSourceSessionPartition } from '../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import { visibleSessionHostIds } from '../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source-session'
@@ -95,20 +95,9 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     return store.flushPendingOrThrowAsync()
   })
 
-  ipcMain.on(
-    'session:read-terminal-scrollback-sync',
-    (event, args: { ref?: unknown } | undefined) => {
-      event.returnValue =
-        typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
-    }
-  )
-
-  // Why: render-time planning only needs to know a local copy exists; a stat never reads bytes.
-  ipcMain.on(
-    'session:has-terminal-scrollback-sync',
-    (event, args: { ref?: unknown } | undefined) => {
-      event.returnValue =
-        typeof args?.ref === 'string' ? store.hasTerminalScrollbackSnapshot(args.ref) : false
-    }
+  ipcMain.handle(
+    'session:read-terminal-scrollback',
+    (_event, args: { ref?: unknown } | undefined) =>
+      typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshotAsync(args.ref) : null
   )
 }

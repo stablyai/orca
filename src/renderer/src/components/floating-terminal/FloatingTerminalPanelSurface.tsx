@@ -206,8 +206,11 @@ export function renderFloatingTerminalPanelSurface(
             >
               {/* Unresolvable stale tabs need the empty-state actions instead of a blank body. */}
               {surface.kind === 'workspace' && hasVisibleFloatingTabs ? (
-                // The tree needs a flex host owning its rect; block layout collapses panes to zero height.
-                <div className="absolute inset-0 flex" data-floating-workspace-surface-frame>
+                // The tree needs a flex host owning its rect; reserve a 4px east resize lane when unmaximized so xterm's scrollbar stays uncovered.
+                <div
+                  className={`absolute inset-y-0 left-0 flex ${maximized ? 'right-0' : 'right-1'}`}
+                  data-floating-workspace-surface-frame
+                >
                   <TabGroupSplitNodeTree
                     layout={surface.layout}
                     worktreeId={FLOATING_TERMINAL_WORKTREE_ID}

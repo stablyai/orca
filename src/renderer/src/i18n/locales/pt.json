@@ -1233,7 +1233,8 @@
       "remove": "Remover…",
       "empty": "Nenhuma extensão está ativada para este perfil",
       "visitWebStore": "Visitar a Chrome Web Store",
-      "manage": "Gerenciar extensões"
+      "manage": "Gerenciar extensões",
+      "openWebStoreFailed": "Não foi possível abrir a Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Celular P — 320 × 568",
@@ -1740,8 +1741,6 @@
       "rowPermissionsLabel": "Permissões de {{agent}}",
       "customPermissions": "Argumentos personalizados",
       "replaceWithPermissionMode": "Substituir por {{mode}}",
-      "expandAgentSettings": "Expandir configurações do agente",
-      "collapseAgentSettings": "Recolher configurações do agente",
       "defaultOpensAs": "Abrir {{value0}} como",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
@@ -2529,9 +2528,6 @@
         "unreadableSkillSource": "Uma pasta de skill não respondeu, então este status pode estar incompleto."
       },
       "useMacosTccPromptNotice": {
-        "title": "Está vendo avisos de “O Orca gostaria de acessar…”?",
-        "description": "Mensagens de permissão do macOS podem aparecer quando um agente ou ferramenta de terminal em execução no Orca tenta acessar arquivos protegidos. Conceda Acesso Total ao Disco em Configurações para reduzir esses avisos.",
-        "openSettings": "Abrir Configurações",
         "dismiss": "Não mostrar novamente"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -5251,16 +5247,12 @@
           "5426ecbdcb": "Scripts locais não serão executados",
           "95a0411b3e": "modelo",
           "175daba180": "Exemplo",
-          "b20c5df6ca": "Adicione um arquivo `orca.yaml` para habilitar padrões compartilhados de configuração, arquivamento ou automação de issue para este repositório. Modelo de exemplo:",
-          "56f9a4a1d0": "Usando `orca.yaml`",
           "623e0c9f31": "Não foi possível interpretar o `orca.yaml`",
-          "5a67e4793d": "Nenhum `orca.yaml` detectado",
           "07ba35bc68": "Verifique a indentação sob `scripts:`. As chaves de hook devem usar dois espaços, e as linhas de comando devem usar quatro.",
           "787ca433ef": "Defina somente as chaves suportadas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compare seu arquivo com o modelo funcional abaixo e copie essa estrutura se necessário.",
           "0cc712b823": "O arquivo de configuração principal existe na raiz do repositório, mas o Orca ainda não conseguiu interpretar as definições de hook suportadas.",
           "aba825233f": "O arquivo contém chaves de configuração que esta versão do Orca não reconhece. Talvez seja necessário atualizar o Orca, ou verificar o arquivo em busca de erros de digitação.",
-          "ca424ff135": "Padrões compartilhados de hook e automação de issue estão definidos no repositório e disponíveis para todos que o usam.",
           "8bfe65fc60": "Usar comandos locais",
           "8d6c56bff8": "Executar ambos",
           "0fa21e19ec": "Nome do espaço de trabalho, geralmente baseado no nome da branch.",
@@ -5830,8 +5822,6 @@
             "df205a675e": "Intensidade da Tonalidade",
             "ba1d9a0607": "Tonalidade da Barra Lateral"
           },
-          "interfaceDefaultFont": "Fonte padrão",
-          "terminalDefaultFont": "Fonte padrão",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarSummary": "Barra lateral, barra de status e explorador de arquivos",
@@ -5925,14 +5915,11 @@
           "remoteDetectionFailed": "Não foi possível detectar os agentes instalados. Verifique a conexão com o host e tente novamente.",
           "retryDetection": "Tentar novamente",
           "02e0143be5": "Instalado",
-          "92033495ff": "Auto",
           "f9f127d664": "Substitua o caminho ou nome do binário, e edite os argumentos de inicialização padrão ou o ambiente deste agente.",
           "f95b5c79b8": "Instalar",
           "fe4d630c94": "Documentação",
-          "8dc0192e48": "Desativado",
           "5200dac9da": "Redefinir",
           "2e45ca29b6": "Comando",
-          "d4d2a45d63": "Ativado",
           "1c9a9679ec": "Disponibilidade de {{value0}}",
           "0d9e293a02": "Atualizar",
           "c9b33eb5c0": "Atualizando…",
@@ -5947,10 +5934,8 @@
           "codexSessionSource": "Diretório do Codex de onde importar",
           "codexSessionSourceInfo": "Sobre importar o histórico do Codex",
           "codexSessionSourceTooltip": "O Orca executa o Codex em um diretório isolado. Aponte isso para o diretório Codex existente para importar esse histórico de sessão. Vazio usa ~/.codex.",
-          "storedDefaultUndetected": "Salvo como seu padrão, mas não detectado agora",
           "noAgentsDetected": "Nenhum agente detectado. Se um estiver instalado, a verificação pode ter expirado.",
-          "9f30095d49": "Permissões do Agente",
-          "3bddd54c9e": "Agente Padrão"
+          "9f30095d49": "Permissões do Agente"
         },
         "ExperimentalPane": {
           "a20d5ea365": "Mantém um destaque visível no nível do painel após eventos de sino do terminal ou conclusão de agente, até que você interaja com esse painel. Experimental enquanto ajustamos o sinal.",
@@ -8593,8 +8578,7 @@
           "60f8a673a7": "Voltar ao app",
           "6503182299": "Checklist de introdução",
           "82db1b7de4": "Checklist de introdução, {{value0}} de {{value1}} concluído(s). Mostrar guia de configuração.",
-          "df38d612b7": "Nenhum projeto adicionado ainda.",
-          "3e483e256b": "Nenhuma configuração de projeto correspondente."
+          "df38d612b7": "Nenhum projeto adicionado ainda."
         },
         "computer": {
           "use": {
@@ -13769,7 +13753,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Remover link",
           "cdfe166f6f": "Editar link",
-          "bfc813e909": "Abrir link",
           "7b0b945fdc": "Cole ou digite um link…",
           "copyLink": "Copiar link"
         },
@@ -14799,7 +14782,14 @@
           "precheckNone": "Nenhuma",
           "migrate": "Migrar",
           "migrateNotice": "{{host}} foi atualizado para um novo host remoto. Migre esta automação para que ela continue em execução.",
-          "needsMigration": "Requer migração"
+          "needsMigration": "Requer migração",
+          "repeats": "Repetição",
+          "missedRunGrace": "Tolerância de execução perdida",
+          "execution": "Execução",
+          "notRunYet": "Ainda não executada",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} execução relatada",
+          "usageDetail_many": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} execuções relatadas"
         },
         "ExternalAutomationManagers": {
           "e02f970595": "Nenhum gerenciador de automação externa encontrado.",
@@ -15028,7 +15018,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Mostrar menos",
-          "showMore": "Mostrar mais"
+          "showMore": "Mostrar mais",
+          "copied": "Copiado",
+          "copyFailed": "Falha ao copiar",
+          "copyPrompt": "Copiar prompt"
         },
         "AutomationRunPageFrame": {
           "40a511bed4": "Contexto da execução",
@@ -16835,6 +16828,8 @@
             "3a9c5f7e12": "Minimizar"
           },
           "TerminalErrorToast": {
+            "title": "Problema no terminal",
+            "errorTitle": "Erro no terminal",
             "e4aa243f8c": "Reiniciar daemon",
             "retry": "Tentar novamente",
             "retrying": "Tentando novamente…",
@@ -18020,7 +18015,6 @@
             "runningTerminalBlocker": "Processo de terminal em execução",
             "terminalLivenessUnknownBlocker": "Atividade do terminal desconhecida",
             "dirtyEditorBufferBlocker": "Buffer do editor não salvo",
-            "volatileLocalContextBlocker": "Contexto local volátil",
             "recentVisibleContextBlocker": "Abas visitadas recentemente",
             "liveAgentBlocker": "Agente ativo",
             "sshDisconnectedBlocker": "Remoto indisponível",
@@ -19586,6 +19580,14 @@
                     "logins": {
                       "title": "Continue conectado",
                       "body": "Traga seus logins existentes para o Orca e continue conectado imediatamente."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensões do Chrome",
+                        "body": "Instale extensões pela Chrome Web Store e fixe-as ao lado da barra de endereços.",
+                        "action": "Abrir Web Store",
+                        "secondaryAction": "Entendi"
+                      }
                     }
                   },
                   "tasks": {
@@ -22313,6 +22315,7 @@
           "about": {
             "parakeetV3": "Rápido. {{languages}} idiomas europeus.",
             "parakeetV2": "Rápido. Só inglês, e o mais preciso nele.",
+            "parakeetUnifiedEn": "Somente inglês. As palavras aparecem enquanto você fala.",
             "whisperTiny": "O menor download. Bom para experimentar o ditado.",
             "whisperTurbo": "Mais idiomas, cerca de 100. Lento sem GPU.",
             "senseVoice": "Rápido. Para chinês, japonês e coreano.",
@@ -22856,7 +22859,6 @@
       "description": "Os agentes lá usam as contas padrão do Claude e do Codex da distribuição até que o Orca no WSL seja atualizado."
     },
     "antigravity": {
-      "chatTitle": "Chats do Antigravity",
       "chatSignIn": "Entrar",
       "chatChangeAccount": "Trocar conta",
       "chatRetry": "Tentar entrar novamente",
@@ -22874,23 +22876,13 @@
       "chatFailed": "Falha ao entrar. Tente novamente.",
       "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
-      "signIn": "Inicie o agy neste host e conclua o login no navegador. Depois, salve a conta atual. Para adicionar outra conta, use /logout no agy e entre novamente.",
-      "docs": "Instruções de login",
       "retry": "Tentar novamente",
-      "identityUnknown": "Identidade conectada indisponível",
-      "signedOut": "Nenhuma conta nativa do agy está conectada.",
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",
-      "save": "Salvar conta atual",
       "refresh": "Atualizar contas",
       "usage": "Atualizar uso",
-      "working": "Atualizando conta",
       "usageReading": "Sessão: {{session}} · Semanal: {{weekly}}",
       "saved": "Conta Google salva",
-      "nativeActive": "Conta nativa",
-      "selected": "Selecionada",
-      "select": "Selecionar",
       "remove": "Remover",
-      "sessions": "A seleção se aplica a novas sessões do agy neste host. Sessões existentes podem manter a conta anterior.",
       "searchDescription": "Salve e selecione contas Google nativas do agy no host de execução.",
       "title": "Antigravity",
       "keyword": {
@@ -22902,14 +22894,12 @@
       "authMethod": "Entrar com",
       "personal": "Conta Google",
       "gcpProject": "Projeto do Google Cloud",
-      "gcpLocation": "Local do Google Cloud",
       "settingsIncomplete": "Escolha um tipo de conta Antigravity e informe seu projeto e local do Google Cloud.",
       "settingsLoadFailed": "O Orca não conseguiu carregar suas configurações de login do Antigravity. Tente novamente.",
       "settingsSaveFailed": "O Orca não conseguiu salvar suas configurações de login do Antigravity. Tente novamente.",
       "lastReading": "{{reading}} · Lido {{time}}",
       "noReading": "Uso desconhecido: ainda não consultado",
       "windowsChanged": "A conta padrão do host foi alterada. Selecione uma conta salva para aplicá-la novamente.",
-      "windowsSessions": "Selecionar aplica e verifica a credencial agy padrão do host. As opções de comando e as mudanças posteriores de conta são gerenciadas pelo agy. As sessões existentes podem continuar usando a conta anterior.",
       "fd47b5a5dd": "Contas do Antigravity"
     },
     "claude": {
@@ -24113,11 +24103,10 @@
     "setByArguments": "Definido pelos seus argumentos",
     "searchModels": "Pesquisar modelos",
     "noModels": "Nenhum modelo corresponde à pesquisa.",
-    "legacyModels": "Modelos antigos",
     "toggleArguments": "Mostrar ou ocultar argumentos",
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos",
+    "moreModelsWithCount": "Mais modelos ({{total}})",
     "use": "Usar",
     "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",

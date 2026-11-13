@@ -11,6 +11,8 @@ export function watchForSettingsDeepLinkTarget(args: {
   root: HTMLElement | null
   isTargetPresent: () => boolean
   onTargetPresent: () => void
+  /** The target never mounted; the caller drops its pending jump so it cannot fire later. */
+  onTimeout?: () => void
 }): SettingsDeepLinkTargetWatch {
   const root = args.root ?? (typeof document === 'undefined' ? null : document.body)
   if (!root || typeof MutationObserver === 'undefined') {
@@ -42,7 +44,11 @@ export function watchForSettingsDeepLinkTarget(args: {
     args.onTargetPresent()
   })
   observer.observe(root, { subtree: true, childList: true })
-  timeout = window.setTimeout(finish, TARGET_WAIT_TIMEOUT_MS)
+  timeout = window.setTimeout(() => {
+    timeout = null
+    finish()
+    args.onTimeout?.()
+  }, TARGET_WAIT_TIMEOUT_MS)
 
   return { cancel: finish }
 }

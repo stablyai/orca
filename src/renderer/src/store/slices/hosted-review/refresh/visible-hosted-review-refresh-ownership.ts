@@ -1,6 +1,6 @@
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { GitHubPRRefreshCandidate } from '../../../../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshCandidate } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { getHostedReviewCacheKey } from '../hosted-review-cache-identity'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'

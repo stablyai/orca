@@ -1,18 +1,18 @@
 import { mergeCommandEnvironment } from '../../../shared/command-environment'
 import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
-import { cleanGeneratedCommitMessage } from '../../../shared/source-control/ai/generation/commit-message-agent-output'
+import { cleanAgentAnswer } from '../../text-generation/failures/source-control-agent-failure'
 import { wslDistroForCommand } from '../../../shared/wsl-paths'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { OpenCodeTextTaskError, runOwnedOpenCodeTextTask } from './opencode-owned-text-task'
 import { runOpenCodeWslTextTask } from './wsl/opencode-wsl-text-task'
-import { killSourceControlAgentProcess } from '../../text-generation/source-control-agent-termination'
+import { killSourceControlAgentProcess } from '../../text-generation/execution/source-control-agent-termination'
 import {
   clearLocalGenerationCancelToken,
   localGenerationLaneKey,
   setLocalGenerationCancelToken
-} from '../../text-generation/source-control-generation-lanes'
+} from '../../text-generation/execution/source-control-generation-lanes'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
-import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/source-control-generation-limits'
+import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/execution/source-control-generation-limits'
 import type {
   InternalTextGenerationResult,
   LocalGenerationTarget,
@@ -82,7 +82,7 @@ export async function runOpenCodeTextTask(input: {
           stop: killSourceControlAgentProcess,
           shouldExecute: input.shouldExecute
         })
-    const cleaned = cleanGeneratedCommitMessage(rawOutput)
+    const cleaned = cleanAgentAnswer(rawOutput, input.operation)
     if (!cleaned) {
       throw new OpenCodeTextTaskError('session')
     }

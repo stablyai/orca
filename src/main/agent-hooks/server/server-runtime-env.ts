@@ -59,6 +59,6 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       ? join(userDataPath, 'agent-hooks', endpointNamespace)
       : join(userDataPath, 'agent-hooks')
     this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
-    this.lastStatusFilePath = join(this.endpointDir, 'last-status.json')
+    this.setStatusFilePath(join(this.endpointDir, 'last-status.json'))
   }
 }

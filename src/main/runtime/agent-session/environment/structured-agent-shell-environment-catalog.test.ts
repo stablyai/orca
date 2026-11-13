@@ -22,7 +22,7 @@ const shell = vi.hoisted(
     nextSaved: []
   })
 )
-vi.mock('../../../startup/login-shell-environment', () => ({
+vi.mock('../../../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
     if (options?.startedAfter !== undefined) {
       shell.current = { ...shell.next }
