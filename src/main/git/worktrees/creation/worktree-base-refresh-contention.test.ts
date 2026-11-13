@@ -10,11 +10,6 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  translateWslOutputPaths: (output: string) => output
-}))
-
 import {
   LOCAL_BASE_REF_REFRESH_WAIT_MS,
   refreshLocalBaseRefForWorktreeCreate
@@ -154,6 +149,40 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     gitExecFileAsyncMock.mockReset()
   })
   afterEach(() => vi.useRealTimers())
+
+  it('finishes the shared WSL refresh when its initiating create is cancelled', async () => {
+    const controller = new AbortController()
+    installGitFake({ owner: true, mutate: async () => ({ stdout: '' }) })
+    const execute = gitExecFileAsyncMock.getMockImplementation()!
+    gitExecFileAsyncMock.mockImplementation(async (args, options) => {
+      if (commandOf(args) === 'worktree') {
+        controller.abort()
+        return {
+          stdout: 'worktree /qamnt/c/repo\nHEAD old-main\nbranch refs/heads/main\n',
+          executionContext: {
+            kind: 'wsl',
+            paths: { distro: 'Ubuntu', root: '/qamnt/', generation: 0, stopCount: 0 }
+          }
+        }
+      }
+      return execute(args, options)
+    })
+
+    await expect(
+      refreshLocalBaseRefForWorktreeCreate(
+        'C:/repo',
+        'origin/main',
+        'refs/remotes/origin/main',
+        undefined,
+        { wslDistro: 'Ubuntu', signal: controller.signal }
+      )
+    ).resolves.toEqual({
+      baseRef: 'origin/main',
+      localBranch: 'main',
+      status: 'updated',
+      ownerWorktreePath: 'C:/repo'
+    })
+  })
 
   function installRepoFake(repoPath: string) {
     let localOid = 'old-main'

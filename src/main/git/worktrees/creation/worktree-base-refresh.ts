@@ -123,7 +123,9 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
         { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
         () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
       )
-      const toHostPath = await gitResultPathTranslator(result, repoPath, options)
+      const toHostPath = await gitResultPathTranslator(result, repoPath, {
+        wslDistro: options.wslDistro
+      })
       return parseWorktreeList(result.stdout).map((row) => ({ ...row, path: toHostPath(row.path) }))
     }
   }
