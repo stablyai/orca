@@ -1631,7 +1631,7 @@
           "wsOwnerFormer": "Made a former member the owner of a workspace",
           "wsOwnerMadeNamed": "Made {{person}} the owner of workspace “{{name}}”",
           "wsOwnerMade": "Made {{person}} the owner of a workspace",
-          "wsOwnerNotified": "Told the previous owner about an owner change",
+          "wsOwnerNotified": "Notified the previous owner about an owner change",
           "wsOwnerNotifiedFormer": "a former member",
           "wsOwnerNotifiedPrevious": "the previous owner",
           "wsOwnerNotifiedNamed": "Notified {{person}} about the owner change for workspace “{{name}}”",

@@ -2734,7 +2734,7 @@
     "enterprise": {
       "audit": {
         "action": {
-          "wsOwnerNotified": "Told the previous owner about an owner change"
+          "wsOwnerNotified": "Notified the previous owner about an owner change"
         }
       }
     },
