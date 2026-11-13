@@ -1789,7 +1789,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
               deferMemberGit: true
             })
             await recordOwnerDeviceForCreate(life, ready)
-            await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop' } }, life.now())
+            await auditSession(life.db, caller, { action: 'workspace.create', targetType: 'workspace', targetId: ready.row.id, detail: { origin: 'desktop', visibility: ready.row.visibility } }, life.now())
             timings = ready.timings
             return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
           }
@@ -2245,6 +2245,29 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         Object.keys(rest).length > 0
           ? await patchWorkspace(db, caller, current, rest, now)
           : { row: current, revoke: 'none' }
+      // Who can open a workspace decides who its agents act as and whose secrets it gets, so both
+      // directions of a share, and a change of owner, go in the team's audit log.
+      if (patched.row.visibility !== current.visibility) {
+        await auditSession(
+          db,
+          caller,
+          {
+            action: patched.row.visibility === 'team' ? 'workspace.shared_with_team' : 'workspace.made_private',
+            targetType: 'workspace',
+            targetId: row.id,
+            detail: { from: current.visibility, to: patched.row.visibility }
+          },
+          now
+        )
+      }
+      if (patched.row.user_id !== current.user_id) {
+        await auditSession(
+          db,
+          caller,
+          { action: 'workspace.owner_changed', targetType: 'workspace', targetId: row.id, detail: { fromUserId: current.user_id, toUserId: patched.row.user_id } },
+          now
+        )
+      }
       if (archivedNow && patched.revoke === 'none') {
         // Archiving disconnects teammates' devices, as before.
         patched = { ...patched, revoke: 'non_owner' }

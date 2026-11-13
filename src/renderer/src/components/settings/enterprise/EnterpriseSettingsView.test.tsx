@@ -400,6 +400,9 @@ describe('copy', () => {
       'routine.run.start',
       'routine.run.finish',
       'routine.rotate_webhook',
+      'workspace.shared_with_team',
+      'workspace.made_private',
+      'workspace.owner_changed',
       // Sent by auth and billing (AUDIT-AUTH-EVENTS).
       'member.invited',
       'member.invite_revoked',
@@ -488,6 +491,74 @@ describe('copy', () => {
     )
     expect(say('billing.overage_enabled', null)).toBe('Turned on overage')
     expect(say('billing.overage_disabled', null)).toBe('Turned off overage')
+  })
+
+  it('words a workspace being shared with the team, made private, and handed to a new owner (EP-3)', () => {
+    const event = (action: string, label: string | null): CloudAuditEvent => ({
+      id: 'v',
+      at: FIXTURE_NOW,
+      category: 'workspaces',
+      action,
+      actor: { kind: 'person', userId: 'u_ada', name: 'Ada Lovelace', via: null },
+      target: { type: 'workspace', id: 'sbx_1', label },
+      detail: { from: 'private', to: 'team' }
+    })
+    expect(auditEventSentence(event('workspace.shared_with_team', 'checkout-redesign'))).toBe(
+      'Shared workspace “checkout-redesign” with the team'
+    )
+    expect(auditEventSentence(event('workspace.made_private', 'checkout-redesign'))).toBe(
+      'Made workspace “checkout-redesign” private'
+    )
+    expect(auditEventSentence(event('workspace.shared_with_team', null))).toBe(
+      'Shared a workspace with the team'
+    )
+    expect(auditEventSentence(event('workspace.made_private', null))).toBe(
+      'Made a workspace private'
+    )
+    expect(auditEventSentence(event('workspace.owner_changed', 'checkout-redesign'))).toBe(
+      'Changed the owner of workspace “checkout-redesign”'
+    )
+  })
+
+  it('says who the new owner of a workspace is when it can', () => {
+    const say = (
+      detail: Record<string, unknown>,
+      label: string | null = 'checkout-redesign'
+    ): string =>
+      auditEventSentence({
+        id: 'o',
+        at: FIXTURE_NOW,
+        category: 'workspaces',
+        action: 'workspace.owner_changed',
+        actor: { kind: 'person', userId: 'u_ada', name: 'Ada Lovelace', via: null },
+        target: { type: 'workspace', id: 'sbx_1', label },
+        detail
+      })
+    const grace = { fromUserId: 'u_ada', toUserId: 'u_grace', toUserName: 'Grace Hopper' }
+    expect(say(grace)).toBe('Made Grace Hopper the owner of workspace “checkout-redesign”')
+    expect(say(grace, null)).toBe('Made Grace Hopper the owner of a workspace')
+    // The new owner has since left the team.
+    expect(say({ ...grace, toUserFormer: true })).toBe(
+      'Made a former member the owner of workspace “checkout-redesign”'
+    )
+    expect(say({ fromUserId: 'u_ada', toUserId: 'u_x', toUserFormer: true }, null)).toBe(
+      'Made a former member the owner of a workspace'
+    )
+    // The actor made themselves the owner.
+    expect(say({ fromUserId: 'u_bob', toUserId: 'u_ada', toUserName: 'Ada Lovelace' })).toBe(
+      'Took ownership of workspace “checkout-redesign”'
+    )
+    expect(say({ fromUserId: 'u_bob', toUserId: 'u_ada' }, null)).toBe(
+      'Took ownership of a workspace'
+    )
+    // Nobody can name them: the sentence that needs no name. The previous owner is never shown.
+    expect(say({ fromUserId: 'u_ada', toUserId: 'u_new' })).toBe(
+      'Changed the owner of workspace “checkout-redesign”'
+    )
+    expect(say({ fromUserId: 'u_ada', toUserId: 'u_new' }, null)).toBe(
+      'Changed the owner of a workspace'
+    )
+    expect(say(grace)).not.toContain('Ada')
   })
 
   it('falls back to the plain sentence when the target has no name', () => {

@@ -162,8 +162,22 @@ const VIA: Record<string, AuditActor['via']> = { api_key: 'api_key', mcp: 'mcp',
 
 type Labels = { names: ReadonlyMap<string, string>; former: ReadonlySet<string>; workspaces: ReadonlyMap<string, string> }
 
+/** The new owner of a workspace, for `workspace.owner_changed` rows. */
+function newOwnerId(detail: Record<string, unknown> | null): string | null {
+  return typeof detail?.toUserId === 'string' ? detail.toUserId : null
+}
+
 function eventView(row: MergedRow, labels: Labels): AuditEvent {
-  const detail = safeDetail(row.detail)
+  let detail = safeDetail(row.detail)
+  if (row.action === 'workspace.owner_changed') {
+    // Named as of now, like every other person in the log: a new owner who has since left reads
+    // as a former member, and one nobody can name is left as an id for the caller to word.
+    const owner = newOwnerId(detail)
+    const name = owner ? labels.names.get(owner) : undefined
+    if (owner && detail) {
+      detail = { ...detail, ...(name ? { toUserName: name } : {}), ...(labels.former.has(owner) ? { toUserFormer: true } : {}) }
+    }
+  }
   const system = row.actor_type === 'system'
   const actorId = system ? null : row.user_id
   const actor: AuditActor = system
@@ -215,6 +229,12 @@ async function labelsFor(db: D1Database, accountId: string, rows: readonly Merge
     }
     if (row.target_id && (row.target_type === 'workspace' || row.target_type === 'sandbox')) {
       workspaceIds.add(row.target_id)
+    }
+    if (row.action === 'workspace.owner_changed') {
+      const owner = newOwnerId(safeDetail(row.detail))
+      if (owner) {
+        people.add(owner)
+      }
     }
   }
   const ids = [...people]
