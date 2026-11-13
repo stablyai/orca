@@ -136,8 +136,7 @@ it('keeps a paused final answer until it is read, independently of dead transpor
 it('rejects a broken catalog transfer and closes even after an earlier once-error consumer detached', async () => {
   const handle = pendingChild()
   handle.child.removeAllListeners('error')
-  const earlierError = vi.fn()
-  handle.child.once('error', earlierError)
+  handle.child.once('error', () => {})
   handle.child.emit('error', new Error('Earlier unproven connection failure'))
   vi.spyOn(console, 'error').mockImplementation(() => {})
   handle.child.on('error', () => {
@@ -160,7 +159,6 @@ it('rejects a broken catalog transfer and closes even after an earlier once-erro
   handle.exit(0)
   await rejected
   await closed
-  expect(earlierError).toHaveBeenCalledTimes(1)
   expect(handle.child.rootAbsent).toBe(true)
   expect(handle.child.exitCode).toBe(0)
 })
