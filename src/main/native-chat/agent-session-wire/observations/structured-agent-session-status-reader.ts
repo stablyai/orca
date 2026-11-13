@@ -20,7 +20,13 @@ export type StructuredAgentSessionWorkFrameReader = <T>(
     value: T
     work?: JournalSqlWorkResult
   }>
-) => Promise<{ work: StructuredAgentSessionObservedWork | null; value: T } | null>
+) => Promise<{
+  work: StructuredAgentSessionObservedWork | null
+  value: T
+  /** Whether live authority, the owning handle and the adopted cursor still match the frame. */
+  current: () => boolean
+} | null>
+
 /** The existing per-handle cache binds the reader to its real live owners and publication path. */
 export function createStructuredAgentSessionStatusReader(
   deps: StructuredAgentSessionStatusFeedDeps,
@@ -99,7 +105,11 @@ export function createStructuredAgentSessionStatusReader(
     }
     const frame = await projections.captureWorkFrame(journal, capture(sessionId, journal), rows)
     return frame && !replaced()
-      ? { work: observedWork(journal, frame.answer), value: frame.value }
+      ? {
+          work: observedWork(journal, frame.answer),
+          value: frame.value,
+          current: () => frame.current() && !replaced()
+        }
       : null
   }
 

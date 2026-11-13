@@ -21,6 +21,7 @@ import {
 import {
   captureSubscriberFrame,
   readCaughtUpWork,
+  SubscriberFrameSuperseded,
   type SubscriberFrameCapture
 } from './agent-session-subscriber-frame-capture'
 import type { StructuredAgentSessionWorkFrameReader } from '../../observations/structured-agent-session-status-reader'
@@ -44,7 +45,7 @@ export type SubscriberDeliveryPort = {
     captureQueuePublication?: (
       sessionId: string,
       work: StructuredAgentSessionObservedWork | undefined
-    ) => Promise<QueuePublication | undefined>
+    ) => Promise<QueuePublication | null | undefined>
   }
   emit: (
     subscriber: Subscriber,
@@ -61,15 +62,37 @@ export type SubscriberDeliveryPort = {
   activity: (sessionId: string) => AgentSessionTurnActivity | null
 }
 
-export async function deliverToSubscriber(
+type DeliveryInput = {
+  subscriber: Subscriber
+  journal: AgentSessionJournal
+  hostNow: number
+  emitCheckpoint: boolean
+  activity?: AgentSessionTurnActivity | null | undefined
+}
+
+/** The frame last delivered at the subscriber's cursor; undefined when the delivery was abandoned. */
+export function deliverToSubscriber(
   port: SubscriberDeliveryPort,
-  input: {
-    subscriber: Subscriber
-    journal: AgentSessionJournal
-    hostNow: number
-    emitCheckpoint: boolean
-    activity?: AgentSessionTurnActivity | null | undefined
+  input: DeliveryInput
+): Promise<SubscriberFrameCapture<unknown> | undefined> {
+  return unlessSuperseded(deliver(port, input))
+}
+
+/** A superseded emission sent nothing and advanced nothing; the newer commit's delivery follows. */
+async function unlessSuperseded<T>(delivery: Promise<T>): Promise<T | undefined> {
+  try {
+    return await delivery
+  } catch (error) {
+    if (error instanceof SubscriberFrameSuperseded) {
+      return undefined
+    }
+    throw error
   }
+}
+
+async function deliver(
+  port: SubscriberDeliveryPort,
+  input: DeliveryInput
 ): Promise<SubscriberFrameCapture<unknown> | undefined> {
   const { subscriber, journal, hostNow, emitCheckpoint, activity } = input
   const checkpointActivity = emitCheckpoint ? port.activity(subscriber.sessionId) : undefined
@@ -235,7 +258,7 @@ export async function publishSubscriberSnapshot(
   fence: number,
   hostNow: number
 ): Promise<void> {
-  await publishSnapshotFrame(port, subscriber, journal, fence, { hostNow })
+  await unlessSuperseded(publishSnapshotFrame(port, subscriber, journal, fence, { hostNow }))
 }
 
 async function publishSnapshotFrame(

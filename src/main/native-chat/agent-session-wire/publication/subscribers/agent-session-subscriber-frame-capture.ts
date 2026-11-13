@@ -12,37 +12,57 @@ export type SubscriberFrameCapture<T> = {
   value: T
   work: StructuredAgentSessionObservedWork | undefined
   queue?: { value: QueuePublication | undefined }
+  /** Whether live authority, the owning handle and the adopted cursor still match this frame. */
+  current: () => boolean
+}
+
+type FrameCaptureHooks = Pick<
+  SubscriberDeliveryPort['hooks'],
+  'readWorkFrame' | 'captureQueuePublication'
+>
+
+/** A frame decorated after capture found the journal past it; its newer commit delivers again. */
+export class SubscriberFrameSuperseded extends Error {
+  constructor() {
+    super('the journal moved past this frame before it was emitted')
+    this.name = 'SubscriberFrameSuperseded'
+  }
 }
 
 /** Hold the chat's lane for one bounded read of rows, work and queue, then release it before any
- *  emission. Undefined abandons the frame: an inactive subscriber, a closed or replaced journal, or
- *  live authority that changed mid-read, whose own publication schedules the replacement. */
-export async function captureSubscriberFrame<T>(
-  port: SubscriberDeliveryPort,
-  subscriber: Subscriber,
+ *  emission. Undefined abandons the frame: not `live`, a closed or replaced journal, or live
+ *  authority that changed during any part of the read, whose own publication schedules the
+ *  replacement. */
+export async function captureJournalFrame<T>(
+  hooks: FrameCaptureHooks,
+  sessionId: string,
   journal: AgentSessionJournal,
-  rows: (work: JournalDomainHistoryWork | undefined) => Promise<AgentSessionHistoryFrame<T>>
+  rows: (work: JournalDomainHistoryWork | undefined) => Promise<AgentSessionHistoryFrame<T>>,
+  live: () => boolean = () => true
 ): Promise<SubscriberFrameCapture<T> | undefined> {
-  const live = () => port.isActive(subscriber) && !journal.isClosed
-  if (!live()) {
+  const open = () => live() && !journal.isClosed
+  if (!open()) {
     return undefined
   }
   let captured: SubscriberFrameCapture<T> | undefined
   try {
     captured = await journal.readInOrder(async () => {
-      if (!live()) {
+      if (!open()) {
         return undefined
       }
-      const frame = await readWorkFrame(port, subscriber.sessionId, journal, rows)
-      if (!frame || !live()) {
+      const frame = await readWorkFrame(hooks, sessionId, journal, rows)
+      if (!frame || !open()) {
         return undefined
       }
-      const capture = port.hooks.captureQueuePublication
+      const capture = hooks.captureQueuePublication
       if (!capture) {
         return frame
       }
-      const queue = await capture(subscriber.sessionId, frame.work)
-      return live() ? { ...frame, queue: { value: queue } } : undefined
+      const queue = await capture(sessionId, frame.work)
+      // The queue was read at this frame's authority; nothing may have moved since.
+      return queue !== null && open() && frame.current()
+        ? { ...frame, queue: { value: queue } }
+        : undefined
     })
   } catch (error) {
     if (error instanceof AgentSessionJournalError && journal.isClosed) {
@@ -50,24 +70,35 @@ export async function captureSubscriberFrame<T>(
     }
     throw error
   }
-  return captured && live() ? captured : undefined
+  return captured && open() ? captured : undefined
+}
+
+export function captureSubscriberFrame<T>(
+  port: SubscriberDeliveryPort,
+  subscriber: Subscriber,
+  journal: AgentSessionJournal,
+  rows: (work: JournalDomainHistoryWork | undefined) => Promise<AgentSessionHistoryFrame<T>>
+): Promise<SubscriberFrameCapture<T> | undefined> {
+  return captureJournalFrame(port.hooks, subscriber.sessionId, journal, rows, () =>
+    port.isActive(subscriber)
+  )
 }
 
 async function readWorkFrame<T>(
-  port: SubscriberDeliveryPort,
+  hooks: FrameCaptureHooks,
   sessionId: string,
   journal: AgentSessionJournal,
   rows: (work: JournalDomainHistoryWork | undefined) => Promise<AgentSessionHistoryFrame<T>>
 ): Promise<SubscriberFrameCapture<T> | null> {
-  const reader = port.hooks.readWorkFrame
+  const reader = hooks.readWorkFrame
   if (!reader) {
-    return { work: undefined, value: (await rows(undefined)).result }
+    return { work: undefined, value: (await rows(undefined)).result, current: () => true }
   }
   const frame = await reader(sessionId, journal, async (work) => {
     const read = await rows(work)
     return { value: read.result, ...(read.work ? { work: read.work } : {}) }
   })
-  return frame && { work: frame.work ?? undefined, value: frame.value }
+  return frame && { work: frame.work ?? undefined, value: frame.value, current: frame.current }
 }
 
 /** Caught-up frames carry no rows; a current cached answer needs no read. */
@@ -79,4 +110,30 @@ export async function readCaughtUpWork(
     result: undefined,
     ...(work && !work.unlessAt ? { work: await journal.reads.work(work.read) } : {})
   }
+}
+
+const REQUEST_FRAME_ATTEMPTS = 3
+
+/** A request answers once, so it takes another capture only after one was abandoned because live
+ *  authority moved; persistent churn fails the request instead of answering with mixed state. */
+export async function captureRequestFrame<T>(
+  journal: AgentSessionJournal,
+  capture: () => Promise<T | undefined>
+): Promise<T> {
+  for (let attempt = 0; attempt < REQUEST_FRAME_ATTEMPTS; attempt += 1) {
+    if (journal.isClosed) {
+      break
+    }
+    const captured = await capture()
+    if (captured !== undefined) {
+      return captured
+    }
+  }
+  if (journal.isClosed) {
+    throw new AgentSessionJournalError(
+      'journal_closed',
+      `the journal for ${journal.identity.sessionId} is closed`
+    )
+  }
+  throw new Error('live work kept changing while this chat frame was read')
 }

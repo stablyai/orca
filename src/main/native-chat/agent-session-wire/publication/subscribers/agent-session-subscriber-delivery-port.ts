@@ -16,7 +16,7 @@ export function subscriberDeliveryPort(
 ): SubscriberDeliveryPort {
   let work: Promise<StructuredAgentSessionObservedWork | null> | undefined
   let queue: Promise<QueuePublication | undefined> | undefined
-  let framed: { key: string; value: Promise<QueuePublication | undefined> } | undefined
+  let framed: { key: string; value: Promise<QueuePublication | null | undefined> } | undefined
   const readWork = () =>
     (work ??= Promise.resolve(
       sessionId && journal ? base.hooks.readCurrentWork?.(sessionId, journal) : null
@@ -28,7 +28,14 @@ export function subscriberDeliveryPort(
         const key = journal && frameQueueKey(journal, current)
         if (key === undefined || framed?.key !== key) {
           const value = Promise.resolve(readQueue(id, current, true))
-          framed = key === undefined ? undefined : { key, value }
+          const entry = key === undefined ? undefined : { key, value }
+          framed = entry
+          // A superseded answer is that attempt's alone; the next capture reads again.
+          void value.then((answer) => {
+            if (answer === null && framed === entry) {
+              framed = undefined
+            }
+          })
           return value
         }
         return framed.value
@@ -41,8 +48,10 @@ export function subscriberDeliveryPort(
           readCurrentWork: readWork,
           readQueuePublication: queueChanged
             ? () =>
-                (queue ??= readWork().then((value) =>
-                  base.hooks.readQueuePublication?.(sessionId, value ?? undefined)
+                (queue ??= readWork().then(
+                  async (value) =>
+                    (await base.hooks.readQueuePublication?.(sessionId, value ?? undefined)) ??
+                    undefined
                 ))
             : undefined,
           captureQueuePublication: queueChanged ? captureQueue : undefined

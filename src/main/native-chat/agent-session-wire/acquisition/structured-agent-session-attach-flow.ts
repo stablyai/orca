@@ -36,9 +36,7 @@ import {
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent-session-replay-outcome'
-import { readAgentSessionHydrationPage } from '../publication/history/agent-session-history-page'
-import { withPublishedWork } from '../observations/agent-session-published-work'
-import { heldStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { captureAttachedHydration } from './structured-agent-session-attach-hydration'
 import { acquireOwner } from './structured-agent-session-acquisition'
 import {
   importAdoptedTranscript,
@@ -288,25 +286,18 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
-  const work = await heldStructuredAgentSessionCurrentWork(
+  const { page, cursor } = await captureAttachedHydration(
     store,
     sessionId,
     attached.journal,
-    undefined
-  )
-  const page = withPublishedWork(
-    await readAgentSessionHydrationPage(
-      attached.journal,
-      fence,
-      withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId))
-    ),
-    work
+    fence,
+    withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId))
   )
   return {
     ok: true,
     replayed,
     fence,
-    cursor: await attached.journal.reads.cursor(),
+    cursor,
     value: {
       sessionId,
       fence,

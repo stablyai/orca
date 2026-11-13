@@ -11,6 +11,7 @@ import type { AgentChildWorkView } from '../../../../../shared/agent-status/chil
 import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from '../history/structured-agent-session-history-result'
+import { captureJournalFrame, captureRequestFrame } from './agent-session-subscriber-frame-capture'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { AgentSessionHistoryScope } from '../history/agent-session-history-page'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
@@ -71,21 +72,25 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
-    const [result, queue] = await Promise.all([
-      this.currentWork(request.sessionId).then((work) =>
-        readStructuredAgentSessionHistoryResult({
-          journal,
-          record: this.deps.store.getConversation(request.sessionId),
-          forkMarker: readForkMarker(this.deps.store, request.sessionId),
-          request,
-          scope,
-          reader,
-          replaceNormalizedHistory,
-          ...(work ? { work } : {})
-        })
-      ),
-      this.subscribers.readQueuePublication(request.sessionId)
-    ])
+    const { result, queue: captured } = await captureRequestFrame(journal, () =>
+      readStructuredAgentSessionHistoryResult({
+        journal,
+        record: this.deps.store.getConversation(request.sessionId),
+        forkMarker: readForkMarker(this.deps.store, request.sessionId),
+        request,
+        scope,
+        reader,
+        replaceNormalizedHistory,
+        capture: (rows) =>
+          captureJournalFrame(
+            this.subscribers.frameHooks(request.sessionId, journal),
+            request.sessionId,
+            journal,
+            rows
+          )
+      })
+    )
+    const queue = captured?.value
     const backgroundTasks = this.read(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {

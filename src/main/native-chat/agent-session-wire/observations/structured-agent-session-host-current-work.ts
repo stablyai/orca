@@ -5,6 +5,7 @@ import { structuredAgentSessionHandoverAuthority } from '../delivery/structured-
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
+import type { JournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
 // Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
 export type StructuredAgentSessionCurrentWorkHost = {
@@ -43,21 +44,31 @@ export async function heldStructuredAgentSessionCurrentWork(
     | undefined
 ): Promise<StructuredAgentSessionObservedWork> {
   const { state } = await journal.readWork(
-    () => {
-      const child = session?.child
-      const held = child?.heldSends?.()
-      return {
-        handle: journal.observationHandle(),
-        record: store.getConversation(sessionId),
-        replaced: store.replacedRuntime(sessionId),
-        ended: session?.lastEndedChild,
-        child: child ? { fence: child.fence, heldSends: held && [...held] } : null,
-        ...structuredAgentSessionHandoverAuthority(journal),
-        openedThrough: journal.openingCursor(),
-        operationalRevision: session?.operationalRevision ?? 0
-      }
-    },
+    () => heldStructuredAgentSessionWorkAuthority(store, sessionId, journal, session),
     { kind: 'state' }
   )
   return new StructuredAgentSessionObservedWork(journal, state, journal.cursor())
+}
+
+/** Live authority from the record store and the session's held child. */
+export function heldStructuredAgentSessionWorkAuthority(
+  store: StructuredAgentSessionCurrentWorkHost['store'],
+  sessionId: string,
+  journal: AgentSessionJournal,
+  session:
+    | Pick<StructuredAgentSessionHostSession, 'lastEndedChild' | 'operationalRevision' | 'child'>
+    | undefined
+): JournalCurrentWorkAuthority {
+  const child = session?.child
+  const held = child?.heldSends?.()
+  return {
+    handle: journal.observationHandle(),
+    record: store.getConversation(sessionId),
+    replaced: store.replacedRuntime(sessionId),
+    ended: session?.lastEndedChild,
+    child: child ? { fence: child.fence, heldSends: held && [...held] } : null,
+    ...structuredAgentSessionHandoverAuthority(journal),
+    openedThrough: journal.openingCursor(),
+    operationalRevision: session?.operationalRevision ?? 0
+  }
 }

@@ -2,7 +2,10 @@ import {
   copyJournalWorkAuthority,
   copyJournalCurrentWorkAuthority
 } from '../../agent-session-journal/journal-observer-read'
-import { journalSqlWorkAnswerIsCurrent } from '../../agent-session-journal/journal-sql-work-answer'
+import {
+  journalSqlWorkAnswerIsCurrent,
+  readJournalSqlWorkFrame
+} from '../../agent-session-journal/journal-sql-work-answer'
 import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
 import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
@@ -157,7 +160,7 @@ export class StructuredAgentSessionJournalProjections {
   }
 
   /** One attempt: the caller's rows and work from one reader snapshot, validated against live
-   *  authority. A cached answer is reused only at that same snapshot. Null when authority changed
+   *  authority; a cached answer is reused only at that same snapshot. Null when authority changed
    *  during the read; the change's own publication schedules the replacement. */
   async captureWorkFrame<T>(
     journal: SqlAgentSessionJournal,
@@ -166,34 +169,26 @@ export class StructuredAgentSessionJournalProjections {
       value: T
       work?: JournalSqlWorkResult
     }>
-  ): Promise<{ answer: JournalSqlWorkResult | null; value: T } | null> {
+  ): Promise<{ answer: JournalSqlWorkResult | null; value: T; current: () => boolean } | null> {
     const captured = capture()
     if (!captured) {
       this.byJournal.delete(journal)
-      return { answer: null, value: (await read(undefined)).value }
+      return { answer: null, value: (await read(undefined)).value, current: () => !capture() }
     }
     const cached = this.currentWorkSql(journal, captured)
-    const authority = copyJournalCurrentWorkAuthority(captured.authority)
-    const frame = await read({
-      read: { authority, operation: { kind: 'state' } },
-      ...(cached
-        ? { unlessAt: { cursor: cached.cursor, physicalCursor: cached.physicalCursor } }
-        : {})
-    })
-    const answer = frame.work ?? cached
-    const recaptured = capture()
-    if (
-      !recaptured ||
-      !answer ||
-      recaptured.contextId !== captured.contextId ||
-      !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, answer)
-    ) {
-      return null
+    const frame = await readJournalSqlWorkFrame(
+      journal,
+      () => {
+        const live = capture()
+        return live && live.contextId === captured.contextId ? live.authority : null
+      },
+      read,
+      cached
+    )
+    if (frame && frame.answer !== cached) {
+      this.remember(journal, captured, frame.answer, captured.contextId)
     }
-    if (frame.work) {
-      this.remember(journal, recaptured, frame.work, captured.contextId)
-    }
-    return { answer, value: frame.value }
+    return frame
   }
 
   private remember(

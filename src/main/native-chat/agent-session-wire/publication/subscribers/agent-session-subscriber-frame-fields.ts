@@ -42,7 +42,7 @@ export type SubscriberFieldHooks = {
     sessionId: string,
     work?: StructuredAgentSessionObservedWork,
     inLane?: boolean
-  ) => QueuePublication | undefined | Promise<QueuePublication | undefined>
+  ) => QueuePublication | null | undefined | Promise<QueuePublication | null | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
 }
@@ -85,7 +85,7 @@ async function buildSubscriberFrame(
       ? undefined
       : queuePublication
         ? queuePublication.value
-        : await hooks.readQueuePublication?.(subscriber.sessionId)
+        : ((await hooks.readQueuePublication?.(subscriber.sessionId)) ?? undefined)
   const attachedQueued =
     queued !== undefined &&
     event.type !== 'end' &&

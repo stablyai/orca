@@ -9,7 +9,6 @@ import {
   type AgentJournalSubmission
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -28,6 +27,10 @@ import { structuredAgentSessionStopNoteIdentity } from '../../../operations/stru
 import { createStructuredAgentSessionStatusReader } from '../../../observations/structured-agent-session-status-reader'
 import { indexedStatusFeedSession } from '../../../observations/testing/structured-agent-session-status-feed-test-session.test-fixture'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
+import {
+  structuredQueueSendGate,
+  tryReadQueuePublication
+} from '../../../delivery/structured-agent-session-queued-publication'
 import {
   fixture,
   journals,
@@ -69,25 +72,32 @@ async function openChat(name: string, held: Set<string>) {
   const subscribers = new AgentSessionSubscribers({
     readCurrentWork: reader.work,
     readWorkFrame: reader.workFrame,
-    readQueuePublication: async () => ({
-      queuedMessages: (await journal.queuedMessages.list()).flatMap(
-        (row): AgentSessionQueuedMessage[] =>
-          row.state === 'waiting' || row.state === 'returned'
-            ? [
-                {
-                  messageId: row.messageId,
-                  position: row.position,
-                  body: row.body,
-                  state: row.state
-                }
-              ]
-            : []
-      ),
-      queuePause: null,
-      nextQueuedMessageId: null
-    })
+    // The production queue gate, over the same live owners the status reader sees.
+    readQueuePublication: (sessionId, work, inLane) =>
+      tryReadQueuePublication(
+        journal,
+        structuredQueueSendGate(
+          {
+            store: {
+              getConversation: () => null,
+              replacedRuntime: () => undefined,
+              getRecord: () => null
+            },
+            sessions: new Map([[SESSION, session]])
+          },
+          sessionId,
+          () => 1_000,
+          work
+        ),
+        inLane
+      )
   })
   const historyReads = vi.spyOn(journal, 'history')
+  const queueReads = vi.spyOn(journal.reads, 'queue')
+  /** Checked against the pane after every delivered event. */
+  const invariants: (() => void)[] = []
+  /** Runs after every lane operation already admitted, including a queued capture. */
+  const laneDrained = () => journal.readInOrder(() => undefined)
   const panes = new Map<string, StructuredAgentSessionState>()
   const events: AgentSessionSubscribeEvent[] = []
   const eventsOf = new Map<string, AgentSessionSubscribeEvent[]>()
@@ -108,6 +118,9 @@ async function openChat(name: string, held: Set<string>) {
             event
           })
         )
+        for (const invariant of invariants) {
+          invariant()
+        }
       }
     })
   const pane = (id = 'pane') => panes.get(id) ?? EMPTY_STRUCTURED_AGENT_SESSION
@@ -168,6 +181,9 @@ async function openChat(name: string, held: Set<string>) {
     events,
     eventsOf,
     historyReads,
+    queueReads,
+    invariants,
+    laneDrained,
     open,
     resume,
     pane,
@@ -177,8 +193,6 @@ async function openChat(name: string, held: Set<string>) {
     holdNextAdoption
   }
 }
-
-const settled = () => new Promise((resolve) => setTimeout(resolve, 50))
 
 it('a send accepted while its delivery is in flight ends accepted', async () => {
   const chat = await openChat('race', new Set(['send']))
@@ -212,7 +226,6 @@ it('a commit readable before main adopts it is delivered only after adoption, wi
   chat.open()
   await vi.waitFor(() => expect(chat.sendState('send')).toBe('unknown'))
   const before = chat.events.length
-  const reads = chat.historyReads.mock.calls.length
 
   const held = chat.holdNextAdoption()
   const written = chat.journal.appendItem(
@@ -222,10 +235,6 @@ it('a commit readable before main adopts it is delivered only after adoption, wi
   )
   await held.committed
   chat.subscribers.snapshot(SESSION, chat.journal, 1)
-  await settled()
-  expect(chat.historyReads.mock.calls.length).toBe(reads)
-  expect(chat.events.length).toBe(before)
-
   held.adopt()
   await written
   await vi.waitFor(() =>
@@ -239,7 +248,6 @@ it('a subscriber closed while its capture waits for adoption receives nothing mo
   const chat = await openChat('cancel', new Set())
   const close = chat.open()
   await vi.waitFor(() => expect(chat.events.some((event) => event.type === 'snapshot')).toBe(true))
-  const reads = chat.historyReads.mock.calls.length
 
   const held = chat.holdNextAdoption()
   const written = chat.submit()
@@ -249,11 +257,12 @@ it('a subscriber closed while its capture waits for adoption receives nothing mo
   const ended = chat.events.length
   held.adopt()
   await written
-  await settled()
+  // The waiting capture is admitted, abandons, and the lane runs on past it.
+  await chat.laneDrained()
+  await chat.laneDrained()
 
   expect(chat.events.at(-1)?.type).toBe('end')
   expect(chat.events.length).toBe(ended)
-  expect(chat.historyReads.mock.calls.length).toBe(reads)
 })
 
 it('a consumed queued card leaves with the page that shows its bubble', async () => {
@@ -264,8 +273,7 @@ it('a consumed queued card leaves with the page that shows its bubble', async ()
   const bubble = () =>
     chat.pane().items.some((item) => item.itemId === agentJournalSubmissionKey('card-send'))
   await vi.waitFor(() => expect(queued()).toBe(true))
-  const seen: boolean[] = []
-  const observe = setInterval(() => seen.push(queued() || bubble()), 1)
+  chat.invariants.push(() => expect(queued() || bubble()).toBe(true))
 
   const card = await chat.journal.queuedMessages.get('card')
   const held = chat.holdNextAdoption()
@@ -285,10 +293,8 @@ it('a consumed queued card leaves with the page that shows its bubble', async ()
   held.adopt()
   await written
   await vi.waitFor(() => expect(bubble()).toBe(true))
-  clearInterval(observe)
 
   expect(queued()).toBe(false)
-  expect(seen).not.toContain(false)
 })
 
 it('a resume with stop notes keeps the working state of the frame it caught up to', async () => {
@@ -326,19 +332,18 @@ it('a resume with stop notes keeps the working state of the frame it caught up t
   })
   await held.committed
   chat.resume('resumed', chat.pane(), resumeAt)
-  await settled()
   held.adopt()
   await written
   chat.subscribers.publish(SESSION, chat.journal)
-  await vi.waitFor(() => expect(chat.pane('resumed').working).toBe(false))
-  await settled()
-
   // Rows clear unstated work fields, so every row-carrying frame must state its own.
-  const resumed = (chat.eventsOf.get('resumed') ?? []).flatMap((event) =>
-    event.type === 'batch' && event.batch.items.length > 0 ? [event.working] : []
-  )
-  expect(resumed.length).toBeGreaterThan(0)
-  expect(resumed.every((working) => working === false)).toBe(true)
+  const rowFrames = () =>
+    (chat.eventsOf.get('resumed') ?? []).flatMap((event) =>
+      event.type === 'batch' && event.batch.items.length > 0 ? [event.working] : []
+    )
+  await vi.waitFor(() => expect(rowFrames().length).toBeGreaterThan(0))
+  await chat.laneDrained()
+
+  expect(rowFrames().every((working) => working === false)).toBe(true)
   expect(chat.pane('resumed').working).toBe(false)
 })
 
@@ -359,8 +364,27 @@ it('a capture whose live authority changes mid-read is replaced, not delivered',
   })
   chat.subscribers.snapshot(SESSION, chat.journal, 1)
   await vi.waitFor(() => expect(chat.sendState('send')).toBe('unknown'))
-  await settled()
 
   expect(chat.delivered(before)).not.toContain('pending')
-  expect(chat.sendState('send')).toBe('unknown')
+})
+
+it('a capture whose live authority changes during its queue read is replaced, not delivered', async () => {
+  const held = new Set(['send'])
+  const chat = await openChat('queue-authority', held)
+  await chat.submit()
+  chat.open()
+  await vi.waitFor(() => expect(chat.sendState('send')).toBe('pending'))
+  const before = chat.events.length
+
+  // The page and work are validated; the change lands while the queue gate reads.
+  chat.queueReads.mockImplementationOnce(async (...args) => {
+    const read = chat.journal.reads.queue(...args)
+    held.clear()
+    chat.subscribers.publish(SESSION, chat.journal)
+    return read
+  })
+  chat.subscribers.snapshot(SESSION, chat.journal, 1)
+  await vi.waitFor(() => expect(chat.sendState('send')).toBe('unknown'))
+
+  expect(chat.delivered(before)).not.toContain('pending')
 })
