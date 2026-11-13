@@ -23,13 +23,13 @@ const PROFILE_TABLES = new Set([
   'pr_check_contexts',
   'sqlite_sequence'
 ])
-const CONTENT_TABLES = [
+const CONTENT_TABLES: readonly string[] = [
   'journal_rows',
   'journal_outcome_generations',
   'journal_outcome_epochs',
   'journal_outcomes',
   'queued_messages'
-] as const
+]
 const SOURCE_COLUMNS: Readonly<Record<string, string>> = {
   journal_sessions: 'session_id workspace_id epoch',
   journal_rows: 'session_id epoch seq ts row_json',
@@ -92,7 +92,7 @@ export function readJournalLegacyProofPage(
 
       if (
         PROFILE_TABLES.has(table) ||
-        CONTENT_TABLES.includes(table as (typeof CONTENT_TABLES)[number]) ||
+        CONTENT_TABLES.includes(table) ||
         table === 'journal_sessions'
       ) {
         continue
