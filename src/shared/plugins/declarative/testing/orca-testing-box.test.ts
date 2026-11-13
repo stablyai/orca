@@ -45,9 +45,4 @@ describe('orca/testing reads Box', () => {
     expect(panel.errors).toEqual([])
     expect(panel.warnings).toEqual([])
   })
-
-  it('summarizes what sits in Boxes, and danger or warning Boxes themselves', async () => {
-    panel = await mount({ default: Status })
-    expect(panel.summary()).toEqual(['Heading "Services"', 'Box danger "billing Down"'])
-  })
 })

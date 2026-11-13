@@ -83,7 +83,7 @@ export function createTerminalPaneMenuAgentSessionActions({
   return { onForkAgentSession, onContinueAgentSessionInNewSession, onCopyAgentSessionContext }
 }
 
-/** Copy Session ID shows whenever the pane names a provider session; Copy Agent ID only where
+/** Copy Session ID shows whenever the pane names a provider session; Copy Orca Session ID only where
  *  the pane's host can answer (see `canPaneOfferAgentId`). */
 export function terminalPaneMenuAgentIdProps(
   contextMenu: {

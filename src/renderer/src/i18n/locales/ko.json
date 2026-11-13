@@ -1614,9 +1614,6 @@
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
       },
       "useMacosTccPromptNotice": {
-        "title": "“Orca에서 접근하려고 합니다…” 권한 요청이 표시되나요?",
-        "description": "Orca에서 실행 중인 에이전트나 터미널 도구가 보호된 파일에 접근하려고 하면 macOS 권한 메시지가 표시될 수 있습니다. 이러한 요청을 줄이려면 설정에서 전체 디스크 접근 권한을 허용하세요.",
-        "openSettings": "설정 열기",
         "dismiss": "다시 표시하지 않기"
       },
       "useInstalledAgentSkills": {
@@ -3248,7 +3245,6 @@
             "7eee951968": "워크스페이스 안전성 확인 중",
             "191f0bc98e": "닫기",
             "7ae2ad30f4": "새로고침",
-            "b2c1331844": "비활성 워크스페이스 삭제",
             "7f451a3e2c": "정리 제안을 무시할 수 없습니다.",
             "662b8ec3f8": "워크스페이스 정리 검사 실패",
             "9cc26c019d": "제거",
@@ -3258,7 +3254,6 @@
             "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
             "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
             "86ba852118": "{{value0}}, {{value1}}개 실패",
-            "deleteButtonCount": "{{value0}}개 삭제",
             "archivedStatus": "보관됨",
             "74f6c16279": "뒤로"
           },
@@ -3841,7 +3836,6 @@
             "1d411fb6a5": "이 repo에 대한 빠른 명령 저장",
             "8f1e971966": "빠른 명령 추가",
             "3220e2da27": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
-            "e8e1a52edb": "'{{value0}}'을 삭제하시겠습니까?",
             "37e1bb90ce": "실행: {{value0}}",
             "77ac113df0": "{{value0}} 시작: {{value1}}",
             "7b1c9d6ae1": "실행",
@@ -5177,7 +5171,6 @@
           "loading": "콘텐츠 로드 중…",
           "deleteFailed": "Orca가 클라우드에서 이 항목을 삭제할 수 없습니다.",
           "deleted": "클라우드에서 삭제됨",
-          "confirmDelete": "삭제 확인",
           "moreActions": "{{name}}에 대한 추가 작업",
           "deletePackage": "클라우드에서 삭제"
         },
@@ -5409,8 +5402,6 @@
           "5cc1a6701c": "설정 열기",
           "2b56b35f53": "설정에서 이를 변경할 수 있습니다.",
           "dd3a45bbbd": "다음번에는 이 확인을 건너뛰겠습니다.",
-          "fc23c4cbdf": "워크스페이스 삭제",
-          "86f0ae1257": "워크스페이스 삭제",
           "removeFolderProjectInstead": "이 워크스페이스를 삭제하는 대신 폴더 프로젝트를 제거하세요.",
           "gitBlocksMainWorktree": "Git에서는 메인 워크트리를 제거할 수 없습니다.",
           "removeBatchFolder_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
@@ -5507,11 +5498,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "취소",
-          "591f330288": "프로젝트 그룹 삭제",
           "2c14ce677a": "삭제 중...",
           "0e0e6764af": "포함된 프로젝트",
           "55f75628c0": "디스크의 프로젝트 폴더는 삭제되지 않습니다.",
-          "fec7e9c8ae": "그룹 삭제",
           "removeContainedProjects_other": "포함된 프로젝트 {{count}}개 제거",
           "deleteGroupDescription": "<name>{{name}}</name> 그룹을 삭제합니다.",
           "moreProjects_other": "+{{count}}개 더"
@@ -6245,9 +6234,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "취소",
           "cf95e3b5bb": "닫기",
-          "deleteWorkspace": "워크스페이스 삭제",
           "deleting": "삭제 중...",
-          "forceDelete": "강제 삭제",
           "forceDeleting": "강제 삭제 중..."
         },
         "local": {
@@ -6549,16 +6536,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "유지된 브랜치 검토",
           "f21976c9a8": "강제 삭제하려는 로컬 브랜치을 선택하세요. 선택되지 않은 브랜치는 저장소에 유지됩니다.",
           "38c947f7c5": "모두 선택",
           "9602129d38": "{{value1}} 중 {{value0}}이(가) 선택됨",
           "ee39e872d5": "병합되지 않을 수 있음",
           "676db406fd": "헤드를 사용할 수 없음",
-          "285e1e4882": "취소",
-          "a0f9863597_one": "강제 삭제 {{count}} 브랜치",
-          "a0f9863597_other": "{{count}} 브랜치 강제 삭제",
-          "a0f9863597": "{{count}} 브랜치 강제 삭제"
+          "285e1e4882": "취소"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "맨 위로 이동"
@@ -7853,7 +7836,6 @@
           "c6b155911b": "모든 명령",
           "c36912efd5": "탭 표시줄의 빠른 명령 버튼을 사용하여 실행하거나 터미널 내부를 마우스 오른쪽 버튼으로 클릭하세요.",
           "3d9dc558e8": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
-          "3edf3deaf8": "'{{value0}}'을 삭제하시겠습니까?",
           "9fcfc29519": "삽입",
           "9b3e338d62": "Enter로 실행",
           "4ccc63da87": "에이전트",
@@ -8307,8 +8289,7 @@
           "60f8a673a7": "앱으로 돌아가기",
           "6503182299": "온보딩 체크리스트",
           "82db1b7de4": "온보딩 체크리스트, {{value0}}/{{value1}} 완료. 설정 가이드 보기.",
-          "df38d612b7": "아직 추가된 프로젝트가 없습니다.",
-          "3e483e256b": "일치하는 프로젝트 설정이 없습니다."
+          "df38d612b7": "아직 추가된 프로젝트가 없습니다."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "상태",
@@ -12842,7 +12823,6 @@
             "abf59262fb": "agent를 시작하기 전에 전체 명령 입력을 리뷰하고 편집하세요.",
             "4ede779461": "AI를 통해 리뷰 충돌 해결",
             "3b203c62f8": "이렇게 하면 PR에서 해당 댓글이 영구적으로 제거됩니다.",
-            "ea9b649ce3": "댓글을 삭제하시겠습니까?",
             "5788d1059d": "리뷰 스레드를 업데이트할 수 없습니다. GitHub API 예산을 확인하세요.",
             "07871c0589": "다른 PR 연결",
             "7f4489f370": "새로고침",
@@ -13710,8 +13690,7 @@
                   "5ddd8cac7f": "스테이징된 변경 사항을 모두 삭제하시겠습니까?",
                   "d4df3a61df": "'{{value0}}' 변경사항을 취소하시겠습니까?",
                   "5c0bdbc4cb": "'{{value0}}'을(를) 복원하시겠습니까?",
-                  "d97bf697c9": "이 파일이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
-                  "96c772bee9": "'{{value0}}'을 삭제하시겠습니까?"
+                  "d97bf697c9": "이 파일이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다."
                 },
                 "dialog": {
                   "3bc61dc989": "취소",
@@ -13947,7 +13926,6 @@
             "unresolved": "이 워크스페이스를 소유한 호스트를 확인할 수 없습니다. 연결을 확인한 후 다시 시도하세요."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "'{{value0}}'을(를) 영구적으로 삭제하시겠습니까?",
             "92276aceb7": "삭제",
             "7fb9435c86": "원격 호스트의 디렉터리와 그 안의 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
             "23e98f192f": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
@@ -14128,7 +14106,6 @@
             "resumeInNewCliTooltipChat": "이 채팅은 그대로 유지됩니다."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "이 세션을 삭제할까요?",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
@@ -15808,7 +15785,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
-          "bfc813e909": "링크 열기",
           "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
           "copyLink": "링크 복사"
         },
@@ -17036,9 +17012,7 @@
           "2faecab10b": "지금 실행",
           "13118faadf": "알 수 없는 프로젝트",
           "73f630b49d": "취소",
-          "9adfab2596": "외부 자동화 삭제",
           "1e2e41392f": "다시 묻지 마세요",
-          "080dcb5fbb": "자동화 삭제",
           "19a6e30eae": "자동화 새로 고침",
           "77c2778945": "자동화",
           "e1bf9b1512": "워크스페이스를 사용할 수 없습니다.",
@@ -17884,7 +17858,6 @@
       },
       "artifacts": {
         "ArtifactsPage": {
-          "deleteTitle": "아티팩트를 삭제할까요?",
           "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
           "delete": "삭제",
           "signInAgain": "아티팩트를 로드하려면 Orca에 다시 로그인하세요.",
@@ -19826,11 +19799,8 @@
           "candidateName": "{{value1}}의 {{value0}}"
         },
         "stopAgents": {
-          "titleMany": "이 agent들을 중지할까요?",
           "descriptionOne": "삭제하면 agent의 현재 작업이 중지됩니다.",
-          "descriptionMany": "삭제하면 이 agent들의 현재 작업이 중지됩니다.",
-          "confirm": "agent 중지 후 삭제",
-          "confirmOne": "agent 중지 후 삭제"
+          "descriptionMany": "삭제하면 이 agent들의 현재 작업이 중지됩니다."
         },
         "candidateRow": {
           "gitChip": {
@@ -20980,10 +20950,7 @@
       "delete": "삭제",
       "restore": "복원",
       "discard": "버리기",
-      "discardAll": "모두 폐기",
-      "deleteUntrackedTitle_one": "추적되지 않은 파일 {{count}}개를 삭제할까요?",
-      "deleteUntrackedTitle_other": "추적되지 않은 파일 {{count}}개를 삭제할까요?",
-      "deleteCount": "{{count}}개 삭제"
+      "discardAll": "모두 폐기"
     },
     "createReviewFailure": {
       "authRequiredCommand": "{{providerName}}이(가) 인증되지 않았습니다. 다음 단계: 이 환경에서 {{command}}을(를) 실행하세요.",
@@ -21407,7 +21374,8 @@
   },
   "common": {
     "retry": "다시 시도",
-    "cancel": "취소"
+    "cancel": "취소",
+    "delete": "삭제"
   },
   "fileExplorer": {
     "root": {
@@ -21427,8 +21395,7 @@
     "trashFailed": {
       "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
       "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
-      "description": "이 작업은 되돌릴 수 없습니다.",
-      "confirm": "영구 삭제"
+      "description": "이 작업은 되돌릴 수 없습니다."
     }
   },
   "sparsePreset": {
@@ -21586,6 +21553,11 @@
         "reasonSharedSession": "다른 패널에서도 열려 있음",
         "sharedOne": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 1개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다.",
         "sharedOther": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 {{count}}개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다."
+      },
+      "oauthUsage": {
+        "title": "Claude 사용량 주기적 조회",
+        "description": "Claude Code 로그인 정보로 사용량, 크레딧 및 비활성 계정을 확인합니다. 끄면 실행 중인 터미널 세션에서 제공하는 실시간 사용량만 표시합니다.",
+        "about": "Claude 사용량 주기적 조회 정보"
       }
     },
     "hostSignIn": {
@@ -21795,7 +21767,6 @@
     "nestedRemoval": {
       "refreshFailed": "워크스페이스 목록을 새로고침하지 못했습니다",
       "review": "중첩 워크트리와 함께 삭제…",
-      "title": "워크스페이스와 중첩 워크트리를 삭제할까요?",
       "description": "\"{{name}}\", 아래에 나열된 모든 중첩 워크트리, 그리고 커밋되지 않은 변경 사항을 포함한 그 안의 모든 파일이 영구적으로 삭제됩니다. 해당 터미널과 에이전트는 중지됩니다.",
       "detached": "분리된 HEAD",
       "loading": "중첩 워크트리 확인 중…",
@@ -21803,7 +21774,6 @@
       "cancel": "취소",
       "retry": "다시 검토",
       "deleting": "삭제 중…",
-      "confirm": "나열된 모든 워크트리 삭제",
       "preservedBranches": "일부 중첩 워크트리 브랜치가 유지되었습니다"
     },
     "setupTerminalTitle": "초기 설정"

@@ -17,6 +17,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type ClaudeOAuthUsageEnabledResolver,
   type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
@@ -90,10 +91,16 @@ export abstract class RateLimitServiceState {
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0
   protected claudeFetchGeneration = 0
+  protected claudeUsageAbortController = new AbortController()
+  protected liveClaudeUsage: ProviderRateLimits | null = null
   // Why: cached display receipts cannot establish when the selected account was last checked.
   protected lastClaudeCheckCompletedAt: number | null = null
   // Capture account attribution once per cycle instead of rerunning auth preparation on every post.
-  protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
+  protected lastClaudeAuthSnapshot: {
+    configDir: string | null
+    home: string | undefined
+    provenance: string
+  } | null = null
   /** Where the applied host-runtime Claude/Codex readings were taken. */
   protected usageReadingAccounts: Partial<
     Record<'claude' | 'codex', { home: string; provenance: string }>
@@ -122,6 +129,7 @@ export abstract class RateLimitServiceState {
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
   protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
+  protected claudeOAuthUsageEnabledResolver: ClaudeOAuthUsageEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
   protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null

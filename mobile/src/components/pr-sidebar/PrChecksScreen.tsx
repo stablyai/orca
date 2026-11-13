@@ -134,6 +134,7 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
                 error={notice.error}
                 warning={notice.warning}
                 undeliveredPrompt={notice.undeliveredPrompt}
+                opens={notice.opens}
                 errorStyle={styles.error}
               />
               {tab.actions.error ? <Text style={styles.error}>{tab.actions.error}</Text> : null}

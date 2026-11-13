@@ -703,7 +703,6 @@
       "automations": "Automations"
     },
     "hostScreenOverlays": {
-      "deleteWorktree": "Delete Worktree",
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
       "deleteKeepsEnvironment": "The environment \"{{environment}}\" that Orca created for it keeps running: its recipe has no destroy step.",
@@ -714,8 +713,7 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\"",
-      "deleteAnyway": "Delete Anyway"
+      "deleteFailed": "Failed to delete \"{{name}}\""
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -1565,7 +1563,6 @@
       "unresolve": "Unresolve",
       "resolve": "Resolve",
       "replyPlaceholder": "Write a reply…",
-      "deleteConfirmTitle": "Delete comment?",
       "deleteConfirmMessage": "This permanently deletes the comment on GitHub."
     },
     "commentsSection": {
@@ -2235,7 +2232,6 @@
       "newCommand": "New quick command"
     },
     "quickCommandsSheet": {
-      "deleteConfirmTitle": "Delete \"{{label}}\"?",
       "untitled": "Untitled",
       "deleteConfirmMessage": "This quick command will be removed from your saved list.",
       "editTitle": "Edit Quick Command",
@@ -4798,7 +4794,6 @@
       "completed": "Completed",
       "couldNotStart": "Could not start",
       "skipped": "Skipped",
-      "deleteAutomationTitle": "Delete automation?",
       "deleteRetained": "Delete “{{name}}” and its retained runs?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Could not verify the original agent pane. Reconnect and try again.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "The original agent pane is no longer available to open. Saved output remains here.",

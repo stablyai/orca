@@ -10,7 +10,7 @@ import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatTerminalForkProvider } from './messages/actions/NativeChatTerminalForkProvider'
+import { NativeChatTerminalTranscriptProviders } from './messages/actions/NativeChatTerminalForkProvider'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -304,8 +304,8 @@ export function NativeChatResolvedView({
     onFind: find.open
   })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
+  const transcript = { isVisible, find, agent, sessionId, transcriptPath, terminalTabId }
 
-  const terminalForkTarget = { agent, sessionId, transcriptPath, terminalTabId }
   const root = (
     <div
       ref={rootRef}
@@ -351,7 +351,7 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatTerminalForkProvider {...terminalForkTarget} messages={session.messages}>
+          <NativeChatTerminalTranscriptProviders {...transcript} messages={session.messages}>
             <NativeChatMessageList
               ref={messageListRef}
               session={sessionWithPending}
@@ -363,7 +363,7 @@ export function NativeChatResolvedView({
               deliveryNotices={deliveryNotices}
               runtimeContext={imageRuntimeContext}
             />
-          </NativeChatTerminalForkProvider>
+          </NativeChatTerminalTranscriptProviders>
         )}
       </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}

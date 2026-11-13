@@ -7,6 +7,7 @@ import { githubRepoIdentityKey } from '../../../../../../shared/github/repositor
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
+import type { GitHubPreviewRouteStore } from './native-chat-github-route-store'
 import {
   findGitHubPreviewRouteRepo,
   githubPreviewRepoAuthorityKey,
@@ -91,9 +92,14 @@ export function reloadGitHubLinkPreview(
 export function routedGitHubLinkPreviewKey(
   routeAuthority: HostAuthorityKey,
   link: GitHubIssueOrPRLink,
-  repos: readonly Repo[] = useAppStore.getState().repos
+  route: readonly Repo[] | Repo | null = useAppStore.getState().repos
 ): string {
-  const repo = readGitHubPreviewRouteRepo(repos, routeAuthority, link)
+  const repo =
+    route === null
+      ? null
+      : 'id' in route
+        ? route
+        : readGitHubPreviewRouteRepo(route, routeAuthority, link)
   return repo
     ? githubLinkPreviewKey(repo, link)
     : `${routeAuthority}:unrouted:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
@@ -101,35 +107,55 @@ export function routedGitHubLinkPreviewKey(
 
 export function readCachedRoutedGitHubLinkPreview(
   routeAuthority: HostAuthorityKey,
-  link: GitHubIssueOrPRLink
+  link: GitHubIssueOrPRLink,
+  route?: GitHubPreviewRouteStore
 ): GitHubWorkItem | null {
-  return previews.read(routedGitHubLinkPreviewKey(routeAuthority, link))
+  return previews.read(routedGitHubLinkPreviewKey(routeAuthority, link, route?.read()))
 }
 
-export function loadRoutedGitHubLinkPreview(
+export async function loadRoutedGitHubLinkPreview(
   routeAuthority: HostAuthorityKey,
-  link: GitHubIssueOrPRLink
+  link: GitHubIssueOrPRLink,
+  route?: GitHubPreviewRouteStore
 ): Promise<GitHubWorkItem | null> {
-  return loadPreviewFromCatalog(
-    routeAuthority,
-    link,
-    (repos) => findGitHubPreviewRouteRepo(repos, routeAuthority, link),
-    (repos) => readGitHubPreviewRouteRepo(repos, routeAuthority, link)
-  )
+  const snapshot = route?.repos === useAppStore.getState().repos ? route : undefined
+  // Keep routing current until a pending request settles, including after its card unmounts.
+  const stop = snapshot?.retain()
+  try {
+    return await loadPreviewFromCatalog(
+      routeAuthority,
+      link,
+      (repos) =>
+        snapshot?.repos === repos
+          ? snapshot.find()
+          : findGitHubPreviewRouteRepo(repos, routeAuthority, link),
+      (repos) =>
+        snapshot?.repos === repos
+          ? snapshot.read()
+          : readGitHubPreviewRouteRepo(repos, routeAuthority, link),
+      snapshot?.identities
+    )
+  } finally {
+    stop?.()
+  }
 }
 
 async function loadPreviewFromCatalog(
   routeAuthority: HostAuthorityKey,
   link: GitHubIssueOrPRLink,
   select: (repos: readonly Repo[]) => Promise<Repo | null>,
-  read: (repos: readonly Repo[]) => Repo | null
+  read: (repos: readonly Repo[]) => Repo | null,
+  capturedIdentities?: ReadonlySet<string>
 ): Promise<GitHubWorkItem | null> {
   const repos = useAppStore.getState().repos
-  const captured = new Set(
-    githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity)
-  )
+  const captured =
+    capturedIdentities ??
+    new Set(githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity))
   const retired = new Set<string>()
-  const stop = useAppStore.subscribe((state) => {
+  const stop = useAppStore.subscribe((state, previous) => {
+    if (state.repos === previous.repos) {
+      return
+    }
     const live = new Set(
       githubPreviewRouteCandidates(state.repos, routeAuthority).map(githubPreviewRepoIdentity)
     )

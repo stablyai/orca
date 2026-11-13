@@ -16,6 +16,7 @@ import {
 } from '../browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BrowserClientHostAttachParams,
+  BrowserClientHostCommandResultChunkParams,
   BrowserClientHostCommandResultParams,
   BrowserNetworkTunnelAttachParams
 } from '../browser/client-hosting/browser-client-host-protocol'
@@ -732,6 +733,11 @@ import {
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
 import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
+import {
+  WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReportUnsavedEditorsParams,
+  WorkspaceCleanupRunNowParams
+} from './workspace-cleanup-runner-params'
 import { WorkspaceCleanupScanParams } from './workspace-cleanup-scan-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
@@ -921,6 +927,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.click': Element,
   'browser.clientHost.attach': BrowserClientHostAttachParams,
   'browser.clientHost.commandResult': BrowserClientHostCommandResultParams,
+  'browser.clientHost.commandResultChunk': BrowserClientHostCommandResultChunkParams,
   'browser.clientHost.fileChannel.abort': BrowserClientFileChannelAbortParams,
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
@@ -1635,6 +1642,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
+  'workspaceCleanup.report': null,
+  'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
+  'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,

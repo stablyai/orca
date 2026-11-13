@@ -16,7 +16,7 @@ import { hostDictationTerms } from './runtime-dictation-terms'
 import { dictationTextSettingsFor } from '../../../shared/dictation-cleanup'
 import type { DictationTerm } from '../../../shared/dictation-dictionary'
 import { cleanUpDictatedText } from '../../speech/dictation-cleanup-service'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
