@@ -87,6 +87,7 @@ describe('standalone fetch ref-update recovery', () => {
     failure(`${CAS_DIAGNOSTIC}\nfatal: Could not resolve host: example.invalid`),
     failure(`${CAS_DIAGNOSTIC}\nremote: error: access denied`),
     failure(`${CAS_DIAGNOSTIC}\nremote: ERROR access denied`),
+    failure(`${CAS_DIAGNOSTIC}\nErrors during submodule fetch:\n\tsub`),
     failure(`${CAS_DIAGNOSTIC}\nfatal: bad object HEAD`),
     failure(
       "error: cannot lock ref 'refs/heads/main': is at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa but expected bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

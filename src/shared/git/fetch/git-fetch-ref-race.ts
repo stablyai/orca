@@ -6,7 +6,8 @@ import { isExecKilledError, stripCredentialsFromMessage } from '../remotes/git-r
 
 const REMOTE_REF_CAS_ERROR =
   /^(?:error|fatal): (?:fetching ref refs\/remotes\/[^\s]+ failed: incorrect old value provided|cannot lock ref 'refs\/remotes\/[^'\s]+': is at (?:[0-9a-f]{40}|[0-9a-f]{64}) but expected (?:[0-9a-f]{40}|[0-9a-f]{64}))$/i
-const OTHER_GIT_ERROR = /\b(?:error|fatal):|^remote:.*\b(?:error|fatal)\b/i
+const OTHER_GIT_ERROR =
+  /\b(?:error|fatal):|^remote:.*\b(?:error|fatal)\b|^Errors during submodule fetch:/i
 
 function remoteRefRaceStderr(error: unknown): string | null {
   if (!(error instanceof Error) || isExecKilledError(error)) {
@@ -59,8 +60,15 @@ export async function retryGitFetchRefRace<T>(
     }
     throwIfSignalAborted(signal)
     if (retry === 2) {
-      const detail = stripCredentialsFromMessage(stderr.trim())
-      throw new Error(`${detail}\nAnother Git process updated remote references. Try again.`, {
+      const detail = stripCredentialsFromMessage(
+        stderr
+          .split(/[\r\n]+/)
+          .map((line) => line.trim())
+          .filter((line) => REMOTE_REF_CAS_ERROR.test(line))
+          .join('; ')
+      )
+      // IPC error normalization retains only the final line.
+      throw new Error(`${detail} Another Git process updated remote references. Try again.`, {
         cause: initialError
       })
     }
