@@ -55,6 +55,10 @@ export type ProviderVisibleCapture = {
   raw: Promise<PtyProviderBufferSnapshot | null>
   parsed?: Promise<RuntimeTerminalProjection>
   settled: boolean
+  // Only an actual null answer permits the one further capture; a settled frame is reused.
+  answeredNull?: true
+  // The primary stage reading this capture; an earlier capture's null never answers a newer one.
+  primary?: Promise<RuntimeVisibleTerminalState | null>
 }
 
 /**
@@ -70,7 +74,6 @@ export type ProviderVisibleRead = {
   capture?: ProviderVisibleCapture
   // Captures issued or adopted: a primary and at most one fallback.
   attempts: number
-  providerFrame?: Promise<RuntimeVisibleTerminalState | null>
   fallback?: Promise<RuntimeTerminalProjection | null>
   // Unsettled stages, captures, parses and caller holds; the entry leaves the map at zero.
   pending: number

@@ -162,8 +162,20 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     }
   }
 
-  /** A renderer fallback for one visible read; its rows return only while that read is still current. */
-  protected async readRendererVisibleSnapshotLines(
+  /**
+   * A renderer fallback for one visible read; its rows return only while that read is still current.
+   * A supplied `timeoutMs` is the caller's remaining budget for the RPC, parse and return together.
+   */
+  protected readRendererVisibleSnapshotLines(
+    ptyId: string,
+    entry: ProviderVisibleRead,
+    timeoutMs?: number
+  ): Promise<RuntimeTerminalProjection> {
+    const read = this.readRendererVisibleFrame(ptyId, entry)
+    return timeoutMs === undefined ? read : withTimeout(read, timeoutMs, { lines: [] })
+  }
+
+  private async readRendererVisibleFrame(
     ptyId: string,
     entry: ProviderVisibleRead
   ): Promise<RuntimeTerminalProjection> {

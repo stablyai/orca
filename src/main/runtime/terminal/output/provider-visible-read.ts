@@ -2,6 +2,7 @@ import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-
 import type { RuntimeVisibleTerminalState } from '../records/runtime-terminal-state-records'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type { RuntimeTerminalProjection } from './terminal-projection'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { withTimeout, withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -10,7 +11,6 @@ import {
 } from './provider-snapshot-budget'
 import {
   providerFrameFitsGrid,
-  sameProviderFrameGrid,
   type ProviderVisibleCapture,
   type ProviderVisibleRead
 } from '../lifecycle/terminal-view-resources'
@@ -131,15 +131,6 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
       : null
   }
 
-  /** Only the exact current entry of the current lifecycle may publish, return or write retry state. */
-  protected ownsProviderVisibleRead(ptyId: string, entry: ProviderVisibleRead): boolean {
-    return (
-      !entry.retired &&
-      this.providerVisibleStateReadsByPtyId.get(ptyId) === entry &&
-      this.getPtyLifecycleGeneration(ptyId) === entry.generation
-    )
-  }
-
   /**
    * One caller's gated primary wait. The retry gate is checked before joining shared work, and
    * only the default wait's expiry is a retry-policy result; a supplied deadline ends this caller.
@@ -152,13 +143,15 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
     if (this.providerVisibleRetryActive(ptyId)) {
       return null
     }
-    entry.providerFrame ??= this.trackProviderVisibleWork(
+    // The read's current capture: after an actual null this is the pending fallback, joined, not re-asked.
+    const capture = this.shareVisibleCapture(ptyId, entry, false)
+    capture.primary ??= this.trackProviderVisibleWork(
       ptyId,
       entry,
-      this.providerFrameStage(ptyId, entry)
+      this.providerFrameStage(ptyId, entry, capture)
     )
     const result = await withTimeoutResult(
-      entry.providerFrame,
+      capture.primary,
       suppliedTimeoutMs ?? VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
     )
     if (result.ok) {
@@ -167,7 +160,7 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
     if (
       suppliedTimeoutMs === undefined &&
       this.ownsProviderVisibleRead(ptyId, entry) &&
-      entry.capture?.settled === false &&
+      !capture.settled &&
       !this.providerVisibleRetryActive(ptyId)
     ) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
@@ -188,12 +181,12 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
     return (this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()
   }
 
-  /** The shared primary provider frame: actual null opens the retry window, a frame clears it. */
+  /** The shared primary provider frame: actual null opens the retry window; only an applicable frame clears it. */
   private async providerFrameStage(
     ptyId: string,
-    entry: ProviderVisibleRead
+    entry: ProviderVisibleRead,
+    capture: ProviderVisibleCapture
   ): Promise<RuntimeVisibleTerminalState | null> {
-    const capture = this.shareVisibleCapture(ptyId, entry, false)
     const snapshot = await capture.raw
     if (!this.ownsProviderVisibleRead(ptyId, entry)) {
       return null
@@ -202,7 +195,6 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
     if (
       this.providerSnapshotsWithLiveModeTransition.has(snapshot) &&
       !this.hasHostHistoryAuthority(ptyId)
@@ -214,10 +206,16 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
         return null
       }
       if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
+        this.providerVisibleRetryAtByPtyId.delete(ptyId)
+        this.publishProviderFrameMode(ptyId, snapshot)
         return liveState
       }
     }
-    return this.publishVisibleFrame(ptyId, entry, capture, snapshot)
+    const state = await this.publishVisibleFrame(ptyId, entry, capture, snapshot)
+    if (state) {
+      this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    }
+    return state
   }
 
   /**
@@ -244,8 +242,8 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
   }
 
   /**
-   * The read's one capture: a pending one is always joined, never duplicated. A primary never
-   * replaces a settled capture; a fallback may, once, so an entry issues or adopts at most two.
+   * The read's one capture: a pending or answered one is always joined, never duplicated. Only a
+   * fallback after an actual null may take one more, so an entry issues or adopts at most two.
    */
   private shareVisibleCapture(
     ptyId: string,
@@ -253,7 +251,7 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
     fallback: boolean
   ): ProviderVisibleCapture {
     const current = entry.capture
-    if (current && (!current.settled || !fallback || entry.attempts >= 2)) {
+    if (current && (!current.answeredNull || !fallback || entry.attempts >= 2)) {
       return current
     }
     entry.attempts += 1
@@ -261,54 +259,15 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
       raw: this.acquireVisibleRaw(ptyId, entry),
       settled: false
     }
-    void capture.raw.then(() => {
+    void capture.raw.then((snapshot) => {
       capture.settled = true
+      if (!snapshot) {
+        capture.answeredNull = true
+      }
     })
     entry.capture = capture
     this.trackProviderVisibleWork(ptyId, entry, capture.raw)
     return capture
-  }
-
-  /**
-   * An eligible pending acquisition is adopted as this read's capture: current generation, never
-   * one a grid change retired, and a current frame only on its own grid. Otherwise a new capture,
-   * shared with other consumers only when no current acquisition holds the slot.
-   */
-  private acquireVisibleRaw(
-    ptyId: string,
-    entry: ProviderVisibleRead
-  ): Promise<PtyProviderBufferSnapshot | null> {
-    const acquisitions = entry.currentFrame
-      ? this.providerFrameAcquisitionsByPtyId
-      : this.providerBufferAcquisitionsByPtyId
-    const existing = acquisitions.get(ptyId)
-    const current =
-      existing?.generation === entry.generation &&
-      (!entry.currentFrame || sameProviderFrameGrid(existing.grid ?? null, entry.grid))
-    if (existing && current && !existing.visibleRetired && !existing.timedOut) {
-      return existing.promise
-    }
-    const promise = this.captureProviderTerminalBuffer(
-      ptyId,
-      { scrollbackRows: 0 },
-      entry.generation
-    )
-    if (!current) {
-      const acquisition = {
-        generation: entry.generation,
-        scrollbackRows: 0,
-        promise,
-        timedOut: false,
-        ...(entry.currentFrame ? { grid: entry.grid } : {})
-      }
-      acquisitions.set(ptyId, acquisition)
-      void promise.finally(() => {
-        if (acquisitions.get(ptyId) === acquisition) {
-          acquisitions.delete(ptyId)
-        }
-      })
-    }
-    return promise
   }
 
   /** Parses the capture once for every waiter, then publishes only while the read is still current. */
@@ -343,6 +302,17 @@ export abstract class OrcaRuntimeWithProviderVisibleRead extends OrcaRuntimeWith
       grid: frameGrid,
       currentFrame: entry.currentFrame
     })
+    this.publishProviderFrameMode(ptyId, snapshot)
     return state
+  }
+
+  /** Only an applicable frame's screen mode becomes the mode later reads select their source by. */
+  private publishProviderFrameMode(ptyId: string, snapshot: PtyProviderBufferSnapshot): void {
+    if (typeof snapshot.alternateScreen !== 'boolean') {
+      return
+    }
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    tracker.scan(snapshot.alternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
+    this.providerModeTrackersByPtyId.set(ptyId, tracker)
   }
 }

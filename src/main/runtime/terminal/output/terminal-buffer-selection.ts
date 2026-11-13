@@ -4,6 +4,7 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-
 import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
+import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
   sameProviderFrameGrid,
   type ProviderVisibleRead
@@ -13,7 +14,8 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   protected abstract captureProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number },
-    generation: number
+    generation: number,
+    publishMode?: boolean
   ): Promise<PtyProviderBufferSnapshot | null>
 
   protected async serializeTerminalBufferFromAvailableState(
@@ -186,6 +188,67 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   ): Promise<T> {
     const entry = joined ?? this.joinProviderVisibleRead(ptyId, currentFrame)
     return this.trackProviderVisibleWork(ptyId, entry, run(entry))
+  }
+
+  /** Only the exact current entry of the current lifecycle may publish, return or write retry state. */
+  protected ownsProviderVisibleRead(ptyId: string, entry: ProviderVisibleRead): boolean {
+    return (
+      !entry.retired &&
+      this.providerVisibleStateReadsByPtyId.get(ptyId) === entry &&
+      this.getPtyLifecycleGeneration(ptyId) === entry.generation
+    )
+  }
+
+  /**
+   * An eligible pending acquisition is adopted as this read's capture: current generation, never
+   * one a grid change retired, and a current frame only on its own grid. Otherwise a new capture,
+   * shared with other consumers only when no current acquisition holds the slot.
+   */
+  protected acquireVisibleRaw(
+    ptyId: string,
+    entry: ProviderVisibleRead
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    const acquisitions = entry.currentFrame
+      ? this.providerFrameAcquisitionsByPtyId
+      : this.providerBufferAcquisitionsByPtyId
+    const existing = acquisitions.get(ptyId)
+    const current =
+      existing?.generation === entry.generation &&
+      (!entry.currentFrame || sameProviderFrameGrid(existing.grid ?? null, entry.grid))
+    if (existing && current && !existing.visibleRetired && !existing.timedOut) {
+      return existing.promise
+    }
+    const promise = this.captureProviderTerminalBuffer(
+      ptyId,
+      { scrollbackRows: 0 },
+      entry.generation,
+      false
+    )
+    if (!current) {
+      const acquisition = {
+        generation: entry.generation,
+        scrollbackRows: 0,
+        promise,
+        timedOut: false,
+        ...(entry.currentFrame ? { grid: entry.grid } : {})
+      }
+      acquisitions.set(ptyId, acquisition)
+      void promise.finally(() => {
+        if (acquisitions.get(ptyId) === acquisition) {
+          acquisitions.delete(ptyId)
+        }
+      })
+    }
+    return promise
+  }
+
+  /** One supplied deadline for a whole read: each call gives the options with the time left. */
+  protected spendProviderSnapshotDeadline(
+    options: RuntimeProviderSnapshotReadOptions
+  ): () => RuntimeProviderSnapshotReadOptions {
+    const deadline = options.timeoutMs === undefined ? null : Date.now() + options.timeoutMs
+    return () =>
+      deadline === null ? options : { ...options, timeoutMs: Math.max(0, deadline - Date.now()) }
   }
 
   protected async serializeProviderTerminalBuffer(

@@ -153,14 +153,20 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
       deep,
       renders,
       // The provider's frame at the current sequence, drawn for the given grid.
-      frame: (row: string, frameCols: number, frameRows: number): PtyProviderBufferSnapshot => ({
+      frame: (
+        row: string,
+        frameCols: number,
+        frameRows: number,
+        alternateScreen = owner === 'provider'
+      ): PtyProviderBufferSnapshot => ({
         data: row ? `${row}\r\n` : '',
         cols: frameCols,
         rows: frameRows,
         seq: runtime.getPtyOutputSequence('pty-1'),
         source: 'headless',
-        alternateScreen: owner === 'provider'
+        alternateScreen
       }),
+      output: (data: string) => runtime.onPtyData('pty-1', data, Date.now()),
       read: (first: { screen?: boolean }, options: RuntimeProviderSnapshotReadOptions = {}) =>
         track(runtime.readTerminal(terminal.handle, first, options)),
       screen: (): Promise<string> =>
@@ -277,7 +283,8 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
       t.frames[2]!.resolve(t.frame('SUCCESSOR_ROW', 80, 25))
       expect(await successor).toContain('SUCCESSOR_ROW')
 
-      t.frames[1]!.resolve(t.frame('LATE_ROW', 80, 25))
+      // A's older normal-screen answer must not change the mode later reads select their source by.
+      t.frames[1]!.resolve(t.frame('LATE_ROW', 80, 25, false))
       expect(await late).not.toContain('LATE_ROW')
       const after = await t.screen()
       expect(after).toContain('SUCCESSOR_ROW')
@@ -415,6 +422,115 @@ describe('terminal frame across a grid change or lifecycle reset', () => {
       expect(await long).toContain('GATED_ROW')
       expect((await rejoined).tail.join('\n')).toContain('GATED_ROW')
       expect(t.frames).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+      await t.cleanup()
+    }
+  })
+
+  // FA-C2: a supplied deadline used to restart at the renderer fallback after the primary spent it.
+  it('ends a stream probe at its own deadline across the primary and the renderer', async () => {
+    const t = await terminalAt(80, 25, 'provider', { renderer: true })
+    try {
+      // A known alternate screen whose published frame later output has outdated.
+      const first = t.screen()
+      await vi.waitFor(() => expect(t.frames).toHaveLength(1))
+      t.frames[0]!.resolve(t.frame('FIRST_ROW', 80, 25))
+      expect(await first).toContain('FIRST_ROW')
+      t.output('MORE_OUTPUT\r\n')
+      t.registerRenderer()
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+
+      const probe = t.read({}, probeOptions)
+      const probeSettled = settledFlag(probe)
+      await advance(0)
+      expect(t.frames).toHaveLength(2)
+      await advance(90)
+      t.frames[1]!.resolve(null)
+      await advance(0)
+      // The renderer fallback is actually reached, then held.
+      expect(t.renders).toHaveLength(1)
+      await advance(9)
+      expect(probeSettled()).toBe(false)
+      await advance(1)
+      expect(probeSettled()).toBe(true)
+      expect((await probe).tail.join('\n')).toContain('MORE_OUTPUT')
+    } finally {
+      vi.useRealTimers()
+      await t.cleanup()
+    }
+  })
+
+  // FO-P1: a settled frame used to count as leave for the fallback to capture and parse again.
+  it('reuses a settled frame instead of capturing again when it does not apply', async () => {
+    const t = await terminalAt(80, 25, 'provider')
+    const parses = vi.spyOn(HeadlessEmulator.prototype, 'write')
+    try {
+      const read = t.screen()
+      await vi.waitFor(() => expect(t.frames).toHaveLength(1))
+      // A positive frame drawn for another grid: not applicable, and not an actual null either.
+      t.frames[0]!.resolve(t.frame('WRONG_GRID_ROW', 40, 10))
+      expect(await read).not.toContain('WRONG_GRID_ROW')
+      expect(t.frames).toHaveLength(1)
+      expect(parses.mock.calls.filter(([data]) => data.includes('WRONG_GRID_ROW'))).toHaveLength(1)
+    } finally {
+      parses.mockRestore()
+      await t.cleanup()
+    }
+  })
+
+  // FO-C2: a late frame that did not apply used to clear the retry window it arrived inside.
+  it('keeps the retry window when a late frame for another grid arrives inside it', async () => {
+    const t = await terminalAt(80, 25, 'provider')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const expiring = t.read({})
+      await advance(0)
+      expect(t.frames).toHaveLength(1)
+      await advance(750)
+      expect((await expiring).tail.join('\n')).toContain('MAIN_ONLY_ROW')
+      await advance(50)
+      t.frames[0]!.resolve(t.frame('WRONG_GRID_ROW', 40, 10))
+      await advance(0)
+
+      // Still inside the window: a primary preview answers at once, with no wait and no capture.
+      const preview = t.preview()
+      const previewSettled = settledFlag(preview)
+      await advance(0)
+      expect(previewSettled()).toBe(true)
+      expect(await preview).not.toContain('WRONG_GRID_ROW')
+      expect(t.frames).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+      await t.cleanup()
+    }
+  })
+
+  // MML-PRJ-ACTUAL-NULL: a primary's actual null used to answer every later primary caller on the
+  // read, so one arriving after the retry window missed the fallback frame that was still coming.
+  it('lets a primary caller after the retry window join the pending fallback frame', async () => {
+    const t = await terminalAt(80, 25, 'provider')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const long = t.screen()
+      await advance(0)
+      expect(t.frames).toHaveLength(1)
+      t.frames[0]!.resolve(null)
+      await advance(0)
+      expect(t.frames).toHaveLength(2)
+
+      await advance(1_500)
+      const preview = t.preview()
+      const previewSettled = settledFlag(preview)
+      await advance(0)
+      expect(previewSettled()).toBe(false)
+      expect(t.frames).toHaveLength(2)
+
+      await advance(500)
+      t.frames[1]!.resolve(t.frame('POST_GATE_FRAME', 80, 25))
+      expect(await long).toContain('POST_GATE_FRAME')
+      expect(await preview).toContain('POST_GATE_FRAME')
+      expect(t.frames).toHaveLength(2)
     } finally {
       vi.useRealTimers()
       await t.cleanup()

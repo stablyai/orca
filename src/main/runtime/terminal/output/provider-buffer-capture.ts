@@ -54,7 +54,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   ): Promise<RuntimeVisibleTerminalState | null>
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string,
-    entry: ProviderVisibleRead
+    entry: ProviderVisibleRead,
+    timeoutMs?: number
   ): Promise<RuntimeTerminalProjection>
   protected abstract readWholeScreenModel(
     ptyId: string | null | undefined
@@ -65,10 +66,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     rows: number
   }): Promise<RuntimeTerminalProjection>
 
+  /**
+   * A visible read passes `publishMode: false` and publishes the snapshot's screen mode only when
+   * its frame is applicable; a superseded visible frame must not change later source selection.
+   */
   protected async captureProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number },
-    generation: number
+    generation: number,
+    publishMode = true
   ): Promise<PtyProviderBufferSnapshot | null> {
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
@@ -104,7 +110,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         if (liveModeTracker.hasObservedAlternateScreenSwitch) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
-        this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        if (publishMode) {
+          this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        }
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
       const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
@@ -144,6 +152,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (this.hasHostHistoryAuthority(ptyId)) {
       return this.withHostHistoryFallback(ptyId, read, opts, providerSnapshot)
     }
+    // A supplied deadline is one budget spent across every stage this read reaches.
+    const remaining = this.spendProviderSnapshotDeadline(providerSnapshot)
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
     const recoveredWorkerFallback =
       read.tail.length === 0 && this.legacyWorkerRecovery.hasRecoveredPty(ptyId)
@@ -157,7 +167,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       const providerProjection = await this.readProviderTerminalTailLines(
         ptyId,
         opts.limit,
-        providerSnapshot
+        remaining()
       )
       if (providerProjection && providerProjection.lines.length > 0) {
         return withVisibleProjection(read, providerProjection, opts.limit)
@@ -181,7 +191,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     return this.withProviderVisibleRead(ptyId, false, async (entry) => {
       const visibleState = await this.readVisibleTerminalState(ptyId, {
         entry,
-        timeoutMs: providerSnapshot.timeoutMs
+        timeoutMs: remaining().timeoutMs
       })
       if (
         !blankFallback &&
@@ -190,12 +200,16 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         !visibleState?.isAlternateScreen
       ) {
         return conpty
-          ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
+          ? await this.withConptyRenderedTail(ptyId, read, opts.limit, remaining())
           : read
       }
       let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
       if (projection.lines.length === 0) {
-        projection = await this.readRendererVisibleSnapshotLines(ptyId, entry)
+        projection = await this.readRendererVisibleSnapshotLines(
+          ptyId,
+          entry,
+          remaining().timeoutMs
+        )
       }
       return withVisibleProjection(read, projection, opts.limit)
     })
