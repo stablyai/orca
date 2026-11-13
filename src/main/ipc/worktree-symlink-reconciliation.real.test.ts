@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { findCreatedWorktree } from './created-worktree-reconciliation'
@@ -17,7 +18,7 @@ afterEach(async () => {
 
 describe('native worktree symlink reconciliation (real Git)', () => {
   it('matches the authoritative listed row after adding through a symlink root', async () => {
-    const fixtureRoot = await mkdtemp(join(process.cwd(), '.pr-10172-real-git-'))
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'orca-worktree-real-git-'))
     fixtureRoots.push(fixtureRoot)
     const repoPath = join(fixtureRoot, 'repo')
     const canonicalRoot = join(fixtureRoot, 'canonical-worktrees')

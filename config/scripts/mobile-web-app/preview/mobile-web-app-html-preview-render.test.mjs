@@ -2,6 +2,7 @@
 // Use srcdoc: WebKit refuses blob frames inheriting frame-ancestors none even when frame-src blob is allowed.
 // Pixel oracle works across engines; WebKit refuses evaluation inside opaque-origin frame.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -87,8 +88,7 @@ beforeAll(async () => {
   // this module's top level has already built the object.
   rig.foreignOrigin = foreignOrigin
 
-  await mkdir(join(mobileDir, '.tmp'), { recursive: true })
-  scratch = await mkdtemp(join(mobileDir, '.tmp', 'html-preview-render-'))
+  scratch = await mkdtemp(join(tmpdir(), 'orca-html-preview-render-'))
   // Before any page exists, which is the point of it being a listener.
   assetServer = await startArtifactAssetServer(scratch)
   rig.assetServer = assetServer
@@ -161,7 +161,6 @@ afterAll(async () => {
   foreign?.close()
   assetServer?.server.close()
   if (scratch) {
-    // Remove this run’s scratch only; other suites share mobile/.tmp.
     await rm(scratch, { recursive: true, force: true })
   }
 })

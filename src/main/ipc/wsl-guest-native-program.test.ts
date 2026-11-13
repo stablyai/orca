@@ -8,6 +8,10 @@ import {
   resolveGuestNativeProgram
 } from './wsl-guest-windows-drive-path'
 
+vi.mock('../../shared/system-cli-install-dirs', () => ({
+  getSystemCliInstallDirectories: () => []
+}))
+
 let root: string
 let native: string
 let drive: string
@@ -34,7 +38,11 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('the Windows-copy check', () => {
-  const options = () => ({ pathEnv: `${native}:${drive}/npm`, homePath: join(root, 'home') })
+  const options = () => ({
+    pathEnv: `${native}:${drive}/npm`,
+    homePath: join(root, 'home'),
+    platform: 'linux' as const
+  })
 
   it('still finds a WSL install made after the verdict was cached', () => {
     install(join(drive, 'npm'))

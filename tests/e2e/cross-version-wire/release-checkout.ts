@@ -13,6 +13,7 @@ import {
 } from './release-checkout-publication.ts'
 import { releaseModuleLocation } from './release-module-locations.ts'
 import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
+import { prepareCrossVersionFixtureCache } from './cross-version-fixture-cache.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,
@@ -23,7 +24,6 @@ export type {
 export { selectLatestStableReleaseTag }
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
-const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
 
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
 
@@ -149,12 +149,13 @@ export function releaseModuleExport<T>(module: Record<string, unknown>, name: st
   return value as T
 }
 
-// Copy under the root tsconfig because root-only CI lacks Expo’s mobile config; pin relative imports to working-tree sources.
+// Keep copied phone modules outside Expo's config; pin relative imports to working-tree sources.
 export async function importWorkingTreeModuleCopy(
   rootRelativePath: string,
-  cacheRoot: string = DEFAULT_CACHE_ROOT
+  cacheRoot?: string
 ): Promise<Record<string, unknown>> {
-  const copy = checkoutModulePath(join(cacheRoot, 'working-tree'), rootRelativePath)
+  const root = cacheRoot ?? (await prepareCrossVersionFixtureCache(REPO_ROOT))
+  const copy = checkoutModulePath(join(root, 'working-tree'), rootRelativePath)
   const original = checkoutModulePath(REPO_ROOT, rootRelativePath)
   const staged = `${copy}.${process.pid}.tmp`
   await mkdir(dirname(copy), { recursive: true })
@@ -180,7 +181,7 @@ export async function materializeReleaseCheckout(
 ): Promise<ReleaseCheckout> {
   const commit = resolveCommit(ref)
   const label = ref.replace(/[^A-Za-z0-9._-]/g, '_')
-  const cacheRoot = options.cacheRoot ?? DEFAULT_CACHE_ROOT
+  const cacheRoot = options.cacheRoot ?? (await prepareCrossVersionFixtureCache(REPO_ROOT))
   const root = join(cacheRoot, label, `${commit}-format-${CHECKOUT_FORMAT}`)
   await publishReleaseCheckout({
     root,

@@ -74,6 +74,7 @@ afterAll(async () => {
 async function openHtmlFile(browser, { line, truncated = false, editable = false } = {}) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
+    locale: 'en-US',
     hasTouch: true
   })
   const page = await context.newPage()
