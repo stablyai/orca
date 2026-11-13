@@ -1,5 +1,9 @@
 import { createContext, useMemo } from 'react'
-import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage,
+  NativeChatToolCallBlock
+} from '../../../../../../shared/native-chat/native-chat-types'
 import {
   collectGitHubSeenReferenceRepos,
   type GitHubRepoReference,
@@ -7,18 +11,31 @@ import {
 } from '../../../../../../shared/github/markdown/github-reference-links'
 import {
   COMMAND_START,
-  shellCode
+  shellCode,
+  shellSegments
 } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { nativeChatToolCallScript } from '../../../../../../shared/native-chat/tools/native-chat-tool-call-script'
 import { pairToolBlocks } from '../../../../../../shared/native-chat/tools/native-chat-tool-pairs'
 
 const NO_SEEN_REPOS: GitHubSeenReferenceRepos = new Map()
-// Only gh output speaks for this chat's references; a read file or fetched page may cite any repo.
-const RUNS_GH = new RegExp(`${COMMAND_START}gh\\s`, 'u')
+const GH_COMMAND = new RegExp(`^${COMMAND_START}gh\\s`, 'u')
+const SILENT_COMMAND = /^cd(?:\s|$)/u
 
 /** Repos bare `#123` in this chat's messages follow ahead of the chat's own repo. */
 export const NativeChatGitHubSeenReposContext =
   createContext<GitHubSeenReferenceRepos>(NO_SEEN_REPOS)
+
+// Only gh output speaks for this chat's references; a read file or fetched page may cite any repo,
+// so output another command could have printed into is not attributed to gh.
+function printsOnlyGhOutput(script: string): boolean {
+  const commands = shellSegments(shellCode(script))
+    .map((command) => command.trim())
+    .filter(Boolean)
+  return (
+    commands.some((command) => GH_COMMAND.test(command)) &&
+    commands.every((command) => GH_COMMAND.test(command) || SILENT_COMMAND.test(command))
+  )
+}
 
 // A message's blocks never change once written, so a streaming reply rescans only its new rows.
 const seenByMessage = new WeakMap<NativeChatMessage, GitHubSeenReferenceRepos>()
@@ -27,15 +44,22 @@ function messageSeenRepos(message: NativeChatMessage): GitHubSeenReferenceRepos 
   let seen = seenByMessage.get(message)
   if (!seen) {
     const found = new Map<string, GitHubRepoReference>()
+    const callByResult = new Map<NativeChatBlock, NativeChatToolCallBlock>()
+    for (const { call, result } of pairToolBlocks(message.blocks)) {
+      if (call && result) {
+        callByResult.set(result, call)
+      }
+    }
+    // Block order, so the latest sighting within a message wins.
     for (const block of message.blocks) {
       if (block.type === 'text') {
         collectGitHubSeenReferenceRepos(block.text, found)
-      }
-    }
-    for (const { call, result } of pairToolBlocks(message.blocks)) {
-      const script = call && result ? nativeChatToolCallScript(call.name, call.input) : null
-      if (result && script && RUNS_GH.test(shellCode(script))) {
-        collectGitHubSeenReferenceRepos(result.output, found)
+      } else if (block.type === 'tool-result') {
+        const call = callByResult.get(block)
+        const script = call ? nativeChatToolCallScript(call.name, call.input) : null
+        if (script && printsOnlyGhOutput(script)) {
+          collectGitHubSeenReferenceRepos(block.output, found)
+        }
       }
     }
     seen = found.size > 0 ? found : NO_SEEN_REPOS
