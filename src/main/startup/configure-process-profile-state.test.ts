@@ -25,7 +25,8 @@ afterEach(() => {
 describe('pre-ready profile-state recovery boundary', () => {
   it('ignores a matching marker when SQLite is missing but an export remains', async () => {
     const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
-    const { writeHttp1CompatibilityMarker } = await import('./http1-compatibility-marker')
+    const { writeHttp1CompatibilityMarker } =
+      await import('./network-compatibility/http1-compatibility-marker')
     const { profileStateJsonExportPath } =
       await import('../persistence/profile-state/legacy-json/profile-state-export-path')
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))

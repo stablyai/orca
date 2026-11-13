@@ -8,7 +8,7 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import {
   CODEX_DEFAULT_SERVICE_TIER,

@@ -3,7 +3,7 @@ import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { prepareCodexAdoption } from '../../native-chat/codex-adoption-preparation'
+import { prepareCodexAdoption } from '../../native-chat/conversation-adoption/codex-adoption-preparation'
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { generatedSessionTitle } from '../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../ai-vault/session-titles/session-title-resolver'
@@ -12,7 +12,7 @@ import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-s
 import type {
   StructuredAgentCliSourceEvidence,
   StructuredAgentCliSourceLocator
-} from '../../native-chat/structured-agent-cli-source'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentSessionProviderHandle,
@@ -30,12 +30,12 @@ import {
   findConflictingStructuredAdoption,
   resolveStructuredAgentSessionAdoption,
   structuredAdoptionConflictError
-} from '../../native-chat/structured-agent-session-history-adoption'
+} from '../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { structuredAgentRuntimeMetadata } from './installation/structured-agent-runtime-metadata'
 import type {
   StructuredAgentTranscriptImport,
   StructuredAgentTranscriptImportSettings
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export type StructuredAgentSessionCreateIntentInput = {
   envelope: { sessionId: string; clientOperationId: string }

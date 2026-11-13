@@ -11,7 +11,7 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../core'
 import { clientRendersStructuredAgent } from '../structured-sessions/structured-agent-session-policy'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchTabViewerRule } from './agent-launch-tab-publication'
 
 /** The paired client whose view this launch should move, or null when it moves the host's. */

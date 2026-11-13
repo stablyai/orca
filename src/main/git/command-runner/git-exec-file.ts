@@ -6,7 +6,7 @@ import {
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
@@ -30,6 +30,7 @@ import { createAbortError } from './process-capture/abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
+import { trackGitRefMutation } from './git-ref-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
 import { gitRunsIn } from './host-routing/git-runs-in'
 
@@ -190,6 +191,7 @@ export function gitExecFileAsync(
 ): Promise<{ stdout: string; stderr: string }> {
   const options = routeLocalGitOptions(callerOptions)
   const releaseMutation = trackGitWorktreeMutation(args, options)
+  const releaseRefMutation = trackGitRefMutation(args)
   const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
   // Missing folders start no child and must not record a git.exec span.
@@ -209,8 +211,10 @@ export function gitExecFileAsync(
     // A timed-out caller can settle before its child exits.
     if (terminationState.current) {
       void terminationState.current.then(releaseMutation)
+      void terminationState.current.then(releaseRefMutation)
     } else {
       releaseMutation()
+      releaseRefMutation()
     }
   })
 }

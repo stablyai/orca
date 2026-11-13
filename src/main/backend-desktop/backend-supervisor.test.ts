@@ -37,7 +37,7 @@ vi.mock('../worker-threads/worker-thread-entry-path', () => ({
   currentWorkerEntryLayout: () => ({ moduleDir: '/' }),
   resolveWorkerThreadEntryPath: () => 'backend-entry.js'
 }))
-vi.mock('../window/renderer-document-navigation', () => ({
+vi.mock('../window/security/renderer-document-navigation', () => ({
   isRendererDocumentNavigation: () => true
 }))
 vi.mock('../usage/worktree-attribution/usage-worktree-metadata', () => ({

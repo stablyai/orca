@@ -7,7 +7,7 @@ import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usa
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
-import { isRendererDocumentNavigation } from '../window/renderer-document-navigation'
+import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
 
 export function trustsBackendRenderer(contents: WebContents): boolean {
   if (

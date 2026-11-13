@@ -12,8 +12,11 @@ import {
   cachedProjectDirCwd,
   cwdBucketScopePrefixes
 } from '../../../ai-vault/scope/session-scanner-scope-discovery'
-import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import {
+  wslGatedReaddir,
+  wslGatedStat
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
 import { normalizeRetirableGeneratedName } from './retirable-generated-name'

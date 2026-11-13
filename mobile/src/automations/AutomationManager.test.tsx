@@ -19,8 +19,8 @@ vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
 }))
 vi.mock(
-  '../platform/text-input-font-size',
-  async () => await import('../platform/text-input-font-size.web')
+  '../platform/text-input/text-input-font-size',
+  async () => await import('../platform/text-input/text-input-font-size.web')
 )
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { installOrcadHostAdapters } from '../../../src/main/orcad/orcad-host-adapters'
+import { installOrcadHostAdapters } from '../../../src/main/orcad/host-runtime/orcad-host-adapters'
 import type { Store } from '../../../src/main/persistence/loading-store/store'
 import { createProfileStateStore } from '../../../src/main/persistence/profile-state/startup/profile-state-store-factory'
 

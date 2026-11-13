@@ -72,12 +72,7 @@ function renderSurface(surface: 'accounts' | 'provider', target: RuntimeClientTa
   if (surface === 'accounts') {
     render(
       <TooltipProvider>
-        <AntigravityChatSignInRow
-          owner={target}
-          label="Test host"
-          description=""
-          disabled={false}
-        />
+        <AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />
       </TooltipProvider>
     )
   } else {
@@ -132,7 +127,7 @@ it.each(['accounts', 'provider'] as const)(
     await act(async () => {
       streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
     })
-    await user.type(screen.getByLabelText('Google Cloud location'), enterprise.gcpLocation)
+    await user.type(screen.getByLabelText('Location'), enterprise.gcpLocation)
     await user.click(screen.getByRole('button', { name: /^Sign in/ }))
     expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, enterprise)
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
@@ -205,7 +200,10 @@ it('does not start a departed host after its prepared save settles', async () =>
   )
   const user = userEvent.setup()
   const view = render(
-    <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
+    <AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />,
+    {
+      wrapper: TooltipProvider
+    }
   )
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   await user.type(screen.getByLabelText('Google Cloud project'), '-changed')
@@ -221,9 +219,9 @@ it('retains sign-in for an older host without configuration capability', async (
   streams.capability = 'unsupported'
   const target = { kind: 'environment', environmentId: 'old-host' } as const
   const user = userEvent.setup()
-  render(
-    <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
-  )
+  render(<AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />, {
+    wrapper: TooltipProvider
+  })
   await user.click(await screen.findByRole('button', { name: /^Sign in/ }))
   await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
   expect(callAntigravityChatAuthConfig).not.toHaveBeenCalled()
@@ -247,9 +245,9 @@ it('commits the visible choice before sign-in while another client’s refresh i
       : Promise.resolve(personal)
   })
   const user = userEvent.setup()
-  render(
-    <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
-  )
+  render(<AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />, {
+    wrapper: TooltipProvider
+  })
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   await act(async () => {
     refreshing = true
@@ -277,9 +275,9 @@ it('refreshes the saved method after reconnecting to a restarted host with the s
     async (_owner, config) => config ?? current
   )
   follow(target)
-  render(
-    <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
-  )
+  render(<AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />, {
+    wrapper: TooltipProvider
+  })
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   expect(screen.getByRole('button', { name: /^Sign in/ })).toBeEnabled()
   vi.useFakeTimers()
@@ -311,7 +309,8 @@ it.each(['accounts', 'provider'] as const)(
     await screen.findByRole('alert')
     await act(async () => streams.handlers.get(key(target))?.onError(new Error('Connection lost')))
     const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
-    expect(screen.getAllByRole('button')).toEqual([action])
+    const info = screen.queryByRole('button', { name: 'Separate from your agy terminal account.' })
+    expect(screen.getAllByRole('button').filter((button) => button !== info)).toEqual([action])
     expect(action).toBeEnabled()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     await user.click(action)
@@ -334,7 +333,7 @@ it.each(['accounts', 'provider'] as const)(
     await screen.findByRole('alert')
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Google Cloud location')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Sign in/ })).toBeEnabled()
   }
 )

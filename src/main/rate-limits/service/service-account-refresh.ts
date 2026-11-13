@@ -57,6 +57,9 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     provider: 'claude' | 'codex',
     options: { notWithinMs?: number } = {}
   ): boolean {
+    if (provider === 'claude' && !this.isClaudeOAuthUsageEnabled()) {
+      return false
+    }
     const limits = this.state[provider]
     const now = Date.now()
     if (this.isFetching || this.isRetryAfterActive(limits)) {
@@ -230,6 +233,8 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.activeFailureStreakByProvider.claude = 0
     // Outgoing statusline posts must not land on the incoming account during the switch.
     this.lastClaudeAuthSnapshot = null
+    this.liveClaudeUsage = null
+    this.usageReadingAccounts.claude = undefined
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -249,6 +254,8 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     if (targetChanged) {
       // Outgoing target posts must not land on the incoming target during the switch.
       this.lastClaudeAuthSnapshot = null
+      this.liveClaudeUsage = null
+      this.usageReadingAccounts.claude = undefined
     }
     this.updateState({
       ...this.state,

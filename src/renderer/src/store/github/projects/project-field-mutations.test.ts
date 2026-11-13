@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from '../github-slice-test-harness'
 import { projectViewCacheKey } from '../cache/cache-identity'
-import type { GitHubProjectTable } from '../../../../../shared/github/project-types'
-import type { GitHubProjectMutationResult } from '../../../../../shared/github/project-result-types'
+import type { GitHubProjectTable } from '../../../../../shared/github/projects/project-types'
+import type { GitHubProjectMutationResult } from '../../../../../shared/github/projects/project-result-types'
 
 const key = projectViewCacheKey('user', 'owner', 1, 'view')
 const failed: GitHubProjectMutationResult = {

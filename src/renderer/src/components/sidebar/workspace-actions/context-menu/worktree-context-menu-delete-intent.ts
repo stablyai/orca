@@ -16,6 +16,10 @@ export function createWorktreeContextMenuDeleteIntent(args: {
   isMultiContext: boolean
   folderWorkspaceId?: string
 }): WorktreeContextMenuDeleteIntent {
+  if (args.isMultiContext && args.batchDeleteWorktrees.length === 1) {
+    const { id, instanceId, hostId } = args.batchDeleteWorktrees[0]
+    return { kind: 'worktree', worktree: { id, instanceId, hostId } }
+  }
   if (args.isMultiContext) {
     return {
       kind: 'batch',

@@ -1,10 +1,11 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import { worktreeMatchesGitHubNumber } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
-} from '../../../../shared/github/links'
+} from '../../../../shared/github/repositories/links'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
@@ -184,6 +185,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       const matches = workspaces.filter(
         (worktree) =>
           !worktree.isArchived &&
+          !isWorktreeRetiredByRemoval(worktree) &&
           worktreeMatchesGitHubNumber(
             worktree,
             ghNumber,

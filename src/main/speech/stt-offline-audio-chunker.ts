@@ -88,3 +88,38 @@ export class OfflineAudioChunker {
     return Math.max(1, bestIndex)
   }
 }
+
+// Without the detector, audio is still cut at the decode bound, just not at pauses.
+export type AudioSegmenter = {
+  readonly heldSamples: number
+  readonly phraseOpen?: boolean
+  push(samples: Float32Array): Float32Array[] | Promise<Float32Array[]>
+  flush(): Float32Array[] | Promise<Float32Array[]>
+}
+
+export function boundedChunks(sampleRate: number): AudioSegmenter {
+  const chunker = new OfflineAudioChunker(sampleRate)
+  return {
+    get heldSamples() {
+      return chunker.heldSamples
+    },
+    push: (samples) => chunker.push(samples),
+    flush: () => {
+      const rest = chunker.flush()
+      return rest ? [rest] : []
+    }
+  }
+}
+
+export function joinAudio(parts: Float32Array[]): Float32Array {
+  if (parts.length === 1) {
+    return parts[0]
+  }
+  const joined = new Float32Array(parts.reduce((total, part) => total + part.length, 0))
+  let offset = 0
+  for (const part of parts) {
+    joined.set(part, offset)
+    offset += part.length
+  }
+  return joined
+}

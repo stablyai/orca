@@ -131,7 +131,6 @@ export function buildNativeChatTranscript(
     subagentSections: sections = NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
     subagentChoices: choices = NO_NATIVE_CHAT_SUBAGENT_CHOICES,
     liveReasoningId = null,
-    tailRowBelow = false,
     forkOffer
   } = input
   const settledTurnKeys = new Set(
@@ -313,7 +312,7 @@ export function buildNativeChatTranscript(
       slot.continuesTurn = true
     }
   }
-  markNativeChatResponseActionsHang(drawn, tailRowBelow, typography)
+  markNativeChatResponseActionsHang(drawn, typography)
   return {
     slots: drawn,
     forkPoint: forkOffer

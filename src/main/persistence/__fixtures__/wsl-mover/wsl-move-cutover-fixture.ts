@@ -5,7 +5,7 @@ import {
   type WslMoveCutover,
   type WslMoveCutoverPhase
 } from '../../../../shared/wsl-move/wsl-move-cutover'
-import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 
 export function wslMoveCutoverFixture(
   migrationId = 'move-1',
