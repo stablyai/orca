@@ -69,6 +69,7 @@ export async function callComputerSidecarCapabilities(): Promise<ComputerProvide
 export async function callComputerSidecarLaunchApp(
   params: unknown
 ): Promise<ComputerLaunchAppResult> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sidecar returns the provider's launchApp result unchanged, like its sibling calls.
   return (await getComputerSidecar().call('launchApp', params)) as ComputerLaunchAppResult
 }
 

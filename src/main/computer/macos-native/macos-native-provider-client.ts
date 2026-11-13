@@ -53,6 +53,7 @@ export class MacOSNativeProviderClient {
   }
   async launchApp(params: unknown): Promise<ComputerLaunchAppResult> {
     await this.ensureCapability('apps', 'launch')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the helper's launchApp reply has this shape; sibling methods cast the same way.
     return (await this.call('launchApp', params)) as ComputerLaunchAppResult
   }
   async listWindows(params: unknown): Promise<ComputerListWindowsResult> {
