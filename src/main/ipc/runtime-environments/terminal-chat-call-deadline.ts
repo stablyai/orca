@@ -2,28 +2,33 @@ import { isTerminalChatPromptCall } from '../../../shared/terminal/input/termina
 import { TerminalChatPromptParam } from '../../../shared/rpc-contract/terminal-chat-prompt-params'
 import { readRuntimeElapsedClock } from '../../runtime/hosts/runtime-elapsed-clock'
 import { terminalChatPromptSchedule } from '../../../shared/terminal/input/terminal-chat-prompt-budget'
-import { mainProcessState } from '../../startup/main-process-state'
 
 type ChatCall = { method: string; params?: unknown; timeoutMs?: number }
 
 export type TerminalChatCallBudget = Readonly<{
   prompt: NonNullable<ReturnType<typeof TerminalChatPromptParam.parse>>
+  originRuntimeId?: string
   schedule: ReturnType<typeof terminalChatPromptSchedule>
 }>
 
-export function terminalChatCallBudget(call: ChatCall): TerminalChatCallBudget | undefined {
+export function terminalChatCallBudget(
+  call: ChatCall,
+  originRuntimeId?: string
+): TerminalChatCallBudget | undefined {
   if (!isTerminalChatPromptCall(call.method, call.params)) {
     return undefined
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preceding Chat classification proves this nested field exists.
   const params = call.params as { chatPrompt: unknown }
   const prompt = TerminalChatPromptParam.parse(params.chatPrompt)
-  return prompt ? { prompt, schedule: terminalChatPromptSchedule(prompt.text) } : undefined
+  return prompt
+    ? { prompt, originRuntimeId, schedule: terminalChatPromptSchedule(prompt.text) }
+    : undefined
 }
 
 export function assertTerminalChatCallCurrent(
   budget: TerminalChatCallBudget | undefined,
-  runtimeId = mainProcessState.runtime?.getRuntimeId()
+  runtimeId = budget?.originRuntimeId
 ): number | undefined {
   if (!budget?.prompt.expiry) {
     return undefined
@@ -50,7 +55,7 @@ export async function withTerminalChatCallDeadline<T>(
   if (!isTerminalChatPromptCall(call.method, call.params)) {
     return run()
   }
-  const budget = terminalChatCallBudget(call)
+  const budget = terminalChatCallBudget(call, runtimeId)
   const remaining = assertTerminalChatCallCurrent(budget, runtimeId)
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout>

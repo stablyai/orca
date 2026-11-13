@@ -1,3 +1,4 @@
+import type { RuntimeEnvironmentCall } from '../../../main/ipc/runtime-environments/runtime-environment-call'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
@@ -18,14 +19,12 @@ import {
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
+  terminalChatCallBudget,
   terminalChatTransportTimeoutMs,
   withTerminalChatCallDeadline
 } from '../../../main/ipc/runtime-environments/terminal-chat-call-deadline'
 
 const clock = vi.hoisted(() => ({ lower: 100000, upper: 100001 }))
-vi.mock('../../../main/startup/main-process-state', () => ({
-  mainProcessState: { runtime: { getRuntimeId: () => 'main' } }
-}))
 vi.mock('../../../main/runtime/hosts/runtime-elapsed-clock', () => ({
   readRuntimeElapsedClock: () => clock
 }))
@@ -123,7 +122,7 @@ it('selects the remote expiry from authenticated status on its actual sending so
     }
     return params
   })
-  const selected = selectTerminalChatRuntimeCall({
+  const call: RuntimeEnvironmentCall = {
     method: 'terminal.send',
     timeoutMs: 1000,
     params: {
@@ -134,7 +133,8 @@ it('selects the remote expiry from authenticated status on its actual sending so
         expiry: { runtimeId: 'main', expiresAtMs: 110000 }
       }
     }
-  })
+  }
+  const selected = selectTerminalChatRuntimeCall(call, terminalChatCallBudget(call, 'main'))
   await expect(
     sendRemoteRuntimeRequestOnSocket(
       server.pairing,
@@ -178,7 +178,7 @@ it('blocks a post-status pre-send expiry without closing another raw-input socke
   await expect(raw.request('terminal.send', { text: 'raw before' }, 1000)).resolves.toMatchObject({
     ok: true
   })
-  const selected = selectTerminalChatRuntimeCall({
+  const call: RuntimeEnvironmentCall = {
     method: 'terminal.send',
     timeoutMs: 1000,
     params: {
@@ -194,7 +194,8 @@ it('blocks a post-status pre-send expiry without closing another raw-input socke
       clock.upper = 110001
       return { params, envelope }
     }
-  })
+  }
+  const selected = selectTerminalChatRuntimeCall(call, terminalChatCallBudget(call, 'main'))
   await expect(
     sendRemoteRuntimeRequestOnSocket(
       server.pairing,

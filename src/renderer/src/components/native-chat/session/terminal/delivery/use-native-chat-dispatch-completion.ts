@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   prunePendingSends,
   releaseEmptyTranscriptClaims,
@@ -30,7 +30,7 @@ export function useNativeChatDispatchCompletion({
     ) => save((entries) => finishPendingSendDispatch(entries, id, promise, outcome)),
     [save]
   )
-  const dispatchObservers = useMemo<{
+  const dispatchObservers = useRef<{
     scope: NativeChatPendingSendScope
     seen: WeakSet<Promise<NativeChatPendingDispatchOutcome>>
     reconcile:
@@ -40,16 +40,18 @@ export function useNativeChatDispatchCompletion({
           promise: Promise<NativeChatPendingDispatchOutcome>,
           outcome: NativeChatPendingDispatchOutcome
         ) => void)
-  }>(
-    () => ({
-      scope,
-      seen: new WeakSet<Promise<NativeChatPendingDispatchOutcome>>(),
-      reconcile: null
-    }),
-    [scope]
-  )
+  } | null>(null)
   useLayoutEffect(() => {
-    dispatchObservers.reconcile = (id, promise, outcome) => {
+    let observer = dispatchObservers.current
+    if (observer?.scope !== scope) {
+      observer = {
+        scope,
+        seen: new WeakSet<Promise<NativeChatPendingDispatchOutcome>>(),
+        reconcile: null
+      }
+      dispatchObservers.current = observer
+    }
+    observer.reconcile = (id, promise, outcome) => {
       save((entries) =>
         prunePendingSends(
           releaseEmptyTranscriptClaims(
@@ -62,19 +64,23 @@ export function useNativeChatDispatchCompletion({
       )
     }
     return () => {
-      dispatchObservers.reconcile = null
+      observer.reconcile = null
     }
-  }, [dispatchObservers, save, messages, sessionId])
+  }, [scope, save, messages, sessionId])
   useEffect(() => {
+    const observer = dispatchObservers.current
+    if (!observer || observer.scope !== scope) {
+      return
+    }
     for (const entry of pending) {
       const promise = entry.dispatchOutcome
-      if (!entry.dispatchPending || !promise || dispatchObservers.seen.has(promise)) {
+      if (!entry.dispatchPending || !promise || observer.seen.has(promise)) {
         continue
       }
-      dispatchObservers.seen.add(promise)
+      observer.seen.add(promise)
       const id = entry.id
-      void promise.then((outcome) => dispatchObservers.reconcile?.(id, promise, outcome))
+      void promise.then((outcome) => observer.reconcile?.(id, promise, outcome))
     }
-  }, [pending, scope, dispatchObservers])
+  }, [pending, scope])
   return finishDispatch
 }

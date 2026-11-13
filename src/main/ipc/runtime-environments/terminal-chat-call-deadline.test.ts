@@ -1,3 +1,4 @@
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import * as ChatBudget from '../../../shared/terminal/input/terminal-chat-prompt-budget'
 import { TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -225,3 +226,34 @@ it.each([1, 10])(
     expect(schedule).toHaveBeenCalledTimes(count)
   }
 )
+
+it('rejects a destination identity in the originating grant before account preparation', async () => {
+  await expect(
+    call({
+      terminal: 'terminal',
+      chatPrompt: {
+        agent: 'claude',
+        text: 'body',
+        expiry: { runtimeId: 'runtime', expiresAtMs: 110000 }
+      }
+    })
+  ).rejects.toThrow('Chat input request expired')
+  expect(mocks.accounts).not.toHaveBeenCalled()
+  expect(mocks.oneShot).not.toHaveBeenCalled()
+  expect(mocks.send).not.toHaveBeenCalled()
+})
+
+it('rejects an expiring direct route without trusted originating context before opening a sending socket', async () => {
+  await expect(
+    callRuntimeEnvironment('/tmp/sta14532-chat-deadline', 'host', 'terminal.send', {
+      terminal: 'terminal',
+      chatPrompt: {
+        agent: 'claude',
+        text: 'body',
+        expiry: { runtimeId: 'main', expiresAtMs: 110000 }
+      }
+    })
+  ).rejects.toThrow('Chat input request expired')
+  expect(mocks.oneShot).not.toHaveBeenCalled()
+  expect(mocks.send).not.toHaveBeenCalled()
+})

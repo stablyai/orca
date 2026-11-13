@@ -24,6 +24,7 @@ export function selectTerminalChatRuntimeCall(
     call.signal?.throwIfAborted()
     assertTerminalChatCallCurrent(budget)
   }
+  assertCurrent()
   return {
     ...call,
     requestSelection: {
