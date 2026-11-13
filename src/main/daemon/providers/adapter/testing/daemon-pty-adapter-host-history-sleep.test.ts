@@ -223,4 +223,27 @@ describe('quit commits every captured host session', () => {
     }
     expect(children.every((child) => vi.mocked(child.kill).mock.calls.length === 0)).toBe(true)
   }, 30_000)
+
+  // A relaunched app can bind a session no pane mounted; its output still needs its cut.
+  it('commits a bound session that no pane has mounted', async () => {
+    const { open, child, historyPath } = await startHost()
+    const sessionId = 'quit-bound-unmounted'
+    const before = open()
+    await before.spawn(request(sessionId))
+    await before.disconnectOnly()
+    const relaunched = open()
+    expect((await relaunched.listProcesses()).map((process) => process.id)).toContain(sessionId)
+    // A Sleep that cannot end the process leaves it bound to this app but never mounted.
+    vi.mocked(child().kill).mockImplementation(() => {
+      throw new Error('signal refused')
+    })
+    await expect(relaunched.shutdown(sessionId, { keepHistory: true })).rejects.toThrow()
+    child()._simulateData('UNMOUNTED_ROW\r\n')
+
+    await relaunched.disconnectOnly({ deadlineMs: Date.now() + 5_000 })
+    const restored = await new HistoryReader(historyPath).detectColdRestore(sessionId, {
+      ignoreCleanEnd: true
+    })
+    expect(restored?.snapshotAnsi).toContain('UNMOUNTED_ROW')
+  }, 30_000)
 })

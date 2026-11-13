@@ -8,6 +8,7 @@ import {
   type TerminalHistoryCwdObservation
 } from '../storage/terminal-history-cwd-observation'
 import type { FlushHistoryUnavailableReason } from '../../protocol/daemon-history-protocol'
+import type { TerminalJournalCwdNote } from './terminal-session-journal-contract'
 import { TerminalSessionJournalReads } from './terminal-session-journal-reads'
 import {
   TerminalJournalOperation,
@@ -46,11 +47,14 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
     }
     const valid = isLiteralHostCwd(observation) ? observation : null
     const record = this.queue.committed + this.queue.length
-    if (valid) {
+    // The previous effective note stays the answer if this one never publishes.
+    const previousNote = this.cwdNote
+    const note = valid ? { cwd: valid, record } : null
+    if (note) {
       // Only a real observation boundary is sealed; later output may not coalesce across it.
       this.queue.sealAll()
       this.queue.cutAt = record
-      this.cwdNote = { cwd: valid, record }
+      this.cwdNote = note
       this.markApplied()
     }
     const operation = new TerminalJournalOperation(
@@ -65,6 +69,8 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
       },
       valid ? 'published' : observation === undefined ? 'none' : 'rejected'
     )
+    operation.note = note
+    operation.previousNote = note ? previousNote : null
     this.operation = operation
     if (this.queue.length === 0 && this.committedLogBytes === 0 && this.foldGeneration === 0) {
       this.needsEmptyBacking = true
@@ -90,11 +96,14 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
       generation: writer.committedLog?.generation ?? 0,
       logBytes: this.committedLogBytes
     }
-    const note = this.cwdNote
-    if (note && 'record' in note && note.record === operation.cut.record) {
+    const note = operation.note
+    // Unless a fold already carried it into its checkpoint, this note publishes here.
+    if (note && this.cwdNote === note) {
       const replaced = this.publishNote({ cwd: note.cwd, ...position })
       if (replaced !== 'replaced') {
-        this.cwdNote = null
+        // The last acknowledged folder stays effective; this one was never saved.
+        this.cwdNote = operation.previousNote
+        this.queue.cutAt = null
         this.markApplied()
         this.failOperation(operation, {
           phase: 'preflight',
@@ -117,14 +126,24 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
     return this.operation === operation
   }
 
-  /** A fold that covered the note carries it in its checkpoint; a later note keeps its boundary. */
-  protected settleFoldedNote(): void {
-    const note = this.cwdNote
-    if (note && (!('record' in note) || note.record <= this.queue.committed)) {
+  /**
+   * The note a fold captured and applied now lives in its checkpoint. A note admitted after that
+   * capture, even at the same record boundary, was not applied and still publishes.
+   */
+  protected settleFoldedNote(applied: TerminalJournalCwdNote | null): void {
+    if (!applied) {
+      return
+    }
+    const operation = this.operation
+    if (this.cwdNote === applied) {
       this.cwdNote = null
-      if (this.operation?.observation && this.operation.state === 'admitted') {
-        this.operation.cwdNote = 'folded'
+      if (operation?.note === applied && operation.state === 'admitted') {
+        operation.cwdNote = 'folded'
       }
+    }
+    if (operation?.previousNote === applied) {
+      // A failed replacement now falls back to the checkpoint that holds this folder.
+      operation.previousNote = null
     }
   }
 
@@ -162,6 +181,8 @@ export abstract class TerminalSessionJournalOperations extends TerminalSessionJo
       return
     }
     operation.failure = failure
+    // Queued verification stops; issued reads and writes keep their leases until they settle.
+    operation.cancel.abort(new Error('operation_ended'))
     operation.publication.resolve(null)
     operation.outcome.resolve(failure)
     this.endOperation(operation)

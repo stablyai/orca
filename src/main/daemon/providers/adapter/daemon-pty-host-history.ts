@@ -76,6 +76,13 @@ export class DaemonPtyHostHistoryBindings {
     return this.bindings.get(sessionId)
   }
 
+  /** Every binding with a known incarnation, live pane or not: each owns a durable cut at quit. */
+  boundIncarnations(): { id: string; incarnationId: string }[] {
+    return [...this.bindings].flatMap(([id, binding]) =>
+      binding.incarnationId ? [{ id, incarnationId: binding.incarnationId }] : []
+    )
+  }
+
   release(sessionId: string, incarnationId?: string): void {
     const binding = this.bindings.get(sessionId)
     if (binding && (incarnationId === undefined || binding.incarnationId === incarnationId)) {

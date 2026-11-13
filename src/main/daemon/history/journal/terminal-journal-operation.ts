@@ -1,4 +1,5 @@
 import type { TerminalOwner } from '../../../../shared/terminal/pty/lifecycle/terminal-owner'
+import type { TerminalJournalCwdNote } from './terminal-session-journal-contract'
 import type {
   FlushHistoryUnavailableReason,
   TerminalHistoryCwdNoteOutcome
@@ -52,6 +53,9 @@ export class TerminalJournalOperation {
   /** The journal-owned Sleep preflight; it ends the operation if its waiter has left. */
   preflight: Promise<boolean> | null = null
   readonly cancel = new AbortController()
+  /** The note this operation installed at C, and the effective note it replaced. */
+  note: TerminalJournalCwdNote | null = null
+  previousNote: TerminalJournalCwdNote | null = null
 
   constructor(
     readonly kind: TerminalJournalOperationKind,

@@ -259,6 +259,84 @@ describe('one admitted operation and its source lineage', () => {
   })
 })
 
+describe('note lifetime across folds and refused saves', () => {
+  const flood = '\x1b[0m'.repeat(16_384)
+  const fold = (record: (data: string) => void) => {
+    for (let chunk = 0; chunk < 96; chunk += 1) {
+      record(flood)
+    }
+  }
+
+  // A folder saved after a fold, with nothing newer, applies at that checkpoint's empty log.
+  it('restores a folder saved right after a fold with no newer output', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('note-after-fold')
+    await prime(journal)
+    record(journal, `${osc7('/tmp/folder-a')}A_ROW\r\n`)
+    fold((data) => record(journal, data))
+    expect(await journal.flush()).toBe(true)
+    expect(readFileSync(join(journal.dir, 'output.log')).length).toBe(9)
+
+    expect(await admit(journal, 'commit', '/tmp/folder-b').publication.promise).toEqual({
+      generation: 1,
+      logBytes: 9
+    })
+    const restored = await restoreFromDisk(journal, 'note-after-fold')
+    expect(restored?.cwd).toBe('/tmp/folder-b')
+    expect(restored?.snapshotAnsi).toContain('A_ROW')
+  }, 30_000)
+
+  it('publishes a note admitted after a fold captured its source, at the same boundary', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('note-after-capture')
+    await prime(journal)
+    record(journal, `${osc7('/tmp/folder-a')}A_ROW\r\n`)
+    const publish = Promise.withResolvers<void>()
+    const strict = TerminalHistorySessionWriter.prototype.checkpointStrict
+    const publishing = vi
+      .spyOn(TerminalHistorySessionWriter.prototype, 'checkpointStrict')
+      .mockImplementation(async function (this: TerminalHistorySessionWriter, ...args) {
+        await publish.promise
+        return strict.apply(this, args)
+      })
+    fold((data) => record(journal, data))
+    const flushed = journal.flush()
+    // Sync point only: the fold has captured its records and note and is publishing.
+    await vi.waitFor(() => expect(publishing).toHaveBeenCalled())
+    const commit = admit(journal, 'commit', '/tmp/folder-b')
+    publish.resolve()
+
+    expect(await commit.publication.promise).toEqual({ generation: 1, logBytes: 9 })
+    expect(commit.cwdNote).toBe('published')
+    expect(await flushed).toBe(true)
+    const restored = await restoreFromDisk(journal, 'note-after-capture')
+    expect(restored?.cwd).toBe('/tmp/folder-b')
+    expect(restored?.snapshotAnsi).toContain('A_ROW')
+  }, 30_000)
+
+  it('keeps the acknowledged folder when a later one cannot be saved, through a read and a fold', async () => {
+    const { openJournal, record, prime } = openReads()
+    const journal = openJournal('note-refused')
+    await prime(journal)
+    record(journal, `${osc7('/tmp/folder-a')}A_ROW\r\n`)
+    expect(await admit(journal, 'commit', '/tmp/folder-b').publication.promise).not.toBeNull()
+    // A valid folder whose saved metadata would exceed its 64 KiB bound.
+    const refused = admit(journal, 'commit', `/tmp/${'x'.repeat(70_000)}`)
+
+    expect(await refused.outcome.promise).toEqual({ phase: 'preflight', reason: 'unrepresentable' })
+    const image = await journal.readImage(journal.captureReadCut(), { scrollbackRows: 5000 })
+    expect(image?.snapshot.cwd).toBe('/tmp/folder-b')
+    record(journal, 'LATER_ROW\r\n')
+    fold((data) => record(journal, data))
+    expect(await journal.flush()).toBe(true)
+    const checkpoint = JSON.parse(readFileSync(join(journal.dir, 'checkpoint.json'), 'utf8'))
+    expect(checkpoint.cwd).toBe('/tmp/folder-b')
+    const restored = await restoreFromDisk(journal, 'note-refused')
+    expect(restored?.cwd).toBe('/tmp/folder-b')
+    expect(restored?.snapshotAnsi).toContain('LATER_ROW')
+  }, 30_000)
+})
+
 describe('Sleep preflight and final cut', () => {
   const flood = '\x1b[0m'.repeat(16_384)
 

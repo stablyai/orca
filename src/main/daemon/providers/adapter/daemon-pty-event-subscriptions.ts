@@ -177,15 +177,10 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     }
   }
 
-  private hostBindingsForQuit(): { id: string; incarnationId: string }[] {
-    return [...this.activeSessionIds].flatMap((id) => {
-      const incarnationId = this.hostHistory.get(id)?.incarnationId
-      return incarnationId ? [{ id, incarnationId }] : []
-    })
-  }
-
-  private wslBridgePanesForQuit(): { sessionId: string; paneKey: string; wslDistro: string }[] {
-    return [...this.activeSessionIds].flatMap((sessionId) => {
+  private wslBridgePanesForQuit(
+    boundIds: readonly string[]
+  ): { sessionId: string; paneKey: string; wslDistro: string }[] {
+    return [...new Set([...this.activeSessionIds, ...boundIds])].flatMap((sessionId) => {
       const wslDistro = this.wslDistrosBySessionId.get(sessionId)
       const paneKey = this.wslPaneKeysBySessionId.get(sessionId)
       return wslDistro && paneKey ? [{ sessionId, paneKey, wslDistro }] : []
@@ -228,11 +223,11 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       deadlineMs
     )
     this.respawnAdoptionClosed = true
-    // Every host binding gets its durable cut; captured before any probe await.
-    const hostSessions = this.hostHistory.enabled ? this.hostBindingsForQuit() : []
+    // Every host binding gets its durable cut, mounted or not; captured before any probe await.
+    const hostSessions = this.hostHistory.enabled ? this.hostHistory.boundIncarnations() : []
     // Bridge bash reports no folder and the daemon outlives quit; a distro stopped before relaunch leaves only this read.
     const shellCwds = await readDaemonWslQuitCwds(
-      this.wslBridgePanesForQuit(),
+      this.wslBridgePanesForQuit(hostSessions.map(({ id }) => id)),
       Math.max(0, Math.min(this.quitWslCwdBudgetMs, deadlineMs - Date.now()))
     )
     await Promise.allSettled(

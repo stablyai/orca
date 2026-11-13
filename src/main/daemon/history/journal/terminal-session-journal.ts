@@ -304,7 +304,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalSleep {
       this.committedLogBytes = writer.committedLog?.bytes ?? 0
       this.markApplied()
       this.host.charge(this, -this.queue.commit(covered, 0))
-      this.settleFoldedNote()
+      this.settleFoldedNote(cut.cwdNote)
       this.publishIfCovered()
     } finally {
       release()

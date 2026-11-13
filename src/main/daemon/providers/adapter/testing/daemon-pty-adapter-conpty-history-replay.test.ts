@@ -7,7 +7,11 @@ import { HistoryReader } from '../../../history/restoration/history-reader'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import type { DaemonServer } from '../../../server/daemon-server'
-import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
+import {
+  createMockSubprocess,
+  LEGACY_HISTORY_PROTOCOL_VERSION,
+  startDaemonAdapterHarness
+} from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import type * as DaemonHistoryReplayPtyModule from '../../../protocol/daemon-history-replay-pty'
@@ -141,10 +145,13 @@ describe('daemon history of a ConPTY session through a resize', () => {
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
 
   beforeEach(async () => {
-    const harness = await startDaemonAdapterHarness(() => {
-      lastSubprocess = createMockSubprocess()
-      return lastSubprocess
-    })
+    const harness = await startDaemonAdapterHarness(
+      () => {
+        lastSubprocess = createMockSubprocess()
+        return lastSubprocess
+      },
+      { protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION }
+    )
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -175,7 +182,13 @@ describe('daemon history of a ConPTY session through a resize', () => {
     try {
       const historyDir = join(dir, 'history')
       const sessionId = `wt-1::/project@@resize${opts.from[0]}to${opts.to[0]}`
-      const history = new SavingDaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const history = new SavingDaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        historyPath: historyDir,
+        // This file covers the main-written pipeline that pre-v57 daemons still use.
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION
+      })
       await history.spawn({ cols: opts.from[0], rows: opts.from[1], cwd: '/project', sessionId })
       await history.savePeriodically([sessionId])
       // Rows of 70 columns wrap at 40 and fit at 120, so the resize moves rows through scrollback.
@@ -253,7 +266,13 @@ describe('daemon history of a ConPTY session through a resize', () => {
   it('keeps the stamp through a disconnect mid-commit: unknown is not an older daemon', async () => {
     const historyDir = join(dir, 'history')
     const sessionId = 'wt-1::/project@@disconnect1'
-    const history = new SavingDaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    const history = new SavingDaemonPtyAdapter({
+      socketPath,
+      tokenPath,
+      historyPath: historyDir,
+      // This file covers the main-written pipeline that pre-v57 daemons still use.
+      protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION
+    })
     await history.spawn({ cols: 40, rows: 10, cwd: '/project', sessionId })
     lastSubprocess._simulateData('$ ')
     history.disconnectDuringNextCommit()
@@ -272,7 +291,13 @@ describe('daemon history of a ConPTY session through a resize', () => {
     const sessionId = 'wt-1::/project@@wake-upgrade1'
     olderDaemon.hosting = true
     try {
-      const history = new SavingDaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const history = new SavingDaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        historyPath: historyDir,
+        // This file covers the main-written pipeline that pre-v57 daemons still use.
+        protocolVersion: LEGACY_HISTORY_PROTOCOL_VERSION
+      })
       await history.spawn({ cols: 40, rows: 10, cwd: '/project', sessionId })
       lastSubprocess._simulateData('$ echo before\r\nbefore\r\n$ ')
       await history.shutdown(sessionId, { immediate: true, keepHistory: true })
