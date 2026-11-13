@@ -1,5 +1,6 @@
 import { TerminalRestoringPlaceholder } from '../mounting/TerminalRestoringPlaceholder'
 import { TerminalCrewPortals } from '../../orchestration-crew/TerminalCrewPortals'
+import { terminalPaneMenuAgentIdProps } from '../context-menu/terminal-pane-menu-agent-session-actions'
 import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwners } from '../input/file-drop/TerminalPaneFileDropOwner'
 import TerminalSearch from '@/components/TerminalSearch'
@@ -83,7 +84,7 @@ export function TerminalPaneSurface({
     keybindings,
     managedPanes,
     managerRef,
-    menuAgentSessionId,
+    menuAgentIds,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -308,8 +309,7 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
-        canCopyAgentSessionId={menuAgentSessionId !== null}
-        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
+        {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentIds)}
       />
       <LinkActionPopover
         request={terminalManager ? terminalLinkActionRequest : null}

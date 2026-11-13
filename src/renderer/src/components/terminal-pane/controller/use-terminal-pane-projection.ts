@@ -78,6 +78,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
 
   const {
     menuAgentSessionId,
+    menuAgentIdAvailable,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,
@@ -130,7 +131,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     visibleLaunchRefusal,
     visibleTerminalError,
     menuPaneHasCustomTitle,
-    menuAgentSessionId,
+    menuAgentIds: { sessionId: menuAgentSessionId, agentIdAvailable: menuAgentIdAvailable },
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,
