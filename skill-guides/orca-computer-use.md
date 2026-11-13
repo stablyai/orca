@@ -147,13 +147,13 @@ These need the foreground, so ask the user first:
 - A background action reports success but the UI does not change, and no semantic action can do the job.
 - On macOS, drags in Chromium or Electron apps, and apps that read the hardware pointer (games, OpenGL/Metal views, Java/Tk), which ignore background pointer events.
 - On Windows, keyboard input (`press-key`, `hotkey`, `paste-text` and `type-text`) needs the target window focused; otherwise it is refused with `window_not_focused` and nothing is sent. For editable fields use `set-value`.
-- On Linux and Windows, actions that need the real pointer, and on Linux keys sent with no focused editable field. They are refused with `background_unavailable`; see below.
+- On Linux and Windows, actions that need the real pointer, and on Linux keys sent while the target window is not active (Return in a focused GTK text field works). They are refused with `background_unavailable`; see below.
 
 On macOS, a window that is minimized, hidden (Cmd+H) or on another Space cannot be read, so `get-app-state` fails with `window_not_found`. Ask the user to bring it on screen.
 
 On macOS, background actions that would open a menu or dialog over the user are refused before anything is sent: right-clicks and Control-clicks, clicks or drags that start on popup menus, menu buttons, native combo boxes and web `<select>` controls, and buttons whose title ends in an ellipsis (`Save…`), which usually open a dialog. For a popup, native combo box or `<select>`, set the option with `set-value` on that element.
 
-On macOS, every action runs in the background: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. `capabilities` reports this as `supports.input.background`.
+On macOS, every action without `--restore-window` runs in the background: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. `capabilities` reports this as `supports.input.background`.
 
 On Linux, element clicks through the element's accessibility action, `set-value`, `type-text --element-index` and secondary actions run without raising the window or moving the pointer, and Return in a focused GTK text field runs its activate action. Anything that needs the real pointer (clicks with no accessibility action, right, middle, multiple or modified clicks, scrolling, drags) or the focused window (other keys, typing with no focused editable field) is refused with `background_unavailable` and nothing is sent; so is a click that would open a menu, a keyboard-grabbing popup or a dialog (a GTK 4 or Qt label ending in `…`). Ask the user before retrying with `--restore-window`, which raises only the target window, refuses a window on another workspace and puts the cursor back. On Wayland, synthetic pointer and key input never reaches native windows, so it is refused even with the flag. `action.delivery` is measured: `foreground` when the input went to the window in front or the target came forward.
 
