@@ -17355,7 +17355,9 @@
           "fa5d096b00": "Zoom out",
           "passwordProtected": "This PDF is password-protected",
           "loadFailed": "Failed to load PDF preview",
-          "decodeFailed": "Failed to decode PDF content"
+          "decodeFailed": "Failed to decode PDF content",
+          "goBack": "Back ({{value0}})",
+          "goForward": "Forward ({{value0}})"
         },
         "ReviewNotesSendMenuContent": {
           "a49800405b": "New agent",
@@ -24484,7 +24486,9 @@
       "128cce6e6d": "Set title…",
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
-      "d286d1ab85": "Clear pane title"
+      "d286d1ab85": "Clear pane title",
+      "editorPdfBack": "Go back in PDF",
+      "editorPdfForward": "Go forward in PDF"
     },
     "group": {
       "global": "Global",

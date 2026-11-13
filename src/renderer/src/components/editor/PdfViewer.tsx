@@ -1,5 +1,13 @@
 import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Image as ImageIcon,
+  RotateCcw,
+  Search,
+  ZoomIn,
+  ZoomOut
+} from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import type {
   EventBus,
@@ -11,11 +19,14 @@ import PdfFind from './PdfFind'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
+import { usePdfLinkHistoryInput } from './use-pdf-link-history-input'
+import type { PdfLinkHistoryState } from './pdf-link-history'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { useTranslate } from '@/i18n/use-translate'
 import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
 import { createPdfViewerSession } from './pdf-viewer-session'
+import type { PdfLinkHistoryDirection, PdfViewerLinkHistory } from './pdf-link-navigation'
 import {
   applyPdfScalePreference,
   stepPdfScalePreference,
@@ -31,6 +42,7 @@ const MIN_SCALE = 0.25
 const MAX_SCALE = 5
 const SCALE_STEP = 1.25
 const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
+const NO_LINK_HISTORY: PdfLinkHistoryState = { canGoBack: false, canGoForward: false }
 
 type PdfViewerProps = {
   /** Base64 bytes, for git blobs, diffs and the web client. */
@@ -73,6 +85,10 @@ function PdfDocumentViewer({
   const [scale, setScale] = useState(1)
   const keybindings = useAppStore((state) => state.keybindings)
   const findShortcutLabel = useShortcutLabel('editor.find')
+  const backShortcutLabel = useShortcutLabel('editor.pdfBack')
+  const forwardShortcutLabel = useShortcutLabel('editor.pdfForward')
+  const [linkHistoryState, setLinkHistoryState] = useState(NO_LINK_HISTORY)
+  const linkHistoryRef = useRef<PdfViewerLinkHistory | null>(null)
   const isCommandOwner = useContext(EditorCommandOwnerContext)
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
@@ -121,13 +137,20 @@ function PdfDocumentViewer({
         eventBusRef.current = session.eventBus
         findControllerRef.current = session.findController
         pdfViewerRef.current = session.viewer
+        linkHistoryRef.current = session.linkHistory
+        const stopLinkHistory = session.linkHistory.subscribe(() =>
+          setLinkHistoryState(session.linkHistory.getState())
+        )
         return () => {
           try {
+            stopLinkHistory()
             session.dispose()
           } finally {
             eventBusRef.current = null
             findControllerRef.current = null
             pdfViewerRef.current = null
+            linkHistoryRef.current = null
+            setLinkHistoryState(NO_LINK_HISTORY)
             setFindOpen(false)
           }
         }
@@ -191,6 +214,16 @@ function PdfDocumentViewer({
   const openFind = useCallback(() => setFindOpen(true), [])
   usePdfViewerFindShortcut({ rootRef, ownsCommands: isCommandOwner, keybindings, openFind })
 
+  const navigateLinkHistory = useCallback((direction: PdfLinkHistoryDirection) => {
+    linkHistoryRef.current?.navigate(direction)
+  }, [])
+  usePdfLinkHistoryInput({
+    rootRef,
+    ownsCommands: isCommandOwner,
+    keybindings,
+    navigate: navigateLinkHistory
+  })
+
   const zoomPercent = Math.round(scale * 100)
 
   return (
@@ -224,6 +257,32 @@ function PdfDocumentViewer({
         ) : null}
       </div>
       <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={() => navigateLinkHistory('back')}
+            disabled={!linkHistoryState.canGoBack}
+            data-pdf-link-history="back"
+            title={t('auto.components.editor.PdfViewer.goBack', 'Back ({{value0}})', {
+              value0: backShortcutLabel
+            })}
+          >
+            <ArrowLeft size={14} />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={() => navigateLinkHistory('forward')}
+            disabled={!linkHistoryState.canGoForward}
+            data-pdf-link-history="forward"
+            title={t('auto.components.editor.PdfViewer.goForward', 'Forward ({{value0}})', {
+              value0: forwardShortcutLabel
+            })}
+          >
+            <ArrowRight size={14} />
+          </button>
+        </div>
         <div className="flex items-center gap-1">
           <button
             type="button"

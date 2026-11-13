@@ -101,6 +101,8 @@ export type KeybindingActionId =
   | 'editor.previousChange'
   | 'editor.nextChange'
   | 'editor.addReviewNote'
+  | 'editor.pdfBack'
+  | 'editor.pdfForward'
   | 'sourceControl.sendReviewNotes'
   | 'fileExplorer.undo'
   | 'fileExplorer.redo'

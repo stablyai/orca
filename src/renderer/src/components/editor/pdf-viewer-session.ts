@@ -1,8 +1,7 @@
 import type * as pdfjsLib from 'pdfjs-dist'
 import {
-  EventBus,
+  type EventBus,
   PDFFindController,
-  PDFLinkService,
   PDFViewer as PdfJsViewer
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import {
@@ -19,6 +18,12 @@ import {
   clampPdfViewPosition,
   createPdfViewPositionRecorder
 } from './pdf-view-position'
+import {
+  attachPdfLinkHistory,
+  createLinkFocusTrackingEventBus,
+  HistoryAwarePdfLinkService,
+  type PdfViewerLinkHistory
+} from './pdf-link-navigation'
 
 const PAGE_WIDTH_REFIT_SETTLE_MS = 150
 
@@ -57,12 +62,12 @@ export function createPdfViewerSession({
   viewer: InstanceType<typeof PdfJsViewer>
   eventBus: InstanceType<typeof EventBus>
   findController: InstanceType<typeof PDFFindController>
+  linkHistory: PdfViewerLinkHistory
   dispose: () => void
 } {
   let cancelled = false
-  const eventBus = new EventBus()
-
-  const linkService = new PDFLinkService({ eventBus })
+  const { eventBus, cancelPendingLinkTargetFocus } = createLinkFocusTrackingEventBus()
+  const linkService = new HistoryAwarePdfLinkService({ eventBus })
 
   const findController = new PDFFindController({ linkService, eventBus })
 
@@ -113,6 +118,7 @@ export function createPdfViewerSession({
     : null
 
   const handleUpdateViewArea = (evt: { location?: unknown }): void => {
+    linkNavigation.recordViewArea(evt?.location)
     recorder?.record(evt?.location)
   }
 
@@ -124,6 +130,14 @@ export function createPdfViewerSession({
     detachInputWatcher?.()
     recorder?.arm()
   }
+
+  const linkNavigation = attachPdfLinkHistory({
+    viewer,
+    linkService,
+    cancelPendingLinkTargetFocus,
+    isActive: () => !cancelled,
+    onReaderMoved: markUserMoved
+  })
 
   const handlePagesInit = (): void => {
     // Why: pdf.js drops a preset scale set before its page views exist, leaving the PDF at 100%.
@@ -226,6 +240,7 @@ export function createPdfViewerSession({
       clearTimeout(refitTimer)
     }
     recorder?.dispose()
+    cancelPendingLinkTargetFocus()
     eventBus.off('pagesinit', handlePagesInit)
     eventBus.off('pagesloaded', handlePagesLoaded)
     eventBus.off('updateviewarea', handleUpdateViewArea)
@@ -251,5 +266,11 @@ export function createPdfViewerSession({
     dispose()
     throw error
   }
-  return { viewer, eventBus, findController, dispose }
+  return {
+    viewer,
+    eventBus,
+    findController,
+    linkHistory: linkNavigation.linkHistory,
+    dispose
+  }
 }

@@ -127,5 +127,30 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  // Why: the same defaults as browser.back/forward, so a PDF link jump reverses like a web link.
+  {
+    id: 'editor.pdfBack',
+    title: 'Go Back in PDF',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'pdf', 'link', 'history', 'back', 'previous'],
+    defaultBindings: {
+      darwin: ['Mod+BracketLeft'],
+      linux: ['Alt+ArrowLeft'],
+      win32: ['Alt+ArrowLeft']
+    }
+  },
+  {
+    id: 'editor.pdfForward',
+    title: 'Go Forward in PDF',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'pdf', 'link', 'history', 'forward', 'next'],
+    defaultBindings: {
+      darwin: ['Mod+BracketRight'],
+      linux: ['Alt+ArrowRight'],
+      win32: ['Alt+ArrowRight']
+    }
   }
 ]
