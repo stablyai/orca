@@ -34,6 +34,7 @@ export function activateWorktreeJumpPaletteEntry(
     // The first revealed row takes the hint's place in the committed keyboard order.
     const expandedItemId = controller.selectionItemIdsRef.current[previousIndex]
     if (expandedItemId) {
+      controller.revealRequestRef.current = expandedItemId
       controller.setSelectedItemId(expandedItemId)
     }
     controller.inputRef.current?.focus()

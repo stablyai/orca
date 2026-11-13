@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo } from 'react'
+import { useCallback, useId, useMemo, useRef } from 'react'
 import type { WorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 
@@ -19,6 +19,8 @@ export function useWorktreeJumpPaletteOptions({
   handleCommandSelectionChange
 }: WorktreeJumpPaletteOptionsInput) {
   const optionIdPrefix = `${useId()}option`
+  // See more moves the highlight onto a row the window may not show yet; the list reveals it after commit.
+  const revealRequestRef = useRef<string | null>(null)
   // Every rendered option counts, disabled ones included; headings are not options.
   const optionIds = useMemo(
     () =>
@@ -61,7 +63,8 @@ export function useWorktreeJumpPaletteOptions({
   return {
     activeOptionId: getOptionId(commandSelectedItemId),
     getOptionId,
-    getOptionProps
+    getOptionProps,
+    revealRequestRef
   }
 }
 

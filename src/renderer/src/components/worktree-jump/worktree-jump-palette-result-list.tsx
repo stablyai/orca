@@ -127,6 +127,16 @@ export function WorktreeJumpPaletteResultList({
     }
   }, [entryIndexByKey, getOptionId, revealRef, virtualizer, windowed])
 
+  const { revealRequestRef } = controller
+  useLayoutEffect(() => {
+    const requested = revealRequestRef.current
+    if (requested === null || requested !== commandSelectedItemId) {
+      return
+    }
+    revealRequestRef.current = null
+    revealRef.current(requested)
+  }, [commandSelectedItemId, revealRef, revealRequestRef])
+
   if (!windowed) {
     return (
       <>
