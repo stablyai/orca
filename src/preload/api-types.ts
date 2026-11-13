@@ -106,6 +106,7 @@ export type PreloadApi = {
   telemetryTrack: TelemetryApi['telemetryTrack']
   telemetrySetOptIn: TelemetryApi['telemetrySetOptIn']
   diagnostics: DiagnosticsApi
+  telemetryClaimTabAgentSearchHint: TelemetryApi['telemetryClaimTabAgentSearchHint']
   telemetryGetConsentState: TelemetryApi['telemetryGetConsentState']
   telemetryAcknowledgeBanner: TelemetryApi['telemetryAcknowledgeBanner']
   settings: SettingsApi

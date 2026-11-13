@@ -2951,7 +2951,7 @@ html.native-shell .app-layout {
 .tab-entry-omnibox:has(> input:focus:placeholder-shown:not(:read-only))::after {
   content: '';
   position: absolute;
-  inset-inline-start: calc(var(--spacing) * 3);
+  inset-inline-start: var(--tab-entry-caret-inset, calc(var(--spacing) * 3));
   top: 50%;
   width: 2px;
   height: 1em;
@@ -2959,6 +2959,10 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, currentColor 85%, transparent);
   pointer-events: none;
   animation: tab-entry-caret 850ms step-end infinite;
+}
+
+.tab-entry-omnibox:has(> input[data-highlighted='true']) {
+  --tab-entry-caret-inset: calc(var(--spacing) * 5 + 1px);
 }
 
 @keyframes tab-entry-caret {

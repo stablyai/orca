@@ -139,6 +139,8 @@ const api = {
   telemetryTrack: telemetryTrackApi,
   telemetrySetOptIn: telemetrySetOptInApi,
   telemetryAcknowledgeBanner: telemetryAcknowledgeBannerApi,
+  telemetryClaimTabAgentSearchHint: (previouslyExposed) =>
+    ipcRenderer.invoke('telemetry:claimTabAgentSearchHint', previouslyExposed),
   telemetryGetConsentState: telemetryGetConsentStateApi,
   diagnostics: diagnosticsApi,
   settings: settingsApi,

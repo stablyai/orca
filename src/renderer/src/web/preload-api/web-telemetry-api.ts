@@ -2,6 +2,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 
 export function createWebTelemetryApi(): Partial<PreloadApi> {
   return {
+    telemetryClaimTabAgentSearchHint: () => Promise.resolve(null),
     telemetryTrack: () => Promise.resolve(),
     telemetrySetOptIn: () => Promise.resolve(),
     telemetryGetConsentState: () =>

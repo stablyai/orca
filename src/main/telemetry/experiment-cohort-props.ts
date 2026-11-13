@@ -1,3 +1,4 @@
+import type { TelemetrySettings } from '../../shared/telemetry-settings-types'
 import type { CommonProps } from '../../shared/telemetry-events'
 import type { Store } from '../persistence/loading-store/store'
 import { ensureChatUiLaunchTipCohort } from './chat-ui-launch-tip-cohort'
@@ -6,6 +7,7 @@ export function experimentCohortProps(
   store: Store
 ): Pick<
   CommonProps,
+  | 'tab_agent_search_hint_v1'
   | 'onboarding_language_v1'
   | 'chat_ui_launch_tip_v1'
   | 'chat_ui_launch_tip_rollout_v1'
@@ -27,6 +29,7 @@ export function experimentCohortProps(
       ? telemetry?.chatUiLaunchTipTargeting?.mode
       : undefined
   return {
+    ...tabAgentSearchHintCohortProps(telemetry),
     onboarding_language_v1:
       language === 'control' || language === 'treatment' ? language : undefined,
     chat_ui_launch_tip_v1:
@@ -46,4 +49,13 @@ export function experimentCohortProps(
         ? targeting
         : undefined
   }
+}
+
+export function tabAgentSearchHintCohortProps(
+  telemetry: TelemetrySettings | undefined
+): Pick<CommonProps, 'tab_agent_search_hint_v1'> {
+  const assignment = telemetry?.tabAgentSearchHintCohort
+  return assignment === 'control' || assignment === 'treatment'
+    ? { tab_agent_search_hint_v1: assignment }
+    : {}
 }

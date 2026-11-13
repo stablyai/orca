@@ -53,6 +53,9 @@ export type TelemetryApi = {
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
   /** Main retains upload payloads so the renderer cannot read or substitute arbitrary bytes. */
   diagnostics: DiagnosticsApi
+  telemetryClaimTabAgentSearchHint: (
+    previouslyExposed: boolean
+  ) => Promise<'control' | 'treatment' | null>
   telemetryGetConsentState: () => Promise<TelemetryConsentState>
   /** Banner dismissal opts in without emitting telemetry_opted_in; shares the consent rate limit. */
   telemetryAcknowledgeBanner: () => Promise<void>

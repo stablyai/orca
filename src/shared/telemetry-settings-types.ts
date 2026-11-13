@@ -22,6 +22,8 @@ export type TelemetrySettings = {
   existedBeforeTelemetryRelease: boolean
   /** Frozen 50/50 assignment for fresh installs; absent for profiles predating the experiment. */
   onboardingLanguageCohort?: 'control' | 'treatment'
+  tabAgentSearchHintCohort?: 'control' | 'treatment'
+  tabAgentSearchHintExposed?: boolean
   /** Historical 70% control / 30% assignment; never changed by delivery expansions. */
   chatUiLaunchTipCohort?: ChatUiLaunchTipCohort
   /** Frozen corner-card-v3 assignment: 3/7 treatment for old controls, 60% for new enrollees. */

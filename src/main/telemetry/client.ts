@@ -8,7 +8,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { telemetryEventSampleRate } from './event-sampling'
 import * as protectedMilestones from './protected-milestones'
-import { experimentCohortProps } from './experiment-cohort-props'
+import * as telemetryProperties from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
@@ -77,7 +77,7 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   commonProps = buildCommonProps(installId, sessionId, BUILD_IDENTITY)
 
   // Official builds only; contributor builds retain the original announcement behavior.
-  Object.assign(commonProps, experimentCohortProps(store))
+  Object.assign(commonProps, telemetryProperties.experimentCohortProps(store))
 
   // Validate singleton common properties once; invalid identity would collapse installs into one subject.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)
@@ -190,6 +190,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   if (!result.ok) {
     return false
   }
+  Object.assign(commonProps, telemetryProperties.tabAgentSearchHintCohortProps(settings.telemetry))
   if (milestoneDay !== null) {
     protectedMilestones.record(name, result.props, settings, milestoneDay)
   }
