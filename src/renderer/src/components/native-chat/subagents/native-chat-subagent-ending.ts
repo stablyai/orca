@@ -21,14 +21,14 @@ function words(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-/** Codex's last own message is its reply; a clipped copy of it counts as the same. */
+/** Codex's last own message is its reply; the roster's clipped copy of it counts as the same, a shorter own message does not. */
 function rowsEndWith(rows: readonly NativeChatMessage[], reply: string): boolean {
   const last = rows.findLast((row) => row.role === 'assistant')
   const said = words(
     last?.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n') ?? ''
   )
   const replied = words(reply)
-  return said.length > 0 && (said.startsWith(replied) || replied.startsWith(said))
+  return said.length > 0 && said.startsWith(replied)
 }
 
 export function nativeChatSubagentEnding({
