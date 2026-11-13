@@ -24,10 +24,39 @@ export function mayBeJql(input: string): boolean {
   return JQL_OPERATOR_PATTERN.test(input.trim())
 }
 
-/** Exact-issue-key JQL when the whole input is key-shaped; null otherwise. */
-export function buildJiraIssueKeyJql(input: string): string | null {
+export function isBareJiraIssueNumber(input: string): boolean {
+  return /^\d+$/.test(input.trim())
+}
+
+/** Issue keys the input names: itself when key-shaped, or a bare number within each of `projectKeys`. */
+export function listJiraIssueKeyCandidates(
+  input: string,
+  projectKeys: readonly string[] = []
+): string[] {
   const trimmed = input.trim()
-  return JIRA_ISSUE_KEY_PATTERN.test(trimmed) ? `key = "${trimmed.toUpperCase()}"` : null
+  const candidates = isBareJiraIssueNumber(trimmed)
+    ? projectKeys.map((projectKey) => `${projectKey}-${trimmed}`)
+    : [trimmed]
+  return [
+    ...new Set(
+      candidates.filter((key) => JIRA_ISSUE_KEY_PATTERN.test(key)).map((key) => key.toUpperCase())
+    )
+  ]
+}
+
+export function buildJiraIssueKeysJql(keys: readonly string[]): string {
+  return keys.length === 1
+    ? `key = "${keys[0]}"`
+    : `key in (${keys.map((key) => `"${key}"`).join(', ')})`
+}
+
+/** Exact-issue-key JQL when the input is key-shaped, or a bare number within each of `projectKeys`. */
+export function buildJiraIssueKeyJql(
+  input: string,
+  projectKeys: readonly string[] = []
+): string | null {
+  const keys = listJiraIssueKeyCandidates(input, projectKeys)
+  return keys.length > 0 ? buildJiraIssueKeysJql(keys) : null
 }
 
 /** Search issue text, ignoring key shape. Empty when no searchable words remain. */

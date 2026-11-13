@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildJiraTextMatchJql } from './jira-search-input-jql'
+import { buildJiraIssueKeyJql, buildJiraTextMatchJql } from './jira-search-input-jql'
 
 describe('buildJiraTextMatchJql', () => {
   // Each of these returned HTTP 400 or zero results from Jira before being neutralized.
@@ -49,5 +49,30 @@ describe('buildJiraTextMatchJql', () => {
     ['fix NOT login', 'text ~ "fix not login*"']
   ])('keeps boolean words as words: %s', (input, expected) => {
     expect(buildJiraTextMatchJql(input)).toBe(expected)
+  })
+})
+
+describe('buildJiraIssueKeyJql', () => {
+  it.each([
+    ['400', 'key = "PROJ-400"'],
+    // A full key names its own project, so the selected one must not prefix it.
+    ['other-5', 'key = "OTHER-5"']
+  ])('within project PROJ: %s -> %s', (input, expected) => {
+    expect(buildJiraIssueKeyJql(input, ['PROJ'])).toBe(expected)
+  })
+
+  it.each([
+    ['400', 'key in ("ALP-400", "BET-400")'],
+    ['other-5', 'key = "OTHER-5"']
+  ])('within projects ALP and BET: %s -> %s', (input, expected) => {
+    expect(buildJiraIssueKeyJql(input, ['ALP', 'BET', 'alp'])).toBe(expected)
+  })
+
+  it.each(['400 crash', '#400', 'v400', '4.0'])('is not a key within a project: %j', (input) => {
+    expect(buildJiraIssueKeyJql(input, ['PROJ'])).toBeNull()
+  })
+
+  it('needs a project to read a bare number as a key', () => {
+    expect(buildJiraIssueKeyJql('400')).toBeNull()
   })
 })
