@@ -20,7 +20,7 @@ import {
   getVisibleWorktreeTerminalActivityTabs,
   getStructuredChatWorktreeIds
 } from './visible-worktree-activity-inputs'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'

@@ -5,6 +5,7 @@ import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { repoHooksCheckWakeParams } from '../../../../shared/repo-hooks-check-wake'
+import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
 function getHookInspectionTarget(hostId: ExecutionHostId): RuntimeClientTarget {
@@ -36,24 +37,26 @@ export type IssueCommandReadResult = {
   refusedWslDistro?: string
 }
 
-/** `background`: a render-driven probe that must not boot a stopped WSL distro (E9); launches omit it. */
+/** `background`: a render-driven probe that must not boot a stopped WSL distro (E9); launches omit it. `createSource`: read the ref a create checks out. */
 export async function checkRuntimeHooks(
   hostId: ExecutionHostId,
   repoId: string,
-  options: { background?: boolean } = {}
+  options: { background?: boolean; createSource?: SetupHooksCreateSource } = {}
 ): Promise<HookCheckResult> {
   const target = getHookInspectionTarget(hostId)
+  const createSource = options.createSource ? { createSource: options.createSource } : {}
   if (target.kind !== 'environment') {
     return window.api.hooks.check({
       repoId,
       hostId,
-      ...(options.background ? { background: true } : {})
+      ...(options.background ? { background: true } : {}),
+      ...createSource
     })
   }
   return callRuntimeRpc<HookCheckResult>(
     target,
     'repo.hooksCheck',
-    { repo: repoId, ...repoHooksCheckWakeParams(options.background) },
+    { repo: repoId, ...repoHooksCheckWakeParams(options.background), ...createSource },
     { timeoutMs: 15_000 }
   )
 }

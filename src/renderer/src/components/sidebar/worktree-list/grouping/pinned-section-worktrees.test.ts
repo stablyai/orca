@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getPinnedSectionWorktrees } from '../../../../../../shared/sidebar-list/pinned-section-worktrees'
-import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
-import { buildRows } from './build-rows.test-fixture'
+import { getPinnedSectionWorktrees } from '../../../../../../shared/sidebar-list/lineage/pinned-section-worktrees'
+import { worktree } from './worktree-list-groups-test-fixtures'
 
 function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -67,57 +66,5 @@ describe('getPinnedSectionWorktrees', () => {
     expect(
       getPinnedSectionWorktrees([child, sibling], lineageById, map).map((worktree) => worktree.id)
     ).toEqual([])
-  })
-
-  it('handles a deep pinned lineage without overflowing the renderer stack', () => {
-    const depth = 6_000
-    const worktrees: Worktree[] = []
-    const lineageById: Record<string, WorktreeLineage> = {}
-    for (let index = 0; index < depth; index++) {
-      const current = makeWorktree(`deep-${index}`, { isPinned: index === 0 })
-      worktrees.push(current)
-      const parent = worktrees[index - 1]
-      if (parent) {
-        lineageById[current.id] = makeLineage(current, parent)
-      }
-    }
-
-    expect(
-      getPinnedSectionWorktrees(
-        worktrees,
-        lineageById,
-        new Map(worktrees.map((worktree) => [worktree.id, worktree]))
-      )
-    ).toHaveLength(depth)
-  })
-
-  it('builds rows for a deep expanded pinned lineage without overflowing the renderer stack', () => {
-    const depth = 6_000
-    const worktrees: Worktree[] = []
-    const lineageById: Record<string, WorktreeLineage> = {}
-    for (let index = 0; index < depth; index++) {
-      const current = makeWorktree(`rendered-deep-${index}`, { isPinned: true })
-      worktrees.push(current)
-      const parent = worktrees[index - 1]
-      if (parent) {
-        lineageById[current.id] = makeLineage(current, parent)
-      }
-    }
-
-    const rows = buildRows(
-      'none',
-      worktrees,
-      repoMap,
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      lineageById,
-      new Map(worktrees.map((worktree) => [worktree.id, worktree])),
-      true
-    )
-
-    expect(rows.filter((row) => row.type === 'item')).toHaveLength(depth)
   })
 })

@@ -11,7 +11,7 @@ import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/metadata/sort-order-update'
 import type { WorkspaceMetadataSet } from './worktree/metadata/workspace-metadata-set'
-import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
+import type { SidebarInputsChangedEvent } from './sidebar-list/feed/sidebar-inputs-feed-contract'
 import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
 import type { WorkspaceCleanupRunFinishedEvent } from './workspace-cleanup/workspace-cleanup-run'
 

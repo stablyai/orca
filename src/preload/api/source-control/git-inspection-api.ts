@@ -61,7 +61,10 @@ export type GitInspectionApi = {
   atRiskLocalFiles: (args: {
     worktreePath: string
     connectionId?: string
+    /** Lets cancelAtRiskLocalFiles stop the scan once its preview closes. */
+    requestToken?: string
   }) => Promise<WorktreeAtRiskLocalFiles>
+  cancelAtRiskLocalFiles: (args: { requestToken: string }) => Promise<void>
   findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
   refs: (args: {
     worktreePath: string

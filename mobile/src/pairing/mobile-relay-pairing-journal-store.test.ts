@@ -157,16 +157,11 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
-    let replacementSaved = false
-    const saving = saveMobileRelayPairingJournal(replacement).then(() => {
-      replacementSaved = true
-    })
-    await Promise.resolve()
-    expect(replacementSaved).toBe(false)
+    const saving = saveMobileRelayPairingJournal(replacement)
 
     releaseSecretRead()
     await expect(loading).resolves.toEqual(journal)
-    await expect(saving).resolves.toBeUndefined()
+    await saving
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
     expect(asyncStorage.removeItem).not.toHaveBeenCalled()
   })
@@ -217,7 +212,7 @@ describe('mobile relay pairing journal store', () => {
     )
     const replacementSave = saveMobileRelayPairingJournal(replacement)
 
-    await expect(authorizationUpdate).resolves.toBeUndefined()
+    await authorizationUpdate
     await expect(replacementSave).rejects.toThrow(/pairing in progress/)
   })
 

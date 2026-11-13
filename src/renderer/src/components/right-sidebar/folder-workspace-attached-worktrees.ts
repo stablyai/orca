@@ -12,7 +12,7 @@ import {
   getSidebarLineageParentsByIdentity,
   type SidebarLineageParentIdentities,
   getProjectedWorktreeLineageChildrenByParentId
-} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null

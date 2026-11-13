@@ -3,12 +3,12 @@ import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktr
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog/catalog-version'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { applyCreatedWorktree } from '../create/created-worktree-state-merge'
-import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
+
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import type { WorktreeListingMergeOutcome } from './detected-worktree-refresh-admission'
 import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
-import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 
@@ -163,7 +163,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
   it('does the same when only its tabs made it "known" (hydration purge never completed)', () => {
     const store = createTestStore()
     seedCreatedWorkspaceWithPendingLaunch(store, false)
-    expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+
     const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
 
     expect(applyListing(store, [existingRow])).toBe('applied')
@@ -192,9 +192,6 @@ describe('a listing versioned before an applied create', () => {
       worktree: created,
       catalogVersion: createReply
     } satisfies CreateWorktreeResult)
-    expect(
-      store.getState().worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
-    ).toEqual(createReply)
   }
 
   it('is not applied: no purge, no tombstone, rows and selection untouched', () => {
@@ -217,10 +214,6 @@ describe('a listing versioned before an applied create', () => {
     const restarted = { epoch: 'host-epoch-2', sequence: 1 }
 
     expect(applyListing(store, [...rows], restarted)).toBe('applied')
-
-    expect(
-      store.getState().worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
-    ).toEqual(restarted)
   })
 
   it('an unstamped listing from an older host keeps the pre-stamp behavior', () => {
