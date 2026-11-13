@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { GroupHookCheckResult } from '../../../../../../shared/project-group-hooks'
 import { projectGroupHookOwner } from '../../../../../../shared/workspace-hook-owner'
@@ -9,6 +10,7 @@ import { projectGroupSetupExample } from '../../../../../../shared/project-group
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/workspace-creation/folder/folder-workspace-agent-startup'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
@@ -19,7 +21,12 @@ export function ProjectGroupHooksSection({
 }: {
   group: ProjectGroup
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [inspection, setInspection] = useState<GroupHookCheckResult | null>(null)
+  const confirmedInspection = useRef<GroupHookCheckResult | null>(null)
+  const pendingSave = useRef<Promise<void> | null>(null)
+  const [saving, setSaving] = useState(false)
+  const fieldset = useRef<HTMLFieldSetElement>(null)
   const owner = projectGroupHookOwner(
     inspection ? { ...group, hookSettings: inspection.hookSettings } : group
   )
@@ -43,6 +50,7 @@ export function ProjectGroupHooksSection({
     void checkRuntimeGroupHooks(hostId, group.id, { background: true })
       .then((result) => {
         if (!cancelled) {
+          confirmedInspection.current = result
           setInspection(result)
         }
       })
@@ -57,25 +65,79 @@ export function ProjectGroupHooksSection({
   const example = platform
     ? projectGroupSetupExample(getFolderSourceRepos(repos, groups, group), platform)
     : undefined
+  const updateHookSettings = (hookSettings: NonNullable<ProjectGroup['hookSettings']>): void => {
+    if (!inspection || inspection.unavailable || inspection.status === 'error') {
+      return
+    }
+    if (fieldset.current) {
+      setInspection({ ...inspection, hookSettings })
+      setSaving(true)
+    }
+    // A blur/autosave may already be accepted before the pending fieldset renders.
+    const save: Promise<void> = (pendingSave.current ?? Promise.resolve()).then(async () => {
+      const previous = confirmedInspection.current
+      if (!previous) {
+        return
+      }
+      const ownsInspection = (): boolean =>
+        Boolean(fieldset.current) && pendingSave.current === save
+      let saved = false
+      try {
+        saved = await useAppStore
+          .getState()
+          .updateProjectGroup(group.id, { hookSettings }, { hostId })
+      } catch {
+        // A rejected endpoint reply still needs the same owner reconciliation as false.
+      }
+      if (saved) {
+        confirmedInspection.current = { ...previous, hookSettings, status: 'ok' }
+      } else {
+        confirmedInspection.current = previous
+        if (ownsInspection()) {
+          setInspection({ ...previous })
+        }
+        if (fieldset.current) {
+          try {
+            const current = await checkRuntimeGroupHooks(hostId, group.id, { background: true })
+            confirmedInspection.current =
+              current.status !== 'error' && !current.unavailable
+                ? current
+                : { ...previous, status: 'error' }
+          } catch {
+            confirmedInspection.current = { ...previous, status: 'error' }
+          }
+        }
+        toast.error(t('sessionHistory.settings.saveError', 'Could not save. Try again.'))
+      }
+      if (ownsInspection()) {
+        setInspection(confirmedInspection.current)
+      }
+    })
+    pendingSave.current = save
+    void save.finally(() => {
+      if (pendingSave.current === save) {
+        pendingSave.current = null
+        if (fieldset.current) {
+          setSaving(false)
+        }
+      }
+    })
+  }
+  const inspectionReady =
+    inspection !== null && !inspection.unavailable && inspection.status !== 'error'
   return (
-    <fieldset disabled={!inspection || Boolean(inspection.unavailable)} className="min-w-0">
+    <fieldset ref={fieldset} disabled={!inspectionReady || saving} className="min-w-0">
       <RepositoryHooksSection
         repo={owner}
         showArchive={false}
         yamlHooks={inspection?.hooks ?? null}
         hasHooksFile={inspection?.hasHooks ?? false}
-        hooksInspectionReady={inspection !== null && !inspection.unavailable}
+        hooksInspectionReady={inspectionReady}
         mayNeedUpdate={inspection?.mayNeedUpdate ?? false}
         copiedTemplate={false}
         onCopyTemplate={() => void window.api.ui.writeClipboardText(GROUP_SETUP_HOOKS_TEMPLATE)}
         setupExample={example}
-        onUpdateHookSettings={(hookSettings) => {
-          if (!inspection || inspection.unavailable) {
-            return
-          }
-          setInspection((current) => (current ? { ...current, hookSettings } : current))
-          void useAppStore.getState().updateProjectGroup(group.id, { hookSettings }, { hostId })
-        }}
+        onUpdateHookSettings={updateHookSettings}
       />
     </fieldset>
   )
