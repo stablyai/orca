@@ -1,6 +1,8 @@
 import { TriangleAlert } from 'lucide-react'
 import type React from 'react'
 import { useEffect, useId, useState } from 'react'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../ui/button'
 import { Skeleton } from '../ui/skeleton'
@@ -71,15 +73,22 @@ export function RecipeEnvForwardingWarning({
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden />
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-sm font-medium text-foreground">
-            {summary?.narrowed
-              ? t(
+            {summary?.narrowed ? (
+              // passEnv is an orca.yaml key, so it reads as code rather than a word.
+              <Trans
+                i18n={i18n}
+                defaults={t(
                   'agentHostPanel.recipeEnvNarrowed',
-                  "This recipe's create script gets only the variables its passEnv allows."
-                )
-              : t(
-                  'agentHostPanel.recipeEnv',
-                  "This recipe's create script gets this computer's environment."
+                  "This recipe's create script gets only the variables its <code>passEnv</code> allows."
                 )}
+                components={{ code: <code className="rounded bg-muted px-1 py-0.5 font-mono" /> }}
+              />
+            ) : (
+              t(
+                'agentHostPanel.recipeEnv',
+                "This recipe's create script gets this computer's environment."
+              )
+            )}
           </p>
           {summary === null ? (
             <Skeleton className="h-3.5 w-4/5" shape="small" />
