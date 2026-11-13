@@ -64,6 +64,7 @@ export const conductor = defineFixture({
           setup: shortSetup,
           archive: null,
           editable: false,
+          ubuntuNote: null,
           skippedFields: ['environment_variables'],
           runActions:
             '# Web (web)\npnpm dev --port $CONDUCTOR_PORT\n\n# Worker (worker)\npnpm worker:dev'
@@ -92,6 +93,7 @@ export const devcontainer = defineFixture({
           setup: longSetup,
           archive: 'docker compose -f infra/docker-compose.dev.yml down --volumes',
           editable: false,
+          ubuntuNote: null,
           skippedFields: ['postStartCommand', 'postAttachCommand', 'features', 'forwardPorts'],
           runActions: null
         }}
@@ -139,6 +141,7 @@ export const hugeReviewExpanded = defineFixture({
           setup: hugeSetup,
           archive: hugeSetup,
           editable: false,
+          ubuntuNote: null,
           skippedFields: Array.from({ length: 30 }, (_, index) => `steps.${index}.uses`),
           runActions: null
         }}
@@ -161,10 +164,39 @@ export const packageManager = defineFixture({
           setup: 'pnpm install',
           archive: null,
           editable: true,
+          ubuntuNote: null,
           skippedFields: [],
           runActions: null
         }}
       />
     </Frame>
   )
+})
+
+/** PARITY-DNF: a Conductor setup from Amazon Linux; translated lines, and lines left to check. */
+export const conductorDnfReview = defineFixture({
+  width: 720,
+  render: () => (
+    <Frame>
+      <SetupScriptPromptCardShell
+        {...base}
+        isPackageManagerSuggestion={false}
+        candidateSource="Conductor (.conductor/settings.toml)"
+        candidateProvenance=".conductor/settings.toml"
+        detectedSetupPreview={{
+          setup:
+            'sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y g++ make libpq-dev\nbash scripts/setup-db.sh\npnpm install',
+          archive: null,
+          editable: false,
+          skippedFields: [],
+          runActions: null,
+          ubuntuNote: {
+            translated: 1,
+            checkLines: ['scripts/setup-db.sh: sudo dnf install -y postgresql15']
+          }
+        }}
+      />
+    </Frame>
+  ),
+  interact: openReview
 })

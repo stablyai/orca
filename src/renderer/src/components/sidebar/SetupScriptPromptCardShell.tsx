@@ -118,6 +118,7 @@ export function SetupScriptPromptCardShell({
           archive={detectedSetupPreview.archive}
           runActions={detectedSetupPreview.runActions}
           skippedFields={detectedSetupPreview.skippedFields}
+          ubuntuNote={detectedSetupPreview.ubuntuNote}
           provenance={candidateProvenance}
           isSaving={isImporting}
           onSave={onImport}

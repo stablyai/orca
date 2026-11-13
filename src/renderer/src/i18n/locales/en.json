@@ -29663,5 +29663,12 @@
     "copyLinkFailed": "Couldn’t copy the link.",
     "linkCopied": "Link copied",
     "signInLinkHint": "Open it in any browser on this computer."
+  },
+  "setupScriptImport": {
+    "ubuntuNote": {
+      "title": "Uses dnf",
+      "check": "This script uses dnf; Orca’s sandboxes run Ubuntu. Check these lines:",
+      "translated": "This script used dnf; Orca’s sandboxes run Ubuntu, so its install lines now use apt-get."
+    }
   }
 }

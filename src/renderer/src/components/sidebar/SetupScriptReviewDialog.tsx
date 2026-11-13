@@ -1,3 +1,5 @@
+import { UbuntuSetupNote } from './UbuntuSetupNote'
+import type { UbuntuNote } from '../../../../shared/workspace-setup/setup-script-imports'
 import React from 'react'
 import { Download, LoaderCircle } from 'lucide-react'
 import { Trans } from 'react-i18next'
@@ -24,6 +26,8 @@ export type SetupScriptReviewDialogProps = {
   /** Imported run actions; saved with setup and started from the Run button. */
   runActions?: string | null
   skippedFields: readonly string[]
+  /** PARITY-DNF: Amazon Linux install lines translated to apt-get, and what to check. */
+  ubuntuNote?: UbuntuNote | null
   provenance: string | null
   isSaving: boolean
   onSave: () => void
@@ -63,6 +67,7 @@ export function SetupScriptReviewDialog({
   archive,
   runActions,
   skippedFields,
+  ubuntuNote = null,
   provenance,
   isSaving,
   onSave
@@ -124,6 +129,7 @@ export function SetupScriptReviewDialog({
             />
           ) : null}
 
+          {ubuntuNote ? <UbuntuSetupNote note={ubuntuNote} /> : null}
           {skippedFields.length > 0 ? <SkippedFieldsList fields={skippedFields} /> : null}
         </div>
 

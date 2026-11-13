@@ -1,7 +1,10 @@
 import { formatRunActionsForTrust } from '../../../../shared/orca-yaml-run-actions'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
-import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
+import type {
+  SetupScriptImportCandidate,
+  UbuntuNote
+} from '../../../../shared/workspace-setup/setup-script-imports'
 import type { RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
@@ -215,6 +218,8 @@ export type DetectedSetupPreviewContent = {
   skippedFields: readonly string[]
   /** Imported run actions, as the text the Run button will execute. */
   runActions: string | null
+  /** PARITY-DNF: Amazon Linux install lines translated to apt-get, and what to check. */
+  ubuntuNote: UbuntuNote | null
 }
 
 // Mirrors what buildImportedHookSettings saves; only package-manager guesses are editable before saving.
@@ -228,7 +233,8 @@ export function getDetectedSetupPreviewContent(
     archive: candidate.archive ?? null,
     editable,
     skippedFields: candidate.unsupportedFields ?? [],
-    runActions: candidate.run?.length ? formatRunActionsForTrust(candidate.run) : null
+    runActions: candidate.run?.length ? formatRunActionsForTrust(candidate.run) : null,
+    ubuntuNote: candidate.ubuntuNote ?? null
   }
 }
 
