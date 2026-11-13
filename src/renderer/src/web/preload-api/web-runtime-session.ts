@@ -211,6 +211,13 @@ export function assertActiveEnvironment(environmentId: string): void {
   }
 }
 
+export function assertEnvironmentPairingCurrent(environment: StoredWebRuntimeEnvironment): void {
+  const stored = readStoredWebRuntimeEnvironment()
+  if (stored?.id === environment.id && pairingRevisionOf(stored) > pairingRevisionOf(environment)) {
+    throw new Error(PAIRING_CHANGED_MESSAGE)
+  }
+}
+
 function pairingRevisionOf(environment: StoredWebRuntimeEnvironment): number {
   return environment.pairingRevision ?? environment.createdAt
 }
