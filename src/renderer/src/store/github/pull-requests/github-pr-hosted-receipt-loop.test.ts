@@ -154,7 +154,12 @@ it('applies data-bearing retry replies to both clients and sends selection after
   if (!('kind' in seed) || seed.kind !== 'found') {
     throw new Error('expected initial PR')
   }
-  const clients: { select: () => void; title: () => string | undefined; dispose: () => void }[] = []
+  const clients: {
+    select: () => void
+    title: () => string | undefined
+    fetchedAt: () => number | undefined
+    dispose: () => void
+  }[] = []
   const selection: boolean[][] = [[], []]
   const receipts: unknown[][] = [[], []]
   const reasons: string[] = []
@@ -244,6 +249,8 @@ it('applies data-bearing retry replies to both clients and sends selection after
     await commands.getRepoPRForBranch('repo', 'shared', 12, null, false, 'head-a', 'active')
     mocks.gate.mockResolvedValue(181_000)
     await vi.advanceTimersByTimeAsync(120_001)
+    // The first job learns the quota pause after admission, so its wait ends at the response deadline.
+    await vi.advanceTimersByTimeAsync(25_000)
     expect(selection).toEqual([[false], [false]])
     for (let client = 0; client < 2; client += 1) {
       expect(receipts[client]).toMatchObject([
@@ -264,6 +271,10 @@ it('applies data-bearing retry replies to both clients and sends selection after
       [false, true]
     ])
     expect(reasons).toEqual(['swr', 'swr', 'swr', 'swr'])
+    for (const client of clients) {
+      expect(client.title()).toBe('changed on another client')
+      expect(client.fetchedAt()).toBe(181_000)
+    }
     expect(mocks.resolve).toHaveBeenCalledTimes(3)
   } finally {
     for (const client of clients) {

@@ -3,7 +3,7 @@ import { commands, found, mocks, read, rpcRead } from './runtime-hosted-pr-snaps
 import { PrForBranch } from '../../../../shared/rpc-contract/github-pull-request-params'
 
 it('promotes a shared selected demand without losing other rows or renewing its attempt', async () => {
-  const branches = ['ordinary-a', 'ordinary-b', 'selected-a', 'selected-b']
+  const branches = ['ordinary-a', 'selected-a', 'selected-b']
   await Promise.all(branches.map((branch) => read(branch, 'active')))
   await vi.advanceTimersByTimeAsync(60_000)
   const gate = Date.now() + 60_000
@@ -29,9 +29,23 @@ it('promotes a shared selected demand without losing other rows or renewing its 
   await demand('selected-a', true)
   await demand('selected-b', true)
   await demand('selected-a', false)
+  const { schedulePRWatchRead } =
+    await import('../../../github/pull-requests/refresh/pr-refresh-coordinator')
+  const { makeCandidate } =
+    await import('../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness')
+  schedulePRWatchRead(
+    { prKey: 'github.com/acme/repo#12' },
+    makeCandidate({
+      repoId: 'repo',
+      branch: 'watched',
+      cacheKey: '/repo::watched',
+      currentHeadOid: 'head-a'
+    }),
+    gate
+  )
   mocks.gate.mockResolvedValue(null)
   await vi.advanceTimersByTimeAsync(65_000)
-  expect(starts).toEqual(['selected-a', 'ordinary-a', 'selected-b', 'ordinary-b'])
+  expect(starts).toEqual(['selected-a', 'ordinary-a', 'selected-b', 'watched'])
   const completed = starts.length
   await vi.advanceTimersByTimeAsync(6 * 60_000)
   expect(starts.length).toBe(completed)
