@@ -16,7 +16,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca open [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
-      "It can bring Orca's window to the front. Agents should run it only when the user asks or `orca status --json` reports Orca is not running or still cannot connect after about 30 seconds of retries, never to retry a failed command."
+      'Starts Orca without taking the foreground and does nothing when an Orca window is already open. Agents should run it only when the user asks or `orca status --json` reports Orca is not running or still cannot connect after about 30 seconds of retries, never to retry a failed command.'
     ],
     examples: ['orca open', 'orca open --json']
   },
