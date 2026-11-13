@@ -283,6 +283,8 @@ final class Provider {
             return providerHandshake()
         case "listApps":
             return ["apps": listApps().map(renderListedApp)]
+        case "launchApp":
+            return try launchApp(params: params)
         case "listWindows":
             return try listWindows(params: params)
         case "getAppState":
@@ -734,6 +736,7 @@ final class Provider {
                     "list": true,
                     "bundleIds": true,
                     "pids": true,
+                    "launch": true,
                 ],
                 "windows": [
                     "list": true,
@@ -800,6 +803,48 @@ final class Provider {
         if let bundle = app.bundleId, blockedBundleIds.contains(bundle) {
             throw ProviderError.coded("app_blocked", "app '\(bundle)' is blocked for safety")
         }
+    }
+
+    private func launchApp(params: [String: JSONValue]) throws -> [String: Any] {
+        let query = try requiredString(params, "app").trimmingCharacters(in: .whitespacesAndNewlines)
+        let activate = params["activate"]?.bool == true
+        // Why: Launch Services sends a running app a reopen event, and many apps answer it by opening a window.
+        if let running = listApps().first(where: { matches($0, query: query) }) {
+            try rejectBlockedApp(running)
+            return renderLaunch(running, launched: false)
+        }
+        guard let url = installedApplicationURL(query) else {
+            throw ProviderError.coded("app_not_found", "app '\(query)' is not running and no installed app has that name, bundle ID or path")
+        }
+        if let bundleId = Bundle(url: url)?.bundleIdentifier, blockedBundleIds.contains(bundleId) {
+            throw ProviderError.coded("app_blocked", "app '\(bundleId)' is blocked for safety")
+        }
+        let pid: pid_t
+        do {
+            pid = try BlockingAsync.run(timeout: 30, timeoutMessage: "launching '\(query)' timed out") {
+                let configuration = NSWorkspace.OpenConfiguration()
+                configuration.activates = activate
+                return try await NSWorkspace.shared.openApplication(at: url, configuration: configuration).processIdentifier
+            }
+        } catch let error as ProviderError {
+            throw error
+        } catch {
+            throw ProviderError.coded("app_launch_failed", "could not launch '\(query)': \(error.localizedDescription)")
+        }
+        guard let app = appByPid(pid) else {
+            throw ProviderError.coded("app_launch_failed", "'\(query)' exited right after it launched")
+        }
+        return renderLaunch(app, launched: true)
+    }
+
+    private func renderLaunch(_ app: AppDescriptor, launched: Bool) -> [String: Any] {
+        // Why: measured, not taken from the request; an app may activate itself however it was started.
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid
+        return [
+            "app": ["name": app.name, "bundleId": jsonNullable(app.bundleId), "pid": Int(app.pid)],
+            "launched": launched,
+            "delivery": frontmost ? "foreground" : "background",
+        ]
     }
 
     private func listWindows(params: [String: JSONValue]) throws -> [String: Any] {
@@ -1467,6 +1512,27 @@ private func parsePid(_ query: String) -> pid_t? {
     guard query.hasPrefix("pid:") else { return nil }
     guard let pid = Int32(query.dropFirst(4)), pid > 0 else { return nil }
     return pid
+}
+
+/// An app that isn't running, by absolute path, bundle ID or bundle name in the usual install folders.
+private func installedApplicationURL(_ query: String) -> URL? {
+    if query.hasPrefix("/") {
+        return FileManager.default.fileExists(atPath: query) ? URL(fileURLWithPath: query) : nil
+    }
+    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: query) {
+        return url
+    }
+    let bundleName = query.lowercased().hasSuffix(".app") ? query : "\(query).app"
+    let folders = [
+        "/Applications",
+        "/Applications/Utilities",
+        "/System/Applications",
+        "/System/Applications/Utilities",
+        NSHomeDirectory() + "/Applications",
+    ]
+    return folders
+        .map { URL(fileURLWithPath: $0).appendingPathComponent(bundleName) }
+        .first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
 private func matches(_ app: AppDescriptor, query: String) -> Bool {
@@ -3301,7 +3367,11 @@ private final class AsyncBox<T>: @unchecked Sendable {
 }
 
 private enum BlockingAsync {
-    static func run<T>(timeout: TimeInterval, operation: @escaping @Sendable () async throws -> T) throws -> T {
+    static func run<T>(
+        timeout: TimeInterval,
+        timeoutMessage: String = "screenshot capture timed out",
+        operation: @escaping @Sendable () async throws -> T
+    ) throws -> T {
         let semaphore = DispatchSemaphore(value: 0)
         let box = AsyncBox<T>()
         let task = Task.detached {
@@ -3314,7 +3384,7 @@ private enum BlockingAsync {
         }
         guard semaphore.wait(timeout: .now() + timeout) == .success else {
             task.cancel()
-            throw ProviderError.coded("action_timeout", "screenshot capture timed out")
+            throw ProviderError.coded("action_timeout", timeoutMessage)
         }
         return try box.result!.get()
     }

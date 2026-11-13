@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs'
 import type net from 'node:net'
 import type {
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
@@ -49,6 +50,10 @@ export class MacOSNativeProviderClient {
   async capabilities(): Promise<ComputerProviderCapabilities> {
     await this.ensureCompatible()
     return this.providerCapabilities!
+  }
+  async launchApp(params: unknown): Promise<ComputerLaunchAppResult> {
+    await this.ensureCapability('apps', 'launch')
+    return (await this.call('launchApp', params)) as ComputerLaunchAppResult
   }
   async listWindows(params: unknown): Promise<ComputerListWindowsResult> {
     await this.ensureCapability('windows', 'list')

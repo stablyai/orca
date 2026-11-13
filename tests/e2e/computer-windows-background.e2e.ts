@@ -1,5 +1,11 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type { ComputerActionResult, ComputerSnapshotResult } from '../../src/shared/runtime-types'
+import type {
+  ComputerActionResult,
+  ComputerLaunchAppResult,
+  ComputerSnapshotResult
+} from '../../src/shared/runtime-types'
 import {
   ensureOrcaRuntimeLaunched,
   findRoleIndex,
@@ -15,6 +21,11 @@ import {
   type WindowsSemanticFixture,
   type WindowsSemanticFixtureState
 } from './helpers/windows-semantic-controls-fixture'
+import {
+  closeWindowFixture,
+  launchWindowFixture,
+  type WindowFixture
+} from './helpers/windows-form-fixture'
 
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
@@ -260,6 +271,62 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
       const after = await readState()
       expect(after.activations).toBe(before.activations)
       expect(after.notes).toBe(before.notes)
+    })
+  }
+)
+
+
+async function foregroundWindowOwnerPid(): Promise<number> {
+  const { stdout } = await promisify(execFile)('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    [
+      'Add-Type -Name Foreground -Namespace OrcaE2E -MemberDefinition \'[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);\'',
+      '$owner = [uint32]0',
+      '[void][OrcaE2E.Foreground]::GetWindowThreadProcessId([OrcaE2E.Foreground]::GetForegroundWindow(), [ref]$owner)',
+      '$owner'
+    ].join('; ')
+  ])
+  return Number.parseInt(stdout.trim(), 10)
+}
+
+// Character Map is a classic single-process Win32 app on every Windows image, so its pid owns its window.
+describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
+  'computer-use Windows launch-app',
+  () => {
+    let holder: WindowFixture | null = null
+    let launchedPid: number | null = null
+
+    beforeAll(async () => {
+      await ensureOrcaRuntimeLaunched()
+      holder = await launchWindowFixture(
+        "$form.Text = 'orca-e2e-launch-holder'",
+        '$form.Activate()'
+      )
+    })
+
+    afterAll(async () => {
+      if (launchedPid !== null) {
+        await promisify(execFile)('taskkill.exe', ['/PID', String(launchedPid), '/F']).catch(
+          () => {}
+        )
+      }
+      if (holder) {
+        await closeWindowFixture(holder)
+      }
+      await stopOrcaRuntime()
+    })
+
+    test('launch-app starts an app without taking the foreground', async () => {
+      const result = parseJsonOutput<{ result: ComputerLaunchAppResult }>(
+        (await runOrcaCli(['computer', 'launch-app', 'charmap', '--json'])).stdout
+      ).result
+      launchedPid = result.app.pid
+
+      expect(result.launched).toBe(true)
+      expect(result.delivery).toBe('background')
+      expect(await foregroundWindowOwnerPid()).not.toBe(result.app.pid)
     })
   }
 )

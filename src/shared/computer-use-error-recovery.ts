@@ -16,7 +16,7 @@ export function computerUseErrorRecoveryData(
         'Run `orca computer list-apps --json` and retry with the exact app name or bundle ID.',
         'If the target is a website or web app such as Gmail, choose the desktop browser app/window that contains it; `orca computer` app selectors refer to desktop apps, not website names.',
         'Do not retry the same `orca computer ... --app <web app>` command unchanged.',
-        'If the desired browser is not listed, start it on macOS with `open -g -a <browser>` so it opens in the background; on Windows and Linux ask the user to start it. Then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
+        'If the desired browser is not listed, start it with `orca computer launch-app <browser>` so it opens in the background (macOS and Windows); on Linux ask the user to start it. Then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
       )
     case 'app_blocked':
       return recoverWith(
@@ -31,7 +31,7 @@ export function computerUseErrorRecoveryData(
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and target one of the listed windows.',
         'If the app is listed but has no usable window, ask the user to open or show one. Do not add `--restore-window` on your own, not even just to observe.',
-        'If no window is listed, the app may have none open; ask the user to open one. `orca computer` does not launch desktop apps: start a closed one on macOS with `open -g -a <app>`; on Windows and Linux ask the user to.'
+        'If no window is listed, the app may have none open; ask the user to open one.'
       )
     case 'window_not_focused':
       if (message?.includes('may already have been delivered')) {

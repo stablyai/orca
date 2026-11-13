@@ -440,6 +440,123 @@ public static class OrcaDesktopWin32 {
             }
         };
     }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct STARTUPINFO {
+        public int cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public int dwX;
+        public int dwY;
+        public int dwXSize;
+        public int dwYSize;
+        public int dwXCountChars;
+        public int dwYCountChars;
+        public int dwFillAttribute;
+        public int dwFlags;
+        public short wShowWindow;
+        public short cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct STARTUPINFOEX {
+        public STARTUPINFO StartupInfo;
+        public IntPtr lpAttributeList;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_INFORMATION {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public int dwProcessId;
+        public int dwThreadId;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateProcessW", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool CreateProcess(string applicationName, System.Text.StringBuilder commandLine, IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles, uint creationFlags, IntPtr environment, string currentDirectory, ref STARTUPINFOEX startupInfo, out PROCESS_INFORMATION processInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool InitializeProcThreadAttributeList(IntPtr attributeList, int attributeCount, int flags, ref IntPtr size);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool UpdateProcThreadAttribute(IntPtr attributeList, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previousValue, IntPtr returnSize);
+
+    [DllImport("kernel32.dll")]
+    private static extern void DeleteProcThreadAttributeList(IntPtr attributeList);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetShellWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
+    // Starts an app without handing it the caller's right to take the foreground (design from agent-desktop #615):
+    // the desktop shell is its parent, and its first ShowWindow is SW_SHOWNOACTIVATE.
+    public static int LaunchWithoutForeground(string executable, string workingDirectory) {
+        const uint processCreateProcess = 0x0080;
+        const uint extendedStartupInfoPresent = 0x00080000;
+        const int procThreadAttributeParentProcess = 0x00020000;
+        const int startfUseShowWindow = 0x0001;
+        const short swShowNoActivate = 4;
+        uint shellProcessId;
+        GetWindowThreadProcessId(GetShellWindow(), out shellProcessId);
+        if (shellProcessId == 0) {
+            throw new InvalidOperationException("no desktop shell is running to start the app under");
+        }
+        var shell = OpenProcess(processCreateProcess, false, (int)shellProcessId);
+        if (shell == IntPtr.Zero) {
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "could not open the desktop shell process");
+        }
+        var attributes = IntPtr.Zero;
+        var parentHandle = IntPtr.Zero;
+        var attributesInitialized = false;
+        try {
+            var size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            attributes = Marshal.AllocHGlobal(size);
+            if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref size)) {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+            attributesInitialized = true;
+            // CreateProcess reads the handle through this pointer, so it must outlive the call.
+            parentHandle = Marshal.AllocHGlobal(IntPtr.Size);
+            Marshal.WriteIntPtr(parentHandle, shell);
+            if (!UpdateProcThreadAttribute(attributes, 0, (IntPtr)procThreadAttributeParentProcess, parentHandle, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero)) {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+            var startup = new STARTUPINFOEX();
+            startup.StartupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+            startup.StartupInfo.dwFlags = startfUseShowWindow;
+            startup.StartupInfo.wShowWindow = swShowNoActivate;
+            startup.lpAttributeList = attributes;
+            PROCESS_INFORMATION process;
+            var commandLine = new System.Text.StringBuilder("\"" + executable + "\"");
+            if (!CreateProcess(executable, commandLine, IntPtr.Zero, IntPtr.Zero, false, extendedStartupInfoPresent, IntPtr.Zero, workingDirectory, ref startup, out process)) {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            return process.dwProcessId;
+        } finally {
+            if (attributesInitialized) { DeleteProcThreadAttributeList(attributes); }
+            if (attributes != IntPtr.Zero) { Marshal.FreeHGlobal(attributes); }
+            if (parentHandle != IntPtr.Zero) { Marshal.FreeHGlobal(parentHandle); }
+            CloseHandle(shell);
+        }
+    }
+
+    // Bottom of the z-order without activating: the window stays restored and drivable but covers nothing.
+    public static bool SendWindowToBack(IntPtr hwnd) {
+        const uint swpNoSize = 0x0001;
+        const uint swpNoMove = 0x0002;
+        const uint swpNoActivate = 0x0010;
+        return SetWindowPos(hwnd, new IntPtr(1), 0, 0, 0, 0, swpNoSize | swpNoMove | swpNoActivate);
+    }
 }
 "@
 
@@ -1453,6 +1570,80 @@ function Get-OrcaWindowList([string]$Query) {
     }
 }
 
+function Resolve-OrcaLaunchExecutable([string]$Query) {
+    $needle = $Query.Trim()
+    if ([System.IO.Path]::IsPathRooted($needle)) {
+        if (Test-Path -LiteralPath $needle -PathType Leaf) { return $needle }
+        throw "appNotFound(`"$Query`")"
+    }
+    $exe = if ($needle.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $needle } else { "$needle.exe" }
+    $command = Get-Command -Name $exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $command) { return [string]$command.Source }
+    # Why: Start-Process finds apps such as chrome.exe through App Paths, which PATH lookup misses.
+    foreach ($hive in @("HKCU:", "HKLM:")) {
+        $entry = Get-ItemProperty -LiteralPath "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$exe" -ErrorAction SilentlyContinue
+        if ($null -eq $entry -or [string]::IsNullOrWhiteSpace([string]$entry.'(default)')) { continue }
+        $path = [Environment]::ExpandEnvironmentVariables(([string]$entry.'(default)').Trim('"'))
+        if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+    }
+    throw "appNotFound(`"$Query`")"
+}
+
+function Wait-OrcaLaunchedWindow([int]$ProcessId, [int]$TimeoutMilliseconds) {
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if ($null -eq $process) { return $null }
+        if ($process.MainWindowHandle -ne 0) { return $process }
+        Start-Sleep -Milliseconds 100
+    }
+    Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+}
+
+function New-OrcaLaunchResult($Process, [bool]$Launched) {
+    $owner = [uint32]0
+    [void][OrcaDesktopWin32]::GetWindowThreadProcessId([OrcaDesktopWin32]::GetForegroundWindow(), [ref]$owner)
+    # Why: measured, not taken from the request; an app may raise itself however it was started.
+    $delivery = if ($owner -eq $Process.Id) { "foreground" } else { "background" }
+    [pscustomobject]@{ ok = $true; app = New-OrcaAppRecord $Process; launched = $Launched; delivery = $delivery }
+}
+
+function Invoke-OrcaLaunchApp($Operation) {
+    $query = ([string]$Operation.app).Trim()
+    if ([string]::IsNullOrWhiteSpace($query)) { throw 'appNotFound("")' }
+    $processName = [System.IO.Path]::GetFileNameWithoutExtension($query)
+    # Why: starting a running app again usually opens a second window over the user's work.
+    $running = Get-OrcaWindowProcesses | Where-Object { $_.ProcessName -ieq $processName } | Select-Object -First 1
+    if ($null -ne $running) {
+        Assert-OrcaProcessAllowed $running
+        return New-OrcaLaunchResult $running $false
+    }
+
+    $executable = Resolve-OrcaLaunchExecutable $query
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($executable).ToLowerInvariant().Replace(" ", "")
+    foreach ($fragment in $BlockedAppFragments) {
+        if ($name.Contains($fragment.Replace(" ", ""))) { throw "appBlocked(`"$name`")" }
+    }
+    $activate = [bool]$Operation.activate
+    try {
+        $processId = if ($activate) {
+            (Start-Process -FilePath $executable -PassThru).Id
+        } else {
+            [OrcaDesktopWin32]::LaunchWithoutForeground($executable, [System.IO.Path]::GetDirectoryName($executable))
+        }
+    } catch {
+        throw "app_launch_failed: could not launch '$query': $($_.Exception.Message)"
+    }
+    $process = Wait-OrcaLaunchedWindow $processId 10000
+    if ($null -eq $process) {
+        throw "app_launch_failed: the process started for '$query' exited; if it handed off to another process, find that one with list-apps"
+    }
+    if (-not $activate -and $process.MainWindowHandle -ne 0) {
+        [void][OrcaDesktopWin32]::SendWindowToBack([IntPtr]$process.MainWindowHandle)
+    }
+    New-OrcaLaunchResult $process $true
+}
+
 function Get-OrcaHandshake {
     [pscustomobject]@{
         platform = "win32"
@@ -1460,7 +1651,7 @@ function Get-OrcaHandshake {
         providerVersion = "1.0.0"
         protocolVersion = 1
         supports = [pscustomobject]@{
-            apps = [pscustomobject]@{ list = $true; bundleIds = $false; pids = $true }
+            apps = [pscustomobject]@{ list = $true; bundleIds = $false; pids = $true; launch = $true }
             windows = [pscustomobject]@{ list = $true; targetById = $true; targetByIndex = $true; focus = $false; moveResize = $false }
             observation = [pscustomobject]@{ screenshot = $true; annotatedScreenshot = $false; elementFrames = $true; ocr = $false; disabledState = $true }
             actions = [pscustomobject]@{
@@ -2010,6 +2201,9 @@ function Invoke-OrcaOperation($Operation) {
     if ($Operation.tool -eq "list_windows") {
         $list = Get-OrcaWindowList $Operation.app
         return [pscustomobject]@{ ok = $true; app = $list.app; windows = @($list.windows) }
+    }
+    if ($Operation.tool -eq "launch_app") {
+        return Invoke-OrcaLaunchApp $Operation
     }
     if ($Operation.tool -eq "get_app_state") {
         return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) $Operation.root }
