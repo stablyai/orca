@@ -1,5 +1,4 @@
 import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
@@ -45,7 +44,11 @@ async function startFixture(): Promise<{ server: Server; origin: string }> {
     }
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return { server, origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('fixture server has no port')
+  }
+  return { server, origin: `http://127.0.0.1:${address.port}` }
 }
 
 function readPagePlacements(page: Page, worktreeId: string): Promise<Record<string, string>> {
@@ -105,9 +108,9 @@ async function clickInGuest(
       const guest = webContents
         .getAllWebContents()
         .find((contents) => contents.getType() === 'webview' && contents.getURL() === url)!
-      const { x, y } = (await guest.executeJavaScript(
+      const { x, y }: { x: number; y: number } = await guest.executeJavaScript(
         `(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } })()`
-      )) as { x: number; y: number }
+      )
       guest.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
       guest.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
     },
@@ -118,6 +121,7 @@ async function clickInGuest(
 test('a This-device page opens new tabs on this device and keeps OAuth popups working', async ({
   testRepoPath
 }, testInfo) => {
+  // Boots a headless host and a paired client, then waits on two tab creations and a popup round trip.
   test.setTimeout(300_000)
   const { server, origin } = await startFixture()
   const host = await launchHeadlessPairedRuntimeHost()
