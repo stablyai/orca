@@ -20,7 +20,7 @@ import {
 import { cn } from '@/lib/class-names'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger } from '@/components/ui/popover'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../linear/task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../mutations/task-page-github-work-item-mutation-types'
 import {
   mergeReviewerSuggestions,
   resolveTaskPullRequestRepo
