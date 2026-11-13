@@ -45,7 +45,7 @@ export const FIXTURE_SECRETS: Record<CloudSecretScope, CloudSecretView[]> = {
     view('personal', 'ANTHROPIC_API_KEY', 'agent_key', 'x7Qa', 2),
     view('personal', 'GITHUB_PACKAGES_TOKEN', 'env', '9fd2', 50),
     view('personal', 'SENTRY_ENV', 'env', null, 400),
-    // Not swappable at egress: shows "Real value in sandbox".
+    // Not swappable at egress: no tag on its row (the Add/Replace and paste views warn).
     view('personal', 'AWS_ACCESS_KEY_ID', 'agent_key', 'Q7MP', 6),
     view('personal', 'AWS_SECRET_ACCESS_KEY', 'agent_key', 'k2Vd', 6),
     view('personal', 'OPENROUTER_API_KEY', 'env', 'r9Tw', 8)

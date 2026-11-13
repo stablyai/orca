@@ -82,7 +82,7 @@ function SecretRow({
           <code title={secret.name} className="min-w-0 font-mono text-xs break-all">
             {secret.name}
           </code>
-          <CloudSecretChips name={secret.name} kind={secret.kind} />
+          <CloudSecretChips name={secret.name} />
         </span>
         <span className="w-[9ch] shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground">
           <span aria-hidden>{maskedHint(secret.hint)}</span>
