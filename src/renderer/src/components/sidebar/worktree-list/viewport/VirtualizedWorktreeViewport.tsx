@@ -377,7 +377,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     >
       <div
         ref={setScrollRootRef}
-        data-worktree-sidebar
+        data-worktree-sidebar={groupBy === 'workspace-status' ? 'workspace-status' : 'true'}
         tabIndex={0}
         role="listbox"
         aria-label={t('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}

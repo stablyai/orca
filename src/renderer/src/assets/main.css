@@ -1604,6 +1604,27 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+[data-worktree-sidebar='workspace-status']
+  [data-worktree-card-surface]:not([data-worktree-card-active]):not([data-worktree-card-selected]) {
+  border-color: color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent);
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 5%, transparent);
+}
+
+[data-worktree-sidebar='workspace-status']
+  [data-worktree-card-surface].worktree-sidebar-card-hover:hover:not(
+    [data-worktree-card-active]
+  ):not([data-worktree-card-selected]) {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+}
+
+.dark
+  [data-worktree-sidebar='workspace-status']
+  [data-worktree-card-surface].worktree-sidebar-card-hover:hover:not(
+    [data-worktree-card-active]
+  ):not([data-worktree-card-selected]) {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
+}
+
 /* Why: one multi-selected look for every list on the card surface (workspaces and
    agents); after the hover rules so it wins, and never on the active/open row. */
 [data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active]) {
