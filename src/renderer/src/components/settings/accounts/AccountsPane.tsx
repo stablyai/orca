@@ -53,14 +53,10 @@ import type {
   RenameAccountTarget
 } from './accounts-pane-types'
 import { AccountRenameDialog } from './account-rename-dialog'
-import { createAccountRenameRunner } from './account-rename-runner'
 import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './scope/accounts-pane-runtime'
 import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-runtime-label'
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
-import {
-  createClaudeAccountActionRunner,
-  createCodexAccountActionRunner
-} from './accounts-pane-account-actions'
+import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
@@ -269,40 +265,26 @@ export function AccountsPane({
     }
   }, [scopeEnvironmentId])
 
-  const runCodexAccountAction = createCodexAccountActionRunner({
-    settings,
-    accountOwner,
-    isCurrentAccountOwner,
-    accountRuntime,
-    isRemoteAccountScope,
-    codexAccounts,
-    setCodexAccounts,
-    setCodexAccountsLoaded,
-    setCodexAction,
-    fetchSettings,
-    recordFeatureInteraction
-  })
-  const runClaudeAccountAction = createClaudeAccountActionRunner({
-    accountOwner,
-    isCurrentAccountOwner,
-    accountRuntime,
-    isRemoteAccountScope,
-    claudeAccounts,
-    setClaudeAccounts,
-    setClaudeAction,
-    fetchSettings,
-    recordFeatureInteraction
-  })
-  const renameAccount = createAccountRenameRunner({
-    accountOwner,
-    hostLabel: accountRuntimeSentenceLabel,
-    isCurrentAccountOwner,
-    isRemoteAccountScope,
-    setClaudeAccounts,
-    setCodexAccounts,
-    fetchSettings,
-    setRenamingAccountKeys
-  })
+  // One construction site: each runner reads the owner ref only when its action settles.
+  const { runCodexAccountAction, runClaudeAccountAction, renameAccount } =
+    createAccountsPaneRunners({
+      settings,
+      accountOwner,
+      hostLabel: accountRuntimeSentenceLabel,
+      isCurrentAccountOwner,
+      accountRuntime,
+      isRemoteAccountScope,
+      codexAccounts,
+      setCodexAccounts,
+      setCodexAccountsLoaded,
+      setCodexAction,
+      claudeAccounts,
+      setClaudeAccounts,
+      setClaudeAction,
+      setRenamingAccountKeys,
+      fetchSettings,
+      recordFeatureInteraction
+    })
   const model: AccountsPaneSectionModel = {
     settings,
     accountOwner,
