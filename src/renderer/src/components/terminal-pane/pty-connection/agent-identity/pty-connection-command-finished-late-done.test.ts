@@ -180,13 +180,7 @@ describe('command-finished drop and a Done that lands after it', () => {
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
-    const realStore = createTestStore(
-      (
-        await vi.importMock<PtyConnectionAgentTitleMocks>(
-          '@/lib/agent-status/aggregation/worktree-agent-status'
-        )
-      ).isClaudeAgent
-    )
+    const realStore = createTestStore()
     mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
       delete mockStoreState.agentStatusByPaneKey[key]
     })

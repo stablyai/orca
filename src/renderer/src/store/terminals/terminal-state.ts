@@ -34,6 +34,9 @@ import type { TerminalActions } from './terminal-actions'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PairedTerminalTabCloseIntentSlice } from './retirement/paired-terminal-tab-close-intent-actions'
 
+/** A pane's prompt-cache state for its agent session: 'requested' once it sent a request, then the countdown start (ms). */
+export type PromptCacheTimerEntry = number | 'requested'
+
 export type TerminalState = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -141,7 +144,7 @@ export type TerminalState = {
       cwd: string
     }
   >
-  cacheTimerByKey: Record<string, number | null>
+  cacheTimerByKey: Record<string, PromptCacheTimerEntry>
   lastTerminalInputAtByPaneKey: Record<string, number>
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>

@@ -25,12 +25,11 @@ import { createWorkspaceTerminalHydrationActions } from './hydration/workspace-t
 import { createWorkspaceTerminalReconnectActions } from './hydration/workspace-terminal-reconnect'
 import { createPairedTerminalTabCloseIntentSlice } from './retirement/paired-terminal-tab-close-intent-actions'
 
-export const createTerminalSlice: (
-  ...args: [
-    ...Parameters<StateCreator<AppState, [], [], TerminalSlice>>,
-    isClaudeAgent?: Parameters<typeof createTerminalEphemeralActions>[2]
-  ]
-) => TerminalSlice = (set, get, api, isClaudeAgent = undefined) => ({
+export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (
+  set,
+  get,
+  api
+) => ({
   tabsByWorktree: {},
   activeTabId: null,
   activeTabIdByWorktree: {},
@@ -78,7 +77,7 @@ export const createTerminalSlice: (
   cacheTimerByKey: {},
   lastTerminalInputAtByPaneKey: {},
   recentQuickCommandIdByGroup: {},
-  ...createTerminalEphemeralActions(set, get, isClaudeAgent),
+  ...createTerminalEphemeralActions(set, get),
   ...createTerminalTabCreationActions(set, get, api.subscribe),
   ...createTerminalTabAgentLaunchPaneActions(set),
   ...createActiveWorkspaceTerminalActions(set, get),

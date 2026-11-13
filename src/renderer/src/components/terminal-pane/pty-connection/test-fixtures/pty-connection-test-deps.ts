@@ -6,7 +6,7 @@ import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 
 export type PtyConnectionAgentTitleMocks = Required<
-  Pick<PtyConnectionDeps, 'detectAgentStatusFromTitle' | 'isClaudeAgent' | 'isGeminiTerminalTitle'>
+  Pick<PtyConnectionDeps, 'detectAgentStatusFromTitle' | 'isGeminiTerminalTitle'>
 >
 
 export function bindPaneAgentTitleMocks<T extends object>(
@@ -15,7 +15,6 @@ export function bindPaneAgentTitleMocks<T extends object>(
 ) {
   return Object.assign(deps, {
     detectAgentStatusFromTitle: mocks.detectAgentStatusFromTitle,
-    isClaudeAgent: mocks.isClaudeAgent,
     isGeminiTerminalTitle: mocks.isGeminiTerminalTitle
   })
 }
@@ -58,7 +57,7 @@ export type PaneConnectionDeps = {
 }
 
 export function buildPaneConnectionDeps(
-  getState: () => Pick<StoreState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
+  getState: () => Pick<StoreState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'cacheTimerByKey'>,
   overrides: Record<string, unknown> = {}
 ): PaneConnectionDeps {
   return {
@@ -98,7 +97,10 @@ export function buildPaneConnectionDeps(
     markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
-    setCacheTimerStartedAt: vi.fn(),
+    setCacheTimerStartedAt: vi.fn((key: string, entry: number | 'requested' | null) => {
+      const { [key]: _previous, ...rest } = getState().cacheTimerByKey
+      getState().cacheTimerByKey = entry === null ? rest : { ...rest, [key]: entry }
+    }),
     syncPanePtyLayoutBinding: vi.fn((paneId: number, ptyId: string) => {
       const layout = getState().terminalLayoutsByTabId?.['tab-1']
       if (layout) {

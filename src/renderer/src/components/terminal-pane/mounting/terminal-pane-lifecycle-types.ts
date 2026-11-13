@@ -1,3 +1,4 @@
+import type { PromptCacheTimerEntry } from '@/store/terminals/terminal-state'
 import type { HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester } from '@/lib/browser/navigation/http-link-destinations'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../../shared/notification-source'
@@ -93,7 +94,7 @@ export type UseTerminalPaneLifecycleDeps = {
     paneKey?: string
     agentStatusSnapshot?: ParsedAgentStatusPayload
   }) => void
-  setCacheTimerStartedAt: (key: string, ts: number | null) => void
+  setCacheTimerStartedAt: (key: string, entry: PromptCacheTimerEntry | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   syncPanePtyLayoutBindingForLeaf?: (
     leafId: string,

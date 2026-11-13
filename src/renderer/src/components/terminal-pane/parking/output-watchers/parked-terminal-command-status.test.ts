@@ -22,6 +22,8 @@ type MockStoreState = {
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
+  cacheTimerByKey: Record<string, number | 'requested'>
+  setCacheTimerStartedAt: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>
@@ -54,6 +56,14 @@ function makeMockStoreState(): MockStoreState {
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     runtimePaneTitlesByTabId: { [TAB_ID]: { [PANE_ID]: '✳ Build feature' } },
+    cacheTimerByKey: {},
+    setCacheTimerStartedAt: vi.fn((key: string, entry: number | 'requested' | null) => {
+      if (entry === null) {
+        delete mockStoreState.cacheTimerByKey[key]
+      } else {
+        mockStoreState.cacheTimerByKey[key] = entry
+      }
+    }),
     setAgentStatus: vi.fn(),
     dropAgentStatus: vi.fn(),
     clearAgentLaunchConfig: vi.fn(),
@@ -130,6 +140,42 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
       await flushMicrotasks()
 
       expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalled()
+    })
+
+    it("keeps a live Claude's cache session through a nested shell's leaked 133;D", async () => {
+      mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+        agent: 'claude',
+        shellForeground: false
+      }
+      confirmForegroundProcess.mockResolvedValue('claude')
+      mockStoreState.cacheTimerByKey[PANE_KEY] = 1_000
+      const policy = await createPolicy(PTY_ID_LOCAL)
+      // Claude titles the pane with bare task text.
+      policy.observeTitle('Build feature')
+
+      policy.onCommandFinished(0)
+      await flushMicrotasks()
+
+      expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe(1_000)
+      policy.dispose()
+    })
+
+    it("keeps a live Claude's cache session through two leaked 133;D before the read lands", async () => {
+      mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+        agent: 'claude',
+        shellForeground: false
+      }
+      confirmForegroundProcess.mockResolvedValue('claude')
+      mockStoreState.cacheTimerByKey[PANE_KEY] = 1_000
+      const policy = await createPolicy(PTY_ID_LOCAL)
+      policy.observeTitle('✳ Build feature')
+
+      policy.onCommandFinished(0)
+      policy.onCommandFinished(0)
+      await flushMicrotasks()
+
+      expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe(1_000)
+      policy.dispose()
     })
   })
 

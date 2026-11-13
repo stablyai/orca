@@ -126,7 +126,8 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
     if (endedNotice) {
       retireTerminalNoticeLifetime(endedNotice)
     }
-    // Abrupt exits may omit title reset; always clear the cache countdown.
+    // Abrupt exits may omit title reset; always end the cache session.
+    session.endPromptCacheWaitsOnCommandStarted?.()
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     useAppStore.getState().removeAgentStatus(session.cacheKey)
     useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)

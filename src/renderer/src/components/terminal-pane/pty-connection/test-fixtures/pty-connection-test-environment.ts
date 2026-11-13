@@ -22,7 +22,6 @@ export function buildAgentStatusModuleMock(
   return {
     ...actual,
     isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title)),
-    isClaudeAgent: vi.fn(() => false),
     detectAgentStatusFromTitle: vi.fn((title: string) => {
       if (/Claude (working|done)/.test(title)) {
         return /working/.test(title) ? 'working' : 'idle'

@@ -276,6 +276,7 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
         session.agentTaskCompleteSettingsUnsubscribe = null
       }
       session.windowsPtyModel.dispose()
+      session.restoredCacheTimer?.dispose()
       if (session.unsubscribeWindowsDoneTerminalModeReset !== null) {
         session.unsubscribeWindowsDoneTerminalModeReset()
         session.unsubscribeWindowsDoneTerminalModeReset = null

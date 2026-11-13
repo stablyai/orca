@@ -89,7 +89,7 @@ describe('setActiveWorktree', () => {
         [wt]: [orphanId]
       },
       cacheTimerByKey: {
-        [`${orphanId}:seed`]: 123
+        [`${orphanId}:22222222-2222-4222-8222-222222222222`]: 123
       },
       activeTabId: orphanId,
       activeTabIdByWorktree: {
@@ -109,7 +109,7 @@ describe('setActiveWorktree', () => {
     expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
     expect(s.automaticAgentResumeClaimsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingInitialCwdByTabId[orphanId]).toBeUndefined()
-    expect(s.cacheTimerByKey[`${orphanId}:seed`]).toBeUndefined()
+    expect(s.cacheTimerByKey[`${orphanId}:22222222-2222-4222-8222-222222222222`]).toBeUndefined()
     const replacementLayout = s.terminalLayoutsByTabId[replacement.id]
     expect(replacementLayout?.root).toEqual({
       type: 'leaf',

@@ -65,7 +65,7 @@ export type StoreState = {
   sshConnectionStates: Map<string, { status: string }>
   sshTargetLabels?: Map<string, string>
   transientClearedAgentStatusConnectionIds: Record<string, true>
-  cacheTimerByKey: Record<string, number | null>
+  cacheTimerByKey: Record<string, number | 'requested'>
   settings: {
     theme?: 'system' | 'dark' | 'light'
     promptCacheTimerEnabled?: boolean

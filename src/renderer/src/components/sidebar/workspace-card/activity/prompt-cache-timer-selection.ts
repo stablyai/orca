@@ -1,4 +1,5 @@
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import type { PromptCacheTimerEntry } from '@/store/terminals/terminal-state'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
 export type PromptCacheCountdownSelection = {
@@ -13,7 +14,7 @@ function getCacheTimerTabId(key: string): string | null {
 
 export function getMostUrgentPromptCacheStartedAt(
   tabs: readonly Pick<TerminalTab, 'id'>[] | undefined,
-  cacheTimerByKey: Record<string, number | null>
+  cacheTimerByKey: Record<string, PromptCacheTimerEntry>
 ): number | null {
   if (!tabs || tabs.length === 0) {
     return null
@@ -21,7 +22,7 @@ export function getMostUrgentPromptCacheStartedAt(
   const tabIds = new Set(tabs.map((tab) => tab.id))
   let oldest: number | null = null
   for (const [key, startedAt] of Object.entries(cacheTimerByKey)) {
-    if (startedAt == null) {
+    if (typeof startedAt !== 'number') {
       continue
     }
     const tabId = getCacheTimerTabId(key)
@@ -37,12 +38,12 @@ export function getMostUrgentPromptCacheStartedAt(
 
 export function getPromptCacheCountdownForPane(
   paneKey: string,
-  cacheTimerByKey: Record<string, number | null>,
+  cacheTimerByKey: Record<string, PromptCacheTimerEntry>,
   ttlMs: number
 ): PromptCacheCountdownSelection | null {
   if (ttlMs <= 0 || parsePaneKey(paneKey) === null) {
     return null
   }
   const startedAt = cacheTimerByKey[paneKey]
-  return startedAt == null ? null : { startedAt, ttlMs }
+  return typeof startedAt === 'number' ? { startedAt, ttlMs } : null
 }
