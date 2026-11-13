@@ -26,7 +26,7 @@ import {
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'
 import { nonInteractiveGitEnv } from './git-environment/git-process-env'
-import { acquireGitAdmission } from './admission/git-subprocess-admission'
+import { acquireGitAdmission, releaseGitAdmissionAfter } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
@@ -187,12 +187,7 @@ async function gitExecFileAsyncUnlocked(
           options.canStart
         )
       } finally {
-        const termination = terminationState.current
-        if (termination) {
-          void termination.then(grant.release)
-        } else {
-          grant.release()
-        }
+        releaseGitAdmissionAfter(terminationState.current, grant)
       }
     }
   )

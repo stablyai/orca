@@ -54,7 +54,10 @@ export const gitApi = {
   atRiskLocalFiles: (args: {
     worktreePath: string
     connectionId?: string
+    requestToken?: string
   }): Promise<WorktreeAtRiskLocalFiles> => ipcRenderer.invoke('git:atRiskLocalFiles', args),
+  cancelAtRiskLocalFiles: (args: { requestToken: string }): Promise<void> =>
+    ipcRenderer.invoke('git:cancelAtRiskLocalFiles', args),
   findHugeFoldersToIgnore: (args: { worktreePath: string }): Promise<string[]> =>
     ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>

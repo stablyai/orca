@@ -18751,7 +18751,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "開啟方式（焦點不在可編輯欄位時）"
+            "openWith": "開啟方式（在 Orca 文字欄位中輸入時除外）"
           }
         },
         "pluginInstallCount": {
@@ -19482,8 +19482,7 @@
         "stateBlockedCount_other": "受阻：{{value0}}",
         "stateDoneCount_other": "已完成：{{value0}}",
         "stateIdleCount_other": "已停止：{{value0}}",
-        "stateUnverifiableCount_other": "狀態不可用：{{value0}}",
-        "showAgent": "在對話中顯示 {{value0}}"
+        "stateUnverifiableCount_other": "狀態不可用：{{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
       "newRowsAnnouncement": "你離開期間有新訊息",

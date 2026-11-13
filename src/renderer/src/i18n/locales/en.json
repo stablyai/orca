@@ -19998,7 +19998,7 @@
         },
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Open with (when focus is not in an editable field)"
+            "openWith": "Open with (except while typing in an Orca text field)"
           }
         },
         "pluginInstallCount": {
@@ -20926,7 +20926,7 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "showAgent": "Show {{value0}} in the conversation"
+        "openAgent": "Open {{value0}}"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -21077,7 +21077,25 @@
         "started_one": "Kicked off {{count}} subagent",
         "started_other": "Kicked off {{count}} subagents",
         "ran_one": "Ran {{count}} subagent",
-        "ran_other": "Ran {{count}} subagents"
+        "ran_other": "Ran {{count}} subagents",
+        "backToMain": "Back to main agent",
+        "mainAgent": "Main agent",
+        "promptFromMain": "Prompt from main agent",
+        "clickToOpen": "Click to open",
+        "backTo": "Back to {{value0}}",
+        "path": "Subagent path",
+        "stateHeading": {
+          "completed": "Completed",
+          "working": "Working",
+          "idle": "Idle",
+          "failed": "Failed",
+          "stopped": "Stopped",
+          "unverifiable": "Status unavailable"
+        },
+        "noSteps": "No steps yet",
+        "beforeClear": "This subagent ran before the chat was cleared",
+        "stoppedBeforeReply": "Stopped before replying",
+        "noReply": "Ended without a reply"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",

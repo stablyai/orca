@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from '../../../runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { useAppStore } from '../../../store/index'
+import { markHydratedBrowserPageHandles } from '../../../store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { openWorkspaceBrowserTab } from './workspace-browser-tab-open'
 import { resetWebSessionBrowserPlacementsForTests } from '../../../runtime/browser/placement/web-session-browser-placement'
 import {
@@ -36,9 +37,21 @@ vi.mock(
 
 const initialState = useAppStore.getInitialState()
 
+function resetBrowserPlacementStore(): void {
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
+}
+
 describe('workspace URL tab placement', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    resetBrowserPlacementStore()
     resetWebSessionTabsSyncTestState()
     resetWebSessionBrowserPlacementsForTests()
     resetHostPages()
@@ -56,7 +69,7 @@ describe('workspace URL tab placement', () => {
     vi.unstubAllGlobals()
     resetWebSessionTabsSyncTestState()
     resetWebSessionBrowserPlacementsForTests()
-    useAppStore.setState(initialState, true)
+    resetBrowserPlacementStore()
   })
 
   it.each([true, false])(

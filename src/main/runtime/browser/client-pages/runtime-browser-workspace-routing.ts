@@ -1,3 +1,9 @@
+import {
+  actOnRuntimeBrowserInitialization,
+  captureRuntimeBrowserInitializationAction
+} from './runtime-browser-page-initialization-action'
+import type { BrowserPageInitializationActionParams } from '../../../../shared/browser/client-hosting/browser-page-initialization-action'
+import type { z } from 'zod'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import '../../../browser/network/execution-routes/browser-network-execution-route'
@@ -23,6 +29,35 @@ import type { RpcContext } from '../../rpc/core'
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
 
 export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
+  async actOnClientPageInitialization(
+    params: z.infer<typeof BrowserPageInitializationActionParams>
+  ): Promise<void> {
+    const pages = getRuntimeBrowserPageRegistry(this)
+    const authority = getBrowserHostLeaseRegistry(this)
+    const current = captureRuntimeBrowserInitializationAction(
+      pages,
+      authority,
+      params.page,
+      params.expectedPlacement
+    )
+    const workspace = await this.resolveBrowserWorkspace(params.worktree)
+    const page = current()
+    if (page.workspaceId !== workspace.id) {
+      throw new Error('browser_page_workspace_mismatch')
+    }
+    const completion = actOnRuntimeBrowserInitialization({
+      pages,
+      authority,
+      page,
+      action: params.action,
+      explicitUrl: true,
+      resolveExecutionHostKey: (id) => this.resolveBrowserExecutionHostKeyForWorkspace(id),
+      notifyWorkspace: (id) => this.notifyMobileSessionTabsChanged(id)
+    })
+    // This UI action acknowledges accepted intent; the command owns load completion.
+    void completion.catch(() => {})
+  }
+
   /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */
   async resolveBrowserExecutionHostKeyForWorkspace(
     workspaceId: string
@@ -56,6 +91,8 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
       caller,
       pages: getRuntimeBrowserPageRegistry(this),
       leases: getBrowserHostLeaseRegistry(this),
+      resolveExecutionHostKey: (id) => this.resolveBrowserExecutionHostKeyForWorkspace(id),
+      notifyWorkspace: (id) => this.notifyMobileSessionTabsChanged(id),
       resolveWorkspace: (selector) =>
         resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector)
     })

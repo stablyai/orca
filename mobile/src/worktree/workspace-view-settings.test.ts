@@ -33,18 +33,6 @@ describe('the other-client filter on an older desktop', () => {
 })
 
 describe('applyDesktopViewSettings', () => {
-  it("falls back to the desktop's legacy host scope when no host list is saved", () => {
-    const scoped = applyDesktopViewSettings(base, {
-      visibleWorkspaceHostIds: null,
-      workspaceHostScope: 'ssh:box'
-    })
-    expect(scoped.filters.visibleHostIds).toEqual(['ssh:box'])
-    expect(
-      applyDesktopViewSettings(scoped, { visibleWorkspaceHostIds: null, workspaceHostScope: 'all' })
-        .filters.visibleHostIds
-    ).toBeNull()
-  })
-
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {
     const newerGroup: WorkspaceViewSettings = JSON.parse('{"groupBy":"mystery"}')
     const next = applyDesktopViewSettings(base, newerGroup)

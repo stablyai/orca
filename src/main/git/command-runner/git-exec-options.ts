@@ -38,3 +38,17 @@ export type GitExecOptions = {
   /** Observe stderr without changing capture/errors; incompatible with terminationBarrier. */
   onStderr?: (chunk: string) => void
 }
+
+export type GitBufferExecOptions = {
+  cwd: string
+  maxBuffer?: number
+  timeout?: number
+  timeoutMsForTest?: number
+  env?: NodeJS.ProcessEnv
+  wslDistro?: string
+  preferWslDirectGit?: boolean
+  admissionTier?: GitAdmissionTier
+  signal?: AbortSignal
+  stdin?: string
+  executionContext?: GitExecutionContext
+}

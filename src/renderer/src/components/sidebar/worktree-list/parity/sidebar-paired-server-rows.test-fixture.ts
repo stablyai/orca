@@ -12,7 +12,7 @@ import {
   pairedServerRowOfWorktree,
   type PairedServerHostFacts,
   type PairedServerWorkspaceRow
-} from '../../../../../../shared/sidebar-list/paired-server-rows'
+} from '../../../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import { describePairedServerHosts } from '../../../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'

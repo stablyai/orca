@@ -3,16 +3,15 @@ import {
   pendingWslGitPathPreparation,
   captureGitExecutionContext,
   assertPreparedGitCommand,
-  gitResultWithExecutionContext,
-  type GitExecutionContext
+  gitResultWithExecutionContext
 } from './host-routing/wsl-git-path-preparation'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+import type { GitBufferExecOptions } from './git-exec-options'
 import {
   pendingWslDirectGitReadEnvironment,
   resolveGitCommand
 } from './host-routing/git-command-resolution'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
-import { acquireGitAdmission } from './admission/git-subprocess-admission'
+import { acquireGitAdmission, releaseGitAdmissionAfter } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
@@ -26,19 +25,7 @@ import { gitRunsIn } from './host-routing/git-runs-in'
 
 async function gitExecFileAsyncBufferInSpan(
   args: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    timeout?: number
-    timeoutMsForTest?: number
-    env?: NodeJS.ProcessEnv
-    wslDistro?: string
-    preferWslDirectGit?: boolean
-    admissionTier?: GitAdmissionTier
-    signal?: AbortSignal
-    stdin?: string
-    executionContext?: GitExecutionContext
-  }
+  options: GitBufferExecOptions
 ): Promise<{ stdout: Buffer }> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
     const checkoutRoutingReady = pendingWslGitPathPreparation(args, options)
@@ -98,11 +85,7 @@ async function gitExecFileAsyncBufferInSpan(
         resolved.executionContext
       )
     } finally {
-      if (termination) {
-        void termination.then(grant.release)
-      } else {
-        grant.release()
-      }
+      releaseGitAdmissionAfter(termination, grant)
     }
   })
 }

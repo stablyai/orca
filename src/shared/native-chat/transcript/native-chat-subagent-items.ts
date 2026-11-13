@@ -152,29 +152,37 @@ function groupRow(groupId: string, members: readonly NativeChatMessage[]): Nativ
   return row
 }
 
-/** Disambiguate duplicate provider labels with ordinals that avoid existing names, including provider-authored Audit 2. */
-function labelledEntries(blocks: readonly NativeChatSubagentBlock[]): NativeChatSubagentEntry[] {
+/** Disambiguate duplicate labels with ordinals that avoid existing names, including provider-authored Audit 2. */
+export function disambiguateSubagentLabels(labels: readonly string[]): string[] {
   const taken = new Set<string>()
   const repeated = new Set<string>()
-  for (const block of blocks) {
-    if (taken.has(block.label)) {
-      repeated.add(block.label)
+  for (const label of labels) {
+    if (taken.has(label)) {
+      repeated.add(label)
     }
-    taken.add(block.label)
+    taken.add(label)
   }
   const claimed = new Set<string>()
   // Both sets only grow, so a label's search resumes past its last ordinal instead of rescanning from 2.
   const nextOrdinal = new Map<string, number>()
-  return blocks.map((block) => {
-    let label = block.label
+  return labels.map((base) => {
+    let label = base
     if (repeated.has(label) && claimed.has(label)) {
-      let ordinal = nextOrdinal.get(block.label) ?? 2
+      let ordinal = nextOrdinal.get(base) ?? 2
       for (; taken.has(label) || claimed.has(label); ordinal++) {
-        label = `${block.label} ${ordinal}`
+        label = `${base} ${ordinal}`
       }
-      nextOrdinal.set(block.label, ordinal)
+      nextOrdinal.set(base, ordinal)
     }
     claimed.add(label)
+    return label
+  })
+}
+
+function labelledEntries(blocks: readonly NativeChatSubagentBlock[]): NativeChatSubagentEntry[] {
+  const labels = disambiguateSubagentLabels(blocks.map((block) => block.label))
+  return blocks.map((block, index) => {
+    const label = labels[index]!
     const held = foldedEntries.get(block)
     if (held?.label === label) {
       return held
