@@ -62,7 +62,7 @@ it('matches a legacy caption after the CLI echoes its attached file path', () =>
   const pending = [{ ...gluePending('image', 'look'), imagePaths: ['/tmp/a.png'] }]
   const messages = [
     GLUE_BOUNDARY,
-    userMessage('image-row', '@/tmp/a.png look', 6000),
+    userMessage('image-row', '/tmp/a.png look', 6000),
     assistantMessage('reply', 'done', 6100)
   ]
   expect(prunePendingSends(pending, messages)).toEqual([])

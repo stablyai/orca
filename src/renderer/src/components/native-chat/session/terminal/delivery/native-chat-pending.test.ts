@@ -87,7 +87,7 @@ it('holds a pathless image receipt through cache remount and paging without recl
       [
         ...replied,
         { ...image, id: 'new-image', timestamp: 130, transcriptOrder: 10 },
-        { ...answer, timestamp: 140, transcriptOrder: 11 }
+        { ...answer, id: 'later-answer', timestamp: 140, transcriptOrder: 11 }
       ],
       session
     )
