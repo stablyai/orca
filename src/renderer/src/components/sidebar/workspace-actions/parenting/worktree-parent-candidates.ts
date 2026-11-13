@@ -10,7 +10,7 @@ import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 import {
   getCyclicProjectedWorktreeLineageIds,
   type SidebarLineageParentIdentities
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   lineageStoreKeyOfRow,
   OWN_LINEAGE_STORE_KEY
