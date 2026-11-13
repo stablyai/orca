@@ -3,8 +3,12 @@
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
 
+// The release workflow sets this only for the Play AAB; Play installs must not offer GitHub updates.
+const IS_PLAY_BUILD = process.env.ORCA_ANDROID_DISTRIBUTION === 'play'
+
 module.exports = ({ config }) => ({
   ...config,
+  ...(IS_PLAY_BUILD && { extra: { ...config.extra, androidDistribution: 'play' } }),
   // `expo run` installs a dev-client build cached for the current native fingerprint instead of
   // rebuilding; scripts/native-client.mjs populates the cache.
   buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },

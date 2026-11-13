@@ -943,8 +943,10 @@
       "desktopTooOldBody": "Eşleştirilmiş bu masaüstü uygulaması, mevcut Orca Mobile sürümünüz için çok eski. Bilgisayarınızdaki Orca'yı güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
       "getVersion": "Orca {{version}} Sürümünü İndir",
       "mobileTooOldAppStore": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı App Store üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "mobileTooOldGooglePlay": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı Google Play üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
       "mobileTooOldGitHubReleases": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
       "openAppStore": "App Store'u Aç",
+      "openGooglePlay": "Google Play'i Aç",
       "openGitHubReleases": "GitHub Releases Sayfasını Aç",
       "refreshRecoveryNote": "Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
       "refreshWorkspaceBody": "Bu sunucu için önbelleğe alınan çalışma alanı, masaüstü uygulamasının beklediğinden daha eski. Güncel sürümü indirmek için bu sunucuya yeniden bağlanın.",
@@ -953,6 +955,7 @@
       "updateMobileTitle": "Orca Mobile'ı güncelleyin",
       "updateRecoveryNote": "Zaten güncellediniz mi? Sunucular bölümüne dönüp bağlantıyı yenileyin. Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
       "workspaceNeedsUpdateAppStore": "Bu masaüstü uygulamasının mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı App Store üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "workspaceNeedsUpdateGooglePlay": "Bu masaüstü uygulamasının mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı Google Play üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
       "workspaceNeedsUpdateGitHubReleases": "Bu masaüstü uygulamasının mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin."
     },
     "richMarkdownEditor": {

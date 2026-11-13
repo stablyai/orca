@@ -939,8 +939,10 @@
       "desktopTooOldBody": "ペアリング済みのデスクトップアプリは、現在の Orca Mobile に対応していない古いバージョンです。コンピュータの Orca を更新して、このホストへの接続を再試行してください。",
       "getVersion": "Orca {{version}} を入手",
       "mobileTooOldAppStore": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "mobileTooOldGooglePlay": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。Google Play から Orca Mobile を更新して、このホストへの接続を再試行してください。",
       "mobileTooOldGitHubReleases": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。",
       "openAppStore": "App Store を開く",
+      "openGooglePlay": "Google Play を開く",
       "openGitHubReleases": "GitHub Releases を開く",
       "refreshRecoveryNote": "このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
       "refreshWorkspaceBody": "このホスト用にキャッシュされたワークスペースは、デスクトップが必要とするバージョンより古くなっています。このホストに再接続して、最新のワークスペースをダウンロードしてください。",
@@ -949,6 +951,7 @@
       "updateMobileTitle": "Orca Mobile を更新",
       "updateRecoveryNote": "すでに更新済みですか？「ホスト」に戻り、接続を更新してください。このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
       "workspaceNeedsUpdateAppStore": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "workspaceNeedsUpdateGooglePlay": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。Google Play から Orca Mobile を更新して、このホストへの接続を再試行してください。",
       "workspaceNeedsUpdateGitHubReleases": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。"
     },
     "richMarkdownEditor": {

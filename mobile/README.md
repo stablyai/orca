@@ -211,6 +211,24 @@ After a release-signed build, the workflow checks that the APK's signing certifi
 release notes. Android only installs an update signed by the same key as the installed app, so
 the keystore must be backed up: losing it means no existing install can be updated in place.
 
+### Google Play
+
+A release-signed run also builds `app-release.aab` (artifact `orca-mobile-aab`) with
+`ORCA_ANDROID_DISTRIBUTION=play`. `app.config.js` turns that into `extra.androidDistribution`, and
+a Play build never checks GitHub for updates or points people at GitHub Releases. Play App Signing
+uses the same key (uploaded with PEPK), so Play and GitHub installs can update each other.
+
+Published runs upload the AAB to Play's internal testing track once these exist; without the secret
+the upload job is skipped:
+
+| Name                             | Kind     | Value                                                                    |
+| -------------------------------- | -------- | ------------------------------------------------------------------------ |
+| `ORCA_PLAY_SERVICE_ACCOUNT_JSON` | secret   | JSON key of a service account with release access in Play Console        |
+| `ORCA_PLAY_RELEASE_STATUS`       | variable | optional; `draft` (default) until the app is published, then `completed` |
+
+Play rejects a versionCode it has seen, so bump `expo.android.versionCode` for every release. An
+AAB uploaded by hand uses up its versionCode too, so the next tagged release needs a higher one.
+
 ## Protocol Version Compatibility
 
 Mobile and desktop talk over a versioned protocol. Because mobile updates lag desktop by 24-48h via the App Store, both sides exchange version numbers on `status.get` so a genuinely incompatible combo can hard-block instead of silently misbehaving.
@@ -238,7 +256,7 @@ Do **not** bump for additive changes:
 
 Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change that requires a minimum mobile version to function safely. Same for `MIN_COMPATIBLE_DESKTOP_VERSION` from the mobile side.
 
-When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS) or GitHub Releases (Android). When desktop is too old it opens GitHub Releases.
+When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS), Google Play (Play builds) or GitHub Releases (other Android builds). When desktop is too old it opens GitHub Releases.
 
 To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/connection/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 
