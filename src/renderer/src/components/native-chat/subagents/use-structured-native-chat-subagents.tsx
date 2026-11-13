@@ -3,7 +3,7 @@ import type { StructuredAgentSubagentRoster } from '../../../../../shared/agent-
 import type { StructuredSessionBackgroundTasksView } from '../../../../../shared/structured-session-background-tasks-view'
 import { NativeChatStructuredSessionStatus } from '../tools/tasks/NativeChatStructuredSessionStatus'
 import { useStructuredSessionTaskStop } from '../tools/tasks/use-structured-session-task-stop'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   backFromNativeChatSubagent,
   closeNativeChatSubagentOnEscape,
@@ -27,6 +27,7 @@ export function useStructuredNativeChatSubagents({
     stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
   }
 }) {
+  const t = useTranslate()
   const open = useNativeChatOpenSubagent(paneKey)
   const openId = open?.agentId ?? null
   const parentId = open?.parentId ?? null
@@ -57,7 +58,7 @@ export function useStructuredNativeChatSubagents({
             parentId === null
               ? undefined
               : (controller.subagentRoster?.get(parentId)?.entry.label ??
-                translate('components.native-chat.subagents.unnamed', 'Subagent'))
+                t('components.native-chat.subagents.unnamed', 'Subagent'))
           }
           onBack={() => backFromNativeChatSubagent(paneKey)}
         />
