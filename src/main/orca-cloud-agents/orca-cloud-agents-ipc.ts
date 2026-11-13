@@ -9,10 +9,6 @@ import {
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
-import {
-  claudeStateFile,
-  readClaudeFolderLogin
-} from '../claude-accounts/sign-in/claude-account-folder'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 import { createAgentCredentialsClient } from './agent-credentials-client'
@@ -61,14 +57,6 @@ function broadcast(setups: OrcaCloudAgentSetups): void {
   }
 }
 
-function readClaudeEmail(): string | null {
-  try {
-    return readClaudeFolderLogin(claudeStateFile(process.env.CLAUDE_CONFIG_DIR))?.email ?? null
-  } catch {
-    return null
-  }
-}
-
 /** The signed-in Orca user, re-read only when the profile index changes (sign-in, sign-out, switch). */
 function orcaIdentityReader(userDataPath: string): () => string | null {
   let cached: { generation: number; identity: string | null } | null = null
@@ -110,7 +98,6 @@ function serviceFor(userDataPath: string): OrcaCloudAgentsService {
         })
       : null,
     spawnSetupToken: spawnClaudeSetupTokenPty,
-    readClaudeEmail,
     openExternal: (url) => shell.openExternal(url),
     broadcast,
     identity: orcaIdentityReader(userDataPath)
