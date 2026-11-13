@@ -30,3 +30,27 @@ it('hides a head-mismatched merged branch review while preserving explicit links
     deriveWorktreeCardPrDisplay({ ...worktree, head: 'old-head' }, entry, undefined).prDisplay
   ).toMatchObject({ provider: 'github', number: 42 })
 })
+
+it('uses cached merged head proof when the hosted review of the same PR lacks it', () => {
+  const worktree = makeWorktree({ id: 'workspace', repoId: 'repo', head: 'current-head' })
+  const review: HostedReviewInfo = {
+    provider: 'github',
+    number: 42,
+    title: 'Merged work',
+    state: 'merged',
+    url: 'https://github.com/example/repo/pull/42',
+    status: 'success',
+    updatedAt: '2026-11-01T00:00:00Z',
+    mergeable: 'UNKNOWN',
+    headSha: 'old-head'
+  }
+  const result = deriveWorktreeCardPrDisplay(
+    worktree,
+    { data: review, fetchedAt: 2, linkedReviewHintKey: '' },
+    {
+      data: { ...review, checksStatus: 'success', confirmedContainedHeadOid: 'current-head' },
+      fetchedAt: 1
+    }
+  )
+  expect(result.prDisplay).toMatchObject({ provider: 'github', number: 42 })
+})

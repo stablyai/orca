@@ -96,7 +96,8 @@ export function deriveWorktreeCardPrDisplay(
     cachedBranchPR !== null &&
     cachedBranchPR !== undefined &&
     hostedReview?.provider === 'github' &&
-    hostedReview.number === cachedBranchPR.number
+    hostedReview.number === cachedBranchPR.number &&
+    isCachedMergedBranchPRCurrentForWorktree(hostedReview, worktree)
   const useCachedBranchReview =
     cachedBranchPR !== undefined &&
     cachedBranchPR !== null &&

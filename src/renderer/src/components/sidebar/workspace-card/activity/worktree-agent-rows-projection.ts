@@ -33,14 +33,20 @@ function rowBelongsToHost(
   state: AppState,
   row: DashboardAgentRow,
   hostId: ExecutionHostId,
-  owner: ReturnType<typeof resolveQualifiedWorktreeExecutionOwner> | undefined
+  owner: ReturnType<typeof resolveQualifiedWorktreeExecutionOwner> | undefined,
+  stampedHosts: ReadonlyMap<string, ExecutionHostId | undefined>
 ): boolean {
   const paneKey = row.activationPaneKey ?? row.paneKey
   const entry =
     state.agentStatusByPaneKey[paneKey] ??
     state.retainedAgentsByPaneKey[paneKey]?.entry ??
     row.entry
-  const paneHost = getAgentPaneExecutionHost(state, paneKey, entry, row.tab.ptyId)
+  const retainedHost = state.agentStatusByPaneKey[paneKey]
+    ? undefined
+    : state.retainedAgentsByPaneKey[paneKey]?.executionHostId
+  const paneHost =
+    retainedHost ??
+    getAgentPaneExecutionHost(state, paneKey, entry, row.tab.ptyId, stampedHosts.get(row.tab.id))
   return (
     paneHost === hostId ||
     Boolean(
@@ -110,6 +116,7 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       paneForegroundAgentByPaneKey,
       selectFreshness(state),
       representedTabs,
+      state.unifiedTabsByWorktree[worktreeId],
       workspaceOwner?.hostId,
       workspaceOwner?.worktree.runtimeOwnerEnvironmentId,
       workspaceOwner?.worktree.hostId,
@@ -144,8 +151,15 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       paneForegroundAgentByPaneKey,
       now: Date.now()
     })
+    const stampedHosts = new Map(
+      (state.unifiedTabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.contentType === 'terminal')
+        .map((tab) => [tab.entityId, tab.executionHostId])
+    )
     result = applyAgentRowLineage(
-      hostId ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner)) : rows
+      hostId
+        ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner, stampedHosts))
+        : rows
     )
     return result
   }
