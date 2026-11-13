@@ -13,6 +13,7 @@ import { setWindowMaterialSuppressed } from '../window/presentation/window-mater
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
 import { quitProcess } from '../startup/quit/process-quit-request'
+import { readInstalledBundleChange } from '../startup/installed-bundle/installed-bundle-identity'
 import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/profile-startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
@@ -200,6 +201,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       setWindowMaterialSuppressed(window, suppressed)
     }
   })
+
+  // Lets a renderer that failed to load a chunk ask whether the bundle on disk is still the one it came from.
+  ipcMain.handle('app:readInstalledBundleChange', () => readInstalledBundleChange())
 
   ipcMain.handle('app:relaunch', async () => {
     // Delay teardown so the renderer can paint Restarting after cleanup.
