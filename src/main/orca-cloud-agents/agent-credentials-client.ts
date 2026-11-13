@@ -107,6 +107,7 @@ const SERVER_CODES = new Map<string, OrcaCloudAgentsErrorCode>([
   ['broker_in_progress', 'broker_in_progress'],
   ['rate_limited', 'rate_limited'],
   ['broker_unavailable', 'broker_unavailable'],
+  ['device_auth_disabled', 'device_auth_disabled'],
   ['no_golden_image', 'no_golden_image'],
   ['not_configured', 'not_configured']
 ])

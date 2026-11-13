@@ -29098,6 +29098,8 @@
       "codeExpired": "The code expired · start again",
       "notChatGpt": "That sign-in wasn’t a ChatGPT account. Use the ChatGPT account you use with Codex.",
       "brokerBusy": "A ChatGPT sign-in is already running. Finish it, or try again in a minute.",
+      "deviceAuthDisabled": "Device code sign-in is off for this ChatGPT account",
+      "deviceAuthDisabledDetail": "Turn it on in ChatGPT’s security settings, then try again. On a work or team account, a ChatGPT admin may need to turn it on.",
       "rateLimited": "Too many sign-in attempts. Try again in a few minutes.",
       "invalidToken": "This token isn’t valid · run claude setup-token again",
       "notEnabled": "Orca can’t use your {{product}} account in cloud workspaces right now.",
