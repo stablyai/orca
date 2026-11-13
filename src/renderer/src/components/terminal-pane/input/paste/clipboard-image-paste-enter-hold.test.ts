@@ -9,6 +9,7 @@ function fakeTextarea(paneId: number): HTMLElement {
         ? { getAttribute: (name: string) => (name === 'data-pane-id' ? String(paneId) : null) }
         : null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the shape eventTargetPaneId probes.
   return textarea as unknown as HTMLElement
 }
 
@@ -17,7 +18,7 @@ function keyEvent(
   target: EventTarget | null,
   overrides: Partial<KeyboardEvent> = {}
 ): KeyboardEvent {
-  return {
+  const partial = {
     key,
     repeat: false,
     shiftKey: false,
@@ -28,7 +29,9 @@ function keyEvent(
     target,
     preventDefault: vi.fn(),
     stopImmediatePropagation: vi.fn()
-  } as unknown as KeyboardEvent
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial keyboard event carrying only plain-key fields.
+  return partial as unknown as KeyboardEvent
 }
 
 function enterEvent(
@@ -156,6 +159,45 @@ describe('clipboard image paste Enter hold', () => {
     hold.settleImageUpload(second, true)
     vi.advanceTimersByTime(50)
     expect(input).toHaveBeenCalledWith('\r')
+  })
+
+  it('defers a scheduled Enter when another upload starts inside the post-paste delay', () => {
+    const { hold, input } = setup()
+    const first = hold.noteImageUploadStart(7)
+    hold.handleKeyDown(enterEvent(fakeTextarea(7)))
+    hold.settleImageUpload(first, true)
+
+    const second = hold.noteImageUploadStart(7)
+    vi.advanceTimersByTime(50)
+    expect(input).not.toHaveBeenCalled()
+
+    hold.settleImageUpload(second, true)
+    vi.advanceTimersByTime(50)
+    expect(input).toHaveBeenCalledWith('\r')
+  })
+
+  it('cancels the held Enter when one of two overlapping uploads fails first', () => {
+    const { hold, input } = setup()
+    const first = hold.noteImageUploadStart(7)
+    const second = hold.noteImageUploadStart(7)
+    hold.handleKeyDown(enterEvent(fakeTextarea(7)))
+
+    hold.settleImageUpload(first, false)
+    hold.settleImageUpload(second, true)
+    vi.advanceTimersByTime(50)
+    expect(input).not.toHaveBeenCalled()
+  })
+
+  it('cancels the held Enter when one of two overlapping uploads fails last', () => {
+    const { hold, input } = setup()
+    const first = hold.noteImageUploadStart(7)
+    const second = hold.noteImageUploadStart(7)
+    hold.handleKeyDown(enterEvent(fakeTextarea(7)))
+
+    hold.settleImageUpload(first, true)
+    hold.settleImageUpload(second, false)
+    vi.advanceTimersByTime(50)
+    expect(input).not.toHaveBeenCalled()
   })
 
   it('dispose clears pending state so a stale timer cannot reach a remounted pane', () => {

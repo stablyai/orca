@@ -16,6 +16,7 @@ type TerminalInputEventTarget = {
 type HeldPaneTerminal = { id: number; terminal: { input: (data: string) => void } }
 
 function eventTargetPaneId(event: Event): number | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DOM EventTarget probed by shape; a wrong target fails the classList guard.
   const target = event.target as TerminalInputEventTarget | null
   // Only the pane's own terminal input: its search box and chat cover are portaled into the pane too.
   if (!target?.classList?.contains('xterm-helper-textarea') || !target.closest) {
@@ -39,19 +40,33 @@ export function createClipboardImagePasteEnterHold({
   // Per pane: overlapping uploads count up, and each pane holds its own Enter.
   const uploadsByPaneId = new Map<number, { count: number; run: number }>()
   const heldEnterRunByPaneId = new Map<number, number>()
+  const pendingEnterTimerByPaneId = new Map<number, ReturnType<typeof globalThis.setTimeout>>()
   let runCounter = 0
 
+  const cancelPendingEnter = (paneId: number): void => {
+    const timer = pendingEnterTimerByPaneId.get(paneId)
+    if (timer !== undefined) {
+      globalThis.clearTimeout(timer)
+      pendingEnterTimerByPaneId.delete(paneId)
+    }
+  }
+
   const pressHeldEnter = (paneId: number, run: number): void => {
-    globalThis.setTimeout(() => {
-      if (heldEnterRunByPaneId.get(paneId) !== run) {
-        return
-      }
-      heldEnterRunByPaneId.delete(paneId)
-      // Like an agent prompt paste: the TUI must see the bracketed paste end before Enter.
-      getPanes()
-        ?.find((pane) => pane.id === paneId)
-        ?.terminal.input('\r')
-    }, AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+    cancelPendingEnter(paneId)
+    pendingEnterTimerByPaneId.set(
+      paneId,
+      globalThis.setTimeout(() => {
+        pendingEnterTimerByPaneId.delete(paneId)
+        if (heldEnterRunByPaneId.get(paneId) !== run) {
+          return
+        }
+        heldEnterRunByPaneId.delete(paneId)
+        // Like an agent prompt paste: the TUI must see the bracketed paste end before Enter.
+        getPanes()
+          ?.find((pane) => pane.id === paneId)
+          ?.terminal.input('\r')
+      }, AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+    )
   }
 
   /** Registered for the capture phase: swallow an Enter typed into a pane whose image upload is in flight. */
@@ -65,6 +80,7 @@ export function createClipboardImagePasteEnterHold({
     }
     if (isPlainEscapeKeyEvent(event)) {
       // Esc cancels that pane's held Enter and flows on to the terminal untouched.
+      cancelPendingEnter(paneId)
       heldEnterRunByPaneId.delete(paneId)
       return
     }
@@ -85,10 +101,13 @@ export function createClipboardImagePasteEnterHold({
       const upload = uploadsByPaneId.get(paneId)
       if (upload) {
         upload.count++
+        // An Enter already scheduled for this pane waits for this upload too, not just the first.
+        cancelPendingEnter(paneId)
         return { paneId, run: upload.run }
       }
       const run = ++runCounter
       uploadsByPaneId.set(paneId, { count: 1, run })
+      cancelPendingEnter(paneId)
       return { paneId, run }
     },
     /** `landed` is true only when the image path's bracketed paste reached the pane. */
@@ -99,6 +118,11 @@ export function createClipboardImagePasteEnterHold({
         return
       }
       upload.count--
+      if (!landed) {
+        // One failed paste in the group fails the message; cancel the Enter even if uploads remain.
+        cancelPendingEnter(token.paneId)
+        heldEnterRunByPaneId.delete(token.paneId)
+      }
       if (upload.count > 0) {
         return
       }
@@ -111,11 +135,16 @@ export function createClipboardImagePasteEnterHold({
         pressHeldEnter(token.paneId, heldRun)
       } else {
         // A failed or rejected upload drops the Enter; the paste error is already shown.
+        cancelPendingEnter(token.paneId)
         heldEnterRunByPaneId.delete(token.paneId)
       }
     },
     /** Teardown: clear all state so a stale timer cannot reach a remounted pane's reused id. */
     dispose: (): void => {
+      for (const timer of pendingEnterTimerByPaneId.values()) {
+        globalThis.clearTimeout(timer)
+      }
+      pendingEnterTimerByPaneId.clear()
       uploadsByPaneId.clear()
       heldEnterRunByPaneId.clear()
     }
