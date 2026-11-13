@@ -102,8 +102,13 @@ export async function runSleepWorktrees(
   }
   const { errors, results, vmStillRunningIds, unsleptWorktreeIds } =
     await sleepWorktreesReportingFailures(worktreeIds, { markChatsAsleep: true })
+  // SLEEP-RECONNECT-BANNER: a paired workspace is still going to sleep until its sandbox has slept
+  // through the control plane below and its status says so (it has no local record that flips).
+  const pairedIds = new Set(worktreeIds.filter((id) => isPairedCloudWorkspace(id)))
   for (const id of worktreeIds) {
-    clearWorktreeGoingToSleep(id)
+    if (!pairedIds.has(id)) {
+      clearWorktreeGoingToSleep(id)
+    }
     clearWorktreeKeptAwake(id)
   }
   // Refused before main started it (nothing stopped) or failed: the workspace is awake.
@@ -118,7 +123,11 @@ export async function runSleepWorktrees(
   const unslept = new Set(unsleptWorktreeIds)
   const pairedStillRunning = await sleepPairedCloudSandboxes(
     worktreeIds.filter((id) => !unslept.has(id))
-  )
+  ).finally(() => {
+    for (const id of pairedIds) {
+      clearWorktreeGoingToSleep(id)
+    }
+  })
   const stillRunningIds = [...vmStillRunningIds, ...pairedStillRunning]
   // The paired sandbox kept running: no sealed copy is coming either.
   for (const id of pairedStillRunning) {

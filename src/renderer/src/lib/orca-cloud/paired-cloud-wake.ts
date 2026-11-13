@@ -23,10 +23,13 @@ function notPairedMessage(): string {
 // Paired rows this desktop put to sleep (their status read may not have caught up yet).
 const sleptHere = new Set<string>()
 
-/** Paired Sleep succeeded here: its status is re-read now, and an open wakes it even before that. */
-export function notePairedCloudSlept(workspaceId: string): void {
+/**
+ * Paired Sleep succeeded here: its status is re-read now (resolved once read, so the sleep can keep
+ * saying "going to sleep" until the row says Asleep), and an open wakes it even before that.
+ */
+export function notePairedCloudSlept(workspaceId: string): Promise<void> {
   sleptHere.add(workspaceId)
-  void refreshCloudWorkspaceStatus(workspaceId)
+  return refreshCloudWorkspaceStatus(workspaceId).catch(() => undefined)
 }
 
 /** How often, and for how long, an explicit wake re-reads status until the VM runs. */

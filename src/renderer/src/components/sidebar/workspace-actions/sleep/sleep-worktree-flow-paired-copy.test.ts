@@ -23,7 +23,11 @@ vi.mock('./workspace-sleep-target', () => ({
 }))
 
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { resetWorktreeSleepViewForTests, sleepCopySave } from '@/lib/worktree-sleep-view'
+import {
+  isWorktreeGoingToSleep,
+  resetWorktreeSleepViewForTests,
+  sleepCopySave
+} from '@/lib/worktree-sleep-view'
 import { PAIRED_HOST_SLEEP_TIMEOUT_MS, runSleepWorktrees } from './sleep-worktree-flow'
 
 const T0 = 1_800_000_000_000
@@ -59,6 +63,28 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
     await runSleepWorktrees([PAIRED, LOCAL])
     expect(sleepCopySave(PAIRED)).toEqual({ state: 'saving', since: T0 })
     expect(sleepCopySave(LOCAL)).toBeNull()
+  })
+
+  it('stays going to sleep until the paired sandbox slept, so no reconnect banner shows (SLEEP-RECONNECT-BANNER)', async () => {
+    let finishPairedSleep: (stillRunning: string[]) => void = () => undefined
+    let goingDuringPairedSleep: { paired: boolean; local: boolean } | null = null
+    mocks.sleepPairedCloudSandboxes.mockImplementation(
+      () =>
+        new Promise<string[]>((resolve) => {
+          goingDuringPairedSleep = {
+            paired: isWorktreeGoingToSleep(PAIRED),
+            local: isWorktreeGoingToSleep(LOCAL)
+          }
+          finishPairedSleep = resolve
+        })
+    )
+    const done = runSleepWorktrees([PAIRED, LOCAL])
+    await vi.waitFor(() => expect(goingDuringPairedSleep).not.toBeNull())
+    // The control plane is still suspending the paired sandbox: it is going to sleep, not down.
+    expect(goingDuringPairedSleep).toEqual({ paired: true, local: false })
+    finishPairedSleep([])
+    await done
+    expect(isWorktreeGoingToSleep(PAIRED)).toBe(false)
   })
 
   it('clears it when the control plane left the paired sandbox running', async () => {

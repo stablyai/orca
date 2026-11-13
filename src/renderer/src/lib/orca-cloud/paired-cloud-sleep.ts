@@ -45,7 +45,7 @@ export async function sleepPairedCloudSandboxes(worktreeIds: readonly string[]):
       stillRunning.push(id)
     } else {
       // The row says Asleep (not Active) now, and opening it wakes it (n38 GATE).
-      notePairedCloudSlept(id)
+      await notePairedCloudSlept(id)
     }
   }
   return stillRunning

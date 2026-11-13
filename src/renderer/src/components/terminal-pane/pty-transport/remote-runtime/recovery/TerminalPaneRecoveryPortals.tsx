@@ -228,7 +228,9 @@ export function TerminalPaneRecoveryPortals({
     stoppedWslDistro === null &&
     pairingRefusedEnvironmentId === null &&
     !cloudWaking &&
-    !cloudAsleep
+    !cloudAsleep &&
+    // SLEEP-RECONNECT-BANNER: a sleep the person asked for drops the connection on purpose.
+    !goingToSleep
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
   const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
@@ -389,6 +391,7 @@ export function TerminalPaneRecoveryPortals({
             // Why stopped panes too: a card flashing over the notice's hold is the overlap this avoids.
             heldByServer={
               cloudWaking ||
+              goingToSleep ||
               (!isolated &&
                 !awaitingSignIn &&
                 !wslHostUnavailable &&
