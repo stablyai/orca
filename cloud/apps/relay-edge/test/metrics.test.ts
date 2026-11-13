@@ -4,7 +4,9 @@ import type { Env } from '../src/env'
 
 const withCf = (cf?: Record<string, string>) => {
   const request = new Request('https://edge.test/v1/connect/x')
-  if (cf) Object.defineProperty(request, 'cf', { value: cf })
+  if (cf) {
+    Object.defineProperty(request, 'cf', { value: cf })
+  }
   return request
 }
 

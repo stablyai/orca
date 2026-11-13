@@ -49,19 +49,35 @@ function previousInEdgeCohort(
   userId?: string
 ): boolean {
   const flags = config.control!()
-  if (flags.mode !== 'on') return false
-  if (config.denyHosts.has(relayHostId)) return false
-  if (config.allowHosts.has(relayHostId)) return true
-  if (region !== 'any' && !config.regions.has(region ?? RELAY_DEFAULT_REGION)) return false
-  if (userId !== undefined && config.allowUsers?.has(userId)) return true
+  if (flags.mode !== 'on') {
+    return false
+  }
+  if (config.denyHosts.has(relayHostId)) {
+    return false
+  }
+  if (config.allowHosts.has(relayHostId)) {
+    return true
+  }
+  if (region !== 'any' && !config.regions.has(region ?? RELAY_DEFAULT_REGION)) {
+    return false
+  }
+  if (userId !== undefined && config.allowUsers?.has(userId)) {
+    return true
+  }
   return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
 }
 
 function previousMayBeOnEdge(config: EdgeRelayConfig, relayHostId: string, userId?: string): boolean {
   const flags = config.control!()
-  if (flags.leaveCeilingPermille === undefined) return true
-  if (config.allowHosts.has(relayHostId) || config.denyHosts.has(relayHostId)) return true
-  if (userId !== undefined && config.allowUsers?.has(userId)) return true
+  if (flags.leaveCeilingPermille === undefined) {
+    return true
+  }
+  if (config.allowHosts.has(relayHostId) || config.denyHosts.has(relayHostId)) {
+    return true
+  }
+  if (userId !== undefined && config.allowUsers?.has(userId)) {
+    return true
+  }
   const ceiling = Math.max(flags.leaveCeilingPermille, edgeRolloutPermille(config.rolloutPercent, flags), config.rolloutPercent * 10)
   return edgeCohortBucketPermille(relayHostId) < ceiling
 }
@@ -258,7 +274,9 @@ describe('edge move records the region', () => {
   const databases: RelayDatabase[] = []
   afterEach(async () => {
     vi.restoreAllMocks()
-    for (const database of databases.splice(0)) await database.close()
+    for (const database of databases.splice(0)) {
+      await database.close()
+    }
   })
   const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
 
@@ -346,7 +364,9 @@ describe('edge evacuation by recorded region', () => {
   const databases: RelayDatabase[] = []
   afterEach(async () => {
     vi.restoreAllMocks()
-    for (const database of databases.splice(0)) await database.close()
+    for (const database of databases.splice(0)) {
+      await database.close()
+    }
   })
 
   async function harness(flags: EdgeControlFlags) {

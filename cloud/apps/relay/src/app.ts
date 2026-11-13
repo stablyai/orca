@@ -497,7 +497,9 @@ export function createRelayApp(
     const edge = operations.edgeAssignments
     // From the IP table only; the address itself is never kept or logged.
     const country = edge ? requestCountry(edge.config.ipCountry, context.req.header('x-forwarded-for')) : null
-    if (edge?.config.ipCountry) edge.regionCountries.record(requestedRegion, country)
+    if (edge?.config.ipCountry) {
+      edge.regionCountries.record(requestedRegion, country)
+    }
     const toEdge =
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&

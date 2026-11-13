@@ -156,7 +156,9 @@ export function edgeRegionRolloutPermille(
   region: RelayRegion
 ): number | undefined {
   const regional = flags.regionRolloutPermille?.[region]
-  if (regional !== undefined) return regional
+  if (regional !== undefined) {
+    return regional
+  }
   return scope.regions.has(region) ? edgeRolloutPermille(scope.rolloutPercent, flags) : undefined
 }
 
@@ -171,13 +173,17 @@ export function edgeAnyRegionRolloutPermille(
     ...scope.regions,
     ...(Object.keys(flags.regionRolloutPermille ?? {}) as RelayRegion[])
   ])
-  if (inScope.size === 0) return edgeRolloutPermille(scope.rolloutPercent, flags)
+  if (inScope.size === 0) {
+    return edgeRolloutPermille(scope.rolloutPercent, flags)
+  }
   return Math.max(...[...inScope].map((region) => edgeRegionRolloutPermille(scope, flags, region)!))
 }
 
 // Whether the country of an ask keeps the host out of `region`'s cohort. `null`: the ask's country
 // is unknown.
 export function edgeCountryExcluded(flags: EdgeControlFlags, region: RelayRegion, country: string | null): boolean {
-  if (country === null) return flags.regionExcludeUnknownCountry?.[region] === true
+  if (country === null) {
+    return flags.regionExcludeUnknownCountry?.[region] === true
+  }
   return flags.regionExcludeCountries?.[region]?.includes(country) === true
 }

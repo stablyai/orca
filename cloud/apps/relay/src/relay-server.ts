@@ -201,7 +201,9 @@ export function createRelayServer(
       ? new EdgeEvacuation(observedDatabase, edgeConfig, edgeAdmin, EDGE_CELL_ID, options.now, options.random)
       : undefined
   edgeEvacuation?.start()
-  if (edgeConfig?.ipCountry) edgeAssignments?.regionCountries.start()
+  if (edgeConfig?.ipCountry) {
+    edgeAssignments?.regionCountries.start()
+  }
   // A rollback (mode off/down, a smaller share) starts draining within seconds.
   options.edgeControl?.onChange(() => edgeEvacuation?.controlChanged())
   if (edgeAssignments) {

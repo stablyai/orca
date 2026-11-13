@@ -284,7 +284,9 @@ describePostgres('relay edge on PostgreSQL', () => {
       assign: async (body: EdgeAssignBody) => {
         pushes += 1
         // The third push fails: that move, and its region record, roll back.
-        if (pushes === 3) throw new EdgeAdminUnavailableError('status_503')
+        if (pushes === 3) {
+          throw new EdgeAdminUnavailableError('status_503')
+        }
         return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
       },
       exportHost: async (): Promise<never> => {

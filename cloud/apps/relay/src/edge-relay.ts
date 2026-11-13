@@ -98,8 +98,12 @@ export function inEdgeCohort(
   } else {
     const asked = region ?? RELAY_DEFAULT_REGION
     const regional = edgeRegionRolloutPermille(config, flags, asked)
-    if (regional === undefined) return false
-    if (country !== undefined && edgeCountryExcluded(flags, asked, country)) return false
+    if (regional === undefined) {
+      return false
+    }
+    if (country !== undefined && edgeCountryExcluded(flags, asked, country)) {
+      return false
+    }
     rollout = regional
   }
   if (userId !== undefined && config.allowUsers?.has(userId)) return true

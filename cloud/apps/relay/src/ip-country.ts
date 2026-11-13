@@ -48,12 +48,14 @@ export function loadIpCountryTable(path: string): IpCountryLookup {
 export function parseIpCountryTable(text: string): IpCountryLookup {
   const codes: string[] = []
   const codeIndex = new Map<string, number>()
-  const v4: Array<[number, number, number]> = []
-  const v6: Array<[bigint, bigint, number]> = []
+  const v4: [number, number, number][] = []
+  const v6: [bigint, bigint, number][] = []
   for (const line of text.split('\n')) {
     const [first, last, rawCode] = line.split(',').map((field) => field.trim().replace(/^"|"$/g, ''))
     const code = rawCode?.toUpperCase()
-    if (!first || !last || !code || !/^[A-Z]{2}$/.test(code) || UNKNOWN_CODES.has(code)) continue
+    if (!first || !last || !code || !/^[A-Z]{2}$/.test(code) || UNKNOWN_CODES.has(code)) {
+      continue
+    }
     let index = codeIndex.get(code)
     if (index === undefined) {
       index = codes.push(code) - 1
@@ -65,7 +67,9 @@ export function parseIpCountryTable(text: string): IpCountryLookup {
       v6.push([ipv6Prefix64(ipv6Groups(first)), ipv6Prefix64(ipv6Groups(last)), index])
     }
   }
-  if (v4.length + v6.length === 0) throw new Error('ip_country_table_empty')
+  if (v4.length + v6.length === 0) {
+    throw new Error('ip_country_table_empty')
+  }
   v4.sort((a, b) => a[0] - b[0])
   v6.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const v4First = Uint32Array.from(v4, (range) => range[0])
@@ -79,7 +83,9 @@ export function parseIpCountryTable(text: string): IpCountryLookup {
       let v4 = isIPv4(ip) ? ipv4Number(ip) : undefined
       let groups: number[] | undefined
       if (v4 === undefined) {
-        if (!isIPv6(ip)) return undefined
+        if (!isIPv6(ip)) {
+          return undefined
+        }
         groups = ipv6Groups(ip)
         // IPv4-mapped (::ffff:a.b.c.d, or its hex spelling ::ffff:abcd:efgh) is the IPv4 address.
         if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
@@ -131,7 +137,9 @@ function ipv6Groups(ip: string): number[] {
         : [Number.parseInt(token, 16)]
     )
   const headGroups = tokens(head)
-  if (tail === undefined) return headGroups
+  if (tail === undefined) {
+    return headGroups
+  }
   const tailGroups = tokens(tail)
   return [...headGroups, ...Array<number>(8 - headGroups.length - tailGroups.length).fill(0), ...tailGroups]
 }

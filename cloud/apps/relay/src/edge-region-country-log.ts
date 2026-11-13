@@ -24,9 +24,13 @@ export class EdgeRegionCountryTally {
   }
 
   flush(): void {
-    if (this.counts.size === 0) return
+    if (this.counts.size === 0) {
+      return
+    }
     const counts: Record<string, Record<string, number>> = {}
-    for (const [region, byCountry] of this.counts) counts[region] = Object.fromEntries(byCountry)
+    for (const [region, byCountry] of this.counts) {
+      counts[region] = Object.fromEntries(byCountry)
+    }
     this.counts = new Map()
     console.warn(JSON.stringify({ event: EDGE_REGION_COUNTRY_EVENT, windowMs: EDGE_REGION_COUNTRY_WINDOW_MS, counts }))
   }
