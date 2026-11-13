@@ -926,9 +926,7 @@
         "importInvalid": "{{count}} unreadable rows",
         "importUndecryptable": "{{count}} protected by the browser; export a CSV from it instead",
         "imported": "Imported {{count}} passwords",
-        "deleteAllConfirmTitle": "Delete all password data?",
         "deleteAllConfirmDescription": "Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.",
-        "deleteAll": "Delete data",
         "deletedAll": "Password data deleted",
         "form": {
           "invalidSite": "Enter a website address, like example.com.",
@@ -968,7 +966,6 @@
         "editFor": "Edit {{account}}",
         "moreActions": "More actions for {{account}}",
         "accountCount": "{{count}} accounts",
-        "deleteConfirmTitle": "Delete the {{site}} password for {{username}}?",
         "deleteConfirmDescription": "Orca won’t fill it anymore. This can’t be undone.",
         "deleteConfirm": "Delete",
         "profileDescription": "Saved logins for the {{profile}} profile. Orca fills one only when you pick it under a sign-in field.",
@@ -1413,6 +1410,12 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "search": {
+      "clear": "Clear search",
+      "results": "Settings search results",
+      "noResults": "No settings match “{{value0}}”",
+      "moreResults": "{{value0}} more · keep typing to narrow"
     },
     "voice": {
       "cleanup": {
@@ -2646,9 +2649,11 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "title": "Seeing “Orca would like to access…” prompts?",
-        "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
-        "openSettings": "Open Settings",
+        "titleOne": "macOS just interrupted an agent",
+        "titleMany": "macOS interrupted your agents {{count}}×",
+        "subtitle": "Full Disk Access stops these file prompts.",
+        "enable": "Turn on Full Disk Access",
+        "close": "Close",
         "dismiss": "Don't show again"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -4384,7 +4389,6 @@
             "7eee951968": "Scanning workspaces",
             "191f0bc98e": "Close",
             "7ae2ad30f4": "Refresh",
-            "b2c1331844": "Delete Inactive Workspaces",
             "7f451a3e2c": "Could not ignore cleanup suggestion",
             "662b8ec3f8": "Workspace cleanup scan failed",
             "9cc26c019d": "Remove",
@@ -4394,7 +4398,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
             "mergedStatus": "Merged",
             "unchangedStatus": "No new commits",
@@ -4997,7 +5000,6 @@
             "1d411fb6a5": "Save a quick command for this repo",
             "8f1e971966": "Add quick command",
             "3220e2da27": "This quick command will be removed from your saved list.",
-            "e8e1a52edb": "Delete \"{{value0}}\"?",
             "37e1bb90ce": "Run: {{value0}}",
             "77ac113df0": "Start {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Run",
@@ -6408,7 +6410,6 @@
           "loading": "Loading contents…",
           "deleteFailed": "Orca could not delete this from the Cloud.",
           "deleted": "Deleted from the Cloud",
-          "confirmDelete": "Confirm delete",
           "moreActions": "More actions for {{name}}",
           "deletePackage": "Delete from the Cloud"
         },
@@ -6687,8 +6688,6 @@
           "5cc1a6701c": "Open Settings",
           "2b56b35f53": "You can change this in Settings.",
           "dd3a45bbbd": "We'll skip this confirmation next time.",
-          "fc23c4cbdf": "Delete Workspace",
-          "86f0ae1257": "Delete Workspaces",
           "removeFolderProjectInstead": "Remove the folder project instead of deleting this workspace.",
           "gitBlocksMainWorktree": "Git does not allow removing the main worktree.",
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
@@ -6795,11 +6794,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancel",
-          "591f330288": "Delete Project Group",
           "2c14ce677a": "Deleting...",
           "0e0e6764af": "Contained projects",
           "55f75628c0": "Project folders on disk are not deleted.",
-          "fec7e9c8ae": "Delete Group",
           "removeContainedProjects_one": "Remove {{count}} contained project",
           "removeContainedProjects_other": "Remove {{count}} contained projects",
           "deleteGroupDescription": "Delete <name>{{name}}</name>.",
@@ -7552,9 +7549,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Cancel",
           "cf95e3b5bb": "Close",
-          "deleteWorkspace": "Delete Workspace",
           "deleting": "Deleting...",
-          "forceDelete": "Force Delete",
           "forceDeleting": "Force Deleting..."
         },
         "HostRemoveDialog": {
@@ -7828,16 +7823,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "Review kept branches",
           "f21976c9a8": "Select the local branches you want to force delete. Unselected branches stay in their repositories.",
           "38c947f7c5": "Select all",
           "9602129d38": "{{value0}} of {{value1}} selected",
           "ee39e872d5": "May be unmerged",
           "676db406fd": "Head unavailable",
-          "285e1e4882": "Cancel",
-          "a0f9863597_one": "Force Delete {{count}} Branch",
-          "a0f9863597_other": "Force Delete {{count}} Branches",
-          "a0f9863597": "Force Delete {{count}} Branches"
+          "285e1e4882": "Cancel"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Jump to top"
@@ -9246,7 +9237,6 @@
           "c6b155911b": "All commands",
           "c36912efd5": "Run them from the Quick Commands button in the tab bar, or right-click inside any terminal.",
           "3d9dc558e8": "This quick command will be removed from your saved list.",
-          "3edf3deaf8": "Delete \"{{value0}}\"?",
           "9fcfc29519": "Insert",
           "9b3e338d62": "Enter",
           "4ccc63da87": "Agent",
@@ -9712,7 +9702,6 @@
           "6503182299": "Onboarding checklist",
           "82db1b7de4": "Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.",
           "df38d612b7": "No projects added yet.",
-          "3e483e256b": "No matching project settings.",
           "progressComplete": "{{value0}}/{{value1}} complete"
         },
         "ShortcutFilterRail": {
@@ -14333,7 +14322,6 @@
             "abf59262fb": "Review and edit the full command input before starting an agent.",
             "4ede779461": "Resolve Review Conflicts With AI",
             "3b203c62f8": "This will permanently remove the comment from the PR.",
-            "ea9b649ce3": "Delete comment?",
             "5788d1059d": "Could not update review thread. Check the GitHub API budget.",
             "07871c0589": "Link another PR",
             "7f4489f370": "Refresh",
@@ -14793,6 +14781,11 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
+            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
+            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
+            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
+            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
+            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -15217,8 +15210,7 @@
                   "5ddd8cac7f": "Discard all staged changes?",
                   "d4df3a61df": "Discard changes to \"{{value0}}\"?",
                   "5c0bdbc4cb": "Restore \"{{value0}}\"?",
-                  "d97bf697c9": "This will permanently delete this file. This cannot be undone.",
-                  "96c772bee9": "Delete \"{{value0}}\"?"
+                  "d97bf697c9": "This will permanently delete this file. This cannot be undone."
                 },
                 "dialog": {
                   "3bc61dc989": "Cancel",
@@ -15476,7 +15468,6 @@
             "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "Permanently delete '{{value0}}'?",
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
@@ -15665,7 +15656,6 @@
             "resumeInNewCliTooltipChat": "This chat stays unchanged."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "Delete this session?",
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
@@ -17422,7 +17412,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
-          "bfc813e909": "Open link",
           "7b0b945fdc": "Paste or type a link…",
           "copyLink": "Copy link"
         },
@@ -18662,9 +18651,7 @@
           "2faecab10b": "Run Now",
           "13118faadf": "Unknown project",
           "73f630b49d": "Cancel",
-          "9adfab2596": "Delete External Automation",
           "1e2e41392f": "Don't ask again",
-          "080dcb5fbb": "Delete Automation",
           "19a6e30eae": "Refresh automations",
           "77c2778945": "Automations",
           "e1bf9b1512": "Workspace is not available.",
@@ -19607,7 +19594,6 @@
         "ArtifactsPage": {
           "signInAgain": "Sign in to Orca again to load artifacts.",
           "loadFailed": "Could not load artifacts.",
-          "deleteTitle": "Delete artifact?",
           "deleteDescription": "“{{name}}” will no longer be available at its public link.",
           "delete": "Delete",
           "deleteFailed": "Could not delete the artifact.",
@@ -21790,11 +21776,8 @@
           "candidateName": "{{value0}} on {{value1}}"
         },
         "stopAgents": {
-          "titleMany": "Stop these agents?",
           "descriptionOne": "Deleting will stop the agent's current work.",
-          "descriptionMany": "Deleting will stop these agents' current work.",
-          "confirm": "Stop agents and delete",
-          "confirmOne": "Stop agent and delete"
+          "descriptionMany": "Deleting will stop these agents' current work."
         },
         "candidateRow": {
           "gitChip": {
@@ -21809,9 +21792,7 @@
         },
         "confirm": {
           "deletingTitle_one": "Deleting {{count}} workspace",
-          "deletingTitle_other": "Deleting {{count}} workspaces",
-          "deleteTitle_one": "Delete {{count}} workspace?",
-          "deleteTitle_other": "Delete {{count}} workspaces?"
+          "deletingTitle_other": "Deleting {{count}} workspaces"
         }
       },
       "creation": {
@@ -21900,10 +21881,10 @@
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID",
-        "copyAgentId": "Copy Agent ID",
-        "copyAgentIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
-        "copyAgentIdSuccess": "Agent ID copied",
-        "copyAgentIdError": "Unable to copy agent ID"
+        "copyOrcaSessionId": "Copy Orca Session ID",
+        "orcaSessionIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
+        "orcaSessionIdCopied": "Orca session ID copied",
+        "orcaSessionIdCopyFailed": "Unable to copy Orca session ID"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
@@ -22709,9 +22690,6 @@
       "restore": "Restore",
       "discard": "Discard",
       "discardAll": "Discard all",
-      "deleteUntrackedTitle_one": "Delete {{count}} untracked file?",
-      "deleteUntrackedTitle_other": "Delete {{count}} untracked files?",
-      "deleteCount": "Delete {{count}}",
       "deleteUntrackedFilesDescription_one": "This will permanently delete {{count}} untracked file. This cannot be undone.",
       "unstagedFilesIncludingUntrackedDescription_one": "This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone."
     },
@@ -23192,7 +23170,8 @@
   "common": {
     "retry": "Retry",
     "cancel": "Cancel",
-    "unassigned": "Unassigned"
+    "unassigned": "Unassigned",
+    "delete": "Delete"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -23336,8 +23315,7 @@
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
-      "description": "This cannot be undone.",
-      "confirm": "Delete Permanently"
+      "description": "This cannot be undone."
     }
   },
   "sparsePreset": {
@@ -23589,7 +23567,6 @@
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
       "review": "Delete with nested worktrees…",
-      "title": "Delete workspace and nested worktrees?",
       "description": "This permanently deletes \"{{name}}\", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.",
       "detached": "Detached HEAD",
       "loading": "Checking nested worktrees…",
@@ -23597,7 +23574,6 @@
       "cancel": "Cancel",
       "retry": "Review again",
       "deleting": "Deleting…",
-      "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
     },
     "setupTerminalTitle": "Setup",

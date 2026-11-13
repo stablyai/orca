@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PtyModelRestoreReason } from '../../../shared/terminal/replay/pty-model-restore-marker'
 import type {
   PtyDeliveryWriteOff,

@@ -24,6 +24,7 @@ import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pa
 import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { useRemoteUnsavedEditorReport } from '../runtime/workspace-cleanup/remote-unsaved-editor-report'
 
 /** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
@@ -42,6 +43,7 @@ export function useAppShellServices(): void {
   useIpcEvents()
   useProfileStateSaveDelayNotice()
   useRemoteRuntimeRecoveryTriggers()
+  useRemoteUnsavedEditorReport()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
   useReadOnScreenAttention()

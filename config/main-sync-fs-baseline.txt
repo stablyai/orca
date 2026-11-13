@@ -253,7 +253,7 @@
 1 src/main/foreign-sqlite-readers/readers/opencode-binder-sessions.ts
 5 src/main/git/repositories/discovery/repo-detection.ts
 13 src/main/git/repositories/discovery/repo-git-marker-scan.ts
-1 src/main/git/source-control/huge-folder-ignore.ts
+1 src/main/git/source-control/ignores/huge-folder-ignore.ts
 3 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/github/client/check/check-job-log-cache-retention-child.mjs
 3 src/main/grok/grok-hook-backup-cleanup.ts
@@ -441,10 +441,10 @@
 5 src/main/providers/local-pty/local-pty-executable-spawn.ts
 1 src/main/providers/local-pty/local-pty-session-operations.ts
 1 src/main/providers/local-pty/local-pty-shell-ready-wrapper-root.ts
-1 src/main/providers/macos-login-session-pty-probe.ts
-3 src/main/providers/macos-tcc-login-shell.ts
-3 src/main/providers/windows-powershell-executable.ts
-2 src/main/providers/working-directory-validation.ts
+1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
+3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
+3 src/main/providers/shell-launch/windows/powershell-executable.ts
+2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts
 2 src/main/pty/history/terminal-history-paths.ts
@@ -533,7 +533,7 @@
 3 src/main/startup/windows-startup/windows-renderer-runtime-files.ts
 3 src/main/startup/windows-startup/windows-user-data-acl.ts
 2 src/main/stats/stats-file-loader.ts
-2 src/main/text-generation/source-control-prompt-files.ts
+2 src/main/text-generation/prompts/source-control-prompt-files.ts
 1 src/main/updater/lifecycle/windows-update-install-directory.ts
 9 src/main/updater/linux-package/appimage-runtime-identity.ts
 1 src/main/updater/linux-package/linux-package-install-command.ts
