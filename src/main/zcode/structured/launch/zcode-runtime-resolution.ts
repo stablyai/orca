@@ -243,15 +243,24 @@ function runnableNode22(candidate: string): Promise<boolean> {
   if (cached) {
     return cached
   }
+  // Cache successes only: installs and upgrades must re-probe without a host restart, and a
+  // missing path fails fast anyway.
   const verdict = runProcess({ program: candidate, args: ['-v'], timeoutMs: 5000 })
     .then((result) => {
-      if (result.code !== 0) {
+      const major =
+        result.code === 0
+          ? Number.parseInt(result.stdout.trim().replace(/^v/u, ''), 10)
+          : Number.NaN
+      if (!(Number.isSafeInteger(major) && major >= 22)) {
+        node22Verdicts.delete(candidate)
         return false
       }
-      const major = Number.parseInt(result.stdout.trim().replace(/^v/u, ''), 10)
-      return Number.isSafeInteger(major) && major >= 22
+      return true
     })
-    .catch(() => false)
+    .catch(() => {
+      node22Verdicts.delete(candidate)
+      return false
+    })
   node22Verdicts.set(candidate, verdict)
   return verdict
 }
