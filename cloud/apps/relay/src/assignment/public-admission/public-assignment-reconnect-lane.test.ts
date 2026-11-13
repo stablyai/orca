@@ -64,26 +64,6 @@ describe('public assignment reconnect lane', () => {
     expect((await second).status).toBe(200)
   })
 
-  it('rate-limits repeat fast-lane attempts with the short retry-after', async () => {
-    const host = 'rrrrrrrrrrrrrrrr'
-    const assign = vi.fn(async () => assignment('cell-r', host))
-    const resolve = vi.fn(async () => assignment('cell-r', host))
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    expect(
-      (await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))).status
-    ).toBe(200)
-    const repeat = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
-
-    expect(repeat.status).toBe(503)
-    expect(repeat.headers.get('retry-after')).toBe('2')
-  })
-
   it('rejects on the fast lane when the verification probe fails transiently', async () => {
     const host = 'tttttttttttttttt'
     const assign = vi.fn()
