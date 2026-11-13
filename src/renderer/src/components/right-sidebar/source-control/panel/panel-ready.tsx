@@ -4,10 +4,13 @@ import { SourceControlHeaderToolbar } from './header-toolbar'
 import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
+import { SourceControlChangeScopeBar } from './change-scope-bar'
+import { GitGraphOpenButton } from '../sync/git-graph-open-button'
+import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
-  const { model, worktreePath } = props
+  const { currentWorktreeId, model, worktreePath } = props
   const {
     activeGroupId,
     activeWorktreeId,
@@ -40,7 +43,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     manualReviewUrl,
     openHostedReviewInChecks,
     prGenerating,
+    isGitHistoryVisible,
     refreshBranchCompare,
+    resolveSplitTargetGroupId,
     selectedKeys,
     setBaseRefDialogOpen,
     setDiffCommentsExpanded,
@@ -116,7 +121,19 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
                   onRetryRebaseInspect: model.handleRetryRebaseInspect
                 }
           }
+          graphControl={
+            isGitHistoryVisible ? (
+              <GitGraphOpenButton
+                worktreeId={currentWorktreeId}
+                onOpen={(event) => {
+                  void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId(event))
+                }}
+              />
+            ) : null
+          }
         />
+
+        {isGitHistoryVisible ? <SourceControlChangeScopeBar {...props} /> : null}
 
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf

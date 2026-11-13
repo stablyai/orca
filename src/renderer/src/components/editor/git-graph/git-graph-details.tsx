@@ -94,7 +94,6 @@ export function GitGraphDetails({
       <GitHistoryCommitFiles
         state={files}
         onOpenFile={(entry, event) => actions.openCommitFile(item, entry, event)}
-        onOpenAll={() => void actions.openHistoryCommitDiff(item)}
       />
     </div>
   )

@@ -12,13 +12,14 @@ export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs
         query
       })
     },
-    history: async ({ worktreePath, limit, baseRef, branchOnly, skip, refs, historyToken }) => {
+    history: async ({ worktreePath, limit, baseRef, branchOnly, branchListOnly, skip, refs, historyToken }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         limit,
         baseRef,
         branchOnly,
+        branchListOnly,
         refs,
         historyToken,
         skip

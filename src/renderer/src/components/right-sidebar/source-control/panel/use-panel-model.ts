@@ -14,6 +14,7 @@ import { useRebaseAutoStashProbe } from '../sync/use-rebase-auto-stash-probe'
 import { useOrcaRebaseMarker } from '../sync/use-orca-rebase-marker'
 import { resolveSourceControlRebaseModel } from './base-rebase-state'
 import { useSourceControlPanelFoundation } from './use-panel-foundation'
+import { useChangeScopeSync } from './use-change-scope-sync'
 
 export function useSourceControlPanelModel() {
   const foundation = useSourceControlPanelFoundation()
@@ -190,6 +191,14 @@ export function useSourceControlPanelModel() {
     worktreePath,
     activeRepoTarget,
     resolveSplitTargetGroupId
+  })
+  useChangeScopeSync({
+    changeScope: foundation.changeScope,
+    setChangeScope: foundation.setChangeScope,
+    setCommitScopeFiles: foundation.setCommitScopeFiles,
+    gitHistoryState: foundation.gitHistoryState,
+    statusHead: foundation.activeGitStatusHead ?? null,
+    loadCommitFiles: gitHistoryCommitActions.loadCommitFiles
   })
   const noteOpening = useSourceControlNoteOpening({
     activeWorktreeId,

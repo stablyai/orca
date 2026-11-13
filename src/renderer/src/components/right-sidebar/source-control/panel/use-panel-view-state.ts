@@ -6,11 +6,15 @@ import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
-
-const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+import {
+  readRememberedChangeScope,
+  rememberChangeScope,
+  type SourceControlChangeScope,
+  type SourceControlCommitScopeFiles
+} from './change-scope'
 
 function createDefaultCollapsedSections(): Set<string> {
-  return new Set(DEFAULT_COLLAPSED_SECTIONS)
+  return new Set()
 }
 
 // Preserve per-worktree disclosure across sidebar-tab unmounts for this renderer session.
@@ -48,7 +52,20 @@ export function useSourceControlPanelViewState({
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
-  const isGitHistoryExpanded = !collapsedSections.has('history')
+  const [changeScope, setChangeScopeState] = useState<SourceControlChangeScope>(() =>
+    readRememberedChangeScope(activeWorktreeId)
+  )
+  const [commitScopeFiles, setCommitScopeFiles] = useState<SourceControlCommitScopeFiles | null>(
+    null
+  )
+  const [changeScopeMenuOpen, setChangeScopeMenuOpen] = useState(false)
+  const setChangeScope = useCallback(
+    (scope: SourceControlChangeScope) => {
+      rememberChangeScope(activeWorktreeId, scope)
+      setChangeScopeState(scope)
+    },
+    [activeWorktreeId]
+  )
 
   const handleToggleSourceControlViewMode = useCallback(() => {
     const current = useAppStore.getState().settings
@@ -72,6 +89,9 @@ export function useSourceControlPanelViewState({
     setBaseRefDialogOpen(false)
     // Preserve repo-scoped defaultBaseRef and per-worktree in-flight commits so switches cannot clobber defaults or enable duplicate commits.
     setFilterQuery('')
+    setChangeScopeState(readRememberedChangeScope(activeWorktreeId))
+    setCommitScopeFiles(null)
+    setChangeScopeMenuOpen(false)
     // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.
   }
 
@@ -105,15 +125,20 @@ export function useSourceControlPanelViewState({
 
   return {
     baseRefDialogOpen,
+    changeScope,
+    changeScopeMenuOpen,
     collapsedSections,
+    commitScopeFiles,
     collapsedTreeDirs,
     fileListScrollElement,
     filterExpanded,
     filterQuery,
     handleToggleSourceControlViewMode,
-    isGitHistoryExpanded,
     isMac,
     setBaseRefDialogOpen,
+    setChangeScope,
+    setChangeScopeMenuOpen,
+    setCommitScopeFiles,
     setFileListScrollElement,
     setFilterExpanded,
     setFilterQuery,

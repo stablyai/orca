@@ -9,6 +9,15 @@ import type { OpenFile } from '../types/open-file'
 import { editorOpenOwner, qualifyEditorContentId } from './editor-open-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from './git-status-reconciliation'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+
+function hasCombinableBranchCompare(
+  summary: GitBranchCompareSummary | null | undefined
+): summary is GitBranchCompareSummary {
+  return Boolean(
+    summary?.status === 'ready' && summary.baseOid && summary.headOid && summary.mergeBase
+  )
+}
 
 export function createOpenCombinedDiff(
   set: EditorSet,
@@ -17,9 +26,18 @@ export function createOpenCombinedDiff(
   return {
     openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot, options) => {
       const contentOwner = editorOpenOwner(get(), worktreeId, options)
+      // Decided from the same synchronous state the tab is built from, so a whole-scope open
+      // never titles an uncommitted-only tab "All Changes".
+      const uncommittedOnly =
+        options?.uncommittedOnly === true ||
+        (options?.wholeScope === true &&
+          !hasCombinableBranchCompare(get().gitBranchCompareSummaryByWorktree[worktreeId]))
+      // Own id so an Uncommitted tab never turns an open All Changes tab uncommitted-only.
       const baseId = areaFilter
         ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-        : `${worktreeId}::all-diffs::uncommitted`
+        : uncommittedOnly
+          ? `${worktreeId}::all-diffs::uncommitted-only`
+          : `${worktreeId}::all-diffs::uncommitted`
       const id = qualifyEditorContentId(
         baseId,
         contentOwner.runtimeEnvironmentId,
@@ -29,18 +47,16 @@ export function createOpenCombinedDiff(
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter
           ] ?? 'All Changes')
-        : 'All Changes'
+        : uncommittedOnly
+          ? 'Uncommitted Changes'
+          : 'All Changes'
       const placementId = options?.placementWorkspaceId ?? worktreeId
       const intent = editorPlacementIntent(get, placementId)
       const groupId = resolveEditorOpenTargetGroupId(get(), placementId, options?.targetGroupId)
       set((s) => {
         const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
         const branchCompare =
-          !areaFilter &&
-          branchSummary?.status === 'ready' &&
-          branchSummary.baseOid &&
-          branchSummary.headOid &&
-          branchSummary.mergeBase
+          !areaFilter && !uncommittedOnly && hasCombinableBranchCompare(branchSummary)
             ? toBranchCompareSnapshot(branchSummary)
             : undefined
         const branchEntriesSnapshot = branchCompare

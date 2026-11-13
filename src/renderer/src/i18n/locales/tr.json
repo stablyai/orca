@@ -13823,13 +13823,6 @@
             "c76693e456": "Bu çalışma alanı için dosyalar yüklenemedi:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Henüz commit yok",
-            "d0fb0f4bf2": "Commit'leri yenile",
-            "9f7535d22b": "Ref'ler, tam olarak o commit'i işaret eden branch veya tag adlarıdır. Yalnızca Git'in commit için adlandırılmış bir ref'i olduğu yerlerde görünürler.",
-            "9289ba0cb9": "Ref nedir?",
-            "d836037d02": "Commit'ler",
-            "8232c8b2f2": "{{value0}} commit'ini aç: {{value1}}",
-            "e5e81e59a6": "Commit'leri yeniden boyutlandır",
             "6d1e0a7c3b": "Commit dosyaları yüklenemedi"
           },
           "HostedReviewActions": {
@@ -15078,12 +15071,7 @@
             "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok",
-            "c3d4e5f6a7": "Tüm Değişiklikleri Aç"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "{{value0}} commit'indeki dosyaları göster: {{value1}}",
-            "4a8d9e0c1f": "{{value0}} commit'indeki dosyaları gizle: {{value1}}"
+            "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Commit'i tarayıcıda aç",
