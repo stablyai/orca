@@ -9,7 +9,7 @@ import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
 } from '../../../../src/shared/github/repositories/links'
-import { linkMobilePr } from '../../source-control/mobile-pr-link'
+import { linkMobilePr } from '../../source-control/review/mobile-pr-link'
 import { TextField } from '../composer-input/TextField'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
