@@ -15,7 +15,7 @@ import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../..
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../linear/task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../mutations/task-page-github-work-item-mutation-types'
 import { buildRequestedReviewUsers } from './task-page-github-review-model'
 
 type ReviewerActionsInput = {

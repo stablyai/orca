@@ -30,7 +30,10 @@ import {
   conversationCommandFailure,
   type ConversationCommandParams
 } from './structured-conversation-command'
-import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import {
+  compactionChildWork,
+  conversationCommandBlocked
+} from './structured-conversation-command-admission'
 import { maybeQueueStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-messages'
 import { structuredAgentSessionCompactBody } from './structured-agent-session-command-turn'
 
@@ -186,10 +189,10 @@ function acceptUnderSerialize(
           (await conversationCommandBlocked(
             ctx,
             record,
-            {
+            compactionChildWork(ctx.agents.capabilities(record.provider), () => ({
               views: context.readChildWork(ctx.sessionId),
               open: context.childWorkOpen(ctx.sessionId)
-            },
+            })),
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
           ))
         const blocked =
