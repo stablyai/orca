@@ -5,8 +5,8 @@ import {
   found,
   mocks,
   rpcRead
-} from '../../../../../main/runtime/integrations/reviews/runtime-hosted-pr-snapshot-test-harness'
-import type { PRRefreshOutcome } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+} from '../../src/main/runtime/integrations/reviews/runtime-hosted-pr-snapshot-test-harness'
+import type { PRRefreshOutcome } from '../../src/shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 describe('hosted PR receipt delivery', () => {
   it('carries a real deferred reply through the visible target, store and scheduler to its completion', async () => {
@@ -15,13 +15,12 @@ describe('hosted PR receipt delivery', () => {
       makePRRefreshWorktree,
       resetRemoteRuntimeMocks,
       runtimeEnvironmentCall
-    } = await import('../github-slice-test-harness')
+    } = await import('../../src/renderer/src/store/github/github-slice-test-harness')
     const { getVisibleHostedReviewRefreshTargets } =
-      await import('../../slices/hosted-review/refresh/visible-hosted-review-refresh-targets')
+      await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets')
     const { createVisibleHostedReviewRefreshScheduler } =
-      await import('../../slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
-    const { PrForBranch } =
-      await import('../../../../../shared/rpc-contract/github-pull-request-params')
+      await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
+    const { PrForBranch } = await import('../../src/shared/rpc-contract/github-pull-request-params')
     const readReceipt = (reason: 'active' | 'swr') =>
       commands.getRepoPRForBranch(
         'repo',
@@ -171,18 +170,18 @@ it('applies data-bearing retry replies to both clients and sends selection after
       makePRRefreshWorktree,
       resetRemoteRuntimeMocks,
       runtimeEnvironmentCall
-    } = await import('../github-slice-test-harness')
+    } = await import('../../src/renderer/src/store/github/github-slice-test-harness')
     const { getVisibleHostedReviewRefreshTargets } =
-      await import('../../slices/hosted-review/refresh/visible-hosted-review-refresh-targets')
+      await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets')
     const { createVisibleHostedReviewRefreshScheduler } =
-      await import('../../slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
+      await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
     resetRemoteRuntimeMocks()
     runtimeEnvironmentCall.mockImplementation(async (args) => {
       if (args.method !== 'github.prForBranch') {
         throw new Error('unexpected fixture RPC')
       }
       const { PrForBranch } =
-        await import('../../../../../shared/rpc-contract/github-pull-request-params')
+        await import('../../src/shared/rpc-contract/github-pull-request-params')
       const params = PrForBranch.parse(args.params)
       const requestClient = 'selector' in args && args.selector === 'env-client-0' ? 0 : 1
       reasons.push(params.reason ?? 'missing')
