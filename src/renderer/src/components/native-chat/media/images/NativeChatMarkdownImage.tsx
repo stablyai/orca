@@ -1,45 +1,31 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { FileText } from 'lucide-react'
 import { ExpandableMarkdownImage } from '@/components/sidebar/MarkdownImageLightbox'
 import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
 } from '@/components/sidebar/comment-markdown-github-attachment-media'
-import {
-  getLocalImageCacheKey,
-  useLocalImageSrc
-} from '@/components/editor/document-images/useLocalImageSrc'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { chatImageAccess } from '@/lib/files/access/local-file-access'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { getLocalImageCacheKey } from '@/components/editor/document-images/useLocalImageSrc'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
-import { jiraImageReference } from '../../../../../../shared/jira/jira-attachment-image'
-import { filesystemPathToFileUri } from '../../../../../../shared/file-links/file-uri-path'
-import {
-  createNativeChatFileHref,
-  routeNativeChatHref
-} from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { resolveNativeChatFileLink } from '../../links/actions/native-chat-file-link'
 import { useNativeChatFileLinkClick } from '../../links/actions/use-native-chat-file-link-click'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
-import { useNativeChatMediaHref } from './use-native-chat-media-href'
 import { useNativeChatLinkClick } from '../../links/actions/native-chat-link-click-context'
+import {
+  NATIVE_CHAT_MARKDOWN_IMAGE_ACCESS,
+  nativeChatMarkdownImageDisplaySrc,
+  useNativeChatMarkdownImageSrc
+} from './use-native-chat-markdown-image-src'
+import { NativeChatImageLinkActions } from './NativeChatImageLinkActions'
+import { NativeChatImageGalleryContext } from '../gallery/native-chat-image-gallery-context'
+import { NativeChatMarkdownRowKeyContext } from '../../markdown/native-chat-markdown-row-identity'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
-const IMAGE_ACCESS = chatImageAccess()
 
 type MarkdownImageProps = {
   src?: string
@@ -51,88 +37,56 @@ export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.El
   if (!props.src) {
     return props.alt ? <span>{props.alt}</span> : null
   }
-  const src =
-    props.src.startsWith('//') && /^https?:$/.test(window.location.protocol)
-      ? `${window.location.protocol}${props.src}`
-      : props.src
   if (isGitHubUserAttachmentUrl(props.src)) {
     return <GitHubUserAttachmentImage src={props.src} alt={props.alt} />
   }
+  const src = nativeChatMarkdownImageDisplaySrc(props.src)
   const identity = owner?.runtimeContext
     ? getLocalImageCacheKey(
         props.src,
         owner.runtimeContext.connectionId,
         owner.runtimeContext,
-        IMAGE_ACCESS
+        NATIVE_CHAT_MARKDOWN_IMAGE_ACCESS
       )
     : 'unresolved'
   return (
     <NativeChatMarkdownImagePreview
       key={[owner?.sessionId, identity, src].join('\0')}
-      {...props}
+      alt={props.alt}
       src={src}
+      gallerySource={props.src}
     />
   )
 }
 
-function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React.JSX.Element {
+function NativeChatMarkdownImagePreview({
+  src,
+  alt,
+  gallerySource
+}: {
+  src: string
+  alt?: string
+  /** The source as the transcript wrote it, which the chat-wide preview indexes by. */
+  gallerySource: string
+}): React.JSX.Element {
   const t = useTranslate()
   const onLinkClick = useNativeChatLinkClick()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
   const linkedHref = useContext(NativeChatMarkdownImageLinkContext)
+  const gallery = useContext(NativeChatImageGalleryContext)
+  const rowKey = useContext(NativeChatMarkdownRowKeyContext)
   const [open, setOpen] = useState(false)
   const [near, setNear] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const [footprint, setFootprint] = useState<{ width: number; aspectRatio: string }>()
   const [loadedImageSrc, setLoadedImageSrc] = useState<string>()
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [failedSrc, setFailedSrc] = useState<string>()
   const handingOff = useRef(false)
-  const runtimeContext = owner?.runtimeContext ?? null
-  const fileLinkContext =
-    runtimeContext?.worktreePath && owner?.fileLinkContext
-      ? {
-          ...owner.fileLinkContext,
-          worktreeId: runtimeContext.worktreeId ?? owner.fileLinkContext.worktreeId,
-          worktreePath: runtimeContext.worktreePath,
-          runtimeEnvironmentId: runtimeTargetEnvironmentId(runtimeContext.target)
-        }
-      : null
-  const route = routeNativeChatHref(src)
-  const originalImageHref =
-    route.kind === 'file' ? createNativeChatFileHref(route.pathText, 'literal') : src
-  const external = Boolean(src && /^(?:https?|data|blob):/i.test(src))
-  const attachment = src ? jiraImageReference(src) !== null : false
   const visible = owner?.isVisible ?? true
   const leaseActive = visible && (near || open)
-  const media = useNativeChatMediaHref({
-    href: originalImageHref,
-    runtimeContext,
-    tabId: fileLinkContext?.sourceTabId,
-    sessionId: owner?.sessionId,
-    active: leaseActive,
-    retryKey
-  })
-  const imageHref = media.href
-  const imageRuntimeContext =
-    runtimeContext && media.expectedEnvironmentPairingRevision !== undefined
-      ? {
-          ...runtimeContext,
-          expectedEnvironmentPairingRevision: media.expectedEnvironmentPairingRevision
-        }
-      : runtimeContext
-  const target = resolveNativeChatFileLink(imageHref, fileLinkContext)
-  const localSrc =
-    !external && !attachment && target ? filesystemPathToFileUri(target.absolutePath) : undefined
-  const loadedSrc = useLocalImageSrc(
-    leaseActive ? localSrc : undefined,
-    target?.absolutePath ?? '',
-    runtimeContext?.connectionId,
-    imageRuntimeContext,
-    IMAGE_ACCESS,
-    retryKey
-  )
+  const image = useNativeChatMarkdownImageSrc({ src, active: leaseActive, retryKey })
+  const { imageSrc, imageHref, target, route, fileLinkContext } = image
   useEffect(() => {
     const element = triggerRef.current
     if (!element) {
@@ -148,31 +102,18 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
       setNear(nextNear)
     })
   }, [])
-  const imageSrc = external || attachment ? src : leaseActive ? loadedSrc : undefined
   const displaySrc = imageSrc === failedSrc ? undefined : imageSrc
   const onFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
   const title =
     alt?.trim() ||
     (target ? basename(target.absolutePath) : '') ||
     t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
-  if (!visible && (open || menuOpen)) {
+  if (!visible && open) {
     setOpen(false)
-    setMenuOpen(false)
   }
-  const actions =
-    menuOpen && fileLinkContext && imageHref
-      ? nativeChatLinkActions(imageHref, fileLinkContext, t)
-      : null
-  const canOfferActions = Boolean(fileLinkContext && (target || /^https?:/i.test(src ?? '')))
-  const actionsLabel = target
-    ? t('components.native-chat.imagePreview.fileActions', 'File actions')
-    : t('components.native-chat.imagePreview.linkActions', 'Link actions')
   const runAction = (action: LinkAction): void => {
     handingOff.current = true
-    flushSync(() => {
-      setMenuOpen(false)
-      setOpen(false)
-    })
+    flushSync(() => setOpen(false))
     void action.run()
   }
   const fallback = (
@@ -195,9 +136,6 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
           setRetryKey((key) => key + 1)
         }
         setOpen(nextOpen)
-        if (!nextOpen) {
-          setMenuOpen(false)
-        }
       }}
       triggerLabel={`${t('components.native-chat.composer.viewAttachment', 'View image')}: ${title}`}
       className="max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-border/70"
@@ -219,6 +157,8 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
           } else {
             onLinkClick?.(event, src)
           }
+          event.preventDefault()
+        } else if (gallery?.open(gallerySource, rowKey)) {
           event.preventDefault()
         }
       }}
@@ -248,39 +188,15 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
         },
         onInteractOutside: keepPreviewOpenForChatMenu,
         ...copyAttributes,
-        toolbarActions: canOfferActions ? (
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={actionsLabel}>
-                    <FileText />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{actionsLabel}</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent
-              align="end"
-              onCloseAutoFocus={(event) => {
-                if (handingOff.current || !open) {
-                  event.preventDefault()
-                }
-              }}
-            >
-              {actions
-                ? [actions.primary, actions.alternate, ...(actions.secondaryActions ?? [])].map(
-                    (action) =>
-                      action ? (
-                        <DropdownMenuItem key={action.label} onSelect={() => runAction(action)}>
-                          {action.label}
-                        </DropdownMenuItem>
-                      ) : null
-                  )
-                : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null
+        toolbarActions: (
+          <NativeChatImageLinkActions
+            src={src}
+            image={image}
+            dialogOpen={open}
+            isHandingOff={() => handingOff.current}
+            onRun={runAction}
+          />
+        )
       }}
     />
   )

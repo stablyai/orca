@@ -16,7 +16,7 @@ const NO_IMAGES: NativeChatImageRefBlock[] = []
 
 /** The raster image a file-read tool names. A shell read (Codex's `cat x.png`) and an SVG read hand
  *  the agent text, not a picture; hosts read only absolute paths. */
-function imageReadPath(call: NativeChatToolCallBlock): string | null {
+export function nativeChatToolImageReadPath(call: NativeChatToolCallBlock): string | null {
   if (
     nativeChatToolCategory(call.name, call.mcpIdentity) !== 'read' ||
     nativeChatFullCommand(call.input) !== null
@@ -32,12 +32,14 @@ export function nativeChatToolRunViewedImages(
   blocks: readonly NativeChatBlock[]
 ): NativeChatImageRefBlock[] {
   // Most runs read no images, so they skip pairing.
-  if (!blocks.some((block) => isToolCallBlock(block) && imageReadPath(block) !== null)) {
+  if (
+    !blocks.some((block) => isToolCallBlock(block) && nativeChatToolImageReadPath(block) !== null)
+  ) {
     return NO_IMAGES
   }
   const paths = new Set<string>()
   for (const { call, result } of pairToolBlocks(blocks)) {
-    const path = call ? imageReadPath(call) : null
+    const path = call ? nativeChatToolImageReadPath(call) : null
     // Only a read that finished without error showed the agent its image.
     if (call && path !== null && nativeChatToolLineLabel(call, result).verb === 'read') {
       paths.add(path)

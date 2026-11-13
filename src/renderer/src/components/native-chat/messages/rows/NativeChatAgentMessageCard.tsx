@@ -157,6 +157,7 @@ export function NativeChatAgentMessageCard({
           <NativeChatImageAttachments
             blocks={message.blocks}
             runtimeContext={runtimeContext}
+            messageId={message.id}
             enablePreview={runtimeContext !== undefined}
           />
           <NativeChatTextAttachments

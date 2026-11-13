@@ -1,24 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { PanZoomImageDialog } from '../../../editor/PanZoomImageDialog'
-import {
-  getLocalImageCacheKey,
-  useLocalImageSrc
-} from '../../../editor/document-images/useLocalImageSrc'
+import { getLocalImageCacheKey } from '../../../editor/document-images/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '../../../../runtime/files/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
-import { chatImageAccess } from '../../../../lib/files/access/local-file-access'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
-
-function renderableImageSource(source: string | undefined): boolean {
-  return Boolean(source && /^(?:https?|data|blob):/i.test(source))
-}
+import {
+  renderableNativeChatImageSource,
+  useNativeChatTranscriptImageSrc
+} from './use-native-chat-transcript-image-src'
+import { NativeChatImageGalleryContext } from '../gallery/native-chat-image-gallery-context'
 
 function transcriptImageIdentity(
   block: Extract<NativeChatBlock, { type: 'image-ref' }>,
@@ -26,7 +23,7 @@ function transcriptImageIdentity(
 ): string {
   const source = block.url?.trim() || block.path
   const filePath = block.path ?? source ?? ''
-  if (renderableImageSource(source)) {
+  if (renderableNativeChatImageSource(source)) {
     return `external\0${source ?? ''}`
   }
   return `${source ?? ''}\0${filePath}\0${
@@ -38,33 +35,27 @@ function transcriptImageIdentity(
   }`
 }
 
-// Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
-const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
-
 function TranscriptImagePreview({
   block,
-  runtimeContext
+  runtimeContext,
+  messageId
 }: {
   block: Extract<NativeChatBlock, { type: 'image-ref' }>
   runtimeContext: RuntimeFileOperationArgs | null | undefined
+  messageId?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const gallery = useContext(NativeChatImageGalleryContext)
   const [open, setOpen] = useState(false)
   const [near, setNear] = useState(false)
   const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-  const source = block.url?.trim() || block.path
-  const filePath = block.path ?? source ?? ''
-  const external = renderableImageSource(source)
   const leaseActive = near || open
-  const localSrc = useLocalImageSrc(
-    leaseActive && !external && runtimeContext !== undefined ? source : undefined,
-    filePath,
-    runtimeContext?.connectionId,
+  const { source, external, displaySrc } = useNativeChatTranscriptImageSrc(
+    block,
     runtimeContext,
-    TRANSCRIPT_IMAGE_ACCESS
+    leaseActive
   )
-  const displaySrc = external && leaseActive ? source : localSrc
   const copySrc = copyableNativeChatImageSrc(displaySrc)
   const label = nativeChatImageLabel(block)
   const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
@@ -113,7 +104,11 @@ function TranscriptImagePreview({
         aria-label={`${viewImageLabel}: ${label}`}
         title={label}
         data-native-chat-copy-image-src={copySrc}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!source || !gallery?.open(source, messageId)) {
+            setOpen(true)
+          }
+        }}
         className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <img
@@ -142,10 +137,13 @@ export function NativeChatImageAttachments({
   blocks,
   runtimeContext,
   enablePreview = runtimeContext !== undefined,
+  messageId,
   className
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
+  /** The transcript row drawing these, so the chat-wide preview opens on this copy of a repeated image. */
+  messageId?: string
   /** Callers without an image owner get label-only chips. */
   enablePreview?: boolean
   className?: string
@@ -205,6 +203,7 @@ export function NativeChatImageAttachments({
             key={`${imageKeyBase}-${identity}-${occurrence}`}
             block={image}
             runtimeContext={runtimeContext}
+            messageId={messageId}
           />
         )
       })}
