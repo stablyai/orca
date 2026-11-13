@@ -12,6 +12,7 @@ import {
 } from '../ipc/cloud-workspaces-pairings'
 import type { CloudWorkspacesService } from './cloud-workspaces-service'
 import { createCloudPairingRecovery } from './cloud-pairing-recovery'
+import { createCloudRecoveryGrantsStore } from './cloud-recovery-grants-store'
 
 export const CLOUD_ACCESS_LOST_CHANNEL = 'cloudWorkspaces:accessLost'
 
@@ -19,7 +20,10 @@ export function installCloudPairingRecovery(
   getService: () => Promise<CloudWorkspacesService | null>
 ): void {
   const userDataPath = (): string => app.getPath('userData')
+  const recoveryGrants = createCloudRecoveryGrantsStore(userDataPath())
   const recovery = createCloudPairingRecovery({
+    recordedGrant: (sandboxId) => recoveryGrants.get(sandboxId),
+    recordGrant: (sandboxId, grantId) => recoveryGrants.set(sandboxId, grantId),
     target: async (environmentId) => {
       const sandboxId = cloudSandboxIdForEnvironment(userDataPath(), environmentId)
       if (!sandboxId) {
@@ -44,14 +48,20 @@ export function installCloudPairingRecovery(
       const s = await getService().catch(() => null)
       return s ? s.openGrant(sandboxId) : { ok: false, error: 'not_configured' }
     },
-    repair: async (environmentId, pairingCode) =>
-      (
-        await verifyAndRepairRuntimeEnvironmentFromPairingCode(
-          userDataPath(),
-          { selector: environmentId, pairingCode },
-          { allowCloudWorkspace: true }
-        )
-      ).ok,
+    repair: async (environmentId, pairingCode) => {
+      const result = await verifyAndRepairRuntimeEnvironmentFromPairingCode(
+        userDataPath(),
+        { selector: environmentId, pairingCode },
+        { allowCloudWorkspace: true }
+      )
+      if (result.ok) {
+        return 'saved'
+      }
+      // The link is for another host (saved key or reached host differs): no retry can fix it.
+      return result.kind === 'different-server' || result.kind === 'host-identity-mismatch'
+        ? 'wrong_server'
+        : 'failed'
+    },
     bind: (sandboxId, _environmentId, grantId) => rebindCloudPairingGrant(sandboxId, grantId),
     revokeGrant: async (sandboxId, grantId) => {
       await (await getService().catch(() => null))?.revokeGrant(sandboxId, grantId)
