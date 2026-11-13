@@ -263,6 +263,17 @@ async function reportLandingScroll(container: HTMLElement): Promise<void> {
   expect(box.scrollTop).toBe(landed)
 }
 
+/** The browser's first size report for each drawn row, which it sends in the frame a row appears and this
+ *  harness only sends when asked: rows the window drew while it believed the box was scrolling get theirs here. */
+async function reportDrawnRowSizes(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    for (const row of Array.from(container.querySelectorAll(ROW))) {
+      resized(row, rowHeight(row))
+    }
+  })
+  await settle()
+}
+
 describe('NativeChatToolRun opened-run reader', () => {
   beforeEach(() => {
     vi.useFakeTimers({
@@ -556,13 +567,15 @@ describe('NativeChatToolRun opened-run reader', () => {
       const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
       await settle()
       await scrollBox(container, 9_013)
-      const before = topRow(container)
+      await reportDrawnRowSizes(container)
 
       // Hidden shortly after one more scroll, before anything deferred from it could settle.
       await act(async () => {
         fireEvent.scroll(membersBox(container))
         vi.advanceTimersByTime(hiddenAfterMs)
       })
+      // The reader's place as the pane hides is the one that must come back.
+      const before = topRow(container)
       pane.hidden = true
       rerender(<Transcript blocks={calls(1_000)} visible={false} />)
       // A hidden box loses its offset and may report that as a scroll; the transcript then unmounts the run.
@@ -572,6 +585,7 @@ describe('NativeChatToolRun opened-run reader', () => {
       rerender(<Transcript blocks={calls(1_000)} />)
       await settle()
       await reportLandingScroll(container)
+      await reportDrawnRowSizes(container)
       expect(topRow(container)).toEqual(before)
     })
   }

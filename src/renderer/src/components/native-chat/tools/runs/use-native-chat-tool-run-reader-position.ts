@@ -30,6 +30,64 @@ export function claimNativeChatToolRunReveal(scroller: HTMLElement, member: HTML
 const drawsSomething = (row: NativeChatToolRunRow): boolean => row.kind !== 'aside' || row.focusable
 
 // `seen` is the size and row list the frame budget was granted for; a real change grants a new budget.
+// Blank rows a capture may step over after the box top before it trusts the model instead.
+const MAX_BLANK_ROWS_STEPPED = 8
+
+/** Where the drawn rows put the box top: a row's own place, an undrawn gap, or no usable geometry. */
+type DrawnPlace = NativeChatRunPosition | 'gap' | 'unusable'
+
+/** The reader's place read from the rows actually drawn at the box top, which win over a model that may still
+ *  hold an old height. A binary search over the content's in-flow children keeps this bounded in every mode. */
+function placeFromDrawnRows(
+  scroller: HTMLElement,
+  rowIndexByKey: ReadonlyMap<string, number>
+): DrawnPlace {
+  const box = scroller.getBoundingClientRect()
+  const content = scroller.firstElementChild
+  // A hidden or not-yet-laid-out box reports no client height: nothing there is the reader's place.
+  if (scroller.clientHeight <= 0 || !content?.isConnected) {
+    return 'unusable'
+  }
+  const children = content.children
+  let found = -1
+  for (let low = 0, high = children.length - 1; low <= high;) {
+    const middle = (low + high) >> 1
+    if (children[middle]!.getBoundingClientRect().top - box.top <= 0.5) {
+      found = middle
+      low = middle + 1
+    } else {
+      high = middle - 1
+    }
+  }
+  const read = (child: Element) => {
+    const key = child.getAttribute(ROW_KEY_ATTRIBUTE)
+    const rect = child.getBoundingClientRect()
+    const kind =
+      key === null ? 'spacer' : rowIndexByKey.has(key) && rect.height > 0 ? 'row' : 'blank'
+    return { kind, key, rect }
+  }
+  const atTop = found >= 0 ? read(children[found]!) : undefined
+  if (atTop && atTop.kind !== 'blank' && atTop.rect.bottom > box.top) {
+    return atTop.kind === 'row' && atTop.key !== null
+      ? { key: atTop.key, offset: box.top - atTop.rect.top }
+      : 'gap'
+  }
+  // A blank row or a margin between children: the place is the next child that draws, if it is a row.
+  for (let index = found + 1, blanks = 0; index < children.length; index++) {
+    const next = read(children[index]!)
+    if (next.kind === 'blank') {
+      if (++blanks > MAX_BLANK_ROWS_STEPPED) {
+        return 'gap'
+      }
+      continue
+    }
+    return next.kind === 'row' && next.key !== null
+      ? { key: next.key, offset: Math.max(0, box.top - next.rect.top) }
+      : 'gap'
+  }
+  return 'gap'
+}
+
 type Landing = {
   target: NativeChatRunPosition
   frames: number
@@ -77,10 +135,10 @@ export function useNativeChatToolRunReaderPosition({
     return next
   }, [rows])
   const isVisibleRef = useRef(isVisible)
-  const latest = useRef({ virtualizer, rows, nextDrawing, onRevealed })
+  const latest = useRef({ virtualizer, rows, rowIndexByKey, nextDrawing, onRevealed })
   useLayoutEffect(() => {
     isVisibleRef.current = isVisible
-    latest.current = { virtualizer, rows, nextDrawing, onRevealed }
+    latest.current = { virtualizer, rows, rowIndexByKey, nextDrawing, onRevealed }
   })
 
   const retireLanding = useCallback(() => {
@@ -89,18 +147,36 @@ export function useNativeChatToolRunReaderPosition({
       setHeldRowKey(undefined)
     }
   }, [setHeldRowKey])
-  /** The reader's row in the window's full measurement model, which also covers rows not drawn. */
-  const capture = useCallback((scrollTop: number) => {
-    const { virtualizer: model, rows: current, nextDrawing: next } = latest.current
-    const found = model.getVirtualItemForOffset(scrollTop)?.index
-    const index = found === undefined ? -1 : (next[found] ?? -1)
-    const row = current[index]
-    const measured = model.measurementsCache[index]
-    // No drawing row there (or nothing measured yet) keeps the last place rather than inventing one.
-    if (row && measured) {
-      positionRef.current = { key: row.key, offset: Math.max(0, scrollTop - measured.start) }
-    }
-  }, [])
+  /** The reader's row: from the drawn rows when they cover the box top, else from the window's full model,
+   *  which also covers rows not drawn. No usable geometry keeps the last place. */
+  const capture = useCallback(
+    (scrollTop: number) => {
+      const {
+        virtualizer: model,
+        rows: current,
+        rowIndexByKey: keys,
+        nextDrawing: next
+      } = latest.current
+      const scroller = scrollerRef.current
+      const drawn = scroller ? placeFromDrawnRows(scroller, keys) : 'unusable'
+      if (drawn === 'unusable') {
+        return
+      }
+      if (drawn !== 'gap') {
+        positionRef.current = drawn
+        return
+      }
+      const found = model.getVirtualItemForOffset(scrollTop)?.index
+      const index = found === undefined ? -1 : (next[found] ?? -1)
+      const row = current[index]
+      const measured = model.measurementsCache[index]
+      // No drawing row there (or nothing measured yet) keeps the last place rather than inventing one.
+      if (row && measured) {
+        positionRef.current = { key: row.key, offset: Math.max(0, scrollTop - measured.start) }
+      }
+    },
+    [scrollerRef]
+  )
 
   /** Every scroll of the visible box: the reader's own retires any landing first, in every drawing mode. */
   const onScrolled = useCallback(
