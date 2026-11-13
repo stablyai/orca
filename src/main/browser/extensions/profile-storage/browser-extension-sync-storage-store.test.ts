@@ -77,6 +77,7 @@ describe('BrowserExtensionProfileDocumentStore', () => {
       store.write(profile, OTHER, { kept: profile })
     }
     await store.flush()
+    writeFileSync(join(root, 'sync-storage', '.DS_Store'), 'Finder metadata')
     // A pending write must not bring a forgotten extension back.
     store.write('default', EXTENSION, { pending: true })
     await Promise.all([store.forgetExtension(EXTENSION), store.forgetProfile('work')])

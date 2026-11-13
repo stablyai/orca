@@ -33,9 +33,9 @@ export function sweepCovers(sweep: SweepScope, profileId: string, extensionId: s
 }
 
 /** A missing directory has nothing to delete; any other read error fails the sweep. */
-async function readdirIfPresent(directory: string): Promise<string[]> {
+async function ifPresent<T>(read: () => Promise<T[]>): Promise<T[]> {
   try {
-    return await readdir(directory)
+    return await read()
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return []
@@ -70,16 +70,17 @@ export async function deleteSweptDocuments(
     return
   }
   if (sweep.kind === 'extension') {
-    const profileDirectories = await readdirIfPresent(storageDirectory)
+    const entries = await ifPresent(() => readdir(storageDirectory, { withFileTypes: true }))
+    // Skip stray files like .DS_Store: a path through one fails with ENOTDIR on every retry.
     await removeAll(
-      profileDirectories.map((directory) =>
-        join(storageDirectory, directory, documentFileName(sweep.extensionId))
-      )
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(storageDirectory, entry.name, documentFileName(sweep.extensionId)))
     )
     return
   }
   const directory = documentProfileDirectory(storageDirectory, sweep.profileId)
-  const files = await readdirIfPresent(directory)
+  const files = await ifPresent(() => readdir(directory))
   await removeAll(
     files
       .filter((file) => {
