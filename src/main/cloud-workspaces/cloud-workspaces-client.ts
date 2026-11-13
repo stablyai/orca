@@ -14,6 +14,7 @@ import {
   CloudWorkspaceListResponseSchema,
   CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
+  CloudWorkspaceFollowSchema,
   OrgPromptsSchema,
   type CloudWorkspaceLinkTarget,
   type CloudWorkspaceListQuery,
@@ -156,6 +157,9 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     async patch(id: string, patch: CloudWorkspacePatch) {
       return call('PATCH', ws(id), CloudWorkspaceResponseSchema.extend({}).passthrough(), patch)
+    },
+    async follow(id: string, follow: boolean) {
+      return call(follow ? 'PUT' : 'DELETE', `${ws(id)}/follow`, CloudWorkspaceFollowSchema)
     },
     async noteSent(id: string) {
       await call('POST', `${ws(id)}/sent`, NoteSentSchema, {})

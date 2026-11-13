@@ -354,3 +354,9 @@ function AwaitingPane({
     </div>
   )
 }
+
+/** RS-3: device code sign-in is off for this ChatGPT account (a fixable setting: amber, not red). */
+export const notSetUpDeviceAuthOff = fixture({
+  agent: 'codex',
+  setUp: { setup: { phase: 'failed', error: 'device_auth_disabled' } }
+})

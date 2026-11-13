@@ -68,6 +68,11 @@ export function keySourceLabel(kind: AgentKeyKind, t: Translate): string {
   }
 }
 
+/** RS-3 (design-squad): a fixable access setting reads as a warning (amber), not an error (red). */
+export function setupFailureTone(error: OrcaCloudAgentSetupFailure): 'warning' | 'error' {
+  return error === 'device_auth_disabled' ? 'warning' : 'error'
+}
+
 export function setupFailureCopy(
   agent: OrcaCloudAccountAgent,
   error: OrcaCloudAgentSetupFailure,
@@ -114,6 +119,19 @@ export function setupFailureCopy(
           'Too many sign-in attempts. Try again in a few minutes.'
         ),
         detail: nothingChanged
+      }
+    case 'device_auth_disabled':
+      // RS-3: the broker started but ChatGPT refused to issue a device code for this account.
+      // (design-squad) a pointer that is right rather than a guessed setting name.
+      return {
+        title: t(
+          'orcaCloudAccounts.error.deviceAuthDisabled',
+          'Device code sign-in is off for this ChatGPT account'
+        ),
+        detail: t(
+          'orcaCloudAccounts.error.deviceAuthDisabledDetail',
+          'Turn it on in ChatGPT’s security settings, then try again. On a work or team account, a ChatGPT admin may need to turn it on.'
+        )
       }
     case 'invalid_token':
       return {

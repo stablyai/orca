@@ -6,8 +6,11 @@ import { createRunTempDirectory, sweepStaleRunDirectories } from './vitest-run-t
 
 const bases = []
 
+// A run root past 50 chars falls back to /tmp (resolveRunTempBase), so a base under a long TMPDIR (the Linux
+// premerge lane's is under the home directory) would test /tmp instead of the base it made. Keep POSIX bases short.
 function makeBase() {
-  const base = mkdtempSync(join(tmpdir(), 'orca-run-temp-'))
+  const root = process.platform === 'win32' ? tmpdir() : '/tmp'
+  const base = mkdtempSync(join(root, 'ort-'))
   bases.push(base)
   return base
 }

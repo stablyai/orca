@@ -1,12 +1,20 @@
 // A provider 401 on an Orca-account request (the proxy swapped the real credential in) is a signal, not a
-// verdict: one transient auth error must not sign a person out of every workspace. Before revoking, the
-// control plane makes one cheap server-side auth check with the real credential (no tokens spent) and
-// revokes only when that also says the credential is dead. The desktop can ask for the same check before a
+// verdict: one transient auth error must not sign a person out of every workspace. The control plane makes
+// one cheap server-side auth check with the real credential (no tokens spent). RS-2: that check alone never
+// revokes either (it has never been tried against a real OAuth sign-in): a failed check marks the sign-in
+// "needs check" (suspect), which stays usable at egress; a LATER real agent request that also gets a 401
+// revokes it, and a real request that succeeds (or a passing check) clears it. The desktop can ask for the same check before a
 // launch (POST /v1/agent-credentials/claude/verify). Checks are rate-limited per person and agent
 // (agent_credentials.checked_at), passes are remembered (verified_at), and every keep or revoke is audited
 // (agent_credential_audit).
 import type { AccountProvider } from './account-providers'
-import { markAgentCredentialRevoked, readUsableAgentCredential } from './agent-credentials'
+import {
+  agentCredentialSuspectAt,
+  clearAgentCredentialSuspect,
+  markAgentCredentialRevoked,
+  markAgentCredentialSuspect,
+  readUsableAgentCredential
+} from './agent-credentials'
 import type { Keyring } from './secrets-crypto'
 
 /** At most one auth check (and so one revoke) per person and agent per minute. */
@@ -15,7 +23,7 @@ export const CREDENTIAL_CHECK_INTERVAL_MS = 60_000
 export const CREDENTIAL_VERIFIED_FRESH_MS = 10 * 60_000
 
 export type CredentialVerdict = 'valid' | 'invalid' | 'unknown'
-export type CheckOutcome = 'revoked' | 'kept' | 'skipped'
+export type CheckOutcome = 'revoked' | 'suspect' | 'kept' | 'skipped'
 
 type CheckContext = {
   db: D1Database
@@ -28,7 +36,7 @@ type CheckContext = {
 
 async function audit(
   db: D1Database,
-  entry: { userId: string; agent: string; action: 'revoked' | 'kept'; reason: string; sandboxId: string | null; path: string | null; now: number }
+  entry: { userId: string; agent: string; action: 'revoked' | 'suspect' | 'kept'; reason: string; sandboxId: string | null; path: string | null; now: number }
 ): Promise<void> {
   await db
     .prepare(
@@ -74,6 +82,8 @@ async function checkCredential(
   const base = { userId, agent, now, ...where }
   if (verdict === 'valid') {
     await db.prepare(`UPDATE agent_credentials SET verified_at = ? WHERE user_id = ? AND agent = ?`).bind(now, userId, agent).run()
+    // A passing check clears "needs check".
+    await clearAgentCredentialSuspect(db, userId, agent, now)
   }
   if (verdict !== 'invalid') {
     // A pass on a pre-launch verify is routine; a 401 that didn't hold up, or any inconclusive check, is audited.
@@ -83,19 +93,65 @@ async function checkCredential(
     }
     return 'kept'
   }
-  await markAgentCredentialRevoked(db, userId, agent, now)
+  // RS-2: the check's auth failure alone never revokes: the sign-in needs a real request to confirm it.
+  await markAgentCredentialSuspect(db, userId, agent, now)
   await audit(db, {
     ...base,
-    action: 'revoked',
-    reason: trigger.kind === 'verify' ? 'verify_confirmed_auth_failure' : 'provider_401_confirmed_by_check'
+    action: 'suspect',
+    reason: trigger.kind === 'verify' ? 'verify_check_auth_failure' : 'provider_401_check_auth_failure'
   })
-  return 'revoked'
+  return 'suspect'
 }
 
-export function handleAccountUnauthorized(
+/**
+ * A real agent request got a 401 with the real credential swapped in. A sign-in already in question (a
+ * check failed after an EARLIER 401) is now confirmed dead: revoked. Otherwise one rate-limited check, which
+ * at most puts it in question.
+ */
+export async function handleAccountUnauthorized(
   ctx: CheckContext & { sandboxId: string; path: string }
 ): Promise<CheckOutcome> {
+  // The 401 that triggered the failed check was consumed by that check, so any 401 seen here, with the
+  // sign-in already in question, is a different, later real request.
+  const suspectAt = await agentCredentialSuspectAt(ctx.db, ctx.userId, ctx.provider.agent)
+  if (suspectAt !== null) {
+    await markAgentCredentialRevoked(ctx.db, ctx.userId, ctx.provider.agent, ctx.now)
+    await audit(ctx.db, {
+      userId: ctx.userId,
+      agent: ctx.provider.agent,
+      action: 'revoked',
+      reason: 'provider_401_after_check_failure',
+      sandboxId: ctx.sandboxId,
+      path: ctx.path,
+      now: ctx.now
+    })
+    return 'revoked'
+  }
   return checkCredential(ctx, { kind: 'egress_401', sandboxId: ctx.sandboxId, path: ctx.path })
+}
+
+/** RS-2: a real agent request with the real credential succeeded: a sign-in in question is fine after all. */
+export async function handleAccountRequestSucceeded(ctx: {
+  db: D1Database
+  agent: AccountProvider['agent']
+  userId: string
+  sandboxId: string
+  path: string
+  now: number
+}): Promise<boolean> {
+  const cleared = await clearAgentCredentialSuspect(ctx.db, ctx.userId, ctx.agent, ctx.now)
+  if (cleared) {
+    await audit(ctx.db, {
+      userId: ctx.userId,
+      agent: ctx.agent,
+      action: 'kept',
+      reason: 'request_succeeded_after_check_failure',
+      sandboxId: ctx.sandboxId,
+      path: ctx.path,
+      now: ctx.now
+    })
+  }
+  return cleared
 }
 
 /**

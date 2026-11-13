@@ -59,6 +59,7 @@ import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
 import { handleDeviceSessionsRoute } from './device-sessions'
 import { removeMember } from './member-removal'
+import { setFollow } from './workspace-follows'
 import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
@@ -122,7 +123,7 @@ import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from '
 import { SecretsKmsError } from './secrets-kms'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
-import { handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
+import { handleAccountRequestSucceeded, handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { refreshCodexLeases } from './codex-credentials'
 import {
@@ -132,7 +133,7 @@ import {
   deleteAgentCredential,
   providerEnabled,
   putClaudeCredential,
-  readUsableAgentCredential
+  readUsableAgentCredentialState
 } from './agent-credentials'
 import {
   AgentSourceError,
@@ -208,6 +209,7 @@ import {
   WORKSPACE_ERROR_STATUS,
   WorkspaceError,
   canOpen,
+  canSee,
   isOrgAdmin,
   listWorkspaces,
   patchWorkspace,
@@ -394,6 +396,8 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
           return []
         }
         let real: string | null = null
+        // RS-2: this sign-in is in question (a check failed); a real request here confirms or clears it.
+        let suspect = false
         return [
           {
             header: provider.header,
@@ -418,7 +422,9 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_disabled')
               }
-              real = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
+              const account = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
+              real = account.value
+              suspect = account.suspect
               if (!real) {
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('no_agent_credential')
@@ -429,6 +435,25 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             // Reached only after the real credential was swapped in and sent (denied or unswapped requests
             // never get here).
             onUpstreamStatus: (status, request) => {
+              // RS-2: a real request the provider accepted (not a 401, not a server failure) clears "needs
+              // check". Only while it's in question, so a healthy account costs no writes.
+              if (suspect && !provider.onUnauthorized && status !== 401 && status < 500) {
+                suspect = false
+                const now = (deps.now ?? Date.now)()
+                const work = handleAccountRequestSucceeded({
+                  db: env.SANDBOX_DB,
+                  agent,
+                  userId: row.user_id,
+                  sandboxId: row.id,
+                  path: request.path,
+                  now
+                }).then((cleared) => (cleared ? forgetAccountCredential(row.user_id, agent) : undefined))
+                if (deps.waitUntil) {
+                  deps.waitUntil(work.catch(() => undefined))
+                } else {
+                  void work.catch(() => undefined)
+                }
+              }
               if (status === 401) {
                 const now = (deps.now ?? Date.now)()
                 const waitUntil = (work: Promise<unknown>) => (deps.waitUntil ? deps.waitUntil(work.catch(() => undefined)) : void work.catch(() => undefined))
@@ -449,7 +474,13 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                           fetch: deps.egressFetch ?? fetch
                         })
                       )
-                      .then((outcome) => outcome === 'revoked')
+                      .then((outcome) => {
+                        // In question, not revoked: still usable; the next lookup reads the new state.
+                        if (outcome === 'suspect') {
+                          forgetAccountCredential(row.user_id, agent)
+                        }
+                        return outcome === 'revoked'
+                      })
                 // Every running sandbox of this person drops the dead placeholder, not only this one.
                 const work = handled.then(async (changed) => {
                   if (!changed) {
@@ -501,14 +532,20 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
 
 // Account credentials per person, decrypted at most once a minute per isolate; an edit or delete drops it.
 const ACCOUNT_CACHE_MS = 10_000
-const accountCache = new Map<string, { at: number; value: Promise<string | null> }>()
-function cachedAccountCredential(db: D1Database, keyring: Keyring, userId: string, agent: 'claude' | 'codex', now: number): Promise<string | null> {
+const accountCache = new Map<string, { at: number; value: Promise<{ value: string | null; suspect: boolean }> }>()
+function cachedAccountCredential(
+  db: D1Database,
+  keyring: Keyring,
+  userId: string,
+  agent: 'claude' | 'codex',
+  now: number
+): Promise<{ value: string | null; suspect: boolean }> {
   const key = `${userId}:${agent}`
   const hit = accountCache.get(key)
   if (hit && now - hit.at < ACCOUNT_CACHE_MS) {
     return hit.value
   }
-  const value = readUsableAgentCredential(db, keyring, userId, agent, now)
+  const value = readUsableAgentCredentialState(db, keyring, userId, agent, now)
   accountCache.set(key, { at: now, value })
   value.catch(() => accountCache.delete(key))
   return value
@@ -616,6 +653,9 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       if (result.outcome === 'revoked') {
         forgetAccountCredential(caller.userId, 'claude')
         await refreshOwnersSandboxes(env, deps, caller.userId)
+      }
+      if (result.outcome === 'suspect') {
+        forgetAccountCredential(caller.userId, 'claude')
       }
       const view = await agentCredentialsView(db, env, caller.userId, now)
       return noStore({ claude: view.claude, verifiedAt: result.verifiedAt, checked: result.outcome !== 'fresh' && result.outcome !== 'skipped' })
@@ -2114,7 +2154,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       throw error
     }
   }
-  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
+  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|follow|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
     return fail('not_found', 404)
   }
@@ -2142,6 +2182,13 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     }
     await recordMemberSend(db, row.id, caller.userId, now)
     return json({ ok: true })
+  }
+  if (route === 'PUT follow' || route === 'DELETE follow') {
+    // Following needs seeing it; an admin addressing a private row for management can't follow it.
+    if (!canSee(caller, row)) {
+      throw new WorkspaceError('not_found')
+    }
+    return json(await setFollow(db, caller, row, route === 'PUT follow', now))
   }
   if (route === 'POST presence') {
     const body = PresenceSchema.safeParse(await readJson(request))

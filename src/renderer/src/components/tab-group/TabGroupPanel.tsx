@@ -27,6 +27,7 @@ import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'
 import { CloudWorkspaceNumberChip } from '../cloud-workspaces/CloudWorkspaceNumberChip'
+import { CloudWorkspacePeople } from '../cloud-workspaces/CloudWorkspacePeople'
 import { CloudGitSetupStrip } from '../orca-cloud/CloudGitSetupStrip'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
@@ -315,7 +316,10 @@ export default function TabGroupPanel({
             >
               {/* One W-number and Run button per workspace: in the focused split, or the only group. */}
               {!hasSplitGroups || isFocused ? (
-                <CloudWorkspaceNumberChip worktreeId={worktreeId} />
+                <>
+                  <CloudWorkspacePeople worktreeId={worktreeId} />
+                  <CloudWorkspaceNumberChip worktreeId={worktreeId} />
+                </>
               ) : null}
               {!hasSplitGroups || isFocused ? <RunActionButton worktreeId={worktreeId} /> : null}
               <TabBarQuickCommandsButton

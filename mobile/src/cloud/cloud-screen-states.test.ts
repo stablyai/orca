@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { setCloudReturnTo, takeCloudReturnTo } from './cloud-return-to'
-import { cloudHostGate, cloudMissingState } from './cloud-screen-states'
+import { cloudHostGate, cloudMissingState, cloudNumberLinkState } from './cloud-screen-states'
 
 const base = { isPending: false, isFetching: false, isError: false }
 
@@ -61,5 +61,35 @@ describe('return after connecting', () => {
     // Gave up on the link and connected much later: stay on Home.
     setCloudReturnTo('/cloud/sbx_abc', 0)
     expect(takeCloudReturnTo(11 * 60_000)).toBeNull()
+  })
+
+  it('returns to a W-number link too, but not to other nested paths', () => {
+    setCloudReturnTo('/cloud/orca-eval-team/W-589')
+    expect(takeCloudReturnTo()).toBe('/cloud/orca-eval-team/W-589')
+    setCloudReturnTo('/cloud/orca-eval-team/settings')
+    expect(takeCloudReturnTo()).toBeNull()
+  })
+})
+
+describe('W-number link', () => {
+  it('asks a phone not connected to Orca Cloud to sign in instead of calling it private or deleted', () => {
+    expect(cloudNumberLinkState({ validLink: true, enrolled: false, sandboxId: null })).toBe(
+      'signin'
+    )
+  })
+
+  it('opens the workspace it resolves to, and is missing when it resolves to none', () => {
+    expect(cloudNumberLinkState({ validLink: true, enrolled: true, sandboxId: 'sbx_1' })).toBe(
+      'found'
+    )
+    expect(cloudNumberLinkState({ validLink: true, enrolled: true, sandboxId: null })).toBe(
+      'missing'
+    )
+  })
+
+  it('is missing when the link is malformed, connected or not', () => {
+    expect(cloudNumberLinkState({ validLink: false, enrolled: false, sandboxId: null })).toBe(
+      'missing'
+    )
   })
 })

@@ -53,15 +53,19 @@ describe('Orca Cloud settings group', () => {
     expect(new Set(sections.map((section) => section.group))).toEqual(new Set(['orca-cloud']))
   })
 
-  it('adds Enterprise after Team for a team owner or admin only', () => {
+  it('adds Workspaces then Enterprise after Team for a team owner or admin only', () => {
     const ids = (patch: Parameters<typeof options>[0]) =>
       buildOrcaCloudSettingsSections(options(patch)).map((section) => section.id)
     expect(ids({})).not.toContain('cloud-enterprise')
     expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-enterprise')
+    // HOME-1: the team's workspace list is an admin management view, never a member page.
+    expect(ids({})).not.toContain('cloud-workspaces')
+    expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-workspaces')
     const admin = ids({ isOrcaTeamAdmin: true })
-    expect(admin.slice(0, 4)).toEqual([
+    expect(admin.slice(0, 5)).toEqual([
       'cloud-billing',
       'cloud-team',
+      'cloud-workspaces',
       'cloud-enterprise',
       'cloud-secrets'
     ])
@@ -75,6 +79,7 @@ describe('Orca Cloud settings group', () => {
         .find((entry) => entry.id === id)!
         .searchEntries.flatMap((entry) => entry.keywords ?? [])
     expect(keywords('cloud-enterprise')).toContain('audit log')
+    expect(keywords('cloud-workspaces')).toContain('cloud workspaces')
     expect(keywords('cloud-api-keys')).not.toContain('audit log')
     // Never without a control plane, whatever the role.
     expect(ids({ isOrcaTeamAdmin: true, isOrcaCloudApiAvailable: false })).toEqual([])

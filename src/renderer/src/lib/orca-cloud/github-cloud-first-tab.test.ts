@@ -187,6 +187,11 @@ describe('PAIRED-HELD-ACTIVE: the held placeholder is in front after a GitHub-on
     await create()
     await vi.waitFor(() => expect(tabIds()).toEqual([HELD()]))
     useAppStore.setState({ activeWorktreeId: 'wt-2', activeTabId: 'web-terminal-elsewhere' })
+    // The store's setActiveTab already ignores a tab outside the active workspace, so the end state
+    // alone can't show the guard: it must not even ask to activate the held tab.
+    const realSetActiveTab = useAppStore.getState().setActiveTab
+    const setActiveTab = vi.fn(realSetActiveTab)
+    useAppStore.setState({ setActiveTab })
     // Fake time from here: the settle's recheck after the seeder's shell runs on a timer.
     vi.useFakeTimers()
     try {
@@ -194,7 +199,9 @@ describe('PAIRED-HELD-ACTIVE: the held placeholder is in front after a GitHub-on
       await vi.advanceTimersByTimeAsync(600)
     } finally {
       vi.useRealTimers()
+      useAppStore.setState({ setActiveTab: realSetActiveTab })
     }
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(useAppStore.getState()).toMatchObject({
       activeWorktreeId: 'wt-2',
       activeTabId: 'web-terminal-elsewhere'

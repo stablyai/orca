@@ -115,6 +115,8 @@ export const ORCA_CLOUD_AGENTS_ERROR_CODES = [
   'broker_in_progress',
   'rate_limited',
   'broker_unavailable',
+  /** RS-3: the ChatGPT account has device-code sign-in turned off (the Codex broker can't print a code). */
+  'device_auth_disabled',
   'no_golden_image',
   'timeout',
   'unavailable',

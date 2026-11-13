@@ -193,6 +193,15 @@ export function registerCloudWorkspacesHandlers(
         ? s.patch(parsed.data.id, parsed.data.patch)
         : INVALID
   })
+  handle('cloudWorkspaces:follow', async (args) => {
+    const parsed = z.object({ id: Id, follow: z.boolean() }).safeParse(args)
+    const s = await getService()
+    return !s
+      ? NOT_CONFIGURED
+      : parsed.success
+        ? s.follow(parsed.data.id, parsed.data.follow)
+        : INVALID
+  })
   handle('cloudWorkspaces:resolveLink', async (args) => {
     const parsed = z
       .object({ target: LinkTarget, chatId: ChatId.nullable().optional() })
