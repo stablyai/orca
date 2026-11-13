@@ -1,5 +1,5 @@
 import { isCommittedChatAttachmentCandidate } from '../../../../src/shared/native-chat-text-attachment-references'
-import { createMobileFilePreviewHref } from '../mobile-file-preview-route'
+import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
 import { hostStackRouteHref } from '../../navigation/host-stack-navigation'

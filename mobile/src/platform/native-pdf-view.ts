@@ -4,12 +4,12 @@ import { File as FsFile } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
 import { presentPdf } from '../../modules/orca-mobile-web-shell/src'
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
-import { PDF_MIME_TYPE } from '../files/mobile-file-media'
+import { PDF_MIME_TYPE } from '../files/media/mobile-file-media'
 import {
   downloadMobileFileMedia,
   MobileMediaHostOutdatedError,
   type MobileMediaSink
-} from '../files/mobile-file-media-download'
+} from '../files/media/mobile-file-media-download'
 import {
   pdfViewParamsSchema,
   type BridgePdfOpenParams
