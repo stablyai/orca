@@ -276,7 +276,8 @@ export async function createDraftRelease({
       token,
       {
         method: 'PATCH',
-        body: JSON.stringify({ body, target_commitish: targetMetadata })
+        // tag_name on every PATCH: one without it reset the v1.4.259 draft to an untagged-… release.
+        body: JSON.stringify({ tag_name: tag, body, target_commitish: targetMetadata })
       }
     )
     if (patchedRelease?.draft !== true) {
@@ -303,7 +304,7 @@ export async function createDraftRelease({
         token,
         {
           method: 'PATCH',
-          body: JSON.stringify({ body: publishedBody })
+          body: JSON.stringify({ tag_name: tag, body: publishedBody })
         }
       )
       throw new Error(

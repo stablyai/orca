@@ -125,7 +125,7 @@ describe('publishCompleteDraftReleases', () => {
             'https://api.github.com/repos/stablyai/orca/releases/7',
             expect.objectContaining({
               method: 'PATCH',
-              body: JSON.stringify({ draft: false, prerelease: true })
+              body: JSON.stringify({ tag_name: 'v1.4.2-rc.7', draft: false, prerelease: true })
             })
           ]
         ])
