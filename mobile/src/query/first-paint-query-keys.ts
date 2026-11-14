@@ -17,7 +17,7 @@ import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-sessio
 import type { MobileSessionTab } from '../session/tabs/mobile-session-tabs'
 import { activeSessionTabOf } from '../session/tabs/active-session-tab'
 import { storedTabChatTranscriptIdentity } from '../session/native-chat/transcript/mobile-native-chat-transcript-store'
-import { gitStatusQuery } from '../source-control/mobile-git-status-query'
+import { gitStatusQuery } from '../source-control/changes/mobile-git-status-query'
 import { firstPaintTaskKeys } from '../tasks/screen-state/task-query-storage'
 import { hostQueryKey } from './host-query-key'
 import { persistedHostQueryKey, type PersistedHostQueryKey } from './host-query-persistence'

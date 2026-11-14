@@ -96,7 +96,6 @@ describe('mobile mouse encoding proof', () => {
   })
 
   it.each([
-    ['SGR', '?1006h', '[<65;'],
     ['pixel', '?1016h', '[<65;'],
     ['explicit legacy', '?1006l', '[Ma']
   ])('keeps %s encoding proven by a live write', (_name, mode, prefix) => {

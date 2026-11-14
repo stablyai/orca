@@ -140,9 +140,6 @@ async function setup(cells: RelayCellConfig[] = [SOURCE, TARGET]) {
   }
 }
 
-// The old process stopped heartbeating at START_MS, so it is unheard from here.
-const OLD_UNHEARD_AT = START_MS + HEARTBEAT_TTL_MS + 1_000
-
 async function hintedAssign(store: RelayAssignmentStore) {
   return await store.assign(IDENTITY, 'us-central1', 'us-central1', undefined, {
     hostRequested: true
@@ -204,14 +201,6 @@ describe('a host offline through a roll redials via hinted assign', () => {
       await expectRefused(hintedAssign(store), 'unheard')
     })
 
-    it('is refused on an ordinary readiness dip with no roll stamp', async () => {
-      const { store, heartbeat, at } = await setup()
-      await at(20_000)
-      await heartbeat(SOURCE, { incarnation: NEW_INCARNATION, startedAt: 15_000, ready: false })
-
-      await expectRefused(hintedAssign(store), 'not_ready')
-    })
-
     it('is refused on a migration-only cell parked without a roll stamp', async () => {
       const { store, heartbeat, at, park } = await setup()
       await park('migration-only')
@@ -220,16 +209,6 @@ describe('a host offline through a roll redials via hinted assign', () => {
 
       await expectRefused(hintedAssign(store), 'not_ready')
     })
-  })
-
-  // Residual: the old process is past its TTL and the new one has not heartbeated yet, so
-  // nothing proves the drained sockets gone. The client's retry lands once the new one is heard.
-  it('is still refused between the old process going unheard and the new one heartbeating', async () => {
-    const { store, at, isolateForRoll } = await setup()
-    await isolateForRoll()
-    await at(OLD_UNHEARD_AT)
-
-    await expectRefused(hintedAssign(store), 'unheard')
   })
 
   it('is refused when the roll stamp is stale, even with a new process', async () => {

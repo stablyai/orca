@@ -10,7 +10,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { AgentKanbanCard } from './AgentKanbanCard'
+import { AgentKanbanLaneCardList } from './AgentKanbanLaneCardList'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
 import {
@@ -68,16 +68,20 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
+  dialogPaneKey,
   onOpenTerminal
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
+  dialogPaneKey: string | null
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const label = bucketLabel(bucket, t)
+  // State, not a ref: the list's virtualizer must re-render once the parent scroller attaches.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
 
   return (
     // Cards carry attention color; keep the column neutral to avoid duplicate signaling.
@@ -93,21 +97,23 @@ function KanbanColumn({
           {cards.length}
         </span>
       </header>
-      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+      <div
+        ref={setScrollElement}
+        className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+      >
         {cards.length === 0 ? (
           <p className="px-1 py-2 text-[11px] text-muted-foreground">
             {t('dashboardPopout.bucket.empty', 'None')}
           </p>
         ) : (
-          cards.map((card) => (
-            <AgentKanbanCard
-              key={card.paneKey}
-              card={card}
-              repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
-              now={now}
-              onOpenTerminal={onOpenTerminal}
-            />
-          ))
+          <AgentKanbanLaneCardList
+            cards={cards}
+            scrollElement={scrollElement}
+            repoIconsByRepoId={repoIconsByRepoId}
+            now={now}
+            dialogPaneKey={dialogPaneKey}
+            onOpenTerminal={onOpenTerminal}
+          />
         )}
       </div>
     </section>
@@ -287,6 +293,7 @@ export function AgentKanbanBoard({
                 cards={grouped[bucket]}
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
+                dialogPaneKey={openedCard?.paneKey ?? null}
                 onOpenTerminal={handleOpenTerminal}
               />
             ))}

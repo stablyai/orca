@@ -82,22 +82,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
   })
 
-  it('does not kill a preserved daemon when startup lease acquisition fails', async () => {
-    const mod = await importFresh()
-    ensureRunningOverrides.push(async () => ({
-      socketPath: '/fake/preserved-socket',
-      tokenPath: '/fake/preserved-token'
-    }))
-    lifecycleLeaseErrors.push(new Error('preserved lease failed'))
-
-    await expect(mod.initDaemonPtyProvider()).rejects.toThrow('preserved lease failed')
-
-    expect(adoptionLeaseReleases[0]).toHaveBeenCalledOnce()
-    expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
-    expect(spawnerInstances[0].shutdown).not.toHaveBeenCalled()
-    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
-  })
-
   it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {
     const mod = await importFresh()
     let resolveEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void

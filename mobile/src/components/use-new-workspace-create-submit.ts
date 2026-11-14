@@ -1,7 +1,7 @@
 import { settingsRead } from '../settings/mobile-settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
+import type { RetiredNameRegistry } from '../../../src/shared/worktree/naming/retired-name-registry'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'

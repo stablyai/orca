@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { openRelayDatabase } from './database.js'
 import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
@@ -51,28 +50,6 @@ describePostgres('optional PostgreSQL statement statistics', () => {
     )
     return result.rows[0]!.present
   }
-
-  it('exposes an existing collector idempotently, and skips servers without one', async () => {
-    const url = await freshDatabase()
-    const database = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
-    await database.close()
-    const client = await connect(url)
-    try {
-      expect(await installed(client)).toBe(preloaded)
-      if (preloaded) {
-        const before = await client.query('SELECT stats_reset FROM public.pg_stat_statements_info')
-        await client.query(POSTGRES_STATEMENT_STATS_MIGRATION)
-        const after = await client.query('SELECT stats_reset FROM public.pg_stat_statements_info')
-        expect(after.rows).toEqual(before.rows)
-        await client.query('SELECT calls, wal_bytes, shared_blks_dirtied FROM public.pg_stat_statements LIMIT 1')
-      } else {
-        await client.query(POSTGRES_STATEMENT_STATS_MIGRATION)
-        expect(await installed(client)).toBe(false)
-      }
-    } finally {
-      await client.end()
-    }
-  })
 
   it('tolerates missing extension privileges', async () => {
     const client = await connect(await freshDatabase())

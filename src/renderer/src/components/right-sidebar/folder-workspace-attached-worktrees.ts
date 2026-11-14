@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -7,12 +7,12 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/workt
 import type { Worktree } from '../../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { getProjectedWorktreeLineage } from '../../../../shared/worktree/workspace-lineage-graph'
+import { getProjectedWorktreeLineage } from '../../../../shared/worktree/lineage/workspace-lineage-graph'
 import {
   getSidebarLineageParentsByIdentity,
   type SidebarLineageParentIdentities,
   getProjectedWorktreeLineageChildrenByParentId
-} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null

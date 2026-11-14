@@ -24,7 +24,7 @@ import type {
   ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../../src/shared/ui-chrome-types'
-import { getWorktreeCardModeUpdates } from '../../../../src/shared/worktree/card-properties'
+import { getWorktreeCardModeUpdates } from '../../../../src/shared/worktree/row-display/card-properties'
 import type { HostScreenState } from '../use-host-screen-state'
 import { applyCollapse, withPendingViewChanges } from './host-view-pending-changes'
 import {

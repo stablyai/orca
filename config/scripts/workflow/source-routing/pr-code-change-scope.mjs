@@ -75,7 +75,7 @@ const GIT_COMPAT_PREFIXES = [
   'src/shared/git-',
   'src/shared/git/',
   'src/shared/review-head-tracking-ref',
-  'src/shared/worktree/local-base-branch-fast-forward',
+  'src/shared/worktree/base-refs/local-base-branch-fast-forward',
   'src/main/git/',
   'config/scripts/git-binary-compatibility'
 ]

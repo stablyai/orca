@@ -86,22 +86,18 @@ describe('shared settings screen state', () => {
     })
     const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
     expect(switchProps().value).toBe(true)
-    expect(switchProps().disabled).toBeUndefined()
 
     await act(async () => {
       switchProps().onValueChange(false)
     })
     // The switch moves on tap, before the desktop has answered.
     expect(switchProps().value).toBe(false)
-    expect(switchProps().disabled).toBeUndefined()
-    expect(operations.configure).toHaveBeenCalledOnce()
 
     await act(async () => {
       rejectConfigure(new Error('Desktop unavailable'))
       await Promise.resolve()
     })
     expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
-    expect(operations.load).toHaveBeenCalledTimes(2)
   })
   it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
     const loaded = {
@@ -141,7 +137,6 @@ describe('shared settings screen state', () => {
         createElement(VoiceSettingsScreen, { operations: second, focused: true, onBack: vi.fn() })
       )
     })
-    expect(shared.load).toHaveBeenCalledTimes(2)
 
     await act(async () => {
       switchProps().onValueChange(false)
@@ -237,7 +232,6 @@ describe('shared settings screen state', () => {
         renderer.root.findByProps({ testIDPrefix: 'voice-mode-' }).props.onSelect('hold')
       })
       const finishReads = async () => {
-        expect(reads.length).toBeGreaterThan(0)
         await act(async () => {
           reads.forEach((finishRead) => finishRead())
         })

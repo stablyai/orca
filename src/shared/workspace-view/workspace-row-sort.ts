@@ -1,5 +1,5 @@
 import type { PersistedUIState } from '../persisted-ui-state-types'
-import { compareCodePoints, createSidebarTextComparator } from '../sidebar-list/text-order'
+import { compareCodePoints, createSidebarTextComparator } from '../sidebar-list/sorting/text-order'
 
 export type WorkspaceSortBy = PersistedUIState['sortBy']
 

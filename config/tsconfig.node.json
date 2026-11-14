@@ -26,7 +26,6 @@
     "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
     "../src/renderer/src/components/native-chat/structured-agent-question-projection.ts",
-    "../src/renderer/src/components/native-chat/subagents/native-chat-subagent-delegation.ts",
     "../src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends.ts",
     "../src/renderer/src/components/native-chat/queue/structured-agent-session-queue-request.ts",
     "../src/renderer/src/components/native-chat/native-chat-composer-primary-action.ts",
@@ -43,6 +42,7 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "rewriteRelativeImportExtensions": true,
     "types": ["electron-vite/node"]
   }
 }

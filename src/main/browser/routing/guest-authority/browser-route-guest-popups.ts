@@ -38,6 +38,8 @@ export type BrowserRouteGuestPopupDependencies = {
     request: NewBrowserTabPopupRequest,
     observed: ObservedBrowserGuestGesture | null
   ) => boolean
+  /** The desktop user's own input in a popup takes its opener's page back from the agent. */
+  releaseAgentLead?: (openerWebContentsId: number) => void
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -105,7 +107,18 @@ export function createBrowserRouteGuestPopupController(input: {
     if (!enforceBrowserRouteWebRtcPolicy(contents, () => {})) {
       return false
     }
-    const gesture = trackBrowserGuestInputGesture(contents)
+    const gesture = trackBrowserGuestInputGesture(contents, {
+      onActivatingInput: (byAgent) => {
+        if (byAgent) {
+          return
+        }
+        try {
+          input.dependencies.releaseAgentLead?.(input.opener.id)
+        } catch {
+          // A destroyed opener has no lead left to release.
+        }
+      }
+    })
     gestures.add(gesture)
     try {
       contents.setWindowOpenHandler(buildWindowOpenHandler(contents, gesture))

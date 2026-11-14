@@ -1,6 +1,6 @@
 import { RuntimeFileReads } from './file-reads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAuthorizedPathMock, statMock } from './runtime-file-command-mock-registry'
@@ -77,6 +77,37 @@ describe('RuntimeFileReads', () => {
         commands.readChatImagePreview('id:wt-1', join(dir, 'notes.txt'))
       ).rejects.toThrow('not_an_image')
     })
+
+    it.skipIf(process.platform === 'win32')(
+      'reads an extensionless chat image by its bytes, inside or outside project roots',
+      async () => {
+        const dir = await previewFixture()
+        const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+        await writeFile(join(dir, 'photo'), png)
+        await writeFile(join(dir, 'notes'), 'secret')
+        await symlink(join(dir, 'photo'), join(dir, 'photo.jpg'))
+        await symlink(join(dir, 'notes'), join(dir, 'notes.jpg'))
+        const { commands } = createFileReads()
+        statMock.mockResolvedValue({ isFile: () => true })
+        resolveAuthorizedPathMock.mockRejectedValue(new Error('Access denied'))
+
+        await expect(
+          commands.readChatImagePreview('id:wt-1', join(dir, 'photo.jpg'))
+        ).resolves.toEqual({
+          content: png.toString('base64'),
+          isBinary: true,
+          isImage: true,
+          mimeType: 'image/png'
+        })
+        await expect(
+          commands.readChatImagePreview('id:wt-1', join(dir, 'notes.jpg'))
+        ).rejects.toThrow('only show local image files')
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+        await expect(commands.readChatImagePreview('id:wt-1', join(dir, 'notes'))).rejects.toThrow(
+          'not_an_image'
+        )
+      }
+    )
   })
 })
 

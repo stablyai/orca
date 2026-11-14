@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronRight,
@@ -189,6 +189,9 @@ type AgentKanbanCardProps = {
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
+  /** Lane-owned so disclosure survives virtual unmount while scrolled away. */
+  subagentsOpen: boolean
+  onToggleSubagents: (paneKey: string) => void
   /** Host dialogs on the board because bucket moves remount cards and would close an embedded conversation. */
   onOpenTerminal: (card: DashboardCard) => void
 }
@@ -198,11 +201,12 @@ export const AgentKanbanCard = memo(
     card,
     repoIcon = null,
     now,
+    subagentsOpen,
+    onToggleSubagents,
     onOpenTerminal
   }: AgentKanbanCardProps): React.JSX.Element {
     const t = useTranslate()
     useTranslation()
-    const [subagentsOpen, setSubagentsOpen] = useState(false)
     // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
     const needsYou = card.bucket === 'attention'
     const displayState = dashboardCardDisplayState(card)
@@ -266,7 +270,7 @@ export const AgentKanbanCard = memo(
             <button
               type="button"
               aria-expanded={subagentsOpen}
-              onClick={() => setSubagentsOpen((open) => !open)}
+              onClick={() => onToggleSubagents(card.paneKey)}
               className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <ChevronRight
@@ -327,6 +331,8 @@ export const AgentKanbanCard = memo(
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.subagentsOpen === next.subagentsOpen &&
+    previous.onToggleSubagents === next.onToggleSubagents &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||

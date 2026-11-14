@@ -18,7 +18,7 @@ import {
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
+} from '../../../shared/worktree/visibility/visibility-sources'
 
 /** Same paths on different hosts can have different git usernames and branch prefixes. */
 export function repoGitUsernameCacheKey(

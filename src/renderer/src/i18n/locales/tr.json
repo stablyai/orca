@@ -7986,12 +7986,6 @@
             "title": "Ajan uykusu",
             "toggleLabel": "Ajan uykusunu aç/kapat"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Güncellenmiş worktree kartı düzenini, meta veri yerleşimini, kart görüntüleme menü seçeneklerini ve durum sunumunu önizleyin.",
-            "description": "Güncellenmiş worktree kartı düzenini, meta veri yerleşimini, kart görüntüleme menü seçeneklerini ve durum sunumunu önizleyin.",
-            "title": "Yeni kart stili",
-            "toggleLabel": "Yeni kart stilini aç/kapat"
-          },
           "ca2219fe5e": "Sağ alt köşeye sabitlenmiş küçük, animasyonlu bir evcil hayvan gösterir. Durum çubuğu evcil hayvan menüsünden bir karakter (Claudino, OpenCode, Gremlin) seçin veya kendi PNG, APNG, GIF, WebP, JPG ya da SVG dosyanızı yükleyin. Bu ayarı devre dışı bırakmadan aynı menüden istediğiniz zaman gizleyebilirsiniz.",
           "dd6f0a1d45": "Evcil Hayvan",
           "0e89a574ae": "Sağ alt köşede yüzen animasyonlu evcil hayvan.",
@@ -10151,11 +10145,9 @@
             "newWorktreeCardStyle": {
               "card": "kart",
               "cards": "kartlar",
-              "description": "Güncellenmiş worktree kartı düzenini, meta veri yerleşimini, kart görüntüleme menüsü seçeneklerini ve durum sunumunu önizleyin.",
               "menu": "menü",
               "metadata": "meta veri",
               "status": "durum",
-              "title": "Yeni kart stili",
               "worktree": "worktree",
               "worktrees": "worktree'ler"
             },
@@ -17541,8 +17533,6 @@
           "18763ded26": "Zamanlama",
           "dbef8dc110": "Bu SSH otomasyonu yalnızca Orca, SSH sunucusuna ulaşabildiğinde çalışır. Yeniden bağlanma etkileşimli kimlik bilgileri gerektiriyorsa veya sunucu kullanılamıyorsa çalıştırma atlandı olarak kaydedilir.",
           "1f6026358e": "Otomasyonu sil",
-          "d79452fb30": "Otomasyonu sürdür",
-          "91a4155e95": "Otomasyonu duraklat",
           "2fb1605beb": "Şimdi Çalıştır",
           "221916d93c": "Ajan işlerini zamanlamaya başlamak için bir otomasyon oluşturun.",
           "b09b2384fd": "Duraklatıldı",
@@ -17625,18 +17615,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Henüz çalıştırma yok.",
-          "9974a2b429": "Durum",
           "13988187b3": "Token",
           "86a248187e": "Harcama",
           "149c0b49c7": "Çalışma alanı",
           "8faaa00726": "Çalıştırma",
-          "53fc5f07ab": "Çalıştırma geçmişi",
-          "a00e38d1a3": "yok",
+          "a00e38d1a3": "—",
           "historyUnavailable": "Çalıştırma geçmişi bu sunucudan alınamıyor. Bu, otomasyonun başarısız olduğu veya hiç çalıştırılmadığı anlamına gelmez."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Çalıştırma bağlamı",
-          "33741dd973": "Çalıştırmalara dön"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Dakika",
@@ -17662,10 +17646,8 @@
           "5ad314118e": "Oturum"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Çalıştırmaları görüntülemek için bir otomasyon seçin.",
           "295698292f": "Yeniden çalıştır",
           "0e110a3469": "Çalıştırmalar",
-          "bb1b2cd31e": "Genel bakış",
           "25060635c6": "Yeni ekle",
           "d207ab4c25": "Bir şablondan başla",
           "15e0bfb13b": "Sil",
@@ -17703,8 +17685,6 @@
           "8500baacb4": "harici kaynak",
           "36f71740a7": "Seçilen çalışma alanı",
           "cd8397cc32": "Her çalıştırmada yeni çalışma alanı",
-          "pendingAutomationMissing": "Otomasyon artık kullanılamıyor.",
-          "pendingAutomationRunMissing": "Çalıştırma geçmişi artık kullanılamıyor.",
           "paused": "Duraklatıldı",
           "missingWorkspace": "Eksik çalışma alanı",
           "usageUnavailable": "Kullanım bilgisi yok",
@@ -17713,7 +17693,6 @@
           "latestSavedOutput": "En son kaydedilen çıktı",
           "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
           "retryFullOutput": "Yeniden dene",
-          "backToList": "Tüm otomasyonlar",
           "tableName": "Ad",
           "tableProject": "Proje",
           "tableHost": "Sunucu",
@@ -17723,7 +17702,6 @@
           "rowActions": "Otomasyon işlemleri",
           "tableLastRun": "Son çalıştırma",
           "ownerChanged": "Bu otomasyonun sunucusu değişti. Yenileyin ve tekrar deneyin.",
-          "runError": "Hata:",
           "deleteAutomationDescription": "<name/> ve çalıştırma geçmişini sil. Önceki çalıştırmaların oluşturduğu çalışma alanları silinmez.",
           "deleteExternalAutomationDescription": "<host/> üzerindeki <provider/> içinden <name/> otomasyonunu sil.",
           "runUsageSummaryTokens_other": "Tahmini {{cost}} · {{tokens}} token",
@@ -17991,8 +17969,7 @@
           "historyUnavailable_other": "{{count}} otomasyon için çalıştırma geçmişi kullanılamıyor. Sayımlara yalnızca kullanılabilir geçmiş dahildir."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Otomasyonlar gezinme yolu",
-          "runDetails": "Çalıştırma ayrıntıları"
+          "ariaLabel": "Otomasyonlar gezinme yolu"
         },
         "extraAgentArgs": {
           "advanced": "Gelişmiş",
@@ -18051,13 +18028,12 @@
           "noWorkspaceLaunched": "Çalışma alanı başlatılmadı"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Başlatılmadı",
-          "namedWorkspaceGone": "{{name}} (artık kullanılamıyor)"
+          "notLaunched": "Başlatılmadı"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "bilinmiyor"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH sunucusu",
@@ -18989,7 +18965,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Birlikte aç (odak düzenlenebilir bir alanda değilken)"
+            "openWith": "Birlikte aç (bir Orca metin alanına yazarken hariç)"
           }
         },
         "pluginInstallCount": {
@@ -19759,8 +19735,7 @@
         "stateIdleCount_one": "{{value0}} durduruldu",
         "stateIdleCount_other": "{{value0}} durduruldu",
         "stateUnverifiableCount_one": "Durum bilgisi alınamıyor: {{value0}}",
-        "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}",
-        "showAgent": "{{value0}} öğesini konuşmada göster"
+        "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
       "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
@@ -20221,7 +20196,8 @@
         "unconfirmed": "{{agent}} çatallamayı doğrulayamadı",
         "unconfirmedDetail": "Yine de açılmış olabilir. Yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
         "failed": "{{agent}} bu sohbeti çatallayamadı",
-        "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin."
+        "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin.",
+        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın."
       },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",

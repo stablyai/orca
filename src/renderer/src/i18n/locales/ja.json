@@ -7335,12 +7335,6 @@
             "title": "Agent のスリープ",
             "toggleLabel": "Agent のスリープを切り替え"
           },
-          "newWorktreeCardStyle": {
-            "copy": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "title": "新規カードスタイル",
-            "toggleLabel": "新規カードスタイルを切り替え"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "シェルから渡す変数",
             "shellEnvNamePlaceholder": "変数名",
@@ -9496,11 +9490,9 @@
             "newWorktreeCardStyle": {
               "card": "カード",
               "cards": "カード",
-              "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
               "menu": "メニュー",
               "metadata": "メタデータ",
               "status": "状態",
-              "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
             },
@@ -16855,8 +16847,7 @@
           "historyUnavailable_other": "{{count}} 件のオートメーションで実行履歴を利用できません。集計には利用可能な履歴のみが含まれます。"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "自動化のパンくずリスト",
-          "runDetails": "実行の詳細"
+          "ariaLabel": "自動化のパンくずリスト"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "クロン式",
@@ -16889,8 +16880,6 @@
           "18763ded26": "スケジュール",
           "dbef8dc110": "この SSH 自動化は、Orca が SSH ホストにアクセスできる間のみ実行されます。再接続に対話型認証情報が必要な場合、またはホストが利用できない場合、実行はスキップされたとして記録されます。",
           "1f6026358e": "オートメーションの削除",
-          "d79452fb30": "自動化を再開する",
-          "91a4155e95": "自動化を一時停止する",
           "2fb1605beb": "今すぐ実行",
           "221916d93c": "自動化を作成して、Agent の作業のスケジュール設定を開始します。",
           "b09b2384fd": "一時停止中",
@@ -16967,18 +16956,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "まだ実行はありません。",
-          "9974a2b429": "状態",
           "13988187b3": "トークン",
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
           "8faaa00726": "実行",
-          "53fc5f07ab": "実行履歴",
-          "a00e38d1a3": "該当なし",
+          "a00e38d1a3": "—",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "実行コンテキスト",
-          "33741dd973": "実行一覧に戻る"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "分",
@@ -17004,10 +16987,8 @@
           "5ad314118e": "セッション"
         },
         "AutomationsPage": {
-          "c3a28c9793": "実行を表示するオートメーションを選択します。",
           "295698292f": "再実行",
           "0e110a3469": "実行履歴",
-          "bb1b2cd31e": "概要",
           "25060635c6": "新規追加",
           "d207ab4c25": "テンプレートから始める",
           "15e0bfb13b": "削除",
@@ -17045,8 +17026,6 @@
           "8500baacb4": "外部ソース",
           "36f71740a7": "選択したワークスペース",
           "cd8397cc32": "実行ごとに新規ワークスペース",
-          "pendingAutomationMissing": "自動化は利用できなくなりました。",
-          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。",
           "paused": "一時停止中",
           "missingWorkspace": "ワークスペースがありません",
           "usageUnavailable": "使用量を利用できません",
@@ -17055,7 +17034,6 @@
           "latestSavedOutput": "最新の保存済み出力",
           "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
           "retryFullOutput": "再試行",
-          "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
           "tableHost": "ホスト",
@@ -17065,7 +17043,6 @@
           "rowActions": "自動化の操作",
           "tableLastRun": "最後の実行",
           "ownerChanged": "この自動化によりホストが変更されました。更新して再試行してください。",
-          "runError": "エラー:",
           "deleteAutomationDescription": "<name/> とその実行履歴を削除します。過去の実行で作成されたワークスペースは削除されません。",
           "deleteExternalAutomationDescription": "<host/> 上の <provider/> から <name/> を削除します。",
           "runUsageSummaryTokens_other": "推定 {{cost}} · {{tokens}} トークン"
@@ -17361,12 +17338,11 @@
           "noWorkspaceLaunched": "ワークスペースは起動されていません"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "未起動",
-          "namedWorkspaceGone": "{{name}}（利用できなくなりました）"
+          "notLaunched": "未起動"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",
-          "costUnavailable": "不明"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH ホスト",
@@ -18331,7 +18307,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "次で開く（編集可能なフィールドにフォーカスがない場合）"
+            "openWith": "次で開く（Orca のテキストフィールドで入力中を除く）"
           }
         },
         "pluginInstallCount": {
@@ -19144,8 +19120,7 @@
         "stateMonitoringCount": "{{value0}} 監視",
         "stateUnverifiableCount": "{{value0}} は状態を取得できません",
         "stateWaitingCount": "{{value0}} 待機中",
-        "stateWorkingCount": "{{value0}} 実行中",
-        "showAgent": "会話に {{value0}} を表示"
+        "stateWorkingCount": "{{value0}} 実行中"
       },
       "railLabel": "あなたのメッセージ",
       "railImageMessage": "画像添付",
@@ -19536,7 +19511,8 @@
         "unconfirmedDetail": "チャットが開いている可能性があります。再度分岐する前にセッション履歴を確認してください。",
         "failed": "{{agent}} はこのチャットを分岐できませんでした",
         "hostUnsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。",
-        "failedDetail": "チャットは変更されていません。もう一度お試しください。"
+        "failedDetail": "チャットは変更されていません。もう一度お試しください。",
+        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。"
       },
       "cardKindHidden": {
         "description": "いつでも次の場所で変更できます：",

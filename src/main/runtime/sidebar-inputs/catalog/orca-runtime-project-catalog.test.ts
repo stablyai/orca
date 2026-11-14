@@ -7,7 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 
-import { readSidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import { readSidebarFeedDomains } from '../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 
 import '../../../../shared/mobile-project-sections-contract'
 import { OrcaRuntimeService } from '../../orca-runtime'

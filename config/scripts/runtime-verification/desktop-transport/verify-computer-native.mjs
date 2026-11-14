@@ -76,6 +76,19 @@ const checks = [
     enabled: process.platform === 'win32'
   },
   {
+    name: 'Windows native control tests',
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      'native/computer-use-windows/runtime-native-controls.test.ps1'
+    ],
+    enabled: process.platform === 'win32'
+  },
+  {
     name: 'macOS helper app bundle and signature',
     run: verifyMacOSHelperApp,
     enabled: process.platform === 'darwin'

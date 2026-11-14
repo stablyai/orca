@@ -92,6 +92,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   }
 
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
+  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
@@ -152,18 +153,16 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
 
-  protected structuredAgentSessionStartupOpen: savedChatOpen.AgentSessionRecordStoreStartupOpen | null =
-    null
+  protected structuredAgentSessionStartupOpen?: savedChatOpen.AgentSessionRecordStoreStartupOpen
 
   /** Starts the saved-chat open early; the next startup restoration consumes this attempt. */
   beginStructuredAgentSessionStartupOpen(
     maintenanceAfter: Promise<void>,
-    open = savedChatOpen.startLocalAgentSessionRecordStoreOpen(
-      this.legacyStructuredSessionTabIds,
-      maintenanceAfter
-    )
+    open?: savedChatOpen.AgentSessionRecordStoreStartupOpen
   ): void {
-    this.structuredAgentSessionStartupOpen = open
+    const legacyTabIds = this.legacyStructuredSessionTabIds
+    this.structuredAgentSessionStartupOpen =
+      open ?? savedChatOpen.startLocalAgentSessionRecordStoreOpen(legacyTabIds, maintenanceAfter)
   }
 
   protected mobileSessionTabsChangeSequence = 0
@@ -354,7 +353,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
-    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId)
+    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

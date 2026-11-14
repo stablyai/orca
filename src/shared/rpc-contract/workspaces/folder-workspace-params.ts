@@ -6,6 +6,37 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachm
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { DiffCommentSchema } from '../../diff-comment-schema'
+import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
+import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
+import { LaunchSourceParam } from '../agent-launch/launch-source-param'
+
+export const FolderWorkspaceHookCreateShape = {
+  runHooks: z.boolean().optional(),
+  setupDecision: z.enum(['run', 'skip', 'inherit']).optional(),
+  approvedSetupHash: z.string().max(128).optional(),
+  approvedSetupHashes: z.array(z.string().max(128)).max(64).optional(),
+  agentLaunchMode: z.literal('structured').optional(),
+  startupCommand: OptionalString,
+  startupEnv: z.record(z.string(), z.string()).optional(),
+  startupLaunchConfig: sleepingAgentLaunchConfigSchema,
+  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+  startupAgent: z.string().refine(isTuiAgent).optional(),
+  startupPrompt: OptionalString,
+  startupDraft: OptionalString,
+  startupAgentArgs: AgentArgs.optional(),
+  startupSessionOptions: z.record(z.string(), z.string()).optional(),
+  startupLaunchPreferences: LaunchPreferences.optional(),
+  launchSource: LaunchSourceParam.optional()
+}
+
+export function assertFolderWorkspaceStartup(
+  value: { startupAgent?: string; startupPrompt?: string },
+  ctx: z.RefinementCtx
+): void {
+  if (value.startupPrompt !== undefined && value.startupAgent === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'startupPrompt requires startupAgent' })
+  }
+}
 
 export const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -30,6 +61,7 @@ export function assertLinkedTaskSourceContextMatch(
 
 export const FolderWorkspaceCreate = z
   .object({
+    ...FolderWorkspaceHookCreateShape,
     projectGroupId: requiredString('Missing project group id'),
     name: OptionalString,
     folderPath: OptionalString.nullable().optional(),
@@ -42,6 +74,7 @@ export const FolderWorkspaceCreate = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertLinkedTaskSourceContextMatch)
+  .superRefine(assertFolderWorkspaceStartup)
 
 // Hosts advertising the unique-id mutation capability refuse a shared folder id when this is set.
 const RequireUniqueId = z.boolean().optional()

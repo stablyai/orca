@@ -9,8 +9,8 @@ import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
-import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatToolRunWindowProvider } from './tools/runs/native-chat-tool-run-window-context'
+import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
+import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -326,6 +326,7 @@ export function NativeChatResolvedView({
         }
         rootInput.onKeyDownCapture(event)
       }}
+      onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
@@ -350,19 +351,19 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatToolRunWindowProvider isVisible={isVisible} find={find}>
-            <NativeChatMessageList
-              ref={messageListRef}
-              session={sessionWithPending}
-              isVisible={isVisible}
-              isWorking={turnActive}
-              expandSignal={false}
-              {...turnTiming}
-              awaitingInput={awaitingInput}
-              deliveryNotices={deliveryNotices}
-              runtimeContext={imageRuntimeContext}
-            />
-          </NativeChatToolRunWindowProvider>
+          <NativeChatSubagentTranscripts
+            find={find}
+            paneKey={paneKey}
+            ref={messageListRef}
+            session={sessionWithPending}
+            isVisible={isVisible}
+            isWorking={turnActive}
+            expandSignal={false}
+            {...turnTiming}
+            awaitingInput={awaitingInput}
+            deliveryNotices={deliveryNotices}
+            runtimeContext={imageRuntimeContext}
+          />
         )}
       </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}

@@ -1,3 +1,5 @@
+import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
 import type {
@@ -76,23 +78,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         isActive: tab.active === true
       }
     })
-    const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .map((page) => ({
-        type: 'browser' as const,
-        id: page.browserPageId,
-        title: page.title || page.url || 'Browser',
-        browserWorkspaceId: page.browserPageId,
-        browserPageId: page.browserPageId,
-        browserProfileId: page.browserProfileId,
-        executionHostKey: page.executionHostKey,
-        placement: page.placement,
-        url: page.url,
-        loading: page.loading,
-        canGoBack: page.canGoBack,
-        canGoForward: page.canGoForward,
-        isActive: page.active
-      }))
+    const publishedClientTabs = buildRuntimeClientBrowserTabs(
+      getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+      getBrowserHostLeaseRegistry(this)
+    )
     return [...publishedServerTabs, ...publishedClientTabs]
   }
 

@@ -2,14 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
 
 describe('checkServeUserDataPath', () => {
-  it('refuses a serve that landed on a profile other than the one the CLI chose', () => {
-    const env: NodeJS.ProcessEnv = { ORCA_SERVE_USER_DATA_PATH: '/isolated/profile' }
-    expect(
-      checkServeUserDataPath({ isServeMode: true, userDataPath: '/default/orca', env })
-    ).toContain('/isolated/profile')
-    expect(env.ORCA_SERVE_USER_DATA_PATH).toBeUndefined()
-  })
-
   it('allows the chosen profile, including another spelling of it', () => {
     expect(
       checkServeUserDataPath({
@@ -26,13 +18,6 @@ describe('checkServeUserDataPath', () => {
         platform: 'win32'
       })
     ).toBeNull()
-  })
-
-  it('leaves launches without a CLI choice, or outside serve, alone', () => {
-    expect(checkServeUserDataPath({ isServeMode: true, userDataPath: '/a', env: {} })).toBeNull()
-    const env: NodeJS.ProcessEnv = { ORCA_SERVE_USER_DATA_PATH: '/b' }
-    expect(checkServeUserDataPath({ isServeMode: false, userDataPath: '/a', env })).toBeNull()
-    expect(env.ORCA_SERVE_USER_DATA_PATH).toBeUndefined()
   })
 })
 

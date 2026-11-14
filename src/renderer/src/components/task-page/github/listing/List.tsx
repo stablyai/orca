@@ -37,6 +37,7 @@ export function TaskPageGitHubList({
     pendingGithubScrollRestoreRef,
     githubListRestoreWriteRef,
     loadingTargetPage,
+    githubListRevalidating,
     taskListPositionRef,
     perRepoSourceState,
     unresolvedSourceRepos,
@@ -310,6 +311,7 @@ export function TaskPageGitHubList({
             currentPage={currentPage}
             totalPages={totalPages}
             loadingTarget={loadingTargetPage}
+            disabled={githubListRevalidating}
             onPageChange={(page) => {
               pendingGithubScrollRestoreRef.current = null
               githubListScrollTopRef.current = 0

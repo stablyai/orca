@@ -101,7 +101,6 @@ jobs:
           src/cli/output/command-result-output.test.ts
           src/cli/computer/computer-state-formatting.test.ts
           src/cli/index.test.ts
-          src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli

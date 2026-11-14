@@ -11,7 +11,7 @@
 17 src/main/ai-vault-search/storage/session-search-index-writer.ts
 10 src/main/ai-vault-search/storage/session-search-message-rows.ts
 3 src/main/ai-vault-search/storage/session-search-query-schema.ts
-17 src/main/ai-vault-search/storage/session-search-retention-delete.ts
+22 src/main/ai-vault-search/storage/session-search-retention-delete.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 16 src/main/ai-vault-search/storage/session-search-store.ts
 26 src/main/ai-vault-search/storage/session-search-tool-purge.ts

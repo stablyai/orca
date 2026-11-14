@@ -99,7 +99,7 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
   db.pragma('journal_mode = WAL')
   db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
   db.pragma('foreign_keys = ON')
-  // WAL checkpoints flush committed pages and macOS drive caches.
+  // WAL commits survive app crashes; OS crashes or power loss may roll back uncheckpointed commits.
   db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
   db.pragma('checkpoint_fullfsync = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)

@@ -1,4 +1,4 @@
-import { automaticWorktreeDisplayName } from '../../../../src/shared/worktree/display-name-provenance'
+import { automaticWorktreeDisplayName } from '../../../../src/shared/worktree/metadata/display-name-provenance'
 import { TextInputSheetContent } from '../../components/TextInputModal'
 import { useDraftRenameSheet } from '../../components/use-draft-rename-sheet'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

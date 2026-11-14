@@ -72,10 +72,9 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    // Exclude withdrawn sends and subagent prompts so rail contents do not depend on section expansion.
+    // Exclude withdrawn sends.
     if (
       slot.kind !== 'message' ||
-      slot.depth !== 0 ||
       slot.message.role !== 'user' ||
       slot.message.from !== undefined ||
       slot.message.stoppedBeforeStart === true

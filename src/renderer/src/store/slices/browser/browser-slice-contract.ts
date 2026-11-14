@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
 
 /** What a new tab opens on; a partition only when it must not be derived from the profile. */
@@ -85,7 +86,10 @@ export type ClosedBrowserWorkspaceSnapshot = {
   position?: RecentlyClosedTabPosition
 }
 
+import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+
 export type RemoteBrowserPageHandle = {
+  initializationPresentation?: BrowserInitializationPresentation
   environmentId: string
   remotePageId: string
   /** Profile identity confirmed by the host's current page snapshot. */
@@ -187,8 +191,16 @@ export type BrowserSlice = {
     options?: { surfacePane?: boolean }
   ) => void
   consumeAddressBarFocusRequest: (pageId: string) => boolean
-  updateBrowserTabPageState: (pageId: string, updates: BrowserTabPageState) => void
-  updateBrowserPageState: (pageId: string, updates: BrowserTabPageState) => void
+  updateBrowserTabPageState: (
+    pageId: string,
+    updates: BrowserTabPageState,
+    loadingOwner?: BrowserPageLoadingOwner
+  ) => void
+  updateBrowserPageState: (
+    pageId: string,
+    updates: BrowserTabPageState,
+    loadingOwner?: BrowserPageLoadingOwner
+  ) => void
   setBrowserPageCertificateFailure: (
     pageId: string,
     failure: BrowserCertificateFailure | null

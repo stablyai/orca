@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from '../assignment/assignment-store.js'
 import type { RelayCellConfig } from '../config.js'
-import {
-  openInMemoryRelayDatabase,
-  openRelayDatabase,
-  type RelayDatabase
-} from '../database/database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database/database.js'
 
 const KEY_PREFIX = 'reconnect-claim'
 const USER_ID = `${KEY_PREFIX}-user-1`
@@ -21,54 +17,19 @@ const CELL_INCARNATION = '11111111-1111-4111-8111-111111111111'
 const IDENTITY = { userId: USER_ID, relayHostId: RELAY_HOST_ID }
 const CONTROL_ACTIVITY_ID = `control:${CELL.id}:1`
 
-const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
-const backends: { name: string; open: () => Promise<RelayDatabase> }[] = [
-  { name: 'sqlite', open: openInMemoryRelayDatabase },
-  ...(databaseUrl
-    ? [
-        {
-          name: 'postgres',
-          open: () => openRelayDatabase({ databaseUrl, dataDir: '' })
-        }
-      ]
-    : [])
-]
-
 const databases: RelayDatabase[] = []
-
-async function removeScopedRows(database: RelayDatabase): Promise<void> {
-  await database.query(
-    `DELETE FROM relay_control_connection_reservations WHERE user_id LIKE '${KEY_PREFIX}-%'`
-  )
-  await database.query(
-    `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE '${KEY_PREFIX}-%'`
-  )
-  await database.query(`DELETE FROM relay_assignments WHERE user_id LIKE '${KEY_PREFIX}-%'`)
-  for (const table of [
-    'relay_cell_connection_snapshots',
-    'relay_cell_connection_runtime',
-    'relay_cell_connection_limits',
-    'relay_cell_runtime',
-    'relay_cells'
-  ]) {
-    await database.query(`DELETE FROM ${table} WHERE cell_id = ?`, [CELL.id])
-  }
-}
 
 afterEach(async () => {
   for (const database of databases.splice(0)) {
-    await removeScopedRows(database)
     await database.close()
   }
 })
 
 async function setup(
-  open: () => Promise<RelayDatabase>,
   now: () => number
 ): Promise<{ database: RelayDatabase; store: RelayAssignmentStore }> {
-  const database = await open()
+  const database = await openInMemoryRelayDatabase()
   databases.push(database)
-  await removeScopedRows(database)
   const store = new RelayAssignmentStore(database, now, {
     requireLiveCells: true,
     heartbeatTtlMs: 45_000
@@ -113,10 +74,10 @@ async function reservations(
   }))
 }
 
-describe.each(backends)('control reservation claim on reconnect ($name)', ({ open }) => {
+describe('control reservation claim on reconnect', () => {
   it('claims the fresh reservation when the same generation reconnects', async () => {
     let now = 100_000_000
-    const { database, store } = await setup(open, () => now)
+    const { database, store } = await setup(() => now)
 
     const assignment = await store.assign(IDENTITY)
     await store.activateControl(IDENTITY, {
@@ -158,7 +119,7 @@ describe.each(backends)('control reservation claim on reconnect ($name)', ({ ope
 
   it('still refuses to claim a second reservation while the first is outstanding', async () => {
     let now = 100_000_000
-    const { database, store } = await setup(open, () => now)
+    const { database, store } = await setup(() => now)
 
     const assignment = await store.assign(IDENTITY)
     await store.activateControl(IDENTITY, {

@@ -234,6 +234,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             title={sendTargetDisabledReason ? null : undefined}
             tooltipSide="right"
             progress={presentation.progress}
+            unread={isUnvisited}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>

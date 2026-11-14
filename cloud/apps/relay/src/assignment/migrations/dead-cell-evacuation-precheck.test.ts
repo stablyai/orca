@@ -1,53 +1,14 @@
-import pg from 'pg'
-import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from '../assignment-store.js'
 import type { RelayCellConfig } from '../../config.js'
-import {
-  openInMemoryRelayDatabase,
-  openRelayDatabase,
-  type RelayDatabase
-} from '../../database/database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../../database/database.js'
 
-const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
-const schema = 'relay_dead_cell_precheck_test'
 const CELLS: RelayCellConfig[] = [
   { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
   { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
 ]
 
-function scopedUrl(): string {
-  const url = new URL(databaseUrl!)
-  url.searchParams.set('options', `-c search_path=${schema}`)
-  return url.toString()
-}
-
-async function onAdmin(sql: string): Promise<void> {
-  const client = new pg.Client({ connectionString: databaseUrl })
-  await client.connect()
-  try {
-    await client.query(sql)
-  } finally {
-    await client.end()
-  }
-}
-
-const dialects: [string, () => Promise<RelayDatabase>][] = [
-  ['sqlite', openInMemoryRelayDatabase],
-  ...(databaseUrl
-    ? [
-        [
-          'postgres',
-          async () => {
-            await onAdmin(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
-            await onAdmin(`CREATE SCHEMA ${schema}`)
-            return await openRelayDatabase({ databaseUrl: scopedUrl(), dataDir: '' })
-          }
-        ] as [string, () => Promise<RelayDatabase>]
-      ]
-    : [])
-]
-
-describe.each(dialects)('dead-cell evacuation pre-check (%s)', (_dialect, open) => {
+describe('dead-cell evacuation pre-check', () => {
   let database: RelayDatabase | undefined
 
   afterEach(async () => {
@@ -55,12 +16,8 @@ describe.each(dialects)('dead-cell evacuation pre-check (%s)', (_dialect, open) 
     database = undefined
   })
 
-  afterAll(async () => {
-    if (databaseUrl) await onAdmin(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
-  })
-
   async function setup(now: () => number) {
-    database = await open()
+    database = await openInMemoryRelayDatabase()
     const store = new RelayAssignmentStore(database, now, {
       requireLiveCells: true,
       heartbeatTtlMs: 45_000

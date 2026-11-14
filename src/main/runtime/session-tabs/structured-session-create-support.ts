@@ -300,7 +300,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
 
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
     const startup = this.structuredAgentSessionStartupOpen
-    this.structuredAgentSessionStartupOpen = null
+    this.structuredAgentSessionStartupOpen = undefined
     if (!(startup ? startup.persisted : this.hasPersistedStructuredAgentSessionStore())) {
       return
     }

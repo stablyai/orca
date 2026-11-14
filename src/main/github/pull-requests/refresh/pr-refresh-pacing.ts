@@ -7,6 +7,13 @@ const BACKGROUND_BUDGET_MAX = 20
 const ACTIVE_BURST_WINDOW_MS = 30_000
 const ACTIVE_BURST_MAX = 3
 
+export function isSelectedBudgetedPRRefresh(entry: PRRefreshQueueEntry): boolean {
+  return (
+    entry.candidate.isSelected === true &&
+    (entry.reason === 'visible' || (entry.reason === 'swr' && entry.hosted !== undefined))
+  )
+}
+
 export function usesActiveRefreshPacing(entry: PRRefreshQueueEntry): boolean {
   // Selected admission survives deselection while queued; periodic follow-ups clear the flag.
   return (
@@ -31,8 +38,7 @@ export class PRRefreshPacing {
   }
 
   noteBackgroundStart(entry: PRRefreshQueueEntry): void {
-    this.lastBudgetedStartWasSelected =
-      entry.reason === 'visible' && entry.candidate.isSelected === true
+    this.lastBudgetedStartWasSelected = isSelectedBudgetedPRRefresh(entry)
     const now = Date.now()
     this.lastBackgroundStartAt = now
     this.backgroundStarts.push(now)
@@ -70,8 +76,7 @@ export class PRRefreshPacing {
   private priority(entry: PRRefreshQueueEntry): number {
     // Reserve the next budgeted slot for other ready reviews after a selected list read.
     return this.lastBudgetedStartWasSelected &&
-      entry.reason === 'visible' &&
-      entry.candidate.isSelected === true &&
+      isSelectedBudgetedPRRefresh(entry) &&
       entry.bypassBackgroundBudget !== true
       ? 0
       : entry.priority

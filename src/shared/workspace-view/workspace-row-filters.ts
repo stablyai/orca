@@ -4,7 +4,7 @@ import {
   isHiddenByKindSwitch,
   type WorkspaceKind,
   type WorkspaceKindSwitches
-} from '../worktree/workspace-kinds'
+} from '../worktree/visibility/workspace-kinds'
 
 /** Persisted Workspace options filters shared across surfaces. */
 export type WorkspaceRowFilters = WorkspaceKindSwitches & {

@@ -49,6 +49,13 @@ export function renderSnapshot(
       treeText,
       elementCount: snapshot.elements?.length ?? 0,
       focusedElementId,
+      ...(snapshot.elements === undefined
+        ? {}
+        : {
+            disabledElementIndexes: snapshot.elements
+              .filter((element) => element.isDisabled === true)
+              .map((element) => element.index)
+          }),
       ...(snapshot.rootElementIndex === undefined
         ? {}
         : { rootElementIndex: snapshot.rootElementIndex }),

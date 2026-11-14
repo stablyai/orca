@@ -4,7 +4,7 @@ import { isFeatureTipSeenId } from '../../feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
-} from '../../worktree/card-properties'
+} from '../../worktree/row-display/card-properties'
 import { isPluginPanelTabKey } from '../../plugins/frames/plugin-tab-key'
 import { isFeatureInteractionId } from '../../feature-interactions'
 import type { FeatureInteractionId } from '../../feature-interaction-catalog'

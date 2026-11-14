@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
-import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/sidebar-feed-rows'
-import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
+import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
+import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { buildProjectSectionCatalog } from '../../worktree/project-section-catalog'
@@ -12,7 +12,7 @@ import type { WorktreeHostContextOf } from '../../worktree/worktree-host-context
 import type { MobileLineageStores } from '../../worktree/mobile-workspace-lineage'
 import { useLastVisitedWorktreeOnHost } from '../../worktree/use-last-visited-worktree-on-host'
 import { rowFiltersForView } from '../../worktree/workspace-view-settings'
-import { buildSidebarFeedCatalog } from '../../../../src/shared/sidebar-list/sidebar-feed-catalog'
+import { buildSidebarFeedCatalog } from '../../../../src/shared/sidebar-list/catalog/sidebar-feed-catalog'
 import { buildHostFeedView } from '../sidebar-feed/host-sidebar-feed-inputs'
 import {
   buildHostFeedSections,

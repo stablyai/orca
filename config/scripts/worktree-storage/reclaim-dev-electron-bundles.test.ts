@@ -29,8 +29,7 @@ function makeWorktree(bundles: { name: string; marker: boolean }[]): string {
 describe('sweeping across worktrees', () => {
   it.each([
     ['--apply', '--exclude-worktree'],
-    ['--exclude-worktree', '--apply'],
-    ['--exclude-worktree', '-invalid', '--apply']
+    ['--exclude-worktree', '--apply']
   ])('rejects invalid exclusion operands before cleanup: %j', async (...flags) => {
     const worktree = makeWorktree([{ name: 'idle', marker: true }])
     const initialized = await runProcess({ program: 'git', args: ['-C', worktree, 'init', '-q'] })

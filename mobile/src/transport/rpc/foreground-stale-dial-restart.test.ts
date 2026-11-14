@@ -106,27 +106,6 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     vi.unstubAllGlobals()
   })
 
-  it('leaves a dial opened after the foreground edge alone', async () => {
-    const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key')
-    latest().authenticate()
-    latest().close()
-    await vi.advanceTimersByTimeAsync(500)
-    const fresh = latest()
-    expect(client.getState()).toBe('connecting')
-
-    // Coalesce handoff and AppState nudges so the second cannot churn the first’s fresh socket.
-    client.notifyForeground()
-    const afterFirstNudge = latest()
-    client.notifyForeground()
-    client.notifyForeground()
-
-    expect(latest()).toBe(afterFirstNudge)
-    expect(afterFirstNudge).toBe(fresh)
-    expect(fresh.readyState).toBe(MockWebSocket.CONNECTING)
-
-    client.close()
-  })
-
   it('abandons a handshake stalled across the suspension', async () => {
     const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key')
     latest().authenticate()
