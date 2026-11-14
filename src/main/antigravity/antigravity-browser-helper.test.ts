@@ -4,6 +4,32 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { expect, it, vi } from 'vitest'
 
+import { scrubAntigravityAcpEnvironment } from './antigravity-acp-environment-sanitizer'
+import {
+  ANTIGRAVITY_BROWSER_MARKER,
+  antigravityBrowserHelperPreflightPassed
+} from './antigravity-browser-helper'
+
+it('removes a case-insensitive Crashpad pipe override from the helper environment', () => {
+  const env = { chrome_crashpad_pipe_name: 'stale', PATH: '/bin' }
+  expect(scrubAntigravityAcpEnvironment(env, env)).toContain('chrome_crashpad_pipe_name')
+  expect(env).toEqual({ PATH: '/bin' })
+})
+
+it('rejects a truncated browser-helper preflight capture', () => {
+  const marker = `${ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(
+    'https://example.invalid/orca-antigravity-browser-preflight'
+  )}\n`
+  expect(
+    antigravityBrowserHelperPreflightPassed({
+      code: 0,
+      stdout: '',
+      stderr: marker,
+      outputTruncated: true
+    })
+  ).toBe(false)
+})
+
 it.skipIf(process.platform === 'win32')(
   'runs the real Python BROWSER parser with a colon, space and apostrophe in the executable path',
   async () => {

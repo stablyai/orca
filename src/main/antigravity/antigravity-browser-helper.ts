@@ -2,6 +2,7 @@
 
 import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 import { runProcess } from '@orca/process-host'
+import { scrubAntigravityAcpEnvironment } from './antigravity-acp-environment-sanitizer'
 
 export const ANTIGRAVITY_BROWSER_MARKER = '__ORCA_ANTIGRAVITY_AUTH_URL__'
 
@@ -34,23 +35,32 @@ export const antigravityBrowserArgv = (link: string): string[] =>
     arg === '%s' ? link : arg
   )
 
+export const antigravityBrowserHelperPreflightPassed = (result: {
+  readonly code: number | null
+  readonly stdout: string
+  readonly stderr: string
+  readonly outputTruncated: boolean
+}): boolean =>
+  result.code === 0 &&
+  result.stdout === '' &&
+  !result.outputTruncated &&
+  result.stderr === `${ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(PREFLIGHT_URL)}\n`
+
 /** Check before each server start: a broken helper could let Python launch a real browser. */
 export async function antigravityBrowserHelperWorks(): Promise<boolean> {
   if (!usable) {
     return false
   }
   const [program = '', ...args] = antigravityBrowserArgv(PREFLIGHT_URL)
+  const env = { ...process.env } as Record<string, string>
+  scrubAntigravityAcpEnvironment(env, process.env)
   const spec = {
     program,
     args,
-    ...(process.platform === 'win32' ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } : {}),
+    ...(process.platform === 'win32' ? { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } } : {}),
     timeoutMs: 5_000,
     maxOutputBytes: 4_096
   }
   const result = await runProcess(spec).catch(() => null)
-  return (
-    result?.code === 0 &&
-    result.stdout === '' &&
-    result.stderr === `${ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(PREFLIGHT_URL)}\n`
-  )
+  return result !== null && antigravityBrowserHelperPreflightPassed(result)
 }
