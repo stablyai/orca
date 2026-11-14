@@ -13,7 +13,7 @@ import { inSendOrder } from './native-chat-send-order'
 import {
   stoppedTurnOpeners,
   structuredAgentTurnAnchors
-} from './transcript/native-chat-turn-membership'
+} from './transcript/native-chat-turn-anchors'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 /** Presentation key for the notice after a send stopped before execution. */

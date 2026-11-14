@@ -110,9 +110,11 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Last assistant prose/system failure per turn and before each send-back; no answer means fold all work. */
+/** Last assistant prose/system failure per turn and before each send-back; no answer means fold all work.
+ * Without provider turn bounds any prose row may end a turn a hand-back started, so each stays an answer. */
 export function nativeChatTurnAnswerRows(
-  rows: readonly NativeChatTurnFoldRow[]
+  rows: readonly NativeChatTurnFoldRow[],
+  providerTurnBoundsKnown = true
 ): ReadonlySet<number> {
   const answers = new Set<number>()
   const latest = new Map<string, number>()
@@ -129,6 +131,9 @@ export function nativeChatTurnAnswerRows(
       row.rendersProse &&
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
     if (isCandidate) {
+      if (!providerTurnBoundsKnown) {
+        answers.add(index)
+      }
       latest.set(row.turnKey, index)
     }
   }
@@ -142,13 +147,16 @@ export function nativeChatTurnAnswerRows(
 export function nativeChatTurnFold({
   rows,
   settledTurnKeys,
-  expandedTurnKeys
+  expandedTurnKeys,
+  providerTurnBoundsKnown = true
 }: {
   rows: readonly NativeChatTurnFoldRow[]
   settledTurnKeys: ReadonlySet<string>
   expandedTurnKeys: ReadonlySet<string>
+  /** False for chats without turn records: their keys span provider turns, so every prose row stays an answer. */
+  providerTurnBoundsKnown?: boolean
 }): NativeChatTurnFold {
-  const answers = nativeChatTurnAnswerRows(rows)
+  const answers = nativeChatTurnAnswerRows(rows, providerTurnBoundsKnown)
   const foldedRows = new Set<number>()
   const foldableTurnKeys = new Set<string>()
   for (const [index, row] of rows.entries()) {
