@@ -1,6 +1,6 @@
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
-import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
-import { buildSections } from '../worktree/workspace-list-sections'
+import { buildProjectSectionCatalog } from '../worktree/project-sections/project-section-catalog'
+import { buildSections } from '../worktree/workspace-list/workspace-list-sections'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { createElement, useEffect } from 'react'
 import { act, type create } from 'react-test-renderer'
@@ -19,7 +19,7 @@ import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { useHostScreenState } from './use-host-screen-state'
 import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
 
 vi.mock('expo-router', () => ({}))

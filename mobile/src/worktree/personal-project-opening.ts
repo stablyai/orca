@@ -1,5 +1,5 @@
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import type { MobileViewState } from './workspace-view-settings'
+import type { MobileViewState } from './workspace-list/workspace-view-settings'
 import { randomUUID } from 'expo-crypto'
 import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
 import {
@@ -7,13 +7,13 @@ import {
   newerPersonalProjectOrder,
   type PersonalProjectOrder
 } from '../../../src/shared/personal-project-order'
-import type { ServedProjectSections } from './project-sections-operations'
+import type { ServedProjectSections } from './project-sections/project-sections-operations'
 import { projectOpenWrite, worktreeActivate } from '../host-screen/host-screen-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readMirroredKeyOrStore } from '../storage/mirrored-storage-keys'
-import { LAST_VISITED_WORKTREE_STORAGE_KEY } from './last-visited-worktree-repo'
-import { readLastVisitedWorktreeOnHost } from './last-visited-worktree-by-host'
-import type { Worktree } from './workspace-list-types'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from './navigation/last-visited-worktree-repo'
+import { readLastVisitedWorktreeOnHost } from './navigation/last-visited-worktree-by-host'
+import type { Worktree } from './workspace-list/workspace-list-types'
 
 const writer = randomUUID()
 let seq = 0

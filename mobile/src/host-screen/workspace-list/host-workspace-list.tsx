@@ -4,23 +4,33 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { resolveProjectPreferenceKey } from '../../../../src/shared/project-preference-identity'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
-import { AuthFailedBanner } from '../../components/AuthFailedBanner'
-import { Presence } from '../../components/AutoHeight'
-import { HostDiagnosticsLink } from '../../components/HostDiagnosticsLink'
-import { HostOfflineBanner, useHostOfflineBanner } from '../../components/HostOfflineBanner'
+import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
+import { Presence } from '../../components/motion/AutoHeight'
+import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../../components/host-connection/HostOfflineBanner'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
-import { HostRouteNoticeBanner } from '../../components/HostRouteNoticeBanner'
+import { HostRouteNoticeBanner } from '../../components/host-connection/HostRouteNoticeBanner'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
-import { WorktreeListRow } from '../../components/WorktreeListRow'
+import { WorktreeListRow } from '../../worktree/row-presentation/WorktreeListRow'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
-} from '../../worktree/host-workspace-list-states'
-import { getWorktreeDotStatus, hasWorktreeAgentState } from '../../worktree/workspace-list-ordering'
-import type { Section, WorkspaceListItem, Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/execution-hosts/host-workspace-list-states'
+import {
+  getWorktreeDotStatus,
+  hasWorktreeAgentState
+} from '../../worktree/workspace-list/workspace-list-ordering'
+import type {
+  Section,
+  WorkspaceListItem,
+  Worktree
+} from '../../worktree/workspace-list/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
 import { hostScreenStyles as styles } from '../host-screen-styles'

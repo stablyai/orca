@@ -17,15 +17,16 @@ import { isPageHostRemovalUnavailable } from '../../host-catalog/page-host-remov
 import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../../host-route-notice'
 import { leaveHostRoute } from '../../host-route-exit'
 import {
   getWorktreeRowIdentity,
   isSameWorktreeRow
-} from '../../worktree/worktree-host-row-identity'
-import { noteLastVisitedWorktree } from '../../worktree/last-visited-worktree-by-host'
-import { isWorktreePinned, type Worktree } from '../../worktree/workspace-list-sections'
+} from '../../worktree/row-presentation/worktree-host-row-identity'
+import { noteLastVisitedWorktree } from '../../worktree/navigation/last-visited-worktree-by-host'
+import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'

@@ -7,7 +7,7 @@ import { RecordProjectOpenParams } from '../../../src/shared/rpc-contract/person
 import { mutatePersonalProjectOrder } from '../../../src/shared/personal-project-order-writes'
 import type { Repo } from '../../../src/shared/repo-types'
 import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
-import type { Worktree } from './workspace-list-types'
+import type { Worktree } from './workspace-list/workspace-list-types'
 import { captureMobilePersonalOpening } from './personal-project-opening'
 
 const storage = vi.hoisted(() => ({ read: vi.fn() }))

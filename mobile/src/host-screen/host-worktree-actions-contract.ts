@@ -3,7 +3,7 @@ import type { useForgetHostClient } from '../transport/connection/host-client-ho
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HostScreenState } from './use-host-screen-state'
-import type { ServedProjectSections } from '../worktree/project-sections-operations'
+import type { ServedProjectSections } from '../worktree/project-sections/project-sections-operations'
 
 export type HostWorktreeActionsArgs = {
   client: RpcClient | null

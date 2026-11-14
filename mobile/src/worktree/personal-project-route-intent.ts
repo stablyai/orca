@@ -10,10 +10,10 @@ import { resolveProjectPreferenceKey } from '../../../src/shared/project-prefere
 import { projectOpenWrite } from '../host-screen/host-screen-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readMirroredKeyOrStore } from '../storage/mirrored-storage-keys'
-import { LAST_VISITED_WORKTREE_STORAGE_KEY } from './last-visited-worktree-repo'
-import { readLastVisitedWorktreeOnHost } from './last-visited-worktree-by-host'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from './navigation/last-visited-worktree-repo'
+import { readLastVisitedWorktreeOnHost } from './navigation/last-visited-worktree-by-host'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import { projectSectionsRead } from './project-sections-operations'
+import { projectSectionsRead } from './project-sections/project-sections-operations'
 
 const Intent = z.object({
   writer: z.string().uuid(),
