@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Palette } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -17,7 +16,6 @@ import { normalizeRepoBadgeColor, REPO_COLORS } from '../../../../../../shared/r
 export function ProjectGroupColorMenu({ group }: { group: ProjectGroup }): React.JSX.Element {
   const t = useTranslate()
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
-  const [saving, setSaving] = useState(false)
   const color = normalizeRepoBadgeColor(group.color)
   const names = [
     t('auto.components.sidebar.groupColor.gray', 'Gray'),
@@ -31,28 +29,21 @@ export function ProjectGroupColorMenu({ group }: { group: ProjectGroup }): React
   ]
 
   const saveColor = async (value: string): Promise<void> => {
-    setSaving(true)
-    try {
-      const saved = await updateProjectGroup(
-        group.id,
-        { color: value === 'none' ? null : value },
-        {
-          hostId: getRepoExecutionHostId(group)
-        }
-      )
-      if (!saved) {
-        toast.error(
-          t('auto.components.sidebar.groupColor.saveFailed', 'Could not save group color')
-        )
+    const saved = await updateProjectGroup(
+      group.id,
+      { color: value === 'none' ? null : value },
+      {
+        hostId: getRepoExecutionHostId(group)
       }
-    } finally {
-      setSaving(false)
+    )
+    if (!saved) {
+      toast.error(t('auto.components.sidebar.groupColor.saveFailed', 'Could not save group color'))
     }
   }
 
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger disabled={saving}>
+      <DropdownMenuSubTrigger>
         <Palette className="size-3.5" />
         {t('auto.components.sidebar.groupColor.label', 'Group color')}
       </DropdownMenuSubTrigger>

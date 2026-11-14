@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup, ProjectGroupMutation } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -70,6 +70,47 @@ describe('repos-project-groups-owner-routing', () => {
   })
 
   describe('project group mutations route to the owning host', () => {
+    it('keeps the last color choice when an older save is delayed without blocking another group', async () => {
+      const firstStarted = Promise.withResolvers<void>()
+      const firstReply = Promise.withResolvers<void>()
+      const persisted = new Map<string, ProjectGroup>([
+        [folderScanGroup.id, { ...folderScanGroup, executionHostId: 'local' }],
+        ['other', { ...folderScanGroup, id: 'other', executionHostId: 'local' }]
+      ])
+      projectGroupsUpdate.mockImplementation(async ({ groupId, updates }: ProjectGroupMutation) => {
+        if (updates.color === '#ef4444') {
+          firstStarted.resolve()
+          await firstReply.promise
+        }
+        const previous = persisted.get(groupId)
+        if (!previous) {
+          return null
+        }
+        const updated = {
+          ...previous,
+          color: updates.color === undefined ? previous.color : updates.color
+        }
+        persisted.set(groupId, updated)
+        return updated
+      })
+      const store = createTestStore()
+      store.setState({ projectGroups: [...persisted.values()] })
+      const first = store.getState().updateProjectGroup(folderScanGroup.id, { color: '#ef4444' })
+      await firstStarted.promise
+      const last = store.getState().updateProjectGroup(folderScanGroup.id, { color: '#14b8a6' })
+      await store.getState().updateProjectGroup('other', { color: '#ec4899' })
+      expect(store.getState().projectGroups.find((group) => group.id === 'other')?.color).toBe(
+        '#ec4899'
+      )
+      firstReply.resolve()
+      await Promise.all([first, last])
+
+      expect(persisted.get(folderScanGroup.id)?.color).toBe('#14b8a6')
+      expect(
+        store.getState().projectGroups.find((group) => group.id === folderScanGroup.id)?.color
+      ).toBe('#14b8a6')
+    })
+
     it('refuses, rather than following focus, when a colliding id has no unambiguous owner', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
