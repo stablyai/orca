@@ -1,4 +1,5 @@
 import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { recordTerminalInputActivity } from '@/lib/terminal/input/terminal-input-activity-coalescing'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -145,6 +146,12 @@ export function createTerminalEphemeralActions(
     recordTerminalInput: (paneKey, timestamp = Date.now()) => {
       if (!paneKey || !Number.isFinite(timestamp)) {
         return
+      }
+      if (get().settings?.tabBarOrderMode === 'mru') {
+        const pane = parsePaneKey(paneKey)
+        if (pane) {
+          get().recordTabInteraction(pane.tabId)
+        }
       }
       recordTerminalInputActivity({
         paneKey,

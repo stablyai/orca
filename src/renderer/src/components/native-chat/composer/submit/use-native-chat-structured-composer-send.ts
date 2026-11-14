@@ -15,7 +15,10 @@ import {
 } from '../editor/native-chat-prompt-document'
 import type { StructuredAgentSessionAttachmentPreparation } from '../../session/structured/delivery/structured-agent-session-send-slot'
 import { useCallback } from 'react'
-import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
+import {
+  captureNativeChatStructuredUserAction,
+  completeNativeChatStructuredUserAction
+} from './native-chat-structured-user-action'
 import {
   isStructuredAgentSessionHostCommand,
   isStructuredAgentSessionGoalCommand,
@@ -201,6 +204,7 @@ export function useNativeChatStructuredComposerSend({
       }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
+      const recordInteraction = captureNativeChatStructuredUserAction(structuredTransport)
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -226,7 +230,8 @@ export function useNativeChatStructuredComposerSend({
           completeNativeChatStructuredUserAction(
             agent,
             structuredTransport,
-            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
+            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined,
+            recordInteraction
           )
           consume()
           return true

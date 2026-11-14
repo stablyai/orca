@@ -528,6 +528,14 @@
     "refreshingDetails": "Kontrol ayrıntıları yenileniyor…"
   },
   "settings": {
+    "general": {
+      "tabBarOrder": {
+        "title": "Sekme çubuğu sırası",
+        "description": "Yazarken veya klavyeyle geçiş yaparken sabitlenmemiş sekmeleri başa taşır. Tıklamak sırayı değiştirmez. Sürüklenen sekmeler sonraki etkileşime kadar yerinde kalır.",
+        "manual": "Elle",
+        "mru": "En son kullanılan"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "Ayarlar → Ajanlar",
       "permissionsTitle": "Yeni sohbetlerin izinleri",

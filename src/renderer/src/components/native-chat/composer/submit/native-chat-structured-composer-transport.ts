@@ -49,6 +49,7 @@ export type NativeChatStructuredComposerTransport = {
   /** The session's context usage; null until the journal can state it. */
   contextUsage?: StructuredAgentContextUsage | null
   worktreeId?: string
+  tabId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
   /** `/btw`; absent where Orca can't fork this chat, so the command stays the agent's. */

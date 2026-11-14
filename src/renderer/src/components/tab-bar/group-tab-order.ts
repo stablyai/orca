@@ -150,9 +150,11 @@ export function getActiveTabNavOrder(
     | 'tabsByWorktree'
     | 'openFiles'
     | 'browserTabsByWorktree'
-  >,
+  > &
+    Partial<Pick<AppState, 'getTabCycleOrder'>>,
   worktreeId: string,
-  ids: ActiveTabNavOrderIds = {}
+  ids: ActiveTabNavOrderIds = {},
+  orderMode: 'visible' | 'cycle' = 'visible'
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds =
@@ -186,7 +188,9 @@ export function getActiveTabNavOrder(
       ...groupTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
     ])
     return getGroupVisibleTabOrder(
-      group,
+      orderMode === 'cycle' && state.getTabCycleOrder
+        ? { ...group, tabOrder: state.getTabCycleOrder(worktreeId, group.id) }
+        : group,
       groupTabs,
       groupTerminalIds,
       new Set(editorIds),
