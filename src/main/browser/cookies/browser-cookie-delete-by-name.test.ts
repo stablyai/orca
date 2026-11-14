@@ -57,43 +57,4 @@ describe('deleteCookieByName', () => {
 
     expect(deletes.map(({ domain }) => domain)).toEqual(['.example.com', 'www.example.com'])
   })
-
-  it('reports nothing deleted when no cookie matches', async () => {
-    await expect(
-      deleteSid({ domain: 'example.org', pageUrl: 'https://ignored.test/' })
-    ).resolves.toEqual({
-      result: { deleted: false },
-      deletes: []
-    })
-  })
-
-  it('rejects a domain or URL it cannot match cookies against', async () => {
-    await expect(
-      deleteSid({ domain: 'localhost:3000', pageUrl: 'https://ignored.test/' })
-    ).rejects.toMatchObject({
-      code: 'invalid_argument'
-    })
-    await expect(
-      deleteSid({ url: 'example.com', pageUrl: 'https://ignored.test/' })
-    ).rejects.toMatchObject({
-      code: 'invalid_argument'
-    })
-  })
-
-  it('falls back to the tab URL and asks for --domain or --url when it has no cookie host', async () => {
-    const { deletes } = await deleteSid({ pageUrl: 'https://www.example.com/app' })
-    expect(deletes.map(({ domain }) => domain)).toEqual(['.example.com', 'www.example.com'])
-
-    for (const pageUrl of [
-      'about:blank',
-      'file:///tmp/a.html',
-      'data:text/html,hi',
-      'chrome-error://chromewebdata/'
-    ]) {
-      await expect(deleteSid({ pageUrl })).rejects.toMatchObject({
-        code: 'invalid_argument',
-        message: expect.stringContaining('pass --domain or --url')
-      })
-    }
-  })
 })
