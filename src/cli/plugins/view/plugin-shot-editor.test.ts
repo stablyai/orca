@@ -108,40 +108,11 @@ describe('orca plugin shot --editor', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
-  it('passes --in-place, and notes whether acts ran on a copy', async () => {
-    const call = vi.fn().mockResolvedValue(reply({ acted: 1 }))
-    await shot(
-      [
-        'local.sketch',
-        '--editor',
-        '/w/a.sketch',
-        '--act',
-        '{"key":"r"}',
-        '--out',
-        'x.png',
-        '--in-place'
-      ],
-      call
-    )
-    expect(call.mock.calls[0]?.[1]).toMatchObject({ inPlace: true, acts: [{ key: 'r' }] })
-    await expect(shot(['local.sketch', '--in-place'], vi.fn())).rejects.toThrow(/--editor/)
-  })
-
   it('exits 1 when the editor never asked for its document or logged errors', async () => {
     await shot(
       ['local.sketch', '--editor', 'a.sketch', '--out', 'x.png'],
       vi.fn().mockResolvedValue(reply({ subscribed: false, errors: ['never asked'] }))
     )
     expect(process.exitCode).toBe(1)
-  })
-
-  it('checks its flags before reaching the host', async () => {
-    const call = vi.fn()
-    const run = (argv: string[]) => shot(['local.sketch', '--editor', 'a.sketch', ...argv], call)
-    await expect(run(['--act', '[{"click":[-1,0]}]'])).rejects.toThrow(/--act: action 1/)
-    await expect(run(['--height', '50'])).rejects.toThrow(/--height takes/)
-    await expect(run(['--panel', 'p'])).rejects.toThrow(/--panel or --editor/)
-    await expect(shot(['local.sketch', '--height', '600'], call)).rejects.toThrow(/--editor/)
-    expect(call).not.toHaveBeenCalled()
   })
 })

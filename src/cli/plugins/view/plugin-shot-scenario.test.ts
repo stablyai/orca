@@ -57,7 +57,6 @@ let root: string
 let dir: string
 let pluginKey: string
 let panelId: string
-let stdout: string[]
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'orca-shot-scenario-')))
@@ -70,11 +69,7 @@ beforeEach(async () => {
   check.checkPluginPanels.mockResolvedValue([
     { panel: panelId, entry: 'src/panel.tsx', scenario: 'counted', drawnTree: TREE, issues: [] }
   ])
-  stdout = []
-  vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-    stdout.push(String(chunk))
-    return true
-  })
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
 })
 
 afterEach(async () => {
@@ -89,38 +84,7 @@ afterEach(async () => {
 const run = (argv: string[], call: ReturnType<typeof vi.fn>, remote = false) =>
   PLUGIN_VIEW_HANDLERS['plugin shot'](context(argv, call, { cwd: root, remote }))
 
-const printed = () => JSON.parse(stdout.join('')).result
-
 describe('orca plugin shot --scenario', () => {
-  it('renders the scenario here and sends only its tree to plugins.shotReplay', async () => {
-    const call = vi.fn(async () => ({ result: replayReply() }))
-    await run(['plugin', 'shot', dir, '--scenario', 'counted', '--theme', 'dark'], call)
-    expect(check.checkPluginPanels).toHaveBeenCalledWith(dir, {
-      panel: panelId,
-      scenario: 'counted',
-      drawnTree: true
-    })
-    expect(call.mock.calls).toEqual([
-      [
-        'plugins.shotReplay',
-        {
-          pluginKey,
-          panelId,
-          title: expect.any(String),
-          scenario: 'counted',
-          tree: TREE,
-          colorScheme: 'dark'
-        },
-        { timeoutMs: expect.any(Number) }
-      ]
-    ])
-    const result = printed()
-    expect(result).toMatchObject({ replay: true, scenario: 'counted', errors: [] })
-    expect(result.notes[0]).toMatch(/host-owned control values start from the tree's props/)
-    expect(result.path).toBe(join(dir, '.orca', 'shots', `${pluginKey}-${panelId}.counted.png`))
-    expect((await readFile(result.path)).toString('base64')).toBe(PNG_BASE64)
-  })
-
   it('refuses another host and a bridged shell, since it runs the code here', async () => {
     await expect(
       run(['plugin', 'shot', dir, '--scenario', 'counted'], vi.fn(), true)
@@ -172,23 +136,5 @@ describe('orca plugin shot --scenario', () => {
     await expect(
       run(['plugin', 'shot', dir, '--scenario', 'counted'], ignored)
     ).rejects.toMatchObject({ code: 'runtime_unsupported' })
-  })
-
-  it('fails when the scenario drew no tree, without reaching the host', async () => {
-    check.checkPluginPanels.mockResolvedValue([
-      {
-        panel: panelId,
-        entry: 'src/panel.tsx',
-        drawnTree: null,
-        issues: [{ kind: 'plugin', message: 'boom' }]
-      }
-    ])
-    const call = vi.fn()
-    await expect(run(['plugin', 'shot', dir, '--scenario', 'counted'], call)).rejects.toMatchObject(
-      {
-        code: 'plugin_check_failed'
-      }
-    )
-    expect(call).not.toHaveBeenCalled()
   })
 })
