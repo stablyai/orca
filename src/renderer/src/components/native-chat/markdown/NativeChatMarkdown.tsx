@@ -24,6 +24,7 @@ import {
   NativeChatMarkdownImageLinkContext
 } from '../media/images/NativeChatMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
+import { remarkNativeChatBulletIndentation } from './native-chat-markdown-bullet-indentation'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
 import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-context'
@@ -54,6 +55,7 @@ type NativeChatMarkdownProps = Omit<
   streaming?: boolean
   /** The transcript row's identity, so reader choices inside the text outlive the row's mount. */
   rowKey?: string
+  preserveBulletIndentation?: boolean
 }
 
 /** Every chat surface rewrites `file:` destinations before sanitize can drop them. */
@@ -62,6 +64,7 @@ function withFileDestinations(
 ): CommentMarkdownExtension {
   return {
     remarkPlugins: [...(visualExtension?.remarkPlugins ?? []), remarkNativeChatFileDestinations],
+    remarkPluginsBefore: visualExtension?.remarkPluginsBefore,
     extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
       ? visualExtension.extraFlowSyntaxMarkers
       : [],
@@ -130,6 +133,7 @@ export function NativeChatMarkdown({
   streaming = false,
   growing = false,
   rowKey,
+  preserveBulletIndentation = false,
   content,
   variant,
   ...props
@@ -137,13 +141,21 @@ export function NativeChatMarkdown({
   const onLinkClick = useNativeChatLinkClick()
   const wordFadeArmed = useWordFadeArmed(fadeWords)
   const visualExtension = useNativeChatVisualMarkdownExtension(visualMessageId)
-  const extension = useMemo(
-    () =>
+  const extension = useMemo(() => {
+    const base =
       variant === 'document'
         ? createNativeChatImageExtension(visualExtension, onLinkClick)
-        : withFileDestinations(visualExtension),
-    [onLinkClick, variant, visualExtension]
-  )
+        : withFileDestinations(visualExtension)
+    return preserveBulletIndentation
+      ? {
+          ...base,
+          remarkPluginsBefore: [
+            remarkNativeChatBulletIndentation,
+            ...(base.remarkPluginsBefore ?? [])
+          ]
+        }
+      : base
+  }, [onLinkClick, preserveBulletIndentation, variant, visualExtension])
   const fileLinkExists = useNativeChatFileLinkExists(
     linkifyFilePaths && onLinkClick !== undefined,
     streaming

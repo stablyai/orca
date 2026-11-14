@@ -38,6 +38,7 @@ import type {
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
+import { NativeChatListIndentation } from './native-chat-prompt-list-indentation'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 
@@ -104,6 +105,7 @@ function NativePromptEditor({
         NativeChatFileReference,
         NativeChatImageReference,
         NativeChatUnkernedRunDecorations,
+        NativeChatListIndentation,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({
           placeholder: () => placeholderRef.current,
