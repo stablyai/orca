@@ -29,7 +29,7 @@ export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
   set(this: OriginBufferLine, index, cell) {
     const state = readOriginLineAttachment(this)!
     state.owner.flush()
-    state.originals!.set.call(this, index, cell)
+    state.originals!.set!.call(this, index, cell)
     state.owner.writeCell(this, index)
   },
   insertCells(this: OriginBufferLine, position, count, fill) {
