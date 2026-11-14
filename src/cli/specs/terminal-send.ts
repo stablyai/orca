@@ -5,17 +5,19 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
   path: ['terminal', 'send'],
   summary: 'Send input to a live terminal',
   usage:
-    'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--json]',
+    'orca terminal send [--terminal <handle>] [--text <text|-> | --text-file <path>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'terminal',
     'text',
+    'text-file',
     'enter',
     'interrupt',
     'wait-submit',
     'retry-request'
   ],
   notes: [
+    'Use --text - to read UTF-8 text from stdin until EOF, or --text-file <path> to read a UTF-8 file relative to the CLI working directory. These sources are mutually exclusive and preserve whitespace and control bytes.',
     "Without --enter, --text is written to the PTY verbatim, so control bytes pass through (Bash/Zsh: --text $'\\x1b' for Escape, $'\\x15' for Ctrl+U).",
     'With --enter and without --interrupt, a prompt to a recognized running agent is bracketed-pasted and embedded Escape bytes are made inert.',
     'For a text-plus-Enter agent prompt, the result separates input acceptance from observed submission and turn start.',
