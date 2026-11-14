@@ -7,10 +7,7 @@ import type { NativeChatOptionPickerRequest } from '@/components/native-chat/ses
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
-import type {
-  NativeChatPaneFork,
-  NativeChatPaneForks
-} from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
@@ -36,8 +33,8 @@ function nativeChatSessionAttachmentNotReadyNotice(
       )
 }
 
-function nativeChatForkCommand(
-  fork: NativeChatPaneFork | undefined,
+export function nativeChatForkCommand(
+  { fork, sideChat }: NativeChatPaneForks,
   isWorking: boolean,
   agent: AgentType
 ): NativeChatStructuredComposerTransport['fork'] {
@@ -47,8 +44,17 @@ function nativeChatForkCommand(
   }
   return {
     run: () => {
-      // Refused, not deferred: the user retries once the reply ends.
+      // Like `/btw`, a running reply forks through the newest finished one; refused, never deferred,
+      // where there is none (a first reply, or an agent that forks only its latest turn).
       if (isWorking) {
+        const throughItemId = sideChat?.finishedForkItemId
+        if (throughItemId) {
+          if (fork.pendingItemId !== null) {
+            return translate('components.native-chat.fork.pending', 'Forking this chat…')
+          }
+          void fork.request(throughItemId)
+          return null
+        }
         return translate(
           'components.native-chat.fork.commandWorking',
           'Can’t fork while {{agent}} is replying. Run /fork again when it finishes.',
@@ -123,7 +129,7 @@ export function useNativeChatStructuredComposerTransport(args: {
                 })
             }
           : undefined,
-      fork: nativeChatForkCommand(fork, controller.isWorking, props.agent),
+      fork: nativeChatForkCommand({ fork, sideChat }, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),
       send: (text, attachments, ...request) => {
