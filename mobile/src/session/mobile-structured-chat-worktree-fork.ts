@@ -120,6 +120,8 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   terminal?: boolean
   /** The chat a subagent reports back to, by name. */
   sourceLabel?: string
+  /** Another agent's fork: the new chat starts from this recap instead of a copy. */
+  recap?: string
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   showToast: (message: string, durationMs?: number) => void
   openWorktree: (worktreeId: string, name: string, warning?: string) => void
@@ -147,7 +149,7 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   if (!base) {
     return
   }
-  const subagent = input.mode === 'subagent' && input.terminal !== true
+  const subagent = input.mode === 'subagent' && input.terminal !== true && !input.recap
   const task = subagent ? await askMobileSubagentTask() : null
   if (subagent && !task) {
     return
@@ -178,7 +180,7 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
     report(created.error)
     return
   }
-  if (input.terminal) {
+  if (input.terminal && !input.recap) {
     const opened = await sessionTabCreateTerminal
       .request(
         client,
@@ -210,11 +212,12 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
     client,
     created.worktreeId,
     input.agent,
-    input.forkFrom,
+    input.recap ? undefined : input.forkFrom,
     undefined,
-    task
-      ? subagentFirstMessage(task, input.forkFrom.sessionId, input.sourceLabel ?? input.agent)
-      : undefined
+    input.recap ??
+      (task
+        ? subagentFirstMessage(task, input.forkFrom.sessionId, input.sourceLabel ?? input.agent)
+        : undefined)
   ).catch(() => ({ kind: 'unknown' as const }))
   // A subagent works in the background; you stay in this chat.
   if (task) {

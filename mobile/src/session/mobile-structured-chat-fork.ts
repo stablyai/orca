@@ -49,7 +49,9 @@ export function mobileChatForkTabPlacement(
 export async function forkMobileStructuredChat(
   scope: ForkScope,
   agent: TuiAgent,
-  forkFrom: StructuredAgentSessionForkSource
+  forkFrom: StructuredAgentSessionForkSource,
+  /** Another agent's fork: a fresh chat whose first message recaps this one. */
+  recap?: string
 ): Promise<void> {
   const agentName = TUI_AGENT_DISPLAY_NAMES[agent]
   const report = (message: string): void => {
@@ -72,8 +74,9 @@ export async function forkMobileStructuredChat(
       client,
       scope.worktreeId,
       agent,
-      forkFrom,
-      tabPlacement
+      recap ? undefined : forkFrom,
+      tabPlacement,
+      recap
     )
     if (result.kind === 'created') {
       scope.pendingSelectionRef.current = withLaunchReply(scope.pendingSelectionRef.current, lock, {

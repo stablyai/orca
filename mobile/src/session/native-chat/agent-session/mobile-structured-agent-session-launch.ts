@@ -14,7 +14,8 @@ import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams,
-  type StructuredAgentSessionForkSource
+  type StructuredAgentSessionForkSource,
+  type StructuredAgentSessionResumeSource
 } from '../../../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../../../src/shared/agent-session/structured-agent-create-support-reply'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -48,13 +49,15 @@ function createParamsFor(
   worktree: string,
   forkFrom: StructuredAgentSessionForkSource | undefined,
   tabPlacement: StructuredAgentSessionCreateParams['tabPlacement'],
-  firstMessageText?: string
+  firstMessageText?: string,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
     ...(forkFrom ? { forkFrom } : {}),
+    ...(resumeFrom ? { resumeFrom } : {}),
     ...(tabPlacement ? { tabPlacement } : {}),
     ...(firstMessageText
       ? {
@@ -106,7 +109,9 @@ export async function createMobileStructuredAgentSession(
   /** Sent only to a host advertising create placement; the replay keeps it. */
   tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
   /** Sent only to a host advertising create messages: the chat's first prompt. */
-  firstMessageText?: string
+  firstMessageText?: string,
+  /** A transcript already placed on this host, e.g. a chat copied from another host. */
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -147,7 +152,14 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement, firstMessageText)
+  const params = createParamsFor(
+    agent,
+    worktree,
+    forkFrom,
+    tabPlacement,
+    firstMessageText,
+    resumeFrom
+  )
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   let priorCreateOutcomeUnknown = false
