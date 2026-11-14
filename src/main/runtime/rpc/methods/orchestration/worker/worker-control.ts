@@ -305,7 +305,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         warning:
           abandoned.disposition === 'abandoned'
             ? 'Possibly-live resources were retained; no process was stopped or deleted.'
-            : `The worker was already ${worker.state}; its terminal was left open and no process changed.`,
+            : `The worker was already ${abandoned.worker.state}; its terminal was left open and no process changed.`,
         residualResources: JSON.parse(abandoned.worker.residual_resources) as unknown[]
       }
     }
