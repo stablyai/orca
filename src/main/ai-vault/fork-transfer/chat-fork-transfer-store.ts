@@ -1,28 +1,29 @@
 import { createHash, randomUUID, type Hash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, rmSync } from 'node:fs'
 import { mkdir, open, rm, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import {
   CHAT_FORK_TRANSFER_CHUNK_BYTES,
   CHAT_FORK_TRANSFER_IDLE_MS,
-  CHAT_FORK_TRANSFER_MAX_BYTES,
-  CHAT_FORK_TRANSFER_MAX_SESSIONS
+  CHAT_FORK_TRANSFER_MAX_BYTES
 } from '../../../shared/ai-vault/fork-transfer/chat-fork-transfer-limits'
+import { ChatForkImportLaunches } from './chat-fork-import-launches'
 import {
   ChatForkTransferError,
   type ChatForkImportLaunch,
   type StagedChatForkImport,
   type StagedChatForkImportTarget
 } from './chat-fork-transfer-ownership'
+import {
+  clearChatForkIdleTimer,
+  ownedChatForkEntry as owned,
+  reserveChatForkSlot,
+  restartChatForkIdleTimer,
+  type Timed
+} from './chat-fork-transfer-slots'
 
-type Timed = { owner: string; timer: ReturnType<typeof setTimeout> | null }
-
-type ExportEntry = Timed & {
-  directory: string
-  filePath: string | null
-  byteLength: number
-}
+type ExportEntry = Timed & { directory: string; filePath: string | null; byteLength: number }
 
 type ImportEntry = Timed & {
   filePath: string
@@ -30,29 +31,33 @@ type ImportEntry = Timed & {
   hash: Hash
   written: number
   busy: boolean
+  commit: Promise<ChatForkImportLaunch> | null
   declared: StagedChatForkImportTarget & { byteLength: number; sha256: string }
 }
-
-type LaunchEntry = Timed & ChatForkImportLaunch
 
 /** Staged chat transcripts moving between hosts; every id is host-minted and bound to its caller. */
 export class ChatForkTransferStore {
   private readonly exports = new Map<string, ExportEntry>()
   private readonly imports = new Map<string, ImportEntry>()
-  private readonly launches = new Map<string, LaunchEntry>()
+  /** Begun imports still opening their staging file; they hold a slot like an open import. */
+  private readonly opening = new Map<string, { owner: string }>()
+  private readonly launches: ChatForkImportLaunches
   private ready: Promise<void> | null = null
+  private disposed = false
 
   constructor(
     private readonly root: string,
     private readonly idleMs = CHAT_FORK_TRANSFER_IDLE_MS
-  ) {}
+  ) {
+    this.launches = new ChatForkImportLaunches(idleMs)
+  }
 
   async createExport(
     owner: string,
     produce: (directory: string) => Promise<{ filePath: string }>
   ): Promise<{ exportId: string; byteLength: number; sha256: string }> {
     await this.prepare()
-    reserve(this.exports.size)
+    reserveChatForkSlot([this.exports.values()], owner)
     const exportId = randomUUID()
     const directory = join(this.root, 'exports', exportId)
     const entry: ExportEntry = { owner, timer: null, directory, filePath: null, byteLength: 0 }
@@ -76,7 +81,7 @@ export class ChatForkTransferStore {
       }
       entry.filePath = filePath
       entry.byteLength = size
-      this.touch(entry, () => this.disposeExport(exportId))
+      restartChatForkIdleTimer(entry, this.idleMs, () => this.disposeExport(exportId))
       return { exportId, byteLength: size, sha256 }
     } catch (error) {
       this.disposeExport(exportId)
@@ -108,7 +113,7 @@ export class ChatForkTransferStore {
     } finally {
       await handle.close()
     }
-    this.touch(entry, () => this.disposeExport(exportId))
+    restartChatForkIdleTimer(entry, this.idleMs, () => this.disposeExport(exportId))
     return { bytesBase64: buffer.toString('base64'), eof: offset + wanted >= entry.byteLength }
   }
 
@@ -125,14 +130,26 @@ export class ChatForkTransferStore {
     declared: StagedChatForkImportTarget & { byteLength: number; sha256: string }
   ): Promise<{ importId: string; chunkBytes: number }> {
     await this.prepare()
-    reserve(this.imports.size)
     if (declared.byteLength > CHAT_FORK_TRANSFER_MAX_BYTES) {
       throw new ChatForkTransferError('chat_fork_transfer_too_large')
     }
+    // Reserved synchronously, so begins racing in one tick cannot all pass the cap.
+    reserveChatForkSlot([this.imports.values(), this.opening.values()], owner)
     const importId = randomUUID()
     const filePath = join(this.root, 'imports', `${importId}.jsonl`)
-    await mkdir(dirname(filePath), { recursive: true, mode: 0o700 })
-    const handle = await open(filePath, 'wx', 0o600)
+    this.opening.set(importId, { owner })
+    let handle: FileHandle
+    try {
+      await mkdir(dirname(filePath), { recursive: true, mode: 0o700 })
+      handle = await open(filePath, 'wx', 0o600)
+    } finally {
+      this.opening.delete(importId)
+    }
+    if (this.disposed) {
+      await handle.close().catch(() => undefined)
+      await rm(filePath, { force: true }).catch(() => undefined)
+      throw new ChatForkTransferError('chat_fork_transfer_not_found')
+    }
     const entry: ImportEntry = {
       owner,
       timer: null,
@@ -141,10 +158,11 @@ export class ChatForkTransferStore {
       hash: createHash('sha256'),
       written: 0,
       busy: false,
+      commit: null,
       declared
     }
     this.imports.set(importId, entry)
-    this.touch(entry, () => void this.disposeImport(importId))
+    restartChatForkIdleTimer(entry, this.idleMs, () => void this.disposeImport(importId))
     return { importId, chunkBytes: CHAT_FORK_TRANSFER_CHUNK_BYTES }
   }
 
@@ -162,9 +180,9 @@ export class ChatForkTransferStore {
       throw new ChatForkTransferError('chat_fork_transfer_integrity_failed')
     }
     if (offset !== entry.written) {
-      // A retried chunk the host already holds is acknowledged, never written twice.
+      // A retried chunk the host already holds is acknowledged as that chunk, never written twice.
       if (offset + bytes.length <= entry.written) {
-        return { acknowledgedOffset: entry.written }
+        return { acknowledgedOffset: offset + bytes.length }
       }
       throw new ChatForkTransferError('chat_fork_transfer_offset_mismatch')
     }
@@ -183,32 +201,34 @@ export class ChatForkTransferStore {
     }
     entry.hash.update(bytes)
     entry.written += bytes.length
-    this.touch(entry, () => void this.disposeImport(importId))
+    restartChatForkIdleTimer(entry, this.idleMs, () => void this.disposeImport(importId))
     return { acknowledgedOffset: entry.written }
   }
 
-  /** Verifies the upload, hands it to `place`, and always removes the staged file. */
-  async commitImport<T>(
+  /** Verifies the upload, hands it to `place`, records the launch, and always removes the staged
+   *  file. A retried commit (lost reply) gets the same placement instead of a second copy. */
+  commitImport(
     owner: string,
     importId: string,
-    place: (staged: StagedChatForkImport) => Promise<T>
-  ): Promise<T> {
-    const entry = owned(this.imports, importId, owner)
+    place: (staged: StagedChatForkImport) => Promise<ChatForkImportLaunch>
+  ): Promise<ChatForkImportLaunch> {
+    const entry = this.imports.get(importId)
+    if (entry?.owner !== owner) {
+      const placed = this.launches.find(owner, importId)
+      return placed
+        ? Promise.resolve(placed)
+        : Promise.reject(new ChatForkTransferError('chat_fork_transfer_not_found'))
+    }
+    if (entry.commit) {
+      return entry.commit
+    }
     if (entry.busy) {
-      throw new ChatForkTransferError('chat_fork_transfer_busy')
+      return Promise.reject(new ChatForkTransferError('chat_fork_transfer_busy'))
     }
     entry.busy = true
-    this.clearTimer(entry)
-    try {
-      await entry.handle.close()
-      const { byteLength, sha256, ...target } = entry.declared
-      if (entry.written !== byteLength || entry.hash.digest('hex') !== sha256) {
-        throw new ChatForkTransferError('chat_fork_transfer_integrity_failed')
-      }
-      return await place({ ...target, filePath: entry.filePath })
-    } finally {
-      await this.disposeImport(importId)
-    }
+    clearChatForkIdleTimer(entry)
+    entry.commit = this.placeImport(owner, importId, entry, place)
+    return entry.commit
   }
 
   cancelImport(owner: string, importId: string): boolean {
@@ -220,53 +240,50 @@ export class ChatForkTransferStore {
     return true
   }
 
-  recordLaunch(owner: string, importId: string, launch: ChatForkImportLaunch): void {
-    const oldest = this.launches.keys().next()
-    if (this.launches.size >= CHAT_FORK_TRANSFER_MAX_SESSIONS && !oldest.done) {
-      this.disposeLaunch(oldest.value)
-    }
-    const entry: LaunchEntry = { owner, timer: null, ...launch }
-    this.launches.set(importId, entry)
-    this.touch(entry, () => this.disposeLaunch(importId))
-  }
-
-  /** Not consumed, so a lost-response retry of the same create can still find it. */
   findLaunch(owner: string, importId: string): ChatForkImportLaunch | null {
-    const entry = this.launches.get(importId)
-    if (entry?.owner !== owner) {
-      return null
-    }
-    const { worktreeId, sessionId, filePath, cwd } = entry
-    return { worktreeId, sessionId, filePath, cwd }
+    return this.launches.find(owner, importId)
   }
 
-  /** Closes every open upload and drops all staging. */
-  async dispose(): Promise<void> {
-    for (const id of this.exports.keys()) {
-      this.disposeExport(id)
-    }
-    for (const id of this.launches.keys()) {
-      this.disposeLaunch(id)
-    }
-    await Promise.all([...this.imports.keys()].map((id) => this.disposeImport(id)))
-  }
-
-  private prepare(): Promise<void> {
-    // Staging left by an earlier run can never be resumed.
+  /** Wipes staging left by an earlier run, which can never be resumed. */
+  prepare(): Promise<void> {
     this.ready ??= rm(this.root, { recursive: true, force: true })
     return this.ready
   }
 
-  private touch(entry: Timed, expire: () => void): void {
-    this.clearTimer(entry)
-    entry.timer = setTimeout(expire, this.idleMs)
-    entry.timer.unref?.()
+  /** Closes every open upload and drops all staging; synchronous so it finishes before quit. */
+  dispose(): void {
+    this.disposed = true
+    for (const id of this.exports.keys()) {
+      this.disposeExport(id)
+    }
+    this.launches.clear()
+    for (const id of this.imports.keys()) {
+      void this.disposeImport(id)
+    }
+    try {
+      rmSync(this.root, { recursive: true, force: true })
+    } catch {
+      // A file still held open (Windows) is wiped by the next run's prepare().
+    }
   }
 
-  private clearTimer(entry: Timed): void {
-    if (entry.timer) {
-      clearTimeout(entry.timer)
-      entry.timer = null
+  private async placeImport(
+    owner: string,
+    importId: string,
+    entry: ImportEntry,
+    place: (staged: StagedChatForkImport) => Promise<ChatForkImportLaunch>
+  ): Promise<ChatForkImportLaunch> {
+    try {
+      await entry.handle.close()
+      const { byteLength, sha256, ...target } = entry.declared
+      if (entry.written !== byteLength || entry.hash.digest('hex') !== sha256) {
+        throw new ChatForkTransferError('chat_fork_transfer_integrity_failed')
+      }
+      const placed = await place({ ...target, filePath: entry.filePath })
+      this.launches.record(owner, importId, placed)
+      return placed
+    } finally {
+      await this.disposeImport(importId)
     }
   }
 
@@ -275,7 +292,7 @@ export class ChatForkTransferStore {
     if (!entry) {
       return
     }
-    this.clearTimer(entry)
+    clearChatForkIdleTimer(entry)
     this.exports.delete(id)
     void rm(entry.directory, { recursive: true, force: true }).catch(() => undefined)
   }
@@ -285,34 +302,11 @@ export class ChatForkTransferStore {
     if (!entry) {
       return
     }
-    this.clearTimer(entry)
+    clearChatForkIdleTimer(entry)
     this.imports.delete(id)
     await entry.handle.close().catch(() => undefined)
     await rm(entry.filePath, { force: true }).catch(() => undefined)
   }
-
-  private disposeLaunch(id: string): void {
-    const entry = this.launches.get(id)
-    if (entry) {
-      this.clearTimer(entry)
-      this.launches.delete(id)
-    }
-  }
-}
-
-function reserve(size: number): void {
-  if (size >= CHAT_FORK_TRANSFER_MAX_SESSIONS) {
-    throw new ChatForkTransferError('chat_fork_transfer_busy')
-  }
-}
-
-function owned<T extends Timed>(map: Map<string, T>, id: string, owner: string): T {
-  const entry = map.get(id)
-  // Another caller's id reads as unknown, so ids never leak across devices.
-  if (!entry || entry.owner !== owner) {
-    throw new ChatForkTransferError('chat_fork_transfer_not_found')
-  }
-  return entry
 }
 
 async function hashFile(filePath: string): Promise<string> {

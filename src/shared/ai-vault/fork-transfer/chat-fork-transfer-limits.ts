@@ -2,8 +2,10 @@
 export const CHAT_FORK_TRANSFER_CHUNK_BYTES = 256 * 1024
 export const CHAT_FORK_TRANSFER_MAX_BYTES = 64 * 1024 * 1024
 export const CHAT_FORK_TRANSFER_IDLE_MS = 10 * 60 * 1000
-/** Each of open exports, open imports and placed-but-unlaunched imports. */
+/** Per caller, each of open exports, open imports and placed-but-unlaunched imports. */
 export const CHAT_FORK_TRANSFER_MAX_SESSIONS = 4
+/** Per host, each of open exports and open imports across every caller. */
+export const CHAT_FORK_TRANSFER_MAX_SESSIONS_TOTAL = 16
 export const CHAT_FORK_TRANSFER_CHUNK_BASE64_MAX_CHARS =
   Math.ceil(CHAT_FORK_TRANSFER_CHUNK_BYTES / 3) * 4 + 8
 

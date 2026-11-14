@@ -92,20 +92,12 @@ export const AI_VAULT_FORK_TRANSFER_METHODS = [
     name: 'aiVault.commitChatForkImport',
     permission: 'workspace',
     params: AiVaultChatForkImportIdParams,
-    handler: async (params, context) => {
-      const owner = chatForkTransferOwner(context)
-      const store = chatForkTransferStore()
-      const placed = await store.commitImport(owner, params.importId, (staged) =>
-        placeChatForkImport(staged)
+    handler: (params, context) =>
+      chatForkTransferStore().commitImport(
+        chatForkTransferOwner(context),
+        params.importId,
+        (staged) => placeChatForkImport(staged)
       )
-      store.recordLaunch(owner, params.importId, {
-        worktreeId: placed.worktreeId,
-        sessionId: placed.sessionId,
-        filePath: placed.filePath,
-        cwd: placed.cwd
-      })
-      return placed
-    }
   }),
   defineMethod({
     name: 'aiVault.cancelChatForkImport',

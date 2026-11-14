@@ -1,3 +1,4 @@
+import type { AiVaultCommitChatForkImportResult } from '../../../shared/rpc-contract/ai-vault/ai-vault-fork-transfer-params'
 import type { ChatForkTransferErrorCode } from '../../../shared/ai-vault/fork-transfer/chat-fork-transfer-limits'
 
 export type StagedChatForkImportTarget = {
@@ -9,12 +10,8 @@ export type StagedChatForkImportTarget = {
 
 export type StagedChatForkImport = StagedChatForkImportTarget & { filePath: string }
 
-export type ChatForkImportLaunch = {
-  worktreeId: string
-  sessionId: string
-  filePath: string
-  cwd: string
-}
+/** What a commit placed; replayed to a retried commit and read by the terminal launch. */
+export type ChatForkImportLaunch = AiVaultCommitChatForkImportResult
 
 export class ChatForkTransferError extends Error {
   constructor(readonly code: ChatForkTransferErrorCode) {
