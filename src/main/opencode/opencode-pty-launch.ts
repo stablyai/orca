@@ -27,7 +27,11 @@ import { deleteRequestedEnvKeys } from '../ipc/pty/host-env/path'
 import { probeOpenCodeLaunchCapabilities } from './model-launch/opencode-launch-capabilities'
 import { reserveOpenCodeStartupPrompt } from './startup-prompts/opencode-startup-prompt-owner'
 import { installOpenCodeStartupPromptForLaunch } from './startup-prompts/opencode-startup-prompt-installer'
-import { needsOpenCodePrivateServer, withOpenCodeStandaloneServer } from './opencode-private-server'
+import {
+  needsOpenCodePrivateServer,
+  withOpenCodeStandaloneServer,
+  withoutOpenCodeStandaloneServer
+} from './opencode-private-server'
 import { applyOpenCodeRootModelOverlay } from './model-launch/opencode-root-model-launch'
 
 export async function prepareOpenCodePtyLaunch(options: {
@@ -137,6 +141,9 @@ export async function prepareOpenCodePtyLaunch(options: {
         }
       }
     }
+  }
+  if (capabilities.pluginApi === 'v1' && options.shell && command) {
+    command = withoutOpenCodeStandaloneServer(command, options.shell)
   }
   if (capabilities.pluginApi === 'v2' && options.shell && !options.wsl && command) {
     command = await applyOpenCodeRootModelOverlay({
