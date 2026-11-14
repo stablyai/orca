@@ -28,10 +28,16 @@ function isAtTail(event: NativeScrollEvent): boolean {
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  scrollToIndex: (params: { animated: boolean; index: number; viewPosition: number }) => void
 }
 
+type ScrollToIndexFailure = { index: number; averageItemLength: number }
+
 export type MobileNativeChatTailFollow = {
-  listProps: { ref: (list: MobileNativeChatListHandle | null) => void }
+  listProps: {
+    ref: (list: MobileNativeChatListHandle | null) => void
+    onScrollToIndexFailed: (info: ScrollToIndexFailure) => void
+  }
   pageListProps: {
     ref: (list: MobileNativeChatListHandle | null) => void
     isFollowing: () => boolean
@@ -41,6 +47,8 @@ export type MobileNativeChatTailFollow = {
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
+  /** Puts row `index` at the top and stops following the tail, so new output cannot pull it away. */
+  scrollRowToTop: (index: number) => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   beginMomentum: () => void
@@ -138,6 +146,24 @@ export function useMobileNativeChatTailFollow(args: {
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
 
+  const scrollRowToTop = useCallback(
+    (index: number) => {
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      setFollowing(false)
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0 })
+    },
+    [clearUserScrollSettle, setFollowing]
+  )
+
+  // A row the native list has not measured yet: land near it from the average row height.
+  const onScrollToIndexFailed = useCallback(
+    ({ index, averageItemLength }: ScrollToIndexFailure) => {
+      listRef.current?.scrollToOffset({ animated: true, offset: index * averageItemLength })
+    },
+    []
+  )
+
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = true
@@ -206,12 +232,13 @@ export function useMobileNativeChatTailFollow(args: {
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
-    listProps: { ref: attachList },
+    listProps: { ref: attachList, onScrollToIndexFailed },
     pageListProps: { ref: attachList, isFollowing, onEndDistance },
     showJumpToTail: !following && !atTail,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
+    scrollRowToTop,
     beginUserScroll,
     endUserDrag,
     beginMomentum,

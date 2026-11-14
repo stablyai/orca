@@ -221,6 +221,7 @@
     },
     "message": {
       "copyMessage": "메시지 복사",
+      "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
       "forkFromResponse": "이 응답에서 분기",
       "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
     },

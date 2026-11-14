@@ -243,6 +243,7 @@
     },
     "message": {
       "copyMessage": "Copiar mensagem",
+      "scrollMessageToTop": "Rolar esta mensagem para o topo",
       "forkFromResponse": "Criar ramificação a partir desta resposta",
       "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
     },

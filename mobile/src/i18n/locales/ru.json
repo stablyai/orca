@@ -229,6 +229,7 @@
     },
     "message": {
       "copyMessage": "Копировать сообщение",
+      "scrollMessageToTop": "Прокрутить к началу сообщения",
       "forkFromResponse": "Создать ответвление от этого ответа",
       "forkFromResponseHint": "Новый чат со всем этим ответом до конца хода"
     },

@@ -225,6 +225,7 @@
     },
     "message": {
       "copyMessage": "Copier le message",
+      "scrollMessageToTop": "Revenir au début du message",
       "forkFromResponse": "Créer une branche à partir de cette réponse",
       "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
     },

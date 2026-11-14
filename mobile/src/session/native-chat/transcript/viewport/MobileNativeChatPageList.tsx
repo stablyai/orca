@@ -25,6 +25,7 @@ import {
   mobileNativeChatReadingPlace,
   mobileNativeChatRowAbove,
   mobileNativeChatRowBoxProps,
+  mobileNativeChatRowTop,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
@@ -295,9 +296,19 @@ export function MobileNativeChatPageList({
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
+      },
+      scrollToIndex: ({ index }) => {
+        const s = scroller()
+        const row = live.current.rows[index]
+        const top =
+          s && row ? mobileNativeChatRowTop(s, latest.current.rowKeys.keyOf(row)) : undefined
+        if (s && top !== undefined) {
+          write(s, s.scrollTop + top - s.getBoundingClientRect().top)
+          notePlace(s)
+        }
       }
     }),
-    [scroller, write]
+    [notePlace, scroller, write]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)

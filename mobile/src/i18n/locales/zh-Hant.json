@@ -221,6 +221,7 @@
     },
     "message": {
       "copyMessage": "複製訊息",
+      "scrollMessageToTop": "將此訊息捲動到頂端",
       "forkFromResponse": "從此回覆建立分支",
       "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆"
     },

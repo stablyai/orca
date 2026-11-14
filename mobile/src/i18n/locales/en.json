@@ -3135,6 +3135,7 @@
     },
     "message": {
       "copyMessage": "Copy message",
+      "scrollMessageToTop": "Scroll this message to top",
       "forkFromResponse": "Fork from this response",
       "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },

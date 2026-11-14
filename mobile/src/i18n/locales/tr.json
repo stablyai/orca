@@ -221,6 +221,7 @@
     },
     "message": {
       "copyMessage": "Mesajı kopyala",
+      "scrollMessageToTop": "Bu mesajı yukarı kaydır",
       "forkFromResponse": "Bu yanıttan çatalla",
       "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
     },
