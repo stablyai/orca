@@ -15,6 +15,8 @@ import type { LineageRowFrame } from '../listing/lineage-row-projection'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import { isProjectColorAccentsEnabled, resolveProjectColorAccent } from './project-color-accent'
+import { ProjectColorAccentRail } from './ProjectColorAccent'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
@@ -71,6 +73,12 @@ export function renderWorktreeItemRow(
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null
   })
+  const projectAccentColor = resolveProjectColorAccent({
+    enabled: isProjectColorAccentsEnabled(ctx.settings),
+    groupBy: ctx.groupBy,
+    sectionKey: itemRow.sectionKey,
+    repo: itemRow.repo
+  })
   return (
     <div
       key={itemRow.rowKey}
@@ -105,6 +113,11 @@ export function renderWorktreeItemRow(
         paddingRight: right || undefined
       }}
     >
+      <ProjectColorAccentRail
+        color={projectAccentColor}
+        groupDepth={itemRow.groupDepth}
+        frame={frame}
+      />
       <WorktreeCard
         worktree={itemRow.worktree}
         repo={itemRow.repo}
