@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { hash } from 'node:crypto'
 
 export type ProfileStateDocument = {
   domain: string
@@ -39,7 +39,7 @@ export class ProfileStateRevisionConflictError extends Error {
 }
 
 export function hashProfileStatePayload(payload: string): string {
-  return createHash('sha256').update(payload, 'utf8').digest('hex')
+  return hash('sha256', payload, 'hex')
 }
 
 export function parseProfileStateRoot(rawJson: string): Record<string, unknown> {

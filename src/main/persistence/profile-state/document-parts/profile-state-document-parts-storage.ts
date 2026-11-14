@@ -38,12 +38,17 @@ export type ProfileStatePreparedDocumentPart = ProfileStateDocumentPart & {
   ordinal: number
 }
 
+export type ProfileStateRetainedDocumentParts = Map<
+  string,
+  ProfileStatePreparedDocumentPart & { path: readonly string[] }
+>
+
 /** Reassembled document for a split domain, or undefined when its legacy row is authoritative. */
 export function readProfileStateSplitDocument(
   db: Database.Database,
   domain: string,
   legacyRevision: number,
-  retainedParts?: ProfileStateExistingDocumentParts
+  retainedParts?: ProfileStateRetainedDocumentParts
 ): ProfileStateDocument | undefined {
   if (!isProfileStateSplitDomain(domain)) {
     return undefined
@@ -81,14 +86,16 @@ export function readProfileStateSplitDocument(
         domain
       )
     }
-    parts.push({ key: row.part_key, payload: row.payload })
-    paths.push(path)
-    retainedParts?.set(row.part_key, {
+    const part = {
+      key: row.part_key,
+      payload: row.payload,
       ordinal: Number(row.ordinal),
       contentHash: String(row.content_hash),
-      payload: row.payload,
       path
-    })
+    }
+    parts.push(part)
+    paths.push(path)
+    retainedParts?.set(row.part_key, part)
   }
   let payload: string
   try {

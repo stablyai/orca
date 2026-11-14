@@ -4,7 +4,7 @@ import { assertProfileStateDocumentRevision } from '../database/profile-state-re
 import {
   readSplitDomainWriteState,
   readProfileStateSplitDocument,
-  type ProfileStateExistingDocumentParts
+  type ProfileStateRetainedDocumentParts
 } from '../document-parts/profile-state-document-parts-storage'
 import { validateProfileStateDocumentRow } from './profile-state-document-validation'
 import {
@@ -32,7 +32,7 @@ export function preparePatchedProfileStateDomains(
       }
     }
     let base: unknown
-    let existingParts: ProfileStateExistingDocumentParts | undefined
+    let existingParts: ProfileStateRetainedDocumentParts | undefined
     if (splitState.kind === 'parts') {
       existingParts = new Map()
       const document = readProfileStateSplitDocument(

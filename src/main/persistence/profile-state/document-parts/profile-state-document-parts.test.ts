@@ -177,7 +177,10 @@ describe('profile state document parts', () => {
   it('replaces a complete field prefix, normalizes incoming JSON and preserves omitted-field deletion', () => {
     const db = open()
     try {
-      write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]},"activeTabId":"a"}' })
+      write(db, {
+        workspaceSession:
+          '{"tabsByWorktree":{"2":[],"10":[],"4294967294":[],"01":[],"4294967295":[],"__proto__":[]},"activeTabId":"a"}'
+      })
       const patch = (payload: string) =>
         writeProfileStateDomains(db, {
           expectedRevision: readProfileStateRevision(db),
@@ -189,13 +192,15 @@ describe('profile state document parts', () => {
             }
           ]
         })
-      patch('{ "a": [ ], "b": [ "changed" ] }')
-      expect(exportProfileStateJson(db)).toBe(
-        '{"workspaceSession":{"tabsByWorktree":{"a":[],"b":["changed"]},"activeTabId":"a"}}'
+      patch(
+        '{ "10": [ "changed" ], "2": [], "4294967294": [], "01": [], "4294967295": [], "__proto__": [] }'
       )
-      patch('{"b":[]}')
       expect(exportProfileStateJson(db)).toBe(
-        '{"workspaceSession":{"tabsByWorktree":{"b":[]},"activeTabId":"a"}}'
+        '{"workspaceSession":{"tabsByWorktree":{"2":[],"10":["changed"],"4294967294":[],"01":[],"4294967295":[],"__proto__":[]},"activeTabId":"a"}}'
+      )
+      patch('{"10":[]}')
+      expect(exportProfileStateJson(db)).toBe(
+        '{"workspaceSession":{"tabsByWorktree":{"10":[]},"activeTabId":"a"}}'
       )
     } finally {
       db.close()
