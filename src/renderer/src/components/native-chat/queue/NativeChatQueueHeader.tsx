@@ -70,7 +70,6 @@ export function NativeChatQueueHeader({
             size="xs"
             disabled={!clearCapable || queuePending !== null}
             onClick={onClearAll}
-            className="font-semibold text-foreground"
           >
             <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
               <Trash2 className="size-3" />
@@ -83,7 +82,6 @@ export function NativeChatQueueHeader({
             size="xs"
             disabled={queuePending !== null}
             onClick={onResume}
-            className="font-semibold text-foreground"
           >
             <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
               <Play className="size-3" />
@@ -97,14 +95,13 @@ export function NativeChatQueueHeader({
           <Button
             ref={foldRef}
             type="button"
-            variant="ghost"
+            variant="muted-field-icon"
             size="icon-xs"
             aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
             aria-expanded={expanded}
             aria-controls={listId}
             disabled={foldDisabled}
             onClick={onToggle}
-            className="text-muted-foreground"
           >
             {expanded ? <ChevronDown /> : <ChevronRight />}
           </Button>

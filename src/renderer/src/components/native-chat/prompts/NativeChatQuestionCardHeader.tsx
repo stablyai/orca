@@ -5,7 +5,7 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 
-export type NativeChatQuestionStep = { header: string; answered: boolean }
+export type NativeChatQuestionStep = { id: string; header: string; answered: boolean }
 
 /** The card's band: what is being asked, where in a multi-step card, and fold/cancel; then the step bar. */
 export function NativeChatQuestionCardHeader({
@@ -88,12 +88,11 @@ export function NativeChatQuestionCardHeader({
         ) : null}
         <Button
           type="button"
-          variant="ghost"
+          variant="muted-field-icon"
           size="icon-xs"
           onClick={onCancel}
           disabled={cancelDisabled}
           aria-label={t('components.native-chat.question.cancel', 'Cancel')}
-          className="text-muted-foreground"
         >
           <X />
         </Button>
@@ -102,7 +101,7 @@ export function NativeChatQuestionCardHeader({
         // Each segment's hit area is its padded button; the 4px bar inside is only the picture.
         <div data-native-chat-dock-pinned className="flex shrink-0 gap-[3px] px-3.5">
           {steps.map((step, i) => (
-            <Tooltip key={i}>
+            <Tooltip key={step.id}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -150,13 +149,12 @@ function StepButton({
   return (
     <Button
       type="button"
-      variant="ghost"
+      variant="muted-field-icon"
       size="icon-xs"
       data-native-chat-question-step
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="text-muted-foreground"
     >
       {children}
     </Button>

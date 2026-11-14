@@ -315,11 +315,10 @@ export function NativeChatQueuedMessageCard({
               <TooltipTrigger asChild>
                 <Button
                   type="button"
-                  variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
-                  size="xs"
+                  variant={showsSteerShortcut ? 'queued-head-steer' : 'queued-row-action'}
+                  size="row-action"
                   onClick={onSteer}
                   disabled={steerHeld || busy}
-                  className="h-6.5 gap-1 rounded-[7px] px-2 font-semibold text-foreground hover:bg-foreground/9 dark:hover:bg-foreground/9"
                 >
                   <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
                     {sendNow.steers ? (
@@ -343,45 +342,52 @@ export function NativeChatQueuedMessageCard({
               </TooltipContent>
             </Tooltip>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
-                disabled={busy}
-                onClick={onDelete}
-                // Shown on hover or focus; always on touch screens and on a row that needs attention.
-                className={cn(
-                  'text-muted-foreground transition-opacity',
-                  !attention &&
-                    'opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 [@media(hover:none)]:opacity-100'
-                )}
-              >
-                <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
-                  <Trash2 className="size-3.5" />
-                </NativeChatPendingIcon>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {t('components.native-chat.queuedMessages.delete', 'Delete')}
-            </TooltipContent>
-          </Tooltip>
+          {/* Shown on hover or focus; always on touch screens and on a row that needs attention. */}
+          <span
+            className={cn(
+              'inline-flex transition-opacity',
+              !attention &&
+                'opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 [@media(hover:none)]:opacity-100'
+            )}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="muted-field-icon"
+                  size="icon-xs"
+                  aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
+                  disabled={busy}
+                  onClick={onDelete}
+                >
+                  <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
+                    <Trash2 className="size-3.5" />
+                  </NativeChatPendingIcon>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {t('components.native-chat.queuedMessages.delete', 'Delete')}
+              </TooltipContent>
+            </Tooltip>
+          </span>
           {/* The menu portals, so the list's scroll box never clips it. */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('components.native-chat.queuedMessages.moreActions', 'More actions')}
-                disabled={busy}
-                className="text-muted-foreground opacity-50 hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-              >
-                <MoreHorizontal className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
+            <span className="inline-flex opacity-50 transition-opacity focus-within:opacity-100 hover:opacity-100 has-[[data-state=open]]:opacity-100">
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="muted-field-icon"
+                  size="icon-xs"
+                  aria-label={t(
+                    'components.native-chat.queuedMessages.moreActions',
+                    'More actions'
+                  )}
+                  disabled={busy}
+                >
+                  <MoreHorizontal className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </span>
             <DropdownMenuContent align="end">
               {/* A command's text is not a draft: edited, it would become a message. */}
               {!card.command && onEdit ? (

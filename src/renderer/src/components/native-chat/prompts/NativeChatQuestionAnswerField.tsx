@@ -6,6 +6,12 @@ import { cn } from '@/lib/class-names'
 const LINE_BREAKS = /[\r\n\u2028\u2029]/g
 
 /** The typed answer, filled like the option tiles; one line at rest, two while focused. */
+// The field grows a line on focus; keep it in view when a short pane makes the dock scroll.
+function revealGrownField(event: React.FocusEvent<HTMLTextAreaElement>): void {
+  const field = event.currentTarget
+  requestAnimationFrame(() => field.scrollIntoView?.({ block: 'nearest' }))
+}
+
 export function NativeChatQuestionAnswerField({
   multiline,
   value,
@@ -64,6 +70,7 @@ export function NativeChatQuestionAnswerField({
         <ImeTextarea
           ref={inputRef}
           rows={1}
+          onFocus={revealGrownField}
           data-native-chat-answer-field
           data-native-chat-dock-content
           data-native-chat-prompt-card-focus-target={takesFocus || undefined}

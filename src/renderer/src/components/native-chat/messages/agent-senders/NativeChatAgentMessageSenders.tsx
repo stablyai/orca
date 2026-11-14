@@ -121,20 +121,33 @@ function SenderName({
       </span>
     )
   }
+  const open = (): void =>
+    void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+  if (inline) {
+    // Muted text in a one-line queued row, not a padded button.
+    return (
+      <button
+        type="button"
+        title={label}
+        onClick={open}
+        className="min-w-0 max-w-full truncate rounded-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {label}
+      </button>
+    )
+  }
   return (
     <Button
       type="button"
       variant={queued ? 'link' : 'ghost'}
       size={compact ? 'inlineChip' : queued ? 'xs' : 'sm'}
-      className={`min-w-0 ${compact ? 'max-w-fit flex-1 basis-0' : 'max-w-full'} ${inline ? 'h-auto px-0 text-muted-foreground has-[>svg]:px-0 hover:text-foreground' : ''}`}
+      className={`min-w-0 ${compact ? 'max-w-fit flex-1 basis-0' : 'max-w-full'}`}
       title={
         queued || compact
           ? label
           : t('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
-      onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
-      }
+      onClick={open}
     >
       <span className="min-w-0 truncate">{label}</span>
       {!queued ? <ArrowUpRight className="size-3" aria-hidden /> : null}

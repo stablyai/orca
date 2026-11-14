@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 import {
   invalidateNativeChatDockFit,
   nativeChatDockFitActive
@@ -51,7 +52,7 @@ export function useNativeChatQuestionStepHeight(
     surface.setAttribute('data-native-chat-dock-animating', '')
     surface.style.transition = 'none'
     surface.style.height = `${from}px`
-    void surface.offsetHeight
+    forceLayoutReflow(surface)
     surface.style.transition = `height ${STEP_HEIGHT_MS}ms ease-out`
     surface.style.height = `${to}px`
     let settled = false

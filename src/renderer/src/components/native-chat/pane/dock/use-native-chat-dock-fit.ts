@@ -15,70 +15,80 @@ export function useNativeChatDockFit(dockRef: RefObject<HTMLElement | null>): vo
     if (!root || !dock || typeof ResizeObserver === 'undefined') {
       return
     }
-    let queued = false
-    const run = (): void => {
-      queued = false
+    return watchNativeChatDock(root, dock)
+  }, [dockRef])
+}
+
+/** Re-fit on any observed size change, newly mounted box, invalidation or capped-field content change; returns the teardown. */
+function watchNativeChatDock(root: HTMLElement, dock: HTMLElement): () => void {
+  let queued = false
+  let disposed = false
+  const run = (): void => {
+    queued = false
+    // A pass queued before teardown must not mark a root the dock has left.
+    if (!disposed) {
       runNativeChatDockFit(root, dock)
     }
-    // Coalesce invalidations from one commit; a microtask still runs before the browser paints.
-    const schedule = (): void => {
-      if (!queued) {
-        queued = true
-        queueMicrotask(run)
+  }
+  // Coalesce invalidations from one commit; a microtask still runs before the browser paints.
+  const schedule = (): void => {
+    if (!queued) {
+      queued = true
+      queueMicrotask(run)
+    }
+  }
+  // Resize callbacks run after layout and before paint, so a level change never shows a stale frame.
+  const resize = new ResizeObserver(run)
+  const observed = new WeakSet<Element>()
+  const observeNew = (): boolean => {
+    let added = false
+    const targets = [
+      dock,
+      ...dock.children,
+      ...dock.querySelectorAll(NATIVE_CHAT_DOCK_OBSERVED_SELECTOR)
+    ]
+    for (const target of targets) {
+      if (!observed.has(target)) {
+        observed.add(target)
+        resize.observe(target)
+        added = true
       }
     }
-    // Resize callbacks run after layout and before paint, so a level change never shows a stale frame.
-    const resize = new ResizeObserver(run)
-    const observed = new WeakSet<Element>()
-    const observeNew = (): boolean => {
-      let added = false
-      const targets = [
-        dock,
-        ...dock.children,
-        ...dock.querySelectorAll(NATIVE_CHAT_DOCK_OBSERVED_SELECTOR)
-      ]
-      for (const target of targets) {
-        if (!observed.has(target)) {
-          observed.add(target)
-          resize.observe(target)
-          added = true
-        }
-      }
-      return added
+    return added
+  }
+  observeNew()
+  run()
+  // Only newly mounted boxes need a pass; removed ones resize their observed parents.
+  const mutations = new MutationObserver(() => {
+    if (observeNew()) {
+      schedule()
     }
-    observeNew()
-    run()
-    // Only newly mounted boxes need a pass; removed ones resize their observed parents.
-    const mutations = new MutationObserver(() => {
-      if (observeNew()) {
-        schedule()
-      }
-    })
-    mutations.observe(dock, { childList: true, subtree: true })
-    dock.addEventListener(NATIVE_CHAT_DOCK_INVALIDATE_EVENT, schedule)
-    // A capped field keeps its box while its text shrinks, so while a fallback holds, a change in
-    // its content height (not every keystroke) asks for a pass that may lift the cap.
-    const contentHeights = new WeakMap<Element, number>()
-    const input = (event: Event): void => {
-      const field = event.target
-      if (!(field instanceof HTMLElement) || !root.hasAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)) {
-        return
-      }
-      const height = field.scrollHeight
-      if (contentHeights.get(field) !== height) {
-        contentHeights.set(field, height)
-        schedule()
-      }
+  })
+  mutations.observe(dock, { childList: true, subtree: true })
+  dock.addEventListener(NATIVE_CHAT_DOCK_INVALIDATE_EVENT, schedule)
+  // A capped field keeps its box while its text shrinks, so while a fallback holds, a change in
+  // its content height (not every keystroke) asks for a pass that may lift the cap.
+  const contentHeights = new WeakMap<Element, number>()
+  const input = (event: Event): void => {
+    const field = event.target
+    if (!(field instanceof HTMLElement) || !root.hasAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)) {
+      return
     }
-    dock.addEventListener('input', input)
-    return () => {
-      resize.disconnect()
-      mutations.disconnect()
-      dock.removeEventListener(NATIVE_CHAT_DOCK_INVALIDATE_EVENT, schedule)
-      dock.removeEventListener('input', input)
-      root.removeAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)
+    const height = field.scrollHeight
+    if (contentHeights.get(field) !== height) {
+      contentHeights.set(field, height)
+      schedule()
     }
-  }, [dockRef])
+  }
+  dock.addEventListener('input', input)
+  return () => {
+    disposed = true
+    resize.disconnect()
+    mutations.disconnect()
+    dock.removeEventListener(NATIVE_CHAT_DOCK_INVALIDATE_EVENT, schedule)
+    dock.removeEventListener('input', input)
+    root.removeAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)
+  }
 }
 
 function subscribeToFit(element: Element | null, onChange: () => void): () => void {

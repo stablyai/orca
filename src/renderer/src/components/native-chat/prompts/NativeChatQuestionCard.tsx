@@ -314,6 +314,8 @@ export function NativeChatQuestionCard({
         >
           <NativeChatQuestionCardHeader
             steps={prompt.questions.map((question, i) => ({
+              // Questions never reorder within a card, so their position is their identity.
+              id: `question-${i}`,
               header:
                 question.header ||
                 t('components.native-chat.question.step', 'Step {{value0}}', { value0: i + 1 }),

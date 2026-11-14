@@ -71,7 +71,9 @@ function SortableQueuedMessages({
   const t = useTranslate()
   const mounted = useRef(false)
   const draggingChange = useRef(onDraggingChange)
-  draggingChange.current = onDraggingChange
+  useLayoutEffect(() => {
+    draggingChange.current = onDraggingChange
+  })
   useLayoutEffect(() => {
     mounted.current = true
     return () => {

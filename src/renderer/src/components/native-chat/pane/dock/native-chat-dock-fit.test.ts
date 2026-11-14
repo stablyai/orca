@@ -29,6 +29,7 @@ function dockOf(paneHeight: () => number): { root: HTMLElement; dock: HTMLElemen
     return index === -1 ? tokens.split(' ').length : index
   }
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fitting reads only `length`, which a one-rect array has.
     () => [new DOMRect()] as unknown as DOMRectList
   )
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (

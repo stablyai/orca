@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-style'
 import { NativeChatDock } from '../pane/dock/NativeChatDock'
@@ -221,3 +222,49 @@ export const tinyPane = defineFixture({
     <Pane queue={controller(cards(6))} question={{ questions: QUESTIONS }} height={230} />
   )
 })
+
+// Drives the dock's fit from the page (window.__dockFitLab) to measure levels in real layout.
+function FitLab() {
+  const [height, setHeight] = useState(700)
+  const [mounted, setMounted] = useState(true)
+  Object.assign(window, { __dockFitLab: { setHeight, setMounted } })
+  if (!mounted) {
+    return <div data-native-chat-root="true" style={{ height }} />
+  }
+  return (
+    <div
+      data-native-chat-root="true"
+      className="native-chat-appearance flex flex-col bg-chat-pane"
+      style={{ ...nativeChatAppearanceStyle({}), height }}
+    >
+      <div className="flex min-h-[calc(var(--spacing)*20)] flex-1 flex-col justify-end overflow-hidden p-4 text-sm text-muted-foreground [[data-native-chat-dock-fit~=transcript]_&]:min-h-0">
+        Here is the draft for the Slack card.
+      </div>
+      <NativeChatDock>
+        <NativeChatQueuedMessageList controller={controller(cards(6))} chatWorktreeId={null} />
+        <NativeChatQuestionCard
+          prompt={{ questions: QUESTIONS }}
+          onAnswer={() => {}}
+          onCancel={() => {}}
+        />
+        {/* The composer's box and editor classes, so its fit cap behaves as in the app. */}
+        <div data-native-chat-queue-dock className="shrink-0 bg-chat-pane px-3 pt-2 pb-4 sm:px-4">
+          <div
+            data-native-chat-dock-pinned
+            className="relative z-[1] rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs"
+          >
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              data-lab-editor
+              className="scrollbar-sleek min-h-12 max-h-[calc(8lh+0.5rem)] w-full overflow-y-auto bg-transparent px-2 py-1 text-sm outline-none [[data-native-chat-dock-fit~=composer]_[data-native-chat-dock]:has([data-native-chat-question-card])_&]:max-h-[calc(3lh+0.5rem)]"
+            />
+            <div className="h-8" />
+          </div>
+        </div>
+      </NativeChatDock>
+    </div>
+  )
+}
+
+export const fitLab = defineFixture({ width: 560, render: () => <FitLab /> })

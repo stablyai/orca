@@ -85,7 +85,7 @@ export function NativeChatQuestionOption({
               <span
                 aria-hidden
                 data-native-chat-question-recommended
-                className="ml-1.5 inline-block rounded-full bg-emerald-500/16 px-1.5 align-[1px] text-2xs leading-4 font-semibold whitespace-nowrap text-emerald-700 dark:text-emerald-400"
+                className="ml-1.5 inline-block rounded-full bg-status-success/16 px-1.5 align-[1px] text-2xs leading-4 font-semibold whitespace-nowrap text-status-success"
               >
                 {t('components.native-chat.question.recommended', 'Recommended')}
               </span>
