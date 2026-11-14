@@ -195,7 +195,15 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.75a0d435b7', 'chrome'),
         ...translateSearchKeyword('auto.components.settings.browser.search.533a253deb', 'edge'),
         ...translateSearchKeyword('auto.components.settings.browser.search.1c1e097985', 'arc'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
+        ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile'),
+        ...translateSearchKeyword(
+          'settings.browser.cookieReimportOnLaunch.launchKeyword',
+          'launch'
+        ),
+        ...translateSearchKeyword(
+          'settings.browser.cookieReimportOnLaunch.restartKeyword',
+          'restart'
+        )
       ]
     },
     // Append entries because BrowserPane indexes this catalog by position.

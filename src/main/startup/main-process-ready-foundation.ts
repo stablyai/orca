@@ -49,7 +49,7 @@ import {
   initializeBrowserExtensionSupport,
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
-import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { whenBrowserSessionsReadyForRestoredTabs } from '../browser/sessions/browser-restored-tab-readiness'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
@@ -324,6 +324,5 @@ export async function initializeReadyFoundation(): Promise<void> {
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
   }
-  // Why bounded: restored tabs should get content scripts, but a slow extension never blocks launch.
-  await whenBrowserExtensionSessionsLoaded(3_000)
+  await whenBrowserSessionsReadyForRestoredTabs(store.getSettings())
 }

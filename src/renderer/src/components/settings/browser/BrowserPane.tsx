@@ -384,6 +384,8 @@ export function BrowserPane({
               onSelectHost={selectBrowserSessionHost}
               onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
               onSelectProfile={setDefaultBrowserSessionProfileId}
+              settings={settings}
+              updateSettings={updateSettings}
             />
           ) : null}
 
