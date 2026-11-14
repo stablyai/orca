@@ -84,9 +84,22 @@ it('uses documented link and textual task fallbacks', async () => {
 })
 
 it('uses the renderer CJK emphasis and prose URL boundaries', async () => {
-  expect(adfToMarkdownText(await markdownToAdf('**「重要」**です https://example.com。次'))).toBe(
-    '**「重要」**&#x3067;す <https://example.com>。次'
-  )
+  const doc = await markdownToAdf('**「重要」**です https://example.com。次')
+  expect(doc).toMatchObject({
+    content: [
+      {
+        content: expect.arrayContaining([
+          { type: 'text', text: '「重要」', marks: [{ type: 'strong' }] },
+          {
+            type: 'text',
+            text: 'https://example.com',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com' } }]
+          }
+        ])
+      }
+    ]
+  })
+  expect(adfToMarkdownText(doc)).toBe('**「重要」**です <https://example.com>。次')
 })
 
 it('keeps code whitespace, language and embedded fences including in lists', async () => {
@@ -292,7 +305,9 @@ it('preserves prose-separated URLs, IPv6 authorities and surrounding literal del
       'https://example.com/me@example.com me@example.com',
       '<https://example.com/me@example.com> <me@example.com>'
     ],
-    ['**see https://example.com/x**', '\\*\\*see <https://example.com/x>\\*\\*']
+    ['**see https://example.com/x**', '\\*\\*see <https://example.com/x>\\*\\*'],
+    // Intended: an overlapping local-part run does not create a second partial email.
+    ['a@b.c!x@d.e', '<a@b.c>!x\\@d.e']
   ]
   for (const [value, expected] of values) {
     expect(
@@ -366,4 +381,55 @@ it('bounds actual HTTP normalization reads and admission through document read-b
       }
     }
   }
+})
+
+it('keeps literal entity spellings and code bytes with the CJK serializer', async () => {
+  const doc = {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '&#x3067;' }] },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '&#x3067;', marks: [{ type: 'code' }] }]
+      },
+      { type: 'codeBlock', content: [{ type: 'text', text: '&#x3067;' }] },
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'link',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/?q=&#x3067;' } }]
+          }
+        ]
+      }
+    ]
+  }
+  const markdown = adfToMarkdownText(doc)
+  expect(markdown).toContain('\\&#x3067;\n\n`&#x3067;`\n\n```\n&#x3067;\n```')
+  expect(await markdownToAdf(markdown)).toMatchObject({
+    content: expect.arrayContaining([
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'link',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/?q=&#x3067;' } }]
+          }
+        ]
+      }
+    ])
+  })
+  expect(
+    adfToMarkdownText(
+      {
+        type: 'doc',
+        content: [
+          { type: 'mediaSingle', content: [{ type: 'media', attrs: { id: 'entity-media' } }] }
+        ]
+      },
+      { resolveMedia: () => '![img](https://example.com/?q=&#x3067;)' }
+    )
+  ).toBe('![img](https://example.com/?q=&#x3067;)')
 })

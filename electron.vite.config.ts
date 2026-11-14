@@ -38,6 +38,7 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'remark-gfm',
   'remark-cjk-friendly',
   'mdast-util-to-markdown',
+  'mdast-util-to-markdown-cjk-friendly',
   'mdast-util-gfm',
   'hast-util-from-html-isomorphic',
   // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.

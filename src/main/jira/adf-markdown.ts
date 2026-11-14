@@ -3,6 +3,7 @@ import type { JiraMediaMarkdown } from './adf-text-marks'
 import { escapeMarkdownLinkDestination } from './adf-media-destination'
 import { toMarkdown } from 'mdast-util-to-markdown'
 import { gfmToMarkdown } from 'mdast-util-gfm'
+import { cjkFriendlyToMarkdown } from 'mdast-util-to-markdown-cjk-friendly'
 import { adfBlockNodes } from './adf-blocks'
 
 type JiraAdfRecord = Record<string, unknown>
@@ -109,7 +110,7 @@ export function adfToMarkdownText(value: unknown, options?: AdfToMarkdownOptions
       children: adfBlockNodes(content, (node) => renderMediaMarkdown(node, options))
     },
     {
-      extensions: [gfmToMarkdown()],
+      extensions: [gfmToMarkdown(), cjkFriendlyToMarkdown()],
       bullet: '-',
       emphasis: '*',
       strong: '*',

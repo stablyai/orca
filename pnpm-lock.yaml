@@ -268,6 +268,9 @@ importers:
       mdast-util-to-markdown:
         specifier: 2.2.3
         version: 2.2.3
+      mdast-util-to-markdown-cjk-friendly:
+        specifier: 1.0.2
+        version: 1.0.2(@types/mdast@4.0.4)(micromark-util-types@2.0.2)
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
@@ -13603,7 +13606,7 @@ snapshots:
       mdast-util-gfm-strikethrough: 2.0.0(supports-color@7.2.0)
       mdast-util-gfm-table: 2.0.0(supports-color@7.2.0)
       mdast-util-gfm-task-list-item: 2.0.0(supports-color@7.2.0)
-      mdast-util-to-markdown: 2.1.2
+      mdast-util-to-markdown: 2.2.3
     transitivePeerDependencies:
       - supports-color
 
