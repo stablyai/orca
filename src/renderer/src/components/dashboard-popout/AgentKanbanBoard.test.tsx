@@ -82,6 +82,8 @@ describe('AgentKanbanBoard', () => {
       vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
     )
     ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
+    // Give virtual lanes a viewport; happy-dom has no layout.
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
   })
   afterEach(() => {
     cleanup()
