@@ -5,7 +5,7 @@ const { updateMRMock, invalidateMock } = vi.hoisted(() => ({
   updateMRMock: vi.fn(),
   invalidateMock: vi.fn()
 }))
-vi.mock('../../../gitlab/merge-request-update', () => ({ updateMR: updateMRMock }))
+vi.mock('../../../gitlab/merge-requests/merge-request-update', () => ({ updateMR: updateMRMock }))
 vi.mock('../../../source-control/hosted-review-branch-cache', () => ({
   invalidateHostedReviewBranchCache: invalidateMock
 }))
