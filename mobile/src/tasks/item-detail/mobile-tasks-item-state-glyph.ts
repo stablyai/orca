@@ -1,6 +1,6 @@
 import { Circle, CircleCheck, CircleDot, type LucideIcon } from 'lucide-react-native'
-import { prStateColor } from '../../components/WorktreeMetaGlyphs'
-import { prStateIcon } from '../../components/pr-state-token'
+import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
+import { prStateIcon } from '../../source-control/review/status/pr-state-token'
 import { colors } from '../../theme/mobile-theme'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 

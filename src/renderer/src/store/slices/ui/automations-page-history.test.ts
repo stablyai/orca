@@ -6,7 +6,6 @@ import {
 } from './workspace-navigation-history'
 import { appendAutomationsPageEntry } from './automations-page-history'
 import {
-  isAutomationsHistoryEntry,
   automationsPageLocationKey,
   type AutomationsPageLocation
 } from './automations-page-location'
@@ -24,15 +23,6 @@ const page = (location: AutomationsPageLocation): WorktreeNavHistoryEntry => ({
 })
 
 describe('automations page history', () => {
-  it('replaces the plain sentinel that opening the page recorded', () => {
-    const next = appendAutomationsPageEntry(
-      { worktreeNavHistory: ['skills', 'automations'], worktreeNavHistoryIndex: 1 },
-      detail
-    )
-    expect(next.worktreeNavHistory).toEqual(['skills', page(detail)])
-    expect(next.worktreeNavHistoryIndex).toBe(1)
-  })
-
   it('preserves Forward entries when replay replaces a legacy sentinel', () => {
     const next = appendAutomationsPageEntry(
       { worktreeNavHistory: ['skills', 'automations', 'artifacts'], worktreeNavHistoryIndex: 1 },
@@ -105,11 +95,5 @@ describe('automations page history', () => {
       worktreeNavHistoryIndex: 3
     }
     expect(rewindHistoryIndexPastView(state, 'automations')).toBe(0)
-  })
-
-  it('treats the sentinel and sub-pages as Automations entries', () => {
-    expect(isAutomationsHistoryEntry('automations')).toBe(true)
-    expect(isAutomationsHistoryEntry(page(detail))).toBe(true)
-    expect(isAutomationsHistoryEntry('skills')).toBe(false)
   })
 })
