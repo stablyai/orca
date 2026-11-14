@@ -245,6 +245,8 @@
     "fflate": "0.8.3",
     "i18next": "^26.7.2",
     "jsonc-parser": "^3.3.1",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-to-markdown": "2.2.3",
     "mime-types": "3.0.2",
     "node-pty": "^1.1.0",
     "posthog-node": "^5.52.5",

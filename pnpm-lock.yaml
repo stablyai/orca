@@ -262,6 +262,12 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
+      mdast-util-gfm:
+        specifier: 3.1.0
+        version: 3.1.0(supports-color@7.2.0)
+      mdast-util-to-markdown:
+        specifier: 2.2.3
+        version: 2.2.3
       mime-types:
         specifier: 3.0.2
         version: 3.0.2

@@ -1,112 +1,144 @@
-import { escapeMarkdownLinkDestination } from './adf-media-destination'
+import type { PhrasingContent } from 'mdast'
+import { PROSE_HTTP_URL_SOURCE } from '../../shared/prose-url-boundary'
+import { escapeMarkdownTextLinkDestination } from './adf-media-destination'
+import { adfChildren, adfRecord, adfString } from './adf-nodes'
 
-type JiraAdfRecord = Record<string, unknown>
-
-function isRecord(value: unknown): value is JiraAdfRecord {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function asRecord(value: unknown): JiraAdfRecord {
-  return isRecord(value) ? value : {}
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-/** Escape Markdown punctuation in source text before adding mark delimiters. */
-export function escapeMarkdownLinkLabel(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/\\/g, '\\\\')
-    .replace(/([`*_~[\]<>])/g, '\\$1')
-    .replace(/\r\n?|\n/g, ' ')
-}
-
-function markType(mark: unknown): string {
-  return asString(asRecord(mark).type)
-}
-
-function linkHrefFromMarks(marks: unknown[]): string | undefined {
-  for (const mark of marks) {
-    if (markType(mark) !== 'link') {
-      continue
-    }
-    const href = asString(asRecord(asRecord(mark).attrs).href).trim()
-    if (href) {
-      return href
-    }
+export type JiraMediaMarkdown = { type: 'jiraMedia'; value: string }
+declare module 'mdast' {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Module augmentation requires declaration merging.
+  interface RootContentMap {
+    jiraMedia: JiraMediaMarkdown
   }
-  return undefined
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Module augmentation requires declaration merging.
+  interface PhrasingContentMap {
+    jiraMedia: JiraMediaMarkdown
+  }
 }
+type Wrapper = Extract<PhrasingContent, { type: 'strong' | 'emphasis' | 'delete' | 'link' }>
+type MediaRenderer = (node: Record<string, unknown>) => string
+const BARE_EMAIL_SOURCE = /[a-zA-Z0-9.!#$%&'*+/=?^_{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+/.source
+const BARE_LINK = new RegExp(`${PROSE_HTTP_URL_SOURCE}|${BARE_EMAIL_SOURCE}`, 'gu')
 
-export function joinAdfInlineMarkdown(fragments: { markdown: string; marks: unknown }[]): string {
-  let result = ''
-  for (const { markdown, marks } of fragments) {
-    if (markdown.startsWith('[') && linkHrefFromMarks(asArray(marks)) && result.endsWith('!')) {
-      let slashCount = 0
-      for (let index = result.length - 2; index >= 0 && result[index] === '\\'; index -= 1) {
-        slashCount += 1
-      }
-      // A punctuation bang from the preceding text must not turn this link into an image.
-      if (slashCount % 2 === 0) {
-        result = `${result.slice(0, -1)}\\!`
-      }
+function proseNodes(value: string): PhrasingContent[] {
+  const result: PhrasingContent[] = []
+  let offset = 0
+  for (const match of value.matchAll(BARE_LINK)) {
+    if (match.index > offset) {
+      result.push({ type: 'text', value: value.slice(offset, match.index) })
     }
-    result += markdown
+    const label = match[0]
+    result.push({
+      type: 'link',
+      url: label.includes('://') ? label : `mailto:${label}`,
+      children: [{ type: 'text', value: label }]
+    })
+    offset = match.index + label.length
+  }
+  if (offset < value.length) {
+    result.push({ type: 'text', value: value.slice(offset) })
   }
   return result
 }
 
-/** Keep formatting inside the link label so Markdown preserves both. */
-export function applyAdfTextMarks(text: string, marksValue: unknown): string {
-  const marks = asArray(marksValue)
-  if (!text || marks.length === 0) {
-    return text
+function appendWrapped(
+  target: PhrasingContent[],
+  wrappers: Wrapper[],
+  children: PhrasingContent[]
+): void {
+  const [wrapper, ...rest] = wrappers
+  if (!wrapper) {
+    target.push(...children)
+    return
   }
-
-  if (!marks.some((mark) => ['link', 'code', 'strong', 'em', 'strike'].includes(markType(mark)))) {
-    return text
-  }
-
-  const href = linkHrefFromMarks(marks)
-  const linkedText = href ? text.replace(/\r\n?|\n/g, ' ') : text
-  let formatted = linkedText
-  // Code spans cannot nest other Markdown; apply code before other marks.
-  if (marks.some((mark) => markType(mark) === 'code')) {
-    let longestBacktickRun = 0
-    for (const match of linkedText.matchAll(/`+/g)) {
-      longestBacktickRun = Math.max(longestBacktickRun, match[0].length)
-    }
-    const fence = '`'.repeat(longestBacktickRun + 1)
-    // Padding keeps edge backticks from joining the code-span delimiter.
-    const padding = /^`|`$|^ .* $/s.test(linkedText) && /[^ ]/.test(linkedText) ? ' ' : ''
-    formatted = `${fence}${padding}${linkedText}${padding}${fence}`
+  const last = target.at(-1)
+  if (
+    last?.type === wrapper.type &&
+    'children' in last &&
+    (last.type !== 'link' || (wrapper.type === 'link' && last.url === wrapper.url))
+  ) {
+    appendWrapped(last.children, rest, children)
   } else {
-    formatted = escapeMarkdownLinkLabel(formatted)
-    if (marks.some((mark) => markType(mark) === 'strong')) {
-      formatted = `**${formatted}**`
+    wrapper.children = []
+    appendWrapped(wrapper.children, rest, children)
+    target.push(wrapper)
+  }
+}
+
+function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
+  return nodes.flatMap((node): PhrasingContent[] => {
+    if (!('children' in node)) {
+      return [node]
     }
-    if (marks.some((mark) => markType(mark) === 'em')) {
-      formatted = `*${formatted}*`
+    node.children = normalizedStyles(node.children)
+    if (!['strong', 'emphasis', 'delete'].includes(node.type)) {
+      return [node]
     }
-    if (marks.some((mark) => markType(mark) === 'strike')) {
-      formatted = `~~${formatted}~~`
+    const first = node.children[0]
+    const last = node.children.at(-1)
+    const leading = first?.type === 'text' ? (/^\s+/.exec(first.value)?.[0] ?? '') : ''
+    if (first?.type === 'text') {
+      first.value = first.value.slice(leading.length)
+    }
+    const trailing = last?.type === 'text' ? (/\s+$/.exec(last.value)?.[0] ?? '') : ''
+    if (last?.type === 'text' && trailing) {
+      last.value = last.value.slice(0, -trailing.length)
+    }
+    node.children = node.children.filter((child) => child.type !== 'text' || child.value !== '')
+    return [
+      ...(leading ? [{ type: 'text' as const, value: leading }] : []),
+      ...(node.children.length ? [node] : []),
+      ...(trailing ? [{ type: 'text' as const, value: trailing }] : [])
+    ]
+  })
+}
+
+export function adfInlineNodes(
+  value: unknown,
+  renderMedia: MediaRenderer,
+  inTable = false
+): PhrasingContent[] {
+  const result: PhrasingContent[] = []
+  for (const child of adfChildren(value)) {
+    const node = adfRecord(child)
+    if (typeof node.text === 'string') {
+      const marks = adfChildren(node.marks).map(adfRecord)
+      const types = new Set(marks.map((mark) => mark.type))
+      const link = marks.find((mark) => mark.type === 'link')
+      const url = escapeMarkdownTextLinkDestination(adfString(adfRecord(link?.attrs).href))
+      const wrappers: Wrapper[] = []
+      if (!types.has('code')) {
+        if (types.has('strong')) {
+          wrappers.push({ type: 'strong', children: [] })
+        }
+        if (types.has('em')) {
+          wrappers.push({ type: 'emphasis', children: [] })
+        }
+        if (types.has('strike')) {
+          wrappers.push({ type: 'delete', children: [] })
+        }
+      }
+      if (url) {
+        wrappers.push({ type: 'link', url, children: [] })
+      }
+      const content: PhrasingContent[] = types.has('code')
+        ? [{ type: 'inlineCode', value: node.text }]
+        : url
+          ? [{ type: 'text', value: node.text }]
+          : proseNodes(node.text)
+      appendWrapped(result, wrappers, content)
+    } else if (node.type === 'hardBreak') {
+      result.push(inTable ? { type: 'html', value: '<br>' } : { type: 'break' })
+    } else if (node.type === 'media' || node.type === 'mediaInline') {
+      result.push({ type: 'jiraMedia', value: renderMedia(node) })
+    } else {
+      const attrs = adfRecord(node.attrs)
+      const text = adfString(attrs.text) || adfString(attrs.shortName) || adfString(attrs.url)
+      result.push(
+        ...(text
+          ? [{ type: 'text' as const, value: text }]
+          : adfInlineNodes(node.content, renderMedia, inTable))
+      )
     }
   }
-
-  if (!href) {
-    return formatted
-  }
-
-  const safeUrl = escapeMarkdownLinkDestination(href)
-  if (!safeUrl) {
-    return formatted
-  }
-
-  return `[${formatted}](${safeUrl})`
+  return normalizedStyles(result)
 }
