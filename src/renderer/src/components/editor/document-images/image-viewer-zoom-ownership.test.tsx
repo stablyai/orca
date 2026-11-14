@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImageViewer from './ImageViewer'
 
-import { EditorCommandOwnerContext } from '../editor-command-owner-context'
+import { EditorCommandOwnerContext } from '../commands/editor-command-owner-context'
 import { requestViewerZoom } from '../viewer-viewport/viewer-zoom-request'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

@@ -5623,17 +5623,17 @@
       "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; read-only live tails do not create undo history, while editable external updates remain undoable and arbitrary rewrites continue to replace the model content.",
       "oracle": "Audit2133 current-parent preparation: Current reduced sources/selectors intentionally retire the alarms listed in knownGaps; prior dated runs and replacement claims do not validate the changed set. Historical prior account (preserved verbatim): Audit2095 current-parent preparation2126: Current reduced sources/selectors intentionally retire the alarms listed in knownGaps; prior dated runs and replacement claims do not validate the changed set. Historical prior account (preserved verbatim): Audit1709 retires changed-source assertion and execution scope without equivalent replacement coverage. Existing unchanged-selector receipts remain scoped to their original sources. Historical prior-source oracle: Focused tests assert one post-mount content owner and actual lifecycle remount ordering across retained path models. Real-Monaco tests cover undo behavior for read-only live tails versus editable files. Standalone Node timing and private undo-retention budgets at 9 and 50 MiB were retired by audit1677 and provide no current alarm. The Electron scenario compares legacy setValue with watcher appends, checking visible ranges, selection, Find state, scroll offset, non-undoability, renderer survival and memory budgets. Mock-only edit-shape assertions were retired during test-value audit.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/model-lifetime/buffer-text/monaco-content-sync.undo-history.test.ts",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench --pool=threads",
         "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+        "src/renderer/src/components/editor/model-lifetime/buffer-text/monaco-content-sync.undo-history.test.ts",
         "tests/e2e/agent-session-log-tail-stability.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+          "file": "src/renderer/src/components/editor/model-lifetime/buffer-text/monaco-content-sync.undo-history.test.ts",
           "assertions": [
             "a real Monaco read-only live-tail append leaves canUndo false while an ordinary external update remains undoable"
           ]
@@ -5655,6 +5655,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/model-lifetime/buffer-text/monaco-content-sync.undo-history.test.ts",
           "result": "passed",
           "durationSeconds": 4,
           "summary": "The real-Monaco undo-history test confirmed a read-only live-tail append leaves canUndo false while an ordinary external update remains undoable."

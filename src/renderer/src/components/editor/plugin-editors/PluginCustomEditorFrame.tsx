@@ -16,7 +16,7 @@ import {
 } from '../../plugins/frames/plugin-frame-element'
 import { usePluginFrameHost } from '../../plugins/frames/use-plugin-frame-host'
 import { usePluginFrameEntry } from '../../plugins/frames/use-plugin-frame-entry'
-import { editorShortcutMatches } from '../editor-shortcuts'
+import { editorShortcutMatches } from '../commands/editor-shortcuts'
 import {
   countCustomEditorMergingView,
   useCustomEditorOutsideMerge

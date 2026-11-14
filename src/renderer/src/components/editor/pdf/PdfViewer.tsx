@@ -22,7 +22,7 @@ import {
   type PdfScalePreference
 } from './pdf-scale-preference'
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
-import { EditorCommandOwnerContext } from '../editor-command-owner-context'
+import { EditorCommandOwnerContext } from '../commands/editor-command-owner-context'
 import { listenForViewerZoomRequests } from '../viewer-viewport/viewer-zoom-request'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
