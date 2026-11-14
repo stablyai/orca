@@ -30,7 +30,8 @@ export function useChatForkHosts(input: {
     () => profiles.filter((host) => host.id !== input.currentHostId).map((host) => host.id),
     [profiles, input.currentHostId]
   )
-  const clients = useAllHostClients(otherIds)
+  // Hosts woken only for this sheet disconnect again when it closes.
+  const clients = useAllHostClients(otherIds, { closeUnusedOnRelease: true })
   const capabilities = useHostCapabilities(clients)
   return useMemo(() => {
     const options = new Map(hostPickerOptions([...profiles]).map((row) => [row.value, row]))
