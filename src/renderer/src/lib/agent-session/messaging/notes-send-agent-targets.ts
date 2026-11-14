@@ -58,11 +58,10 @@ function detectTitleHintPaneEvidence(
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
   worktreeId: string,
-  chatNames: StructuredChatTabNames,
-  now = Date.now()
+  chatNames: StructuredChatTabNames
 ): NotesSendAgentTarget[] {
   const targets: NotesSendAgentTarget[] = [
-    ...deriveRunningAgentSendTargets(state, worktreeId, now),
+    ...deriveRunningAgentSendTargets(state, worktreeId),
     ...deriveStatuslessStructuredAgentSendTargets(state, worktreeId)
   ].map((target) => {
     const tab = structuredChatTabById(state.unifiedTabsByWorktree, worktreeId, target.tabId)
