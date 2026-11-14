@@ -6,6 +6,11 @@ import {
   type FrameContext
 } from './browser-extension-frame-lifetime'
 import type { BrowserExtensionEventPayload } from '../../../../shared/browser/extensions/browser-extension-channels'
+import {
+  extensionHasNamespacePermission,
+  getBrowserExtensionNamespace
+} from './browser-extension-namespace-registry'
+import type { BrowserExtensionExecution } from './browser-extension-execution-authority'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   dispatchBrowserExtensionEvent as dispatchEvent,
@@ -19,7 +24,8 @@ import {
   detachWorkerEventStream,
   queueWorkerEvent,
   type QueuedWorkerEvent,
-  type WorkerEventStream
+  type WorkerEventStream,
+  isWorkerPublishing
 } from './browser-extension-worker-event-stream'
 
 /** Event key → every listener's filter; absent when some listener takes everything. */
@@ -36,6 +42,13 @@ export type WorkerContext = {
   stream: WorkerEventStream | null
   queue: QueuedWorkerEvent[]
   starting: boolean
+  extension?: Electron.Extension
+  execution?: BrowserExtensionExecution
+  initialPublication?: boolean
+  publicationUntil?: number
+  publicationComplete?: boolean
+  run?: AbortController
+  pendingLifecycle?: BrowserExtensionEventPayload[]
 }
 
 export type HostSessionState = {
@@ -71,12 +84,17 @@ export function forgetHostSession(sess: Electron.Session): void {
     }
   }
   for (const context of state?.workers.values() ?? []) {
+    context.run?.abort()
     detachWorkerEventStream(context)
   }
   stateBySession.delete(sess)
 }
 
-export function forgetExtensionContexts(sess: Electron.Session, extensionId: string): void {
+export function forgetExtensionContexts(
+  sess: Electron.Session,
+  extensionId: string,
+  retainListeners = false
+): void {
   const state = stateBySession.get(sess)
   if (!state) {
     return
@@ -84,9 +102,20 @@ export function forgetExtensionContexts(sess: Electron.Session, extensionId: str
   forgetBrowserExtensionContextLifetime(state, extensionId)
   const worker = state.workers.get(extensionId)
   if (worker) {
+    worker.run?.abort()
     detachWorkerEventStream(worker)
   }
   state.workers.delete(extensionId)
+  if (retainListeners && worker) {
+    const retained = ensureWorkerContext(state, extensionId, worker.scope)
+    retained.events = new Set(worker.events)
+    retained.filters = new Map(worker.filters)
+    retained.pendingLifecycle = worker.pendingLifecycle?.filter((payload) =>
+      worker.queue.some(
+        (entry) => entry.payload === payload && Date.now() - entry.queuedAt <= 30_000
+      )
+    )
+  }
   for (const [key, frame] of state.frames) {
     if (frame.extensionId === extensionId) {
       forgetBrowserExtensionFrame(state.frames, key, frame)
@@ -174,7 +203,8 @@ export function dispatchToWorkerWhenListening(
   namespace: string,
   event: string,
   args: unknown[],
-  startWorker: (sess: Electron.Session, context: WorkerContext) => void
+  startWorker: (sess: Electron.Session, context: WorkerContext) => void,
+  retainLifecycle = true
 ): void {
   const state = stateBySession.get(sess)
   if (!state) {
@@ -184,6 +214,10 @@ export function dispatchToWorkerWhenListening(
   const scope = `${getChromeExtensionOrigin(extensionId)}/`
   const context = ensureWorkerContext(state, extensionId, scope)
   const payload: BrowserExtensionEventPayload = { namespace, event, args }
+  if (namespace === 'runtime' && retainLifecycle && !context.stream?.published) {
+    context.pendingLifecycle ??= []
+    context.pendingLifecycle.push(payload)
+  }
   if (context.events.has(key)) {
     deliverToWorker(sess, context, key, payload, startWorker)
   } else {
@@ -200,7 +234,16 @@ export function browserExtensionEventHasListener(
   const state = stateBySession.get(sess)
   const key = eventKey(namespace, event)
   for (const context of state?.workers.values() ?? []) {
-    if (context.events.has(key)) {
+    if (
+      (context.events.has(key) || isWorkerPublishing(context)) &&
+      !context.execution?.controller.signal.aborted &&
+      context.extension &&
+      extensionHasNamespacePermission(
+        context.extension,
+        getBrowserExtensionNamespace(namespace)?.permission,
+        sess
+      )
+    ) {
       return true
     }
   }

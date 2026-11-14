@@ -19,6 +19,7 @@ import {
 } from './browser-extension-contexts'
 
 const invokeRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('published') }),
   z.object({ type: z.literal('receipt'), deliveryId: z.string() }),
   z.object({
     type: z.literal('call'),
@@ -71,6 +72,24 @@ export async function handleBrowserExtensionApiRequest(
       throw new BrowserExtensionApiError('Malformed extension API request')
     }
     const request = parsed.data
+    if (request.type === 'published') {
+      if (!caller.fromWorker || listenTarget.kind !== 'worker' || !listenTarget.context.stream) {
+        throw new BrowserExtensionApiError('Publication is not available here')
+      }
+      const context = listenTarget.context
+      const stream = context.stream!
+      stream.published = true
+      context.initialPublication = false
+      context.publicationComplete = true
+      context.pendingLifecycle = []
+      context.events = new Set(stream.events)
+      context.filters = new Map(stream.filters)
+      for (const key of stream.events) {
+        flushWorkerQueue(context, key)
+      }
+      context.queue = context.queue.filter((entry) => !entry.provisional)
+      return { ok: true, value: undefined }
+    }
     if (request.type === 'receipt') {
       if (!caller.fromWorker || !caller.execution || listenTarget.kind !== 'worker') {
         throw new BrowserExtensionApiError('Receipt is not available here')
@@ -106,9 +125,15 @@ export async function handleBrowserExtensionApiRequest(
       const key = eventKey(request.namespace, request.event)
       if (listenTarget.kind === 'worker') {
         const { context } = listenTarget
+        const stream = context.stream
+        if (!stream) {
+          throw new BrowserExtensionApiError('Extension worker connection was closed')
+        }
         if (request.active) {
           context.events.add(key)
           setListenerFilters(context.filters, key, request.filters)
+          stream.events.add(key)
+          setListenerFilters(stream.filters, key, request.filters)
           if (
             extensionHasNamespacePermission(caller.extension, namespace.permission, caller.session)
           ) {
@@ -117,6 +142,8 @@ export async function handleBrowserExtensionApiRequest(
         } else {
           context.events.delete(key)
           setListenerFilters(context.filters, key, undefined)
+          stream.events.delete(key)
+          setListenerFilters(stream.filters, key, undefined)
         }
       } else {
         const { webContents, frame } = listenTarget

@@ -1,10 +1,17 @@
-import { endBrowserExtensionWorkerApiTasks } from './browser-extension-worker-api-tasks'
+import {
+  attachBrowserExtensionWorker,
+  noteBrowserExtensionWorkerRunning,
+  startBrowserExtensionWorker,
+  stopBrowserExtensionWorker
+} from './browser-extension-worker-start'
+export { startBrowserExtensionWorker } from './browser-extension-worker-start'
 import { handleBrowserExtensionContentRequest } from './browser-extension-content-api-host'
 import { ipcMain } from 'electron'
 import {
   getBrowserExtensionExecution,
   isBrowserExtensionExecutionLive
 } from './browser-extension-execution-authority'
+import { isBrowserExtensionSuspension } from '../profile-sessions/browser-extension-worker-registration'
 import {
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   type BrowserExtensionInvokeResult
@@ -15,12 +22,10 @@ import {
 } from '../../../../shared/browser/extensions/browser-extension-url'
 import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
-import { detachWorkerEventStream } from './browser-extension-worker-event-stream'
 import {
   dispatchBrowserExtensionEvent,
   dispatchToWorkerWhenListening,
   ensureHostSessionState,
-  ensureWorkerContext,
   forgetExtensionContexts,
   forgetHostSession,
   getHostSessionState,
@@ -93,28 +98,18 @@ export function installBrowserExtensionApiHost(): void {
   )
 }
 
-/** Tracks the running worker so calls and events can extend its lifetime with startTask(). */
-function attachWorker(
-  sess: Electron.Session,
-  state: HostSessionState,
-  worker: Electron.ServiceWorkerMain
-): void {
-  const parsed = parseChromeExtensionUrl(worker.scope)
-  if (!parsed || !sess.extensions.getExtension(parsed.extensionId)) {
-    return
-  }
-  ensureWorkerContext(state, parsed.extensionId, worker.scope).running = worker
-}
-
 function startWorker(sess: Electron.Session, context: WorkerContext): void {
-  const state = getHostSessionState(sess)
-  if (!state || context.starting) {
+  const execution = getBrowserExtensionExecution(sess, context.extensionId)
+  if (
+    !execution ||
+    !isBrowserExtensionExecutionLive(execution) ||
+    context.starting ||
+    execution.host.workers.get(context.extensionId) !== context
+  ) {
     return
   }
   context.starting = true
-  sess.serviceWorkers
-    .startWorkerForScope(context.scope)
-    .then((worker) => attachWorker(sess, state, worker))
+  void startBrowserExtensionWorker(execution, context)
     .catch((error: unknown) => {
       console.warn('[browser-extensions] Could not start extension worker:', error)
     })
@@ -128,7 +123,7 @@ function sweepRunningWorkers(sess: Electron.Session, state: HostSessionState): v
   for (const versionId of Object.keys(sess.serviceWorkers.getAllRunning())) {
     const worker = sess.serviceWorkers.getWorkerFromVersionID(Number(versionId))
     if (worker) {
-      attachWorker(sess, state, worker)
+      attachBrowserExtensionWorker(sess, state, worker)
     }
   }
 }
@@ -150,16 +145,15 @@ function listenToSession(sess: Electron.Session): void {
     if (runningStatus === 'starting' || runningStatus === 'running') {
       const worker = sess.serviceWorkers.getWorkerFromVersionID(versionId)
       if (worker) {
-        attachWorker(sess, state, worker)
+        noteBrowserExtensionWorkerRunning(worker)
+        attachBrowserExtensionWorker(sess, state, worker)
       }
-    } else if (runningStatus === 'stopped') {
+    } else if (runningStatus === 'stopped' || runningStatus === 'stopping') {
       // Why: a stopped worker drops sends; clearing it makes the next event restart and queue.
       for (const context of state.workers.values()) {
         const running = context.running
         if (running && (running.isDestroyed() || running.versionId === versionId)) {
-          endBrowserExtensionWorkerApiTasks(running)
-          context.running = null
-          detachWorkerEventStream(context)
+          stopBrowserExtensionWorker(context)
         }
       }
     }
@@ -171,7 +165,7 @@ function listenToSession(sess: Electron.Session): void {
     }
   })
   sess.extensions.on('extension-unloaded', (_event, extension) =>
-    forgetExtensionContexts(sess, extension.id)
+    forgetExtensionContexts(sess, extension.id, isBrowserExtensionSuspension(sess, extension))
   )
 }
 
@@ -228,7 +222,16 @@ export function emitBrowserExtensionWorkerStartEvent(
   extensionId: string,
   namespace: string,
   event: string,
-  args: unknown[]
+  args: unknown[],
+  retainLifecycle = true
 ): void {
-  dispatchToWorkerWhenListening(sess, extensionId, namespace, event, args, startWorker)
+  dispatchToWorkerWhenListening(
+    sess,
+    extensionId,
+    namespace,
+    event,
+    args,
+    startWorker,
+    retainLifecycle
+  )
 }

@@ -108,6 +108,6 @@ export function buildBrowserExtensionBackgroundWrapper(
         : {})
     },
     wrapperPath,
-    wrapperSource: `// Written by Orca: its chrome.* additions, then this extension's own worker.\n${load}`
+    wrapperSource: `// Written by Orca: its chrome.* additions, then this extension's own worker.\n${load}globalThis.__orcaExtensionWorkerEvaluated?.();\n`
   }
 }

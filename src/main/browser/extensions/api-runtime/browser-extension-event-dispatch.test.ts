@@ -2,6 +2,19 @@ import { expect, it, vi } from 'vitest'
 import type { HostSessionState, WorkerContext } from './browser-extension-contexts'
 
 vi.mock('electron', () => ({ webFrameMain: {} }))
+import {
+  ensureHostSessionState,
+  ensureWorkerContext,
+  browserExtensionEventHasListener,
+  forgetHostSession
+} from './browser-extension-contexts'
+import { beginWorkerPublication } from './browser-extension-worker-event-stream'
+import { registerBrowserExtensionNamespace } from './browser-extension-namespace-registry'
+registerBrowserExtensionNamespace('webRequest', {
+  permission: 'webRequest',
+  methods: {},
+  events: ['onBeforeRequest']
+})
 import { dispatchBrowserExtensionEvent } from './browser-extension-event-dispatch'
 
 it.each([750, 7500])(
@@ -39,7 +52,15 @@ it.each([750, 7500])(
       events: new Set(['orcaStorageSession.onChanged']),
       filters: new Map(),
       running: null,
-      stream: { send, close: () => {} },
+      stream: {
+        connectionId: 'fixture',
+        controller: new AbortController(),
+        events: new Set(['orcaStorageSession.onChanged']),
+        filters: new Map(),
+        published: true,
+        send,
+        close: () => {}
+      },
       queue: [],
       starting: false
     }
@@ -63,5 +84,36 @@ it.each([750, 7500])(
     expect(send.mock.calls).toEqual([
       [{ namespace: 'orcaStorageSession', event: 'onChanged', args: changes }]
     ])
+  }
+)
+
+it.each([10, 100])(
+  'skips native manifests and request details for %i irrelevant workers',
+  (count) => {
+    const getExtension = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the native lookup is available so eager conversion would be observed.
+    const session = { extensions: { getExtension } } as unknown as Electron.Session
+    const state = ensureHostSessionState(session, 'hot')
+    for (let index = 0; index < count; index++) {
+      const context = ensureWorkerContext(state, String(index), '')
+      context.extension = {
+        id: String(index),
+        name: '',
+        version: '1',
+        path: '',
+        url: '',
+        manifest: { permissions: [] }
+      }
+    }
+    expect(browserExtensionEventHasListener(session, 'webRequest', 'onBeforeRequest')).toBe(false)
+    for (const context of state.workers.values()) {
+      beginWorkerPublication(context)
+    }
+    expect(browserExtensionEventHasListener(session, 'webRequest', 'onBeforeRequest')).toBe(false)
+    const eligible = state.workers.get('0')!
+    eligible.extension!.manifest.permissions = ['webRequest']
+    expect(browserExtensionEventHasListener(session, 'webRequest', 'onBeforeRequest')).toBe(true)
+    expect(getExtension).not.toHaveBeenCalled()
+    forgetHostSession(session)
   }
 )

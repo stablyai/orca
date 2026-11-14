@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 vi.mock('electron', () => ({
@@ -20,6 +20,22 @@ vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 
+const lifecycleStore = vi.hoisted(() => ({
+  value: { lastLoaded: { extensionVersion: '1', chromiumVersion: process.versions.chrome } }
+}))
+vi.mock('../profile-storage/browser-extension-profile-state-store', () => ({
+  getBrowserExtensionProfileStateStore: () => ({
+    read: () => lifecycleStore.value,
+    update: (
+      _profile: string,
+      _id: string,
+      update: (value: typeof lifecycleStore.value) => typeof lifecycleStore.value
+    ) => {
+      lifecycleStore.value = update(lifecycleStore.value)
+    }
+  })
+}))
+
 const wire = await import('../../../../shared/browser/extensions/browser-extension-worker-api')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')
@@ -35,7 +51,14 @@ const OTHER = 'b'.repeat(32)
 const seen: { extensionId: string; fromWorker: boolean | undefined }[] = []
 
 function makeExtension(id: string) {
-  return { id, name: id, version: '1', path: '', url: '', manifest: { permissions: ['probe'] } }
+  return {
+    id,
+    name: id,
+    version: '1',
+    path: '',
+    url: '',
+    manifest: { permissions: ['probe'], background: { service_worker: 'worker.js' } }
+  }
 }
 
 type ProtocolHandler = (request: Request) => Promise<Response>
@@ -45,7 +68,7 @@ function makeSession(ids: string[]) {
   const statusListeners: ((details: { versionId: number; runningStatus: string }) => void)[] = []
   const task = { end: vi.fn() }
   const worker = {
-    scope: `chrome-extension://${VAULT}/`,
+    scope: `chrome-extension://${ids[0]}/`,
     versionId: 7,
     isDestroyed: () => false,
     startTask: vi.fn(() => task)
@@ -56,13 +79,16 @@ function makeSession(ids: string[]) {
     extensions,
     worker,
     task,
+    inventory: true,
     startWorkerForScope: vi.fn((_scope: string) => Promise.resolve(worker)),
     stopWorker: () => {
+      stub.inventory = false
       for (const listener of statusListeners) {
         listener({ versionId: 7, runningStatus: 'stopped' })
       }
     },
     startWorker: () => {
+      stub.inventory = true
       for (const listener of statusListeners) {
         listener({ versionId: 7, runningStatus: 'running' })
       }
@@ -82,7 +108,7 @@ function makeSession(ids: string[]) {
             statusListeners.splice(index, 1)
           }
         },
-        getAllRunning: () => ({}),
+        getAllRunning: () => (stub.inventory ? { 7: { scope: worker.scope } } : {}),
         getWorkerFromVersionID: () => worker,
         startWorkerForScope: (scope: string) => stub.startWorkerForScope(scope)
       },
@@ -135,7 +161,7 @@ async function callAs(stub: ReturnType<typeof makeSession>, extensionId: string,
   const response = await post(
     stub,
     wire.BROWSER_EXTENSION_API_CALL_URL,
-    { token, request },
+    { token, request, connectionId: 'fixture-connection' },
     originOf(extensionId)
   )
   return wire.decodeBrowserExtensionWireJson(await response.text())
@@ -150,11 +176,15 @@ function listen(stub: ReturnType<typeof makeSession>, extensionId: string) {
   })
 }
 
-async function openEvents(stub: ReturnType<typeof makeSession>, extensionId: string) {
+async function openEvents(
+  stub: ReturnType<typeof makeSession>,
+  extensionId: string,
+  connectionId = 'fixture-connection'
+) {
   const response = await post(
     stub,
     wire.BROWSER_EXTENSION_API_EVENTS_URL,
-    { token: tokenFor(stub, extensionId) },
+    { token: tokenFor(stub, extensionId), connectionId },
     originOf(extensionId)
   )
   const reader = response.body?.getReader()
@@ -164,8 +194,8 @@ async function openEvents(stub: ReturnType<typeof makeSession>, extensionId: str
   const decoder = new TextDecoder()
   return {
     next: async () => {
-      const { value } = await reader.read()
-      return wire.decodeBrowserExtensionWireJson(decoder.decode(value).trim())
+      const { value, done } = await reader.read()
+      return done ? undefined : wire.decodeBrowserExtensionWireJson(decoder.decode(value).trim())
     },
     // The worker stopping cancels its fetch.
     cancel: () => reader.cancel()
@@ -192,6 +222,7 @@ beforeAll(() => {
     for (const id of stub.extensions.keys()) {
       beginBrowserExtensionExecution(asSession(stub), id, new AbortController().signal)
     }
+    stub.startWorker()
   }
 })
 
@@ -203,8 +234,10 @@ describe('worker API protocol', () => {
     const session = asSession(stub)
     host.attachBrowserExtensionApiHostToSession(session, 'held-call')
     beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
-    await listen(stub, VAULT)
     stub.startWorker()
+    const events = await openEvents(stub, VAULT)
+    await listen(stub, VAULT)
+    stub.task.end.mockClear()
     let finish = (): void => {}
     let entered = false
     registry.registerBrowserExtensionNamespace('heldCall', {
@@ -239,6 +272,7 @@ describe('worker API protocol', () => {
     } finally {
       finish()
       await pending
+      await events.cancel()
       host.forgetBrowserExtensionContexts(session)
       vi.useRealTimers()
     }
@@ -336,7 +370,6 @@ describe('worker API protocol', () => {
     await first.cancel()
     vaultSession.stopWorker()
     host.emitBrowserExtensionEvent({ extensionId: VAULT }, 'probe', 'onPing', [2])
-    expect(vaultSession.startWorkerForScope).toHaveBeenCalledWith(`chrome-extension://${VAULT}/`)
 
     // The restarted worker reopens its stream, then re-registers the listener.
     vaultSession.startWorker()
@@ -348,7 +381,6 @@ describe('worker API protocol', () => {
   it('holds a worker-start event until the worker registers its listener, then sends it once', async () => {
     const sess = asSession(otherSession)
     host.emitBrowserExtensionWorkerStartEvent(sess, OTHER, 'probe', 'onPing', ['install'])
-    expect(otherSession.startWorkerForScope).toHaveBeenCalledWith(`chrome-extension://${OTHER}/`)
 
     const events = await openEvents(otherSession, OTHER)
     await listen(otherSession, OTHER)
@@ -368,4 +400,267 @@ describe('worker API protocol', () => {
       args: ['later']
     })
   })
+
+  it('admits first events before publication and flushes only the current matching filters once', async () => {
+    const stub = makeSession([VAULT])
+    const session = asSession(stub)
+    host.attachBrowserExtensionApiHostToSession(session, 'first-event')
+    beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+    stub.startWorker()
+    host.emitBrowserExtensionEvent(
+      { session },
+      'probe',
+      'onPing',
+      ['ignored'],
+      (filter) => filter === 'ignored'
+    )
+    host.emitBrowserExtensionEvent(
+      { session },
+      'probe',
+      'onPing',
+      ['first'],
+      (filter) => filter === 'first'
+    )
+    const events = await openEvents(stub, VAULT)
+    await callAs(stub, VAULT, {
+      type: 'listen',
+      namespace: 'probe',
+      event: 'onPing',
+      active: true,
+      filters: ['first']
+    })
+    await callAs(stub, VAULT, { type: 'published' })
+    host.emitBrowserExtensionEvent(
+      { session },
+      'probe',
+      'onPing',
+      ['later'],
+      (filter) => filter === 'first'
+    )
+    await expect(events.next()).resolves.toEqual({
+      namespace: 'probe',
+      event: 'onPing',
+      args: ['first']
+    })
+    await expect(events.next()).resolves.toEqual({
+      namespace: 'probe',
+      event: 'onPing',
+      args: ['later']
+    })
+    await events.cancel()
+    host.forgetBrowserExtensionContexts(session)
+  })
+
+  it('rejects a predecessor connection listen after reconnect without removing the current listener', async () => {
+    const stub = makeSession([VAULT])
+    const session = asSession(stub)
+    host.attachBrowserExtensionApiHostToSession(session, 'reconnect')
+    beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+    stub.startWorker()
+    const previous = await openEvents(stub, VAULT, 'previous')
+    const current = await openEvents(stub, VAULT)
+    await listen(stub, VAULT)
+    const response = await post(
+      stub,
+      wire.BROWSER_EXTENSION_API_CALL_URL,
+      {
+        token: tokenFor(stub, VAULT),
+        connectionId: 'previous',
+        request: { type: 'listen', namespace: 'probe', event: 'onPing', active: false }
+      },
+      originOf(VAULT)
+    )
+    expect(response.status).toBe(409)
+    host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', ['current'])
+    await expect(current.next()).resolves.toEqual({
+      namespace: 'probe',
+      event: 'onPing',
+      args: ['current']
+    })
+    await expect(previous.next()).resolves.toBeUndefined()
+    await current.cancel()
+    host.forgetBrowserExtensionContexts(session)
+  })
+
+  it('wakes retained subscriptions after suspension without delivering into the old connection', async () => {
+    const stub = makeSession([VAULT])
+    const session = asSession(stub)
+    host.attachBrowserExtensionApiHostToSession(session, 'suspended')
+    const old = beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+    stub.startWorker()
+    const first = await openEvents(stub, VAULT)
+    await listen(stub, VAULT)
+    await callAs(stub, VAULT, { type: 'published' })
+    old.controller.abort()
+    forgetExtensionContexts(session, VAULT, true)
+    beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+    host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', ['reopen'])
+    stub.startWorker()
+    const second = await openEvents(stub, VAULT)
+    await listen(stub, VAULT)
+    await expect(second.next()).resolves.toEqual({
+      namespace: 'probe',
+      event: 'onPing',
+      args: ['reopen']
+    })
+    await expect(first.next()).resolves.toBeUndefined()
+    await second.cancel()
+    host.forgetBrowserExtensionContexts(session)
+  })
+})
+
+afterEach(() => vi.useRealTimers())
+
+it('keeps a cold alarm queued when native success precedes running publication and stop races it', async () => {
+  const stub = makeSession([VAULT])
+  const session = asSession(stub)
+  host.attachBrowserExtensionApiHostToSession(session, 'cold-start')
+  const execution = beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+  stub.startWorker()
+  const first = await openEvents(stub, VAULT)
+  await listen(stub, VAULT)
+  await callAs(stub, VAULT, { type: 'published' })
+  stub.stopWorker()
+  host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', ['alarm'])
+  const starting = host.startBrowserExtensionWorker(
+    execution,
+    getHostSessionState(session)!.workers.get(VAULT)!
+  )
+  const result = starting.then(
+    (worker) => ({ worker }),
+    (error: unknown) => ({ error })
+  )
+  // Let the scope-success continuation run before the later native observer task.
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  stub.startWorker()
+  await expect(result).resolves.toEqual({ worker: stub.worker })
+  const second = await openEvents(stub, VAULT)
+  await listen(stub, VAULT)
+  await expect(second.next()).resolves.toEqual({
+    namespace: 'probe',
+    event: 'onPing',
+    args: ['alarm']
+  })
+  await expect(first.next()).resolves.toBeUndefined()
+  await second.cancel()
+  host.forgetBrowserExtensionContexts(session)
+})
+
+it('cancels a scope start that never settles without delaying execution retirement', async () => {
+  const stub = makeSession([VAULT])
+  const session = asSession(stub)
+  host.attachBrowserExtensionApiHostToSession(session, 'cancel-start')
+  const execution = beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+  stub.startWorker()
+  stub.startWorkerForScope.mockImplementationOnce(() => new Promise(() => {}))
+  const started = host.startBrowserExtensionWorker(
+    execution,
+    getHostSessionState(session)!.workers.get(VAULT)!
+  )
+  const rejected = expect(started).rejects.toThrow('unloaded')
+  execution.controller.abort()
+  await rejected
+  host.forgetBrowserExtensionContexts(session)
+})
+
+it('keeps lifecycle delivery ahead of provisional request noise, and never replays it after checkpoint', async () => {
+  const stub = makeSession([VAULT])
+  const session = asSession(stub)
+  host.attachBrowserExtensionApiHostToSession(session, 'lifecycle')
+  beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+  stub.startWorker()
+  registry.registerBrowserExtensionNamespace('runtime', { methods: {}, events: ['onStartup'] })
+  host.emitBrowserExtensionWorkerStartEvent(session, VAULT, 'runtime', 'onStartup', [])
+  for (let index = 0; index < 150; index++) {
+    host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', [index])
+  }
+  const events = await openEvents(stub, VAULT)
+  await callAs(stub, VAULT, {
+    type: 'listen',
+    namespace: 'runtime',
+    event: 'onStartup',
+    active: true
+  })
+  await callAs(stub, VAULT, { type: 'published' })
+  await expect(events.next()).resolves.toEqual({
+    namespace: 'runtime',
+    event: 'onStartup',
+    args: []
+  })
+  forgetExtensionContexts(session, VAULT, true)
+  await expect(events.next()).resolves.toBeUndefined()
+  host.forgetBrowserExtensionContexts(session)
+})
+
+it.each([10, 100])('never repeats irrelevant lifecycle wakes across %i reopens', async (count) => {
+  const { fireRuntimeLifecycleEvents } =
+    await import('../profile-sessions/browser-extension-runtime-lifecycle')
+  for (const end of ['suspend', 'failure', 'published'] as const) {
+    const stub = makeSession([VAULT])
+    const session = asSession(stub)
+    host.attachBrowserExtensionApiHostToSession(session, `lifecycle-${end}`)
+    const execution = beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+    stub.startWorker()
+    fireRuntimeLifecycleEvents(session, 'profile', stub.extensions.get(VAULT)!, 'startup')
+    const context = getHostSessionState(session)!.workers.get(VAULT)!
+    if (end === 'failure') {
+      stub.startWorkerForScope.mockRejectedValue(new Error('native failure'))
+      await expect(host.startBrowserExtensionWorker(execution, context)).rejects.toThrow(
+        'native failure'
+      )
+    } else if (end === 'published') {
+      const events = await openEvents(stub, VAULT)
+      await callAs(stub, VAULT, { type: 'published' })
+      await events.cancel()
+    }
+    // Complete the admitted start attempt before measuring subsequent reopen work.
+    await Promise.resolve()
+    await Promise.resolve()
+    const before = stub.startWorkerForScope.mock.calls.length
+    for (let index = 0; index < count; index++) {
+      forgetExtensionContexts(session, VAULT, true)
+      execution.controller.abort()
+      beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+      fireRuntimeLifecycleEvents(session, 'profile', stub.extensions.get(VAULT)!, 'other')
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+    expect(stub.startWorkerForScope.mock.calls.length - before).toBe(end === 'suspend' ? 1 : 0)
+    host.forgetBrowserExtensionContexts(session)
+  }
+})
+
+it('does not admit unknown events after fallback or renew the original window on failed reconnect', async () => {
+  vi.useFakeTimers()
+  const { beginWorkerPublication } = await import('./browser-extension-worker-event-stream')
+  const stub = makeSession([VAULT])
+  const session = asSession(stub)
+  host.attachBrowserExtensionApiHostToSession(session, 'fallback')
+  beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+  stub.startWorker()
+  const context = getHostSessionState(session)!.workers.get(VAULT)!
+  const first = await openEvents(stub, VAULT)
+  await vi.advanceTimersByTimeAsync(10_000)
+  context.initialPublication = false
+  await first.cancel()
+  const second = await openEvents(stub, VAULT)
+  host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', ['closed'])
+  await second.cancel()
+  // A genuine new native run gets a new admission window.
+  beginWorkerPublication(context, true)
+  const third = await openEvents(stub, VAULT)
+  await vi.advanceTimersByTimeAsync(29_000)
+  await third.cancel()
+  const fourth = await openEvents(stub, VAULT)
+  await vi.advanceTimersByTimeAsync(2_000)
+  host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', ['expired'])
+  await listen(stub, VAULT)
+  host.emitBrowserExtensionEvent({ session }, 'probe', 'onPing', ['real'])
+  await expect(fourth.next()).resolves.toEqual({
+    namespace: 'probe',
+    event: 'onPing',
+    args: ['real']
+  })
+  await fourth.cancel()
+  host.forgetBrowserExtensionContexts(session)
 })

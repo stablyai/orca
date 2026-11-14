@@ -15,6 +15,23 @@ export type BrowserExtensionExecution = {
   release?: () => Promise<void>
   retired?: Promise<void>
   operations: Set<Promise<unknown>>
+  workerRegistration?: Promise<void>
+}
+
+/** Cancellation releases the application waiter; Electron still owns its eventual native result. */
+export function awaitBrowserExtensionExecution<T>(
+  execution: BrowserExtensionExecution,
+  result: Promise<T>
+): Promise<T> {
+  const signal = execution.controller.signal
+  return new Promise<T>((resolve, reject) => {
+    const cancelled = (): void => reject(new Error('Extension context was unloaded'))
+    signal.addEventListener('abort', cancelled, { once: true })
+    void result.then(resolve, reject).finally(() => signal.removeEventListener('abort', cancelled))
+    if (signal.aborted) {
+      cancelled()
+    }
+  })
 }
 
 const executions = new WeakMap<Electron.Session, Map<string, BrowserExtensionExecution>>()

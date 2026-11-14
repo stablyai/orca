@@ -40,6 +40,11 @@ const FAILED: BrowserExtensionInvokeReply = {
   error: 'Orca could not handle this extension call'
 }
 const RECONNECT_DELAY_MS = 1000
+let evaluated = (): void => {}
+const evaluationComplete = new Promise<void>((resolve) => {
+  evaluated = resolve
+})
+Object.defineProperty(globalThis, '__orcaExtensionWorkerEvaluated', { value: () => evaluated() })
 
 // Why captured now: extension code that wraps fetch later must not see or break Orca's calls.
 const nativeFetch = globalThis.fetch.bind(globalThis)
@@ -83,20 +88,34 @@ nativeRuntime?.onMessage?.addListener((message, sender, respond) => {
   ) {
     return undefined
   }
-  void tokenReady.then(async (token) => {
-    await listenChain
-    respond({ challenge, token })
+  void (async () => {
+    const token = await tokenReady
+    const current = connection ?? (await nextConnection)
+    await current.ready
+    await current.chain
+    respond({
+      challenge,
+      token: connection === current && !current.controller.signal.aborted ? token : null,
+      connectionId: current.id
+    })
+  })().catch(() => {
+    try {
+      respond({ challenge, token: null })
+    } catch {
+      // The native sender may already have gone.
+    }
   })
   return true
 })
 
 // Why text/plain: a simple request skips the CORS preflight round trip.
-function post(url: string, body: unknown): Promise<Response> {
+function post(url: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   return nativeFetch(url, {
     method: 'POST',
     cache: 'no-store',
     headers: { 'content-type': 'text/plain' },
-    body: encodeBrowserExtensionWireJson(body)
+    body: encodeBrowserExtensionWireJson(body),
+    signal
   })
 }
 
@@ -107,7 +126,9 @@ async function invoke(request: unknown): Promise<BrowserExtensionInvokeReply> {
   }
   try {
     const reply = decodeBrowserExtensionWireJson(
-      await (await post(BROWSER_EXTENSION_API_CALL_URL, { token, request })).text()
+      await (
+        await post(BROWSER_EXTENSION_API_CALL_URL, { token, request, connectionId: connection?.id })
+      ).text()
     )
     return isReply(reply) ? reply : FAILED
   } catch {
@@ -164,46 +185,90 @@ async function readLines(body: ReadableStream<Uint8Array>): Promise<void> {
 
 /** Last listen state per event, replayed after a reconnect so main flushes what it queued. */
 const listening = new Map<string, { namespace: string; event: string; filters?: unknown[] }>()
-// Why chained: add/remove must reach main in order, and only once the event stream is open
-// (main flushes events queued for a stopped worker when the listener re-registers).
-let markConnected: () => void = () => {}
-let listenChain: Promise<unknown> = new Promise<void>((resolve) => {
-  markConnected = resolve
+type WorkerConnection = {
+  id: string
+  controller: AbortController
+  chain: Promise<void>
+  ready: Promise<void>
+}
+let connection: WorkerConnection | null = null
+let openedConnection = (_connection: WorkerConnection): void => {}
+let nextConnection = new Promise<WorkerConnection>((resolve) => {
+  openedConnection = resolve
 })
 
-function sendListen(namespace: string, event: string, active: boolean, filters?: unknown[]): void {
-  listenChain = listenChain.then(() =>
-    invoke({ type: 'listen', namespace, event, active, filters })
+async function publish(current: WorkerConnection, request: unknown): Promise<void> {
+  const token = await tokenReady
+  if (!token || connection !== current || current.controller.signal.aborted) {
+    throw new Error('Extension worker connection was closed')
+  }
+  const response = await post(
+    BROWSER_EXTENSION_API_CALL_URL,
+    { token, connectionId: current.id, request },
+    current.controller.signal
   )
+  const reply = response.ok ? decodeBrowserExtensionWireJson(await response.text()) : null
+  if (!isReply(reply) || !reply.ok || connection !== current || current.controller.signal.aborted) {
+    throw new Error('Extension worker publication failed')
+  }
+}
+
+function enqueueListen(current: WorkerConnection, request: unknown): void {
+  current.chain = current.chain.then(() => publish(current, request))
+  void current.chain.catch(() => current.controller.abort())
+}
+
+function sendListen(namespace: string, event: string, active: boolean, filters?: unknown[]): void {
+  if (connection) {
+    enqueueListen(connection, { type: 'listen', namespace, event, active, filters })
+  }
 }
 
 async function connectEvents(): Promise<void> {
   const token = await tokenReady
-  let connectedBefore = false
   while (token) {
-    let response: Response | null = null
+    const controller = new AbortController()
+    const id = crypto.randomUUID()
+    let current: WorkerConnection | null = null
     try {
-      response = await post(BROWSER_EXTENSION_API_EVENTS_URL, { token })
-    } catch {
-      response = null
-    }
-    if (response && !response.ok) {
-      break
-    }
-    if (response?.body) {
-      if (!connectedBefore) {
-        connectedBefore = true
-        markConnected()
-      } else {
-        for (const entry of listening.values()) {
-          sendListen(entry.namespace, entry.event, true, entry.filters)
-        }
+      const response = await post(
+        BROWSER_EXTENSION_API_EVENTS_URL,
+        { token, connectionId: id },
+        controller.signal
+      )
+      if (response.status === 403) {
+        return
       }
+      if (!response.ok || !response.body) {
+        throw new Error('Extension worker connection was refused')
+      }
+      current = { id, controller, chain: Promise.resolve(), ready: Promise.resolve() }
+      connection = current
+      openedConnection(current)
+      for (const entry of listening.values()) {
+        enqueueListen(current, { type: 'listen', ...entry, active: true })
+      }
+      const publishing = current
+      current.ready = evaluationComplete.then(async () => {
+        // Queue the checkpoint after synchronous original-worker registration and ordered replay.
+        publishing.chain = publishing.chain.then(() => publish(publishing, { type: 'published' }))
+        await publishing.chain
+      })
+      void current.ready.catch(() => controller.abort())
       await readLines(response.body)
+    } catch {
+      // The existing reconnect replays the actual listeners on a fresh connection.
+    } finally {
+      controller.abort()
+      if (connection === current) {
+        connection = null
+        nextConnection = new Promise<WorkerConnection>((resolve) => {
+          openedConnection = resolve
+        })
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS))
   }
-  markConnected()
 }
 
 const bridge: BrowserExtensionMainWorldBridge = {

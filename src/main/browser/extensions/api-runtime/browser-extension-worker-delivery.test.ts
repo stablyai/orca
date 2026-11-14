@@ -86,7 +86,7 @@ it('refuses another execution or replaced stream receipt and reports missing del
   const verdict = expect(run.pending).rejects.toThrow('did not acknowledge')
   acknowledgeBrowserExtensionWorkerDelivery({ ...run.execution }, run.context, run.id)
   const stream = run.context.stream
-  run.context.stream = { send: () => {}, close: () => {} }
+  run.context.stream = { ...stream!, send: () => {}, close: () => {} }
   acknowledgeBrowserExtensionWorkerDelivery(run.execution, run.context, run.id)
   run.context.stream = stream
   expect(run.task.end).not.toHaveBeenCalled()

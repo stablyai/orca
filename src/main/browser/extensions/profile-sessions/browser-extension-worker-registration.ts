@@ -2,6 +2,7 @@ import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/
 import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
 import type { PreparedBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
 import { retireBrowserExtensionExecution } from '../api-runtime/browser-extension-execution-authority'
+import { forgetExtensionContexts } from '../api-runtime/browser-extension-contexts'
 
 const cleanedNoWorker = new WeakMap<Electron.Session, Set<string>>()
 const suspensions = new WeakMap<Electron.Session, Set<string>>()
@@ -15,6 +16,34 @@ export function isBrowserExtensionSuspension(
 
 // Why: removing an extension makes Chromium unregister its worker, so its next load registers anew.
 const unregisteredWorkersBySession = new WeakMap<Electron.Session, Set<string>>()
+
+/** Registration observation schedules starts; its fallback never certifies a running worker. */
+export function observeBrowserExtensionWorkerRegistration(
+  sess: Electron.Session,
+  extensionId: string,
+  signal: AbortSignal
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const finish = (completed = false): void => {
+      clearTimeout(timer)
+      sess.serviceWorkers.removeListener('registration-completed', registered)
+      signal.removeEventListener('abort', cancelled)
+      resolve(completed)
+    }
+    const cancelled = (): void => finish()
+    const registered = (_event: Electron.Event, details: { scope: string }): void => {
+      if (details.scope === `${getChromeExtensionOrigin(extensionId)}/`) {
+        finish(true)
+      }
+    }
+    const timer = setTimeout(finish, 10_000)
+    sess.serviceWorkers.on('registration-completed', registered)
+    signal.addEventListener('abort', cancelled, { once: true })
+    if (signal.aborted) {
+      finish()
+    }
+  })
+}
 
 export function removeBrowserExtensionFromSession(
   sess: Electron.Session,
@@ -64,6 +93,7 @@ export async function refreshWorkerRegistration(
   if (workerSignature && states.read(profileId, extensionId).workerSignature === workerSignature) {
     return unregistered
   }
+  forgetExtensionContexts(sess, extensionId)
   await sess.clearStorageData({
     origin: getChromeExtensionOrigin(extensionId),
     storages: ['serviceworkers']

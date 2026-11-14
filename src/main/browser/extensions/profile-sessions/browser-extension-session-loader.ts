@@ -40,6 +40,7 @@ import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser
 import { getBrowserExtensionSyncStorageStore } from '../profile-storage/browser-extension-sync-storage-store'
 import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import { retireBrowserExtensionProfileStorage } from '../profile-storage/browser-extension-retired-profile-storage'
+import { forgetExtensionContexts } from '../api-runtime/browser-extension-contexts'
 import {
   attachBrowserExtensionApiHostToSession,
   forgetBrowserExtensionContexts
@@ -270,6 +271,7 @@ function resetExtension(
   // The same queue orders a cold reset before any successor's first original instruction.
   return state.loads.track(extensionId, async () => {
     await retiring
+    forgetExtensionContexts(state.session, extensionId)
     await sessionHooks?.reset?.(state.session, state.profile.id, extensionId)
   })
 }

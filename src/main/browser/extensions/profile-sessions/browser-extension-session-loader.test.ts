@@ -361,6 +361,34 @@ it('keeps pages usable when an enabled extension fails to load', async () => {
   }
 })
 
+it('loads usable extension resources without waiting for a background worker registration', async () => {
+  setBrowserExtensionSupportEnabled(true)
+  await loader.detachBrowserExtensionsFromAllProfileSessions()
+  const profile = {
+    id: 'failed-worker',
+    scope: 'isolated' as const,
+    partition: 'persist:failed-worker',
+    label: 'Worker',
+    source: null
+  }
+  mocks.prepared.hasWorker = true
+  mocks.prepared.signature = 'throwing-worker'
+  getBrowserExtensionInstallStore().save(installed)
+  attachProfile(profile, [])
+  try {
+    await loader.withBrowserExtensionProfileOperation(profile.id, ID, async () => {
+      await expect(
+        loader.loadBrowserExtensionIntoProfile(profile.id, installed)
+      ).resolves.toMatchObject({ id: ID })
+      expect(mocks.loaded.has(ID)).toBe(true)
+    })
+  } finally {
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    mocks.prepared.hasWorker = false
+    mocks.prepared.signature = 'v1'
+  }
+})
+
 it('does not restore stale enablement after uninstall and reinstall in another Orca profile', async () => {
   setBrowserExtensionSupportEnabled(true)
   await loader.detachBrowserExtensionsFromAllProfileSessions()

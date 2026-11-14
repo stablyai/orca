@@ -5,7 +5,11 @@ import {
   getBrowserExtensionExecution,
   isBrowserExtensionExecutionLive
 } from '../api-runtime/browser-extension-execution-authority'
-import { activateBrowserExtensionWorker } from '../api-runtime/browser-extension-worker-activation'
+import {
+  activateBrowserExtensionWorker,
+  isBrowserExtensionWorkerProofLive,
+  type BrowserExtensionWorkerProof
+} from '../api-runtime/browser-extension-worker-activation'
 import { deliverBrowserExtensionWorkerInteraction } from '../api-runtime/browser-extension-worker-delivery'
 import { extensionHasPermission } from '../api-runtime/browser-extension-namespace-registry'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
@@ -46,8 +50,9 @@ export async function dispatchBrowserExtensionNotificationInteraction(
     }
     noteBrowserExtensionUserGesture(session, extensionId)
     const background: unknown = extension.manifest.background
+    let proof: BrowserExtensionWorkerProof | undefined
     if (background && typeof background === 'object' && 'service_worker' in background) {
-      await activateBrowserExtensionWorker(execution)
+      proof = await activateBrowserExtensionWorker(execution)
     }
     if (!isBrowserExtensionExecutionLive(execution)) {
       return
@@ -59,7 +64,10 @@ export async function dispatchBrowserExtensionNotificationInteraction(
       args
     )
     const context = getHostSessionState(session)?.workers.get(extensionId)
-    if (context?.events.has(`notifications.${event}`)) {
+    if (proof && !isBrowserExtensionWorkerProofLive(proof)) {
+      throw new Error('Extension worker is unavailable')
+    }
+    if (context?.stream?.events.has(`notifications.${event}`)) {
       await deliverBrowserExtensionWorkerInteraction(execution, context, {
         namespace: 'notifications',
         event,

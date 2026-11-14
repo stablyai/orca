@@ -3,6 +3,11 @@ import type { WorkerContext } from './browser-extension-contexts'
 
 /** The worker's open events response; `send` throws once the worker has gone. */
 export type WorkerEventStream = {
+  connectionId: string
+  controller: AbortController
+  events: Set<string>
+  filters: Map<string, unknown[]>
+  published: boolean
   send: (payload: BrowserExtensionEventPayload) => void
   close: () => void
 }
@@ -13,6 +18,7 @@ export function attachWorkerEventStream(context: WorkerContext, stream: WorkerEv
     context.stream?.close()
   }
   context.stream = stream
+  beginWorkerPublication(context)
 }
 
 /** Omit `stream` to drop whatever is attached (the worker stopped). */
@@ -59,6 +65,9 @@ export type QueuedWorkerEvent = {
   key: string
   payload: BrowserExtensionEventPayload
   queuedAt: number
+  provisional?: boolean
+  matchesFilter?: (filter: unknown) => boolean
+  resolve?: () => BrowserExtensionEventPayload | null
 }
 
 type StartWorker = (sess: Electron.Session, context: WorkerContext) => void
@@ -66,9 +75,23 @@ type StartWorker = (sess: Electron.Session, context: WorkerContext) => void
 const MAX_QUEUED_EVENTS = 100
 const QUEUED_EVENT_TTL_MS = 30_000
 
+export function beginWorkerPublication(context: WorkerContext, newRun = false): void {
+  if (context.publicationUntil === undefined || newRun || context.publicationComplete) {
+    context.publicationComplete = false
+    context.publicationUntil = Date.now() + QUEUED_EVENT_TTL_MS
+    context.initialPublication = true
+  }
+}
+
+/** Unknown subscriptions stop costing work after their existing event-retention window. */
+export function isWorkerPublishing(context: WorkerContext): boolean {
+  return context.initialPublication === true && Date.now() < (context.publicationUntil ?? 0)
+}
+
 /** Delivers queued events to a (re)started worker once it registers the matching listener. */
 export function flushWorkerQueue(context: WorkerContext, key: string): void {
-  if (!context.stream) {
+  const stream = context.stream
+  if (!stream || !stream.events.has(key)) {
     return
   }
   const now = Date.now()
@@ -77,8 +100,19 @@ export function flushWorkerQueue(context: WorkerContext, key: string): void {
     if (now - queued.queuedAt > QUEUED_EVENT_TTL_MS) {
       continue
     }
-    if (queued.key !== key || !sendToWorkerEventStream(context, queued.payload)) {
+    const filters = stream.filters.get(key)
+    const matches = !queued.matchesFilter || !filters || filters.some(queued.matchesFilter)
+    if (queued.key !== key || !matches) {
       remaining.push(queued)
+      continue
+    }
+    const payload = queued.resolve ? queued.resolve() : queued.payload
+    if (payload && !sendToWorkerEventStream(context, payload)) {
+      remaining.push(queued)
+    } else if (payload && payload.namespace === 'runtime') {
+      context.pendingLifecycle = context.pendingLifecycle?.filter(
+        (entry) => entry !== queued.payload
+      )
     }
   }
   context.queue = remaining
@@ -90,13 +124,21 @@ export function queueWorkerEvent(
   context: WorkerContext,
   key: string,
   payload: BrowserExtensionEventPayload,
-  startWorker: StartWorker
+  startWorker: StartWorker,
+  admission?: Pick<QueuedWorkerEvent, 'provisional' | 'matchesFilter' | 'resolve'>,
+  wake = true
 ): void {
-  context.queue.push({ key, payload, queuedAt: Date.now() })
+  context.queue.push({ key, payload, queuedAt: Date.now(), ...admission })
   if (context.queue.length > MAX_QUEUED_EVENTS) {
-    context.queue.shift()
+    const provisional = context.queue.findIndex((entry) => entry.provisional)
+    const [evicted] = context.queue.splice(provisional === -1 ? 0 : provisional, 1)
+    context.pendingLifecycle = context.pendingLifecycle?.filter(
+      (entry) => entry !== evicted.payload
+    )
   }
-  startWorker(sess, context)
+  if (wake) {
+    startWorker(sess, context)
+  }
 }
 
 export function deliverToWorker(
@@ -104,9 +146,12 @@ export function deliverToWorker(
   context: WorkerContext,
   key: string,
   payload: BrowserExtensionEventPayload,
-  startWorker: StartWorker
+  startWorker: StartWorker,
+  admission?: Pick<QueuedWorkerEvent, 'provisional' | 'matchesFilter' | 'resolve'>
 ): void {
-  if (!sendToWorkerEventStream(context, payload)) {
-    queueWorkerEvent(sess, context, key, payload, startWorker)
+  if (!context.stream?.events.has(key) || !sendToWorkerEventStream(context, payload)) {
+    queueWorkerEvent(sess, context, key, payload, startWorker, admission)
+  } else if (payload.namespace === 'runtime') {
+    context.pendingLifecycle = context.pendingLifecycle?.filter((entry) => entry !== payload)
   }
 }

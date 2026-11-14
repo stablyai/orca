@@ -181,6 +181,7 @@ function guest(id: number, sess: FakeSession, url: string): Guest {
     isDestroyed: () => false,
     getType: () => 'webview',
     hostWebContents: mocks.host,
+    mainFrame: {},
     getURL: () => url,
     getTitle: () => 'live',
     isLoading: () => true,

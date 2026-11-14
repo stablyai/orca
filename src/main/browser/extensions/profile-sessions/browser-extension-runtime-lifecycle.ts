@@ -1,4 +1,5 @@
 import { emitBrowserExtensionWorkerStartEvent } from '../api-runtime/browser-extension-api-host'
+import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import {
   getBrowserExtensionProfileStateStore,
   type BrowserExtensionProfileState
@@ -50,6 +51,18 @@ export function fireRuntimeLifecycleEvents(
   const current = { extensionVersion: extension.version, chromiumVersion: process.versions.chrome }
   const last = store.read(profileId, extension.id).lastLoaded
   if (hasServiceWorker(extension)) {
+    const context = getHostSessionState(sess)?.workers.get(extension.id)
+    const pending = context?.pendingLifecycle?.splice(0) ?? []
+    for (const entry of pending) {
+      emitBrowserExtensionWorkerStartEvent(
+        sess,
+        extension.id,
+        entry.namespace,
+        entry.event,
+        entry.args,
+        false
+      )
+    }
     for (const { event, args } of decideRuntimeLifecycleEvents(last, current, kind)) {
       emitBrowserExtensionWorkerStartEvent(sess, extension.id, 'runtime', event, args)
     }

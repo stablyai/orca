@@ -19,6 +19,7 @@ type NativePageOptions = {
   extensionId: string
   code: string
   timeoutMs?: number
+  deadlineAt?: number
   signal?: AbortSignal
 }
 
@@ -146,7 +147,13 @@ export async function runBrowserExtensionNativePage(options: NativePageOptions):
   }
   const page = new BrowserExtensionNativePage(execution)
   try {
-    return await page.run(options.code, options.timeoutMs, options.signal)
+    return await page.run(
+      options.code,
+      options.deadlineAt === undefined
+        ? options.timeoutMs
+        : Math.max(0, options.deadlineAt - Date.now()),
+      options.signal
+    )
   } finally {
     await page.destroy()
   }

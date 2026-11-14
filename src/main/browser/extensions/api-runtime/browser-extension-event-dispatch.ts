@@ -14,7 +14,11 @@ import {
   extensionHasNamespacePermission,
   getBrowserExtensionNamespace
 } from './browser-extension-namespace-registry'
-import { deliverToWorker } from './browser-extension-worker-event-stream'
+import {
+  deliverToWorker,
+  queueWorkerEvent,
+  isWorkerPublishing
+} from './browser-extension-worker-event-stream'
 
 export type BrowserExtensionEventTarget = {
   /** Only extensions loaded in this session; omit to reach every extension session. */
@@ -31,6 +35,31 @@ export type BrowserExtensionEventArgs =
 
 export function eventKey(namespace: string, event: string): string {
   return `${namespace}.${event}`
+}
+
+function isEventProjection(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+/** A later grant must never add fields to a queued historical event. */
+function restrictProjection(original: unknown, allowed: unknown): unknown {
+  if (Array.isArray(original) && Array.isArray(allowed)) {
+    return original.map((entry, index) => restrictProjection(entry, allowed[index]))
+  }
+  if (isEventProjection(original) && isEventProjection(allowed)) {
+    if (
+      Object.getPrototypeOf(original) !== Object.prototype &&
+      Object.getPrototypeOf(original) !== null
+    ) {
+      return original
+    }
+    return Object.fromEntries(
+      Object.entries(original)
+        .filter(([key]) => Object.hasOwn(allowed, key))
+        .map(([key, value]) => [key, restrictProjection(value, allowed[key])])
+    )
+  }
+  return allowed === undefined ? undefined : original
 }
 
 function listensFor(
@@ -135,7 +164,7 @@ export function dispatchBrowserExtensionEvent(
   for (const [sess, state] of recipients) {
     const extensionIds = new Set<string>()
     for (const context of state.workers.values()) {
-      if (context.events.has(key)) {
+      if (context.events.has(key) || isWorkerPublishing(context)) {
         extensionIds.add(context.extensionId)
       }
     }
@@ -161,8 +190,12 @@ export function dispatchBrowserExtensionEvent(
       if (!extension || !extensionHasNamespacePermission(extension, permission, sess)) {
         continue
       }
-      const worker = target.exceptCaller?.fromWorker ? undefined : state.workers.get(extension.id)
+      const candidate = target.exceptCaller?.fromWorker
+        ? undefined
+        : state.workers.get(extension.id)
+      const worker = candidate?.execution?.controller.signal.aborted ? undefined : candidate
       const workerListens = worker ? listensFor(worker, key, matchesFilter) : false
+      const provisional = worker ? isWorkerPublishing(worker) : false
       const exceptFrame = target.exceptCaller?.frame
       const frames = currentFrames(extension.id)
       const frameListens =
@@ -170,7 +203,7 @@ export function dispatchBrowserExtensionEvent(
         Array.from(frames.values()).some(
           (frame) => !isFrame(frame, exceptFrame) && listensFor(frame, key, matchesFilter)
         )
-      if (!workerListens && !frameListens) {
+      if (!workerListens && !provisional && !frameListens) {
         continue
       }
       const resolvedArgs = typeof args === 'function' ? args(extension, sess) : args
@@ -178,8 +211,49 @@ export function dispatchBrowserExtensionEvent(
         continue
       }
       const payload: BrowserExtensionEventPayload = { namespace, event, args: resolvedArgs }
-      if (worker && workerListens) {
-        deliverToWorker(sess, worker, key, payload, startWorker)
+      if (worker && (workerListens || provisional)) {
+        const published = worker.stream && listensFor(worker.stream, key, matchesFilter)
+        if (published) {
+          deliverToWorker(sess, worker, key, payload, startWorker)
+        } else {
+          const snapshot = structuredClone(payload)
+          queueWorkerEvent(
+            sess,
+            worker,
+            key,
+            snapshot,
+            startWorker,
+            {
+              provisional: !workerListens,
+              matchesFilter,
+              resolve: () => {
+                const current = sess.extensions.getExtension(extensionId)
+                if (
+                  state.workers.get(extensionId) !== worker ||
+                  worker.execution?.controller.signal.aborted ||
+                  !current ||
+                  !extensionHasNamespacePermission(current, permission, sess)
+                ) {
+                  return null
+                }
+                const allowed = typeof args === 'function' ? args(current, sess) : snapshot.args
+                if (!allowed) {
+                  return null
+                }
+                return {
+                  ...snapshot,
+                  args:
+                    typeof args === 'function'
+                      ? snapshot.args.map((value, index) =>
+                          restrictProjection(value, allowed[index])
+                        )
+                      : snapshot.args
+                }
+              }
+            },
+            workerListens
+          )
+        }
       }
       const recipients = frameListens ? currentFrames(extension.id) : undefined
       if (recipients) {

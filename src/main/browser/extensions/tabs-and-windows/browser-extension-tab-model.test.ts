@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => {
   const otherSession = { name: 'other' }
   // Page id → guest webContents and its workspace.
   const pages = new Map<string, { id: number; session: object; worktreeId: string }>()
-  return { workSession, otherSession, pages, createTab: vi.fn() }
+  return { workSession, otherSession, pages, createTab: vi.fn(), active: false, tabs: true }
 })
 
 vi.mock('electron', () => ({
@@ -35,7 +35,12 @@ vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
 }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
 vi.mock('../actions/browser-extension-popup-host', () => ({ closeBrowserExtensionPopup: vi.fn() }))
-vi.mock('../permissions/browser-extension-active-tab', () => ({}))
+vi.mock('../permissions/browser-extension-active-tab', () => ({
+  hasBrowserExtensionActiveTab: () => mocks.active
+}))
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
+  browserExtensionHostPatternsInSession: () => ['https://b.example/*']
+}))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => false }))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
   getBrowserExtensionProfile: (id: string) => ({ id, partition: `persist:${id}` }),
@@ -46,7 +51,8 @@ vi.mock('./browser-extension-window-model', () => ({
   getBrowserExtensionMainWindow: () => ({ id: 1 })
 }))
 
-const { openBrowserExtensionTab } = await import('./browser-extension-tab-model')
+const { openBrowserExtensionTab, snapshotBrowserExtensionTab } =
+  await import('./browser-extension-tab-model')
 const { watchBrowserMainWindowReadiness } =
   await import('../../guest-lifecycle/browser-main-window-readiness')
 
@@ -93,4 +99,107 @@ describe('an extension tab opened while Orca starts', () => {
     window.rendererReady()
     await expect(reopening).resolves.toBe(21)
   })
+})
+
+it('filters a historical tab against its original document after navigation and permission removal', async () => {
+  const { setBrowserExtensionGrantedPermissionsLookup } =
+    await import('../api-runtime/browser-extension-namespace-registry')
+  const { startBrowserExtensionDocument } = await import('./browser-extension-document-ids')
+  const { dispatchBrowserExtensionEvent } =
+    await import('../api-runtime/browser-extension-event-dispatch')
+  const { flushWorkerQueue, beginWorkerPublication } =
+    await import('../api-runtime/browser-extension-worker-event-stream')
+  const { ensureHostSessionState, ensureWorkerContext, forgetHostSession } =
+    await import('../api-runtime/browser-extension-contexts')
+  const extension: Electron.Extension = {
+    id: 'a'.repeat(32),
+    name: '',
+    path: '',
+    url: '',
+    version: '1',
+    manifest: {}
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch uses only this extension lookup.
+  const session = { extensions: { getExtension: () => extension } } as unknown as Electron.Session
+  let url = 'https://a.example/private'
+  let title = 'Private title'
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: document identity uses only this frame as a WeakMap key.
+  const frame = {} as Electron.WebFrameMain
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all snapshot-read native methods are supplied here.
+  const contents = {
+    id: 8,
+    session,
+    mainFrame: frame,
+    getURL: () => url,
+    getTitle: () => title,
+    isDestroyed: () => false,
+    isLoading: () => false,
+    isCurrentlyAudible: () => false,
+    isAudioMuted: () => false
+  } as unknown as Electron.WebContents
+  const describe = snapshotBrowserExtensionTab({
+    contents,
+    index: 0,
+    active: true,
+    windowId: 1,
+    windowType: 'normal'
+  })
+  const state = ensureHostSessionState(session, 'historical')
+  const context = ensureWorkerContext(state, extension.id, '')
+  beginWorkerPublication(context)
+  mocks.tabs = true
+  mocks.active = false
+  setBrowserExtensionGrantedPermissionsLookup(() => (mocks.tabs ? ['tabs'] : []))
+  dispatchBrowserExtensionEvent(
+    new Map([[session, state]]),
+    { session },
+    'tabs',
+    'onCreated',
+    (candidate) => [describe(candidate)],
+    vi.fn()
+  )
+  url = 'https://b.example/public'
+  title = 'Later title'
+  startBrowserExtensionDocument(frame)
+  mocks.tabs = false
+  mocks.active = true
+  const send = vi.fn()
+  context.stream = {
+    connectionId: 'current',
+    controller: new AbortController(),
+    events: new Set(['tabs.onCreated']),
+    filters: new Map(),
+    published: true,
+    send,
+    close: () => {}
+  }
+  flushWorkerQueue(context, 'tabs.onCreated')
+  expect(send.mock.calls).toEqual([
+    [
+      {
+        namespace: 'tabs',
+        event: 'onCreated',
+        args: [
+          {
+            id: 8,
+            index: 0,
+            windowId: 1,
+            active: true,
+            highlighted: true,
+            selected: true,
+            pinned: false,
+            discarded: false,
+            autoDiscardable: true,
+            incognito: false,
+            groupId: -1,
+            status: 'complete',
+            audible: false,
+            mutedInfo: { muted: false }
+          }
+        ]
+      }
+    ]
+  ])
+  forgetHostSession(session)
+  setBrowserExtensionGrantedPermissionsLookup(() => [])
 })

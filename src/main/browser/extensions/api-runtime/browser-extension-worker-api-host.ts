@@ -36,15 +36,25 @@ function refuse(status: number): Response {
   return new Response(null, { status })
 }
 
-function openEventStream(context: WorkerContext, headers: HeadersInit): Response {
+function openEventStream(
+  context: WorkerContext,
+  connectionId: string,
+  headers: HeadersInit
+): Response {
   const encoder = new TextEncoder()
   let stream: WorkerEventStream | null = null
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       const opened: WorkerEventStream = {
+        connectionId,
+        controller: new AbortController(),
+        events: new Set(),
+        filters: new Map(),
+        published: false,
         send: (payload) =>
           controller.enqueue(encoder.encode(`${encodeBrowserExtensionWireJson(payload)}\n`)),
         close: () => {
+          opened.controller.abort()
           try {
             controller.close()
           } catch {
@@ -113,6 +123,8 @@ export async function handleBrowserExtensionWorkerRequest(
     return refuse(403)
   }
   const lifetime = getBrowserExtensionContextSignal(state, extension.id)
+  const requestingContext = state.workers.get(extension.id)
+  const requestingRun = requestingContext?.run
   const text = await readBoundedText(request)
   if (lifetime.aborted || getHostSessionState(sess) !== state) {
     return refuse(403)
@@ -137,9 +149,30 @@ export async function handleBrowserExtensionWorkerRequest(
   const origin = getChromeExtensionOrigin(extension.id)
   const headers = { 'access-control-allow-origin': origin, 'cache-control': 'no-store' }
   const context = ensureWorkerContext(state, extension.id, `${origin}/`)
+  if (
+    requestingContext !== context ||
+    requestingRun !== context.run ||
+    requestingRun?.signal.aborted
+  ) {
+    return refuse(409)
+  }
+  if (context.execution && context.execution !== execution) {
+    return refuse(403)
+  }
+  context.execution = execution
+  const connectionId =
+    body !== null &&
+    typeof body === 'object' &&
+    'connectionId' in body &&
+    typeof body.connectionId === 'string'
+      ? body.connectionId
+      : ''
   const url = request.url.replace(/\/$/, '')
   if (url === BROWSER_EXTENSION_API_EVENTS_URL) {
-    return openEventStream(context, headers)
+    if (!connectionId || connectionId.length > 128 || !context.run || context.run.signal.aborted) {
+      return refuse(409)
+    }
+    return openEventStream(context, connectionId, headers)
   }
   if (url !== BROWSER_EXTENSION_API_CALL_URL) {
     return refuse(404)
@@ -154,6 +187,17 @@ export async function handleBrowserExtensionWorkerRequest(
   // Why: keep the worker alive only while a call is open, not forever.
   const rawRequest =
     body !== null && typeof body === 'object' && 'request' in body ? body.request : null
+  if (
+    rawRequest &&
+    typeof rawRequest === 'object' &&
+    'type' in rawRequest &&
+    (rawRequest.type === 'listen' ||
+      rawRequest.type === 'published' ||
+      rawRequest.type === 'receipt') &&
+    (!connectionId || context.stream?.connectionId !== connectionId || context.run?.signal.aborted)
+  ) {
+    return refuse(409)
+  }
   const task = startBrowserExtensionWorkerApiTask(context.running, rawRequest, execution)
   try {
     const result = await handleBrowserExtensionApiRequest(caller, state, rawRequest, {

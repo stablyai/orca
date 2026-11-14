@@ -1,4 +1,6 @@
-import { activateBrowserExtensionWorker } from '../api-runtime/browser-extension-worker-activation'
+import { ensureWorkerContext } from '../api-runtime/browser-extension-contexts'
+import { beginWorkerPublication } from '../api-runtime/browser-extension-worker-event-stream'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   beginBrowserExtensionExecution,
   isBrowserExtensionExecutionLive,
@@ -35,6 +37,7 @@ import {
 } from './browser-extension-profile-loads'
 import {
   refreshWorkerRegistration,
+  observeBrowserExtensionWorkerRegistration,
   removeBrowserExtensionFromSession
 } from './browser-extension-worker-registration'
 
@@ -71,8 +74,28 @@ export async function loadBrowserExtensionIntoSession(
         throw new Error('Extension id changed since it was added; remove it and add it again')
       }
       throwIfBrowserExtensionStorageAwaitingRestart(sess, prepared.extensionId)
-      await refreshWorkerRegistration(sess, profileId, prepared)
+      const reregisters = await refreshWorkerRegistration(sess, profileId, prepared)
       throwIfBrowserExtensionLoadCancelled(load)
+      if (prepared.hasWorker) {
+        const context = ensureWorkerContext(
+          execution.host,
+          prepared.extensionId,
+          `${getChromeExtensionOrigin(prepared.extensionId)}/`
+        )
+        beginWorkerPublication(context, true)
+        context.execution = execution
+        if (reregisters) {
+          execution.workerRegistration = observeBrowserExtensionWorkerRegistration(
+            sess,
+            prepared.extensionId,
+            execution.controller.signal
+          ).then((completed) => {
+            if (!completed && !context.stream?.published) {
+              context.initialPublication = false
+            }
+          })
+        }
+      }
       const result = await sess.extensions.loadExtension(prepared.directory, {
         allowFileAccess: false
       })
@@ -82,10 +105,11 @@ export async function loadBrowserExtensionIntoSession(
         throwIfBrowserExtensionLoadCancelled(load)
         throw new Error('Extension id changed since it was added; remove it and add it again')
       }
-      noteBrowserExtensionStorageOpened(sess, result.id)
-      if (prepared.hasWorker) {
-        await activateBrowserExtensionWorker(execution)
+      const workerContext = execution.host.workers.get(result.id)
+      if (workerContext) {
+        workerContext.extension = result
       }
+      noteBrowserExtensionStorageOpened(sess, result.id)
       throwIfBrowserExtensionLoadCancelled(load)
       await reconcileBrowserExtensionSessionAccess(sess, result.id, execution.controller.signal)
       throwIfBrowserExtensionLoadCancelled(load)

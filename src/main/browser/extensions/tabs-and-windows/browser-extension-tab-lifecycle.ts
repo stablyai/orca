@@ -14,8 +14,7 @@ import {
 } from './browser-extension-discarded-tabs'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
-  canExtensionSeeTabUrl,
-  describeBrowserExtensionTab,
+  snapshotBrowserExtensionTab,
   replaceActivatedBrowserTabId,
   resolveBrowserExtensionTab
 } from './browser-extension-tab-model'
@@ -43,21 +42,22 @@ function emitTabUpdated(
     unannouncedChanges.add(tabId)
     return
   }
+  let describe: ReturnType<typeof snapshotBrowserExtensionTab> | undefined
   emitBrowserExtensionEvent({ session: contents.session }, 'tabs', 'onUpdated', (extension) => {
-    const entry = resolveBrowserExtensionTab(tabId)
-    if (!entry) {
-      return null
+    if (!describe) {
+      const entry = resolveBrowserExtensionTab(tabId)
+      if (!entry) {
+        return null
+      }
+      describe = snapshotBrowserExtensionTab(entry)
     }
-    const canSee = canExtensionSeeTabUrl(extension, contents.session, contents.getURL(), tabId)
+    const tab = describe(extension)
+    const canSee = tab.url !== undefined
     const { url: _url, title: _title, ...visibleChange } = changeInfo
     if (!canSee && Object.keys(visibleChange).length === 0) {
       return null
     }
-    return [
-      tabId,
-      canSee ? changeInfo : visibleChange,
-      describeBrowserExtensionTab(extension, entry)
-    ]
+    return [tabId, canSee ? changeInfo : visibleChange, tab]
   })
 }
 
@@ -75,9 +75,16 @@ function markAnnounced(contents: Electron.WebContents): boolean {
 }
 
 function emitTabCreated(contents: Electron.WebContents): void {
+  let describe: ReturnType<typeof snapshotBrowserExtensionTab> | undefined
   emitBrowserExtensionEvent({ session: contents.session }, 'tabs', 'onCreated', (extension) => {
-    const current = resolveBrowserExtensionTab(contents.id)
-    return current ? [describeBrowserExtensionTab(extension, current)] : null
+    if (!describe) {
+      const current = resolveBrowserExtensionTab(contents.id)
+      if (!current) {
+        return null
+      }
+      describe = snapshotBrowserExtensionTab(current)
+    }
+    return [describe(extension)]
   })
 }
 
