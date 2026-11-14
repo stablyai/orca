@@ -112,7 +112,9 @@ export function useAppThemePaint(): AppThemePaintState {
   }
 }
 
-/** First paint of a pop-out window: its mode, and its last app theme while settings still pick it. */
+/** First paint of a pop-out window: its mode, and its last app theme while settings still pick it.
+ *  The cache lives in the window's own in-memory partition, so a first open shows built-ins until
+ *  the theme list loads. */
 export function applyStartupAppTheme(settings: GlobalSettings | null): void {
   const painted = resolvePaintedTheme(settings)
   applyDocumentTheme(painted, { disableTransitions: false })
