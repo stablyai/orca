@@ -17,6 +17,8 @@ import { getBrowserExtensionInstallStore } from '../../installation/browser-exte
 import { extensionHasPermission } from '../../api-runtime/browser-extension-namespace-registry'
 import { whenBrowserExtensionProfileLoaded } from '../../profile-sessions/browser-extension-session-loader'
 import { resolveBrowserExtensionTab } from '../../tabs-and-windows/browser-extension-tab-model'
+import { isBrowserExtensionSuspension } from '../../profile-sessions/browser-extension-worker-registration'
+import type { DnrRule } from '../rule-compilation/rule-types'
 
 // Chrome holds requests until rulesets load; a ruleset that never finishes must not stall pages.
 const LOAD_HOLD_LIMIT_MS = 5_000
@@ -61,6 +63,7 @@ export class DnrSessionRuntime {
   private readonly requestStates = new Map<number, DnrRequestState>()
   private readonly loads = new Set<Promise<void>>()
   private loadHold: Promise<void> | null = null
+  private readonly suspendedRules = new Map<string, DnrRule[]>()
   /** Until the profile's startup loads finish, requests wait for extensions not loaded yet. */
   private startupLoad: (() => Promise<void>) | null = null
 
@@ -85,6 +88,7 @@ export class DnrSessionRuntime {
   }
 
   addExtension(extension: Electron.Extension): Promise<void> {
+    const retained = this.suspendedRules.get(extension.id) ?? []
     this.removeExtension(extension.id)
     const withHostAccessOnly = !extensionHasPermission(
       extension,
@@ -109,7 +113,7 @@ export class DnrSessionRuntime {
         extensionHasPermission(extension, permission, this.session)
       )
     })
-    const load = rules.load().catch((error: unknown) => {
+    const load = rules.load(retained).catch((error: unknown) => {
       console.warn(`[browser-extensions] Could not load rules of ${extension.id}:`, error)
     })
     this.loads.add(load)
@@ -142,8 +146,13 @@ export class DnrSessionRuntime {
     return this.whenRulesLoaded()
   }
 
-  removeExtension(extensionId: string): void {
+  removeExtension(extensionId: string, suspend = false): void {
     const entry = this.extensions.get(extensionId)
+    if (suspend && entry) {
+      this.suspendedRules.set(extensionId, entry.rules.getRules('session'))
+    } else {
+      this.suspendedRules.delete(extensionId)
+    }
     if (!entry) {
       return
     }
@@ -168,18 +177,25 @@ export class DnrSessionRuntime {
       return null
     }
     if (!this.loadHold) {
+      let timer: NodeJS.Timeout | undefined
       const hold = Promise.race([
         // Why rules after startup: extensions loaded meanwhile add their own rule loads.
         Promise.resolve(startup?.()).then(() => this.whenRulesLoaded()),
-        new Promise<void>((resolve) => setTimeout(resolve, LOAD_HOLD_LIMIT_MS))
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, LOAD_HOLD_LIMIT_MS)
+        })
       ])
       this.loadHold = hold
-      void hold.then(() => {
-        this.startupLoad = null
+      const clear = (): void => {
+        clearTimeout(timer)
+        if (this.startupLoad === startup) {
+          this.startupLoad = null
+        }
         if (this.loadHold === hold) {
           this.loadHold = null
         }
-      })
+      }
+      void hold.then(clear, clear)
     }
     return this.loadHold
   }
@@ -287,7 +303,7 @@ export function attachBrowserExtensionDnr(
   }
   session.extensions.on('extension-loaded', (_event, extension) => add(extension))
   session.extensions.on('extension-unloaded', (_event, extension) =>
-    runtime.removeExtension(extension.id)
+    runtime.removeExtension(extension.id, isBrowserExtensionSuspension(session, extension))
   )
   session.extensions.getAllExtensions().forEach(add)
 }

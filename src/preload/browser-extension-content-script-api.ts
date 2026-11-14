@@ -1,3 +1,4 @@
+import { createBrowserExtensionContentSessionBridge } from './browser/extensions/storage/browser-extension-content-session-bridge'
 import {
   createContentScriptRelayBridge,
   installContentScriptRelayFilter
@@ -55,6 +56,12 @@ if (!root.__orcaContentScriptApi && root.chrome) {
           runtime
         )
       : null
+  installBrowserExtensionStorageSync(
+    createBrowserExtensionContentSessionBridge('ORCA_EXTENSION_CONTENT_BOOTSTRAP'),
+    { QUOTA_BYTES: 10_485_760 },
+    undefined,
+    'session'
+  )
   installContentScriptRelayFilter()
   if (bridge) {
     installBrowserExtensionStorageSync(bridge, PRELOAD_STORAGE_SYNC_CONSTANTS)

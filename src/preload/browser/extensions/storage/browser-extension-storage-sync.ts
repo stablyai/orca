@@ -47,9 +47,10 @@ type ExtensionCallable = (...args: unknown[]) => unknown
 export function installBrowserExtensionStorageSync(
   bridge: BrowserExtensionMainWorldBridge,
   constants: Record<string, number>,
-  forward?: BrowserExtensionStorageSyncForward
+  forward?: BrowserExtensionStorageSyncForward,
+  areaName: 'sync' | 'session' = 'sync'
 ): BrowserExtensionStorageSyncRelay | null {
-  const namespace = 'orcaStorageSync'
+  const namespace = areaName === 'session' ? 'orcaStorageSession' : 'orcaStorageSync'
   const isObject = (value: unknown): value is ApiObject =>
     value !== null && typeof value === 'object'
   const isCallable = (value: unknown): value is ExtensionCallable => typeof value === 'function'
@@ -93,7 +94,67 @@ export function installBrowserExtensionStorageSync(
     }
   }
   // Chrome stores JSON; converting here also keeps IPC from rejecting functions inside values.
+  const normalize = (value: unknown, ancestors = new Set<object>(), depth = 0): unknown => {
+    if (depth > 100) {
+      return undefined
+    }
+    if (typeof value === 'string') {
+      return value.toWellFormed()
+    }
+    if (value === null || typeof value === 'boolean') {
+      return value
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? (value === 0 ? 0 : value) : undefined
+    }
+    if (typeof value !== 'object') {
+      return undefined
+    }
+    if (value instanceof ArrayBuffer) {
+      return value.slice(0)
+    }
+    if (ArrayBuffer.isView(value)) {
+      return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)
+    }
+    if (ancestors.has(value)) {
+      return null
+    }
+    ancestors.add(value)
+    try {
+      if (Array.isArray(value)) {
+        return Array.from({ length: value.length }, (_, index) => {
+          if (!Object.hasOwn(value, index)) {
+            return null
+          }
+          try {
+            return normalize(value[index], ancestors, depth + 1) ?? null
+          } catch {
+            return null
+          }
+        })
+      }
+      const result: [string, unknown][] = []
+      for (const key of Object.getOwnPropertyNames(value)) {
+        let child: unknown
+        try {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The recursive converter is in the non-null object branch; own names index that same object.
+          child = normalize((value as ApiObject)[key], ancestors, depth + 1)
+        } catch {
+          child = null
+        }
+        if (child !== undefined) {
+          result.push([key.toWellFormed(), child])
+        }
+      }
+      return Object.fromEntries(result)
+    } finally {
+      ancestors.delete(value)
+    }
+  }
   const toWire = (value: unknown): unknown => {
+    if (areaName === 'session') {
+      return normalize(value)
+    }
     const json = JSON.stringify(value)
     return json === undefined ? undefined : JSON.parse(json)
   }
@@ -119,27 +180,40 @@ export function installBrowserExtensionStorageSync(
       bridge.listen(namespace, 'onChanged', active)
     }
   }
-  const makeEvent = (registered: Set<ExtensionCallable>, inner: ApiObject | null): ApiObject => ({
-    addListener: (callback: unknown) => {
-      if (inner && isCallable(inner.addListener)) {
-        inner.addListener(callback)
-      }
-      if (isCallable(callback) && !registered.has(callback)) {
+  const makeEvent = (registered: Set<ExtensionCallable>, inner: ApiObject | null): ApiObject => {
+    const nativeListeners = new Map<ExtensionCallable, ExtensionCallable>()
+    return {
+      addListener: (callback: unknown) => {
+        if (!isCallable(callback) || registered.has(callback)) {
+          return
+        }
         registered.add(callback)
+        if (inner && isCallable(inner.addListener)) {
+          const filtered: ExtensionCallable = (...args) => {
+            if (areaName !== 'session' || args[1] !== 'session') {
+              callback(...args)
+            }
+          }
+          nativeListeners.set(callback, filtered)
+          inner.addListener(filtered)
+        }
         syncListening()
-      }
-    },
-    removeListener: (callback: unknown) => {
-      if (inner && isCallable(inner.removeListener)) {
-        inner.removeListener(callback)
-      }
-      if (isCallable(callback) && registered.delete(callback)) {
+      },
+      removeListener: (callback: unknown) => {
+        if (!isCallable(callback) || !registered.delete(callback)) {
+          return
+        }
+        const filtered = nativeListeners.get(callback)
+        if (filtered && inner && isCallable(inner.removeListener)) {
+          inner.removeListener(filtered)
+        }
+        nativeListeners.delete(callback)
         syncListening()
-      }
-    },
-    hasListener: (callback: unknown) => isCallable(callback) && registered.has(callback),
-    hasListeners: () => registered.size > 0
-  })
+      },
+      hasListener: (callback: unknown) => isCallable(callback) && registered.has(callback),
+      hasListeners: () => registered.size > 0
+    }
+  }
   const deliver = (changes: ApiObject, from?: string): void => {
     const calls: [ExtensionCallable, unknown[]][] = [
       ...[...areaListeners].map((callback): [ExtensionCallable, unknown[]] => [
@@ -147,7 +221,7 @@ export function installBrowserExtensionStorageSync(
         [changes]
       ]),
       ...storageListeners.flatMap((set) =>
-        [...set].map((callback): [ExtensionCallable, unknown[]] => [callback, [changes, 'sync']])
+        [...set].map((callback): [ExtensionCallable, unknown[]] => [callback, [changes, areaName]])
       )
     ]
     for (const [callback, callArgs] of calls) {
@@ -216,6 +290,9 @@ export function installBrowserExtensionStorageSync(
     },
     onChanged: makeEvent(areaListeners, null)
   }
+  if (areaName === 'session') {
+    area.setAccessLevel = method('setAccessLevel')
+  }
   for (const name of ['get', 'getKeys', 'getBytesInUse', 'set', 'remove', 'clear']) {
     area[name] = method(name)
   }
@@ -227,7 +304,7 @@ export function installBrowserExtensionStorageSync(
       continue
     }
     installed.add(storage)
-    define(storage, 'sync', area)
+    define(storage, areaName, area)
     const registered = new Set<ExtensionCallable>()
     storageListeners.push(registered)
     define(

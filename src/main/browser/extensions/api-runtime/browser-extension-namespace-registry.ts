@@ -1,4 +1,5 @@
 import type { ZodType, output } from 'zod'
+import type { BrowserExtensionExecution } from './browser-extension-execution-authority'
 
 /**
  * Who is calling. Main derives this from the IPC sender frame or the worker protocol's session and
@@ -16,6 +17,9 @@ export type BrowserExtensionCaller = {
   userGesture?: boolean
   /** Set for calls from Orca's worker shim (the extension's service worker). */
   fromWorker?: boolean
+  execution?: BrowserExtensionExecution
+  untrusted?: boolean
+  contentContext?: string
 }
 
 /** Thrown by handlers; the message reaches the extension as the rejection / runtime.lastError. */

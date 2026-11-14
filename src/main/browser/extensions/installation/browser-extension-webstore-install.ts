@@ -26,6 +26,7 @@ import { withExtensionEnabled } from '../profile-sessions/browser-extension-prof
 import { reloadBrowserExtensionWhereEnabled } from '../profile-sessions/browser-extension-profile-reload'
 import {
   loadBrowserExtensionIntoProfile,
+  withBrowserExtensionProfileOperation,
   unloadBrowserExtensionEverywhere
 } from '../profile-sessions/browser-extension-session-loader'
 
@@ -157,10 +158,12 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
-      await loadBrowserExtensionIntoProfile(enableInProfileId, record)
-      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-        withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
-      )
+      await withBrowserExtensionProfileOperation(enableInProfileId, extensionId, async () => {
+        await loadBrowserExtensionIntoProfile(enableInProfileId, record)
+        browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+          withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
+        )
+      })
     }
   } catch (error) {
     if (replaced) {

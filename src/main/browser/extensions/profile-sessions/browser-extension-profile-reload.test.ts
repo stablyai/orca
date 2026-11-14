@@ -16,10 +16,10 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   }
 }))
 vi.mock('../installation/browser-extension-load-directory', () => ({
-  prepareBrowserExtensionDirectory: mocks.prepare
+  refreshBrowserExtensionPackage: mocks.prepare
 }))
 vi.mock('./browser-extension-session-loader', () => ({
-  getBrowserExtensionSessionForProfile: () => ({}),
+  hasBrowserExtensionProfileDemand: () => true,
   loadBrowserExtensionIntoProfile: mocks.load,
   unloadBrowserExtensionFromProfile: vi.fn()
 }))

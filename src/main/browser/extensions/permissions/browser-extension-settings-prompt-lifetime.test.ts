@@ -32,6 +32,12 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
 }))
 vi.mock('../browser-extension-management', () => ({ removeBrowserExtension: vi.fn() }))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
+  withBrowserExtensionProfileOperation: async (
+    _profile: string,
+    _id: string,
+    run: (session: Electron.Session) => Promise<unknown>
+  ) => run({} as Electron.Session),
+  hasBrowserExtensionProfileDemand: () => true,
   getBrowserExtensionSessionForProfile: () => ({}),
   loadBrowserExtensionIntoProfile: () => state.load(),
   unloadBrowserExtensionEverywhere: vi.fn()

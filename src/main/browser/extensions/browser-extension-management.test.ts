@@ -44,6 +44,12 @@ vi.mock('./installation/browser-extension-manifest', () => ({
   })
 }))
 vi.mock('./profile-sessions/browser-extension-session-loader', () => ({
+  withBrowserExtensionProfileOperation: async (
+    _profile: string,
+    _id: string,
+    run: (session: Electron.Session) => Promise<unknown>
+  ) => run({} as Electron.Session),
+  hasBrowserExtensionProfileDemand: () => true,
   getBrowserExtensionSessionForProfile: vi.fn(),
   listBrowserExtensionSessions: () => mocks.sessions,
   loadBrowserExtensionFolderIntoProfile: vi.fn(async () => ({ id: ID, version: '1.0' })),

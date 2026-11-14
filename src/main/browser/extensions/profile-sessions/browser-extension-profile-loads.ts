@@ -2,6 +2,7 @@
 export type BrowserExtensionProfileLoad = {
   extensionId: string
   cancelled: boolean
+  signal: AbortSignal
   settled: Promise<void>
 }
 
@@ -20,6 +21,7 @@ export function throwIfBrowserExtensionLoadCancelled(load: BrowserExtensionProfi
  */
 export class BrowserExtensionProfileLoads {
   private readonly loads = new Set<BrowserExtensionProfileLoad>()
+  private readonly controllers = new WeakMap<BrowserExtensionProfileLoad, AbortController>()
   private closed = false
 
   track<T>(
@@ -32,11 +34,14 @@ export class BrowserExtensionProfileLoads {
     const earlier = [...this.loads]
       .filter((load) => load.extensionId === extensionId)
       .map((load) => load.settled)
+    const controller = new AbortController()
     const load: BrowserExtensionProfileLoad = {
       extensionId,
       cancelled: false,
+      signal: controller.signal,
       settled: Promise.resolve()
     }
+    this.controllers.set(load, controller)
     const running = Promise.all(earlier).then(() => run(load))
     load.settled = running.then(
       () => undefined,
@@ -54,6 +59,7 @@ export class BrowserExtensionProfileLoads {
     )
     for (const load of cancelled) {
       load.cancelled = true
+      this.controllers.get(load)?.abort()
     }
     return Promise.all(cancelled.map((load) => load.settled))
   }

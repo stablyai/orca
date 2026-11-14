@@ -1,3 +1,4 @@
+import { installBrowserExtensionMessageTargets } from './browser/extensions/documents/browser-extension-message-targets'
 import {
   BROWSER_EXTENSION_API_CALL_URL,
   BROWSER_EXTENSION_API_EVENTS_URL,
@@ -62,6 +63,33 @@ const tokenReady: Promise<string | null> = nativeFetch(`/${BROWSER_EXTENSION_WOR
   )
   .catch(() => null)
 
+type NativeWorkerChrome = {
+  runtime?: {
+    id?: string
+    onMessage?: { addListener: (listener: (...args: unknown[]) => unknown) => void }
+  }
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron provides chrome.runtime in the extension worker global.
+const nativeChrome = (globalThis as { chrome?: NativeWorkerChrome }).chrome
+const nativeRuntime = nativeChrome?.runtime
+nativeRuntime?.onMessage?.addListener((message, sender, respond) => {
+  const challenge = isRecord(message) ? message.orcaExecutionActivation : null
+  if (
+    typeof challenge !== 'string' ||
+    !isRecord(sender) ||
+    sender.id !== nativeRuntime.id ||
+    sender.url !== `chrome-extension://${nativeRuntime.id}/manifest.json?orca-native-page=1` ||
+    typeof respond !== 'function'
+  ) {
+    return undefined
+  }
+  void tokenReady.then(async (token) => {
+    await listenChain
+    respond({ challenge, token })
+  })
+  return true
+})
+
 // Why text/plain: a simple request skips the CORS preflight round trip.
 function post(url: string, body: unknown): Promise<Response> {
   return nativeFetch(url, {
@@ -104,6 +132,9 @@ function deliver(line: string): void {
   ) {
     for (const dispatch of dispatchers) {
       dispatch(payload.namespace, payload.event, payload.args)
+    }
+    if (typeof payload.deliveryId === 'string') {
+      void invoke({ type: 'receipt', deliveryId: payload.deliveryId })
     }
   }
 }
@@ -195,8 +226,13 @@ const bridge: BrowserExtensionMainWorldBridge = {
 void connectEvents()
 installBrowserExtensionApis(bridge, BROWSER_EXTENSION_API_SURFACE)
 installBrowserExtensionStorageRelay(bridge, 'worker')
+installBrowserExtensionStorageSync(bridge, { QUOTA_BYTES: 10_485_760 }, undefined, 'session')
 installBrowserExtensionNativeMessaging(bridge, 'worker')
-installBrowserExtensionDocumentTargets(bridge, PRELOAD_FIRST_DISCARDED_TAB_ID)
+installBrowserExtensionMessageTargets(bridge, PRELOAD_FIRST_DISCARDED_TAB_ID)
+installBrowserExtensionDocumentTargets(bridge, PRELOAD_FIRST_DISCARDED_TAB_ID, {
+  file: 'ORCA_EXTENSION_OWN_PREFIX',
+  execution: 'ORCA_EXTENSION_OWN_EXECUTION'
+})
 installBrowserExtensionInertApis('worker')
 installContentScriptRelayFilter(
   installBrowserExtensionStorageSync(

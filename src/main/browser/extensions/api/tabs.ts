@@ -82,7 +82,12 @@ async function createTab(
   url: string,
   active: boolean
 ): Promise<chrome.tabs.Tab> {
-  const tabId = await openBrowserExtensionTab(caller.browserProfileId, url, active)
+  const tabId = await openBrowserExtensionTab(
+    caller.browserProfileId,
+    url,
+    active,
+    caller.execution?.controller.signal
+  )
   return describeBrowserExtensionTab(caller.extension, requireCallerTab(caller, tabId))
 }
 

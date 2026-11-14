@@ -31,21 +31,42 @@ const ESCAPE = '\u0000'
 
 /** JSON that keeps `undefined` (optional arguments in tuples, absent event args). */
 export function encodeBrowserExtensionWireJson(value: unknown): string {
-  return JSON.stringify(value, (_key, entry: unknown) =>
-    entry === undefined
+  return JSON.stringify(value, function (this: Record<string, unknown>, key, entry: unknown) {
+    const original: unknown = this[key]
+    const binary =
+      original instanceof ArrayBuffer
+        ? new Uint8Array(original)
+        : ArrayBuffer.isView(original)
+          ? new Uint8Array(original.buffer, original.byteOffset, original.byteLength)
+          : null
+    if (binary) {
+      let raw = ''
+      for (let offset = 0; offset < binary.length; offset += 32_768) {
+        raw += String.fromCharCode(...binary.subarray(offset, offset + 32_768))
+      }
+      return `${ESCAPE}binary:${btoa(raw)}`
+    }
+    return entry === undefined
       ? ESCAPE
       : typeof entry === 'string' && entry.startsWith(ESCAPE)
         ? ESCAPE + entry
         : entry
-  )
+  })
 }
 
 export function decodeBrowserExtensionWireJson(text: string): unknown {
-  return JSON.parse(text, (_key, entry: unknown) =>
-    typeof entry !== 'string' || !entry.startsWith(ESCAPE)
-      ? entry
-      : entry === ESCAPE
-        ? undefined
-        : entry.slice(1)
-  )
+  return JSON.parse(text, (_key, entry: unknown) => {
+    if (typeof entry !== 'string' || !entry.startsWith(ESCAPE)) {
+      return entry
+    }
+    if (entry === ESCAPE) {
+      return undefined
+    }
+    if (entry.startsWith(`${ESCAPE}binary:`)) {
+      return Uint8Array.from(atob(entry.slice(`${ESCAPE}binary:`.length)), (character) =>
+        character.charCodeAt(0)
+      ).buffer
+    }
+    return entry.slice(1)
+  })
 }

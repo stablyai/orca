@@ -64,7 +64,11 @@ export function withBrowserExtensionApiConnectSource(policy: string): string {
  * worker's own URL, so the wrapper must live in the same folder.
  */
 export function buildBrowserExtensionBackgroundWrapper(
-  manifest: Manifest
+  manifest: Manifest,
+  files = {
+    shim: BROWSER_EXTENSION_WORKER_SHIM_FILE,
+    wrapper: BROWSER_EXTENSION_WORKER_WRAPPER_FILE
+  }
 ): BrowserExtensionBackgroundWrapper | null {
   if (manifest.manifest_version !== 3) {
     throw new Error('Orca supports Manifest V3 extensions only')
@@ -79,11 +83,8 @@ export function buildBrowserExtensionBackgroundWrapper(
     throw new Error('The background worker must be inside the extension folder')
   }
   const folder = posix.dirname(original)
-  const wrapperPath =
-    folder === '.'
-      ? BROWSER_EXTENSION_WORKER_WRAPPER_FILE
-      : `${folder}/${BROWSER_EXTENSION_WORKER_WRAPPER_FILE}`
-  const shimUrl = JSON.stringify(`/${BROWSER_EXTENSION_WORKER_SHIM_FILE}`)
+  const wrapperPath = folder === '.' ? files.wrapper : `${folder}/${files.wrapper}`
+  const shimUrl = JSON.stringify(`/${files.shim}`)
   const originalUrl = JSON.stringify(`/${original.split('/').map(encodeURIComponent).join('/')}`)
   const load =
     background.type === 'module'

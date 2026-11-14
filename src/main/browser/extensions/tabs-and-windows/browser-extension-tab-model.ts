@@ -209,10 +209,6 @@ export function canExtensionSeeTabUrl(
   )
 }
 
-function tabStatus(contents: Electron.WebContents): 'loading' | 'complete' {
-  return contents.isLoading() ? 'loading' : 'complete'
-}
-
 /** The fields Orca owns; url/title come from Electron's native result or describeBrowserExtensionTab. */
 function orcaTabFields(entry: BrowserExtensionTabEntry): chrome.tabs.Tab {
   const { contents } = entry
@@ -228,7 +224,7 @@ function orcaTabFields(entry: BrowserExtensionTabEntry): chrome.tabs.Tab {
     autoDiscardable: true,
     incognito: false,
     groupId: -1,
-    status: tabStatus(contents),
+    status: contents.isLoading() ? 'loading' : 'complete',
     audible: contents.isCurrentlyAudible(),
     mutedInfo: { muted: contents.isAudioMuted() }
   }
@@ -295,11 +291,14 @@ export function recentWorktreeIdForBrowserProfile(profileId: string): string | u
 export async function openBrowserExtensionTab(
   browserProfileId: string,
   url: string,
-  active: boolean
+  active: boolean,
+  signal?: AbortSignal
 ): Promise<number> {
   const profile = getBrowserExtensionProfile(browserProfileId)
   // Why wait: extensions open tabs as they load (onInstalled), before Orca's window can take them.
+  signal?.throwIfAborted()
   const mainWindow = profile ? await whenBrowserMainWindowReady(MAIN_WINDOW_WAIT_MS) : null
+  signal?.throwIfAborted()
   if (!mainWindow || !profile) {
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }

@@ -23,7 +23,10 @@ vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
 const wire = await import('../../../../shared/browser/extensions/browser-extension-worker-api')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')
-const { getBrowserExtensionWorkerToken } = await import('./browser-extension-worker-api-host')
+const { beginBrowserExtensionExecution, getBrowserExtensionExecution } =
+  await import('./browser-extension-execution-authority')
+const tokenFor = (stub: ReturnType<typeof makeSession>, id: string): string =>
+  getBrowserExtensionExecution(asSession(stub), id)!.workerToken
 const { forgetExtensionContexts, getHostSessionState } =
   await import('./browser-extension-contexts')
 
@@ -73,6 +76,12 @@ function makeSession(ids: string[]) {
       serviceWorkers: {
         on: (_name: string, listener: (typeof statusListeners)[number]) =>
           statusListeners.push(listener),
+        removeListener: (_name: string, listener: (typeof statusListeners)[number]) => {
+          const index = statusListeners.indexOf(listener)
+          if (index !== -1) {
+            statusListeners.splice(index, 1)
+          }
+        },
         getAllRunning: () => ({}),
         getWorkerFromVersionID: () => worker,
         startWorkerForScope: (scope: string) => stub.startWorkerForScope(scope)
@@ -121,7 +130,7 @@ function post(
 const originOf = (extensionId: string) => `chrome-extension://${extensionId}`
 
 async function callAs(stub: ReturnType<typeof makeSession>, extensionId: string, request: unknown) {
-  const token = getBrowserExtensionWorkerToken(extensionId)
+  const token = tokenFor(stub, extensionId)
   const response = await post(
     stub,
     wire.BROWSER_EXTENSION_API_CALL_URL,
@@ -144,7 +153,7 @@ async function openEvents(stub: ReturnType<typeof makeSession>, extensionId: str
   const response = await post(
     stub,
     wire.BROWSER_EXTENSION_API_EVENTS_URL,
-    { token: getBrowserExtensionWorkerToken(extensionId) },
+    { token: tokenFor(stub, extensionId) },
     originOf(extensionId)
   )
   const reader = response.body?.getReader()
@@ -178,13 +187,64 @@ beforeAll(() => {
   })
   host.attachBrowserExtensionApiHostToSession(asSession(vaultSession), 'default')
   host.attachBrowserExtensionApiHostToSession(asSession(otherSession), 'work')
+  for (const stub of [vaultSession, otherSession]) {
+    for (const id of stub.extensions.keys()) {
+      beginBrowserExtensionExecution(asSession(stub), id, new AbortController().signal)
+    }
+  }
 })
 
 describe('worker API protocol', () => {
   const echo = { type: 'call', namespace: 'probe', method: 'echo', args: [21, undefined] }
 
+  it('releases a stopped worker task and timer without canceling its admitted API work', async () => {
+    const stub = makeSession([VAULT])
+    const session = asSession(stub)
+    host.attachBrowserExtensionApiHostToSession(session, 'held-call')
+    beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
+    await listen(stub, VAULT)
+    stub.startWorker()
+    let finish = (): void => {}
+    let entered = false
+    registry.registerBrowserExtensionNamespace('heldCall', {
+      permission: 'probe',
+      events: [],
+      methods: {
+        wait: registry.defineBrowserExtensionMethod(
+          z.tuple([]),
+          () =>
+            new Promise<string>((resolve) => {
+              entered = true
+              finish = () => resolve('completed')
+            })
+        )
+      }
+    })
+    vi.useFakeTimers()
+    const pending = callAs(stub, VAULT, {
+      type: 'call',
+      namespace: 'heldCall',
+      method: 'wait',
+      args: []
+    })
+    try {
+      await vi.waitFor(() => expect(entered).toBe(true))
+      expect(vi.getTimerCount()).toBe(1)
+      stub.stopWorker()
+      expect(stub.task.end).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+      finish()
+      await expect(pending).resolves.toEqual({ ok: true, value: 'completed' })
+    } finally {
+      finish()
+      await pending
+      host.forgetBrowserExtensionContexts(session)
+      vi.useRealTimers()
+    }
+  })
+
   it('refuses web pages, wrong tokens and extensions not loaded in the session', async () => {
-    const vaultCall = { token: getBrowserExtensionWorkerToken(VAULT), request: echo }
+    const vaultCall = { token: tokenFor(vaultSession, VAULT), request: echo }
     // A website holding the token is refused before main reads its body.
     const fromSite = makeRequest(
       wire.BROWSER_EXTENSION_API_CALL_URL,
@@ -202,7 +262,7 @@ describe('worker API protocol', () => {
         await post(
           vaultSession,
           wire.BROWSER_EXTENSION_API_CALL_URL,
-          { token: getBrowserExtensionWorkerToken(OTHER), request: echo },
+          { token: tokenFor(vaultSession, OTHER), request: echo },
           originOf(VAULT)
         )
       ).status
@@ -224,6 +284,7 @@ describe('worker API protocol', () => {
       const stub = makeSession([VAULT])
       const session = asSession(stub)
       host.attachBrowserExtensionApiHostToSession(session, 'retired')
+      const execution = beginBrowserExtensionExecution(session, VAULT, new AbortController().signal)
       let release = (_body: Uint8Array): void => {}
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -249,7 +310,7 @@ describe('worker API protocol', () => {
       release(
         new TextEncoder().encode(
           wire.encodeBrowserExtensionWireJson({
-            token: getBrowserExtensionWorkerToken(VAULT),
+            token: execution.workerToken,
             request: echo
           })
         )

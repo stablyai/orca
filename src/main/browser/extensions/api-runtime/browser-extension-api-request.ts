@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { acknowledgeBrowserExtensionWorkerDelivery } from './browser-extension-worker-delivery'
+import { isBrowserExtensionExecutionLive } from './browser-extension-execution-authority'
 import type { BrowserExtensionInvokeResult } from '../../../../shared/browser/extensions/browser-extension-channels'
 import {
   BrowserExtensionApiError,
@@ -17,6 +19,7 @@ import {
 } from './browser-extension-contexts'
 
 const invokeRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('receipt'), deliveryId: z.string() }),
   z.object({
     type: z.literal('call'),
     namespace: z.string(),
@@ -34,6 +37,7 @@ const invokeRequestSchema = z.discriminatedUnion('type', [
 ])
 
 export type BrowserExtensionListenTarget =
+  | { kind: 'none' }
   | { kind: 'worker'; context: WorkerContext }
   | { kind: 'frame'; webContents: Electron.WebContents; frame: Electron.WebFrameMain }
 
@@ -59,11 +63,25 @@ export async function handleBrowserExtensionApiRequest(
   listenTarget: BrowserExtensionListenTarget
 ): Promise<BrowserExtensionInvokeResult> {
   try {
+    if (caller.execution && !isBrowserExtensionExecutionLive(caller.execution)) {
+      throw new BrowserExtensionApiError('Extension context was unloaded')
+    }
     const parsed = invokeRequestSchema.safeParse(rawRequest)
     if (!parsed.success) {
       throw new BrowserExtensionApiError('Malformed extension API request')
     }
     const request = parsed.data
+    if (request.type === 'receipt') {
+      if (!caller.fromWorker || !caller.execution || listenTarget.kind !== 'worker') {
+        throw new BrowserExtensionApiError('Receipt is not available here')
+      }
+      acknowledgeBrowserExtensionWorkerDelivery(
+        caller.execution,
+        listenTarget.context,
+        request.deliveryId
+      )
+      return { ok: true, value: undefined }
+    }
     const namespace = getBrowserExtensionNamespace(request.namespace)
     if (!namespace) {
       throw new BrowserExtensionApiError(`chrome.${request.namespace} is not available`)
@@ -79,6 +97,9 @@ export async function handleBrowserExtensionApiRequest(
       requirePermission(caller, namespace.permission)
     }
     if (request.type === 'listen') {
+      if (listenTarget.kind === 'none') {
+        throw new BrowserExtensionApiError('Listening is not available here')
+      }
       if (!namespace.events.includes(request.event)) {
         throw new BrowserExtensionApiError(`Unknown event ${request.namespace}.${request.event}`)
       }
@@ -119,7 +140,11 @@ export async function handleBrowserExtensionApiRequest(
         `chrome.${request.namespace}.${request.method} is not available`
       )
     }
-    return { ok: true, value: await method.invoke(caller, request.args) }
+    const value = await method.invoke(caller, request.args)
+    if (caller.execution && !isBrowserExtensionExecutionLive(caller.execution)) {
+      throw new BrowserExtensionApiError('Extension context was unloaded')
+    }
+    return { ok: true, value }
   } catch (error) {
     if (!(error instanceof BrowserExtensionApiError)) {
       console.warn('[browser-extensions] API call failed:', error)

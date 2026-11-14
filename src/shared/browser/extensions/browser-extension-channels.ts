@@ -28,4 +28,6 @@ export type BrowserExtensionEventPayload = {
   namespace: string
   event: string
   args: unknown[]
+  /** Main-issued receipt for synchronous worker dispatch, not handler completion. */
+  deliveryId?: string
 }

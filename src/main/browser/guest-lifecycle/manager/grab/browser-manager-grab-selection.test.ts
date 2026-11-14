@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../../../extensions/profile-sessions/browser-extension-session-loader', () => ({
+  retainBrowserExtensionPage: async () => {}
+}))
+
 const grabMocks = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn(),
   guestOnMock: vi.fn(),

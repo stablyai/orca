@@ -1,3 +1,7 @@
+import {
+  getBrowserExtensionExecution,
+  isBrowserExtensionExecutionLive
+} from './browser-extension-execution-authority'
 import { z } from 'zod'
 import { getBrowserExtensionContextSignal } from './browser-extension-context-lifetime'
 import { getHostSessionState } from './browser-extension-contexts'
@@ -20,6 +24,7 @@ type ScriptState = {
   failed: Error | null
 }
 const states = new WeakMap<Electron.Session, Map<string, ScriptState>>()
+const registrations = new WeakMap<Electron.Session, Map<string, Record<string, unknown>[]>>()
 const scriptSchema = z.object({ id: z.string() }).loose()
 const replySchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), scripts: z.array(scriptSchema), value: z.unknown() }),
@@ -30,7 +35,8 @@ const replySchema = z.discriminatedUnion('ok', [
 async function runNativeScripts(
   method: ContentScriptMethod | null,
   args: unknown[],
-  restore: Record<string, unknown>[]
+  restore: Record<string, unknown>[],
+  prefix: string
 ): Promise<unknown> {
   const root: { chrome?: unknown } = globalThis
   const chromeApi = root.chrome
@@ -62,17 +68,38 @@ async function runNativeScripts(
         }
       })
     })
+  const wrap = (script: Record<string, unknown>): Record<string, unknown> => ({
+    ...script,
+    ...(script.world !== 'MAIN' && Array.isArray(script.js) ? { js: [prefix, ...script.js] } : {})
+  })
+  const unwrap = (scripts: unknown): unknown =>
+    Array.isArray(scripts)
+      ? scripts.map((script) => ({
+          ...script,
+          ...(Array.isArray(script.js)
+            ? { js: script.js.filter((file: unknown) => file !== prefix) }
+            : {})
+        }))
+      : scripts
+  const nativeArgs =
+    method === 'registerContentScripts' || method === 'updateContentScripts'
+      ? [Array.isArray(args[0]) ? args[0].map(wrap) : args[0]]
+      : args
   // A failed restore retires this owner; partially restored registrations are never called ready.
   for (const script of restore) {
-    await call('registerContentScripts', [[script]])
+    await call('registerContentScripts', [[wrap(script)]])
   }
   let value: unknown
   try {
-    value = method ? await call(method, args) : undefined
+    value = method ? await call(method, nativeArgs) : undefined
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
-  return { ok: true, scripts: await call('getRegisteredContentScripts', []), value }
+  return {
+    ok: true,
+    scripts: unwrap(await call('getRegisteredContentScripts', [])),
+    value: method === 'getRegisteredContentScripts' ? unwrap(value) : value
+  }
 }
 
 function stateFor(session: Electron.Session, extensionId: string): ScriptState {
@@ -101,8 +128,12 @@ function stateFor(session: Electron.Session, extensionId: string): ScriptState {
 
 export function forgetBrowserExtensionContentScriptRestore(
   session: Electron.Session,
-  extensionId: string
+  extensionId: string,
+  suspend = false
 ): void {
+  if (!suspend) {
+    registrations.get(session)?.delete(extensionId)
+  }
   states.get(session)?.get(extensionId)?.controller.abort()
   states.get(session)?.delete(extensionId)
 }
@@ -116,13 +147,34 @@ function enqueue(
   timeoutMs: number
 ): Promise<unknown> {
   const state = stateFor(session, extension.id)
+  const execution = getBrowserExtensionExecution(session, extension.id)
+  if (!execution) {
+    return Promise.reject(new Error('Extension context was unloaded'))
+  }
   const run = state.queue.then(async () => {
     state.signal.throwIfAborted()
     if (state.failed) {
       throw state.failed
     }
     const store = getBrowserExtensionProfileStateStore()
-    const restore = state.restored ? [] : store.read(profileId, extension.id).contentScripts
+    let retained = registrations.get(session)
+    if (!retained) {
+      retained = new Map()
+      registrations.set(session, retained)
+    }
+    const original =
+      retained.get(extension.id) ?? store.read(profileId, extension.id).contentScripts
+    const restore = state.restored ? [] : original
+    if (method === 'updateContentScripts' && Array.isArray(args[0])) {
+      args = [
+        args[0].map((script: Record<string, unknown>) => ({
+          ...script,
+          ...('world' in script && !('js' in script)
+            ? { js: original.find((entry) => entry.id === script.id)?.js }
+            : {})
+        }))
+      ]
+    }
     if (!method && restore.length === 0) {
       state.restored = true
       return
@@ -132,11 +184,14 @@ function enqueue(
       raw = await runBrowserExtensionNativePage({
         session,
         extensionId: extension.id,
-        code: `(${runNativeScripts.toString()})(${JSON.stringify(method)},${JSON.stringify(args)},${JSON.stringify(restore)})`,
+        code: `(${runNativeScripts.toString()})(${JSON.stringify(method)},${JSON.stringify(args)},${JSON.stringify(restore)},${JSON.stringify(execution.contentScriptFile)})`,
         timeoutMs,
         signal: state.signal
       })
       state.signal.throwIfAborted()
+      if (!isBrowserExtensionExecutionLive(execution)) {
+        throw new Error('Extension context was unloaded')
+      }
     } catch (error) {
       // A lost context may still have dispatched native work; only a reload can safely retry it.
       state.failed = error instanceof Error ? error : new Error(String(error))
@@ -147,10 +202,14 @@ function enqueue(
     if (!reply.ok) {
       throw new Error(reply.error)
     }
-    store.update(profileId, extension.id, (stored) => ({
-      ...stored,
-      contentScripts: reply.scripts.filter((script) => script.persistAcrossSessions !== false)
-    }))
+    retained.set(extension.id, reply.scripts)
+    const persistent = reply.scripts.filter((script) => script.persistAcrossSessions !== false)
+    if (
+      JSON.stringify(store.read(profileId, extension.id).contentScripts ?? []) !==
+      JSON.stringify(persistent)
+    ) {
+      store.update(profileId, extension.id, (stored) => ({ ...stored, contentScripts: persistent }))
+    }
     return reply.value
   })
   state.queue = run.catch(() => undefined)

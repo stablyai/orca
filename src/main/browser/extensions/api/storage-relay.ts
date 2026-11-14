@@ -24,7 +24,7 @@ export function registerStorageRelayNamespace(): void {
   registerBrowserExtensionNamespace(STORAGE_RELAY_NAMESPACE, {
     methods: {
       report: defineBrowserExtensionMethod(
-        z.tuple([z.enum(['local', 'session']), changesSchema]),
+        z.tuple([z.literal('local'), changesSchema]),
         (caller, areaName, changes) => {
           if (caller.fromWorker) {
             throw new BrowserExtensionApiError('The worker delivers its own storage changes')

@@ -1,5 +1,5 @@
 import type { DnrEngine } from '../engine'
-import { readDnrRuleJson } from '../rule-compilation/rule-schema'
+import { readDnrRules } from '../rule-compilation/rule-schema'
 import type { DnrRule, DnrRulesetSource } from '../rule-compilation/rule-types'
 import {
   DNR_API_CONSTANTS,
@@ -34,13 +34,6 @@ export type DnrExtensionRulesHost = {
 export class DnrApiError extends Error {}
 
 type ScopedRules = { rules: DnrRule[]; built: DnrBuiltRuleset | null }
-
-function readableRules(json: readonly unknown[]): DnrRule[] {
-  return json.flatMap((value) => {
-    const read = readDnrRuleJson(value)
-    return read.ok ? [read.rule] : []
-  })
-}
 
 export type DnrAttachedRuleset = {
   source: DnrRulesetSource
@@ -81,7 +74,7 @@ export class DnrExtensionRules {
     return run
   }
 
-  load(): Promise<void> {
+  load(sessionRules: DnrRule[] = []): Promise<void> {
     return this.enqueue(async () => {
       const state = readBrowserExtensionDnrState(this.host.profileId, this.extension)
       this.disabledRuleIds = state.disabledRuleIds
@@ -90,18 +83,25 @@ export class DnrExtensionRules {
         ? this.manifestRulesets.filter((ruleset) => state.enabledRulesetIds?.includes(ruleset.id))
         : this.manifestRulesets.filter((ruleset) => ruleset.enabled)
       await this.enableStaticWithinLimits(wanted)
-      const dynamic = readableRules(state.dynamicRules)
-      if (dynamic.length > 0 && !this.unloaded) {
-        const result = await buildDnrRules(dynamic, this.extension.id, { kind: 'dynamic' }, 'warn')
+      for (const [scope, rules, invalid] of [
+        ['session', sessionRules, 'error'],
+        ['dynamic', readDnrRules(state.dynamicRules), 'warn']
+      ] as const) {
+        if (rules.length === 0 || this.unloaded) {
+          continue
+        }
+        const result = await buildDnrRules(rules, this.extension.id, { kind: scope }, invalid)
+        if (!result.ok && scope === 'session') {
+          throw new DnrApiError(result.error)
+        }
         if (result.ok && !this.unloaded) {
-          this.setScoped('dynamic', dynamic, result.built)
+          this.setScoped(scope, rules, result.built)
           this.host.changed()
         }
       }
     })
   }
 
-  /** Extension unloaded: its rules leave the engine; session rules are gone for good. */
   unload(): void {
     this.unloaded = true
     for (const id of this.enabledStatic.keys()) {
@@ -296,7 +296,7 @@ export class DnrExtensionRules {
       const remove = new Set(removeIds)
       const kept = this.scoped[scope].rules.filter((rule) => !remove.has(rule.id))
       const candidates = [...kept, ...addRules]
-      const added = readableRules(addRules)
+      const added = readDnrRules(addRules)
       const result = await buildDnrRules(candidates, this.extension.id, { kind: scope }, 'error')
       if (!result.ok) {
         throw new DnrApiError(result.error)

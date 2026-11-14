@@ -31,6 +31,11 @@ const installedExtensionSchema = z.object({
 export class BrowserExtensionInstallStore {
   private cache: Map<string, InstalledBrowserExtension> | null = null
   private removals: Map<string, number> | null = null
+  private maintenanceVersion = 0
+
+  get maintenanceRevision(): number {
+    return this.maintenanceVersion
+  }
 
   constructor(private readonly rootDirectory: string) {}
 
@@ -81,7 +86,11 @@ export class BrowserExtensionInstallStore {
       }
       this.removals = entries
     }
-    return new Map(this.removals)
+    return this.removals
+  }
+
+  removalGeneration(extensionId: string): number {
+    return this.removalGenerations().get(extensionId) ?? 0
   }
 
   save(extension: InstalledBrowserExtension, updated = false): InstalledBrowserExtension {
@@ -97,6 +106,7 @@ export class BrowserExtensionInstallStore {
     const installed = installedExtensionSchema.parse({ ...extension, installTime })
     entries.set(extension.id, installed)
     this.persist(entries)
+    this.maintenanceVersion++
     return installed
   }
 
@@ -116,6 +126,7 @@ export class BrowserExtensionInstallStore {
     this.removals = removals
     entries.delete(extensionId)
     this.persist(entries)
+    this.maintenanceVersion++
     const ownedDirectory =
       existing.source === 'webstore'
         ? join(this.rootDirectory, extensionId)

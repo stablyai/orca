@@ -35,7 +35,8 @@ export function installContentScriptRelayFilter(answer?: BrowserExtensionStorage
     value !== null && typeof value === 'object'
   const isCallable = (value: unknown): value is ExtensionCallable => typeof value === 'function'
   const isRelayed = (message: unknown): boolean =>
-    isObject(message) && (key in message || probeKey in message)
+    isObject(message) &&
+    (key in message || probeKey in message || 'orcaExecutionActivation' in message)
   const root: { chrome?: unknown; browser?: unknown } = globalThis
   const chromeApi = root.chrome
   const runtime = isObject(chromeApi) ? chromeApi.runtime : null

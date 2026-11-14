@@ -1,8 +1,8 @@
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
-import { prepareBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
+import { refreshBrowserExtensionPackage } from '../installation/browser-extension-load-directory'
 import {
-  getBrowserExtensionSessionForProfile,
+  hasBrowserExtensionProfileDemand,
   loadBrowserExtensionIntoProfile,
   unloadBrowserExtensionFromProfile
 } from './browser-extension-session-loader'
@@ -22,19 +22,16 @@ export async function reloadBrowserExtensionWhereEnabled(
   const profileIds = browserSessionRegistry
     .listProfiles()
     .map((profile) => profile.id)
-    .filter(
-      (profileId) =>
-        isEnabledIn(profileId, extension.id) && getBrowserExtensionSessionForProfile(profileId)
-    )
-  for (const profileId of profileIds) {
-    unloadBrowserExtensionFromProfile(profileId, extension.id)
-  }
+    .filter((profileId) => isEnabledIn(profileId, extension.id))
+  await Promise.all(
+    profileIds.map((profileId) => unloadBrowserExtensionFromProfile(profileId, extension.id))
+  )
   if (options.refresh) {
-    await prepareBrowserExtensionDirectory(extension, { refresh: true })
+    await refreshBrowserExtensionPackage(extension)
   }
   for (const profileId of profileIds) {
     // Why recheck: a Disable during an earlier await had no load of ours to cancel.
-    if (!isEnabledIn(profileId, extension.id)) {
+    if (!isEnabledIn(profileId, extension.id) || !hasBrowserExtensionProfileDemand(profileId)) {
       continue
     }
     await loadBrowserExtensionIntoProfile(profileId, extension, 'reload').catch((error) => {

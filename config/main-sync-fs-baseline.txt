@@ -57,7 +57,6 @@
 2 src/main/browser/electron-fixtures/popup-identity-electron-probe.ts
 1 src/main/browser/extensions/api-runtime/browser-extension-worker-shim-source.ts
 8 src/main/browser/extensions/installation/browser-extension-install-store.ts
-1 src/main/browser/extensions/installation/browser-extension-load-directory.ts
 2 src/main/browser/extensions/profile-storage/browser-extension-data-removal.ts
 8 src/main/browser/extensions/profile-storage/browser-extension-profile-document-store.ts
 4 src/main/browser/extensions/profile-storage/browser-extension-profile-state-store.ts

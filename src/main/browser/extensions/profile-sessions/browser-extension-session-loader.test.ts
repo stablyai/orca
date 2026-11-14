@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
   const prepareGate: { held: Promise<void> | null } = { held: null }
   const storage: { path: string | null } = { path: null }
   return {
+    enabled: new Map<string, string[]>(),
+    profileForSession: 'default',
     userData: '',
     storage,
     prepareGate,
@@ -35,16 +37,21 @@ const mocks = vi.hoisted(() => {
           listener: (event: unknown, details: { scope: string }) => void
         ) => registrationListeners.delete(listener)
       },
+      get storagePath() {
+        return mocks.userData
+      },
       registerPreloadScript: vi.fn(),
       unregisterPreloadScript: vi.fn(),
       getStoragePath: () => mocks.storage.path,
       clearStorageData: vi.fn(async () => {}),
       extensions: {
+        on: vi.fn(),
         getExtension: (id: string) => loaded.get(id) ?? null,
         getAllExtensions: () => [...loaded.values()],
-        loadExtension: vi.fn(async () => {
+        loadExtension: vi.fn(async (directory: string) => {
           const extension = {
-            id: 'a'.repeat(32),
+            id: directory.split('/').at(-1)!,
+            path: '/orca/copy',
             version: '1.0',
             manifest: prepared.hasWorker ? { background: { service_worker: 'bg.js' } } : {}
           }
@@ -57,20 +64,31 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('electron', () => ({
-  app: { on: vi.fn(), getPath: () => mocks.userData },
-  session: {
-    fromPartition: (partition: string) =>
-      partition === 'persist:orca-browser-retired'
-        ? {
-            ...mocks.session,
-            extensions: {
-              ...mocks.session.extensions,
-              getExtension: () => null,
-              getAllExtensions: () => []
-            }
-          }
-        : mocks.session
+vi.mock('electron', () => {
+  const inactiveSession = { ...mocks.session }
+  return {
+    app: { on: vi.fn(), getPath: () => mocks.userData },
+    session: {
+      fromPartition: (partition: string) =>
+        partition === 'persist:orca-browser-inactive'
+          ? inactiveSession
+          : partition === 'persist:orca-browser-retired'
+            ? {
+                ...mocks.session,
+                extensions: {
+                  ...mocks.session.extensions,
+                  getExtension: () => null,
+                  getAllExtensions: () => []
+                }
+              }
+            : mocks.session
+    }
+  }
+})
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    getEnabledExtensionIds: (id: string) => mocks.enabled.get(id) ?? [],
+    profileIdForSession: () => mocks.profileForSession
   }
 }))
 vi.mock('node:fs', async (importOriginal) => ({
@@ -79,18 +97,19 @@ vi.mock('node:fs', async (importOriginal) => ({
   existsSync: () => true
 }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({
-  attachBrowserExtensionApiHostToSession: vi.fn(),
-  forgetBrowserExtensionContexts: vi.fn(),
+  attachBrowserExtensionApiHostToSession: (sess: Electron.Session, id: string) =>
+    contexts.ensureHostSessionState(sess, id),
+  forgetBrowserExtensionContexts: (sess: Electron.Session) => contexts.forgetHostSession(sess),
   getBrowserExtensionProfileIdForSession: vi.fn(() => null),
   emitBrowserExtensionWorkerStartEvent: mocks.emitWorkerStart
 }))
 vi.mock('../installation/browser-extension-load-directory', () => ({
-  prepareBrowserExtensionDirectory: async () => {
+  prepareBrowserExtensionDirectory: async (extension: { id: string }) => {
     mocks.prepareCalls++
     await mocks.prepareGate.held
     return {
-      directory: '/orca/copy',
-      extensionId: 'a'.repeat(32),
+      directory: `/orca/copy/${extension.id}`,
+      extensionId: extension.id,
       workerSignature: mocks.prepared.signature,
       hasWorker: mocks.prepared.hasWorker
     }
@@ -99,6 +118,7 @@ vi.mock('../installation/browser-extension-load-directory', () => ({
 
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 
+const contexts = await import('../api-runtime/browser-extension-contexts')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
 await import('./browser-extension-load-errors')
@@ -140,7 +160,11 @@ describe('profile changes while startup loads are in flight', () => {
     getBrowserExtensionInstallStore().save(installed)
     mocks.prepareGate.held = new Promise<void>((resolve) => (release = resolve))
     const calls = mocks.prepareCalls
+    mocks.enabled.set(profile.id, [ID])
     loader.attachBrowserExtensionsToProfileSession(profile, [ID])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
+    const page = { session: mocks.session, once: vi.fn() } as unknown as Electron.WebContents
+    void loader.retainBrowserExtensionPage(page).catch(() => {})
     await vi.waitFor(() => expect(mocks.prepareCalls).toBe(calls + 1))
   }
 
@@ -153,8 +177,9 @@ describe('profile changes while startup loads are in flight', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.prepared.signature = 'v-disable'
     await attachWithHeldStartupLoad()
-    loader.unloadBrowserExtensionFromProfile('default', ID)
+    const disabling = loader.unloadBrowserExtensionFromProfile('default', ID)
     release()
+    await disabling
     await loader.whenBrowserExtensionProfileLoaded('default')
     expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
     expect(mocks.loaded.size).toBe(0)
@@ -250,6 +275,80 @@ describe('deleted profile action state', () => {
   })
 })
 
+it.each([750, 7500])(
+  'keeps %i saved profiles cold through the session startup path',
+  async (count) => {
+    setBrowserExtensionSupportEnabled(true)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    getBrowserExtensionInstallStore().save(installed)
+    mocks.session.extensions.loadExtension.mockClear()
+    const preparedBefore = mocks.prepareCalls
+    for (let index = 0; index < count; index++) {
+      const id = `fleet-${count}-${index}`
+      mocks.enabled.set(id, [ID])
+      loader.attachBrowserExtensionsToProfileSession(
+        {
+          id,
+          scope: 'isolated',
+          partition: `persist:orca-${id}`,
+          label: id,
+          source: null
+        },
+        [ID]
+      )
+    }
+    await loader.whenBrowserExtensionSessionsLoaded(1000)
+    expect(mocks.prepareCalls - preparedBefore).toBe(0)
+    expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
+    mocks.profileForSession = `fleet-${count}-0`
+    try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
+      const page = { session: mocks.session, once: vi.fn() } as unknown as Electron.WebContents
+      await loader.retainBrowserExtensionPage(page)
+      expect(mocks.session.extensions.loadExtension.mock.calls).toEqual([
+        [`/orca/copy/${ID}`, { allowFileAccess: false }]
+      ])
+      expect(mocks.prepareCalls - preparedBefore).toBe(1)
+    } finally {
+      mocks.profileForSession = 'default'
+      await loader.detachBrowserExtensionsFromAllProfileSessions()
+      for (let index = 0; index < count; index++) {
+        mocks.enabled.delete(`fleet-${count}-${index}`)
+      }
+    }
+  }
+)
+
+it('keeps pages usable when an enabled extension fails to load', async () => {
+  setBrowserExtensionSupportEnabled(true)
+  await loader.detachBrowserExtensionsFromAllProfileSessions()
+  getBrowserExtensionInstallStore().save(installed)
+  const healthy = { ...installed, id: 'b'.repeat(32), name: 'Healthy' }
+  getBrowserExtensionInstallStore().save(healthy)
+  const profile = {
+    id: 'broken-extension-profile',
+    scope: 'isolated' as const,
+    partition: 'persist:orca-browser-broken-extension',
+    label: 'Broken extension',
+    source: null
+  }
+  mocks.enabled.set(profile.id, [ID, healthy.id])
+  mocks.profileForSession = profile.id
+  mocks.session.extensions.loadExtension.mockRejectedValueOnce(new Error('Invalid manifest'))
+  loader.attachBrowserExtensionsToProfileSession(profile, [ID, healthy.id])
+  try {
+    for (let index = 0; index < 2; index++) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
+      const page = { session: mocks.session, once: vi.fn() } as unknown as Electron.WebContents
+      await expect(loader.retainBrowserExtensionPage(page)).resolves.toBeUndefined()
+    }
+    expect(mocks.loaded.has(healthy.id)).toBe(true)
+  } finally {
+    mocks.profileForSession = 'default'
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+  }
+})
+
 it('does not restore stale enablement after uninstall and reinstall in another Orca profile', async () => {
   setBrowserExtensionSupportEnabled(true)
   await loader.detachBrowserExtensionsFromAllProfileSessions()
@@ -274,13 +373,83 @@ it('does not restore stale enablement after uninstall and reinstall in another O
     },
     [ID]
   )
-  await loader.whenBrowserExtensionProfileLoaded('inactive-profile')
+  await loader.withBrowserExtensionProfileOperation('inactive-profile', ID, async () => {})
   expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
   expect(mocks.uninstalled).toHaveBeenCalledWith('inactive-profile', new Set([ID]))
 
+  // This cold session never opened the old database; an explicit enable may load the reinstall.
   await expect(
     loader.loadBrowserExtensionIntoProfile('inactive-profile', installed)
-  ).rejects.toThrow('Restart Orca')
-  expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
+  ).resolves.toMatchObject({ id: ID })
   await loader.detachBrowserExtensionsFromAllProfileSessions()
+})
+
+it('reuses completed full maintenance until the install store changes, and scopes page-less cleanup to its target', async () => {
+  const { EventEmitter } = await import('node:events')
+  const store = getBrowserExtensionInstallStore()
+  const states = getBrowserExtensionProfileStateStore()
+  const profile = {
+    id: 'maintenance',
+    scope: 'isolated' as const,
+    partition: 'persist:maintenance',
+    label: 'Maintenance',
+    source: null
+  }
+  setBrowserExtensionSupportEnabled(true)
+  await loader.detachBrowserExtensionsFromAllProfileSessions()
+  mocks.profileForSession = profile.id
+  mocks.enabled.set(profile.id, [ID])
+  mocks.prepareGate.held = null
+  store.save(installed)
+  loader.attachBrowserExtensionsToProfileSession(profile, [ID])
+  const inventory = vi.spyOn(states, 'readProfile')
+  const makePage = () =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
+    Object.assign(new EventEmitter(), {
+      session: mocks.session,
+      isDestroyed: () => false
+    }) as unknown as Electron.WebContents
+  let tab = makePage()
+  try {
+    await loader.withBrowserExtensionProfileOperation(profile.id, ID, async () => {})
+    expect(inventory).not.toHaveBeenCalled()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(inventory).toHaveBeenCalledTimes(1)
+    tab.emit('destroyed')
+    tab = makePage()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(inventory).toHaveBeenCalledTimes(1)
+    tab.emit('destroyed')
+    store.save({ ...installed, version: '1.1' })
+    tab = makePage()
+    await loader.retainBrowserExtensionPage(tab)
+    expect(inventory).toHaveBeenCalledTimes(2)
+  } finally {
+    tab.emit('destroyed')
+    inventory.mockRestore()
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    mocks.profileForSession = 'default'
+  }
+})
+
+it('skips repeated no-worker cleanup only after completion and invalidates it for every worker generation', async () => {
+  const { refreshWorkerRegistration } = await import('./browser-extension-worker-registration')
+  const clearStorageData = vi.fn(async () => {})
+  const session = { clearStorageData } as unknown as Electron.Session
+  const prepared = {
+    extensionId: 'b'.repeat(32),
+    directory: '/immutable/generation',
+    workerSignature: null,
+    hasWorker: false,
+    release: async () => {}
+  }
+  await refreshWorkerRegistration(session, 'cleanup', prepared)
+  await refreshWorkerRegistration(session, 'cleanup', prepared)
+  expect(clearStorageData).toHaveBeenCalledTimes(1)
+  await refreshWorkerRegistration(session, 'cleanup', { ...prepared, hasWorker: true })
+  await refreshWorkerRegistration(session, 'cleanup', { ...prepared, hasWorker: true })
+  expect(clearStorageData).toHaveBeenCalledTimes(3)
+  await refreshWorkerRegistration(session, 'cleanup', prepared)
+  await refreshWorkerRegistration(session, 'cleanup', prepared)
+  expect(clearStorageData).toHaveBeenCalledTimes(4)
 })

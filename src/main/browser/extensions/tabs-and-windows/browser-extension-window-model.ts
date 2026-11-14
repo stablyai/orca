@@ -8,6 +8,7 @@ import {
 } from '../../../window/activation/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { watchBrowserMainWindowReadiness } from '../../guest-lifecycle/browser-main-window-readiness'
+import { navigateBrowserExtensionPage } from '../profile-sessions/browser-extension-page-navigation'
 
 /** chrome.windows constants. */
 export const WINDOW_ID_NONE = -1
@@ -256,9 +257,11 @@ export function createBrowserExtensionPopout(
     }
     presentBrowserExtensionWindow(window, options.focused)
   })
-  window.loadURL(options.url).catch((error: unknown) => {
-    console.warn('[browser-extensions] Popout failed to load:', error)
-  })
+  void navigateBrowserExtensionPage(window.webContents, () => window.loadURL(options.url)).catch(
+    (error: unknown) => {
+      console.warn('[browser-extensions] Popout failed to load:', error)
+    }
+  )
   emitBrowserExtensionEvent({ session: sess }, 'windows', 'onCreated', [
     describeBrowserExtensionWindow({ window, type: options.type, isMain: false })
   ])

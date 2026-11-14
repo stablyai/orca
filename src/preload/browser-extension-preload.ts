@@ -1,3 +1,4 @@
+import { installBrowserExtensionMessageTargets } from './browser/extensions/documents/browser-extension-message-targets'
 import type { ContextBridge, IpcRenderer } from 'electron'
 import {
   BROWSER_EXTENSION_API_SURFACE,
@@ -106,11 +107,19 @@ function installExtensionContextApis(): void {
   })
   contextBridge.executeInMainWorld({
     func: installBrowserExtensionStorageSync,
+    args: [bridge, { QUOTA_BYTES: 10_485_760 }, undefined, 'session']
+  })
+  contextBridge.executeInMainWorld({
+    func: installBrowserExtensionStorageSync,
     args: [bridge, PRELOAD_STORAGE_SYNC_CONSTANTS]
   })
   contextBridge.executeInMainWorld({
     func: installBrowserExtensionNativeMessaging,
     args: [bridge, 'page']
+  })
+  contextBridge.executeInMainWorld({
+    func: installBrowserExtensionMessageTargets,
+    args: [bridge, PRELOAD_FIRST_DISCARDED_TAB_ID]
   })
   contextBridge.executeInMainWorld({
     func: installBrowserExtensionDocumentTargets,
@@ -134,9 +143,8 @@ function readOrigin(href: string): string | null {
 if (process.contextIsolated) {
   const href = readContextHref()
   if (href.startsWith('chrome-extension://')) {
-    // A document marker survives Chromium reusing an existing extension renderer process.
     // Why origin: a manifest sandbox page keeps its extension URL but runs with an opaque origin.
-    if (!href.endsWith('/manifest.json?orca-native-page=1') && globalThis.origin !== 'null') {
+    if (globalThis.origin !== 'null') {
       installExtensionContextApis()
     }
   } else if (process.isMainFrame && readOrigin(href) === CHROME_WEB_STORE_ORIGIN) {

@@ -1,3 +1,4 @@
+import { getBrowserExtensionPackageRevision } from '../installation/browser-extension-package-revisions'
 import { readFile, stat } from 'node:fs/promises'
 import { crc32, deflateSync } from 'node:zlib'
 import type { BrowserExtensionActionIcon } from './browser-extension-action-state'
@@ -132,11 +133,14 @@ export function resolveActionIconDataUrl(
   if (!path) {
     return Promise.resolve(null)
   }
-  const key = `${extensionDirectory}\0${path}`
-  let cached = iconCache.get(key)
+  const revision = getBrowserExtensionPackageRevision(extensionDirectory)
+  const cache = revision?.icons ?? iconCache
+  const directory = revision?.directory ?? extensionDirectory
+  const key = `${directory}\0${path}`
+  let cached = cache.get(key)
   if (!cached) {
-    cached = readIconFile(extensionDirectory, path)
-    iconCache.set(key, cached)
+    cached = readIconFile(directory, path)
+    cache.set(key, cached)
   }
   return cached
 }

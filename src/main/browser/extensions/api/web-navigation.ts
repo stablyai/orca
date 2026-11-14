@@ -4,6 +4,7 @@ import {
   chromeFrameDocument
 } from '../tabs-and-windows/browser-extension-frame-projection'
 
+import { isBrowserExtensionExecutionLive } from '../api-runtime/browser-extension-execution-authority'
 import { webFrameMain } from 'electron'
 import { z } from 'zod'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
@@ -147,6 +148,17 @@ export function registerWebNavigationNamespace(): void {
   })
   registerBrowserExtensionNamespace(DOCUMENT_TARGETS_NAMESPACE, {
     methods: {
+      prefix: defineBrowserExtensionMethod(z.tuple([z.string().optional()]), (caller, marker) => {
+        const execution = caller.execution
+        if (
+          !execution ||
+          !isBrowserExtensionExecutionLive(execution) ||
+          (marker !== undefined && marker !== execution.fileNonce)
+        ) {
+          throw new BrowserExtensionApiError('Extension context was unloaded')
+        }
+        return { file: execution.contentScriptFile, execution: execution.fileNonce }
+      }),
       // Only extensions that can learn Orca's ids (webNavigation, webRequest) need them mapped.
       frames: defineBrowserExtensionMethod(z.tuple([z.number().int()]), (caller, tabId) =>
         ['webNavigation', 'webRequest'].some((permission) =>

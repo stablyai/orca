@@ -1,4 +1,5 @@
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser-url'
@@ -27,7 +28,7 @@ import { isDocPreviewSession } from '../../browser/document-preview/doc-preview-
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../../shared/browser/extensions/browser-extension-url'
-import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { navigateBrowserExtensionPage } from '../../browser/extensions/profile-sessions/browser-extension-page-navigation'
 import { installBrowserJavaScriptDialogs } from '../../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import { installNativeChatVisualGuestTheme } from '../../host/native-chat-visual-guest-theme'
 import {
@@ -58,8 +59,10 @@ function isAdmissibleExtensionPageAttach(partition: string, src: string): boolea
     return false
   }
   const profile = browserSessionRegistry.listProfiles().find((p) => p.partition === partition)
-  const sess = profile ? getBrowserExtensionSessionForProfile(profile.id) : null
-  return Boolean(sess?.extensions.getExtension(extensionUrl.extensionId))
+  return Boolean(
+    profile &&
+    browserSessionRegistry.getEnabledExtensionIds(profile.id).includes(extensionUrl.extensionId)
+  )
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
@@ -88,6 +91,32 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   // Only previews get this pinned editor-link preload; never accept renderer preload values or expose it to browsing guests.
   const docPreviewLinkPreload = join(__dirname, 'doc-preview-link-preload.js')
   const pluginFrameGuestPreload = join(__dirname, 'plugin-frame-guest-preload.js')
+  const pendingInitialNavigation = new Map<
+    string,
+    { url: string; options: Electron.LoadURLOptions }
+  >()
+  const initialNavigation = new WeakMap<
+    Electron.WebContents,
+    { url: string; options: Electron.LoadURLOptions }
+  >()
+  const captureInitialNavigation = (_event: Electron.Event, guest: Electron.WebContents): void => {
+    const arguments_ =
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron WebContents exposes getLastWebPreferences at runtime; its public type omits it.
+      (
+        guest as Electron.WebContents & { getLastWebPreferences: () => Electron.WebPreferences }
+      ).getLastWebPreferences()?.additionalArguments ?? []
+    const marker = arguments_.find((argument) => pendingInitialNavigation.has(argument))
+    if (!marker) {
+      return
+    }
+    initialNavigation.set(guest, pendingInitialNavigation.get(marker)!)
+    pendingInitialNavigation.delete(marker)
+  }
+  app.on('web-contents-created', captureInitialNavigation)
+  mainWindow.webContents.once('destroyed', () => {
+    app.removeListener('web-contents-created', captureInitialNavigation)
+    pendingInitialNavigation.clear()
+  })
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
@@ -142,6 +171,20 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
     // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
+    if (isProfilePartition) {
+      const marker = `--orca-browser-initial-navigation=${randomUUID()}`
+      pendingInitialNavigation.set(marker, {
+        url: src,
+        options: {
+          ...(typeof params.httpreferrer === 'string' ? { httpReferrer: params.httpreferrer } : {}),
+          ...(typeof params.useragent === 'string' ? { userAgent: params.useragent } : {})
+        }
+      })
+      // Electron constructs this guest synchronously, then calls loadURL before did-attach-webview.
+      params.src = ''
+      webPreferences.additionalArguments = [marker]
+      queueMicrotask(() => pendingInitialNavigation.delete(marker))
+    }
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
@@ -159,6 +202,15 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
     // Install popup/navigation policy at creation or early redirects/target=_blank can outrun registration.
     browserManager.attachGuestPolicies(guest)
+    const navigation = initialNavigation.get(guest)
+    initialNavigation.delete(guest)
+    if (navigation) {
+      void navigateBrowserExtensionPage(guest, () =>
+        guest.loadURL(navigation.url, navigation.options)
+      ).catch((error: unknown) =>
+        console.warn('[browser-extensions] Could not load browser page:', error)
+      )
+    }
     installBrowserJavaScriptDialogs(guest, () => browserManager.resolvePagePromptTarget(guest))
     // Route guests stay blank until exact main-owned registration and override generic popup routing.
     browserRouteWebContentsRegistry.attachGuest(guest)
