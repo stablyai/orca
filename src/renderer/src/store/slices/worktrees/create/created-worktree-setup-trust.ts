@@ -7,7 +7,10 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import {
+  WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
+} from '../../../../../../shared/worktree-runtime-capabilities'
 import type {
   CreateWorktreeResult,
   RunApprovedWorktreeSetupArgs,
@@ -115,7 +118,9 @@ async function runApprovedWorktreeSetup(
   if (target.kind === 'environment') {
     const supported = await runtimeEnvironmentSupportsCapability(
       target.environmentId,
-      WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY
+      args.worktreeId.startsWith('folder:')
+        ? PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
+        : WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY
     ).catch(() => false)
     return supported
       ? callRuntimeRpc<RunApprovedWorktreeSetupResult>(target, 'worktree.runApprovedSetup', {

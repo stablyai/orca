@@ -4,7 +4,7 @@ import {
   makePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
   buildCodexAccountRestartStartup,

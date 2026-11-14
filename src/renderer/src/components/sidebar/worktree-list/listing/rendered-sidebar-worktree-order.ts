@@ -25,8 +25,8 @@ import {
 import {
   addHostSectionRows,
   type HostSectionRow
-} from '../../../../../../shared/sidebar-list/host-section-rows'
-import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/host-section-order'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
 import { buildSidebarHostOptions } from '../controls/sidebar-host-options'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from '../navigation/worktree-sidebar-row-preference'
@@ -35,7 +35,7 @@ import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from '../../../../../../shared/sidebar-list/host-filtering'
+} from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())

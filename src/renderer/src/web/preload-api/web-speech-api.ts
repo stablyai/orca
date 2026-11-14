@@ -10,7 +10,7 @@ import { hostDictationErrorMessage } from '../../../../shared/host-dictation-err
 import {
   MAX_DICTATION_AUDIO_CHUNK_BYTES,
   PCM_BYTES_PER_SAMPLE
-} from '../../../../shared/rpc-contract/speech-params'
+} from '../../../../shared/rpc-contract/speech/speech-params'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { errorMessage } from '../../../../shared/error-message'

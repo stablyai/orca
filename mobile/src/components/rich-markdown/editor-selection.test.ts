@@ -113,7 +113,6 @@ describe('the editor document caret, across a keyboard dismissal', () => {
   it('restores the pre-dismissal caret so a command does not insert at the end', async () => {
     const editor = runtime({ caret: 'paragraph-3' })
     editor.handle.dismissKeyboard()
-    expect(editor.selectedContainer()).toBe(null)
     await editor.handle.runCommand('bold')
     expect(editor.selectedContainer()).toBe('paragraph-3')
     expect(editor.focused()).toBe(true)

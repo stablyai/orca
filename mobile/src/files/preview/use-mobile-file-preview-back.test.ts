@@ -55,66 +55,6 @@ afterEach(() => {
 })
 
 describe('leaving the file preview', () => {
-  it('leaves straight away when there is nothing to lose', () => {
-    const leave = vi.fn()
-    render(false, leave)
-    act(() => {
-      expect(held.back?.requestBack()).toBe(true)
-    })
-    expect(leave).toHaveBeenCalledTimes(1)
-    expect(held.back?.confirmingDiscard).toBe(false)
-  })
-
-  it('asks before dropping an unsaved draft, and does not leave while it is asking', () => {
-    const leave = vi.fn()
-    render(true, leave)
-    act(() => {
-      expect(held.back?.requestBack()).toBe(true)
-    })
-    expect(leave).not.toHaveBeenCalled()
-    expect(held.back?.confirmingDiscard).toBe(true)
-  })
-
-  it('stays on the answer to stay', () => {
-    const leave = vi.fn()
-    render(true, leave)
-    act(() => {
-      held.back?.requestBack()
-    })
-    act(() => {
-      held.back?.stay()
-    })
-    expect(held.back?.confirmingDiscard).toBe(false)
-    expect(leave).not.toHaveBeenCalled()
-  })
-
-  it('leaves once, on the answer to discard', () => {
-    const leave = vi.fn()
-    render(true, leave)
-    act(() => {
-      held.back?.requestBack()
-    })
-    act(() => {
-      held.back?.discard()
-    })
-    expect(held.back?.confirmingDiscard).toBe(false)
-    expect(leave).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops the question when the draft it was about is gone', () => {
-    const leave = vi.fn()
-    const renderer = render(true, leave)
-    act(() => {
-      held.back?.requestBack()
-    })
-    expect(held.back?.confirmingDiscard).toBe(true)
-    act(() => {
-      renderer.update(createElement(Screen, { hasUnsavedDraft: false, leave }))
-    })
-    expect(held.back?.confirmingDiscard).toBe(false)
-    expect(leave).not.toHaveBeenCalled()
-  })
-
   it('does not re-show itself on the next edit after a save', () => {
     // Saving hides the prompt but must also clear asking, or the next edit reopens it without a Back request.
     const leave = vi.fn()

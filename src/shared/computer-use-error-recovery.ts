@@ -2,6 +2,10 @@ export type ComputerUseErrorRecoveryData = {
   nextSteps: string[]
 }
 
+// Why: agents follow recovery text, so a foreground retry must stay the user's decision.
+const FOREGROUND_ONLY_WITH_CONSENT =
+  'If only foreground input can do it, stop and tell the user what needs the foreground. Ask the user before retrying with `--restore-window`: it brings the app forward and takes over their screen, keyboard and pointer. Never add it on your own.'
+
 export function computerUseErrorRecoveryData(
   code: string,
   message?: string
@@ -12,7 +16,7 @@ export function computerUseErrorRecoveryData(
         'Run `orca computer list-apps --json` and retry with the exact app name or bundle ID.',
         'If the target is a website or web app such as Gmail, choose the desktop browser app/window that contains it; `orca computer` app selectors refer to desktop apps, not website names.',
         'Do not retry the same `orca computer ... --app <web app>` command unchanged.',
-        'If the desired browser is not listed, open or focus that browser first, then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
+        'If the desired browser is not listed, start it on macOS with `open -g -a <browser>` so it opens in the background; on Windows and Linux ask the user to start it. Then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
       )
     case 'app_blocked':
       return recoverWith(
@@ -26,24 +30,33 @@ export function computerUseErrorRecoveryData(
     case 'window_not_found':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and target one of the listed windows.',
-        'If the app is listed but no usable window is visible, retry observation once with `--restore-window`.',
-        'If no window is listed, open or focus the app first; `orca computer` does not launch closed desktop apps.'
+        'If the app is listed but has no usable window, ask the user to open or show one. Do not add `--restore-window` on your own, not even just to observe.',
+        'If no window is listed, the app may have none open; ask the user to open one. `orca computer` does not launch desktop apps: start a closed one on macOS with `open -g -a <app>`; on Windows and Linux ask the user to.'
       )
     case 'window_not_focused':
       if (message?.includes('may already have been delivered')) {
         return recoverWith(
           'Run `orca computer get-app-state --app <app> --json` and verify whether the intended action already occurred before retrying.',
-          'Do not retry the click if it already took effect; otherwise bring the target window forward and use fresh state before trying again.'
+          'Do not retry if it already took effect; otherwise retry from fresh state.'
+        )
+      }
+      if (
+        message?.includes('was requested') ||
+        message?.includes('did not focus the target window')
+      ) {
+        return recoverWith(
+          'The window could not be brought forward, so do not retry with `--restore-window`. Ask the user to bring the window forward or check permissions, or use `set-value` for editable fields.'
         )
       }
       return recoverWith(
-        'Retry once with `--restore-window`.',
-        'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'
+        'Nothing was sent. For editable fields use `set-value`, or `type-text --element-index` where `orca computer capabilities --json` lists `actions.typeTextElement`.',
+        FOREGROUND_ONLY_WITH_CONSENT
       )
     case 'background_unavailable':
       return recoverWith(
         'If the message names a popup menu or `<select>`, set its option with `orca computer set-value` on that element instead of clicking.',
-        'Otherwise retry once with `--restore-window`; that brings the app forward and uses foreground input, so tell the user it will take over their screen.'
+        'Otherwise reach the goal with a semantic action such as `set-value` or `perform-secondary-action` if one fits.',
+        FOREGROUND_ONLY_WITH_CONSENT
       )
     case 'window_stale':
       return recoverWith(

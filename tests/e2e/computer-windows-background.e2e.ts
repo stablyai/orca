@@ -8,7 +8,10 @@ import {
   stopOrcaRuntime
 } from './helpers/computer-driver'
 import {
+  launchWindowsFormsFixture,
   launchWindowsSemanticFixture,
+  type WindowsFormsFixture,
+  type WindowsFormsFixtureState,
   type WindowsSemanticFixture,
   type WindowsSemanticFixtureState
 } from './helpers/windows-semantic-controls-fixture'
@@ -154,6 +157,109 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
         'slider at 42'
       )
       expect(result.action?.verification).toMatchObject({ state: 'verified', property: 'value' })
+    })
+  }
+)
+
+let formsFixture: WindowsFormsFixture | null = null
+
+function requireFormsFixture(): WindowsFormsFixture {
+  if (!formsFixture) {
+    throw new Error('Windows Forms fixture has not been launched')
+  }
+  return formsFixture
+}
+
+// Types into a background WinForms text box by element index and checks the window never came forward.
+async function typeIntoField(
+  seed: string,
+  text: string,
+  landed: (state: WindowsFormsFixtureState) => boolean
+): Promise<ComputerActionResult> {
+  const { app, waitForState } = requireFormsFixture()
+  const before = await waitForState((state) => !state.active, 'fixture window inactive')
+  const field = await elementIndex(
+    app,
+    new RegExp(`^\\s*(\\d+)\\s+(?:edit|document)\\b.*${seed}`, 'm')
+  )
+  const result = parseJsonOutput<{ result: ComputerActionResult }>(
+    (
+      await runOrcaCli([
+        'computer',
+        'type-text',
+        '--app',
+        app,
+        '--element-index',
+        String(field),
+        '--text',
+        text,
+        '--no-screenshot',
+        '--json'
+      ])
+    ).stdout
+  ).result
+  const after = await waitForState(landed, `${seed} typed`)
+  expect(after.activations, after.events.join('\n')).toBe(before.activations)
+  expect(result.action).toMatchObject({
+    path: 'accessibility',
+    actionName: 'EM_REPLACESEL',
+    delivery: 'background',
+    verification: { state: 'verified', property: 'elementText' }
+  })
+  return result
+}
+
+describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
+  'computer-use Windows Forms text entry',
+  () => {
+    beforeAll(async () => {
+      await ensureOrcaRuntimeLaunched()
+      formsFixture = await launchWindowsFormsFixture()
+    })
+
+    afterAll(async () => {
+      await formsFixture?.close()
+      formsFixture = null
+      await stopOrcaRuntime()
+    })
+
+    test('type-text --element-index types Unicode into a background text box at its caret', async () => {
+      await typeIntoField(
+        'seed-name',
+        ' café Ω 漢字',
+        (state) => state.name === 'seed-name café Ω 漢字'
+      )
+    })
+
+    test('type-text --element-index keeps line breaks in a background multiline text box', async () => {
+      await typeIntoField(
+        'seed-notes',
+        '\nsecond line',
+        (state) => state.notes === 'seed-notes\r\nsecond line'
+      )
+    })
+
+    test('keys refuse in the background and send nothing', async () => {
+      const { app, readState, waitForState } = requireFormsFixture()
+      const before = await waitForState((state) => !state.active, 'fixture window inactive')
+      const failure = await runOrcaCli([
+        'computer',
+        'press-key',
+        '--app',
+        app,
+        '--key',
+        'Return',
+        '--no-screenshot',
+        '--json'
+      ]).then(
+        () => 'press-key unexpectedly succeeded',
+        (error: unknown) => (error instanceof Error ? error.message : String(error))
+      )
+      expect(failure).toMatch(/"code":\s*"background_unavailable"/)
+      expect(failure).toContain('type-text --element-index')
+      const after = await readState()
+      expect(after.activations).toBe(before.activations)
+      expect(after.notes).toBe(before.notes)
     })
   }
 )

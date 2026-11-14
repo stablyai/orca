@@ -17261,8 +17261,7 @@
           "historyUnavailable_many": "El historial de ejecuciones no está disponible para {{count}} automatizaciones. Los recuentos solo incluyen el historial disponible."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Ruta de navegación de automatizaciones",
-          "runDetails": "Detalles de la ejecución"
+          "ariaLabel": "Ruta de navegación de automatizaciones"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "expresión cron",
@@ -17295,8 +17294,6 @@
           "18763ded26": "Cronograma",
           "dbef8dc110": "Esta automatización SSH se ejecuta sólo mientras Orca puede comunicarse con el host SSH. Si la reconexión necesita credenciales interactivas o el host no está disponible, la ejecución se registra como omitida.",
           "1f6026358e": "Eliminar automatización",
-          "d79452fb30": "Reanudar la automatización",
-          "91a4155e95": "Pausar la automatización",
           "2fb1605beb": "Ejecutar ahora",
           "221916d93c": "Cree una automatización para comenzar a programar el trabajo de los agentes.",
           "b09b2384fd": "En pausa",
@@ -17379,18 +17376,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aún no hay carreras.",
-          "9974a2b429": "Estado",
           "13988187b3": "Fichas",
           "86a248187e": "Gastar",
           "149c0b49c7": "Espacio de trabajo",
           "8faaa00726": "Correr",
-          "53fc5f07ab": "Historial de ejecución",
-          "a00e38d1a3": "n / A",
+          "a00e38d1a3": "—",
           "historyUnavailable": "El historial de ejecuciones no está disponible desde este host. Esto no significa que la automatización haya fallado ni que no tenga ejecuciones."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Ejecutar contexto",
-          "33741dd973": "Volver a carreras"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Minuto",
@@ -17416,10 +17407,8 @@
           "5ad314118e": "Sesión"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Seleccione una automatización para ver las ejecuciones.",
           "295698292f": "Repetición",
           "0e110a3469": "Corre",
-          "bb1b2cd31e": "Descripción general",
           "25060635c6": "Agregar nuevo",
           "d207ab4c25": "Empezar desde una plantilla",
           "15e0bfb13b": "Borrar",
@@ -17457,8 +17446,6 @@
           "8500baacb4": "fuente externa",
           "36f71740a7": "Espacio de trabajo seleccionado",
           "cd8397cc32": "Nuevo espacio de trabajo en cada ejecución",
-          "pendingAutomationMissing": "La automatización ya no está disponible.",
-          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible.",
           "paused": "Pausada",
           "missingWorkspace": "Espacio de trabajo ausente",
           "usageUnavailable": "Uso no disponible",
@@ -17467,7 +17454,6 @@
           "latestSavedOutput": "Última salida guardada",
           "fullOutputUnavailable": "No se pudo cargar la salida completa.",
           "retryFullOutput": "Reintentar",
-          "backToList": "Todas las automatizaciones",
           "tableName": "Nombre",
           "tableProject": "Proyecto",
           "tableHost": "Host",
@@ -17477,7 +17463,6 @@
           "rowActions": "Acciones de automatización",
           "tableLastRun": "Última ejecución",
           "ownerChanged": "Esta automatización cambió de host. Actualiza e inténtalo de nuevo.",
-          "runError": "Error:",
           "deleteAutomationDescription": "Eliminar <name/> y su historial de ejecuciones. No se eliminarán los espacios de trabajo creados por ejecuciones anteriores.",
           "deleteExternalAutomationDescription": "Eliminar <name/> de <provider/> en <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} aprox. · {{tokens}} token",
@@ -17785,14 +17770,13 @@
           "noWorkspaceLaunched": "No se inició ningún espacio de trabajo"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "No iniciado",
-          "namedWorkspaceGone": "{{name}} (ya no disponible)"
+          "notLaunched": "No iniciado"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/d"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -18800,7 +18784,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Abrir con (cuando el foco no está en un campo editable)"
+            "openWith": "Abrir con (excepto al escribir en un campo de texto de Orca)"
           }
         },
         "pluginInstallCount": {
@@ -19679,8 +19663,7 @@
         "stateMonitoringCount": "{{value0}} supervisando",
         "stateUnverifiableCount": "{{value0}} con estado no disponible",
         "stateWaitingCount": "{{value0}} esperando",
-        "stateWorkingCount": "{{value0}} trabajando",
-        "showAgent": "Mostrar {{value0}} en la conversación"
+        "stateWorkingCount": "{{value0}} trabajando"
       },
       "taskList": {
         "title": "Tareas",

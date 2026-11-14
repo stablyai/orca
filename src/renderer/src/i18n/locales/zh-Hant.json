@@ -17334,8 +17334,6 @@
           "18763ded26": "排程",
           "dbef8dc110": "此 SSH 自動化僅在 Orca 可以到達 SSH 遠端主機時執行。如果重新連線需要互動式憑證或主機不可用，則執行將記錄為已跳過。",
           "1f6026358e": "刪除自動化",
-          "d79452fb30": "恢復自動化",
-          "91a4155e95": "暫停自動化",
           "2fb1605beb": "立即執行",
           "221916d93c": "建立自動化來開始安排代理程式工作。",
           "b09b2384fd": "已暫停",
@@ -17415,18 +17413,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "還沒有執行。",
-          "9974a2b429": "狀態",
           "13988187b3": "token",
           "86a248187e": "花費",
           "149c0b49c7": "工作區",
           "8faaa00726": "執行",
-          "53fc5f07ab": "執行歷史",
-          "a00e38d1a3": "不適用",
+          "a00e38d1a3": "—",
           "historyUnavailable": "該主機無法取得執行歷史記錄。這並不意味著自動化失敗或沒有執行。"
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "執行上下文",
-          "33741dd973": "返回執行"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "分鐘",
@@ -17452,10 +17444,8 @@
           "5ad314118e": "工作階段"
         },
         "AutomationsPage": {
-          "c3a28c9793": "選擇一個自動化來檢視執行。",
           "295698292f": "重新執行",
           "0e110a3469": "執行",
-          "bb1b2cd31e": "概述",
           "25060635c6": "新增新的",
           "d207ab4c25": "從範本開始",
           "15e0bfb13b": "刪除",
@@ -17493,8 +17483,6 @@
           "8500baacb4": "外部來源",
           "36f71740a7": "選定的工作區",
           "cd8397cc32": "每次執行時建立新工作區",
-          "pendingAutomationMissing": "自動化已不可用。",
-          "pendingAutomationRunMissing": "執行歷史已不可用。",
           "paused": "已暫停",
           "missingWorkspace": "缺少工作區",
           "usageUnavailable": "用量不可用",
@@ -17503,7 +17491,6 @@
           "latestSavedOutput": "最近儲存的輸出",
           "fullOutputUnavailable": "無法載入完整輸出。",
           "retryFullOutput": "重試",
-          "backToList": "全部自動化",
           "tableName": "名稱",
           "tableProject": "專案",
           "tableHost": "主機",
@@ -17513,7 +17500,6 @@
           "rowActions": "自動化操作",
           "tableLastRun": "最後一次執行",
           "ownerChanged": "此自動化已切換主機。請重新整理後再試。",
-          "runError": "錯誤：",
           "deleteAutomationDescription": "刪除 <name/> 及其執行歷程。不會刪除先前執行所建立的工作區。",
           "deleteExternalAutomationDescription": "從 <host/> 上的 <provider/> 中刪除 <name/>。",
           "runUsageSummaryTokens_other": "預估 {{cost}} · {{tokens}} token"
@@ -17777,8 +17763,7 @@
           "historyUnavailable_other": "{{count}} 個自動化的執行歷程無法使用。計數僅包含可用的歷程記錄。"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "自動化麵包屑",
-          "runDetails": "執行詳情"
+          "ariaLabel": "自動化麵包屑"
         },
         "extraAgentArgs": {
           "advanced": "進階",
@@ -17834,12 +17819,11 @@
           "noWorkspaceLaunched": "未啟動工作區"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "未啟動",
-          "namedWorkspaceGone": "{{name}}（已無法使用）"
+          "notLaunched": "未啟動"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "無資料"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH 主機",
@@ -18751,7 +18735,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "開啟方式（焦點不在可編輯欄位時）"
+            "openWith": "開啟方式（在 Orca 文字欄位中輸入時除外）"
           }
         },
         "pluginInstallCount": {
@@ -19482,8 +19466,7 @@
         "stateBlockedCount_other": "受阻：{{value0}}",
         "stateDoneCount_other": "已完成：{{value0}}",
         "stateIdleCount_other": "已停止：{{value0}}",
-        "stateUnverifiableCount_other": "狀態不可用：{{value0}}",
-        "showAgent": "在對話中顯示 {{value0}}"
+        "stateUnverifiableCount_other": "狀態不可用：{{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
       "newRowsAnnouncement": "你離開期間有新訊息",

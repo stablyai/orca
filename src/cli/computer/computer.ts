@@ -49,6 +49,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer permissions': async ({ flags, client, json }) => {
     const id = getComputerPermissionSetupId(flags)
+    // Agents run this on errors; System Settings over the user's work is only worth it when something is missing.
     const result = await client.call<{
       platform: NodeJS.Platform
       helperAppPath: string | null
@@ -57,7 +58,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       launchQueued?: boolean
       permissions?: { id: string; status: string }[]
       nextStep?: string | null
-    }>('computer.permissions', id ? { id } : {})
+    }>('computer.permissions', id ? { id, skipGranted: true } : {})
     printResult(result, json, (value) => {
       if (value.platform !== 'darwin') {
         return 'Computer-use permission setup is only required on macOS.'

@@ -6,7 +6,7 @@ import {
 import {
   MAX_DICTATION_AUDIO_CHUNK_BYTES as BRIDGE_AUDIO_RING_MAX_BYTES,
   DICTATION_SAMPLE_RATE as MOBILE_DICTATION_PCM_SAMPLE_RATE
-} from '../../../../src/shared/rpc-contract/speech-params'
+} from '../../../../src/shared/rpc-contract/speech/speech-params'
 import { useNativeVerbs, type NativeVerbs } from '../../mobile-web-shell/bridge/use-native-verbs'
 import '../../hooks/mobile-dictation-pending-audio-budget'
 import {

@@ -6,7 +6,7 @@ import {
   UNSTOPPED_PTY_DETAIL_SEPARATOR,
   WORKTREE_TEARDOWN_FORCE_HINT,
   WORKTREE_TEARDOWN_TIMEOUT_PREFIX
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
 import {
   clearStoppedPtyState,

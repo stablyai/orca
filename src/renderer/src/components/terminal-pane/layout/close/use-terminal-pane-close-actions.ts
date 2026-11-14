@@ -13,7 +13,7 @@ import { clearPaneTerminalError } from '../../errors/terminal-error-accumulation
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
 import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane'
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
-import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
+import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
 import { noteAgentLaunchPaneClosedByUser } from '../../../../lib/agent-session/launch/pane/agent-launch-pane-closes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'

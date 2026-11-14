@@ -5,7 +5,7 @@ import {
   FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
   FolderWorkspaceUpdate
-} from '../../../../../shared/rpc-contract/folder-workspace-params'
+} from '../../../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
@@ -20,12 +20,12 @@ export const FOLDER_WORKSPACE_METHODS = [
     name: 'folderWorkspace.create',
     permission: 'workspace',
     params: FolderWorkspaceCreate,
-    handler: async (params, context) => ({
-      folderWorkspace: await context.runtime.createFolderWorkspace({
+    handler: async (params, context) =>
+      context.runtime.createFolderWorkspace({
         ...params,
+        signal: context.signal,
         creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
       })
-    })
   }),
   defineMethod({
     name: 'folderWorkspace.update',

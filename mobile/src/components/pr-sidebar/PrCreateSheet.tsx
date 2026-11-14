@@ -11,26 +11,28 @@ import { SheetPrimaryButton } from '../SheetPrimaryButton'
 import { ListGroup, ListRow } from '../list/ListGroup'
 import { MobileSwitch } from '../MobileSwitch'
 import { normalizeHostedReviewHeadRef } from '../../../../src/shared/source-control/hosted-review/hosted-review-refs'
-import { hostedReviewCopy } from '../../source-control/hosted-review-copy'
 import {
-  mobileHostedReviewCreateIntentProgressMessage,
-  type MobileHostedReviewCreateIntentProgress
-} from '../../source-control/mobile-hosted-review-create-intent'
+  hostedReviewCopy,
+  mobileHostedReviewCreateIntentProgressMessage
+} from '../../source-control/review/creation/hosted-review-copy'
+import '../../source-control/review/creation/mobile-hosted-review-create-intent'
+import type { MobileHostedReviewCreateIntentProgress } from '../../source-control/review/creation/mobile-hosted-review-create-intent'
+
 import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
-} from '../../source-control/mobile-hosted-review-create-intent-runner'
+} from '../../source-control/review/creation/mobile-hosted-review-create-intent-runner'
 import {
   cancelMobilePrFields,
   generateMobilePrFields,
   loadMobilePrCreateDraft
-} from '../../source-control/mobile-pr-create-draft'
+} from '../../source-control/review/creation/mobile-pr-create-draft'
 import {
   getMobileCommitFailureStagedEntries,
   type MobileCommitFailureRecovery
-} from '../../source-control/mobile-commit-failure-recovery'
-import { useMobileCommitFailureRecovery } from '../../source-control/use-mobile-commit-failure-recovery'
-import { MobileCommitFailurePanel } from '../../source-control/MobileCommitFailurePanel'
+} from '../../source-control/commits/mobile-commit-failure-recovery'
+import { useMobileCommitFailureRecovery } from '../../source-control/commits/use-mobile-commit-failure-recovery'
+import { MobileCommitFailurePanel } from '../../source-control/commits/MobileCommitFailurePanel'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
