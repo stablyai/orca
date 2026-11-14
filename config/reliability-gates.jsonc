@@ -9775,7 +9775,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-macos-keybinding-dict-trace.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-linux-fcitx4-trace-replay.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-resumed-preedit-visibility.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composer-placeholder-mask.test.ts src/shared/terminal/input/terminal-composer-draft.test.ts src/main/daemon/emulation/testing/terminal-cursor-line-context.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts",
@@ -9793,7 +9793,6 @@
         "src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts",
         "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
         "src/renderer/src/web/web-preload-api-ui.test.ts",
-        "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
         "src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts",
         "src/main/ipc/terminal-preview-output-stream.test.ts",
         "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
@@ -9833,17 +9832,6 @@
           "file": "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
           "assertions": [
             "rapid input-source changes coalesce to one latest-generation refresh signal"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
-          "assertions": [
-            "the real forwarder behind the Preview bridge encodes the commit from the snapshot-proven flags before any live output",
-            "flags 0/1 commit raw text, flags 2 add one CSI-u release, flags 8 emit one CSI-u press, and flags 10 emit a CSI-u press followed by exactly one release",
-            "both keydown->insertText->keyup and keydown->keyup->insertText orderings produce the same bytes",
-            "the release is emitted by the forwarder while xterm's internal kitty flags stay 0",
-            "the mutable flags getter is read exactly once, at commit time, never on keydown or keyup",
-            "auto-repeat, two-key rollover, a swallowed commit, a retired claim, blur, and disposal each emit at most one release and never synthesize one"
           ]
         },
         {

@@ -1,6 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
+import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 
 /** What one agent line means for the experimental card, in slot priority order. */
 export type SlotLineKind = 'needs' | 'failed' | 'unread' | 'working' | 'seen' | 'idle'
