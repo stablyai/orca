@@ -28,7 +28,8 @@ export type CodexLaunchPreparationInputs = {
 
 /** Unknown inputs only prevent reuse; preparation retains its existing error/retry behavior. */
 export function readCodexLaunchPreparationInputs(
-  runtimeHomePath: string
+  runtimeHomePath: string,
+  isStillValid: () => boolean = () => true
 ): CodexLaunchPreparationInputs | null {
   try {
     const systemHome = getSystemCodexHomePath()
@@ -41,13 +42,22 @@ export function readCodexLaunchPreparationInputs(
       observeResolvedFilePath(kind, input, output)
     }
     for (const home of homes) {
+      if (!isStillValid()) {
+        return null
+      }
       const resolvedHome = resolveHome(home)
       facts.push([home, resolvedHome])
       recordPath('marketplace-home', home, resolvedHome)
       recordPath('daemon-home', home, resolvedHome)
       for (const leaf of ['config.toml', 'hooks.json']) {
+        if (!isStillValid()) {
+          return null
+        }
         const filePath = join(home, leaf)
         files.push(snapshotFile(filePath, facts))
+        if (!isStillValid()) {
+          return null
+        }
         const writePath =
           leaf === 'hooks.json'
             ? resolveHooksJsonWritePath(filePath)
@@ -73,7 +83,13 @@ export function readCodexLaunchPreparationInputs(
       getLegacyCodexProfileTomlPath(),
       getManagedScriptPath()
     ]) {
+      if (!isStillValid()) {
+        return null
+      }
       files.push(snapshotFile(filePath, facts))
+    }
+    if (!isStillValid()) {
+      return null
     }
     const scriptPath = getManagedScriptPath()
     // A mode repair is not a fixed point, even if another writer undoes chmod before the final read.
@@ -87,6 +103,9 @@ export function readCodexLaunchPreparationInputs(
     recordPath('toml-write', legacyPath, legacyWritePath)
     facts.push([`${legacyWritePath}.bak`, entryType(`${legacyWritePath}.bak`)])
     facts.push([...paths], files)
+    if (!isStillValid()) {
+      return null
+    }
     return { digest: digestFileContent(JSON.stringify(facts)), files, paths }
   } catch {
     return null

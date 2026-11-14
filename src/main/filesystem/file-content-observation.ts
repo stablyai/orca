@@ -30,7 +30,7 @@ export function digestFileContent(content: string | Uint8Array): string {
 export async function withFileContentObservation<T>(
   files: readonly ObservedFileContent[],
   paths: ReadonlyMap<string, string>,
-  run: () => Promise<T>
+  run: (isStillValid: () => boolean) => Promise<T>
 ): Promise<{ value: T; matches: boolean }> {
   const expected = new Map<string, { digest: string | null }>()
   for (const file of files) {
@@ -39,7 +39,7 @@ export async function withFileContentObservation<T>(
       const key = fileKey(alias)
       if (expected.has(key)) {
         // Ambiguous aliases cannot prove which file an operation processed.
-        return { value: await run(), matches: false }
+        return { value: await run(() => false), matches: false }
       }
       expected.set(key, entry)
     }
@@ -52,7 +52,7 @@ export async function withFileContentObservation<T>(
   }
   return observations.run(observation, async () => {
     try {
-      const value = await run()
+      const value = await run(() => observation.open && observation.matches)
       return { value, matches: observation.matches }
     } finally {
       observation.open = false
@@ -64,7 +64,7 @@ export async function withFileContentObservation<T>(
 
 export function observeFileDigest(filePath: string, digest: string | null): void {
   const observation = observations.getStore()
-  if (!observation?.open) {
+  if (!observation?.open || !observation.matches) {
     return
   }
   const expected = observation.files.get(fileKey(filePath))
@@ -75,7 +75,7 @@ export function observeFileDigest(filePath: string, digest: string | null): void
 
 export function observeFileContent(filePath: string, content: string | Uint8Array): void {
   const observation = observations.getStore()
-  if (!observation?.open || !observation.files.has(fileKey(filePath))) {
+  if (!observation?.open || !observation.matches || !observation.files.has(fileKey(filePath))) {
     return
   }
   observeFileDigest(filePath, digestFileContent(content))
@@ -83,7 +83,7 @@ export function observeFileContent(filePath: string, content: string | Uint8Arra
 
 export function observeFileReadError(filePath: string, error: unknown): void {
   const observation = observations.getStore()
-  if (!observation?.open || !observation.files.has(fileKey(filePath))) {
+  if (!observation?.open || !observation.matches || !observation.files.has(fileKey(filePath))) {
     return
   }
   if (isDefinitiveAbsence(error)) {
@@ -95,7 +95,7 @@ export function observeFileReadError(filePath: string, error: unknown): void {
 
 export function invalidateFileObservation(filePath: string): void {
   const observation = observations.getStore()
-  if (observation?.open && observation.files.has(fileKey(filePath))) {
+  if (observation?.open && observation.matches && observation.files.has(fileKey(filePath))) {
     observation.matches = false
   }
 }
@@ -105,7 +105,7 @@ export function observeFilePublication(
   content: string | Uint8Array | null
 ): void {
   const observation = observations.getStore()
-  if (!observation?.open) {
+  if (!observation?.open || !observation.matches) {
     return
   }
   const expected = observation.files.get(fileKey(filePath))
@@ -116,7 +116,7 @@ export function observeFilePublication(
 
 export function observeResolvedFilePath(kind: string, input: string, resolved: string): string {
   const observation = observations.getStore()
-  if (!observation?.open) {
+  if (!observation?.open || !observation.matches) {
     return resolved
   }
   const expected = observation.paths.get(`${kind}\0${input}`)
@@ -130,6 +130,7 @@ export function observeResolvedFilePathError(kind: string, input: string, error:
   const observation = observations.getStore()
   if (
     observation?.open &&
+    observation.matches &&
     observation.paths.has(`${kind}\0${input}`) &&
     !isDefinitiveAbsence(error)
   ) {
@@ -140,7 +141,7 @@ export function observeResolvedFilePathError(kind: string, input: string, error:
 export function observedExistsSync(filePath: string): boolean {
   const present = existsSync(filePath)
   const observation = observations.getStore()
-  if (observation?.open) {
+  if (observation?.open && observation.matches) {
     const expected = observation.files.get(fileKey(filePath))
     if (expected && present !== (expected.digest !== null)) {
       observation.matches = false

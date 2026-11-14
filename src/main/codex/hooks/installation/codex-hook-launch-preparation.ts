@@ -169,14 +169,21 @@ export class CodexHookLaunchPreparation {
       return run()
     }
     let complete = false
-    const result = await withFileContentObservation(before.files, before.paths, async () => {
-      const status = await run(() => {
-        complete = true
-      })
-      // This read also validates the last exact publications against the observation scope.
-      const after = readCodexLaunchPreparationInputs(homePath)
-      return { status, stable: after?.digest === before.digest }
-    })
+    const result = await withFileContentObservation(
+      before.files,
+      before.paths,
+      async (isStillValid) => {
+        const status = await run(() => {
+          complete = true
+        })
+        // This read also validates the last exact publications against the observation scope.
+        const stable =
+          complete &&
+          isStillValid() &&
+          readCodexLaunchPreparationInputs(homePath, isStillValid)?.digest === before.digest
+        return { status, stable }
+      }
+    )
     if (complete && result.matches && result.value.stable && digest !== null) {
       this.completedLaunchPrep.set(key, { digest, status: { ...result.value.status } })
       if (this.completedLaunchPrep.size > 32) {
