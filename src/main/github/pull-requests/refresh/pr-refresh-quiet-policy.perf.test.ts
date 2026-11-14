@@ -5,8 +5,10 @@ import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 // The provider records what each actual read asked; the quota probe can be held. Windows 1-8 are
 // open renderers.
 const fixture = vi.hoisted(() => ({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the empty fixture log is populated only with this provider request shape.
   reads: [] as { repoPath: string; ghOptions: { ghAccount?: { user?: string } } }[],
   gate: vi.fn(async (): Promise<number | null> => null),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture starts without a callback and installs a no-argument read hook.
   onRead: null as null | (() => void)
 }))
 vi.mock('../../client/lookup/branch-lookup-resolution', () => ({

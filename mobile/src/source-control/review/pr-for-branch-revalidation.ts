@@ -19,6 +19,9 @@ export function prForBranchIntentParams(args: { refresh?: boolean; intent?: Host
       return { reason: 'active' as const }
     case 'background':
       return { reason: 'swr' as const, acceptRevalidationOnly: true }
+    case undefined:
+    case 'open':
+    case 'action':
     default:
       return {}
   }

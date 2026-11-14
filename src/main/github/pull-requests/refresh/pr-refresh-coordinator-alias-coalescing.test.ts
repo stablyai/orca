@@ -222,7 +222,8 @@ describe('pr-refresh-coordinator', () => {
     reportVisiblePRRefreshCandidates([first], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(60_000)
+    // An unselected open PR keeps the Default two-minute freshness floor in every cadence.
+    await vi.advanceTimersByTimeAsync(120_000)
     const second = makeCandidate({
       cacheKey: '/repo::feature/b',
       branch: 'feature/b',

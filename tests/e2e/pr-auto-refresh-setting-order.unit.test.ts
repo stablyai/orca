@@ -12,6 +12,7 @@ import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
 // event stream is a separate connection, so an event can arrive before a held answer.
 const wire = vi.hoisted(() => ({
   call: vi.fn(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture starts without a handler and registers this callback shape during mount.
   eventHandlers: null as null | { onResponse: (response: unknown) => void },
   reconcile: vi.fn(async () => {})
 }))
@@ -114,11 +115,11 @@ it('converges after a real late write response revokes a later settings event re
   }
   const produced: Record<string, unknown[]> = { update: [], get: [] }
   wire.call.mockImplementation(
-    (_target: unknown, method: string, params?: { prAutoRefresh?: string }) =>
+    (_target: unknown, method: string, params?: Pick<GlobalSettings, 'prAutoRefresh'>) =>
       new Promise((deliver) => {
         const answer =
           method === 'settings.update'
-            ? H.controller.update({ prAutoRefresh: params!.prAutoRefresh as never })
+            ? H.controller.update({ prAutoRefresh: params!.prAutoRefresh })
             : Promise.resolve(H.controller.get())
         void answer.then((settings) => {
           produced[method === 'settings.update' ? 'update' : 'get'].push(settings.prAutoRefresh)
