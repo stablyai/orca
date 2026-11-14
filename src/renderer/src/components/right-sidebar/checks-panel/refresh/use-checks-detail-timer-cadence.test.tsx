@@ -260,7 +260,7 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
       let hostRead: Observation | null = null
       let visible: Observation | null = null
       const saturate = () => {
-        // ast-grep-ignore: test-no-polling-loop -- Fixed fake-clock operations fill the real RPC admission pool.
+        // ast-grep-ignore: test-no-polling-loop-tsx -- Fixed fake-clock operations fill the real RPC admission pool.
         for (let call = 0; call < 24; call += 1) {
           const blocker: (typeof blockers)[number] = { queuedAt: Date.now() }
           blockers.push(blocker)
