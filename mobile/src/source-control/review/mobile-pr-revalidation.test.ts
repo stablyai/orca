@@ -111,7 +111,7 @@ describe('loadPrBranchReview with a revalidation receipt', () => {
     const receipt = {
       ok: true as const,
       result: null,
-      revalidationOnly: true,
+      revalidationOnly: true as const,
       retryAfterMs: 12_000
     }
     const loader = deps(receipt)
