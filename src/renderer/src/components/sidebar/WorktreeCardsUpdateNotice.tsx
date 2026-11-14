@@ -40,7 +40,7 @@ const SKELETON = 'block h-2 shrink-0 rounded-full bg-foreground/[0.14]'
 /** Outlines one new piece of the demo card. */
 function Callout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <span className="relative mr-2.5 inline-flex shrink-0 rounded-[6px] outline-1 outline-offset-2 outline-foreground/60 outline-dashed">
+    <span className="mr-2.5 inline-flex shrink-0 rounded-[6px] outline-1 outline-offset-2 outline-foreground/60 outline-dashed">
       {children}
     </span>
   )
@@ -88,7 +88,7 @@ function UpdateDemo(): React.JSX.Element {
 }
 
 function Bullet(): React.JSX.Element {
-  return <span aria-hidden="true" className="mt-[7px] size-1 shrink-0 rounded-full bg-background" />
+  return <span aria-hidden="true" className="mt-1.5 size-1 shrink-0 rounded-full bg-background" />
 }
 
 export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
