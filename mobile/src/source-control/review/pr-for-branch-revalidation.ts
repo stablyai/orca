@@ -14,17 +14,13 @@ export function prForBranchIntentParams(args: { refresh?: boolean; intent?: Host
   if (args.refresh) {
     return { userRefresh: true }
   }
-  switch (args.intent) {
-    case 'foreground':
-      return { reason: 'active' as const }
-    case 'background':
-      return { reason: 'swr' as const, acceptRevalidationOnly: true }
-    case undefined:
-    case 'open':
-    case 'action':
-    default:
-      return {}
+  if (args.intent === 'foreground') {
+    return { reason: 'active' as const }
   }
+  if (args.intent === 'background') {
+    return { reason: 'swr' as const, acceptRevalidationOnly: true }
+  }
+  return {}
 }
 
 export function resolveGithubPrForBranchOutcome(
