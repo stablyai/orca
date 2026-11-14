@@ -1,6 +1,7 @@
 export const COMPUTER_ERROR_CODES = {
   app_not_found: 'app_not_found',
   app_blocked: 'app_blocked',
+  app_launch_failed: 'app_launch_failed',
   system_shortcut_blocked: 'system_shortcut_blocked',
   window_not_found: 'window_not_found',
   window_not_focused: 'window_not_focused',
@@ -150,6 +151,8 @@ export type ComputerProviderCapabilities = {
       list: boolean
       bundleIds: boolean
       pids: boolean
+      // Starts a closed app without taking the foreground. Absent from providers that predate launch-app.
+      launch?: boolean
     }
     windows: {
       list: boolean
@@ -203,6 +206,14 @@ export type ComputerWindowListWindow = ComputerWindowInfo & {
 export type ComputerListWindowsResult = {
   app: ComputerAppInfo
   windows: ComputerWindowListWindow[]
+}
+
+export type ComputerLaunchAppResult = {
+  app: ComputerAppInfo & { pid: number }
+  // False when the app was already running and was left as it was.
+  launched: boolean
+  // Measured after the launch: 'foreground' when the app ended up frontmost.
+  delivery: 'background' | 'foreground'
 }
 
 export type ComputerListAppsResult = {

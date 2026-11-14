@@ -1,10 +1,6 @@
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
-import {
-  independentAgentModelCatalog,
-  usesModelSpecificAcpEfforts
-} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import type { AgentModelCatalogRefresh } from './agent-model-catalog-refresh'
@@ -25,12 +21,13 @@ export class AgentModelCatalogListingWaiters {
     fingerprint: string,
     waitForChange = false,
     terminal = false,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    baseline?: AgentModelCatalogEntry | null
   ): Promise<AgentModelCatalogEntry | null> | null {
     if (!this.listing(fingerprint) || signal?.aborted) {
       return null
     }
-    const previous = this.read(fingerprint)
+    const previous = baseline === undefined ? this.read(fingerprint) : baseline
     return new Promise((resolve) => {
       const waiters = this.waiters.get(fingerprint) ?? new Set<() => void>()
       let settled = false
@@ -99,29 +96,35 @@ export async function waitForAgentModelCatalogRead(input: {
   params: AgentModelCatalogReadParams
   reader: { deadline: number; signal: AbortSignal }
   store: AgentModelCatalogStore
-  refresh: AgentModelCatalogRefresh | undefined
+  refresh: () => AgentModelCatalogRefresh | undefined
   binding: () => AgentModelCatalogBinding | undefined
 }): Promise<void> {
-  const { params, store, refresh } = input
+  const { params, store } = input
   // Once the reader stops waiting, nothing it left behind subscribes to or holds a listing wait.
   const left = new AbortController()
+  const original = input.binding()
+  const baseline = original ? store.get(original.fingerprint) : null
+  const refresh = input.refresh()
   const wait = async (): Promise<void> => {
     await refresh?.listing
-    await (refresh?.defaults ?? input.binding()?.projecting)
     const bound = left.signal.aborted ? undefined : input.binding()
-    if (
-      bound &&
-      (!store.get(bound.fingerprint) ||
-        independentAgentModelCatalog(params.agent) ||
-        (usesModelSpecificAcpEfforts(params.agent) && store.isListing(bound.fingerprint)) ||
-        store.heldReasonDue(bound.fingerprint))
-    ) {
-      await store.pendingListing(
+    if (bound) {
+      const entry = store.get(bound.fingerprint)
+      if (params.progress !== false && entry && entry !== baseline) {
+        return
+      }
+      const pending = store.pendingListing(
         bound.fingerprint,
         true,
-        params.legacy || usesModelSpecificAcpEfforts(params.agent),
-        left.signal
+        params.progress === false,
+        left.signal,
+        baseline
       )
+      const projection =
+        params.progress === false && store.isListing(bound.fingerprint)
+          ? undefined
+          : bound.projecting
+      await (pending && projection ? Promise.race([pending, projection]) : (pending ?? projection))
     }
     if (bound && !store.isListing(bound.fingerprint)) {
       await refresh?.done

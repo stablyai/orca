@@ -45,14 +45,18 @@ import {
   applyBackgroundActivationPolicy,
   applyServeDesktopWindowActivationPolicy
 } from '../../window/activation/foreground-activation-policy'
+import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
+import { argvRequestsBackgroundOpen } from '../../../shared/background-open-argv'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
-export async function openMainWindow(
-  options: { revealOnDidFinishLoad?: boolean } = {}
-): Promise<BrowserWindow> {
+export async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
   logStartupMilestone('open-main-window-start')
+  // The launch's first window honours the background request `orca open` put on its argv.
+  const revealInBackground =
+    options.revealInBackground ??
+    (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv))
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
     runtime: state.runtime,
@@ -91,7 +95,7 @@ export async function openMainWindow(
     }
   }
   if (state.isServeMode) {
-    applyServeDesktopWindowActivationPolicy({ warn: console.warn })
+    applyServeDesktopWindowActivationPolicy({ warn: console.warn, background: revealInBackground })
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
@@ -144,6 +148,7 @@ export async function openMainWindow(
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
+    revealInBackground,
     title: state.devInstanceIdentity?.name ?? app.name,
     getKeybindings: () => keybindings.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {

@@ -37,6 +37,10 @@ export const PreflightAgentDetection = z
     }
   })
 
+export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
+  userInitiated: z.boolean().optional()
+})
+
 export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend({
   project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
     .strict()

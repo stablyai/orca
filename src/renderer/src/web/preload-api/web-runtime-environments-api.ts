@@ -1,3 +1,4 @@
+import { createWebRuntimeEnvironmentSubscriber } from './web-runtime-subscription'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   createWebRuntimeSubscriptionApiControl,
@@ -20,11 +21,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing/remote-pairing-copy'
 import {
-  assertEnvironmentPairing,
   callEnvironmentEnvelope,
   callWebRuntimeEnvironment,
-  getWebRuntimeStatus,
-  pinnedWebSubscriptionOptions
+  getWebRuntimeStatus
 } from './web-runtime-calls'
 import {
   closeActiveRuntimeClients,
@@ -36,10 +35,7 @@ import {
   removeActiveRuntimeEnvironment,
   requireActiveEnvironmentOrNull,
   resolveEnvironment,
-  webRuntimeState,
-  runtimeCallQueuePool,
-  updateEnvironmentFromResponse,
-  manuallyDisconnectedResponse
+  webRuntimeState
 } from './web-runtime-session'
 export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'] {
   return {
@@ -216,86 +212,6 @@ export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: callWebRuntimeEnvironment,
     ...createWebRuntimeSubscriptionApiControl(pendingSubscriptions),
-    subscribe: async (
-      {
-        selector,
-        method,
-        params,
-        timeoutMs,
-        subscriptionId,
-        expectedEnvironmentPairingRevision,
-        expectedEnvironmentRuntimeId
-      },
-      callbacks
-    ) => {
-      const environment = resolveEnvironment(selector)
-      assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
-      const client = getClientForEnvironment(environment)
-      const controller = new AbortController()
-      if (subscriptionId) {
-        if (pendingSubscriptions.has(subscriptionId)) {
-          throw new Error('Subscription id already exists')
-        }
-        pendingSubscriptions.set(subscriptionId, { controller })
-      }
-      let subscription
-      try {
-        subscription = await runtimeCallQueuePool.enqueue(
-          environment.id,
-          method,
-          () => {
-            assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
-            if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-              throw new Error('runtime_manually_disconnected')
-            }
-            return client.subscribe(
-              method,
-              params,
-              {
-                ...callbacks,
-                onResponse: (response) => {
-                  try {
-                    assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
-                  } catch (error) {
-                    callbacks.onError?.({
-                      code: 'runtime_environment_changed',
-                      message: String(error)
-                    })
-                    callbacks.onClose?.()
-                    controller.abort()
-                    return
-                  }
-                  const result = manuallyDisconnectedEnvironmentIds.has(environment.id)
-                    ? manuallyDisconnectedResponse(environment)
-                    : response
-                  updateEnvironmentFromResponse(environment, result)
-                  callbacks.onResponse(result)
-                }
-              },
-              {
-                timeoutMs,
-                signal: controller.signal,
-                ...pinnedWebSubscriptionOptions(
-                  selector,
-                  expectedEnvironmentPairingRevision,
-                  expectedEnvironmentRuntimeId
-                )
-              }
-            )
-          },
-          0,
-          controller.signal
-        )
-      } finally {
-        if (subscriptionId && pendingSubscriptions.get(subscriptionId)?.controller === controller) {
-          pendingSubscriptions.delete(subscriptionId)
-        }
-      }
-      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-        subscription.unsubscribe()
-        throw new Error('runtime_manually_disconnected')
-      }
-      return subscription
-    }
+    subscribe: createWebRuntimeEnvironmentSubscriber(pendingSubscriptions)
   }
 }

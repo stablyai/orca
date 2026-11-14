@@ -18,6 +18,7 @@ import {
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
+import { synchronizeTerminalKeyboardPane } from '../keyboard/terminal-keyboard-pane-resolution'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import {
   formatClipboardImagePasteError,
@@ -173,7 +174,8 @@ export function registerTerminalPanePasteListeners({
     if (!manager) {
       return
     }
-    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    // Menu pastes skip keydown's active-pane repair, so focus moved without a pointerdown (e.g. file drop) would target a stale pane.
+    const pane = synchronizeTerminalKeyboardPane(manager, activeElementAtDispatch)
     if (!pane) {
       return
     }

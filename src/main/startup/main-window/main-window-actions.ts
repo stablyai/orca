@@ -47,20 +47,21 @@ import {
 import { isHoldingForNewerProtocolDaemon } from '../../daemon/providers/routing/daemon-newer-protocol-hold'
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { confirmNoDaemonSessionsRemain } from '../../ipc/pty/pty-management'
+import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
+import type { DesktopActivationRequest } from '../serve-launch/serve-desktop-activation'
 
 // Inject the opener to avoid an actions/lifecycle import cycle.
-let openWindow: (options?: {
-  revealOnDidFinishLoad?: boolean
-}) => BrowserWindow | Promise<BrowserWindow>
+let openWindow: (options?: MainWindowOpenOptions) => BrowserWindow | Promise<BrowserWindow>
 export function setMainWindowOpener(
-  opener: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow | Promise<BrowserWindow>
+  opener: (options?: MainWindowOpenOptions) => BrowserWindow | Promise<BrowserWindow>
 ): void {
   openWindow = opener
 }
 
-export function focusExistingWindow(): void {
+export function focusExistingWindow(request: DesktopActivationRequest = {}): void {
   focusExistingMainWindow({
     app,
+    background: request.background === true,
     getWindow: () => state.mainWindow,
     openWindow,
     // Repair rewrites renderer DACLs; second-click activation during a blank launch must wait for the gated opener.

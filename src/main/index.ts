@@ -51,20 +51,23 @@ import { registerOrcaProtocolClient } from './startup/open-routing/orca-protocol
 import { clearWindowsStdHandleInheritance } from './startup/windows-startup/windows-std-handle-inheritance'
 import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows-isolated-spawner'
 import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
+import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
+import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
+import { argvRequestsBackgroundOpen, BACKGROUND_OPEN_ARG } from '../shared/background-open-argv'
+import { setBackgroundWindowOpener } from './window/activation/background-window-open'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
 
-async function openMainWindow(
-  options: { revealOnDidFinishLoad?: boolean } = {}
-): Promise<BrowserWindow> {
+async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
   return await openMainWindowController(options)
 }
 
 setMainWindowOpener(openMainWindow)
+setBackgroundWindowOpener(() => requestDesktopActivation([BACKGROUND_OPEN_ARG]))
 
-function focusExistingWindow(): void {
-  focusExistingWindowAction()
+function focusExistingWindow(request: DesktopActivationRequest = {}): void {
+  focusExistingWindowAction(request)
 }
 
 const requestDesktopHandoff = createDesktopHandoff({
@@ -88,7 +91,9 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     requestDesktopHandoff()
     return
   }
-  state.desktopActivationGate?.requestActivation()
+  state.desktopActivationGate?.requestActivation({
+    background: argvRequestsBackgroundOpen(argv)
+  })
 }
 
 /** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */

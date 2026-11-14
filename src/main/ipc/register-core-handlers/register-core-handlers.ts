@@ -1,4 +1,3 @@
-import { closeNotificationDismissalsBeforeRelaunch } from './relaunch-notification-dismissals'
 import { app } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
@@ -86,10 +85,6 @@ import type { AutomationService } from '../../automations/automation-service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
-import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
   deleteRuntimeAiVaultSession,
@@ -103,23 +98,13 @@ import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/age
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
-
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
+import {
+  closeNotificationDismissalsBeforeRelaunch,
+  type CoreHandlerLifecycleOptions
+} from './core-handler-lifecycle'
 
 let registration: Promise<void> | null = null
-
-type CoreHandlerLifecycleOptions = {
-  deferHostInitialization?: boolean
-  hostInitialization?: Promise<void>
-  onBeforeRelaunch?: () => void | Promise<void>
-  onOrcaProfileAuthMutation?: () => void
-  onBeforeOrcaProfileSignOut?: () => void
-  onAfterOrcaProfileSignOut?: () => void
-  getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
-  prepareAiVaultSessionResume?: (
-    args: AiVaultPrepareSessionResumeArgs
-  ) => Promise<AiVaultPrepareSessionResumeResult>
-}
 
 export async function registerCoreHandlers(
   store: Store,

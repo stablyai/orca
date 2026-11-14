@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
-import { getWorkspaceReferenceRefreshTargets } from './workspace-reference-refresh-targets'
+import { createWorkspaceReferenceRefreshTargetsSelector } from './workspace-reference-refresh-targets'
 import {
   referenceAttachment,
   referenceRepo,
@@ -17,7 +18,7 @@ vi.mock('@/store', async () => {
 const read = vi.hoisted(() => vi.fn(async () => null))
 vi.mock('./workspace-reference-detail-read', () => ({ readWorkspaceReferenceDetails: read }))
 const workspace = { ...referenceWorkspace, linkedPR: null, linkedItems: [referenceAttachment()] }
-const update = () => getWorkspaceReferenceRefreshTargets(useAppStore.getState())
+const update = () => createWorkspaceReferenceRefreshTargetsSelector()(useAppStore.getState(), true)
 beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
@@ -86,6 +87,35 @@ it('retains both explicit owners when equal visible workspace IDs exist on two h
     activeWorkspaceExecutionHostId: 'ssh:remote'
   })
   expect(
-    getWorkspaceReferenceRefreshTargets(useAppStore.getState(), { selectedOnly: true })
+    createWorkspaceReferenceRefreshTargetsSelector({ selectedOnly: true })(
+      useAppStore.getState(),
+      true
+    )
   ).toHaveLength(1)
+})
+
+it('adds and removes exact review targets when a headless agent wakes and sleeps its workspace', () => {
+  useAppStore.setState({ browserTabsByWorktree: {} })
+  const select = createWorkspaceReferenceRefreshTargetsSelector()
+  expect(select(useAppStore.getState(), true)).toEqual([])
+  const paneKey = makePaneKey('headless', '11111111-1111-4111-8111-111111111111')
+  useAppStore.setState({
+    agentStatusByPaneKey: {
+      [paneKey]: {
+        paneKey,
+        worktreeId: workspace.id,
+        agentType: 'codex',
+        state: 'working',
+        prompt: '',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        stateHistory: []
+      }
+    }
+  })
+  expect(select(useAppStore.getState(), false)).toMatchObject([
+    { selected: false, fetchedAt: null }
+  ])
+  useAppStore.setState({ agentStatusByPaneKey: {} })
+  expect(select(useAppStore.getState(), false)).toEqual([])
 })

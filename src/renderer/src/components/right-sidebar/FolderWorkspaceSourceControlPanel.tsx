@@ -5,6 +5,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -141,7 +142,13 @@ const WorktreeSection = memo(
             ) : null
           }
           onToggle={() => setExpanded(!isExpanded)}
-          onOpen={() => useAppStore.getState().setActiveWorktree(id, owner.executionHostId)}
+          onOpen={() => {
+            activateAndRevealWorktree(id, {
+              navigationIntent: 'user-open',
+              executionHostId: owner.executionHostId,
+              clearSidebarFilters: false
+            })
+          }}
           actionsSlotRef={setActionsSlot}
         />
         {isExpanded &&

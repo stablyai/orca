@@ -12,7 +12,7 @@ export type PRRefreshErrorType =
   | 'server_error'
   | 'unknown'
 
-export type PRRefreshOutcome =
+export type PRRefreshOutcome = (
   | { kind: 'found'; pr: PRInfo; fetchedAt: number }
   | { kind: 'no-pr'; fetchedAt: number; rejectedPRUrls?: string[] }
   | {
@@ -24,6 +24,27 @@ export type PRRefreshOutcome =
       nextAutoRetryAt?: number
       retryDisabledUntil?: number
     }
+) & { revalidation?: { retryAfterMs: number } }
+
+export type PRRevalidationOnly = { revalidation: { invalidated: true; retryAfterMs: number } }
+export type PRSnapshotReply = PRRefreshOutcome | PRRevalidationOnly
+
+export function isPRRevalidationOnly(value: unknown): value is PRRevalidationOnly {
+  if (!value || typeof value !== 'object' || 'kind' in value || !('revalidation' in value)) {
+    return false
+  }
+  const receipt = value.revalidation
+  return (
+    !!receipt &&
+    typeof receipt === 'object' &&
+    'invalidated' in receipt &&
+    receipt.invalidated === true &&
+    'retryAfterMs' in receipt &&
+    typeof receipt.retryAfterMs === 'number' &&
+    Number.isFinite(receipt.retryAfterMs) &&
+    receipt.retryAfterMs >= 0
+  )
+}
 
 /** `watch` is host-only: a background read for a chat's CI lines, never sent by a client. */
 export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr' | 'watch'

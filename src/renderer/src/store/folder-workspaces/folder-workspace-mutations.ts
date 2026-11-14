@@ -28,6 +28,7 @@ import {
 } from './folder-workspace-catalog'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
+import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 
@@ -231,6 +232,7 @@ export function createFolderWorkspaceMutationActions(
           return false
         }
         set((s) => ({
+          ...removeWorkspaceUnreadState(s, [{ id: workspaceKey, hostId: ownerHostId }]),
           folderWorkspaces: s.folderWorkspaces.filter(
             (workspace) =>
               workspace.id !== folderWorkspaceId ||

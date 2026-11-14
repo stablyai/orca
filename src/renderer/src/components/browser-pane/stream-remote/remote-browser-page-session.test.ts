@@ -53,6 +53,7 @@ function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void 
     tokens,
     callRpc,
     getWorktreeSelector: () => 'id:wt-1',
+    readCurrentObservation: () => [],
     getCurrentUrl: () => 'about:blank',
     readStoredHandle: () => stored,
     writeStoredHandle: (handle) => {
