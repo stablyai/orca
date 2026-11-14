@@ -94,6 +94,25 @@ function useFixtureDisplay(): UsagePercentageDisplay {
   return normalizeUsagePercentageDisplay(useAppStore((s) => s.usagePercentageDisplay))
 }
 
+// Why: previews follow the live setting so flipping the Used/Left switch updates every number.
+function LiveIdentityCard(
+  props: Omit<React.ComponentProps<typeof ProviderIdentityCard>, 'usagePercentageDisplay'>
+): React.JSX.Element {
+  return <ProviderIdentityCard {...props} usagePercentageDisplay={useFixtureDisplay()} />
+}
+
+function LiveProviderPanel(
+  props: Omit<React.ComponentProps<typeof ProviderPanel>, 'usagePercentageDisplay'>
+): React.JSX.Element {
+  return <ProviderPanel {...props} usagePercentageDisplay={useFixtureDisplay()} />
+}
+
+function LiveProviderSegment(
+  props: Omit<React.ComponentProps<typeof ProviderSegment>, 'display'>
+): React.JSX.Element {
+  return <ProviderSegment {...props} display={useFixtureDisplay()} />
+}
+
 function RosterHarness({
   providers,
   mode,
@@ -205,12 +224,7 @@ function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
           <DropdownMenuTrigger>Claude</DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[440px] max-w-[calc(100vw-1rem)]">
             <div className="p-2">
-              <ProviderIdentityCard
-                p={claude}
-                accountLabel="alpha@example.com"
-                usagePercentageDisplay={display}
-                inMenu
-              />
+              <LiveIdentityCard p={claude} accountLabel="alpha@example.com" inMenu />
             </div>
             <FixtureAccountList>
               {accounts.map((account) => (
@@ -300,13 +314,12 @@ export const providerPanelGrok = defineFixture({
         <DropdownMenuTrigger>Grok</DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[440px] max-w-[calc(100vw-1rem)]">
           <div className="p-2">
-            <ProviderPanel
+            <LiveProviderPanel
               p={{
                 ...base('grok'),
                 session: win(84, 300, 2 * HOUR + 10 * MIN),
                 weekly: win(39, 10_080, 6 * DAY + 11 * HOUR)
               }}
-              usagePercentageDisplay="used"
               headerAction={<UsageDisplayToggle asMenuItem />}
             />
           </div>
@@ -325,7 +338,7 @@ export const cardExtraUsageLeft = defineFixture({
         <DropdownMenuTrigger>Claude</DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[440px] max-w-[calc(100vw-1rem)]">
           <div className="p-2">
-            <ProviderIdentityCard
+            <LiveIdentityCard
               p={{
                 ...claudeFor(PRESETS.healthy),
                 extraUsage: {
@@ -341,7 +354,6 @@ export const cardExtraUsageLeft = defineFixture({
                 }
               }}
               accountLabel="alpha@example.com"
-              usagePercentageDisplay="remaining"
               inMenu
             />
           </div>
@@ -359,12 +371,7 @@ export const statusBarFableOnly = defineFixture({
         [false, true].map((compact) => (
           <div key={`${mode}-${compact}`} className="flex items-center gap-3">
             <span className="w-40 text-muted-foreground">{`${mode} · ${compact ? 'narrow' : 'normal'} density`}</span>
-            <ProviderSegment
-              p={claudeFor(PRESETS.fableOnly)}
-              compact={compact}
-              display="used"
-              mode={mode}
-            />
+            <LiveProviderSegment p={claudeFor(PRESETS.fableOnly)} compact={compact} mode={mode} />
           </div>
         ))
       )}
