@@ -1,13 +1,11 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../../shared/execution-host'
-import {
-  getProjectIdentityKey,
-  projectHostSetupProjectionFromRepos
-} from '../../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
 import type { Project, ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import './new-workspace-composer-repo'
@@ -28,20 +26,7 @@ export type WorkspaceCreationTargetHint = Pick<WorkspaceCreationTarget, 'project
   projectHostSetupId?: string | null
 }
 
-export function getRepoWorkspaceCreationTargetHint(
-  repo: Repo,
-  projectHostSetups: readonly ProjectHostSetup[]
-): WorkspaceCreationTargetHint {
-  const hostId = getRepoExecutionHostId(repo)
-  const setup = projectHostSetups.find(
-    (candidate) => candidate.repoId === repo.id && candidate.hostId === hostId
-  )
-  return {
-    projectId: setup?.projectId ?? getProjectIdentityKey(repo),
-    hostId,
-    ...(setup ? { projectHostSetupId: setup.id } : {})
-  }
-}
+export { getRepoWorkspaceCreationTargetHint } from './workspace-creation-target-hint'
 
 export type WorkspaceCreationTargetResolution =
   | { status: 'ready'; target: WorkspaceCreationTarget }
@@ -69,6 +54,8 @@ type ProjectHostWorkspaceTargetInput = {
   projectHostSetupHostId?: ExecutionHostId | null
   focusedHostScope?: ExecutionHostScope | null
   actionableHostIds?: ReadonlySet<ExecutionHostId>
+  /** Preferred tie-break host when several hosts could serve the same target (#41140). */
+  activeWorkspaceHostId?: ExecutionHostId | null
 }
 
 type ProjectSetupModel = {
@@ -102,6 +89,10 @@ function getProjectSetupModel({
 
 function isReadySetup(setup: ProjectHostSetup): boolean {
   return setup.setupState === 'ready'
+}
+
+function focusedHostScopeOrNone(scope: ExecutionHostScope | null | undefined) {
+  return scope && scope !== ALL_EXECUTION_HOSTS_SCOPE ? scope : null
 }
 
 function createTarget(
@@ -142,6 +133,30 @@ function findReadySetupTarget(
   return null
 }
 
+// Host setup arrays reorder on catalog refreshes; an unspecified host must not ride that order (#41140).
+function findPreferredReadySetupTarget(
+  setups: readonly ProjectHostSetup[],
+  reposById: ReadonlyMap<string, readonly Repo[]>,
+  predicate: (setup: ProjectHostSetup) => boolean,
+  preferredHostIds: readonly (ExecutionHostId | null | undefined)[]
+): WorkspaceCreationTarget | null {
+  for (const hostId of [...preferredHostIds, LOCAL_EXECUTION_HOST_ID]) {
+    if (!hostId) {
+      continue
+    }
+    const target = findReadySetupTarget(
+      setups,
+      reposById,
+      (setup) => predicate(setup) && setup.hostId === hostId
+    )
+    if (target) {
+      return target
+    }
+  }
+  // Reached only when no preferred host (Local included) has a ready setup.
+  return findReadySetupTarget(setups, reposById, predicate)
+}
+
 export function resolveWorkspaceCreationTarget(
   input: ProjectHostWorkspaceTargetInput
 ): WorkspaceCreationTargetResolution {
@@ -162,6 +177,7 @@ export function resolveWorkspaceCreationTarget(
   const setups = actionableHostIds
     ? allSetups.filter((setup) => actionableHostIds.has(setup.hostId))
     : allSetups
+  const focusedHostId = focusedHostScopeOrNone(focusedHostScope)
 
   if (projectHostSetupId) {
     const matchingSetups = allSetups.filter((entry) => entry.id === projectHostSetupId)
@@ -225,19 +241,12 @@ export function resolveWorkspaceCreationTarget(
   }
 
   if (projectId) {
-    const focusedHostId =
-      focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE ? focusedHostScope : null
-    const focusedTarget = focusedHostId
-      ? findReadySetupTarget(
-          setups,
-          reposById,
-          (setup) => setup.projectId === projectId && setup.hostId === focusedHostId
-        )
-      : null
-    if (focusedTarget) {
-      return { status: 'ready', target: focusedTarget }
-    }
-    const target = findReadySetupTarget(setups, reposById, (setup) => setup.projectId === projectId)
+    const target = findPreferredReadySetupTarget(
+      setups,
+      reposById,
+      (setup) => setup.projectId === projectId,
+      [input.activeWorkspaceHostId, focusedHostId]
+    )
     if (target) {
       return { status: 'ready', target }
     }
@@ -255,12 +264,26 @@ export function resolveWorkspaceCreationTarget(
 
   const repoId = resolveNewWorkspaceDialogRepoId(input)
   const legacyCandidates = repoId ? (reposById.get(repoId) ?? []) : []
-  const focusedLegacyRepo =
-    focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
-      ? legacyCandidates.find((candidate) => getRepoExecutionHostId(candidate) === focusedHostScope)
-      : null
+  const isActionableHost = (hostId: ExecutionHostId): boolean =>
+    !actionableHostIds || actionableHostIds.has(hostId)
+  const activeLegacyRepo = input.activeWorkspaceHostId
+    ? legacyCandidates.find(
+        (candidate) =>
+          getRepoExecutionHostId(candidate) === input.activeWorkspaceHostId &&
+          isActionableHost(getRepoExecutionHostId(candidate))
+      )
+    : null
+  const focusedLegacyRepo = focusedHostId
+    ? legacyCandidates.find(
+        (candidate) =>
+          getRepoExecutionHostId(candidate) === focusedHostId &&
+          isActionableHost(getRepoExecutionHostId(candidate))
+      )
+    : null
   const legacyRepo =
-    focusedLegacyRepo ?? (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
+    activeLegacyRepo ??
+    focusedLegacyRepo ??
+    (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
   let legacyTarget: WorkspaceCreationTarget | null = null
   if (legacyRepo) {
     const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
@@ -276,7 +299,12 @@ export function resolveWorkspaceCreationTarget(
     legacyTarget = legacySetup ? createTarget(legacySetup, reposById) : null
   } else if (repoId) {
     // Cross-host duplicate repo IDs are ambiguous; retain the resolved setup instead of letting the composer repick arbitrarily.
-    legacyTarget = findReadySetupTarget(setups, reposById, (setup) => setup.repoId === repoId)
+    legacyTarget = findPreferredReadySetupTarget(
+      setups,
+      reposById,
+      (setup) => setup.repoId === repoId,
+      [input.activeWorkspaceHostId, focusedHostId]
+    )
   }
   if (legacyTarget) {
     return { status: 'ready', target: legacyTarget }
@@ -285,7 +313,10 @@ export function resolveWorkspaceCreationTarget(
     // An explicit repo must not fall back to a different ready project/host.
     return { status: 'unavailable', reason: 'setup-not-found' }
   }
-  const fallbackTarget = findReadySetupTarget(setups, reposById, () => true)
+  const fallbackTarget = findPreferredReadySetupTarget(setups, reposById, () => true, [
+    input.activeWorkspaceHostId,
+    focusedHostId
+  ])
   return fallbackTarget
     ? { status: 'ready', target: fallbackTarget }
     : { status: 'unavailable', reason: legacyRepo ? 'setup-not-found' : 'no-eligible-repo' }

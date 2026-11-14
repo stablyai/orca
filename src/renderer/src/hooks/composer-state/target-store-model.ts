@@ -62,6 +62,7 @@ export type ComposerTargetStoreModel = {
   projectGroups: readonly ProjectGroup[]
   projectHostSetups: readonly ProjectHostSetup[]
   activeRepoId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
   settings: GlobalSettings | null
   newWorkspaceDraft: UISlice['newWorkspaceDraft']
   worktreesByRepo: Record<string, Worktree[]>

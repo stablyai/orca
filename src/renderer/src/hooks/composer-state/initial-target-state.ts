@@ -4,6 +4,7 @@ import type { ComposerInitialTargetModel } from './initial-target-model'
 type ComposerInitialTargetStateInput = Pick<
   ComposerModel,
   | 'actionableHostIds'
+  | 'activeWorkspaceExecutionHostId'
   | 'eligibleRepos'
   | 'decisions'
   | 'initialProjectGroupId'
@@ -31,6 +32,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 export function useComposerInitialTargetState(input: ComposerInitialTargetStateInput) {
   const {
     actionableHostIds,
+    activeWorkspaceExecutionHostId,
     decisions,
     eligibleRepos,
     initialProjectGroupId,
@@ -85,6 +87,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     draftRepoId,
     initialRepoId,
     activeRepoId: seedActiveRepoId,
+    activeWorkspaceHostId: activeWorkspaceExecutionHostId,
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
     projectHostSetupId: initialRunSeed.projectHostSetupId,
