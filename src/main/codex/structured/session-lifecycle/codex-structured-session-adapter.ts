@@ -278,7 +278,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     reviewCodexStructuredSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
   cleanBackgroundTerminals: NonNullable<SessionAdapter['cleanBackgroundTerminals']> = (input) =>
-    cleanCodexBackgroundTerminals(this.session(input.sessionId), this.deps.requestTimeoutMs)
+    cleanCodexBackgroundTerminals(this.sessions.get(input.sessionId), this.deps.requestTimeoutMs)
 
   compact: NonNullable<SessionAdapter['compact']> = (input) =>
     compactCodexStructuredSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)

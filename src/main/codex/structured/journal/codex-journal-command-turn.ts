@@ -58,6 +58,23 @@ export class CodexJournalCommandTurn {
     return undefined
   }
 
+  isReviewDelegateStart(params: unknown): boolean {
+    const reviewTurn = this.reviewTurn()
+    const turn = readCodexJournalRecord(readCodexJournalRecord(params).turn)
+    return (
+      reviewTurn !== undefined &&
+      typeof turn.rootTurnId === 'string' &&
+      turn.rootTurnId !== turn.id &&
+      (reviewTurn === null || turn.rootTurnId === reviewTurn)
+    )
+  }
+
+  forgetPendingReview(): void {
+    if (this.awaiting?.name === 'review') {
+      this.awaiting = null
+    }
+  }
+
   isCarrying(providerTurnId: string): boolean {
     return this.carried.has(providerTurnId)
   }

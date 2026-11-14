@@ -23,12 +23,17 @@ export function handleCodexReviewNotification(
     return null
   }
   const item = readCodexJournalRecord(readCodexJournalRecord(event.params).item)
-  if (event.method === 'turn/started' && readCodexTurnId(event.params) !== reviewTurn) {
-    return CODEX_JOURNAL_ADMITTED
+  if (event.method === 'turn/started') {
+    if (commands.isReviewDelegateStart(event.params)) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    commands.forgetPendingReview()
   }
   if (
     (event.method === 'item/started' || event.method === 'item/completed') &&
-    item.type === 'userMessage'
+    item.type === 'userMessage' &&
+    reviewTurn !== null &&
+    readCodexTurnId(event.params) === reviewTurn
   ) {
     return CODEX_JOURNAL_ADMITTED
   }

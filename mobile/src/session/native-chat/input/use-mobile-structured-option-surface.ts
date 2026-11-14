@@ -56,16 +56,6 @@ export function useMobileStructuredOptionSurface(args: {
         const branches = async () =>
           reviewBranchesRead.interpret(await reviewBranchesRead.request(client, { worktree }))
             .branches
-        let folderBranches: string[] | undefined
-        let hasGit = true
-        if (args.worktreeId.startsWith('folder:')) {
-          try {
-            folderBranches = await branches()
-          } catch {
-            folderBranches = []
-            hasGit = false
-          }
-        }
         const menu = createNativeChatReviewMenu({
           copy: {
             baseBranch: translate('nativeChat.review.baseBranch', 'Review against a base branch'),
@@ -80,12 +70,11 @@ export function useMobileStructuredOptionSurface(args: {
               'Codex could not load review targets. Try /review again.'
             )
           },
-          hasGit,
-          branches: () => (folderBranches ? Promise.resolve(folderBranches) : branches()),
+          hasGit: !args.worktreeId.startsWith('folder:'),
+          branches,
           commits: async () =>
-            gitHistoryRead.interpret(
-              await gitHistoryRead.request(client, { worktree, limit: 100, refs: 'head' })
-            ).items,
+            gitHistoryRead.interpret(await gitHistoryRead.request(client, { worktree, limit: 100 }))
+              .items,
           run: review,
           onError: (message) => args.onError?.(message)
         })

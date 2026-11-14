@@ -1,4 +1,3 @@
-import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { startCodexTerminalStopProbe } from '../background-work/codex-background-terminals'
 import * as requestEndWait from '../turns/codex-request-end-wait'
@@ -19,7 +18,8 @@ export function emitCodexStructuredJournalEvent(
   if (
     event.type === 'notification' &&
     event.method === 'turn/started' &&
-    session.translator?.isReviewDelegateStart(readCodexTurnId(event.params))
+    event.threadId === session.threadId &&
+    session.translator?.isReviewDelegateStart(event.params)
   ) {
     return { accepted: true }
   }

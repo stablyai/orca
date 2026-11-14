@@ -287,8 +287,7 @@ function createCodexTranslation(
       return publishActivity(event, unhandled)
     },
     beginCommand: (command) => commands.begin(command),
-    isReviewDelegateStart: (id) =>
-      commands.reviewTurn() !== undefined && commands.reviewTurn() !== id,
+    isReviewDelegateStart: commands.isReviewDelegateStart.bind(commands),
     claimCommandTurn: commands.claim.bind(commands),
     forgetCommand: (turnId) => commands.forget(turnId),
     commandProviderTurnId: (turnId) => commands.providerTurnId(turnId),

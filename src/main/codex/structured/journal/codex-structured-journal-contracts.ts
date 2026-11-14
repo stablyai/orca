@@ -58,7 +58,7 @@ export type CodexJournalTranslator = {
   handle: (event: CodexStructuredSessionEvent) => CodexJournalTranslationAdmission
   /** The next primary turn carries this command and determines its end. */
   beginCommand: (command: StructuredAgentSessionCommandRun) => void
-  isReviewDelegateStart: (providerTurnId: string | null) => boolean
+  isReviewDelegateStart: (params: unknown) => boolean
   claimCommandTurn: (providerTurnId: string) => void
   /** The command was never taken. */
   forgetCommand: (turnId: string) => void

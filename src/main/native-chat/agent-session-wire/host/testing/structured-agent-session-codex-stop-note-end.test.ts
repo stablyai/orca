@@ -1,3 +1,6 @@
+import { CodexAppServerTimeoutError } from '../../../../codex/app-server/codex-app-server-session'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -19,6 +22,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestMessage,
+  hostTestOperationId,
+  hostTestSendParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import {
@@ -171,4 +176,88 @@ it('isolates legacy acquired history from live matching and saves exact proof be
   await reopen([])
   expect(journal().receiptFor('K')).not.toBeNull()
   expect(journal().submission('V')?.dispatchState).toBe('unknown')
+})
+
+it('settles a settings timeout before review as refused and admits the next normal send', async () => {
+  await host.setSessionTabVisibility(SESSION, true)
+  const envelope = (method: string, fields: Record<string, unknown>) => ({
+    sessionId: SESSION,
+    clientOperationId: hostTestOperationId(),
+    expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
+    payloadFingerprint: computeAgentSessionPayloadFingerprint({
+      method,
+      sessionId: SESSION,
+      fields
+    })
+  })
+  const option = { key: 'model', value: 'gpt-review' }
+  expect(
+    await host.setOption(CALLER, {
+      ...option,
+      envelope: envelope('agentSession.setOption', option)
+    })
+  ).toMatchObject({ ok: true })
+  codex.routes['thread/settings/update'] = () => {
+    throw new CodexAppServerTimeoutError('settings timed out')
+  }
+  const fields = {
+    command: 'review' as const,
+    review: { type: 'custom' as const },
+    instructions: 'check correctness'
+  }
+  const params = { ...fields, envelope: envelope('agentSession.conversationCommand', fields) }
+  const result = await host.conversationCommand(CALLER, params)
+  expect(result).toMatchObject({ ok: true })
+  await vi.waitFor(async () => {
+    const settled = await host.journalSnapshot(SESSION)
+    expect(
+      settled.submissions.find(
+        ({ clientMessageId }) => clientMessageId === params.envelope.clientOperationId
+      )
+    ).toMatchObject({ dispatchState: 'rejected' })
+  })
+  expect(
+    codex.connections
+      .flatMap(({ calls }) => calls)
+      .filter(({ method }) => method === 'review/start')
+  ).toEqual([])
+  const snapshot = await host.journalSnapshot(SESSION)
+  expect(
+    snapshot.submissions.find(
+      ({ clientMessageId }) => clientMessageId === params.envelope.clientOperationId
+    )
+  ).toMatchObject({ dispatchState: 'rejected' })
+  expect(
+    snapshot.items.map(({ body }) => readAgentJournalTurn(body)).filter(Boolean)
+  ).toContainEqual(expect.objectContaining({ state: 'completed', outcome: 'failure' }))
+  const send = hostTestSendParams('hello')
+  send.envelope.expectedRuntimeFence = store.getRecord(SESSION)!.lease.runtimeFence
+  codex.routes['turn/start'] = () => {
+    const notify = codex.connections.at(-1)!.handlers.onNotification!
+    notify('turn/started', {
+      threadId: THREAD,
+      turn: { id: 'normal-after-settings', rootTurnId: null }
+    })
+    notify('item/completed', {
+      threadId: THREAD,
+      turnId: 'normal-after-settings',
+      item: {
+        id: 'normal-echo',
+        type: 'userMessage',
+        clientId: send.envelope.clientOperationId,
+        content: [{ type: 'text', text: 'hello', text_elements: [] }]
+      }
+    })
+    return { turn: { id: 'normal-after-settings' } }
+  }
+  expect(await host.send(CALLER, send)).toMatchObject({ ok: true })
+  const after = await host.journalSnapshot(SESSION)
+  expect(
+    after.submissions.find(
+      ({ clientMessageId }) => clientMessageId === send.envelope.clientOperationId
+    )
+  ).toMatchObject({ dispatchState: 'accepted' })
+  expect(after.items.map(({ body }) => readAgentJournalTurn(body)).filter(Boolean)).toContainEqual(
+    expect.objectContaining({ providerTurnId: 'normal-after-settings', state: 'running' })
+  )
 })

@@ -391,6 +391,73 @@ it('keeps an uncertain review armed for late events but forgets a rejected revie
   await adapter.closeAll()
 })
 
+it('admits a normal turn after a review request times out without entering review', async () => {
+  const codex = fakeCodex({
+    'review/start': () => {
+      throw new Error('request timed out')
+    }
+  })
+  const adapter = adapterFor(codex)
+  const tap = recorder()
+  try {
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor(SESSION),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: tap.sink
+    })
+    await expect(
+      adapter.review({
+        sessionId: SESSION,
+        fence: 7,
+        command: { ...COMMAND, name: 'review', review: { type: 'custom' } }
+      })
+    ).rejects.toThrow('request timed out')
+    const notify = codex.connections[0]!.handlers.onNotification!
+    notify('turn/started', {
+      threadId: 'thread-abc',
+      turn: { id: 'normal-turn', rootTurnId: null }
+    })
+    notify('item/completed', {
+      threadId: 'thread-abc',
+      turnId: 'normal-turn',
+      item: { id: 'normal-user', type: 'userMessage', content: [{ type: 'text', text: 'hello' }] }
+    })
+    expect(codexTurnRecords(tap.writes)).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({ turnId: 'normal-turn', state: 'running' })
+      })
+    )
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
+it('uses the reported settings for a first review without an unnecessary settings update', async () => {
+  const codex = fakeCodex()
+  const adapter = adapterFor(codex)
+  try {
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor(SESSION),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+    expect(
+      await adapter.review({
+        sessionId: SESSION,
+        fence: 7,
+        command: { ...COMMAND, name: 'review', review: { type: 'custom' } },
+        executionOptions: { model: 'gpt-live', effort: 'medium' }
+      })
+    ).toMatchObject({ state: 'accepted' })
+    expect(
+      codex.connections[0]!.calls.filter(({ method }) => method === 'thread/settings/update')
+    ).toEqual([])
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
 it('cleans the main thread terminals with one native operation and no subagent interruption', async () => {
   const codex = fakeCodex()
   const adapter = adapterFor(codex)
@@ -411,4 +478,7 @@ it('cleans the main thread terminals with one native operation and no subagent i
     "This Codex version can't stop background terminals from chat. Update Codex."
   )
   await adapter.closeAll()
+  await expect(
+    adapter.cleanBackgroundTerminals({ sessionId: SESSION, fence: 7 })
+  ).resolves.toBeUndefined()
 })

@@ -67,6 +67,53 @@ async function runningHelper(routes: Record<string, Route>) {
 }
 
 describe('Codex sub-agent Stop', () => {
+  it('publishes and stops a helper that starts another turn during a main-thread review', async () => {
+    const codex = await runningHelper({ 'review/start': () => ({ turn: { id: 'review-parent' } }) })
+    try {
+      await codex.adapter.review({
+        sessionId: 'session-1',
+        fence: 7,
+        command: {
+          clientMessageId: 'review-1',
+          turnId: 'review-command',
+          name: 'review',
+          review: { type: 'uncommittedChanges' },
+          identity: { provider: 'orca', clientMessageId: 'review-command' },
+          resultIdentity: { provider: 'orca', clientMessageId: 'review-result' },
+          running: {
+            kind: 'turn',
+            turnId: 'review-command',
+            state: 'running',
+            requestedAt: 1,
+            startedAt: 1
+          }
+        }
+      })
+      codex.notify('turn/completed', {
+        threadId: HELPER,
+        turn: { id: HELPER_TURN, status: 'completed' }
+      })
+      codex.notify('turn/started', {
+        threadId: HELPER,
+        turn: { id: 'helper-turn-2', status: 'inProgress' }
+      })
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(codex.evidence).toContainEqual(
+        expect.objectContaining({
+          type: 'live',
+          child: expect.objectContaining({
+            handle: expect.objectContaining({ id: HELPER, runId: 'helper-turn-2' }),
+            state: 'working'
+          })
+        })
+      )
+      await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: true })
+      expect(codex.interrupts()).toEqual([{ threadId: HELPER, turnId: 'helper-turn-2' }])
+    } finally {
+      await codex.adapter.closeAll()
+    }
+  })
+
   it('stays quiet when the interrupt landed as the run ended and Codex held it unanswered', async () => {
     let endRun = (): void => {}
     const codex = await runningHelper({

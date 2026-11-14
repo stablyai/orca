@@ -170,16 +170,6 @@ export function useNativeChatStructuredComposerTransport(args: {
                       { worktree }
                     )
                   ).branches
-                let folderBranches: string[] | undefined
-                let hasGit = true
-                if (worktreeId.startsWith('folder:')) {
-                  try {
-                    folderBranches = await branches()
-                  } catch {
-                    folderBranches = []
-                    hasGit = false
-                  }
-                }
                 menu = createNativeChatReviewMenu({
                   copy: {
                     baseBranch: translate(
@@ -197,14 +187,13 @@ export function useNativeChatStructuredComposerTransport(args: {
                       'Codex could not load review targets. Try /review again.'
                     )
                   },
-                  hasGit,
-                  branches: () => (folderBranches ? Promise.resolve(folderBranches) : branches()),
+                  hasGit: !worktreeId.startsWith('folder:'),
+                  branches,
                   commits: async () =>
                     (
                       await callRuntimeRpc<GitHistoryResult>(props.target, 'git.history', {
                         worktree,
-                        limit: 100,
-                        refs: 'head'
+                        limit: 100
                       })
                     ).items,
                   run: review,

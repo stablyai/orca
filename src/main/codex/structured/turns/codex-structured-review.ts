@@ -15,9 +15,12 @@ export async function reviewCodexStructuredSession(
   input: Parameters<NonNullable<StructuredAgentSessionAdapter['review']>>[0],
   timeoutMs: number | undefined
 ): ReturnType<NonNullable<StructuredAgentSessionAdapter['review']>> {
-  session.translator?.beginCommand(input.command)
   const choices = resolvedCodexGoalSettings(session, input.executionOptions)
-  if (Object.entries(choices).some(([key, value]) => value !== session.appliedTurnOptions?.[key])) {
+  const current: Readonly<Record<string, string | undefined>> = {
+    model: session.appliedTurnOptions?.model ?? session.reportedOptions.model,
+    effort: session.appliedTurnOptions?.effort ?? session.reportedOptions.effort
+  }
+  if (Object.entries(choices).some(([key, value]) => value !== current[key])) {
     try {
       await session.connection.request(
         'thread/settings/update',
@@ -33,26 +36,24 @@ export async function reviewCodexStructuredSession(
           state: 'rejected',
           ...turnEnd.codexDispatchRejection(
             agentSessionFailureFact('reviewSettingsUnsupported', {
-              detail: session.appliedTurnOptions?.model
-                ? providerDiagnostic(session.appliedTurnOptions.model, 'person')
-                : undefined
+              detail: current.model ? providerDiagnostic(current.model, 'person') : undefined
             })
           )
         }
       }
-      if (isCodexAppServerRequestError(error)) {
-        session.translator?.forgetCommand(input.command.turnId)
-        return {
-          state: 'rejected',
-          ...turnEnd.codexDispatchRejection(agentSessionFailureFact('reviewFailed'))
-        }
+      return {
+        state: 'rejected',
+        ...turnEnd.codexDispatchRejection(agentSessionFailureFact('reviewFailed'))
       }
-      throw error
     }
   }
   if (session.ended || session.fence !== input.fence) {
-    throw new Error('Codex session changed before review.')
+    return {
+      state: 'rejected',
+      ...turnEnd.codexDispatchRejection(agentSessionFailureFact('reviewFailed'))
+    }
   }
+  session.translator?.beginCommand(input.command)
   try {
     const target = input.command.review ?? { type: 'custom' }
     await session.connection.request(
@@ -89,9 +90,12 @@ export async function reviewCodexStructuredSession(
 }
 
 export async function cleanCodexBackgroundTerminals(
-  session: CodexSession,
+  session: CodexSession | undefined,
   timeoutMs: number | undefined
 ): Promise<void> {
+  if (!session || session.ended) {
+    return
+  }
   try {
     await session.connection.request(
       'thread/backgroundTerminals/clean',
