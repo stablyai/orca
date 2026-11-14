@@ -55,6 +55,7 @@ vi.mock('child_process', async () => {
 
 import { main } from '../index'
 import { useWorktreeAwarenessEnvironment } from '../index-test-harness'
+import { okFixture } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('orca cli worktree awareness', () => {
   const priorExitCode = process.exitCode
@@ -72,6 +73,47 @@ describe('orca cli worktree awareness', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  it.each([
+    ['run-show', ['--id', 'run_example']],
+    ['run-current', []],
+    ['run-use', ['--id', 'run_example']]
+  ])('%s keeps the coordinator address reachable in default JSON', async (command, args) => {
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'f7a1c0de-1111-4222-8333-444455556666')
+    callMock.mockResolvedValue(
+      okFixture('req_run', {
+        run: {
+          id: 'run_example',
+          objective: 'Coordinate workers',
+          coordinator_handle: 'term_coordinator',
+          consumer_generation: 1,
+          legacy: 0,
+          created_at: '2026-11-13T00:00:00Z'
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', command, ...args, '--json'], '/tmp/repo')
+
+    const output = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(output.result.run?.coordinator_handle).toBe('term_coordinator')
+    expect(output.result.runId).toBe('run_example')
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('keeps an unbound run-current explicit in default JSON', async () => {
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'f7a1c0de-1111-4222-8333-444455556666')
+    callMock.mockResolvedValue(okFixture('req_run', { run: null }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'run-current', '--json'], '/tmp/repo')
+
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result).toEqual({
+      runId: null,
+      run: null
+    })
   })
 
   it("refuses an agent session's caller flag naming another caller before any request", async () => {

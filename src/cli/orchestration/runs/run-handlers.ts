@@ -55,7 +55,9 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
     if (!flags.has('full')) {
-      printOrchestrationResult(result, json, { fields: (r) => runFields(r.run) })
+      printOrchestrationResult(result, json, {
+        fields: (r) => ({ ...runFields(r.run), run: json ? r.run : undefined })
+      })
       return
     }
     printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
@@ -69,7 +71,10 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     }>('orchestration.runCurrent', { from })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
-        fields: (r) => (r.run ? { ...runFields(r.run), next: r.next } : { runId: null })
+        fields: (r) =>
+          r.run
+            ? { ...runFields(r.run), run: json ? r.run : undefined, next: r.next }
+            : { runId: null, run: json ? null : undefined }
       })
       return
     }
@@ -136,7 +141,11 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
-        fields: (r) => ({ ...runFields(r.run), removedWork: r.removedWork }),
+        fields: (r) => ({
+          ...runFields(r.run),
+          run: json ? r.run : undefined,
+          removedWork: r.removedWork
+        }),
         text: (_, r) =>
           removed
             ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
