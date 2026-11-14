@@ -103,7 +103,11 @@ function deriveTurnFoldRow(
       )
   }
   const speaks =
-    message.role === 'assistant' && content.hasText && !facts.outlivesTurn && !facts.explainsTurn
+    message.role === 'assistant' &&
+    facts.rendersProse &&
+    content.hasText &&
+    !facts.outlivesTurn &&
+    !facts.explainsTurn
   return { ...facts, replyEnd: speaks ? (content.tools.length > 0 ? 'work' : 'words') : undefined }
 }
 

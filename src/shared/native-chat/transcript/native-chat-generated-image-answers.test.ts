@@ -102,3 +102,14 @@ it('deduplicates Windows and UNC destinations already rendered by Markdown, pres
     rows.slice(0, 4).flatMap((row) => row.blocks.filter((block) => block.type === 'image-ref'))
   ).toEqual([])
 })
+
+it('folds narration and the emptied image operation once the image moves to the answer', () => {
+  const rows = project([
+    text('u', 'Draw it.', 'user'),
+    text('narration', 'I will draw it.'),
+    generated('image'),
+    text('done', 'Done.')
+  ])
+  expect(rows.map((row) => row.id)).toEqual(['u', 'done'])
+  expect(rows[1]!.blocks.some((block) => block.type === 'image-ref')).toBe(true)
+})
