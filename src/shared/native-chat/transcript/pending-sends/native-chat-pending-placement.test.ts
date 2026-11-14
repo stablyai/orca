@@ -126,4 +126,74 @@ describe('pending sends overtaken by a later recorded send', () => {
 
     expect(display(laterHistory, retained)).toEqual(['pending:first', 'later-input', 'streaming'])
   })
+
+  it('anchors before the earliest recorded later send when they land out of order', () => {
+    const pending = [send('first', 'Still there?'), send('b', 'b'), send('c', 'c')]
+    const history = [
+      boundary,
+      message('c-input', 'user', 'c', 2),
+      message('c-reply', 'assistant', 'Done c', 3),
+      message('b-input', 'user', 'b', 4)
+    ]
+
+    expect(display(history, pending)).toEqual([
+      'boundary',
+      'pending:first',
+      'c-input',
+      'c-reply',
+      'b-input',
+      'streaming'
+    ])
+  })
+
+  it('moves the anchor earlier when paging reveals an earlier later send', () => {
+    const pending = [send('first', 'Still there?'), send('b', 'b'), send('c', 'c')]
+    const cInput = message('c-input', 'user', 'c', 4)
+    const cReply = message('c-reply', 'assistant', 'Done c', 5)
+    const retained = reconcile(pending, [cInput, cReply])
+    expect(retained.map((entry) => entry.id)).toEqual(['first', 'b'])
+
+    const paged = [
+      boundary,
+      message('b-input', 'user', 'b', 2),
+      message('b-reply', 'assistant', 'Done b', 3),
+      cInput,
+      cReply
+    ]
+    expect(display(paged, reconcile(retained, paged))).toEqual([
+      'boundary',
+      'pending:first',
+      'b-input',
+      'b-reply',
+      'c-input',
+      'c-reply',
+      'streaming'
+    ])
+  })
+
+  it('anchors before a later image-only send recorded as a pathless image row', () => {
+    const pending = [
+      send('first', 'Still there?'),
+      { ...send('image', ''), imagePaths: ['/tmp/orca-paste-image.png'] }
+    ]
+    const imageRow: NativeChatMessage = {
+      id: 'image-input',
+      role: 'user',
+      blocks: [{ type: 'image-ref', url: 'data:image/png;base64,iVBORw0K' }],
+      source: 'transcript',
+      timestamp: 102,
+      transcriptOrder: 2
+    }
+    const history = [boundary, imageRow, message('image-reply', 'assistant', 'Saw it', 3)]
+    const retained = reconcile(pending, history)
+    expect(retained.map((entry) => entry.id)).toEqual(['first'])
+
+    expect(display(history, retained)).toEqual([
+      'boundary',
+      'pending:first',
+      'image-input',
+      'image-reply',
+      'streaming'
+    ])
+  })
 })

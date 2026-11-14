@@ -102,50 +102,6 @@ function gluedCandidateRows(
   })
 }
 
-export function anchorNativeChatPendingSends<T extends NativeChatPendingSend>(
-  pending: T[],
-  messages: readonly NativeChatMessage[]
-): T[] {
-  if (pending.length < 2) {
-    return pending
-  }
-  const consumed = new Map<string, number>()
-  const matches = pending.map((entry) => {
-    const key = nativeChatPendingMatchKey(entry)
-    const used = consumed.get(key) ?? 0
-    const occurrence = nativeChatPendingOccurrence(entry, used)
-    consumed.set(key, Math.max(used, occurrence))
-    if (entry.afterMessageId === undefined) {
-      return undefined
-    }
-    const contentKey = nativeChatPendingContentKey(entry)
-    return messagesAfterPendingBoundary(messages, entry).filter(
-      (message) => nativeChatUserMessageContentKey(message, entry.imagePaths) === contentKey
-    )[occurrence - 1]
-  })
-  let changed = false
-  const next = pending.map((entry, index) => {
-    if (entry.beforeMessage) {
-      return entry
-    }
-    const eligible = messagesAfterPendingBoundary(messages, entry)
-    const anchor = matches.slice(index + 1).find((message) => message && eligible.includes(message))
-    if (!anchor) {
-      return entry
-    }
-    changed = true
-    return {
-      ...entry,
-      beforeMessage: {
-        id: anchor.id,
-        timestamp: anchor.timestamp,
-        ...(anchor.transcriptOrder !== undefined ? { transcriptOrder: anchor.transcriptOrder } : {})
-      }
-    }
-  })
-  return changed ? next : pending
-}
-
 // Pathless image rows (Claude queued prompts) cannot name their send, so each is claimed once, oldest send first.
 // Failed or uncertain writes never claim one, so another send's image cannot hide them.
 function claimPathlessImageRow(
@@ -153,7 +109,7 @@ function claimPathlessImageRow(
   allMessages: readonly NativeChatMessage[],
   claimed: Set<string>,
   advancedOnly: boolean
-): boolean {
+): NativeChatMessage | undefined {
   const count = entry.imagePaths?.filter(Boolean).length ?? 0
   if (
     count === 0 ||
@@ -163,7 +119,7 @@ function claimPathlessImageRow(
     entry.writeUnconfirmedAt !== undefined ||
     normalizeNativeChatPendingText(entry.text)
   ) {
-    return false
+    return undefined
   }
   const messages = messagesAfterPendingBoundary(allMessages, entry)
   const lastNonUser = messages.findLastIndex((message) => message.role !== 'user')
@@ -185,11 +141,62 @@ function claimPathlessImageRow(
   if (row) {
     claimed.add(row.id)
   }
-  return Boolean(row)
+  return row
 }
 
 function carriedImageRowClaims(pending: readonly NativeChatPendingSend[]): Set<string> {
   return new Set(pending.flatMap((entry) => entry.claimedImageRowIds ?? []))
+}
+
+/** Older unmatched sends stay before the earliest recorded later send; anchors only move earlier. */
+export function anchorNativeChatPendingSends<T extends NativeChatPendingSend>(
+  pending: T[],
+  messages: readonly NativeChatMessage[]
+): T[] {
+  if (pending.length < 2) {
+    return pending
+  }
+  const consumed = new Map<string, number>()
+  const claimedImageRows = carriedImageRowClaims(pending)
+  const matches = pending.map((entry) => {
+    const key = nativeChatPendingMatchKey(entry)
+    const used = consumed.get(key) ?? 0
+    const occurrence = nativeChatPendingOccurrence(entry, used)
+    consumed.set(key, Math.max(used, occurrence))
+    const contentKey = nativeChatPendingContentKey(entry)
+    // Claim in the same order as visibility so a pathless image row anchors the send it hides.
+    const match =
+      messagesAfterPendingBoundary(messages, entry).filter(
+        (message) => nativeChatUserMessageContentKey(message, entry.imagePaths) === contentKey
+      )[occurrence - 1] ?? claimPathlessImageRow(entry, messages, claimedImageRows, false)
+    return entry.afterMessageId === undefined ? undefined : match
+  })
+  let changed = false
+  const next = pending.map((entry, index) => {
+    const eligible = messagesAfterPendingBoundary(messages, entry)
+    const anchorIndex = Math.min(
+      ...matches
+        .slice(index + 1)
+        .map((match) => (match && eligible.includes(match) ? messages.indexOf(match) : Infinity))
+    )
+    const anchor = messages[anchorIndex]
+    const stored = entry.beforeMessage
+    // An anchor paged out of view cannot be ordered against this page, so it is kept.
+    const storedIndex = stored ? messages.findIndex((message) => message.id === stored.id) : -1
+    if (!anchor || (stored && (storedIndex === -1 || storedIndex <= anchorIndex))) {
+      return entry
+    }
+    changed = true
+    return {
+      ...entry,
+      beforeMessage: {
+        id: anchor.id,
+        timestamp: anchor.timestamp,
+        ...(anchor.transcriptOrder !== undefined ? { transcriptOrder: anchor.transcriptOrder } : {})
+      }
+    }
+  })
+  return changed ? next : pending
 }
 
 /** Keep echoes until a later non-user turn to avoid first-turn flashes during transient empty reads. */
