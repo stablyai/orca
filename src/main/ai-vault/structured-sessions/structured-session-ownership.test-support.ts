@@ -69,6 +69,12 @@ export function installOwnership(
       store: {
         hostId: record.lease.ownerProcess?.hostId ?? 'local',
         getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+        historyRowOwners: (id: string) =>
+          id === ownership.providerSessionId ? [record.sessionId] : [],
+        getConversation: () => ({
+          ...agentSessionConversationView(record),
+          ownerObservation: ownership.ownerObservation
+        }),
         listConversations: () => [
           {
             ...agentSessionConversationView(record),
@@ -133,6 +139,15 @@ export function installChats(records: AgentSessionRecord[]) {
   const store = {
     hostId: 'local',
     getRecord: vi.fn((sessionId: string) => byId.get(sessionId) ?? null),
+    getConversation: vi.fn((id: string) => {
+      const record = byId.get(id)
+      return record ? agentSessionConversationView(record) : null
+    }),
+    historyRowOwners: vi.fn((id: string) =>
+      records
+        .filter((record) => record.providerHandleChain.some((link) => link.handle.nativeId === id))
+        .map((record) => record.sessionId)
+    ),
     listConversations: vi.fn(() => records.map(agentSessionConversationView))
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.

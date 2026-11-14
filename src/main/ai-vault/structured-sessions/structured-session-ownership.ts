@@ -175,25 +175,29 @@ function acquiredAccountHome(sessionId: string): AgentSessionAccountHome | undef
     : undefined
 }
 
-// Build one lookup per projection to avoid scanning all chat records for every row.
+// The store's commit-kept alias index resolves only chats naming this transcript.
 function ownershipLookup():
   | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership | null)
   | null {
-  if (!getStructuredAgentSessionHost()) {
+  const store = getStructuredAgentSessionHost()?.deps.store
+  if (!store) {
     return null
   }
-  const byProviderSession = new Map<string, StructuredProviderSessionOwnership>()
-  for (const ownership of listOwnership()) {
-    const key = `${ownership.provider}\0${ownership.providerSessionId}`
-    const kept = byProviderSession.get(key)
-    if (!kept || (kept.role !== 'head' && ownership.role === 'head')) {
-      byProviderSession.set(key, ownership)
-    }
-  }
   return (row) => {
-    const found = historyRowOwners(row.agent).flatMap(
-      (owner) => byProviderSession.get(`${owner}\0${row.sessionId}`) ?? []
-    )
+    const byProviderSession = new Map<StructuredAgentId, StructuredProviderSessionOwnership>()
+    const records = store
+      .historyRowOwners(row.sessionId)
+      .flatMap((id) => store.getConversation(id) ?? [])
+    for (const ownership of listStructuredProviderSessionOwnership(records)) {
+      if (ownership.providerSessionId !== row.sessionId) {
+        continue
+      }
+      const kept = byProviderSession.get(ownership.provider)
+      if (!kept || (kept.role !== 'head' && ownership.role === 'head')) {
+        byProviderSession.set(ownership.provider, ownership)
+      }
+    }
+    const found = historyRowOwners(row.agent).flatMap((owner) => byProviderSession.get(owner) ?? [])
     return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
   }
 }

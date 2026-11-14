@@ -1,4 +1,9 @@
 import {
+  sameSessionFileIdentity,
+  sessionFileIdentity,
+  sessionFileVersionMatches
+} from './session-file-version'
+import {
   throwIfAiVaultScanCancelled,
   waitForAiVaultScan
 } from '../scan-lifecycle/ai-vault-scan-cancellation'
@@ -146,10 +151,7 @@ function sessionParseCacheCoversTranscript(
   const { file } = candidate
   const entry = getSessionParseCacheEntry(key)
   return (
-    entry !== undefined &&
-    entry.platform === platform &&
-    entry.mtimeMs === file.mtimeMs &&
-    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
+    entry !== undefined && entry.platform === platform && sessionFileVersionMatches(entry, file)
   )
 }
 
@@ -210,7 +212,8 @@ async function parseCachedInLane(
     const read = await readResumableTranscript({
       candidate,
       platform,
-      resume: entry?.platform === platform ? entry.resume : null,
+      resume:
+        entry?.platform === platform && sameSessionFileIdentity(entry, file) ? entry.resume : null,
       stateFactory,
       stats,
       signal,
@@ -218,6 +221,7 @@ async function parseCachedInLane(
       indexing
     })
     storeSessionParseCacheEntry(key, {
+      ...sessionFileIdentity(file),
       agent: candidate.agent,
       mtimeMs: file.mtimeMs,
       sizeBytes: file.sizeBytes ?? null,
@@ -244,6 +248,7 @@ async function parseCachedInLane(
     }
   })
   storeSessionParseCacheEntry(key, {
+    ...sessionFileIdentity(file),
     agent: candidate.agent,
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,

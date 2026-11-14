@@ -1,3 +1,4 @@
+import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type {
@@ -21,15 +22,20 @@ export type AiVaultScopeRealPaths = {
 
 /** Resolve on the execution host so links refer to the filesystem that recorded each cwd. */
 export async function resolveAiVaultScopeRealPaths(
-  scopePaths: readonly string[]
+  scopePaths: readonly string[],
+  activity?: () => void,
+  signal?: AbortSignal
 ): Promise<AiVaultScopeRealPaths> {
   const links: AiVaultScopeLink[] = []
   for (const scopePath of scopePaths) {
+    throwIfAiVaultScanCancelled(signal)
     // Windows cannot resolve Linux symlinks through a WSL UNC share.
     if (!isAbsolute(scopePath) || parseWslUncPath(scopePath)) {
       continue
     }
     const realPath = await realpath(scopePath).catch(() => null)
+    activity?.()
+    throwIfAiVaultScanCancelled(signal)
     if (realPath && !sameComparisonPath(realPath, scopePath)) {
       links.push({ scopePath, realPath })
     }

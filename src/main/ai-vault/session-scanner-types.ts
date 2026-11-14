@@ -77,6 +77,7 @@ export type FileWithMtime = {
   sidecar?: SessionSidecarObservation
   // Codex dual-root scans use filesystem identity to deduplicate hardlink aliases.
   dev?: number
+  birthtimeMs?: number
   ino?: number
   nlink?: number
 }

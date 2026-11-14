@@ -1,50 +1,36 @@
-import { createInterface } from 'node:readline'
+import { readFirstCwd } from './session-bucket-cwd'
+import { sessionFileIdentity } from '../parse-cache/session-file-version'
+
 import { extname, join } from 'node:path'
 import {
-  openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedStat
 } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { createAiVaultScopeCwdMatcher } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
-import type {
-  AiVaultAgent,
-  AiVaultScanIssue
-} from '../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseWslUncPath, toWindowsWslUncPathSpellings } from '../../../shared/wsl-paths'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import type { FileWithMtime } from '../session-scanner-types'
-import { extractString } from '../../../shared/trimmed-string'
-import { parseJsonObject } from '../parsing/session-json-object'
-import { scanIssueTextFromError } from '../parsing/session-scan-issues'
-import { isMissingTranscriptPathError } from '../discovery/session-path-absence'
+import {
+  recordRefusal,
+  scanIssueTextFromError,
+  type IssueSink
+} from '../parsing/session-scan-issues'
+export { recordRefusal, type IssueSink } from '../parsing/session-scan-issues'
 import { noteAiVaultScanFileFound } from '../scan-lifecycle/ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
-const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 const REPRESENTATIVE_FILE_LIMIT = 3
 const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 
 // Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
-export type IssueSink = (issue: AiVaultScanIssue, error?: unknown) => void
 
 export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
-}
-
-// Report refusals (WSL, permissions) so an unreadable folder or transcript is not mistaken for an empty one.
-export function recordRefusal(
-  issues: IssueSink,
-  path: string,
-  error: unknown,
-  agent: AiVaultAgent
-): void {
-  if (!isMissingTranscriptPathError(error)) {
-    issues({ agent, path, ...scanIssueTextFromError(error) }, error)
-  }
 }
 
 export async function cachedProjectDirCwd(
@@ -182,39 +168,6 @@ async function newestTranscriptsInDir(
   return newest.sort((left, right) => right.mtimeMs - left.mtimeMs).map((value) => value.path)
 }
 
-async function readFirstCwd(
-  filePath: string,
-  issues: IssueSink,
-  agent: AiVaultAgent,
-  signal?: AbortSignal
-): Promise<string | null> {
-  const input = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan', signal)
-  const lines = createInterface({ input, crlfDelay: Infinity })
-  let read = 0
-  try {
-    throwIfAiVaultScanCancelled(signal)
-    for await (const line of lines) {
-      throwIfAiVaultScanCancelled(signal)
-      if (read++ >= REPRESENTATIVE_CWD_LINE_LIMIT) {
-        break
-      }
-      const cwd = extractString(parseJsonObject(line)?.cwd)
-      if (cwd) {
-        return cwd
-      }
-    }
-  } catch (err) {
-    throwIfAiVaultScanCancelled(signal)
-    recordRefusal(issues, filePath, err, agent)
-    return null
-  } finally {
-    // readline.close() leaves its input open; destroy the stream after early exits and read failures.
-    lines.close()
-    input.destroy()
-  }
-  return null
-}
-
 export async function collectBucketFiles(args: {
   paths: readonly string[]
   agent: AiVaultAgent
@@ -236,6 +189,7 @@ export async function collectBucketFiles(args: {
       continue
     }
     try {
+      const fileStat = await wslGatedStat(path, 'scan', args.signal)
       let collected = args.collected
       if (args.inScope) {
         const cwd = await readFirstCwd(path, args.issues, args.agent, args.signal)
@@ -245,7 +199,6 @@ export async function collectBucketFiles(args: {
           continue
         }
       }
-      const fileStat = await wslGatedStat(path, 'scan', args.signal)
       throwIfAiVaultScanCancelled(args.signal)
       // Scope-only scans don't list cwd-bucket agents recursively, so their file count comes from here.
       noteAiVaultScanFileFound(args.signal, args.agent, {
@@ -257,7 +210,8 @@ export async function collectBucketFiles(args: {
         path,
         mtimeMs: fileStat.mtimeMs,
         modifiedAt: fileStat.mtime.toISOString(),
-        sizeBytes: fileStat.size
+        sizeBytes: fileStat.size,
+        ...sessionFileIdentity(fileStat)
       })
     } catch (err) {
       throwIfAiVaultScanCancelled(args.signal)

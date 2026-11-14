@@ -1,3 +1,5 @@
+import { rowsAreObserved, watchRowInterest } from '../scan-lifecycle/ai-vault-row-interest'
+import type { AiVaultRowObserver } from '../../../shared/ai-vault-scan-rows'
 import type { AiVaultServicePendingCall } from './session-scanner-service-client-state'
 import type { AiVaultServiceRequest } from './session-scanner-service-protocol'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
@@ -6,6 +8,7 @@ export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
 
 export type AiVaultServiceScanListener = {
   work: (work: AiVaultScanWork) => void
+  rows?: AiVaultRowObserver
 }
 
 // Large scans run until completion, cancellation, or child exit; history size must not time them out.
@@ -29,7 +32,11 @@ function armAiVaultServiceRequestDeadline(
 
 /** Startup time does not count toward request deadlines. */
 export function sendAiVaultServiceCall(
-  child: { send(request: AiVaultServiceRequest): unknown },
+  child: {
+    send(
+      request: AiVaultServiceRequest | { type: 'rowsInterest'; id: number; observed: boolean }
+    ): unknown
+  },
   call: AiVaultServicePendingCall,
   isActive: () => boolean,
   onTimeout: (error: Error) => void
@@ -39,7 +46,18 @@ export function sendAiVaultServiceCall(
   }
   armAiVaultServiceRequestDeadline(call, onTimeout)
   call.sent = true
+  if (call.request.operation === 'scan') {
+    call.request.options.streamRows = rowsAreObserved(call.scanListener?.rows)
+  }
   child.send(call.request)
+  if (call.request.operation === 'scan' && call.scanListener?.rows) {
+    const rows = call.scanListener.rows
+    call.stopRowsInterest = watchRowInterest(rows, () => {
+      if (!call.cancelled && isActive()) {
+        child.send({ type: 'rowsInterest', id: call.request.id, observed: rowsAreObserved(rows) })
+      }
+    })
+  }
 }
 
 export function noteAiVaultServiceScanProgress(

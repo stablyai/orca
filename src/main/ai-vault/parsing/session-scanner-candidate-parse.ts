@@ -1,3 +1,5 @@
+import { rowsAreObserved } from '../scan-lifecycle/ai-vault-row-interest'
+import type { AiVaultRowObserver } from '../../../shared/ai-vault-scan-rows'
 import { isTranscriptSourceFailure } from './session-scanner-jsonl-reader'
 import {
   physicalSessionCandidates,
@@ -47,6 +49,7 @@ export async function parseSessionCandidates(args: {
   antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
   selectCandidate?: (candidate: SessionFileCandidate) => Promise<boolean>
   admitSession?: (session: AiVaultSession) => boolean
+  observeRows?: AiVaultRowObserver
   listed?: boolean
   settled?: (candidate: SessionFileCandidate, parsed: boolean) => void
 }): Promise<AiVaultSession[]> {
@@ -133,7 +136,11 @@ export async function parseSessionCandidates(args: {
           provisional ??= parsed
         }
         throwIfAiVaultScanCancelled(args.signal)
-        return { winner: accepted ?? provisional, selected, issues }
+        const winner = accepted ?? provisional
+        if (winner && args.observeRows && rowsAreObserved(args.observeRows)) {
+          args.observeRows({ upserts: [winner.session], removed: [] })
+        }
+        return { winner, selected, issues }
       })
     )
     throwIfAiVaultScanCancelled(args.signal)

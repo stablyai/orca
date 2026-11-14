@@ -1,14 +1,15 @@
+import {
+  scanReportingProgress,
+  setServiceScanRowInterest,
+  clearServiceScanRowInterest
+} from './session-scanner-service-scan'
 import { setActiveSink } from '../../observability/tracer'
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
-import { aiVaultScanWork, trackAiVaultScanProgress } from '../scan-lifecycle/ai-vault-scan-progress'
-import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
-import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { readAiVaultFirstUserPrompt } from '../prompts/session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence
 } from '../parse-cache/session-parse-cache-persistence'
-import { scanAiVaultSessions } from '../session-scanner'
 import { invalidateSessionParseCacheEntry } from '../parse-cache/session-parse-cache-store'
 import { SessionScannerServiceSearch } from './session-scanner-service-search'
 import {
@@ -59,21 +60,6 @@ function send(message: AiVaultServiceChildMessage): void {
 
 function titleKey(request: { agent: string; sessionId: string }): string {
   return `${request.agent}\0${request.sessionId}`
-}
-
-async function scanReportingProgress(
-  request: Extract<AiVaultServiceRequest, { operation: 'scan' }>,
-  signal: AbortSignal
-): Promise<{ result: AiVaultListResult; work: AiVaultScanWork | null }> {
-  const stopProgress = trackAiVaultScanProgress(signal, (work) =>
-    send({ type: 'progress', id: request.id, work })
-  )
-  try {
-    const result = await scanAiVaultSessions({ ...request.options, signal })
-    return { result, work: aiVaultScanWork(signal) }
-  } finally {
-    stopProgress()
-  }
 }
 
 async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultServiceResultValue> {
@@ -158,6 +144,7 @@ async function handleRequest(request: AiVaultServiceRequest): Promise<void> {
     })
   } finally {
     pending.delete(request.id)
+    clearServiceScanRowInterest(request.id)
   }
 }
 
@@ -172,6 +159,9 @@ function queueRequest(request: AiVaultServiceRequest): void {
     return
   }
   pending.add(request.id)
+  if (request.operation === 'scan') {
+    setServiceScanRowInterest(request.id, request.options.streamRows === true)
+  }
   // Why: search deadlines and cancellation start at admission, independent of the interactive lane.
   if (sessionSearch.handles(request)) {
     void handleRequest(request)
@@ -219,6 +209,12 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     return
   }
   if (!initialized || shuttingDown) {
+    return
+  }
+  if (raw?.type === 'rowsInterest') {
+    if (pending.has(raw.id)) {
+      setServiceScanRowInterest(raw.id, raw.observed)
+    }
     return
   }
   if (raw?.type === 'cancel') {

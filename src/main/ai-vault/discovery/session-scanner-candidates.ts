@@ -1,3 +1,4 @@
+import { readSessionCopyProof } from '../parse-cache/session-copy-proof'
 import { prioritizeAntigravityTranscriptCandidates } from '../scanners/antigravity/antigravity-transcript-candidates'
 import { readCodexRolloutSessionMetaId } from '../../codex/history/rollouts/codex-rollout-session-meta'
 import {
@@ -95,10 +96,15 @@ export async function sessionCandidatesFromDiscoveries(
       }
     }
   }
+  const fileByPath = new Map(legacy.map((candidate) => [candidate.file.path, candidate.file]))
   const candidates: SessionFileChoice[] = await dedupeCodexRolloutCopyAliases(
     legacy,
     CODEX_ALIAS_ACCESSORS,
-    (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
+    (filePath) => {
+      const file = fileByPath.get(filePath)
+      const read = () => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan')
+      return file ? readSessionCopyProof(file, read, options.signal) : read()
+    },
     options.signal
   )
   for (const group of canonical.values()) {

@@ -1,3 +1,10 @@
+import { pumpAiVaultServiceCalls } from './session-scanner-call-admission'
+import * as callResponse from './session-scanner-call-response'
+import { aiVaultServiceCallPromise } from './session-scanner-call-request'
+import {
+  handleAiVaultServiceScanMessage,
+  recoverAiVaultScanCall
+} from './session-scanner-call-recovery'
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import {
@@ -10,8 +17,6 @@ import {
   aiVaultServiceErrorText,
   attachAiVaultServiceChild,
   cancelAiVaultServiceCall,
-  clearAiVaultServiceCall,
-  createAiVaultServicePendingCall,
   createAiVaultServiceReadyWaiter,
   rejectAiVaultServiceCall,
   requeueOrRejectAiVaultServiceStart,
@@ -23,7 +28,6 @@ import {
 } from './session-scanner-service-client-state'
 import {
   noteAiVaultServiceScanProgress,
-  sendAiVaultServiceCall,
   type AiVaultServiceScanListener
 } from './session-scanner-service-request-deadline'
 import { answerAiVaultServiceSessionSearchRoots } from './session-scanner-service-root-answer'
@@ -32,8 +36,7 @@ import {
   isAiVaultServiceChildMessage,
   type AiVaultSessionSearchInit,
   type AiVaultServiceRequest,
-  type AiVaultServiceRequestBody,
-  type AiVaultServiceResultValue
+  type AiVaultServiceRequestBody
 } from './session-scanner-service-protocol'
 import { forwardWslDistroNotesToChild } from './session-scanner-service-wsl-notes'
 
@@ -68,20 +71,17 @@ export class AiVaultScannerServiceClient {
       return Promise.reject(new Error('AI Vault service queue is full.'))
     }
     const request = { ...body, id: this.nextId++ } as AiVaultServiceRequest
-    return new Promise<T>((resolve, reject) => {
-      const call = createAiVaultServicePendingCall(
-        request,
-        signal,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers choose T as the result value of the operation they send, which is what the child answers with.
-        resolve as (value: unknown) => void,
-        reject,
-        (aborted) => this.cancel(aborted),
-        scanListener
-      )
-      this.queue.push(call)
-      this.idleRetirement.clear()
-      this.pump()
-    })
+    return aiVaultServiceCallPromise<T>(
+      request,
+      signal,
+      scanListener,
+      (call) => this.cancel(call),
+      (call) => {
+        this.queue.push(call)
+        this.idleRetirement.clear()
+        this.pump()
+      }
+    )
   }
 
   updateSessionSearch(init: AiVaultSessionSearchInit): void {
@@ -135,34 +135,16 @@ export class AiVaultScannerServiceClient {
     if (this.restartPolicy.restartScheduled) {
       return
     }
-    for (const lane of ['cache', 'interactive'] as const) {
-      if (this.active.has(lane)) {
-        continue
+    pumpAiVaultServiceCalls(
+      this.queue,
+      this.active,
+      () => this.ensureChild(),
+      (error) => this.onFault(error, true),
+      (call, error) => {
+        this.retryStartOrReject(call, error)
+        this.pump()
       }
-      const index = this.queue.findIndex((call) => call.lane === lane)
-      if (index === -1) {
-        continue
-      }
-      const call = this.queue.splice(index, 1)[0]!
-      this.active.set(lane, call)
-      void this.ensureChild().then(
-        (child) =>
-          sendAiVaultServiceCall(
-            child,
-            call,
-            () => this.active.get(call.lane) === call,
-            this.onDeadline
-          ),
-        (error: Error) => {
-          if (this.active.get(lane) !== call) {
-            return
-          }
-          this.active.delete(lane)
-          this.retryStartOrReject(call, error)
-          this.pump()
-        }
-      )
-    }
+    )
     this.startSessionSearchChild()
     this.scheduleIdleIfNeeded()
   }
@@ -246,20 +228,22 @@ export class AiVaultScannerServiceClient {
     if (!call) {
       return
     }
+    if (handleAiVaultServiceScanMessage(call, message, () => this.recoverScan(call))) {
+      return
+    }
     if (message.type === 'progress') {
       noteAiVaultServiceScanProgress(call, message.work)
       return
     }
     this.active.delete(call.lane)
-    clearAiVaultServiceCall(call)
-    if (!call.cancelled) {
-      if (message.type === 'error') {
-        call.reject(new Error(message.message))
-      } else {
-        call.resolve((message as { value: AiVaultServiceResultValue['value'] }).value)
-      }
-    }
+    callResponse.settleAiVaultServiceResponse(call, message)
     this.pump()
+  }
+
+  private recoverScan(call: AiVaultServicePendingCall): void {
+    if (this.active.get(call.lane) === call) {
+      recoverAiVaultScanCall(call, this.child, (error) => this.onFault(error, true))
+    }
   }
 
   private cancel(call: AiVaultServicePendingCall): void {
@@ -271,8 +255,6 @@ export class AiVaultScannerServiceClient {
       onFault: (error) => this.onFault(error)
     })
   }
-
-  private readonly onDeadline = (error: Error): void => this.onFault(error, true)
 
   private onFault(error: Error, retire = false): void {
     const child = this.child
@@ -291,7 +273,11 @@ export class AiVaultScannerServiceClient {
     const active = [...this.active.values()]
     this.active.clear()
     for (const call of active) {
-      this.retryStartOrReject(call, error)
+      if (call.recovering && !call.cancelled) {
+        callResponse.rejectStalledAiVaultCall(call)
+      } else {
+        this.retryStartOrReject(call, error)
+      }
     }
     this.invalidations.rejectAll(error)
   }

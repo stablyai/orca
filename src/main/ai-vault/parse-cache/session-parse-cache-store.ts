@@ -1,3 +1,8 @@
+import {
+  sameSessionFileIdentity,
+  sessionFileIdentity,
+  type SessionFileIdentity
+} from './session-file-version'
 import type { Hash } from 'node:crypto'
 import type {
   AiVaultAgent,
@@ -27,7 +32,7 @@ export type SessionParseResumePoint = {
   prefixHash: Hash | null
 }
 
-export type SessionParseCacheEntry = {
+export type SessionParseCacheEntry = SessionFileIdentity & {
   mtimeMs: number
   sizeBytes: number | null
   platform: NodeJS.Platform
@@ -52,7 +57,7 @@ export type PersistedSessionParseCacheEntry = Omit<
 // Null proves this transcript version belongs to no scoped path.
 export type SessionScopeCwdStamp = Pick<
   PersistedSessionParseCacheEntry,
-  'mtimeMs' | 'sizeBytes' | 'platform' | 'sidecar'
+  'mtimeMs' | 'sizeBytes' | 'platform' | 'sidecar' | 'dev' | 'ino' | 'birthtimeMs'
 > & { cwd: string | null }
 
 // `parsed` (from a parse row) outranks `read` (learned without a parse).
@@ -222,6 +227,7 @@ export function pruneSessionScopeCwds(discoveredPaths: ReadonlySet<string>): voi
 
 export function scopeCwdStampOf(entry: PersistedSessionParseCacheEntry): SessionScopeCwdStamp {
   return {
+    ...sessionFileIdentity(entry),
     mtimeMs: entry.mtimeMs,
     sizeBytes: entry.sizeBytes,
     platform: entry.platform,
@@ -241,12 +247,14 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
     previous.mtimeMs !== entry.mtimeMs ||
     previous.sizeBytes !== entry.sizeBytes ||
     previous.platform !== entry.platform ||
+    !sameSessionFileIdentity(previous, entry) ||
     previous.session !== entry.session ||
     previous.skippedRecords !== entry.skippedRecords ||
     !sameSidecar(previous.sidecar, entry.sidecar)
   placeRow(path, entry)
   if (changed) {
     coldTier?.stored(path, {
+      ...sessionFileIdentity(entry),
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
       platform: entry.platform,

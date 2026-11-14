@@ -1,3 +1,5 @@
+import { rowsAreObserved } from '../scan-lifecycle/ai-vault-row-interest'
+import type { AiVaultRowObserver } from '../../../shared/ai-vault-scan-rows'
 import { localAiVaultScanRoots } from '../discovery/ai-vault-scan-roots'
 import type { SessionSearchHostScope } from '../../ai-vault-search/session-search-service'
 import { fork, type ChildProcess } from 'node:child_process'
@@ -77,14 +79,23 @@ function getSharedClient(): AiVaultScannerServiceClient {
 export function scanAiVaultSessionsInService(
   options: AiVaultServiceScanOptions,
   signal?: AbortSignal,
-  progress?: LocalAiVaultScanProgressHandle
+  progress?: LocalAiVaultScanProgressHandle,
+  rows?: AiVaultRowObserver
 ): Promise<AiVaultListResult> {
   return withSpan('aiVault.scan.service', async (span) => {
     const value = await requestLocalAiVaultScan(
       (listener) =>
         getSharedClient().request<
           Extract<AiVaultServiceResultValue, { operation: 'scan' }>['value']
-        >({ type: 'request', operation: 'scan', options }, signal, listener),
+        >(
+          {
+            type: 'request',
+            operation: 'scan',
+            options: { ...options, streamRows: rowsAreObserved(rows) }
+          },
+          signal,
+          { ...listener, rows }
+        ),
       { progress }
     )
     span.setAttribute('serviceDurationMs', value.durationMs)

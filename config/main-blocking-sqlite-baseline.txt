@@ -16,7 +16,7 @@
 16 src/main/ai-vault-search/storage/session-search-store.ts
 26 src/main/ai-vault-search/storage/session-search-tool-purge.ts
 9 src/main/ai-vault-search/storage/session-search-write-buffer.ts
-19 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
+16 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
 4 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts

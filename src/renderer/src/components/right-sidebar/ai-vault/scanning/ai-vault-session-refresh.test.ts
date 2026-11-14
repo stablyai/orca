@@ -1,11 +1,17 @@
 // @vitest-environment happy-dom
 
+import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
+import { observeAiVaultProvisionalRows } from '../../ai-vault-provisional-rows'
+import {
+  markInputQuietSchedulerInput,
+  resetInputQuietSchedulerForTest
+} from '@/lib/window-activity/input-quiet-scheduler'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { AiVaultRowsEvent } from '../../../../../../shared/ai-vault-scan-rows'
 import { useAppStore } from '@/store/index'
 import {
   resetAiVaultForcedRescanThrottleForTest,
@@ -51,6 +57,11 @@ const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListRes
 const cancelListSessionsMock = vi.fn<(args: { requestToken: string }) => Promise<void>>()
 
 const onWindowFocusedMock = vi.fn(() => () => {})
+const rowObservers = new Set<(event: AiVaultRowsEvent) => void>()
+const onScanRowsMock = vi.fn((observe: (event: AiVaultRowsEvent) => void) => {
+  rowObservers.add(observe)
+  return () => rowObservers.delete(observe)
+})
 
 const initialAppState = useAppStore.getInitialState()
 
@@ -113,18 +124,6 @@ async function flushMicrotasks(): Promise<void> {
   })
 }
 
-function makeAgentEntry(sessionId: string, state = 'working'): AgentStatusEntry {
-  return {
-    state,
-    prompt: '',
-    updatedAt: 0,
-    stateStartedAt: 0,
-    paneKey: `tab-${sessionId}:leaf-${sessionId}`,
-    stateHistory: [],
-    providerSession: { key: 'session_id', id: sessionId }
-  } as AgentStatusEntry
-}
-
 function makeVaultSession(index: number): AiVaultSession {
   const id = `session-${index}`
   const timestamp = new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString()
@@ -152,26 +151,22 @@ function makeVaultSession(index: number): AiVaultSession {
   }
 }
 
-async function setAgentStatuses(entries: Record<string, AgentStatusEntry>): Promise<void> {
-  await act(async () => {
-    useAppStore.setState({ agentStatusByPaneKey: entries })
-  })
-  await flushMicrotasks()
-}
-
 function lastCallArgs(): unknown {
   return listSessionsMock.mock.calls.at(-1)?.[0]
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
+  resetInputQuietSchedulerForTest()
   listSessionsMock.mockReset().mockResolvedValue(EMPTY_RESULT)
   cancelListSessionsMock.mockReset().mockResolvedValue()
+  rowObservers.clear()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
   ;(window as any).api = {
     aiVault: {
       listSessions: listSessionsMock,
       cancelListSessions: cancelListSessionsMock,
+      onScanRows: onScanRowsMock,
       onWindowFocused: onWindowFocusedMock
     }
   }
@@ -272,47 +267,66 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
   })
 
-  it('replaces a stuck scan on manual Refresh without cancelling an automatic rescan', async () => {
-    let resolveInitial: ((result: AiVaultListResult) => void) | null = null
-    let resolveReplacement: ((result: AiVaultListResult) => void) | null = null
-    listSessionsMock
-      .mockImplementationOnce(
-        () => new Promise<AiVaultListResult>((resolve) => (resolveInitial = resolve))
-      )
-      .mockImplementationOnce(
-        () => new Promise<AiVaultListResult>((resolve) => (resolveReplacement = resolve))
-      )
+  it('retains committed rows during preview and replaces them with the completed list', async () => {
+    const initial = deferredList()
+    const next = deferredList()
+    listSessionsMock.mockReturnValueOnce(initial.promise).mockReturnValueOnce(next.promise)
     await renderHook()
-    expect(latest?.loading).toBe(true)
-
-    await setAgentStatuses({ 'pane-1': makeAgentEntry('new-session') })
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
-    expect(cancelListSessionsMock).not.toHaveBeenCalled()
-
-    cancelListSessionsMock.mockImplementationOnce(async () => {
-      resolveInitial?.({
-        ...EMPTY_RESULT,
-        sessions: [makeVaultSession(1)],
-        cancelled: true
-      })
-    })
     await act(async () => {
-      await latest?.refresh({ force: true })
+      initial.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1), makeVaultSession(2)] })
     })
     await flushMicrotasks()
+    expect(latest?.sessions).toHaveLength(2)
+    await act(async () => {
+      void latest?.refresh({ force: true })
+    })
+    const requestToken = listSessionsMock.mock.calls[1]?.[0].requestToken
+    if (!requestToken) {
+      throw new Error('refresh must supply its row request token')
+    }
+    await act(async () => {
+      for (const observe of rowObservers) {
+        observe({
+          requestToken,
+          scanId: 'next',
+          sequence: 1,
+          reset: true,
+          upserts: [makeVaultSession(3)],
+          removed: []
+        })
+      }
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(latest?.sessions.map((row) => row.id).sort()).toEqual([
+      'session-1',
+      'session-2',
+      'session-3'
+    ])
+    await act(async () => next.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(3)] }))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((row) => row.id)).toEqual(['session-3'])
+  })
 
-    expect(cancelListSessionsMock).toHaveBeenCalledExactlyOnceWith({
-      requestToken: listSessionsMock.mock.calls[0]?.[0].requestToken
+  it('sends manual Refresh to the host while the leading request is still pending, under its own token', async () => {
+    const initial = deferredList()
+    const forced = deferredList()
+    listSessionsMock.mockReturnValueOnce(initial.promise).mockReturnValueOnce(forced.promise)
+    await renderHook()
+    await act(async () => {
+      void latest?.refresh({ force: true })
     })
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
-    expect(listSessionsMock.mock.calls[1]?.[0]).toMatchObject({ force: true })
-    expect(latest?.scanResult).toBeNull()
-    expect(latest?.error).toBeNull()
-
-    await act(async () => {
-      resolveReplacement?.({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] })
-    })
-    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-2'])
+    const leadingToken = listSessionsMock.mock.calls[0]?.[0].requestToken
+    const forcedToken = listSessionsMock.mock.calls[1]?.[0].requestToken
+    expect(forcedToken).not.toBe(leadingToken)
+    expect(listSessionsMock.mock.calls[1]?.[0].force).toBe(true)
+    expect(cancelListSessionsMock).not.toHaveBeenCalled()
+    await act(async () => forced.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] }))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((row) => row.id)).toEqual(['session-2'])
+    await act(async () => initial.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] }))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((row) => row.id)).toEqual(['session-2'])
   })
 })
 
@@ -378,6 +392,106 @@ describe('useAiVaultSessionRefresh after a restart', () => {
     expect(latest?.sessions.map((session) => session.id)).toEqual(['session-3'])
     expect(latest?.loading).toBe(false)
   })
+
+  it('shows delayed saved rows when a queued final result is superseded before publication', async () => {
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const resolveScan = await restartWithScanPending()
+    const read = deferredList()
+    savedLists.read = () => read.promise
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    markInputQuietSchedulerInput()
+    await act(async () => resolveScan({ ...EMPTY_RESULT, sessions: [makeVaultSession(3)] }))
+    expect(latest?.sessions).toEqual([])
+    listSessionsMock.mockRejectedValueOnce(new Error('Refresh failed'))
+    await act(async () => latest?.refresh({ force: true }))
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(latest?.sessions).toEqual([])
+    await act(async () => read.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] }))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((row) => row.id)).toEqual(['session-1'])
+  })
 })
 
 // Plain HTTP hides crypto.randomUUID; fallback tokens must remain v4 UUIDs (#18096).
+
+describe('progressive History publication ownership', () => {
+  function observe(
+    gate: AiVaultSessionPublicationGate,
+    apply: (rows: readonly AiVaultSession[]) => void
+  ) {
+    return observeAiVaultProvisionalRows({
+      requestToken: 'token',
+      baseline: [],
+      deleted: new Set(),
+      gate,
+      isCurrent: () => true,
+      apply
+    })
+  }
+  function emit(sequence: number) {
+    for (const callback of rowObservers) {
+      callback({
+        requestToken: 'token',
+        scanId: 'scan',
+        sequence,
+        reset: sequence === 1,
+        upserts: [makeVaultSession(sequence)],
+        removed: sequence > 1 ? [`session-${sequence - 1}`] : []
+      })
+    }
+  }
+
+  it('publishes the latest rows by the first deadline despite continuous input and batches', async () => {
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const gate = new AiVaultSessionPublicationGate()
+    const reentrant = vi.fn()
+    const apply = vi.fn((_rows: readonly AiVaultSession[]) => gate.publish(EMPTY_RESULT, reentrant))
+    const stop = observe(gate, apply)
+    markInputQuietSchedulerInput()
+    emit(1)
+    for (let sequence = 2; sequence <= 20; sequence++) {
+      await vi.advanceTimersByTimeAsync(50)
+      markInputQuietSchedulerInput()
+      emit(sequence)
+    }
+    expect(apply).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(apply).toHaveBeenCalledOnce()
+    expect(apply.mock.calls[0]?.[0]?.map((row) => row.id)).toEqual(['session-20'])
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(reentrant).toHaveBeenCalledOnce()
+    stop()
+    gate.cancel()
+  })
+
+  it('lets delayed saved rows appear after a queued provisional owner retires', async () => {
+    const gate = new AiVaultSessionPublicationGate()
+    const saved = deferredList()
+    const applySaved = vi.fn()
+    gate.showUntilPublished(saved.promise, applySaved)
+    const apply = vi.fn()
+    const stop = observe(gate, apply)
+    markInputQuietSchedulerInput()
+    emit(1)
+    stop()
+    await vi.advanceTimersByTimeAsync(1000)
+    saved.resolve(EMPTY_RESULT)
+    await flushMicrotasks()
+    expect(apply).not.toHaveBeenCalled()
+    expect(applySaved).toHaveBeenCalledWith(EMPTY_RESULT)
+    gate.cancel()
+  })
+
+  it('keeps an authoritative result that replaced a retiring provisional callback', async () => {
+    const gate = new AiVaultSessionPublicationGate()
+    const stop = observe(gate, vi.fn())
+    const applyFinal = vi.fn()
+    markInputQuietSchedulerInput()
+    emit(1)
+    gate.publish(EMPTY_RESULT, applyFinal)
+    stop()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(applyFinal).toHaveBeenCalledOnce()
+    gate.cancel()
+  })
+})

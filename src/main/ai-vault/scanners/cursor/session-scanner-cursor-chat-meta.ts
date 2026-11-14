@@ -81,13 +81,16 @@ export function cursorChatMetaRefusals(): {
 }
 
 /** Path a discovery stat can watch so a rewritten meta.json invalidates the parse cache. */
-export async function cursorChatMetaPath(transcriptPath: string): Promise<string | undefined> {
+export async function cursorChatMetaPath(
+  transcriptPath: string,
+  signal?: AbortSignal
+): Promise<string | undefined> {
   const chatsRoot = cursorChatsRootFromTranscriptPath(transcriptPath)
   const chatId = cursorChatIdFromTranscriptPath(transcriptPath)
   if (!chatsRoot || !chatId) {
     return undefined
   }
-  const index = await readCursorChatMetaIndexOncePerScan(chatsRoot)
+  const index = await waitForAiVaultScan(readCursorChatMetaIndexOncePerScan(chatsRoot), signal)
   return index.get(chatId)
 }
 

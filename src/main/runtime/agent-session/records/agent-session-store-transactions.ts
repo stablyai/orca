@@ -141,6 +141,11 @@ export class AgentSessionStoreTransactions {
     return this.providerAliases.owner(nativeId)
   }
 
+  historyRowOwners(rowSessionId: string): string[] {
+    this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
+    return this.providerAliases.matchingHistoryOwners(rowSessionId)
+  }
+
   get readOnly(): boolean {
     return this.journalDatabase.readOnly
   }

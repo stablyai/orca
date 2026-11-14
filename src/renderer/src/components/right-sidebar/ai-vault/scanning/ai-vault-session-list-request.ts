@@ -95,6 +95,7 @@ export async function refreshAiVaultSessionList(
   previous?: AiVaultConditionalSnapshot
 ): Promise<AiVaultListResult> {
   const args = aiVaultSessionListArgs(request, options)
+  args.streamRows = window.api.aiVault.onScanRows !== undefined
   if (
     request.sessionLimit !== 'unlimited' &&
     parseRoutableExecutionHostId(request.executionHostScope)?.kind === 'runtime'
@@ -110,7 +111,10 @@ export async function refreshAiVaultSessionList(
     typeof args.afterFingerprint !== 'string' ||
     result.fingerprint !== args.afterFingerprint
   ) {
-    const full = await window.api.aiVault.listSessions(aiVaultSessionListArgs(request, options))
+    const full = await window.api.aiVault.listSessions({
+      ...aiVaultSessionListArgs(request, options),
+      streamRows: args.streamRows
+    })
     if (full.unchanged) {
       throw new Error('Session refresh did not return the requested full history')
     }
