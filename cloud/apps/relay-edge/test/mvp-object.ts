@@ -16,7 +16,7 @@ import nacl from 'tweetnacl'
 import WebSocket from 'ws'
 import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
 import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
-import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
+import { RelayPhoneHelloSchema } from '../../../../src/shared/mobile-relay-phone-protocol'
 
 const PORT = 8789
 const REMOTE = process.env.MVP_URL?.replace(/\/$/, '')

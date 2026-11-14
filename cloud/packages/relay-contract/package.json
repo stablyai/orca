@@ -49,6 +49,10 @@
     "./relay-regions": {
       "types": "./dist/relay-regions.d.ts",
       "default": "./dist/relay-regions.js"
+    },
+    "./ingress-header": {
+      "types": "./dist/ingress-header.d.ts",
+      "default": "./dist/ingress-header.js"
     }
   }
 }

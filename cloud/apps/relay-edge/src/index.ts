@@ -7,11 +7,13 @@ import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
+import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
+import { fromTokenSource, readIngress, type Ingress } from './ingress'
 import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
-const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place']
+const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place', INGRESS_HEADER, 'x-orca-client-ip', 'x-orca-client-country']
 
 function reject(status: number, retryAfter?: number): Response {
   const headers = retryAfter === undefined ? undefined : { 'retry-after': String(retryAfter) }
@@ -21,6 +23,7 @@ function reject(status: number, retryAfter?: number): Response {
 function forward(
   env: Env,
   request: Request,
+  ingress: Ingress | null,
   relayHostId: string,
   extra: Record<string, string>,
   target: 'host' | 'splice' = 'host',
@@ -28,8 +31,9 @@ function forward(
 ): Promise<Response> {
   const headers = new Headers(request.headers)
   for (const name of INTERNAL_HEADERS) headers.delete(name)
-  headers.set('x-edge-origin', new URL(request.url).origin)
-  headers.set('x-edge-place', requestPlace(request))
+  // The origin the client dialled: bound into the host proof transcript.
+  headers.set('x-edge-origin', ingress?.origin ?? new URL(request.url).origin)
+  headers.set('x-edge-place', requestPlace(request, ingress))
   for (const [name, value] of Object.entries(extra)) headers.set(name, value)
   const init = new Request(request.url, { method: 'GET', headers })
   if (target === 'splice') return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(spliceObject)).fetch(init)
@@ -87,12 +91,24 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) return reject(400)
+    // Director admin calls are signature-authenticated and never go through a front door: matched
+    // before the ingress rules, so an egress overlap with a front door's ranges cannot 403 them.
     const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
     if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
+    // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
+    // anything else, including a header that fails to verify, is treated as absent.
+    const ingress = await readIngress(edgeConfig(env), request)
+    if (!ingress && fromTokenSource(edgeConfig(env), request)) {
+      // From a front door's egress ranges but not trusted (missing or wrong token, origin or client
+      // address): refused, never keyed on the shared egress address as if it were a direct client.
+      metric(env, 'ingress_rejected', 1, '', [], '', requestPlace(request))
+      return reject(403)
+    }
+    if (!ingress && request.headers.has(INGRESS_HEADER)) { metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request)) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
-      return forward(env, request, abort[1], { 'x-edge-kind': 'abort' })
+      return forward(env, request, ingress, abort[1], { 'x-edge-kind': 'abort' })
     }
     const abortSplice = url.pathname.match(/^\/__spike\/abort-splice\/([^/]+)$/)
     if (abortSplice && env.SPIKE_ADMIN === '1') {
@@ -100,7 +116,7 @@ export default {
       const parsed = parseConnId(connId)
       if (!parsed) return reject(429)
       // Resets the whole slot object: every splice currently in that slot.
-      return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', parsed.object)
+      return forward(env, request, ingress, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     if (env.SPIKE_DEBUG === '1') {
       if (url.pathname === '/__spike/info') {
@@ -130,7 +146,7 @@ export default {
         return Response.json({ colo: cf?.colo ?? 'local', ms })
       }
       const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
-      if (info) return forward(env, request, info[1], { 'x-edge-kind': 'info' })
+      if (info) { return forward(env, request, ingress, info[1], { 'x-edge-kind': 'info' }) }
     }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
@@ -139,7 +155,7 @@ export default {
       const token = readBearer(request.headers.get('authorization'))
       const claims = token ? await verifyRelayJwt(env, token) : null
       if (!claims) return reject(401)
-      return forward(env, request, claims.relayHostId, {
+      return forward(env, request, ingress, claims.relayHostId, {
         'x-edge-kind': 'control',
         'x-edge-claims': JSON.stringify(claims)
       })
@@ -147,7 +163,7 @@ export default {
 
     const phone = url.pathname.match(/^\/v1\/connect\/([^/]+)$/)
     if (phone) {
-      if (!(await admitPreAuth(env, request, 'phone'))) return reject(429)
+      if (!(await admitPreAuth(env, request, 'phone', ingress))) { return reject(429) }
       if (!isUpgrade) return reject(426)
       // 429 for malformed ids matches the GCE cells.
       if (!HOST_ID.test(phone[1])) return reject(429)
@@ -158,21 +174,21 @@ export default {
         .allocateConnId(phone[1])
         .catch(() => makeConnId(phone[1], Math.floor(Math.random() * SPLICE_SLOTS)))
       if (connId === null) {
-        metric(env, 'not_on_edge', 1, '', [], '', requestPlace(request))
+        metric(env, 'not_on_edge', 1, '', [], '', requestPlace(request, ingress))
         return notOnEdge()
       }
       const parsed = parseConnId(connId)!
-      return forward(env, request, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', parsed.object)
+      return forward(env, request, ingress, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
     if (data) {
-      if (!(await admitPreAuth(env, request, 'data'))) return reject(429)
+      if (!(await admitPreAuth(env, request, 'data', ingress))) { return reject(429) }
       if (!isUpgrade) return reject(426)
       const connId = decodeURIComponent(data[1])
       const parsed = parseConnId(connId)
       if (!parsed) return reject(429)
-      return forward(env, request, parsed.relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', parsed.object)
+      return forward(env, request, ingress, parsed.relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     return reject(404)
   }

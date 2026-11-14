@@ -20,10 +20,18 @@ export type MetricEvent =
   // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'
+  // A request carried an ingress header that failed to verify (wrong secret, skew, malformed).
+  | 'ingress_refused'
+  // A request from a token-mode front door's egress ranges that failed the trust rule: answered 403.
+  | 'ingress_rejected'
+  // An ingress mode is configured but malformed, so it is off: label names the problem (per isolate).
+  | 'ingress_config_invalid'
 
 // blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
 // client's ingress '<continent>/<colo>/<country>' (e.g. 'AS/HKG/HK'; country appended so prefix
-// filters on continent/colo keep working), '' where no client is involved. One index per event for sampling.
+// filters on continent/colo keep working), '' where no client is involved. A verified ingress hop
+// appends its name: 'AS/HKG/HK/cn' (continent/colo are then the ingress hop's; country is the
+// client's when the ingress reports it, else the hop's). One index per event for sampling.
 // Heartbeat events fire per host every ping interval; keep 1 in 10 (multiply counts by 10).
 const HEARTBEAT_SAMPLE = 0.1
 
@@ -41,7 +49,9 @@ export function metric(env: Env, event: MetricEvent, value = 1, label = '', extr
 }
 
 // From the Worker's request (cf is absent in local dev).
-export function requestPlace(request: Request): string {
+export function requestPlace(request: Request, ingress?: { name: string; country?: string } | null): string {
   const cf = (request as Request & { cf?: { colo?: string; continent?: string; country?: string } }).cf
-  return cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}/${cf.country ?? '?'}` : 'local'
+  const country = ingress?.country ?? cf?.country ?? '?'
+  const place = cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}/${country}` : 'local'
+  return ingress ? `${place}/${ingress.name}` : place
 }
