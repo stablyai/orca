@@ -224,6 +224,27 @@ describe('HeadlessEmulator', () => {
 })
 
 describe('action support follows the live terminal editor', () => {
+  it('does not treat a shifted empty wide-cell continuation as predecessor text', async () => {
+    const emulator = new HeadlessEmulator({ cols: 12, rows: 3 })
+    const owner = {}
+    const current = { owner, epoch: 2 }
+    try {
+      await emulator.write('界X', { contentOrigin: { owner, epoch: 1 } })
+      await emulator.write('\r\x1b[2G\x1b[@\rA\x1b[4Gnew', { contentOrigin: current })
+      const lines = emulator.getVisibleActionLines(current)
+      const joined = joinedTerminalOrigins(lines)
+      expect(lines[0]).toBe('A  new')
+      expect(
+        compileTextTest({ contains: 'A  new' })(
+          joined.text,
+          terminalSupportQuery(joined.origins, current)
+        )
+      ).toBe(true)
+    } finally {
+      emulator.dispose()
+    }
+  })
+
   it('keeps predecessor text old through mixed writes, shifts, erase and identical repaint', async () => {
     const emulator = new HeadlessEmulator({ cols: 24, rows: 3 })
     const owner = {}

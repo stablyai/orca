@@ -13,6 +13,7 @@ type OriginCellAttributes = { fg?: number; bg?: number }
 export type OriginBufferLine = {
   length: number
   getString(index: number): string
+  hasContent(index: number): number
   getWidth(index: number): number
   translateToString(trim?: boolean, start?: number, end?: number, columns?: number[]): string
   loadCell(index: number, cell: OriginCell): OriginCell
@@ -110,7 +111,7 @@ export function readOriginScreenLines(
         for (const run of component) {
           append(at + run.start, Math.min(end, at + run.end), run.origin)
         }
-      } else {
+      } else if (line?.hasContent(column)) {
         while (state?.runs[sourceIndex] && state.runs[sourceIndex]!.end <= column) {
           sourceIndex++
         }
