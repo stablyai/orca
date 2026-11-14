@@ -49,18 +49,8 @@ export async function prepareTerminalChatForkForWorkspace(
   throughEntryId: string,
   workspacePath: string
 ): Promise<AiVaultPrepareSessionResumeResult> {
-  const router = getClaudeProfileRouter()
-  const homes = new Set([
-    ...(router ? [...router.accountHomes(), router.systemDefaultHome()] : []),
-    join(homedir(), '.claude')
-  ])
-  for (const home of homes) {
-    const filePath = await resolveSessionFilePath('claude', sessionId, {
-      claudeProjectsDir: join(home, 'projects')
-    })
-    if (!filePath) {
-      continue
-    }
+  const filePath = await findClaudeTerminalTranscript(sessionId)
+  if (filePath) {
     const cut = await copyTerminalChatForkCut({
       agent: 'claude',
       sessionId,
@@ -72,21 +62,38 @@ export async function prepareTerminalChatForkForWorkspace(
       destinationCwd: workspacePath
     })
     const forked = cut?.forkedSession
-    if (!forked) {
-      break
-    }
-    return {
-      ...cut,
-      cliForkSource: {
-        agent: 'claude',
-        sessionId: forked.sessionId,
-        filePath: forked.filePath ?? '',
-        cwd: workspacePath,
-        codexHome: null,
-        executionHostPlatform: process.platform,
-        sourceAgent: 'claude'
+    if (forked) {
+      return {
+        ...cut,
+        cliForkSource: {
+          agent: 'claude',
+          sessionId: forked.sessionId,
+          filePath: forked.filePath ?? '',
+          cwd: workspacePath,
+          codexHome: null,
+          executionHostPlatform: process.platform,
+          sourceAgent: 'claude'
+        }
       }
     }
   }
   throw new Error('chat_fork_source_unavailable')
+}
+
+/** A terminal Claude chat's transcript, found by session id among this host's Claude homes. */
+export async function findClaudeTerminalTranscript(sessionId: string): Promise<string | null> {
+  const router = getClaudeProfileRouter()
+  const homes = new Set([
+    ...(router ? [...router.accountHomes(), router.systemDefaultHome()] : []),
+    join(homedir(), '.claude')
+  ])
+  for (const home of homes) {
+    const filePath = await resolveSessionFilePath('claude', sessionId, {
+      claudeProjectsDir: join(home, 'projects')
+    })
+    if (filePath) {
+      return filePath
+    }
+  }
+  return null
 }
