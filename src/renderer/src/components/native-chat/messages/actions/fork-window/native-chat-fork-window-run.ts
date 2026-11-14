@@ -14,7 +14,7 @@ import {
 } from './native-chat-fork-window-choices'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 import { runNativeChatHostFork } from './native-chat-host-fork'
-import { runNativeChatRecapFork } from './native-chat-recap-fork'
+import { nativeChatForkRecapPrompt, runNativeChatRecapFork } from './native-chat-recap-fork'
 
 /** What the Fork window was confirmed with. */
 export type NativeChatForkWindowSelection = {
@@ -96,6 +96,11 @@ export async function runNativeChatForkWindow(
         })
       : false
   }
+  // Built before any worktree exists, so a chat with nothing to recap leaves none behind.
+  const recap = nativeChatForkRecapPrompt(source, selection.throughItemId)
+  if (recap === null) {
+    return false
+  }
   const worktreeId =
     workspace.kind === 'this'
       ? source.worktreeId
@@ -112,8 +117,7 @@ export async function runNativeChatForkWindow(
     return false
   }
   const launched = await runNativeChatRecapFork({
-    source,
-    throughItemId: selection.throughItemId,
+    recap,
     agent: selection.agent,
     worktreeId,
     ...(selection.draft ? { draft: selection.draft } : {}),

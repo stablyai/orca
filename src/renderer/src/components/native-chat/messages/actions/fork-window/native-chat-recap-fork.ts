@@ -9,13 +9,20 @@ import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/
 import { nativeChatForkRecapMessages } from './native-chat-fork-window-choices'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 
-/** The hand-off recap of the chat through the fork point, built here without asking any model. */
+/** The hand-off recap of the chat through the fork point, built here without asking any model;
+ *  null (after saying so) when there is nothing to recap. */
 export function nativeChatForkRecapPrompt(
   source: NativeChatForkWindowSource,
   throughItemId: string
 ): string | null {
   const messages = nativeChatForkRecapMessages(source.messages(), throughItemId)
   if (!messages) {
+    toast.error(
+      translate(
+        'components.agentSessionContinuation.noContext',
+        'No session context is available to continue in a new session.'
+      )
+    )
     return null
   }
   const sourceWorktree = useAppStore.getState().getKnownWorktreeById(source.worktreeId)
@@ -34,23 +41,13 @@ export function nativeChatForkRecapPrompt(
 /** Starts `agent` in the workspace with a recap of this chat through the fork point as its first
  *  message. Your message, when forking from one, follows the recap and stays unsent. */
 export async function runNativeChatRecapFork(input: {
-  source: NativeChatForkWindowSource
-  throughItemId: string
+  recap: string
   agent: TuiAgent
   worktreeId: string
   draft?: string
   signal?: AbortSignal
 }): Promise<boolean> {
-  const recap = nativeChatForkRecapPrompt(input.source, input.throughItemId)
-  if (!recap) {
-    toast.error(
-      translate(
-        'components.agentSessionContinuation.noContext',
-        'No session context is available to continue in a new session.'
-      )
-    )
-    return false
-  }
+  const { recap } = input
   const worktree = useAppStore.getState().getKnownWorktreeById(input.worktreeId)
   activateAndRevealWorktree(input.worktreeId, { sidebarRevealBehavior: 'auto' })
   return launchAgentSessionContinuation({
