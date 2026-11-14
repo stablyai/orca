@@ -111,7 +111,7 @@ export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
 }
 
 function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
-  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
+  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '')
   if (guarded !== (runtimeConfig ?? '')) {
     writeFileAtomicallyIfUnchanged(
       join(runtimeHomePath, 'config.toml'),
@@ -166,10 +166,7 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
             homes.runtimeHomePath
           )
   }
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(
-    mirroredRuntimeConfig,
-    homes.runtimeHomePath
-  )
+  const nextRuntimeConfig = applyCodexDaemonSocketGuard(mirroredRuntimeConfig)
   if ((runtimeConfigBeforeMirror ?? '') === nextRuntimeConfig) {
     return
   }
@@ -242,8 +239,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyCodexDaemonSocketGuard(
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
-      runtimeHomePath
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath)
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
     writeFileAtomically(runtimeConfigPath, freshRuntimeConfig, RUNTIME_CONFIG_WRITE)
@@ -274,7 +270,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }
