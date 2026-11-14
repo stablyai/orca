@@ -127,6 +127,7 @@ export function useWorktreeJumpPaletteStoreState({
   )
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
+  const sshStateByEnvironment = useAppStore((state) => state.sshStateByEnvironment)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   const hideDefaultBranchWorkspace = useAppStore((state) => state.hideDefaultBranchWorkspace)
@@ -211,6 +212,7 @@ export function useWorktreeJumpPaletteStoreState({
     worktreeVisibilityDefaultsByHost,
     sshTargetLabels,
     sshConnectionStates,
+    sshStateByEnvironment,
     runtimeEnvironments,
     runtimeStatusByEnvironmentId,
     hideDefaultBranchWorkspace,

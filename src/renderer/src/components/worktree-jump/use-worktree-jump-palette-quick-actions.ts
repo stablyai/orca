@@ -64,6 +64,7 @@ export function useWorktreeJumpPaletteQuickActions({
   worktreesByRepo,
   repos,
   sshConnectionStates,
+  sshStateByEnvironment,
   activeGroupIdByWorktree,
   groupsByWorktree,
   unifiedTabsByWorktree,
@@ -142,6 +143,9 @@ export function useWorktreeJumpPaletteQuickActions({
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget])
+  const openWorkspaceStatusPickerAction = useCallback(() => {
+    queueMicrotask(() => openModal('workspace-status-picker'))
+  }, [openModal])
   const buildQuickActionContext = useCallback(
     () =>
       buildCmdJQuickActionContext({
@@ -153,7 +157,8 @@ export function useWorktreeJumpPaletteQuickActions({
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
-        openAddQuickCommand: openAddQuickCommandAction
+        openAddQuickCommand: openAddQuickCommandAction,
+        openWorkspaceStatusPicker: openWorkspaceStatusPickerAction
       }),
     [
       activeGroupSnapshotRef,
@@ -163,7 +168,8 @@ export function useWorktreeJumpPaletteQuickActions({
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
       openNewMarkdownInActiveWorkspace,
-      openNewTerminalTabInActiveWorkspace
+      openNewTerminalTabInActiveWorkspace,
+      openWorkspaceStatusPickerAction
     ]
   )
   // Availability reads store state imperatively; these values supply its real memo dependencies, including managed-browser runtime status.
@@ -176,6 +182,7 @@ export function useWorktreeJumpPaletteQuickActions({
           worktreesByRepo,
           repos,
           sshConnectionStates,
+          sshStateByEnvironment,
           activeGroupIdByWorktree,
           groupsByWorktree,
           unifiedTabsByWorktree,
@@ -220,6 +227,7 @@ export function useWorktreeJumpPaletteQuickActions({
       worktreesByRepo,
       repos,
       sshConnectionStates,
+      sshStateByEnvironment,
       activeGroupIdByWorktree,
       groupsByWorktree,
       unifiedTabsByWorktree,
