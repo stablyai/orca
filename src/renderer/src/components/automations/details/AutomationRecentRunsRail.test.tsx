@@ -33,6 +33,7 @@ it('shows a folded run at its latest occurrence, the time the list and detail sh
     />
   )
   const text = container.querySelector('[data-automation-run-id="folded"]')?.textContent ?? ''
-  expect(text).toContain('Nov 9 at 1:00 AM')
-  expect(text).not.toContain('Nov 1 at')
+  // ICU versions join date and time with ", " or " at ", and may use a narrow space before AM.
+  expect(text).toMatch(/Nov 9(?:,| at) 1:00\sAM/)
+  expect(text).not.toMatch(/Nov 1\b/)
 })
