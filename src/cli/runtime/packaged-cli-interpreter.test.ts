@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { accessSync } from 'node:fs'
 import type * as Fs from 'node:fs'
 
@@ -9,11 +9,25 @@ vi.mock('node:fs', async (importOriginal) => ({
 
 const platform = process.platform
 const argv = process.argv
+const execve = Object.getOwnPropertyDescriptor(process, 'execve')
+beforeEach(() => {
+  Object.defineProperty(process, 'execve', {
+    configurable: true,
+    value: vi.fn(() => {
+      throw new Error('Unexpected native replacement')
+    })
+  })
+})
 afterEach(() => {
   Object.defineProperty(process, 'platform', { value: platform })
   process.argv = argv
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
+  if (execve) {
+    Object.defineProperty(process, 'execve', execve)
+  } else {
+    delete process.execve
+  }
   vi.mocked(accessSync).mockReset()
   vi.resetModules()
 })
