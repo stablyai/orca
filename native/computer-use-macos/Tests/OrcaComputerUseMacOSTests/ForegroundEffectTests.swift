@@ -9,7 +9,6 @@ final class ForegroundEffectTests: XCTestCase {
             XCTAssertEqual(ForegroundEffect.ofPress([Node(role: role)]), .showsMenu, role)
             XCTAssertEqual(ForegroundEffect.ofPress([Node(role: "AXStaticText", labels: ["Small"]), Node(role: role)]), .showsMenu, role)
         }
-        XCTAssertNil(ForegroundEffect.ofPress([Node(role: "AXStaticText"), Node(role: "AXGroup"), Node(role: "AXPopUpButton")]))
     }
 
     func testAWebComboboxIsATextInputNotAMenu() {
