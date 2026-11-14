@@ -1,3 +1,4 @@
+import { structuredAgentSessionReportedModelChoice } from '../../../structured-agent-session-default-model-choice'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
@@ -256,9 +257,17 @@ export function structuredAgentSessionOptionSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
-  const options = modelOptionSnapshot(state).map((option) =>
-    state.fastModeRestricted && option.id === 'fastMode' ? { ...option, settable: false } : option
-  )
+  const options = modelOptionSnapshot(state).map((option) => {
+    if (option.id === 'model') {
+      const reportedModel = structuredAgentSessionReportedModelChoice(state)
+      return reportedModel
+        ? { ...option, reportedModel: reportedModel.value, reportedModelLabel: reportedModel.label }
+        : option
+    }
+    return state.fastModeRestricted && option.id === 'fastMode'
+      ? { ...option, settable: false }
+      : option
+  })
   const interaction = structuredAgentSessionInteractionDescriptor(state)
   return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]
 }

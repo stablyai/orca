@@ -8,6 +8,7 @@ import {
 // English pieces for the session option pickers; desktop translates each one, mobile shows them as is.
 export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   model: 'Model',
+  defaultModel: 'Default',
   effort: 'Effort',
   fastMode: 'Fast mode',
   speed: 'Speed',
@@ -29,6 +30,8 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   chooseInAgentPicker: 'Choose in agent picker…',
   setWhenSessionStarts: 'Set when the session starts.',
   availableAfterSessionStarts: 'Available after the session starts.',
+  futureOptionsRequireUpdate:
+    'Update Orca on this host to change future-turn choices while the agent works.',
   sessionOptions: 'Session options'
 } as const
 
@@ -147,6 +150,8 @@ export function nativeChatSessionOptionDisabledReason(
       return say('setWhenSessionStarts')
     case 'available-after-session-start':
       return say('availableAfterSessionStarts')
+    case 'host-update-required':
+      return say('futureOptionsRequireUpdate')
     case undefined:
       return null
   }
@@ -156,6 +161,18 @@ export function nativeChatModelPillLabel(
   descriptor: SessionOptionDescriptor,
   say: NativeChatSessionOptionSay
 ): string {
+  if (descriptor.defaultChoice?.selected) {
+    if (!descriptor.reportedModel) {
+      return say('defaultModel')
+    }
+    const reported =
+      descriptor.kind.type === 'select'
+        ? descriptor.kind.choices.find((choice) => choice.value === descriptor.reportedModel)
+        : undefined
+    return reported
+      ? nativeChatSessionChoiceLabel(reported, say)
+      : (descriptor.reportedModelLabel ?? descriptor.reportedModel)
+  }
   // The tooltip names the category; default sources still identify a model, while unknown sources do not.
   const choice = descriptor.valueSource === 'unknown' ? null : selectedNativeChatChoice(descriptor)
   if (choice) {

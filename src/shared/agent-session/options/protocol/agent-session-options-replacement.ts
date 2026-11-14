@@ -4,4 +4,10 @@ export type AgentSessionOptionsReplacement = {
   sessionId: string
   fence: number
   now: number
-} & ({ options: Readonly<Record<string, string>> } | { permissionMode: string })
+} & (
+  | {
+      options: Readonly<Record<string, string>>
+      defaultModelOptions?: Readonly<Record<string, string>> | null
+    }
+  | { permissionMode: string }
+)

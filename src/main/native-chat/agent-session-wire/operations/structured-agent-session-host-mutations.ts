@@ -1,3 +1,4 @@
+import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -9,7 +10,6 @@ import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
-  AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
@@ -31,17 +31,12 @@ import {
   sendPreparation,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
-import {
-  cancelPlan,
-  sendPlan,
-  setOptionPlan,
-  type MutationPlan
-} from './structured-agent-session-mutation-plans'
+import { cancelPlan, sendPlan, setOptionPlan } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
-import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
+import { resetStructuredAgentSessionModel } from '../structured-agent-session-model-default'
 import { admitStructuredAgentSessionSend } from '../delivery/structured-agent-session-send-admission'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
-import { mutateWithChatStop } from './structured-agent-session-chat-stop'
+import { mutateWithChatStop, abortProviderWaitForStop } from './structured-agent-session-chat-stop'
 import {
   runWithReadyStructuredAgentSessionOperation,
   runAfterRewindStart
@@ -184,28 +179,6 @@ export function cancelStructuredAgentSessionTurn(
   )
 }
 
-/** Abort unnamed Stop’s startup waits immediately; named stale turns must leave newer starts alone. */
-function abortProviderWaitForStop(
-  context: StructuredAgentSessionMutationContext,
-  caller: StructuredAgentSessionCaller,
-  envelope: AgentSessionMutationEnvelope,
-  plan: MutationPlan<AgentSessionCancelResult>
-): { reached: boolean; handedOver: boolean } | null {
-  const { store } = context.deps
-  if (
-    !agentSessionMutationAdmitsNow({
-      store,
-      callerKey: caller.callerKey,
-      envelope,
-      plan,
-      now: context.now
-    })
-  ) {
-    return null
-  }
-  return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
-}
-
 export function respondToStructuredAgentSessionPrompt(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -223,7 +196,7 @@ export function respondToStructuredAgentSessionPrompt(
 export async function setStructuredAgentSessionOption(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
+  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string | null }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
   const plan = setOptionPlan(params)
   const noChoice =
@@ -236,11 +209,21 @@ export async function setStructuredAgentSessionOption(
       ...plan,
       conversationWrite: true,
       run: async (ctx) => {
-        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
+        if (params.value === null) {
+          const reset = await resetStructuredAgentSessionModel(
+            context.deps,
+            ctx,
+            Boolean((await context.conversation(ctx.sessionId)).child),
+            params.key
+          )
+          return reset
+        }
+        const input = { key: params.key, value: params.value }
+        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, input, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
-          const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, params)
+          const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, input)
           context.trackProviderOperation?.(confirming)
           void confirming.catch((error) => {
             ctx.logger.warn('confirming idle session metadata failed', {

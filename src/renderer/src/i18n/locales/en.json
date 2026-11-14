@@ -20702,6 +20702,8 @@
         "forkedFrom": "Forked from"
       },
       "composer": {
+        "defaultModel": "Default",
+        "defaultModelNotReported": "Default model not reported",
         "send": "Send",
         "planMode": "Plan",
         "moreControls": "More chat controls",
@@ -20822,7 +20824,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "futureOptionsRequireUpdate": "Update Orca on this host to change future-turn choices while the agent works."
       },
       "tool": {
         "exitCode": "exit {{value0}}",

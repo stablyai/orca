@@ -355,6 +355,24 @@ it('withdraws an abandoned queued scope while the two admitted listings continue
   expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-c' }).origin).toBe('unknown')
 })
 
+it('re-reads configured defaults on explicit reset even while the catalog is fresh', async () => {
+  const h = sharedListingHarness()
+  h.discovery.resolve({ ...listing('initial'), complete: true, configured: {} })
+  await h.service.demand({ agent: 'codex' })
+  expect(h.run).toHaveBeenCalledOnce()
+  h.run.mockResolvedValue({ ...listing('configured'), complete: true, configured: {} })
+  const answer = await h.service.read({
+    agent: 'codex',
+    waitForListing: true,
+    requireConfiguredDefault: true
+  })
+  expect(h.run).toHaveBeenCalledTimes(2)
+  if (answer.origin === 'unknown') {
+    throw new Error('Configured default was not refreshed')
+  }
+  expect(answer.models.map((model) => model.id)).toEqual(['configured'])
+})
+
 it.each([false, true])(
   'settles an identical final observation, including eviction (evicted=%s)',
   async (evicted) => {

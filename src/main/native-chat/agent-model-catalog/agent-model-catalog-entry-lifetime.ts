@@ -115,6 +115,18 @@ export function createAgentModelCatalogEntryFactory(
     )
 }
 
+export function agentModelCatalogDefaultVerified(
+  entry: AgentModelCatalogEntry,
+  attempts: ReadonlyMap<string, unknown>,
+  requireDefault: boolean
+): boolean {
+  return (
+    !requireDefault ||
+    !independentAgentModelCatalog(entry.agent) ||
+    (entry.discovered?.complete === true && !attempts.has(entry.fingerprint))
+  )
+}
+
 function writeAgentModelCatalogSuccess(
   state: {
     entries: Map<string, AgentModelCatalogEntry>

@@ -1,3 +1,4 @@
+import { ExecutionLocation } from '../structured-agent-session-location-params'
 import { AgentSessionSelectionSchema } from '../../agent-session/options/protocol/agent-session-execution-options'
 import {
   SendBody,
@@ -8,14 +9,12 @@ import {
 import { TerminalClose } from '../terminal/terminal-unary-params'
 import { Identifier, JournalCursor, SessionId } from './structured-agent-session-identifiers'
 import {
-  AGENT_SESSION_ID_MAX_LENGTH as MAX_ID_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../../agent-session/agent-session-wire'
 import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { normalizeExecutionHostId } from '../../execution-host'
 import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../../agent-session/agent-session-question-answer'
 
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/agent-session-thread-goal-wire'
@@ -40,23 +39,6 @@ export const ProviderHandle = z.discriminatedUnion('kind', [
 
 /** Host-registered agents; clients gate names beyond Claude/Codex on the registered-agents capability. */
 export const StructuredAgent = z.string().refine(isStructuredAgentId, 'Invalid agent')
-
-export const ExecutionHostId = z
-  .string()
-  .max(MAX_ID_LENGTH)
-  .transform((value) => normalizeExecutionHostId(value))
-  .refine((value): value is NonNullable<typeof value> => value !== null, {
-    message: 'Invalid execution host id'
-  })
-
-export const ExecutionLocation = z
-  .object({
-    executionHostId: ExecutionHostId,
-    wslDistro: Identifier('Invalid WSL distro').nullable(),
-    workspaceId: Identifier('Invalid workspace id'),
-    workspaceKind: z.enum(['git-worktree', 'folder'])
-  })
-  .strict()
 
 export const AccountHome = z
   .object({
@@ -179,11 +161,16 @@ export const RespondParams = z
   })
   .strict()
 
-export const SetOptionParams = z.strictObject({
-  envelope: MutationEnvelope,
-  key: Identifier('Invalid option key'),
-  value: z.string().max(MAX_OPTION_LABEL)
-})
+export const SetOptionParams = z
+  .strictObject({
+    envelope: MutationEnvelope,
+    key: Identifier('Invalid option key'),
+    value: z.string().max(MAX_OPTION_LABEL).nullable()
+  })
+  .refine(
+    (params) => params.value !== null || params.key === 'model',
+    'Only model can reset to Default'
+  )
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
