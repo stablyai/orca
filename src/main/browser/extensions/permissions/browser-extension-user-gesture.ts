@@ -2,7 +2,7 @@ import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-na
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
 
-const USER_GESTURE_WINDOW_MS = 5_000
+export const BROWSER_EXTENSION_USER_GESTURE_WINDOW_MS = 5_000
 
 const recentGestures = new WeakMap<AbortSignal, number>()
 
@@ -32,5 +32,9 @@ export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): 
   }
   const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
   const at = recentGestures.get(signal)
-  return at !== undefined && !signal.aborted && Date.now() - at <= USER_GESTURE_WINDOW_MS
+  return (
+    at !== undefined &&
+    !signal.aborted &&
+    Date.now() - at <= BROWSER_EXTENSION_USER_GESTURE_WINDOW_MS
+  )
 }

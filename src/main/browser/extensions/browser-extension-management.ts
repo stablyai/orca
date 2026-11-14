@@ -258,6 +258,6 @@ export function openBrowserExtensionOptions(
     if (!extension) {
       throw new Error('Turn the extension on to open its options')
     }
-    await openBrowserExtensionOptionsPage(browserProfileId, extension)
+    await openBrowserExtensionOptionsPage(browserProfileId, extension, { active: true })
   })
 }
