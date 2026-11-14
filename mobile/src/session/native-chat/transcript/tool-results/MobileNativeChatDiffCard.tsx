@@ -11,7 +11,7 @@ import {
   type NativeChatEditLine
 } from '../../../../../../src/shared/native-chat/tools/native-chat-edit-model'
 import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
-import { nativeChatDiffCardCopy } from '../../../../source-control/review/native-chat-diff-card-copy'
+import { nativeChatDiffCardCopy } from '../../../../source-control/review/review-notes/native-chat-diff-card-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileSourceCopyButton } from '../../../../components/MobileSourceCopyButton'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'

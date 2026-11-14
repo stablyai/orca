@@ -5,8 +5,8 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import type { WorktreeMetaGlyphPresence } from '../worktree/row-presentation/worktree-meta-glyph-presence'
-import { prStateToken } from './pr-state-token'
-import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
+import { prStateToken } from '../source-control/review/status/pr-state-token'
+import { statusColor } from '../source-control/review/status/pr-sidebar-status-color'
 
 // Use shared prStateToken to match sidebar badge: merged purple, open green, closed red, draft/unknown muted.
 export function prStateColor(state: string): string {

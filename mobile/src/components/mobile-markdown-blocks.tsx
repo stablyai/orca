@@ -29,7 +29,7 @@ import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-st
 import { MarkdownText } from './mobile-markdown-text'
 import { codeFenceClosed } from './mobile-markdown-code-nodes'
 import { plainText } from './mobile-markdown-plain-text'
-import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MermaidDiagram } from './mermaid/MermaidDiagram'
 import { MobileMarkdownCallout } from './MobileMarkdownCallout'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownDetails } from './MobileMarkdownDetails'

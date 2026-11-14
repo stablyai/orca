@@ -4,7 +4,7 @@ import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
 import { agentLaunchContextOf, useMobileAgentLaunchQueries } from './mobile-agent-launch-queries'
-import { resolveMobileSourceControlLaunchAgent } from '../../source-control/review/mobile-source-control-launch-agent'
+import { resolveMobileSourceControlLaunchAgent } from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
 
 // The agent a Fix button would start, by the same resolution the launch uses, so it can say "Fix with Claude".
 export function useMobileLaunchAgentLabel(args: {

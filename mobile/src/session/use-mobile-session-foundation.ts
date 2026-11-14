@@ -12,7 +12,7 @@ import {
 } from '../transport/connection/client-context-connection-metrics'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { type ActivePanel, canDockSessionPanel } from './session-panel-host'
-import { useMobilePrBranchContext } from '../source-control/review/use-mobile-pr-branch-context'
+import { useMobilePrBranchContext } from '../source-control/review/pull-request/use-mobile-pr-branch-context'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { useLiveWorktreeName } from '../worktree/row-presentation/use-live-worktree-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'

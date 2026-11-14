@@ -4,7 +4,7 @@ import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-
 import { getGitHubPRPrimaryReviewer } from '../../../../src/shared/github/pull-requests/pr-reviewer-display'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { SourceControlNextStep } from '../../../../src/shared/source-control/decisions/source-control-next-step-decision'
-import { presentPrMerge } from '../../components/pr-sidebar/pr-actions-state'
+import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
 import type { MobileCreatePrAction } from '../review/creation/mobile-create-pr-action'
 import type { MobileSourceControlPrimaryAction } from '../workflows/mobile-source-control-primary-action'
 

@@ -1,13 +1,13 @@
-import type * as UseMobileDiffReviewInteractionsModule from '../../../source-control/review/use-mobile-diff-review-interactions'
-import type * as MobileDiffReviewSheetsModule from '../../../source-control/review/mobile-diff-review-sheets'
+import type * as UseMobileDiffReviewInteractionsModule from '../../../source-control/review/diff-actions/use-mobile-diff-review-interactions'
+import type * as MobileDiffReviewSheetsModule from '../../../source-control/review/diff-actions/mobile-diff-review-sheets'
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
-import type { MobileDiffReviewQueueItem } from '../../../source-control/review/mobile-diff-review-queue'
+import type { MobileDiffReviewQueueItem } from '../../../source-control/review/diff-state/mobile-diff-review-queue'
 import type {
   ReviewScreenState,
   SendSheetState
-} from '../../../source-control/review/mobile-diff-review-screen-model'
+} from '../../../source-control/review/diff-state/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as NativeChatStaleInput from '../../../session/native-chat/composer/delivery/mobile-native-chat-stale-input'
@@ -24,10 +24,10 @@ export function diffReviewActionMountAdapters(
   return {
     'session.diff-review-actions': ({ client, effect }) => {
       const useInteractions = modules.load<typeof UseMobileDiffReviewInteractionsModule>(
-        'mobile/src/source-control/review/use-mobile-diff-review-interactions.ts'
+        'mobile/src/source-control/review/diff-actions/use-mobile-diff-review-interactions.ts'
       ).useMobileDiffReviewInteractions
       const reviewSheets = modules.load<typeof MobileDiffReviewSheetsModule>(
-        'mobile/src/source-control/review/mobile-diff-review-sheets.ts'
+        'mobile/src/source-control/review/diff-actions/mobile-diff-review-sheets.ts'
       )
       const staleInput = modules.load<typeof NativeChatStaleInput>(
         'mobile/src/session/native-chat/composer/delivery/mobile-native-chat-stale-input.ts'

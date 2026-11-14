@@ -12,7 +12,7 @@
     "outDir": "./node_modules/.cache/phone-host-contract-types"
   },
   "files": [
-    "src/components/MobilePRSidebar.tsx",
+    "src/source-control/review/pull-request/MobilePRSidebar.tsx",
     "src/mobile-web-shell/bridge-host-test-fakes.ts",
     "src/transport/connection/stable-logical-rpc-client.ts",
     "src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts",

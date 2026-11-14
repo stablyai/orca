@@ -20,7 +20,7 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
-import { PrStateIcon } from './PrStateIcon'
+import { PrStateIcon } from '../source-control/review/status/PrStateIcon'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
