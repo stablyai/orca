@@ -1,9 +1,9 @@
-import type { Store } from '../../persistence/loading-store/store'
-import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
-import { flushOrcadProfileStoreForShutdown } from '../host-lifecycle/orcad-lifecycle'
+import type { Store } from '../persistence/loading-store/store'
+import { beginProfileShutdownCheckpoint } from '../persistence/profile-shutdown-checkpoint'
+import { flushOrcadProfileStoreForShutdown } from '../orcad/host-lifecycle/orcad-lifecycle'
 
 /** Capture acquired profile resources even when activation fails before runtime construction. */
-export class OrcadProfileShutdown {
+export class BackendCoreProfileShutdown {
   store?: Pick<Store, 'flushPendingOrThrowAsync' | 'flushFinalOrThrowAsync' | 'freezeWritesAsync'>
   paneGrids?: { flushPaneGrids(): Promise<void> | null }
 
