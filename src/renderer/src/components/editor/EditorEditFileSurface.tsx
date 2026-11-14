@@ -25,15 +25,15 @@ import {
   type ReloadContentOptions
 } from './editor-panel-content-types'
 import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
-import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
-import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
+import { PluginFileTypeSuggestion } from './plugin-editors/PluginFileTypeSuggestion'
+import { BinaryFileDefaultAppButton } from './document-media/BinaryFileDefaultAppButton'
 import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
 import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
-import { PluginEditorSourceFallbackNotice } from './PluginEditorNeedsDesktopNotice'
-import PluginCustomEditorFrame from './PluginCustomEditorFrame'
-import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
+import { PluginEditorSourceFallbackNotice } from './plugin-editors/PluginEditorNeedsDesktopNotice'
+import PluginCustomEditorFrame from './plugin-editors/PluginCustomEditorFrame'
+import PluginBytesCustomEditorSurface from './plugin-editors/PluginBytesCustomEditorSurface'
 
 // Retry is a user act: it may start a stopped WSL distro.
 
