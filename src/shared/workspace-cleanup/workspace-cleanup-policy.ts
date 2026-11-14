@@ -138,7 +138,8 @@ export function normalizeRepoWorkspaceCleanupPolicy(
   return undefined
 }
 
-function withEveryRuleOff(rules: WorkspaceCleanupRules): WorkspaceCleanupRules {
+/** The same rules with every rule off; thresholds and protections are kept. */
+export function withEveryRuleOff(rules: WorkspaceCleanupRules): WorkspaceCleanupRules {
   return {
     merged: { enabled: false },
     unchanged: { ...rules.unchanged, enabled: false },

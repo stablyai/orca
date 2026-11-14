@@ -1,5 +1,6 @@
 import type { BrowserSlice, BrowserSliceSet } from '../browser-slice-contract'
 import { findPage, findWorkspace } from './browser-page-records'
+import { preserveBrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 
 export function createBrowserPageViewportActions(
   set: BrowserSliceSet
@@ -15,9 +16,14 @@ export function createBrowserPageViewportActions(
         if (!workspace) {
           return s
         }
-        const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
-          entry.id === pageId ? { ...entry, viewportPresetId } : entry
-        )
+        const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) => {
+          if (entry.id !== pageId) {
+            return entry
+          }
+          const nextPage = { ...entry, viewportPresetId }
+          preserveBrowserPageLoadingOwner(entry, nextPage)
+          return nextPage
+        })
         return {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,

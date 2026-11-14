@@ -1,3 +1,7 @@
+import type {
+  FolderWorkspaceCreateInput,
+  FolderWorkspaceCreateResult
+} from '../../../shared/folder-workspaces/folder-workspace-create'
 import type { WorkspaceMetadataSet } from '../../../shared/worktree/metadata/workspace-metadata-set'
 import type { SparsePresetFailure } from '../../../shared/worktree/creation/sparse-preset-failure'
 import type {
@@ -168,15 +172,7 @@ export type WorktreeApi = {
 export type FolderWorkspacesApi = {
   list: () => Promise<FolderWorkspace[]>
   getPathStatus: (args: FolderWorkspacePathStatusRequest) => Promise<FolderWorkspacePathStatus>
-  create: (args: {
-    projectGroupId: string
-    name?: string
-    folderPath?: string | null
-    connectionId?: string | null
-    linkedTask?: FolderWorkspace['linkedTask']
-    createdWithAgent?: FolderWorkspace['createdWithAgent']
-    pendingFirstAgentMessageRename?: boolean
-  }) => Promise<FolderWorkspace>
+  create: (args: FolderWorkspaceCreateInput) => Promise<FolderWorkspaceCreateResult>
   update: (args: {
     folderWorkspaceId: string
     updates: Partial<

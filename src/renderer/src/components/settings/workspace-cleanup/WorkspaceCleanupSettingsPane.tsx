@@ -105,7 +105,7 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, cachedPreview, adoptPreview } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
@@ -228,21 +228,20 @@ export function WorkspaceCleanupSettingsPane({
     rows: WorkspaceCleanupPreviewRow[]
     nextPreview: WorkspaceCleanupPreview
   } | null> => {
-    // Project rules can delete with every global rule off, so the current rules are always read,
-    // from the page's own preview when it already covers them.
-    const previews = await Promise.all([
-      previewRules(nextRules),
-      cachedPreview(latest) ?? previewRules(latest)
-    ]).catch((error: unknown) => {
-      toast.error(
-        t(
-          'components.settings.workspaceCleanup.previewFailed',
-          "Couldn't check which workspaces this change matches."
-        ),
-        { description: errorMessage(error) }
-      )
-      return null
-    })
+    // Read fresh: a cached baseline can predate files that now protect a workspace. Project rules
+    // can delete with every global rule off, so the current rules are always read.
+    const previews = await Promise.all([previewRules(nextRules), previewRules(latest)]).catch(
+      (error: unknown) => {
+        toast.error(
+          t(
+            'components.settings.workspaceCleanup.previewFailed',
+            "Couldn't check which workspaces this change matches."
+          ),
+          { description: errorMessage(error) }
+        )
+        return null
+      }
+    )
     return previews
       ? { rows: newRemovals(previews[0], previews[1]), nextPreview: previews[0] }
       : null

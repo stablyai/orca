@@ -200,6 +200,7 @@ export function createRepoUpdateActions(
                 ghAccount,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
+                workspaceCleanupPolicy,
                 ...updatesWithoutClearSentinels
               } = sanitizedUpdates
               mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
@@ -244,6 +245,12 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutGhAccount
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
+              }
+              if (workspaceCleanupPolicy === null) {
+                const { workspaceCleanupPolicy: _policy, ...repoWithoutCleanupPolicy } = mergedRepo
+                mergedRepo = repoWithoutCleanupPolicy
+              } else if (workspaceCleanupPolicy !== undefined) {
+                mergedRepo = { ...mergedRepo, workspaceCleanupPolicy }
               }
               return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })

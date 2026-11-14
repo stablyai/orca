@@ -88,6 +88,17 @@ export type SessionFileCandidate = {
   antigravityHistoryPath?: string
 }
 
+// Pass-local wrapper; only its original physical candidates may reach parsers or IPC.
+export type SessionFileChoice = SessionFileCandidate & {
+  alternatives?: readonly SessionFileCandidate[]
+}
+
+export function physicalSessionCandidates(
+  choice: SessionFileChoice
+): readonly SessionFileCandidate[] {
+  return choice.alternatives ?? [choice]
+}
+
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
@@ -99,6 +110,7 @@ export type SessionFileDiscovery = {
 }
 
 export type SessionParseResult = {
+  sourceFailed?: boolean
   session: AiVaultSession | null
   issue: AiVaultScanIssue | null
 }

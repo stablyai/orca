@@ -1,3 +1,4 @@
+import type { GroupHookCheckResult } from '../../../../shared/project-group-hooks'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
@@ -115,4 +116,22 @@ export async function writeRuntimeIssueCommand(
     { repo: repoId, content, ...wake },
     { timeoutMs: 15_000 }
   )
+}
+
+export type { GroupHookCheckResult } from '../../../../shared/project-group-hooks'
+
+export async function checkRuntimeGroupHooks(
+  hostId: ExecutionHostId,
+  groupId: string,
+  options: { background?: boolean } = {}
+): Promise<GroupHookCheckResult> {
+  const target = getHookInspectionTarget(hostId)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<GroupHookCheckResult>(
+        target,
+        'projectGroup.checkHooks',
+        { groupId, ...options },
+        { timeoutMs: 15_000 }
+      )
+    : window.api.projectGroups.checkHooks({ groupId, ...options })
 }

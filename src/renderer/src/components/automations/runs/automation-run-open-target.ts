@@ -25,7 +25,10 @@ import {
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { getAutomationRunViewState } from './automation-run-view-state'
+import {
+  getAutomationRunViewState,
+  type AutomationRunWorkspaceRecord
+} from './automation-run-view-state'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
@@ -56,7 +59,7 @@ export function resolveAutomationRunOpenTarget({
   currentLayout,
   livePtyIds
 }: {
-  run: AutomationRun
+  run: AutomationRunWorkspaceRecord
   terminalTabExists: boolean
   currentLayout: TerminalLayoutSnapshot | null | undefined
   livePtyIds: readonly string[]
@@ -100,7 +103,7 @@ export type AutomationRunTerminalState = {
 
 /** Paired runs name server tab/pane/PTY identities; local mirrors use server terminal handles, so require a PTY from that server instead of comparing its internal PTY ID. */
 export function resolveAutomationRunTerminalTarget(
-  run: AutomationRun,
+  run: AutomationRunWorkspaceRecord,
   terminals: AutomationRunTerminalState,
   ownerEnvironmentId: string | null
 ): AutomationRunPaneTarget | null {
@@ -171,7 +174,7 @@ export function resolveAutomationRunTarget(
     | 'projectGroups'
     | 'settings'
   >,
-  run: AutomationRun,
+  run: AutomationRunWorkspaceRecord,
   authority: AutomationAuthorityRef | null
 ) {
   const environmentId = authority?.kind === 'runtime' ? authority.environmentId : null

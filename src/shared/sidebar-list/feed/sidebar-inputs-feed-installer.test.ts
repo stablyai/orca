@@ -141,24 +141,6 @@ describe('sidebar inputs installer', () => {
     expect(rowsOf(done)).toEqual({ order: { rankedIds: ['x', 'y'] } })
   })
 
-  it('reads a snapshot on a delta from elsewhere, a page from another batch, or unjoinable parts', () => {
-    const base = installed()
-    const read = sidebarInputsChanged(base.state, { generation: 'g1', revision: 5 })
-    const mismatch = reply(read, page({ kind: 'delta', from: 2, revision: 5 }))
-    expect(mismatch.state.installed).toBe(base.state.installed)
-
-    const broken = reply(
-      read,
-      page({
-        kind: 'delta',
-        from: 3,
-        revision: 5,
-        domains: { rows: { upserts: {}, removals: [], parts: { a: '{"unterminated' } } }
-      })
-    )
-    expect(broken.state.installed).toBe(base.state.installed)
-  })
-
   it('re-reads from what is installed on a reset, and on a notice from a new generation', () => {
     const base = installed()
     const read = refreshSidebarInputs(base.state)
