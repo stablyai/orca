@@ -9,6 +9,13 @@ export function kiroTranscriptPathForMetadata(filePath: string): string {
   return filePath.endsWith('.json') ? `${filePath}l` : ''
 }
 
+/** Kiro's V3 engine keeps `sess_<uuid>/session.json` beside a `messages.jsonl` transcript. */
+export function kiroV3TranscriptPathForManifest(filePath: string): string {
+  return getRuntimePathBasename(filePath) === 'session.json'
+    ? replaceSessionFileName(filePath, 'messages.jsonl')
+    : ''
+}
+
 export function grokTranscriptPathForMetadata(filePath: string): string {
   return replaceSessionFileName(filePath, 'chat_history.jsonl')
 }
@@ -60,7 +67,8 @@ const logFileResolvers = {
   kimi: () => null,
   muse: jsonlLog,
   jcode: jsonLog,
-  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null
+  kiro: (filePath) =>
+    kiroV3TranscriptPathForManifest(filePath) || kiroTranscriptPathForMetadata(filePath) || null
 } satisfies Record<AiVaultAgent, LogFileResolver>
 
 export function aiVaultSessionLogFilePath(

@@ -31,6 +31,7 @@ import {
 import { rovoSessionCwd } from '../scanners/session-scanner-rovo-metadata'
 import { grokSessionCwd } from '../scanners/grok/session-scanner-grok-parser'
 import { listedKiroMetadata } from '../scanners/kiro/session-scanner-kiro-parser'
+import { kiroV3ManifestCwd } from '../scanners/kiro/session-scanner-kiro-v3-parser'
 import { openCodeSessionCwd } from '../scanners/opencode/session-scanner-opencode-parser'
 
 type HeadRecord = Record<string, unknown>
@@ -128,9 +129,10 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
     return metadata ? rovoSessionCwd(metadata) : null
   }),
   cline: document(clineManifestCwd),
+  // The chat store records `cwd`; V3 engine manifests record `workspacePaths` instead.
   kiro: document((content) => {
     const metadata = listedKiroMetadata(content)
-    return metadata ? extractString(metadata.cwd) : null
+    return metadata ? (extractString(metadata.cwd) ?? kiroV3ManifestCwd(metadata)) : null
   }),
   cursor: CURSOR,
   // Legacy session files; database rows (`<db>#<id>`) are already filtered by directory in SQL.

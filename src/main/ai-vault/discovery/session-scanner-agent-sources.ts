@@ -5,18 +5,14 @@ import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-overrid
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../../shared/grok-session-paths'
-import { resolveKiroHomeDir } from '../../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
-import {
-  clineMessagesPathForMetadata,
-  kiroTranscriptPathForMetadata
-} from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
+import { clineMessagesPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { isClineSessionMetadataPath } from '../scanners/cline/session-scanner-cline-parser'
 import { cursorChatMetaPath } from '../scanners/cursor/session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from '../scanners/devin/session-scanner-devin-db'
 import { resolveKimiSessionsDir } from '../scanners/kimi/session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from '../../../shared/muse-session-log'
-import { isKiroSessionMetadataPath } from '../scanners/kiro/session-scanner-kiro-parser'
+import { KIRO_AGENT_SOURCE } from '../scanners/kiro/session-scanner-kiro-sources'
 
 import { OPENCLAW_AGENT_SOURCE } from '../scanners/openclaw/openclaw-session-layout'
 import { isOmpConversationDirectory } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
@@ -65,7 +61,6 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   ),
   'transcripts'
 )
-const KIRO_SESSIONS_DIR = join(resolveKiroHomeDir(), 'sessions', 'cli')
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
@@ -208,20 +203,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // Exclude live journals and consolidated backups.
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
   },
-  kiro: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.kiroSessionsDir ?? KIRO_SESSIONS_DIR, wslHomeDirs, [
-        '.kiro',
-        'sessions',
-        'cli'
-      ]),
-    extensions: ['.json'],
-    filePredicate: isKiroSessionMetadataPath,
-    // Transcript appends must invalidate the cached metadata row.
-    contentDependencyPath: kiroTranscriptPathForMetadata,
-    // Per-session subdirectories hold background task state, not sessions.
-    directoryPredicate: () => false
-  },
+  kiro: KIRO_AGENT_SOURCE,
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(options.rovoSessionsDir ?? ROVO_SESSIONS_DIR, wslHomeDirs, [

@@ -27,6 +27,7 @@ type ParserSessionOptions = {
 }
 
 // Kiro CLI chat uses flat metadata/transcript pairs; ACP V3 and task subdirectories have separate stores.
+// The V3 store is read by session-scanner-kiro-v3-parser.ts.
 const KIRO_SESSION_FILE_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/i
 
