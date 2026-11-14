@@ -2,6 +2,7 @@
 // Restore legacy .expired folders still belonging to chats; cleanup failures never block startup.
 
 import type { Dirent } from 'node:fs'
+import { sweepChatTemporaryStorage } from './native-chat-temporary-storage'
 import { lstat, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
@@ -98,6 +99,15 @@ export function scheduleNativeChatVisualsSweep(deps: NativeChatVisualsSweepDeps)
   const run = async (): Promise<void> => {
     try {
       await sweepNativeChatVisualsFolders(deps, () => stopped)
+      if (!stopped) {
+        const temporary = await sweepChatTemporaryStorage(deps.stateDirectory, {}, () => stopped)
+        if (temporary.failed) {
+          deps.logger.warn('native-chat temporary cleanup was incomplete', {
+            scope: 'nativeChatVisuals.temporarySweep',
+            ...temporary
+          })
+        }
+      }
     } catch (error) {
       deps.logger.warn('native-chat visuals sweep failed', {
         scope: 'nativeChatVisuals.sweep',

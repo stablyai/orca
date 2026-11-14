@@ -19,6 +19,7 @@ import {
 } from '../launch/codex-structured-launch-resolution'
 import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
+  NATIVE_CHAT_TEMP_DIR_ENV,
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
@@ -141,7 +142,11 @@ export async function runCodexProviderAppServer<T>(
       cwd,
       cliPath: command,
       env: { ...env, CODEX_HOME: codexHome },
-      envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
+      envToDelete: [
+        NATIVE_CHAT_SCRATCH_DIR_ENV,
+        NATIVE_CHAT_TEMP_DIR_ENV,
+        LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
+      ],
       ...options
     },
     (rpc) => body(rpc, cwd)

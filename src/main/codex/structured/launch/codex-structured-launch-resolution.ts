@@ -34,6 +34,7 @@ import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-pat
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
+  NATIVE_CHAT_TEMP_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 
@@ -188,7 +189,7 @@ export function codexStructuredLaunchPart(
       ),
       // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
-        ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+        ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV, NATIVE_CHAT_TEMP_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ],
       cliRuntimeCommand: command

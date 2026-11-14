@@ -31,7 +31,10 @@ import type {
   ClaudeCliFlagSupport
 } from '../../cli-capabilities/claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
-import { withNativeChatVisualsEnv } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import {
+  withNativeChatVisualsEnv,
+  nativeChatVisualsWritableFolders
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
@@ -233,7 +236,7 @@ export function claudeStructuredLaunchPart(
     const additionalDirectories = [
       ...configured.additionalDirectories,
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
-      ...(visuals ? [visuals.visuals.folder] : [])
+      ...(visuals ? nativeChatVisualsWritableFolders(visuals.visuals) : [])
     ]
     const permission = claudeStructuredPermissionOptions(basis.permissionMode ?? 'ask')
     // --resume fails without a transcript; --session-id collides with an existing one.
