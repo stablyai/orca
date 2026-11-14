@@ -1,4 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { setRendererUiLanguage } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +17,8 @@ import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
 import { ProviderSegment } from './StatusBarProviderSegment'
 import { UsageRosterPanel } from './UsageRosterPanel'
+import { ProviderPanel } from './provider-usage-panel'
+import { UsageDisplayToggle } from './usage-meter'
 import { useAppStore } from '../../../store'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 
@@ -23,12 +27,14 @@ const MIN = 60_000
 const HOUR = 60 * MIN
 const DAY = 24 * HOUR
 
-type Preset = { s5: number; wk: number; fable: number }
+// Why null: a snapshot can carry only the Fable window, with no 5h/weekly reading yet.
+type Preset = { s5: number | null; wk: number | null; fable: number }
 const PRESETS = {
   healthy: { s5: 12, wk: 33, fable: 0 },
   low: { s5: 86, wk: 72, fable: 41 },
   full: { s5: 40, wk: 100, fable: 100 },
-  fable: { s5: 12, wk: 33, fable: 100 }
+  fable: { s5: 12, wk: 33, fable: 100 },
+  fableOnly: { s5: null, wk: null, fable: 100 }
 } satisfies Record<string, Preset>
 
 function win(usedPercent: number, windowMinutes: number, resetsInMs: number): RateLimitWindow {
@@ -55,8 +61,8 @@ function claudeFor(preset: Preset): ProviderRateLimits {
   return {
     ...base('claude'),
     planType: 'max',
-    session: win(preset.s5, 300, 3 * HOUR + 35 * MIN),
-    weekly: win(preset.wk, 10_080, 4 * DAY + 23 * HOUR),
+    session: preset.s5 === null ? null : win(preset.s5, 300, 3 * HOUR + 35 * MIN),
+    weekly: preset.wk === null ? null : win(preset.wk, 10_080, 4 * DAY + 23 * HOUR),
     fableWeekly: win(preset.fable, 10_080, 4 * DAY + 23 * HOUR)
   }
 }
@@ -165,6 +171,18 @@ const OTHER_ACCOUNT: ProviderRateLimits = {
   fableWeekly: win(6, 10_080, 3 * DAY + 11 * HOUR)
 }
 
+// Why a component: the heading must re-render when a fixture switches the UI language.
+function FixtureAccountList({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <AccountSwitchList
+      heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+    >
+      {children}
+    </AccountSwitchList>
+  )
+}
+
 function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
   const claude = claudeFor(preset)
   const accounts: {
@@ -194,7 +212,7 @@ function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
                 inMenu
               />
             </div>
-            <AccountSwitchList heading="Accounts">
+            <FixtureAccountList>
               {accounts.map((account) => (
                 <AccountSwitchRowItem
                   key={account.label}
@@ -209,7 +227,7 @@ function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
                   )}
                 </AccountSwitchRowItem>
               ))}
-            </AccountSwitchList>
+            </FixtureAccountList>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -245,4 +263,55 @@ export const rosterToggleFocused = defineFixture({
     // Why Enter: proves the keyboard path flips the setting and the menu stays open.
     toggle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   }
+})
+
+function focusToggle(frame: HTMLElement): void {
+  const toggle = frame.ownerDocument.querySelector<HTMLElement>('[data-usage-display-toggle]')
+  toggle?.focus()
+}
+
+export const rosterFableOnly = rosterFixture(PRESETS.fableOnly, 'used', 'compact')
+export const rosterFableOnlyNarrow300 = rosterFixture(PRESETS.fableOnly, 'used', 'compact', 324)
+export const rosterFableNarrow300 = rosterFixture(PRESETS.fable, 'used', 'compact', 324)
+export const rosterFullNarrow300 = rosterFixture(PRESETS.full, 'used', 'compact', 324)
+export const rosterDetailedNarrow300 = rosterFixture(PRESETS.low, 'used', 'verbose', 324)
+export const rosterFullCompact = rosterFixture(PRESETS.full, 'used', 'compact')
+
+export const rosterGerman = defineFixture({
+  ...rosterFixture(PRESETS.low, 'used'),
+  interact: () => setRendererUiLanguage('de')
+})
+
+export const cardGerman = defineFixture({
+  ...cardFixture(PRESETS.full, 'used'),
+  interact: () => setRendererUiLanguage('de')
+})
+
+export const cardToggleFocused = defineFixture({
+  ...cardFixture(PRESETS.low, 'used'),
+  interact: focusToggle
+})
+
+export const providerPanelGrok = defineFixture({
+  width: 480,
+  render: () => (
+    <div className="h-[260px] bg-background p-3">
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>Grok</DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[440px] max-w-[calc(100vw-1rem)]">
+          <div className="p-2">
+            <ProviderPanel
+              p={{
+                ...base('grok'),
+                session: win(84, 300, 2 * HOUR + 10 * MIN),
+                weekly: win(39, 10_080, 6 * DAY + 11 * HOUR)
+              }}
+              usagePercentageDisplay="used"
+              headerAction={<UsageDisplayToggle asMenuItem />}
+            />
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
 })

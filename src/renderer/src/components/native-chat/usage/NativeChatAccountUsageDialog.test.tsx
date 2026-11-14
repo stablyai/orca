@@ -115,7 +115,6 @@ describe('/usage modal', () => {
       .mockResolvedValueOnce({ outcome: 'nothingToReset' })
     render(<NativeChatAccountUsageDialog />)
     await screen.findByText('chat@example.com')
-    expect(screen.getByText('100%')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
     await screen.findByRole('button', { name: 'Retry' })
     const first = mocks.reset.mock.calls[0]?.[2]

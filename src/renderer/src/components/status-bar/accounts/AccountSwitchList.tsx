@@ -30,7 +30,9 @@ export function AccountSwitchList({
           <span className="min-w-0 flex-1 truncate">{heading}</span>
           <span className="flex shrink-0 items-end gap-1 text-right">
             <span
-              className={showResetColumn ? 'min-w-8 whitespace-nowrap' : 'w-9 whitespace-nowrap'}
+              className={
+                showResetColumn ? 'min-w-8 whitespace-nowrap' : 'min-w-9 whitespace-nowrap'
+              }
             >
               {display === 'used'
                 ? t('auto.components.status.bar.AccountSwitchList.used', 'Used')

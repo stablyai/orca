@@ -19,9 +19,13 @@ import {
   usedSections,
   type UsageSection
 } from './usage-headline-sections'
-import { formatResetsInCaption } from './usage-reset-caption'
+import {
+  formatLocalizedResetDuration,
+  formatResetsInCaption,
+  validResetAt
+} from './usage-reset-caption'
 import { formatBareUsagePercentage } from './usage-percentage-label'
-import { usageTextClass } from './usage-health-tone'
+import { getUsageHealthTone, usageTextClass } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
@@ -51,6 +55,24 @@ function DetailMetric({
   )
 }
 
+function ScopedUsageFlag({
+  section,
+  display
+}: {
+  section: UsageSection
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <span
+      data-usage-scoped-urgent
+      className={`shrink-0 text-[11px] ${usageTextClass(section.window.usedPercent)}`}
+    >
+      {`${section.label} ${formatBareUsagePercentage(section.window.usedPercent, display, t)}`}
+    </span>
+  )
+}
+
 function RowUsageSummary({
   p,
   display,
@@ -63,26 +85,38 @@ function RowUsageSummary({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const headline = getUsageHeadlineSection(p, t)
+  const scoped = getUrgentScopedSection(p, t)
   if (!headline) {
+    // Why both: no ordinary reading yet, but a nearly spent Fable/MCP limit is still worth naming.
     return (
-      <span data-usage-not-checked className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-        {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
+      <span className="ml-auto flex shrink-0 items-center gap-2">
+        {scoped ? <ScopedUsageFlag section={scoped} display={display} /> : null}
+        <span data-usage-not-checked className="text-[11px] text-muted-foreground">
+          {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
+        </span>
       </span>
     )
   }
-  const scoped = getUrgentScopedSection(p, t)
-  const caption = formatResetsInCaption(headline.window.resetsAt, now, intlLocale, t)
+  // Why: a nearly spent headline needs its own reset more than a scoped flag the Detailed line repeats.
+  const showScoped = scoped !== null && getUsageHealthTone(headline.window.usedPercent) !== 'urgent'
+  const resetsAt = validResetAt(headline.window.resetsAt)
+  const resetLabel =
+    resetsAt === null
+      ? null
+      : (formatLocalizedResetDuration(resetsAt, now, intlLocale) ??
+        t('auto.components.status.bar.InlineUsageBars.now', 'now'))
   return (
     <span className="ml-auto flex shrink-0 items-center gap-2">
-      {scoped ? (
+      {showScoped && scoped ? (
+        <ScopedUsageFlag section={scoped} display={display} />
+      ) : resetLabel ? (
         <span
-          data-usage-scoped-urgent
-          className={`text-[11px] @max-[340px]:hidden ${usageTextClass(scoped.window.usedPercent)}`}
+          data-usage-reset
+          aria-label={formatResetsInCaption(resetsAt, now, intlLocale, t) ?? undefined}
+          className="text-[11px] text-muted-foreground @max-[340px]:hidden"
         >
-          {`${scoped.label} ${formatBareUsagePercentage(scoped.window.usedPercent, display, t)}`}
+          {resetLabel}
         </span>
-      ) : caption ? (
-        <span className="text-[11px] text-muted-foreground @max-[340px]:hidden">{caption}</span>
       ) : null}
       <UsageBar
         usedPercent={headline.window.usedPercent}

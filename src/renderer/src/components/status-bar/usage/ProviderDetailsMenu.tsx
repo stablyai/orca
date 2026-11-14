@@ -105,7 +105,7 @@ export function ProviderDetailsMenu({
           {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
           collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
           scrollable
-          className={`${variant === 'account' ? 'w-[440px]' : 'w-[300px]'} max-w-[calc(100vw-1rem)]`}
+          className="w-[440px] max-w-[calc(100vw-1rem)]"
         >
           {panelBody}
         </DropdownMenuSubContent>
@@ -135,7 +135,7 @@ export function ProviderDetailsMenu({
         side="top"
         align="start"
         sideOffset={8}
-        className={`${variant === 'account' ? 'w-[440px]' : 'w-[260px]'} max-w-[calc(100vw-1rem)]`}
+        className="w-[440px] max-w-[calc(100vw-1rem)]"
         onPointerDownOutside={menuFocusHandoff.onPointerDownOutside}
         onCloseAutoFocus={menuFocusHandoff.onCloseAutoFocus}
       >

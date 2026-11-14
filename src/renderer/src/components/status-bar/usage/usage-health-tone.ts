@@ -21,7 +21,8 @@ export function getUsageHealthTone(usedPercent: number): UsageHealthTone {
 
 const BAR_CLASS: Record<UsageHealthTone, string> = {
   healthy: 'bg-emerald-600 dark:bg-emerald-500',
-  warning: 'bg-yellow-500',
+  // Why 600 in light: yellow-500 barely separates from the light track.
+  warning: 'bg-yellow-600 dark:bg-yellow-500',
   urgent: 'bg-red-500'
 }
 

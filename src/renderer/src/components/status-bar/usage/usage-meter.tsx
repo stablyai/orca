@@ -77,7 +77,7 @@ export function UsageDisplayToggle({
   const setDisplay = useAppStore((s) => s.setUsagePercentageDisplay)
   const label = useUsageDisplayLabel(display)
   const next: UsagePercentageDisplay = display === 'used' ? 'remaining' : 'used'
-  const ariaLabel =
+  const actionLabel =
     next === 'remaining'
       ? t('auto.components.status.bar.UsageDisplayToggle.showRemaining', 'Show remaining usage')
       : t('auto.components.status.bar.UsageDisplayToggle.showUsed', 'Show used usage')
@@ -86,8 +86,9 @@ export function UsageDisplayToggle({
       type="button"
       variant="muted-field-icon"
       size="xs"
-      aria-label={ariaLabel}
-      title={ariaLabel}
+      title={actionLabel}
+      // Why not aria-label: the accessible name must contain the visible "Used"/"Left" (WCAG 2.5.3).
+      aria-description={actionLabel}
       data-usage-display-toggle={display}
       onClick={asMenuItem ? undefined : () => setDisplay(next)}
     >
