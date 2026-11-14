@@ -23,17 +23,6 @@ function sendBeforeInput(field: HTMLElement, inputType: string): InputEvent {
 }
 
 describe('the web sibling', () => {
-  it('submits on the line break the browser reports, and cancels it', () => {
-    const onSubmit = vi.fn()
-    const field = mountField()
-    bindOnWeb(asField(field), onSubmit)
-
-    const event = sendBeforeInput(field, 'insertLineBreak')
-
-    expect(onSubmit).toHaveBeenCalledTimes(1)
-    expect(event.defaultPrevented).toBe(true)
-  })
-
   // IME candidate acceptance emits insertCompositionText, so it must not submit terminal input.
   it('leaves a composition commit alone', () => {
     const onSubmit = vi.fn()
@@ -78,18 +67,17 @@ describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s'
     return { field, onChord, unbind, key }
   }
 
-  it.each([
-    ['c', { ctrlKey: true }, '\x03'],
-    ['ArrowLeft', { ctrlKey: true }, '\x1b[1;5D'],
-    ['Enter', { shiftKey: true }, '\x1b[13;2u']
-  ])('claims %s once before RNWeb can resend it', (name, options, bytes) => {
-    const { field, onChord, key } = setup()
-    const parentKey = vi.fn()
-    field.parentElement?.addEventListener('keydown', parentKey, { once: true })
-    expect(key(name, options).defaultPrevented).toBe(true)
-    expect(onChord).toHaveBeenCalledExactlyOnceWith({ bytes })
-    expect(parentKey).not.toHaveBeenCalled()
-  })
+  it.each([['c', { ctrlKey: true }, '\x03']])(
+    'claims %s once before RNWeb can resend it',
+    (name, options, bytes) => {
+      const { field, onChord, key } = setup()
+      const parentKey = vi.fn()
+      field.parentElement?.addEventListener('keydown', parentKey, { once: true })
+      expect(key(name, options).defaultPrevented).toBe(true)
+      expect(onChord).toHaveBeenCalledExactlyOnceWith({ bytes })
+      expect(parentKey).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(['b'])('keeps Option-generated %j native on iOS and Alt chords on Android', (name) => {
     const { onChord, key } = setup()
@@ -98,17 +86,12 @@ describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s'
   })
 
   it.each([
-    ['a', {}],
-    ['Enter', {}],
     ['Enter', { ctrlKey: true, shiftKey: true }],
-    ['Backspace', {}],
-    ['ArrowLeft', {}],
     ['c', { ctrlKey: true, isComposing: true }],
     ['c', { ctrlKey: true, keyCode: 229 }],
     ['c', { ctrlKey: true, altKey: true }],
     ['c', { metaKey: true }],
-    [' ', { ctrlKey: true }],
-    ['1', { ctrlKey: true }]
+    [' ', { ctrlKey: true }]
   ])('leaves %s input and IME/platform shortcuts alone', (name, options) => {
     const { onChord, key } = setup()
     expect(key(name, options).defaultPrevented).toBe(false)

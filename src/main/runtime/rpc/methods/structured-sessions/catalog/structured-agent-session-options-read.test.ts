@@ -78,6 +78,25 @@ describe('agentSession.modelCatalog', () => {
     )
   })
 
+  it.each([false, true])(
+    'negotiates early progress through the existing client capability (enabled=%s)',
+    async (enabled) => {
+      record = { ...agentSessionRecordFixture(), provider: 'codex' }
+      const result = await call(
+        'agentSession.modelCatalog',
+        { agent: 'codex', sessionId: record.sessionId, waitForListing: true },
+        {
+          ...STRUCTURED_CLIENT,
+          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(
+            (capability) => enabled || capability !== 'agent-session.model-catalog.progress.v1'
+          )
+        }
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      expect(read).toHaveBeenLastCalledWith(expect.objectContaining({ progress: enabled }))
+    }
+  )
+
   it("keeps a moved floating workspace's list apart from the old folder's late answer", async () => {
     const late = Promise.withResolvers<AgentModelCatalogSuccess>()
     const listed = (id: string): AgentModelCatalogSuccess => ({

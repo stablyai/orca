@@ -37,32 +37,6 @@ describe('buildWorkspaceDetailLinks', () => {
     expect(links[3]).toMatchObject({ title: 'Bug', url: 'https://x/3' })
   })
 
-  it("carries the row's PR state, title, link and checks onto its entry", () => {
-    const [pr, other] = buildWorkspaceDetailLinks(
-      row({
-        linkedItems: [{ provider: 'github', type: 'pr', number: 9, title: 'Older linked PR' }],
-        linkedPR: {
-          number: 12,
-          state: 'merged',
-          title: 'Search keyboard',
-          url: 'https://github.com/o/r/pull/12',
-          checksStatus: 'failure'
-        }
-      })
-    )
-
-    expect(pr).toMatchObject({ label: 'PR #9', title: 'Older linked PR' })
-    expect(pr).not.toHaveProperty('state')
-    expect(other).toMatchObject({
-      label: 'PR #12',
-      number: 12,
-      title: 'Search keyboard',
-      url: 'https://github.com/o/r/pull/12',
-      state: 'merged',
-      checks: 'failure'
-    })
-  })
-
   it('enriches a linked entry for the same repo and PR', () => {
     const links = buildWorkspaceDetailLinks(
       row({

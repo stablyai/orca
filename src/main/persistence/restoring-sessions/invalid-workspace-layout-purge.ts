@@ -6,11 +6,11 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/exec
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isWorktreeCatalogVersionBefore } from '../../../shared/worktree/catalog-version'
+import { isWorktreeCatalogVersionBefore } from '../../../shared/worktree/catalog/catalog-version'
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
-} from '../../../shared/worktree/degraded-repo-worktree-validity'
+} from '../../../shared/worktree/catalog/degraded-repo-worktree-validity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   hostWorktreeTarget,

@@ -5,7 +5,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import {
   buildWorktreeSortLabels,
   compareWorktreeSortLabel
-} from '../../../../../../shared/sidebar-list/smart-sort'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
 
 /** Manual ranks by host identity: same-id copies on two hosts are separate cards. */
 export type WorktreeManualOrderCatalog = {

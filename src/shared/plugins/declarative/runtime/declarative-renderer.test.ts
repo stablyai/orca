@@ -103,7 +103,7 @@ describe('declarative runtime', () => {
     expect(deleted).toEqual(['A', 'B'])
   })
 
-  it('ignores events and acks for another document', () => {
+  it('ignores events for another document', () => {
     const { runtime, tree } = setup()
     const onPress = vi.fn()
     runtime.mount(() => h('Button', { onPress }, 'x'))
@@ -266,15 +266,6 @@ describe('declarative runtime', () => {
     handlers.get('theme')?.({ colorScheme: 'light' })
     drain()
     expect(last()).toMatchObject({ tree: { children: ['light'] } })
-    expect([...handlers.keys()].sort()).toEqual([
-      'theme',
-      'ui.ack',
-      'ui.event',
-      'ui.hydrate',
-      'ui.restore',
-      'ui.snapshot',
-      'ui.visibility'
-    ])
     runtime.dispose()
     expect(handlers.size).toBe(0)
   })

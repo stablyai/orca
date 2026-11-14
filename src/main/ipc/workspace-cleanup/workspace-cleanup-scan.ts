@@ -1,7 +1,7 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
-import type { PRCacheView } from '../../../shared/sidebar-list/workspace-review-facts'
+import type { PRCacheView } from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'

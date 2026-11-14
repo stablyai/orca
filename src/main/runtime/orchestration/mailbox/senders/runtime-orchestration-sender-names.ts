@@ -1,4 +1,4 @@
-import { splitPaneTitle } from './sender-pane-title'
+import { paneNamingTab, splitPaneTitle } from './sender-pane-title'
 import { senderDispatchLaunch, senderDispatchLaunchReader } from './sender-dispatch-launch'
 // Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
@@ -12,10 +12,11 @@ import { structuredAgentSessionIdFromTabId } from '../../../../../shared/agent-s
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
+  liveSenderAgent,
+  observeOrchestrationSender,
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
-  paneNamingTab,
   type MirroredTabs,
   type SenderHookRow,
   type SenderNamingLayout,
@@ -93,6 +94,11 @@ export class RuntimeOrchestrationSenderNames {
       undefined,
       taskName
     )
+  }
+
+  /** The agent a chat or terminal party is running now, as its sender card would show it. */
+  liveAgentOf(party: AgentMessageSender['party']): AgentType | null {
+    return liveSenderAgent(observeOrchestrationSender(party, this.namingSources()))
   }
 
   /** Name and agent share one current chat or terminal observation. */

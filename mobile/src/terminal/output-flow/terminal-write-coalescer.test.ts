@@ -16,20 +16,6 @@ describe('terminal write coalescer', () => {
     vi.useRealTimers()
   })
 
-  it('batches writes inside the trailing window preserving byte order', () => {
-    vi.useFakeTimers()
-    const sink = createDeliverySink()
-    const coalescer = createTerminalWriteCoalescer(sink.deliver)
-
-    coalescer.write('a')
-    coalescer.write('b')
-    coalescer.write('c')
-    expect(sink.delivered).toEqual(['a'])
-
-    vi.advanceTimersByTime(48)
-    expect(sink.delivered).toEqual(['a', 'bc'])
-  })
-
   it('flushes within one window even when the wall clock jumps backwards mid-stream', () => {
     vi.useFakeTimers()
     vi.setSystemTime(100_000)

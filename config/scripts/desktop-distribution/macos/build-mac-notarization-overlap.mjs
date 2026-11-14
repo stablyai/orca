@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { basename, join, resolve } from 'node:path'
+import { macTerminalHostPaths } from '../../macos/terminal-host-bundle/macos-terminal-host-bundle.cjs'
 import { assertMacExecutableUuid } from './macos-executable-uuid.cjs'
 
 const ARCHITECTURES = [1, 3] // electron-builder: x64, arm64.
@@ -143,6 +144,7 @@ export async function main(args = process.argv.slice(2)) {
         join(appPath, 'Contents', 'MacOS', basename(appPath, '.app')),
         config.appId
       )
+      assertMacExecutableUuid(macTerminalHostPaths(appPath).executable, config.appId)
     },
     targets: new Map([
       [

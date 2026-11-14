@@ -30,7 +30,7 @@ import {
 import { getWorktreeDotStatus, hasWorktreeAgentState } from '../../worktree/workspace-list-ordering'
 import type { Section, WorkspaceListItem, Worktree } from '../../worktree/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repo-badge-color'
-import { getWorktreeCardDetails } from '../../../../src/shared/worktree/card-properties'
+import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import { useRepoLookById, type RepoLook } from '../catalog/host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'

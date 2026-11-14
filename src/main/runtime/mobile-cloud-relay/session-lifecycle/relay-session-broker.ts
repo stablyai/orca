@@ -94,6 +94,11 @@ export class RelaySessionBroker {
     return !this.closed && this.originPool.hasLiveControl()
   }
 
+  // An expiring relay JWT needs no check here: refresh give-up closes the broker and reports it.
+  isRecovering(): boolean {
+    return !this.closed && this.originPool.isRecovering()
+  }
+
   get endpoint(): RelayCredentials.MobileRelayEndpoint | null {
     const assignment = this.originPool.activeAssignment
     if (!assignment) {
@@ -292,6 +297,7 @@ export class RelaySessionBroker {
         return
       }
       this.closeNow()
+      this.options.onSelfClose?.()
     }
   }
 

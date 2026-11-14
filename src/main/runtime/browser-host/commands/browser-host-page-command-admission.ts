@@ -1,4 +1,5 @@
 import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
@@ -18,6 +19,14 @@ export function assertBrowserHostPageCommandAdmission(
   command: BrowserClientHostCommandEvent['command'],
   requireExecutionHost: (executionHostKey: string) => void
 ): void {
+  if (!lease.hostCapabilities.includes(BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY)) {
+    if (command.type === 'navigate' && command.url.length > 8192) {
+      throw new Error('browser_host_navigation_url_too_long')
+    }
+    if (command.type === 'createPage' && command.initialUrl !== undefined) {
+      throw new Error('browser_host_page_initialization_unsupported')
+    }
+  }
   if (
     command.type === 'switchProfile' &&
     !lease.hostCapabilities.includes(BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY)

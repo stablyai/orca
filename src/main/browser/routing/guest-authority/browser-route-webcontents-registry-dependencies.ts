@@ -18,5 +18,6 @@ export type BrowserRouteWebContentsRegistryDependencies = {
   /** Route-guest popup denials need an explicit notice on the owning page. */
   reportBlockedPopup?(input: { openerWebContentsId: number; url: string }): void
   openNewTabPopup?: BrowserRouteGuestPopupDependencies['openNewTabPopup']
+  releaseAgentLead?: BrowserRouteGuestPopupDependencies['releaseAgentLead']
   maxGuests?: number
 }

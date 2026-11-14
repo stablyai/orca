@@ -2,7 +2,7 @@ import { GIT_READ_TIMEOUT_MS } from '../../../shared/git/commands/git-command-ti
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
-} from '../../../shared/worktree/base-ref-drift-types'
+} from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { readGitCommandFailureText } from '../../../shared/git/commands/git-command-failure-text'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'

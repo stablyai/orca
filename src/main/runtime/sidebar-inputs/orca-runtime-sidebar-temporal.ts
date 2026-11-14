@@ -12,7 +12,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
+import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
 import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
 import {
   SidebarRetentionOwner,

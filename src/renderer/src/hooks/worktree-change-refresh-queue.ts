@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/metadata/sort-order-update'
 
 type WorktreeRename = {
   oldWorktreeId: string

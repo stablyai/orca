@@ -2,7 +2,7 @@
 import type { ProjectSectionEntry, ProjectSectionRepo } from './project-section-grouping'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from './repo-display-labels'
 import type { ProjectOrderBy } from './ui-chrome-types'
-import { compareCodePoints, compareSidebarText } from './sidebar-list/text-order'
+import { compareCodePoints, compareSidebarText } from './sidebar-list/sorting/text-order'
 
 export type ActivityItem = { lastActivityAt?: number }
 

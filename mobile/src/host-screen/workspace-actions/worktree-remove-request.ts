@@ -1,4 +1,4 @@
-import { worktreeRemovalReplyTimeoutMs } from '../../../../src/shared/worktree/archive-hook-removal-gate'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../src/shared/worktree/removal/archive-hook-removal-gate'
 import { RECIPE_REMOVAL_REPLY_TIMEOUT_MS } from '../../../../src/shared/recipe-host-removal'
 import type { Worktree } from '../../worktree/workspace-list-types'
 

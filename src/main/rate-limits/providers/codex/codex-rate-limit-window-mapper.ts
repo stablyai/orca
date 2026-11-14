@@ -1,5 +1,9 @@
 import type { RateLimitWindow } from '../../../../shared/rate-limit-types'
-import type { CodexRateWindowSnapshot } from './codex-rate-limit-window-classification'
+import {
+  CODEX_MONTHLY_WINDOW_MINUTES,
+  type CodexRateLimitWindowsSnapshot,
+  type CodexRateWindowSnapshot
+} from './codex-rate-limit-window-classification'
 
 export function mapCodexRateLimitWindow(
   raw: CodexRateWindowSnapshot | null | undefined,
@@ -35,4 +39,16 @@ export function mapCodexRateLimitWindow(
     resetsAt,
     resetDescription
   }
+}
+
+export function mapCodexIndividualLimitWindow(
+  raw: CodexRateLimitWindowsSnapshot['individualLimit']
+): RateLimitWindow | null {
+  if (typeof raw?.remainingPercent !== 'number' || !Number.isFinite(raw.remainingPercent)) {
+    return null
+  }
+  return mapCodexRateLimitWindow(
+    { usedPercent: 100 - raw.remainingPercent, resetsAt: raw.resetsAt },
+    CODEX_MONTHLY_WINDOW_MINUTES
+  )
 }

@@ -21,7 +21,7 @@ import {
   ListRow
 } from '../../components/list/ListGroup'
 import { TaskProviderLogo } from '../../components/TaskProviderLogo'
-import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/row-display/git-identity-display'
 import {
   buildWorkspaceDetailLinks,
   buildWorkspaceOrigin,

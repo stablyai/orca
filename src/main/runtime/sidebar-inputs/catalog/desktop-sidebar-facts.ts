@@ -9,7 +9,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
-import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/desktop-sidebar-facts'
+import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
