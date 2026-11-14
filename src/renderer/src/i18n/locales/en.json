@@ -22487,7 +22487,15 @@
       "images": "Images",
       "next": "Next image",
       "previous": "Previous image",
-      "position": "{{current}} of {{total}}"
+      "position": "{{current}} of {{total}}",
+      "single": "Single image",
+      "count": "{{count}} images",
+      "thumbnailSize": "Thumbnail size",
+      "smaller": "Smaller thumbnails",
+      "larger": "Larger thumbnails",
+      "grid": "Image grid",
+      "gridView": "Grid view",
+      "gridZoomValue": "{{percent}}% grid zoom"
     }
   },
   "dashboardPopout": {
@@ -25656,7 +25664,6 @@
     "save": "Save proposal",
     "saved": "Saved",
     "savedTitle": "Your saved Orca changes",
-    "search": "Search changes or #PR",
     "searchAction": "Search",
     "searchKeywords": {
       "community": "community",
@@ -25795,6 +25802,22 @@
     "backIncluded": "Back to included change",
     "currentPrDifferent": "This PR now has a different source version. The previews, checks, and conversation below refer to the current PR.",
     "selectedCountLabel": "Selected",
-    "mergedCountLabel": "Merged"
+    "mergedCountLabel": "Merged",
+    "buildIncludes": "Build includes",
+    "searchChanges": "Search features, #PR, or PR URL",
+    "buildFilter": "Build filter",
+    "allChanges": "All changes",
+    "installedFilter": "Installed in this build",
+    "selectedFilter": "Selected for Custom",
+    "reviewFilter": "Review status",
+    "allReviewStates": "All review states",
+    "readyFilter": "Ready for review",
+    "draftFilter": "Draft",
+    "kindFilter": "Change type",
+    "allTypes": "All change types",
+    "searchHelp": "Search titles, descriptions, authors, or a PR ID such as #41731.",
+    "filtersRuntime": "Update this Orca host to use build and review filters.",
+    "repository": "stablyai/orca",
+    "areaFilter": "Feature area"
   }
 }

@@ -73,41 +73,52 @@ export const responseActionsGap = defineFixture({
 })
 
 const galleryImages = [anteImage, grokImage, hermesImage, qoderImage]
+function renderImageGallery(count: number): React.JSX.Element {
+  const images = Array.from({ length: count }, (_, index) => {
+    const url = new URL(galleryImages[index % galleryImages.length], window.location.href)
+    url.searchParams.set('image', String(index + 1))
+    return url.href
+  })
+  const galleryMessages: NativeChatMessage[] = [
+    text('gallery-ask', 'user', 'Show the result images.'),
+    ...Array.from({ length: 7 }, (_, index): NativeChatMessage => ({
+      id: `gallery-tool-${index}`,
+      role: 'assistant',
+      source: 'transcript',
+      timestamp: at(),
+      blocks: [
+        { type: 'text', text: 'Viewed image' },
+        { type: 'image-ref', url: `${images[0]}&preview=${index}` }
+      ]
+    })),
+    text(
+      'gallery-response',
+      'assistant',
+      images.map((src, index) => `![Response ${index + 1}](${src})`).join('\n\n')
+    )
+  ]
+  return (
+    <div className="native-chat-appearance flex h-[700px] flex-col">
+      <NativeChatMessageList
+        session={{ ...session, sessionId: 'gallery-scope-fixture', messages: galleryMessages }}
+        isWorking={false}
+        expandSignal={false}
+      />
+    </div>
+  )
+}
+
 export const imageGalleryResponseScope = defineFixture({
   width: 720,
-  render: () => {
-    const images = galleryImages.map((image) => new URL(image, window.location.href).href)
-    const galleryMessages: NativeChatMessage[] = [
-      text('gallery-ask', 'user', 'Show the four result images.'),
-      ...Array.from({ length: 7 }, (_, index): NativeChatMessage => ({
-        id: `gallery-tool-${index}`,
-        role: 'assistant',
-        source: 'transcript',
-        timestamp: at(),
-        blocks: [
-          { type: 'text', text: 'Viewed image' },
-          { type: 'image-ref', url: `${images[0]}?preview=${index}` }
-        ]
-      })),
-      text(
-        'gallery-response',
-        'assistant',
-        images.map((src, index) => `![Response ${index + 1}](${src})`).join('\n\n')
-      )
-    ]
-    return (
-      <div className="native-chat-appearance flex h-[700px] flex-col">
-        <NativeChatMessageList
-          session={{ ...session, sessionId: 'gallery-scope-fixture', messages: galleryMessages }}
-          isWorking={false}
-          expandSignal={false}
-        />
-      </div>
-    )
-  }
+  render: () => renderImageGallery(4)
 })
 
 export const imageGalleryResponseScopePhone = defineFixture({
   ...imageGalleryResponseScope,
   width: 390
+})
+
+export const imageGalleryScrollableGrid = defineFixture({
+  width: 1100,
+  render: () => renderImageGallery(24)
 })

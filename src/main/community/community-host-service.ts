@@ -1,3 +1,4 @@
+import { readCommunityInstalled } from './read-community-installed'
 import { communityEvidenceSignals } from './community-evidence-signals'
 import type { CommunityPullRequest } from '../../shared/community-catalog'
 import { getCustomBuildInfo } from '../../shared/custom-build'
@@ -97,35 +98,32 @@ export class CommunityHostService {
   }
   async installed(): Promise<CommunityInstalledSnapshot> {
     await this.initialize()
-    const build = getCustomBuildInfo()
-    const numbers = [
-      ...new Set(
-        build?.changes.flatMap((change) =>
-          change.pullRequest ? [change.pullRequest.number] : []
-        ) ?? []
-      )
-    ]
-    const sources: CommunityPullRequest[] = []
-    const unavailable: number[] = []
-    for (let index = 0; index < numbers.length; index += 2) {
-      await Promise.all(
-        numbers.slice(index, index + 2).map(async (number) => {
-          try {
-            sources.push(
-              (await this.catalog.captured(number)) ?? (await this.catalog.detail(number))
-            )
-          } catch {
-            unavailable.push(number)
-          }
-        })
-      )
-    }
-    return { build, sources, unavailable }
+    return readCommunityInstalled(getCustomBuildInfo(), this.catalog)
   }
   async list(query: CommunityQuery) {
     await this.initialize()
     const [snapshot, personal] = await Promise.all([this.catalog.read(), this.features.read()])
     let { catalog } = snapshot
+    const build = getCustomBuildInfo()
+    if (query.inclusion === 'installed') {
+      const installed = await this.installed()
+      if (installed.sources.length) {
+        catalog = {
+          repository: 'stablyai/orca',
+          capturedAt: installed.sources[0].observedAt ?? new Date().toISOString(),
+          sourceUrl: 'https://github.com/stablyai/orca/pulls',
+          groups: [],
+          screenshots: {},
+          ...catalog,
+          pullRequests: [
+            ...(catalog?.pullRequests ?? []),
+            ...installed.sources.filter(
+              (source) => !catalog?.pullRequests.some((row) => row.number === source.number)
+            )
+          ]
+        }
+      }
+    }
     const { status } = snapshot
     const number = communityQueryNumber(query.query)
     if (number !== null && !catalog?.pullRequests.some((row) => row.number === number)) {
@@ -163,10 +161,11 @@ export class CommunityHostService {
         personal,
         status,
         query,
-        this.user
+        this.user,
+        build
       )
     }
-    return queryCommunityCatalog(catalog, personal, status, query, this.user)
+    return queryCommunityCatalog(catalog, personal, status, query, this.user, build)
   }
   async mutate(action: CommunityFeatureAction) {
     if (action.action === 'select' || action.action === 'visit' || action.action === 'save') {

@@ -77,6 +77,28 @@ function ScopedNativeChatImageGallery({
   const t = useTranslate()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
   const [active, setActive] = useState<ActiveGallery | null>(null)
+  const [grid, setGrid] = useState(false)
+  const [visibleImages, setVisibleImages] = useState<ReadonlySet<string>>(new Set())
+  const onGridViewChange = useCallback((next: boolean) => {
+    setGrid(next)
+    if (!next) {
+      setVisibleImages((previous) => (previous.size ? new Set() : previous))
+    }
+  }, [])
+  const onImageVisibilityChange = useCallback((id: string, visible: boolean) => {
+    setVisibleImages((previous) => {
+      if (previous.has(id) === visible) {
+        return previous
+      }
+      const next = new Set(previous)
+      if (visible) {
+        next.add(id)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
+  }, [])
   const [sources, setSources] = useState<Record<string, string | undefined>>({})
   useEffect(() => {
     if (owner?.isVisible === false) {
@@ -98,6 +120,8 @@ function ScopedNativeChatImageGallery({
         selected = { id: `clicked:${rowId}:${source}`, rowId, source, title, kind: 'markdown' }
         records.push(selected)
       }
+      setGrid(false)
+      setVisibleImages(new Set())
       setSources({})
       setActive({
         group,
@@ -130,7 +154,8 @@ function ScopedNativeChatImageGallery({
       {children}
       {active &&
         records.map((record, index) =>
-          Math.abs(index - selectedIndex) <= 9 ? (
+          index === selectedIndex ||
+          (grid ? visibleImages.has(record.id) : Math.abs(index - selectedIndex) <= 9) ? (
             record.kind === 'reference' ? (
               <ReferenceSource
                 key={record.id}
@@ -157,6 +182,9 @@ function ScopedNativeChatImageGallery({
         }
         title={selected?.title ?? ''}
         showTitle
+        getImageCopySrc={copyableNativeChatImageSrc}
+        onGridViewChange={onGridViewChange}
+        onImageVisibilityChange={onImageVisibilityChange}
         gallery={records.map((record) => ({
           id: record.id,
           src: sources[record.id],

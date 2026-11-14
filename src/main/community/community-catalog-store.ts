@@ -19,6 +19,7 @@ const pullRequest = z.object({
   number: z.number().int().positive(),
   title: z.string(),
   displayTitle: z.string(),
+  description: z.string().max(4096).optional(),
   url,
   author: z.string(),
   createdAt: date,

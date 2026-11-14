@@ -9,6 +9,8 @@ export const CommunityQueryParams = z.object({
   area: z.string().max(128).optional(),
   kind: z.string().max(128).optional(),
   images: z.boolean().optional(),
+  inclusion: z.enum(['installed', 'selected']).optional(),
+  readiness: z.enum(['ready', 'draft']).optional(),
   mine: z.boolean().optional(),
   sort: z.enum(['updated', 'popular', 'oldest']).optional(),
   offset: z.number().int().min(0).max(20_000).optional(),

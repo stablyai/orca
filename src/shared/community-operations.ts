@@ -16,6 +16,8 @@ export type CommunityQuery = {
   area?: string
   kind?: string
   images?: boolean
+  inclusion?: 'installed' | 'selected'
+  readiness?: 'ready' | 'draft'
   mine?: boolean
   sort?: 'updated' | 'popular' | 'oldest'
   offset?: number
@@ -32,6 +34,8 @@ export type CommunitySummary = {
   weeks: { date: string; count: number }[]
 }
 export type CommunityPage = {
+  filterVersion?: 1
+  runningBuild?: CustomBuildInfo | null
   viewer?: string | null
   mineCount?: number
   rows: CommunityPullRequest[]

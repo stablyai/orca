@@ -8,6 +8,7 @@ export function CommunityChangeCard({
   label,
   category,
   metadata,
+  description,
   imageUrls,
   imageAlt,
   emptyPreview,
@@ -22,6 +23,7 @@ export function CommunityChangeCard({
   label: string
   category: ReactNode
   metadata: ReactNode
+  description?: ReactNode
   imageUrls: readonly string[]
   imageAlt: string
   emptyPreview: ReactNode
@@ -79,6 +81,7 @@ export function CommunityChangeCard({
           <h3 className="mt-2 min-h-10 text-sm font-semibold leading-snug group-hover:underline">
             {title}
           </h3>
+          {description && <p className="mt-2 text-xs text-muted-foreground">{description}</p>}
           <p className="mt-3 text-xs text-muted-foreground">{metadata}</p>
         </div>
       </button>

@@ -138,6 +138,7 @@ export class CommunityGitHubSource {
       number: raw.number,
       title: raw.title,
       displayTitle: raw.title,
+      description: raw.body?.slice(0, 4096) ?? undefined,
       url: raw.html_url,
       author: raw.user?.login ?? 'Deleted account',
       createdAt: raw.created_at,

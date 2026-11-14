@@ -1,22 +1,15 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowRight, ImageIcon, UserRound } from 'lucide-react'
+import { ArrowDown, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type {
   CommunityFeatureAction,
   CommunityFeaturesSnapshot
 } from '../../../../shared/community-features'
 import type { CommunityPage, CommunityQuery } from '../../../../shared/community-operations'
+import { CommunitySearchFilters } from './CommunitySearchFilters'
 import { CommunityProposalCard } from './CommunityProposalCard'
 export function CommunityCatalog({
   page,
@@ -41,7 +34,18 @@ export function CommunityCatalog({
   const locale = useIntlLocale()
   const [allAreas, setAllAreas] = useState(false)
   const features = Object.values(page.personal.features)
-  const rows = query.mine && !page.viewer ? [] : page.rows
+  const unsupported = !!(query.inclusion || query.readiness) && page.filterVersion !== 1
+  const rows = (query.mine && !page.viewer) || unsupported ? [] : page.rows
+  const hasFilters = !!(
+    query.query ||
+    query.mine ||
+    query.inclusion ||
+    query.readiness ||
+    query.area ||
+    query.kind ||
+    query.images ||
+    (query.view && query.view !== 'explore')
+  )
   const tabs = [
     { id: 'explore', label: t('community.explore', 'Explore'), count: null },
     {
@@ -76,170 +80,106 @@ export function CommunityCatalog({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <form
-        className="flex flex-wrap items-center gap-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          const data = new FormData(event.currentTarget)
-          onQuery({ ...query, query: String(data.get('search') ?? '') })
-        }}
-      >
-        <div className="relative min-w-48 flex-1">
-          <Input
-            name="search"
-            key={query.query}
-            defaultValue={query.query}
-            placeholder={t('community.search', 'Search changes or #PR')}
-            aria-label={t('community.searchLabel', 'Search proposals')}
-          />
-        </div>
-        <Button type="submit" variant="outline">
-          {t('community.searchAction', 'Search')}
-        </Button>
-        <Button
-          variant={query.mine ? 'secondary' : 'outline'}
-          aria-pressed={!!query.mine}
-          disabled={page.viewer === undefined}
-          onClick={() => {
-            if (query.mine || page.viewer) {
-              onQuery({ ...query, mine: !query.mine })
-            } else {
-              onChooseAccount()
-            }
-          }}
-        >
-          <UserRound className="size-4" />
-          {t('community.myPRs', 'My PRs')}
-          {page.viewer && <Badge variant="secondary">{page.mineCount ?? 0}</Badge>}
-        </Button>
-        <Button
-          variant={query.images ? 'secondary' : 'outline'}
-          aria-pressed={!!query.images}
-          onClick={() => onQuery({ ...query, images: !query.images })}
-        >
-          <ImageIcon className="size-4" />
-          {t('community.images', 'Show PRs with images')}
-          <span className="text-muted-foreground">
-            · {page.summary.images.toLocaleString(locale)}
-          </span>
-        </Button>
-        <Select
-          value={query.sort ?? 'updated'}
-          onValueChange={(sort) => {
-            if (sort === 'updated' || sort === 'popular' || sort === 'oldest') {
-              onQuery({ ...query, sort })
-            }
-          }}
-        >
-          <SelectTrigger
-            aria-label={t('community.sort', 'Sort proposals')}
-            className="w-40 max-sm:w-28"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="updated">
-              {t('community.updatedSort', 'Recently updated')}
-            </SelectItem>
-            <SelectItem value="popular">{t('community.popularSort', 'Most reactions')}</SelectItem>
-            <SelectItem value="oldest">{t('community.oldestSort', 'Oldest first')}</SelectItem>
-          </SelectContent>
-        </Select>
-      </form>
-      {(query.mine || page.viewer === undefined) && (
-        <p role="status" className="text-xs text-muted-foreground">
-          {page.viewer === undefined
-            ? t('community.myPRsRuntime', 'Update this Orca host to use My PRs.')
-            : page.viewer
-              ? `${t('community.authoredBy', 'Authored by')} @${page.viewer}`
-              : t(
-                  'community.myPRsAccount',
-                  'Choose a GitHub account on this host to show your PRs.'
-                )}
-        </p>
-      )}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          {
-            name: t('community.unmergedCount', 'Unmerged PRs'),
-            count: page.summary.total,
-            kind: undefined
-          },
-          ...page.summary.kinds
-            .filter((row) => ['Features', 'Fixes'].includes(row.name))
-            .map((row) => ({ ...row, kind: row.name }))
-        ].map((item) => (
-          <Button
-            key={item.name}
-            variant={query.kind === item.kind ? 'secondary' : 'outline'}
-            className="h-auto justify-between text-left whitespace-normal"
-            aria-pressed={query.kind === item.kind}
-            onClick={() => onQuery({ ...query, kind: item.kind })}
-          >
-            <span>
-              <span className="block text-xs font-normal text-muted-foreground">{item.name}</span>
-              <span className="mt-2 block text-2xl font-semibold">
-                {item.count.toLocaleString(locale)}
-              </span>
-            </span>
-            <ArrowRight className="size-4 shrink-0 text-muted-foreground max-sm:hidden" />
-          </Button>
-        ))}
-      </div>
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{t('community.areas', 'Explore by area')}</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAllAreas(!allAreas)}
-            aria-expanded={allAreas}
-          >
-            {allAreas
-              ? t('community.less', 'Show fewer')
-              : `${page.summary.areas.length} ${t('community.inferredAreas', 'inferred areas')}`}
-          </Button>
-        </div>
-        <div
-          className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${allAreas ? '' : 'max-sm:hidden'}`}
-        >
-          <Button
-            size="sm"
-            className="h-auto justify-between"
-            variant={!query.area ? 'secondary' : 'outline'}
-            onClick={() => onQuery({ ...query, area: undefined })}
-          >
-            {t('community.allAreas', 'All areas')}
-          </Button>
-          {page.summary.areas.slice(0, allAreas ? undefined : 3).map((area) => (
-            <Button
-              key={area.name}
-              size="sm"
-              className="h-auto justify-between"
-              variant={query.area === area.name ? 'secondary' : 'outline'}
-              aria-pressed={query.area === area.name}
-              onClick={() =>
-                onQuery({ ...query, area: query.area === area.name ? undefined : area.name })
-              }
+      <CommunitySearchFilters
+        page={page}
+        query={query}
+        onQuery={onQuery}
+        onChooseAccount={onChooseAccount}
+      />
+      {!hasFilters && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              {
+                name: t('community.unmergedCount', 'Unmerged PRs'),
+                count: page.summary.total,
+                kind: undefined
+              },
+              ...page.summary.kinds
+                .filter((row) => ['Features', 'Fixes'].includes(row.name))
+                .map((row) => ({ ...row, kind: row.name }))
+            ].map((item) => (
+              <Button
+                key={item.name}
+                variant={query.kind === item.kind ? 'secondary' : 'outline'}
+                className="h-auto justify-between text-left whitespace-normal"
+                aria-pressed={query.kind === item.kind}
+                onClick={() => onQuery({ ...query, kind: item.kind })}
+              >
+                <span>
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {item.name}
+                  </span>
+                  <span className="mt-2 block text-2xl font-semibold">
+                    {item.count.toLocaleString(locale)}
+                  </span>
+                </span>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground max-sm:hidden" />
+              </Button>
+            ))}
+          </div>
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">{t('community.areas', 'Explore by area')}</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAllAreas(!allAreas)}
+                aria-expanded={allAreas}
+              >
+                {allAreas
+                  ? t('community.less', 'Show fewer')
+                  : `${page.summary.areas.length} ${t('community.inferredAreas', 'inferred areas')}`}
+              </Button>
+            </div>
+            <div
+              className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${allAreas ? '' : 'max-sm:hidden'}`}
             >
-              {area.name}
-              <Badge variant="secondary">{area.count.toLocaleString(locale)}</Badge>
-            </Button>
-          ))}
-        </div>
-        <p className="mt-2 text-2xs text-muted-foreground max-sm:hidden">
-          {t(
-            'community.inferenceNote',
-            'Areas come from PR titles. Images come from author links.'
-          )}
-        </p>
-      </div>
+              <Button
+                size="sm"
+                className="h-auto justify-between"
+                variant={!query.area ? 'secondary' : 'outline'}
+                onClick={() => onQuery({ ...query, area: undefined })}
+              >
+                {t('community.allAreas', 'All areas')}
+              </Button>
+              {page.summary.areas.slice(0, allAreas ? undefined : 3).map((area) => (
+                <Button
+                  key={area.name}
+                  size="sm"
+                  className="h-auto justify-between"
+                  variant={query.area === area.name ? 'secondary' : 'outline'}
+                  aria-pressed={query.area === area.name}
+                  onClick={() =>
+                    onQuery({ ...query, area: query.area === area.name ? undefined : area.name })
+                  }
+                >
+                  {area.name}
+                  <Badge variant="secondary">{area.count.toLocaleString(locale)}</Badge>
+                </Button>
+              ))}
+            </div>
+            <p className="mt-2 text-2xs text-muted-foreground max-sm:hidden">
+              {t(
+                'community.inferenceNote',
+                'Areas come from PR titles. Images come from author links.'
+              )}
+            </p>
+          </div>
+        </>
+      )}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          {(query.mine && !page.viewer ? 0 : page.total).toLocaleString(locale)}{' '}
+          {((query.mine && !page.viewer) || unsupported ? 0 : page.total).toLocaleString(locale)}{' '}
           {t('community.results', 'matching proposals')}
         </span>
-        {(query.query || query.area || query.kind || query.images || query.mine) && (
+        {(query.query ||
+          query.area ||
+          query.kind ||
+          query.images ||
+          query.mine ||
+          query.inclusion ||
+          query.readiness) && (
           <Button
             variant="ghost"
             size="sm"
@@ -256,6 +196,12 @@ export function CommunityCatalog({
               key={pr.number}
               pr={pr}
               feature={page.personal.features[pr.number]}
+              includedImageUrls={page.runningBuild?.changes
+                .filter((change) => change.pullRequest?.number === pr.number)
+                .flatMap((change) => change.imageUrls ?? [])}
+              includedTitles={page.runningBuild?.changes
+                .filter((change) => change.pullRequest?.number === pr.number)
+                .map((change) => change.title)}
               onOpen={() => onOpen(pr.number)}
               onSave={() =>
                 mutate({
@@ -274,7 +220,7 @@ export function CommunityCatalog({
           )}
         </div>
       )}
-      {page.nextOffset !== null && !(query.mine && !page.viewer) && (
+      {page.nextOffset !== null && !(query.mine && !page.viewer) && !unsupported && (
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => void loadMore()} disabled={loading}>
             <ArrowDown className="size-4" />

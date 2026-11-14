@@ -2,6 +2,7 @@ export type CommunityPullRequest = {
   number: number
   title: string
   displayTitle: string
+  description?: string
   url: string
   author: string
   createdAt: string

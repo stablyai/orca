@@ -1,3 +1,4 @@
+import type { CustomBuildInfo } from '../../shared/custom-build'
 import { communityQueryNumber } from '../../shared/community-pr-query'
 export { communityQueryNumber } from '../../shared/community-pr-query'
 import { classifyCommunityPullRequest } from './community-pr-classification'
@@ -52,7 +53,8 @@ export function queryCommunityCatalog(
   personal: CommunityFeaturesSnapshot,
   status: CommunitySyncStatus,
   query: CommunityQuery,
-  viewer: string | null = null
+  viewer: string | null = null,
+  build: CustomBuildInfo | null = null
 ): CommunityPage {
   const number = communityQueryNumber(query.query)
   const words = query.query?.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean) ?? []
@@ -60,15 +62,24 @@ export function queryCommunityCatalog(
     .map((pr) => ({ ...pr, ...classifyCommunityPullRequest(pr.title) }))
     .filter((row) => {
       const feature = personal.features[row.number]
+      const included =
+        build?.changes.filter((change) => change.pullRequest?.number === row.number) ?? []
+      const open = !row.state || row.state === 'open'
       return (
         (!query.mine || (viewer !== null && row.author.toLowerCase() === viewer.toLowerCase())) &&
         (!query.area || row.area === query.area) &&
         (!query.kind || row.kind === query.kind) &&
+        (!query.inclusion ||
+          (query.inclusion === 'installed' ? included.length > 0 : !!feature?.selectedAt)) &&
+        (!query.readiness ||
+          (open && (query.readiness === 'draft' ? row.isDraft : !row.isDraft))) &&
         (!query.images || row.imageUrls.length > 0) &&
         (number !== null
           ? row.number === number
           : words.every((word) =>
-              `${row.number} ${row.title} ${row.author}`.toLocaleLowerCase().includes(word)
+              `${row.number} ${row.title} ${row.description ?? ''} ${row.author} ${included.map((change) => `${change.title} ${change.description ?? ''}`).join(' ')}`
+                .toLocaleLowerCase()
+                .includes(word)
             )) &&
         (!query.view ||
           query.view === 'explore' ||
@@ -89,6 +100,8 @@ export function queryCommunityCatalog(
   const offset = query.offset ?? 0
   const limit = Math.min(60, query.limit ?? 12)
   return {
+    filterVersion: 1,
+    runningBuild: build,
     viewer,
     mineCount: viewer
       ? (catalog?.pullRequests ?? []).filter(
