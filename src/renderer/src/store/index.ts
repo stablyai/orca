@@ -57,6 +57,7 @@ import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-stat
 import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-chat-slept-at'
 import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
 import { createEphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
+import { createScheduledMessagesSlice } from './slices/scheduled-messages/scheduled-messages'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
@@ -129,6 +130,7 @@ export const useAppStore = create<AppState>()(
             ...createMuseUsageSlice(...a),
             ...createBrowserSlice(...a),
             ...createRateLimitSlice(...a),
+            ...createScheduledMessagesSlice(...a),
             ...createSshSlice(...a),
             ...createRuntimeEnvironmentSshSlice(...a),
             ...createWslHostsSlice(...a),

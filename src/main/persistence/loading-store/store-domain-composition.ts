@@ -23,6 +23,7 @@ import { MobileTabSelectionPersistence } from './profile-preferences/mobile-tab-
 import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/remote-layout-snapshot-persistence'
 import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
 import { SparsePresetPersistence } from './project-catalog/sparse-preset-persistence'
+import { ScheduledMessagePersistence } from './automation-state/scheduled-message-persistence'
 import { PtyBindingPersistenceOperations } from './terminal-bindings/pty-binding-persistence'
 import { LayoutCommandPersistence } from '../terminal-topology/layout-command-persistence'
 import { SshProfileOperations } from './ssh-state/ssh-profile-operations'
@@ -40,6 +41,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   RemoteLayoutSnapshotPersistence &
   HostRepoCatalogSnapshotPersistence &
   SparsePresetPersistence &
+  ScheduledMessagePersistence &
   AutomationPersistence &
   MetadataLineageOperations &
   CrossStoreLineagePersistence &
@@ -79,6 +81,7 @@ export type StoreDomains = {
   remoteLayoutSnapshots: RemoteLayoutSnapshotPersistence
   hostRepoCatalogSnapshots: HostRepoCatalogSnapshotPersistence
   sparsePresets: SparsePresetPersistence
+  scheduledMessages: ScheduledMessagePersistence
   ptyBindings: PtyBindingPersistenceOperations
   layoutCommands: LayoutCommandPersistence
   sshProfiles: SshProfileOperations
@@ -98,6 +101,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   RemoteLayoutSnapshotPersistence,
   HostRepoCatalogSnapshotPersistence,
   SparsePresetPersistence,
+  ScheduledMessagePersistence,
   AutomationPersistence,
   MetadataLineageOperations,
   CrossStoreLineagePersistence,
@@ -150,6 +154,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const remoteLayoutSnapshots = new RemoteLayoutSnapshotPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
+  const scheduledMessages = new ScheduledMessagePersistence(runtime, scheduling)
   const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
   const sshProfiles = new SshProfileOperations(runtime, scheduling, repos)
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
@@ -182,6 +187,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     remoteLayoutSnapshots,
     hostRepoCatalogSnapshots: new HostRepoCatalogSnapshotPersistence(runtime, scheduling),
     sparsePresets,
+    scheduledMessages,
     ptyBindings,
     layoutCommands: new LayoutCommandPersistence(
       runtime,

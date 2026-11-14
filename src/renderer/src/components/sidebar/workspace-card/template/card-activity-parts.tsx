@@ -12,6 +12,7 @@ import {
   WorktreeCardRemoteBranchConflict
 } from '../metadata/worktree-card-meta-items'
 import { WorktreeCardStatusLane } from '../surface/worktree-card-status-lane'
+import { WorktreeCardScheduledMessagesBadge } from '../metadata/WorktreeCardScheduledMessagesBadge'
 import { WorktreeLineageToggle } from '../identity/WorktreeLineageToggle'
 import { cardElement } from './card-template-compiler'
 
@@ -49,6 +50,13 @@ function detailsHover(
 export const CARD_ACTIVITY_PARTS = {
   StatusLane: part(['unreadAction'], (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
+  )),
+  // Beside the status lane, not in it: the lane is one icon wide.
+  ScheduledBadge: part(['singleLine'], (props, _children, card) => (
+    <WorktreeCardScheduledMessagesBadge
+      worktreeId={card.worktree.id}
+      className={props.singleLine === true ? 'mr-1' : 'mr-1 mt-[3px]'}
+    />
   )),
   Agents: part(['tight'], (props, _children, card) => (
     <WorktreeCardAgents

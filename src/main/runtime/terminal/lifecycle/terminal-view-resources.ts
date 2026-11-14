@@ -8,9 +8,11 @@ import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,
+  RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry,
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
@@ -19,6 +21,7 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
+import type { AgentIdleEdgeEvent } from './runtime-agent-idle-edge-contracts'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
@@ -84,6 +87,28 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
       }) => void
     >
   >()
+
+  protected agentIdleEdgeListeners = new Set<(event: AgentIdleEdgeEvent) => void>()
+
+  /** Rides the same transition as orchestration push delivery, not a second detector. */
+  subscribeAgentIdleEdge(listener: (event: AgentIdleEdgeEvent) => void): () => void {
+    this.agentIdleEdgeListeners.add(listener)
+    return () => {
+      this.agentIdleEdgeListeners.delete(listener)
+    }
+  }
+
+  protected emitAgentIdleEdge(leaf: RuntimeLeafRecord): void {
+    const { ptyId, worktreeId, leafId, tabId } = leaf
+    if (ptyId === null) {
+      return
+    }
+    notifyRuntimeListeners(
+      this.agentIdleEdgeListeners,
+      (listener) => listener({ ptyId, worktreeId, leafId, tabId }),
+      'agent-idle-edge'
+    )
+  }
 
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 

@@ -9,6 +9,7 @@ import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/cod
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../../providers/accounts/agent-auth-restart-preservation'
 import { preserveStateBeforeUpdateRestart } from '../../updater/update-restart-preservation'
+import { registerScheduledMessageHandlers } from '../../ipc/scheduled-messages'
 import {
   emitPluginWorktreeLifecycle,
   handleCodexHomePtySpawned,
@@ -118,6 +119,8 @@ export function attachMainWindowCoreServices(
         }
       : undefined
   )
+  // Idempotent (drops its old handlers first), so a re-created window re-binds the live service.
+  registerScheduledMessageHandlers(state.scheduledMessageService ?? undefined)
   automations.start()
   attachMainWindowServices(
     window,

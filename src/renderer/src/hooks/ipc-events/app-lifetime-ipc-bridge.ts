@@ -18,6 +18,7 @@ import {
 import { registerBrowserTabActivateIpcBridge } from './browser-tab-activate-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
+import { registerScheduledMessagesIpcBridge } from './scheduled-messages-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerEphemeralVmLifecycleIpcBridge } from './ephemeral-vm-lifecycle-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
@@ -153,6 +154,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerRateLimitIpcBridge(unsubs)
   registerPluginViewIpcBridge(unsubs)
   registerClaudeAccountSwitchIpcBridge(unsubs)
+  registerScheduledMessagesIpcBridge(unsubs)
   const stopDirectSshStateBridge = registerDirectSshStateIpcBridge(unsubs)
   registerZoomIpcBridge(unsubs)
   const agentStatusBridge = registerAgentStatusIpcBridge(unsubs)
