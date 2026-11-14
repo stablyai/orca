@@ -304,8 +304,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
-  /** A saved pick retires this child's earlier execution reports until a turn carries it. */
-  noteOptionPick?(input: { sessionId: string; fence: number; key: string; value: string }): void
   /** Applied inputs for this exact child; observations never decide message admission. */
   readAppliedInputOptions?(input: {
     sessionId: string

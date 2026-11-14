@@ -1,5 +1,5 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { isLocalCounterPtyId } from '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'

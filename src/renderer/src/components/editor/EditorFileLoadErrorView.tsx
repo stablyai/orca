@@ -6,7 +6,7 @@ import { formatFileLoadErrorMessage } from './file-load-error-copy'
 import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isFileTooLargeCodeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
-import { useStoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
+import { useWslHostReadOutage } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../wsl-host-stopped/WslHostStoppedNotice'
 
 // Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
@@ -39,20 +39,21 @@ export function EditorFileLoadErrorView({
 }: {
   message: string
   code?: string
-  /** The file's workspace; a stopped WSL host there gets Start instead of this error. */
+  /** The file's workspace; a stopped or still-connecting WSL host there gets its notice instead of this error. */
   worktreeId?: string
   onRetry: () => void
   /** Reloads after Start without asking to wake again: the click already booted the host. */
   onHostStarted?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const stoppedWslHost = useStoppedWslHost(worktreeId)
-  if (stoppedWslHost) {
+  const wslHostOutage = useWslHostReadOutage(worktreeId)
+  if (wslHostOutage) {
     return (
       <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm">
         <WslHostStoppedNotice
-          environmentId={stoppedWslHost.environmentId}
-          distro={stoppedWslHost.distro}
+          environmentId={wslHostOutage.environmentId}
+          distro={wslHostOutage.distro}
+          connecting={wslHostOutage.connecting}
           size="sm"
           onStarted={onHostStarted}
         />

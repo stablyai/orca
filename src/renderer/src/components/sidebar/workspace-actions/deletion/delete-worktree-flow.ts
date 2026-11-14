@@ -2,7 +2,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
-import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   showNoDeletableWorkspacesToast,

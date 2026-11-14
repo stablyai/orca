@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { accumulateWorkItemPages } from './task-page-work-item-pagination'
 
 function item(repoId: string, id: string, updatedAt: string): GitHubWorkItem {

@@ -3,7 +3,7 @@ import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 
-/** Restore only committed web URLs across engines; other destinations reopen blank and request bodies are never reconstructed. */
+/** Reopen the requested/current web URL across engines; other destinations reopen blank and request bodies are never reconstructed. */
 export function resolveBrowserReopenOnServerUrl(
   url: string | null | undefined
 ): string | undefined {
@@ -26,12 +26,12 @@ export function resolveBrowserReopenOnServerUrl(
 export async function reopenBrowserPageOnServer(args: {
   environmentId: string
   worktreeId: string
-  lastCommittedUrl: string | null | undefined
+  reopenUrl: string | null | undefined
 }): Promise<boolean> {
   return createWebRuntimeSessionBrowserTab({
     worktreeId: args.worktreeId,
     environmentId: args.environmentId,
-    url: resolveBrowserReopenOnServerUrl(args.lastCommittedUrl),
+    url: resolveBrowserReopenOnServerUrl(args.reopenUrl),
     placementPreference: 'server',
     focusOnCreate: true
   })

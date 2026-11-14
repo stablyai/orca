@@ -3,14 +3,14 @@ import React from 'react'
 import {
   projectContentField,
   projectContentFieldLabel
-} from '../../../../shared/github/project-content-field'
+} from '../../../../shared/github/projects/project-content-field'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import type {
   GitHubIssueType,
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { ProjectTitleCell, ProjectTypeCell } from './ProjectCellIdentity'
 import { ProjectAssigneesCell, ProjectLabelsCell } from './ProjectCellRepositoryEditors'

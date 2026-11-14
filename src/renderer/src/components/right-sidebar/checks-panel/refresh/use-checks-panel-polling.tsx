@@ -3,7 +3,7 @@ import { useChecksDetailTimer } from './use-checks-detail-timer'
 import {
   ChecksDetailPollingPolicy,
   nextChecksPollBackoffMs
-} from '../../../../../../shared/github/checks-detail-polling-policy'
+} from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   gitLabPipelineJobsToPRChecks,

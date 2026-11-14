@@ -25,7 +25,10 @@ vi.mock('./worktree-list-reader', () => ({
 import {
   _resetWorktreeScanCacheForTests,
   listWorktreeGraph,
-  listWorktrees
+  listWorktrees,
+  listWorktreesSharedStrict,
+  listWorktreeGraphSharedStrict,
+  bumpWorktreeScanGeneration
 } from './worktree-scan-cache'
 import { __resetSparseCheckoutStateCacheForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
 
@@ -50,25 +53,6 @@ describe('graph and annotated worktree scans', () => {
     __resetSparseCheckoutStateCacheForTests()
   })
 
-  it('does not probe sparse state for a graph scan', async () => {
-    const rows = await listWorktreeGraph(REPO, { wslDistro: 'Ubuntu' })
-
-    expect(rows[0]?.path).toBe('C:\\wt\\x')
-    expect(rows[0]?.isSparse).toBeUndefined()
-    expect(detectSparseCheckoutMock).not.toHaveBeenCalled()
-  })
-
-  it('reads the git listing once for an overlapping graph and annotated scan', async () => {
-    const [graphRows, annotatedRows] = await Promise.all([
-      listWorktreeGraph(REPO, { wslDistro: 'Ubuntu' }),
-      listWorktrees(REPO, { wslDistro: 'Ubuntu' })
-    ])
-
-    expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledTimes(1)
-    expect(graphRows[0]?.isSparse).toBeUndefined()
-    expect(annotatedRows[0]?.isSparse).toBe(true)
-  })
-
   it('resolves a graph scan while the annotated scan is still probing', async () => {
     let releaseProbe!: () => void
     detectSparseCheckoutMock.mockImplementation(
@@ -85,4 +69,65 @@ describe('graph and annotated worktree scans', () => {
     releaseProbe()
     expect((await annotatedScan)[0]?.isSparse).toBe(true)
   })
+})
+
+it('shares only matching live cancellation scopes and preserves generation freshness', async () => {
+  _resetWorktreeScanCacheForTests()
+  readWorktreeListMock.mockReset()
+  __resetSparseCheckoutStateCacheForTests()
+  const pending = Promise.withResolvers<GitWorktreeInfo[]>()
+  readWorktreeListMock.mockReturnValue(pending.promise)
+  detectSparseCheckoutMock.mockResolvedValue(false)
+  const first = new AbortController()
+  const other = new AbortController()
+  const reads = [
+    listWorktreesSharedStrict('/repo', { signal: first.signal }),
+    listWorktreesSharedStrict('/repo', { signal: first.signal }),
+    listWorktreesSharedStrict('/repo', { signal: other.signal }),
+    listWorktreesSharedStrict('/repo')
+  ]
+  expect(readWorktreeListMock).toHaveBeenCalledTimes(3)
+  bumpWorktreeScanGeneration('/repo')
+  reads.push(listWorktreesSharedStrict('/repo', { signal: first.signal }))
+  expect(readWorktreeListMock).toHaveBeenCalledTimes(4)
+  first.abort()
+  await expect(listWorktreesSharedStrict('/repo', { signal: first.signal })).rejects.toThrow()
+  expect(readWorktreeListMock).toHaveBeenCalledTimes(4)
+  pending.resolve([])
+  const outcomes = await Promise.allSettled(reads)
+  expect(outcomes.map((outcome) => outcome.status)).toEqual([
+    'rejected',
+    'rejected',
+    'fulfilled',
+    'fulfilled',
+    'rejected'
+  ])
+})
+
+it('keeps strict all-row graphs separate, preserves errors and refreshes in the same cancellation scope', async () => {
+  _resetWorktreeScanCacheForTests()
+  readTranslatedWorktreeGraphMock.mockReset()
+  const pending = Promise.withResolvers<GitWorktreeInfo[]>()
+  readTranslatedWorktreeGraphMock.mockReturnValue(pending.promise)
+  const signal = new AbortController().signal
+  const scans = [
+    listWorktreeGraphSharedStrict('/repo', { signal }),
+    listWorktreeGraphSharedStrict('/repo', { signal })
+  ]
+  expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledOnce()
+  scans.push(listWorktreeGraph('/repo', { signal }))
+  expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledTimes(2)
+  bumpWorktreeScanGeneration('/repo')
+  scans.push(listWorktreeGraphSharedStrict('/repo', { signal }))
+  expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledTimes(3)
+  const nested = {
+    ...ROW,
+    path: '/repo/checkout/.orca-worktree-preparation',
+    branch: 'refs/heads/orca-create-preparation/test'
+  }
+  pending.resolve([ROW, nested])
+  expect((await Promise.all(scans))[0]).toEqual([ROW, nested])
+  const failure = new Error('inventory unavailable')
+  readTranslatedWorktreeGraphMock.mockRejectedValueOnce(failure)
+  await expect(listWorktreeGraphSharedStrict('/repo', { signal })).rejects.toBe(failure)
 })

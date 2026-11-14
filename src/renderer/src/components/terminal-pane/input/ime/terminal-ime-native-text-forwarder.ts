@@ -6,6 +6,7 @@ import {
   type ImeReleaseKeyEvent
 } from './terminal-ime-kitty-commit-encoding'
 import { getLayoutCharacterForCode } from '../../../../lib/keyboard-layout/layout-base-character'
+import { installTerminalImeRetainedHangulCommit } from './terminal-ime-retained-hangul-commit'
 
 // Claim plain printable keydowns so native input commits supply substituted text before xterm can cancel it; Linux fcitx4 candidate picks need the same path (#28213). Match key length, never source identity or character tables.
 
@@ -115,6 +116,11 @@ export function installTerminalImeNativeTextForwarder(args: {
   let pendingCommit: PendingCommit | null = null
   // Rollover and repeat leave multiple keys held; each needs its own release record.
   const claimedKeyRecords = new Map<string, ClaimedKeyRecord>()
+  const retainedHangulCommit = installTerminalImeRetainedHangulCommit({
+    terminalElement,
+    sendInput: args.sendInput,
+    getKittyKeyboardFlags: () => args.getKittyKeyboardFlags?.() ?? 0
+  })
 
   const findClaimedRecordId = (event: ImeNativeTextKeyEvent): string | null => {
     const direct = claimedKeyId(event)
@@ -294,7 +300,10 @@ export function installTerminalImeNativeTextForwarder(args: {
     }
     event.stopImmediatePropagation()
     // Clear committed text: macOS reads preceding field contents for double-space period substitution (#11504).
-    if (event.target instanceof HTMLTextAreaElement) {
+    if (
+      event.target instanceof HTMLTextAreaElement &&
+      !(event.data && retainedHangulCommit.retain(event.target, event.data))
+    ) {
       event.target.value = ''
     }
   }
@@ -323,6 +332,7 @@ export function installTerminalImeNativeTextForwarder(args: {
     claimKeyEvent,
     dispose: () => {
       cancelPending()
+      retainedHangulCommit.dispose()
       terminalElement.removeEventListener(
         XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
         markCompositionTransactionAccepted,

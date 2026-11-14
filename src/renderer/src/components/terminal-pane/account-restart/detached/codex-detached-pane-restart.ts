@@ -4,7 +4,7 @@ import {
   makePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
   buildCodexAccountRestartStartup,
@@ -19,7 +19,7 @@ import {
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import '../../pty-transport/delivery/pty-dispatcher'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
 import {

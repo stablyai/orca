@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-group-moves'
+import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   collectHeadlessParentTabOrder,

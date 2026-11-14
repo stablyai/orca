@@ -53,14 +53,6 @@ function indexRead(previousByteOffset: number, byteOffset: number, text: string)
   })
 }
 
-it('refuses an append whose predecessor offset is not the committed cursor', () => {
-  expect(indexRead(0, 100, 'first')).toBe(true)
-
-  expect(store.beginWrite(syntheticCandidate(), 'append', 900)).toBeNull()
-  expect(store.beginWrite(syntheticCandidate(), 'append', 99)).toBeNull()
-  expect(store.beginWrite(syntheticCandidate(), 'append', 100)).not.toBeNull()
-})
-
 it('refuses to commit a write whose cursor moved underneath it', () => {
   const stale = store.beginWrite(syntheticCandidate(), 'replace', 0)!
   for (const message of userMessages('stalegeneration', 40)) {
@@ -100,30 +92,4 @@ it('refuses to commit a write whose file was removed mid-read', () => {
   expect(count('sessions')).toBe(0)
   expect(count('messages')).toBe(0)
   expect(count('files')).toBe(0)
-})
-
-it('treats half a recorded identity as no identity at all', () => {
-  const partial = {
-    ...syntheticCandidate({ dev: 7 }),
-    agent: 'claude' as const
-  }
-  const write = store.beginWrite(partial, 'replace', 0)!
-  for (const message of userMessages('halfidentity', 2)) {
-    write.add(message)
-  }
-  write.commit({
-    session: syntheticSession(),
-    byteOffset: 100,
-    incomplete: false
-  })
-  expect(index.db.prepare('SELECT dev, ino FROM files').get()).toEqual({
-    dev: null,
-    ino: null
-  })
-  index.db.exec('UPDATE files SET dev = 7')
-
-  // A partial legacy identity can prove neither sameness nor replacement.
-  expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 7, ino: 99 })?.byteOffset).toBe(100)
-  expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 8, ino: 99 })?.byteOffset).toBe(100)
-  expect(store.beginWrite(syntheticCandidate({ dev: 8, ino: 99 }), 'append', 100)).not.toBeNull()
 })

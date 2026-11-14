@@ -1,6 +1,9 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
+import { selectWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import type { WslHostConnectionState } from '../../../../shared/wsl-host-types'
 import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import { isFileTooLargeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
@@ -60,6 +63,25 @@ export function shouldRetryFileLoadError(message: string, code?: string): boolea
   )
 }
 
+/**
+ * A WSL host's connection in the SSH phase's terms, so a read that failed while it was down waits
+ * for it and retries once it answers. Null for any other host.
+ */
+export function wslHostRetryConnection(
+  environmentId: string | null,
+  state: WslHostConnectionState | undefined
+): { targetId: string; connecting: boolean; connectedEpoch: string | null } | null {
+  if (!environmentId || state === undefined) {
+    return null
+  }
+  return {
+    targetId: `wsl:${environmentId}`,
+    connecting: state === 'connecting' || state === 'reconnecting',
+    // Per host, not per connection: main publishes connecting before every ready, which re-arms it.
+    connectedEpoch: state === 'ready' ? `wsl:${environmentId}` : null
+  }
+}
+
 export function useEditorPanelFileLoadRetry({
   activeFile,
   fileContents,
@@ -76,9 +98,18 @@ export function useEditorPanelFileLoadRetry({
     ? fileContents[activeFileLoadRetryId]?.loadErrorCode
     : undefined
   const hostConnection = useWorktreeHostConnection(activeFile?.worktreeId ?? null)
-  const hostTargetId = hostConnection.targetId
-  const hostConnecting = hostConnection.phase === 'connecting'
-  const connectedHostEpoch = hostConnection.connectedEpoch
+  const wslEnvironmentId = useAppStateValue((state) =>
+    selectWorkspaceRuntimeEnvironmentId(state, activeFile?.worktreeId)
+  )
+  const wslHostState = useAppStateValue((state) =>
+    wslEnvironmentId ? state.wslHostStatuses[wslEnvironmentId]?.state : undefined
+  )
+  // An SSH target keeps its own signal; only a workspace with none reads its WSL host.
+  const wslHost =
+    hostConnection.phase === 'local' ? wslHostRetryConnection(wslEnvironmentId, wslHostState) : null
+  const hostTargetId = wslHost?.targetId ?? hostConnection.targetId
+  const hostConnecting = wslHost?.connecting ?? hostConnection.phase === 'connecting'
+  const connectedHostEpoch = wslHost ? wslHost.connectedEpoch : hostConnection.connectedEpoch
   const seenHostRef = useRef({ targetId: hostTargetId, connectedEpoch: connectedHostEpoch })
 
   useEffect(() => {

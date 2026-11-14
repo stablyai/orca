@@ -10,7 +10,7 @@ import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty
 
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
-import type { PtyProcessInspectionOptions } from '../../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../../providers/pty/process-inspection'
 
 import {
   type TerminalProcessInspection as PtyProcessInspection,

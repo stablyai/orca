@@ -2,7 +2,7 @@ import { revealTerminalPane } from '@/lib/workspace/activation/reveal-terminal-p
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId

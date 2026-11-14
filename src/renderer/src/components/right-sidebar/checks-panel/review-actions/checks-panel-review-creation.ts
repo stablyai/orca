@@ -2,7 +2,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewLookupOutcome
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-request-refresh-types'
+import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { normalizeHostedReviewBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { isHostedReviewCreateEligibilityConfirmable } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-confirmation'
 import type { ChecksPanelReviewLookup } from '../checks-panel-review-lookup-authority'

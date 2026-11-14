@@ -3,11 +3,11 @@ import { getProviderChecksOutcome } from '../../../../../shared/source-control/c
 import type { AppState } from '../../../store/types'
 import { getIndexedRepoMap } from '../../../store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '../../../store/slices/worktrees/listing/worktree-catalog-index'
-import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-request-types'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
-import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '../../../store/slices/hosted-review/hosted-review-cache-identity'
-import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../shared/worktree/hosted-review/github-pr-suppression'
 
 // Derive input types and cache keys together so a newly read field must also invalidate the cache.
 const REQUIRED_INPUT_KEYS = [

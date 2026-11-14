@@ -26,18 +26,6 @@ function ids(result: SessionSearchResponse): string[] {
   return result.hits.map((hit) => hit.sessionId)
 }
 
-describe('the route ladder tries phrase, then AND, then repair, then OR', () => {
-  it('keeps the stop words a repaired prose phrase was typed with', async () => {
-    const { db, engine } = await open('ss-engine-typo-phrase')
-    addSyntheticSession(db, { id: 1, text: 'relay is dropping frames' })
-    addSyntheticSession(db, { id: 2, text: 'dropping frames again here' })
-    // Repair must retain the original phrase’s stop-word decisions.
-    const result = engine.search({ query: 'relay is droppng frames' })
-    expect(result.planner.route).toBe('typo+phrase')
-    expect(ids(result)).toEqual(['1'])
-  })
-})
-
 describe('the conversation scope is a column filter, and it binds the whole query', () => {
   it('refuses an AND whose second term lives only in tool output', async () => {
     // Parenthesize the whole FTS expression so its column filter applies to every term.

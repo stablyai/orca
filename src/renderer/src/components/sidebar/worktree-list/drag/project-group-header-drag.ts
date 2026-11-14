@@ -1,3 +1,7 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
@@ -176,7 +180,9 @@ export function useProjectGroupHeaderDrag({
         elapsedMs: frameTime - previousFrameTime
       })
       if (autoscroll) {
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         refreshHeaderRects()
       }
 
@@ -285,8 +291,7 @@ export function useProjectGroupHeaderDrag({
       return
     }
     const body = document.body
-    const prevCursor = body.style.cursor
-    const prevUserSelect = body.style.userSelect
+    const { cursor: prevCursor, userSelect: prevUserSelect } = body.style
     body.style.cursor = 'grabbing'
     body.style.userSelect = 'none'
     return () => {

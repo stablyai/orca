@@ -2,14 +2,14 @@ import {
   classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { recordFreshLaunch, retireLaunch } from '../launch/launch-evidence'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import { OrcaRuntimeWithDaemonLaunchNote } from './daemon-launch-note'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { spawnSurfaceClaimSequence } from '../surface/pty-recorded-surface-topology'

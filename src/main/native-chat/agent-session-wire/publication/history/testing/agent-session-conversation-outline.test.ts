@@ -50,4 +50,33 @@ describe('conversation outline read', () => {
       omittedEntries: 0
     })
   })
+
+  it('omits sent [Image #N] markers from user message outline previews', () => {
+    const outline = readAgentSessionConversationOutline(
+      snapshot([
+        {
+          itemId: 'user-1',
+          revision: 1,
+          sequence: 1,
+          observedAt: 1,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [
+              { type: 'text', text: 'Compare [Image #1] with baseline' },
+              { type: 'image-ref', path: '/tmp/shot.png' }
+            ]
+          }
+        }
+      ])
+    )
+    expect(outline.entries).toEqual([
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        preview: 'Compare with baseline',
+        imageCount: 1
+      }
+    ])
+  })
 })

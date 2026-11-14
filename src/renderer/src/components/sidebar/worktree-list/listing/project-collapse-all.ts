@@ -1,5 +1,5 @@
-import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 
 export function getRenderedProjectCollapseKeys(rows: readonly HostSectionRow[]): string[] {
   const keys = new Set<string>()

@@ -19,14 +19,15 @@ export function listLegacyWorkerTerminalRecoveryRows(
   if (dispatchIds?.length === 0) {
     return []
   }
+  // Why: drive from the live workers' partial index; ORDER BY dc.rowid alone made the planner scan every Dispatch.
   const rows = this.db
     .prepare(
       `SELECT dc.id AS dispatch_id, dc.task_id, dc.status AS dispatch_status,
               dc.contract_version, dc.assignee_handle, dc.assignee_pane_key,
               dc.process_incarnation, wd.state AS worker_state, wd.worktree_id,
               wd.agent_terminal_handle
-       FROM dispatch_contexts dc
-       INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
+       FROM worker_dispatches wd INDEXED BY idx_worker_dispatches_recoverable
+       CROSS JOIN dispatch_contexts dc ON dc.id = wd.dispatch_id
        WHERE wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
        ${dispatchIds ? 'AND wd.dispatch_id IN (SELECT value FROM json_each(?))' : ''}
        ORDER BY dc.rowid`

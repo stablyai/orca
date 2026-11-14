@@ -4,8 +4,8 @@ import { relativePathInsideRoot } from '../../../../src/shared/cross-platform-pa
 import {
   githubReferenceRepo,
   type GitHubRepoReference
-} from '../../../../src/shared/github/github-reference-links'
-import { githubRepoIdentityKey } from '../../../../src/shared/github/repository-identity-key'
+} from '../../../../src/shared/github/markdown/github-reference-links'
+import { githubRepoIdentityKey } from '../../../../src/shared/github/repositories/repository-identity-key'
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence

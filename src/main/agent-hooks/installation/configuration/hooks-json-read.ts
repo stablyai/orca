@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readObservedFileSync as readFileSync } from '../../../filesystem/file-content-observation'
+
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import type { HooksConfig } from './hook-config-schema'
 

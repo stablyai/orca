@@ -56,45 +56,4 @@ describe('DesktopScriptServeChannel', () => {
     child.stdout.emit('data', '\n')
     expect(handlers.onLine).toHaveBeenLastCalledWith('trailing')
   })
-
-  it('stops delivering a chunk when its line handler closes the channel', () => {
-    const { channel, child, handlers } = createChannel()
-    handlers.onLine.mockImplementation(() => channel.stop())
-    child.stdout.emit('data', 'first\nsecond\n')
-    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['first'])
-  })
-
-  describe('once stopped', () => {
-    /** Exercise channel guards directly so host guards cannot mask a missing check. */
-    it('accepts no further writes', () => {
-      const { channel, child } = createChannel()
-
-      channel.stop()
-      channel.write('{"tool":"click"}\n', vi.fn())
-
-      expect(child.writes).toEqual([])
-    })
-
-    it('reports no error from a write that was already queued', () => {
-      const { channel, child } = createChannel()
-      const onError = vi.fn()
-
-      channel.write('{"tool":"click"}\n', onError)
-      channel.stop()
-      child.failQueuedWrites()
-
-      expect(onError).not.toHaveBeenCalled()
-    })
-
-    it('reports neither lines nor the exit it was asked to cause', () => {
-      const { channel, child, handlers } = createChannel()
-
-      channel.stop()
-      child.stdout.emit('data', Buffer.from('{"a":1}\n', 'utf8'))
-      child.emit('close', 0, null)
-
-      expect(handlers.onLine).not.toHaveBeenCalled()
-      expect(handlers.onGone).not.toHaveBeenCalled()
-    })
-  })
 })

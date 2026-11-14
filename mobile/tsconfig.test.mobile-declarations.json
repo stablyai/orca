@@ -31,7 +31,7 @@
     "src/test-support/rpc-recording/derived-goldens.ts",
     "src/test-support/rpc-recording/golden-recording.ts",
     "src/test-support/rpc-recording/scenario-input.ts",
-    "src/host-screen/host-sidebar-feed-sections.ts",
+    "src/host-screen/sidebar-feed/host-sidebar-feed-sections.ts",
     "src/worktree/workspace-list-sections.ts",
     "src/worktree/worktree-catalog-snapshot-client.ts",
     "src/worktree/worktree-host-context-labels.ts",

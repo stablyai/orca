@@ -3,13 +3,13 @@ import { z } from 'zod'
 import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { Store } from '../persistence/loading-store/store'
 import type { PluginService } from '../plugins/plugin-service'
-import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/plugin-panel-owner-lifecycle'
-import { preparePluginFrameGuest } from '../plugins/panels/plugin-frame-guest-sessions'
-import { isPluginFrameIsolationEnabled } from '../plugins/panels/plugin-frame-isolation'
+import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/panel-lifetime/plugin-panel-owner-lifecycle'
+import { preparePluginFrameGuest } from '../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
+import { isPluginFrameIsolationEnabled } from '../plugins/panels/guest-isolation/plugin-frame-isolation'
 import {
   notePluginFrameTheme,
   pluginFrameThemeSchema
-} from '../plugins/panels/plugin-frame-theme-snapshot'
+} from '../plugins/panels/guest-isolation/plugin-frame-theme-snapshot'
 
 const readPanelEntryArgsSchema = z.object({
   pluginKey: z.string().min(1),

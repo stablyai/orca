@@ -321,7 +321,9 @@ export function NativeChatNoticeRow({
         ) : usageLimitContinue ? (
           <UsageLimitContinueNow
             resetsAt={
-              failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
+              failure?.kind === 'usageLimitReached'
+                ? (orcaStopView.usageLimitContinueAt ?? failure.usageLimit?.resetsAt)
+                : undefined
             }
           />
         ) : null}

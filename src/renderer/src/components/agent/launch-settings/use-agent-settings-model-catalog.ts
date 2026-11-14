@@ -17,6 +17,11 @@ import { subscribeHostAgentLaunchSettings } from '@/runtime/agent-launch-setting
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '@/store'
+import {
+  agentPickerListsCliModels,
+  readAgentPickerCliModelCatalog
+} from '../agent-launch-picker-cli-model-catalog'
+import { resolveWorktreeModelDiscoveryRuntime } from '../../native-chat/session/options/catalog/native-chat-session-option-discovery'
 
 const SETTINGS_LAUNCH = { newLaunch: true, seedsModel: true }
 
@@ -65,23 +70,32 @@ export function useAgentSettingsModelCatalog(
       return
     }
     let stale = false
+    // Like the launch picker, an agent with no structured chat lists through this machine's CLI;
+    // a workspace-less read can't route that to another host, so other hosts keep the seed.
+    const cliRuntime =
+      isLocal && agentPickerListsCliModels({ agent })
+        ? resolveWorktreeModelDiscoveryRuntime(useAppStore.getState(), null)
+        : null
     // Not recorded in the new-chat snapshot: an account answer there would drop newer workspace answers.
     // Old hosts refuse waitForListing, so wait only once the host says a listing is running.
+    const fetchCatalog = (wait: boolean): Promise<AgentSessionModelCatalogResult> =>
+      cliRuntime
+        ? readAgentPickerCliModelCatalog(agent, cliRuntime)
+        : callStructuredAgentSession<AgentSessionModelCatalogResult>(
+            readTarget,
+            'agentSession.modelCatalog',
+            wait ? { agent, waitForListing: true } : { agent }
+          )
     const read = (wait: boolean): void => {
-      void callStructuredAgentSession<AgentSessionModelCatalogResult>(
-        readTarget,
-        'agentSession.modelCatalog',
-        wait ? { agent, waitForListing: true } : { agent }
-      )
+      void fetchCatalog(wait)
         .then((catalog) => {
           if (stale) {
             return
           }
-          if (wait ? catalog.waitExpired : catalog.listingInProgress) {
-            read(true)
-            return
-          }
           setAnswer({ key, accountSettings, generation, catalog })
+          if (catalog.waitExpired || catalog.listingInProgress) {
+            read(true)
+          }
         })
         // Why not the snapshot: an unanswered read can't vouch for an older list.
         .catch(() => {

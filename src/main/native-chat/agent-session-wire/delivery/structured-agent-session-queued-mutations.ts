@@ -22,7 +22,14 @@ import {
   type MutationPlan
 } from '../operations/structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
-import { structuredQueueHold } from './structured-agent-session-queued-gate'
+import {
+  canSteerStructuredQueuedMessage,
+  structuredQueueHold
+} from './structured-agent-session-queued-gate'
+import {
+  structuredInputExecutionWorking,
+  structuredInputHandoverWorking
+} from './structured-agent-session-input-selection'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
@@ -123,6 +130,30 @@ export function sendQueuedStructuredAgentMessage(
       // Commands cannot steer; enforce idle-only Send even for older clients.
       if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")
+      }
+      if (
+        structuredInputExecutionWorking(ctx.journal, work) &&
+        (work.activeTurnId() === null ||
+          structuredInputHandoverWorking(ctx.journal, work) ||
+          !canSteerStructuredQueuedMessage(
+            {
+              record,
+              work,
+              child: context.sessions.get(ctx.sessionId)?.child,
+              stopping: context.readStopping(ctx.sessionId),
+              adapter: context.deps.adapter
+            },
+            row
+          ))
+      ) {
+        return {
+          ok: false,
+          refusal: refuse(
+            'agent_session_operation_invalid',
+            { reason: 'turnActive' },
+            'The current turn cannot accept this queued message yet.'
+          )
+        }
       }
       const submissionId = operationId
       const owed = queuedMessageOwed(context.deps, ctx.sessionId, row.body)

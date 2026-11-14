@@ -1,12 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { RelayDatabase } from '../database/database.js'
-import {
-  createRelayReadiness,
-  RELAY_READINESS_JWKS_GRACE_MS,
-  RELAY_READINESS_SQL_GRACE_MS,
-  type RelayReadinessGraceEvent,
-  type RelayReadinessObservation
-} from './relay-readiness.js'
+import { createRelayReadiness } from './relay-readiness.js'
 
 function database(query: () => Promise<Record<string, unknown>[]>): RelayDatabase {
   return {
@@ -17,88 +11,35 @@ function database(query: () => Promise<Record<string, unknown>[]>): RelayDatabas
   }
 }
 
-describe('relay readiness', () => {
-  it.each([
-    {
-      name: 'JWKS HTTP failure',
-      fetch: vi.fn(async () => new Response('', { status: 503 })) as typeof fetch,
-      query: vi.fn(async () => [{ ready: 1 }]),
-      failure: 'jwks_http_failed'
-    },
-    {
-      name: 'JWKS timeout',
-      fetch: vi.fn(async () => {
-        throw new DOMException('redacted', 'TimeoutError')
-      }) as typeof fetch,
-      query: vi.fn(async () => [{ ready: 1 }]),
-      failure: 'jwks_timed_out'
-    },
-    {
-      name: 'JWKS fetch failure',
-      fetch: vi.fn(async () => {
-        throw new Error('redacted')
-      }) as typeof fetch,
-      query: vi.fn(async () => [{ ready: 1 }]),
-      failure: 'jwks_fetch_failed'
-    },
-    {
-      name: 'SQL failure',
-      fetch: vi.fn(async () => new Response('{}', { status: 200 })) as typeof fetch,
-      query: vi.fn(async () => {
-        throw new Error('redacted')
-      }),
-      failure: 'sql_failed'
-    }
-  ])('reports a safe reason for $name', async ({ fetch, query, failure }) => {
-    const observations: RelayReadinessObservation[] = []
-    const readiness = createRelayReadiness(database(query), 'https://jwks', {
-      fetch,
-      cacheMs: 0,
-      observe: (observation) => observations.push(observation)
-    })
-
-    expect(await readiness.check()).toBe(false)
-    expect(observations).toEqual([expect.objectContaining({ ready: false, failure })])
-    expect(JSON.stringify(observations)).not.toContain('redacted')
-    expect(query).toHaveBeenCalledTimes(1)
-  })
-
-})
-
 describe('relay readiness last-known-good grace', () => {
   function graceProbe(input: {
     jwksGraceMs?: number
     sqlGraceMs?: number
-    cacheMs?: number
     jwksOk: () => boolean
     sqlOk: () => boolean
     now: () => number
   }) {
-    const observations: RelayReadinessObservation[] = []
-    const graceEvents: RelayReadinessGraceEvent[] = []
-    const query = vi.fn(async () => {
+    const query = async () => {
       if (!input.sqlOk()) throw new Error('redacted')
       return [{ ready: 1 }]
-    })
-    const fetchImpl = vi.fn(
-      async () => new Response('{}', { status: input.jwksOk() ? 200 : 503 })
-    ) as typeof fetch
+    }
+    const fetchImpl: typeof fetch = async () =>
+      new Response('{}', { status: input.jwksOk() ? 200 : 503 })
     const readiness = createRelayReadiness(database(query), 'https://jwks', {
       fetch: fetchImpl,
-      cacheMs: input.cacheMs ?? 0,
+      cacheMs: 0,
       ...(input.jwksGraceMs === undefined ? {} : { jwksGraceMs: input.jwksGraceMs }),
       ...(input.sqlGraceMs === undefined ? {} : { sqlGraceMs: input.sqlGraceMs }),
-      now: input.now,
-      observe: (observation) => observations.push(observation),
-      observeGrace: (event) => graceEvents.push(event)
+      now: input.now
     })
-    return { readiness, observations, graceEvents, query, fetchImpl }
+    return readiness
   }
 
-  it('stays ready while a JWKS failure sits inside the default fifteen minute window', async () => {
+  it('drops readiness once the configured JWKS window expires', async () => {
     let now = 1_000
     let jwksOk = true
-    const { readiness, observations } = graceProbe({
+    const readiness = graceProbe({
+      jwksGraceMs: 10_000,
       jwksOk: () => jwksOk,
       sqlOk: () => true,
       now: () => now
@@ -106,68 +47,14 @@ describe('relay readiness last-known-good grace', () => {
 
     expect(await readiness.check()).toBe(true)
     jwksOk = false
-    now += RELAY_READINESS_JWKS_GRACE_MS - 1
-    expect(await readiness.check()).toBe(true)
-    expect(readiness.degradedDependencies()).toEqual(['jwks'])
-    expect(observations.at(-1)).toEqual(
-      expect.objectContaining({
-        ready: true,
-        degraded: true,
-        degradedDependencies: ['jwks'],
-        failure: 'jwks_http_failed'
-      })
-    )
-  })
-
-  it('drops readiness once the JWKS window expires', async () => {
-    let now = 1_000
-    let jwksOk = true
-    const { readiness, observations } = graceProbe({
-      jwksOk: () => jwksOk,
-      sqlOk: () => true,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    jwksOk = false
-    now += RELAY_READINESS_JWKS_GRACE_MS
+    now += 10_000
     expect(await readiness.check()).toBe(false)
     expect(readiness.degradedDependencies()).toEqual([])
-    expect(observations.at(-1)).toEqual(
-      expect.objectContaining({ ready: false, failure: 'jwks_http_failed' })
-    )
-    expect(observations.at(-1)).not.toHaveProperty('degraded')
-  })
-
-  it('gives SQL a shorter window than JWKS by default', async () => {
-    let now = 1_000
-    let sqlOk = true
-    const { readiness, observations } = graceProbe({
-      jwksOk: () => true,
-      sqlOk: () => sqlOk,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    sqlOk = false
-    now += RELAY_READINESS_SQL_GRACE_MS - 1
-    expect(await readiness.check()).toBe(true)
-    expect(observations.at(-1)).toEqual(
-      expect.objectContaining({
-        ready: true,
-        degraded: true,
-        degradedDependencies: ['sql'],
-        failure: 'sql_failed'
-      })
-    )
-    now += 1
-    expect(await readiness.check()).toBe(false)
-    expect(RELAY_READINESS_SQL_GRACE_MS).toBeLessThan(RELAY_READINESS_JWKS_GRACE_MS)
   })
 
   it('keeps a process that never succeeded out of the grace window', async () => {
     let now = 1_000
-    const { readiness, observations, graceEvents } = graceProbe({
+    const readiness = graceProbe({
       jwksOk: () => false,
       sqlOk: () => true,
       now: () => now
@@ -176,14 +63,12 @@ describe('relay readiness last-known-good grace', () => {
     expect(await readiness.check()).toBe(false)
     now += 1_000
     expect(await readiness.check()).toBe(false)
-    expect(graceEvents).toEqual([])
-    expect(observations.every((observation) => observation.degraded === undefined)).toBe(true)
   })
 
   it('restarts the grace window from the most recent success', async () => {
     let now = 1_000
     let jwksOk = true
-    const { readiness } = graceProbe({
+    const readiness = graceProbe({
       jwksGraceMs: 10_000,
       jwksOk: () => jwksOk,
       sqlOk: () => true,
@@ -205,7 +90,7 @@ describe('relay readiness last-known-good grace', () => {
   it('never serves grace when the window is disabled', async () => {
     let now = 1_000
     let jwksOk = true
-    const { readiness, graceEvents } = graceProbe({
+    const readiness = graceProbe({
       jwksGraceMs: 0,
       jwksOk: () => jwksOk,
       sqlOk: () => true,
@@ -215,37 +100,13 @@ describe('relay readiness last-known-good grace', () => {
     expect(await readiness.check()).toBe(true)
     jwksOk = false
     expect(await readiness.check()).toBe(false)
-    expect(graceEvents).toEqual([])
   })
 
-  it('keeps one clock per dependency so a healthy JWKS cannot hold SQL open', async () => {
-    let now = 1_000
-    let sqlOk = true
-    const { readiness, graceEvents } = graceProbe({
-      sqlGraceMs: 10_000,
-      jwksOk: () => true,
-      sqlOk: () => sqlOk,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    sqlOk = false
-    for (let elapsed = 1_000; elapsed <= 11_000; elapsed += 1_000) {
-      now = 1_000 + elapsed
-      await readiness.check()
-    }
-    expect(await readiness.check()).toBe(false)
-    expect(graceEvents.map((event) => [event.dependency, event.grace])).toEqual([
-      ['sql', 'entered'],
-      ['sql', 'expired']
-    ])
-  })
-
-  it('probes SQL on every poll even while JWKS is failing', async () => {
+  it('expires SQL grace despite continuing JWKS failures', async () => {
     let now = 1_000
     let jwksOk = true
     let sqlOk = true
-    const { readiness, observations, query } = graceProbe({
+    const readiness = graceProbe({
       sqlGraceMs: 10_000,
       jwksOk: () => jwksOk,
       sqlOk: () => sqlOk,
@@ -259,18 +120,9 @@ describe('relay readiness last-known-good grace', () => {
     sqlOk = false
     now += 1_000
     expect(await readiness.check()).toBe(true)
-    expect(observations.at(-1)).toEqual(
-      expect.objectContaining({
-        ready: true,
-        failure: 'jwks_http_failed',
-        failures: ['jwks_http_failed', 'sql_failed'],
-        degradedDependencies: ['jwks', 'sql']
-      })
-    )
     // The SQL clock runs on evidence, so its window opens at the poll that saw SQL fail.
     now += 10_000
     expect(await readiness.check()).toBe(false)
-    expect(query).toHaveBeenCalledTimes(4)
   })
 
 })

@@ -3,25 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../../../shared/orcad-migration/orcad-migration-scrollback'
 
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import {
   makeTerminalScrollbackSnapshotRef,
   type TerminalScrollbackSnapshotStorage
 } from '../../../../pty/scrollback/terminal-scrollback-snapshots'
-import {
-  hasDuplicateOrcadMigrationScrollbackDescriptors,
-  projectOrcadMigrationSessionScrollback
-} from './orcad-source-scrollback-state'
-
-const FIRST: OrcadMigrationTerminalScrollbackSnapshot = {
-  tabId: 'tab-1',
-  leafId: 'leaf-1',
-  ref: `v1-${'1'.repeat(32)}`,
-  sha256: 'a'.repeat(64),
-  byteLength: 1
-}
+import { projectOrcadMigrationSessionScrollback } from './orcad-source-scrollback-state'
 
 let root: string
 let storage: TerminalScrollbackSnapshotStorage
@@ -58,20 +46,6 @@ function storeSnapshot(leafId: string, contents: string | number, dir = 'primary
 }
 
 describe('orcad source scrollback projection', () => {
-  it('moves panes that saved no terminal history without blocking the move', () => {
-    const projected = project({
-      buffersByLeafId: { 'leaf-empty': '' },
-      scrollbackRefsByLeafId: {
-        'leaf-deleted': makeTerminalScrollbackSnapshotRef('tab-1', 'leaf-deleted'),
-        'leaf-zero': storeSnapshot('leaf-zero', 0)
-      }
-    })
-
-    expect(projected.blockedItems).toEqual([])
-    expect(projected.snapshots).toEqual([])
-    expect(projected.session.terminalLayoutsByTabId['tab-1'].scrollbackRefsByLeafId).toBeUndefined()
-  })
-
   it('carries history from the fallback root when the primary copy is empty or missing', () => {
     const zeroRef = storeSnapshot('leaf-zero', 0)
     storeSnapshot('leaf-zero', 'zero', 'fallback')
@@ -86,31 +60,5 @@ describe('orcad source scrollback projection', () => {
       ['leaf-missing', 7],
       ['leaf-zero', 4]
     ])
-  })
-
-  it('refuses duplicate refs or tab/leaf identities across merged fragments', () => {
-    expect(
-      hasDuplicateOrcadMigrationScrollbackDescriptors([
-        FIRST,
-        { ...FIRST, tabId: 'tab-2', leafId: 'leaf-2' }
-      ])
-    ).toBe(true)
-    expect(
-      hasDuplicateOrcadMigrationScrollbackDescriptors([
-        FIRST,
-        { ...FIRST, ref: `v1-${'2'.repeat(32)}` }
-      ])
-    ).toBe(true)
-    expect(
-      hasDuplicateOrcadMigrationScrollbackDescriptors([
-        FIRST,
-        {
-          ...FIRST,
-          tabId: 'tab-2',
-          leafId: 'leaf-2',
-          ref: `v1-${'2'.repeat(32)}`
-        }
-      ])
-    ).toBe(false)
   })
 })

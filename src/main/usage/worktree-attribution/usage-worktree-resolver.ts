@@ -61,6 +61,13 @@ export async function createUsageWorktreeResolver(
   worktrees: readonly UsageScanWorktreeRef[]
 ): Promise<UsageWorktreeResolver> {
   const canonicalized = await canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
+  // Most sessions run at a worktree root; skip the linear containment scan for those.
+  const worktreeByPath = new Map<string, UsageScanWorktreeRef>()
+  for (const worktree of canonicalized) {
+    if (!worktreeByPath.has(worktree.canonicalPath)) {
+      worktreeByPath.set(worktree.canonicalPath, worktree)
+    }
+  }
   const worktreeByCwd = new Map<string, UsageScanWorktreeRef | null>()
   return (cwd) => {
     const memoized = worktreeByCwd.get(cwd)
@@ -68,7 +75,8 @@ export async function createUsageWorktreeResolver(
     if (memoized !== undefined) {
       return memoized
     }
-    const resolved = findContainingWorktree(cwd, canonicalized)
+    const resolved =
+      worktreeByPath.get(normalizeFsPath(cwd)) ?? findContainingWorktree(cwd, canonicalized)
     worktreeByCwd.set(cwd, resolved)
     return resolved
   }

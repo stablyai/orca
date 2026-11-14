@@ -32,6 +32,7 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
 import { browserManager } from '../browser-manager'
 import {
   createDownloadItem,
+  guestNavigationMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
   resetBrowserManagerState
@@ -41,6 +42,7 @@ const { webContentsFromIdMock } = browserMocks
 
 let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
 const fakeGuest = (id: number) => ({
+  ...guestNavigationMethods(),
   id,
   isDestroyed: vi.fn(() => false),
   isCurrentlyAudible: vi.fn(() => false),

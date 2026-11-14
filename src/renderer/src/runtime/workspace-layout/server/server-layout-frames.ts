@@ -6,7 +6,7 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
-} from '../../../../../shared/workspace-layout/layout-intents-capability'
+} from '../../../../../shared/workspace-layout/published-layout/layout-intents-capability'
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry

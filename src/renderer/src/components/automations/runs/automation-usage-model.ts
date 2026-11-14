@@ -26,7 +26,7 @@ export function formatAutomationCost(
   t: Translate = translate
 ): string {
   if (value === null || value === undefined) {
-    return t('auto.components.automations.usage.costUnavailable', 'n/a')
+    return t('auto.components.automations.usage.costUnavailable', '—')
   }
   if (value > 0 && value < 0.01) {
     return `$${value.toFixed(4)}`

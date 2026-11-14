@@ -48,6 +48,8 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const [open, setOpen] = useMobileNativeChatDisclosure(`agent-message:${message.id}`, false)
   const headings: Record<AgentMessageHeading, string> = {
     started: t('chat.agentMessage.startedWorker', 'Started worker'),
+    'reopened-worker': t('chat.agentMessage.reopenedWorker', 'Reopened worker'),
+    'followed-up-worker': t('chat.agentMessage.sentFollowUpToWorker', 'Sent follow-up to worker'),
     'handed-off': t('chat.agentMessage.handedOffToAgent', 'Handed off to agent'),
     'started-agent': t('chat.agentMessage.startedAgent', 'Started agent'),
     task: t('chat.agentMessage.taskFromCoordinator', 'Task from coordinator'),

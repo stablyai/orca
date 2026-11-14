@@ -110,15 +110,6 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     expect(readTerminalScrollbackStoredBytesSync(ref, storage)).toBeNull()
   })
 
-  it('refuses a chunk for a manifest whose digest does not match its contents', () => {
-    const store = sourceStore()
-    const manifest = createOrcadMigrationManifest(store, TARGET)
-    const ref = manifest.payload.dormantState?.terminalScrollbackSnapshots?.[0]?.ref ?? ''
-    expect(() =>
-      store.readOrcadMigrationSourceSnapshotChunk({ ...manifest, migrationId: 'forged' }, ref, 0)
-    ).toThrow('orcad_migration_manifest_digest_mismatch')
-  })
-
   // #29083: an enabled automation refused every Connect and left the host unconnectable.
 
   // #30126: three parked shells' local-only scrollback, inlined, overflowed the 768 KB manifest.

@@ -1,10 +1,10 @@
 import type { ReactNode, RefObject } from 'react'
-import type { TextInput, View } from 'react-native'
+import type { HostInstance, TextInputInstance } from 'react-native'
 import type { ComposerMenuIntrinsicSize } from './mobile-native-chat-composer-menu-size'
 
 export type ComposerAllocationProps = {
-  anchorRef: RefObject<View | null>
-  fieldRef: RefObject<TextInput | null>
+  anchorRef: RefObject<HostInstance | null>
+  fieldRef: RefObject<TextInputInstance | null>
   hasMenu: boolean
   children: ReactNode
 }
@@ -18,7 +18,7 @@ export function MobileNativeChatComposerMenuReservation() {
 }
 
 export type ComposerAllocation = {
-  reserveRef: RefObject<View | null>
+  reserveRef: RefObject<HostInstance | null>
   reservation: number
   fieldMaxHeight: number | undefined
   onActiveChange: (active: boolean) => void

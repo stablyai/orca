@@ -9,7 +9,7 @@ import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings
-} from '../../native-chat/structured-agent-command-resolution'
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease

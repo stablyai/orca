@@ -115,6 +115,22 @@
   },
   "overrides": [
     {
+      "files": ["src/main/backend/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["electron", "electron/*"],
+                "message": "Backend services use the typed desktop capability bridge; only the shell imports Electron."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
@@ -145,6 +161,47 @@
               {
                 "regex": "\\.fixture(?:\\.tsx?)?(?:[?#].*)?$",
                 "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/main/backend/**/*.ts"],
+      "excludeFiles": [
+        "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
+        "**/__tests__/**",
+        "src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              },
+              {
+                "name": "ssh2",
+                "allowTypeImports": true,
+                "message": "Value-importing ssh2 hoists it into the eager main-process require block and blocks startup (#35731). Use `import type` plus loadSsh2() from src/main/ssh/ssh2-module-load.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
+                "message": "This module is unit-test support. Import the production web-session owner instead."
+              },
+              {
+                "regex": "\\.fixture(?:\\.tsx?)?(?:[?#].*)?$",
+                "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
+              },
+              {
+                "group": ["electron", "electron/*"],
+                "message": "Backend services use the typed desktop capability bridge; only the shell imports Electron."
               }
             ]
           }
@@ -251,7 +308,7 @@
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
-    "src/cli/bundled-skill-guides.ts",
+    "src/cli/skills/bundled-skill-guides.ts",
     "resources/plugins/declarative/*.mjs",
     "**/node_modules",
     "**/dist",

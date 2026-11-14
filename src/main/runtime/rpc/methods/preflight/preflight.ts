@@ -14,12 +14,12 @@ import {
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
 import {
-  PreflightAgentDetection,
+  PreflightAgentRefresh,
   PreflightProjectAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
-} from '../../../../../shared/rpc-contract/preflight-params'
+} from '../../../../../shared/rpc-contract/preflight/preflight-params'
 
 /** This host's command overrides, so a configured CLI outside PATH is listed like a detected one. */
 function hostDetectionOptions(
@@ -74,11 +74,11 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.refreshAgents',
     permission: 'workspace',
-    params: PreflightAgentDetection,
+    params: PreflightAgentRefresh,
     handler: async (params, { runtime }) => {
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
-      return refreshAgentsOnHost(host, hostDetectionOptions(runtime))
+      return refreshAgentsOnHost(host, hostDetectionOptions(runtime), params.userInitiated)
     }
   })
 ]

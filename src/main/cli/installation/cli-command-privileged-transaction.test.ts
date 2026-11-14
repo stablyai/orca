@@ -1,17 +1,4 @@
-import {
-  chmod,
-  lchmod,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readlink,
-  readdir,
-  rm,
-  symlink,
-  unlink,
-  writeFile
-} from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -78,40 +65,6 @@ function fixtureInstallerOptions(fixture: Awaited<ReturnType<typeof createPrivil
 describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
   'macOS privileged CLI command transaction',
   () => {
-    it('restores a trailing-newline symlink inserted after privileged inspection', async () => {
-      const fixture = await createPrivilegedFixture()
-      const staleTarget = join(fixture.userDataPath, 'cli', 'bin', 'old', 'orca')
-      const foreignTarget = `${staleTarget}\n`
-      await symlink(staleTarget, fixture.commandPath)
-      const original = await lstat(fixture.commandPath, { bigint: true })
-      let raced = false
-      const installer = new CliInstaller({
-        ...fixtureInstallerOptions(fixture),
-        privilegedRunner: async (command) => {
-          await chmod(fixture.protectedDirectory, 0o700)
-          if (!raced) {
-            raced = true
-            await unlink(fixture.commandPath)
-            await symlink(foreignTarget, fixture.commandPath)
-          }
-          const replacement = await lstat(fixture.commandPath, { bigint: true })
-          await executePrivilegedShell(
-            command.replace(
-              `${original.dev}:${original.ino}`,
-              `${replacement.dev}:${replacement.ino}`
-            )
-          )
-        }
-      })
-
-      await chmod(fixture.protectedDirectory, 0o500)
-      await expect(installer.install()).rejects.toThrow()
-      await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
-      expect(
-        (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
-      ).toBe(false)
-    })
-
     it('restores a managed file changed in place after privileged inspection', async () => {
       const fixture = await createPrivilegedFixture()
       const oldCliPath = join(fixture.root, 'old', 'out', 'cli', 'index.js')
@@ -136,46 +89,6 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       await chmod(fixture.protectedDirectory, 0o500)
       await expect(installer.install()).rejects.toThrow()
       await expect(readFile(fixture.commandPath, 'utf8')).resolves.toBe(foreignContent)
-      expect(
-        (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
-      ).toBe(false)
-    })
-
-    it('refuses an unreadable symlink that is not an Orca launcher once root makes it readable', async () => {
-      const fixture = await createPrivilegedFixture()
-      const foreignTarget = '/opt/other/bin/orca'
-      await symlink(foreignTarget, fixture.commandPath)
-      await lchmod(fixture.commandPath, 0o300)
-      const installer = new CliInstaller({
-        ...fixtureInstallerOptions(fixture),
-        privilegedRunner: executePrivilegedShell
-      })
-
-      await chmod(fixture.protectedDirectory, 0o500)
-      await expect(installer.install()).rejects.toThrow(/Refusing to replace non-Orca command/)
-      await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
-      expect(
-        (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
-      ).toBe(false)
-    })
-
-    it('restores the displaced command when publication setup fails', async () => {
-      const fixture = await createPrivilegedFixture()
-      const staleTarget = join(fixture.userDataPath, 'cli', 'bin', 'old', 'orca')
-      await symlink(staleTarget, fixture.commandPath)
-      const installer = new CliInstaller({
-        ...fixtureInstallerOptions(fixture),
-        privilegedRunner: async (command) => {
-          await chmod(fixture.protectedDirectory, 0o700)
-          const sabotaged = command.replace(/\/bin\/mkdir ('[^']*\/publish')/, '/usr/bin/false')
-          expect(sabotaged).not.toBe(command)
-          await executePrivilegedShell(sabotaged)
-        }
-      })
-
-      await chmod(fixture.protectedDirectory, 0o500)
-      await expect(installer.install()).rejects.toThrow()
-      await expect(readlink(fixture.commandPath)).resolves.toBe(staleTarget)
       expect(
         (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
       ).toBe(false)

@@ -122,7 +122,7 @@ export function claimDueWorkerTerminalAutoReleases(
   return claimed
 }
 
-/** A claimed close found its agent working again: back to suspended, output archive dropped. */
+/** A claimed close found its agent working again: back to suspended, output reference dropped. */
 export function deferWorkerTerminalAutoRelease(this: OrchestrationDb, resourceId: string): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {

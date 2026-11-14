@@ -19,8 +19,9 @@ const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupp
 const XTERM_CORE_PATCH =
   /^config\/patches\/(?:@xterm__xterm@[^/]+\.patch|xterm-src\/@xterm__xterm@[^/]+\.src\.patch)$/
 
+// Paths follow the input/ime and input/keyboard owners (#39113); the pre-move paths matched nothing.
 const NATIVE_IME_PRODUCT_SOURCE =
-  /^(?:src\/shared\/terminal-unicode-provider\.ts$|src\/renderer\/src\/lib\/pane-manager\/terminal-ime-|src\/renderer\/src\/components\/terminal-pane\/(?:terminal-ime-|terminal-ios-hangul-|xterm-bypass-policy))/
+  /^(?:src\/shared\/terminal-unicode-provider\.ts$|src\/renderer\/src\/lib\/pane-manager\/terminal-input\/terminal-ime-|src\/renderer\/src\/components\/terminal-pane\/input\/(?:ime\/|keyboard\/xterm-bypass-policy|terminal-pane-pane-input\.ts$))/
 
 /** The harness itself: the session runner, the boundary probes, and the native specs. */
 const NATIVE_IME_HARNESS =
@@ -132,7 +133,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       ) ||
       (isProductSource(file) &&
-        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
+        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/profile-startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
           file
         ))
   },
@@ -142,14 +143,16 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       file === 'tests/e2e/helpers/orca-serve-cli-host.ts' ||
       (isProductSource(file) &&
-        /^src\/main\/startup\/(?:windows-app-data-path|main-process-preflight)\.ts$/.test(file))
+        /^src\/main\/startup\/(?:windows-startup\/windows-app-data-path|main-process-preflight)\.ts$/.test(
+          file
+        ))
   },
   {
     id: 'clipboard.windows-copy-file',
     specs: ['tests/e2e/file-explorer-copy-file-windows.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
+      /^src\/(?:main\/window\/clipboard\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
         file
       )
   },
@@ -308,7 +311,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       ) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:ssh|managed-server\/[a-z-]+)\/orcad-managed-|main\/ipc\/(?:ssh\/)?ssh-port-forward|main\/(?:ipc\/(?:(?:ssh\/)?ssh-(?:connect-flow|connection-handlers|host-user-disconnect|session-teardown)|(?:runtime-environments\/)?runtime-environment-(?:connectivity-handlers|manual-disconnect))|ssh\/(?:connection\/ssh-connection-manager|ssh-user-disconnect))\.ts$|renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts$|renderer\/src\/runtime\/(?:web-runtime-session|web-session-close-|runtime-terminal-artifact-read\.ts$)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/remote-runtime-|terminal-host-(?:workspace-file|file-link-existence)\.ts$))/.test(
+        /^src\/(?:main\/(?:ssh|managed-server\/[a-z-]+)\/orcad-managed-|main\/ipc\/(?:ssh\/)?ssh-port-forward|main\/(?:ipc\/(?:(?:ssh\/)?ssh-(?:connect-flow|connection-handlers|host-user-disconnect|session-teardown)|(?:runtime-environments\/(?:connectivity\/)?)?runtime-environment-(?:connectivity-handlers|manual-disconnect))|ssh\/(?:connection\/ssh-connection-manager|ssh-user-disconnect))\.ts$|renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts$|renderer\/src\/runtime\/(?:web-runtime-session|web-session-close-|runtime-terminal-artifact-read\.ts$)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/remote-runtime-|terminal-host-(?:workspace-file|file-link-existence)\.ts$))/.test(
           file
         ))
   },
@@ -320,7 +323,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       file === 'tests/e2e/fixtures/structured-claude-stub.cjs' ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:claude\/claude-(?:stream-json-connection|stream-json-exit-error|structured-session-exit-lifecycle)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
+        /^src\/(?:main\/(?:claude\/(?:claude-(?:stream-json-connection|structured-session-exit-lifecycle)|sdk-transport\/claude-stream-json-exit-error)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
           file
         ))
   },
@@ -399,7 +402,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       isProductSource(file) &&
       (XTERM_CORE_PATCH.test(file) ||
-        /^src\/renderer\/src\/components\/terminal-pane\/(?:terminal-ime-|use-terminal-pane-lifecycle|xterm-bypass-policy|terminal-option-shortcut-policy)/.test(
+        /^src\/renderer\/src\/components\/terminal-pane\/(?:input\/ime\/terminal-ime-|controller\/use-terminal-pane-lifecycle|input\/keyboard\/(?:xterm-bypass-policy|terminal-option-shortcut-policy))/.test(
           file
         ))
   },
@@ -444,7 +447,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:layout\/close\/retire-unbound-(?:ipc|runtime)-terminal-pane|terminal-pane-(?:close-admission|close-identity|lifecycle-close|pane-closed|retirement-ownership)|use-terminal-pane-close-actions)|src\/renderer\/src\/store\/(?:terminals\/terminal-tab-close(?:-providers)?|slices\/(?:terminal-tab-retirement|terminal-retirement-teardown-reservation|retired-terminal-tab-state-sweep)))\.ts$/.test(
+      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:layout\/close\/retire-unbound-(?:ipc|runtime)-terminal-pane|terminal-pane-(?:close-admission|close-identity|lifecycle-close|pane-closed|retirement-ownership)|use-terminal-pane-close-actions)|src\/renderer\/src\/store\/(?:terminals\/retirement\/(?:terminal-tab-close(?:-providers)?|terminal-tab-retirement|terminal-retirement-teardown-reservation|retired-terminal-tab-state-sweep)))\.ts$/.test(
         file
       )
   },
@@ -477,16 +480,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    // Layout resolution can invent split directions; publishing the guess overwrites the original tree irreversibly.
-    id: 'terminal-session.split-orientation-resolution',
-    specs: ['tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/runtime\/(?:remote-terminal-layout-resolution\.ts|sync-runtime-graph\/(?:graph-publication|mobile-session-terminal-tabs|mobile-session-surfaces)\.ts|web-session-tabs-sync\/terminal-surfaces\.ts)$/.test(
-        file
-      )
-  },
-  {
     id: 'terminal-session.remote-pane-layout-retry',
     specs: ['tests/e2e/paired-remote-pane-layout-retry.spec.ts'],
     matches: (file) =>
@@ -502,7 +495,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       file === 'tests/e2e/helpers/connector-fake-claude.ts' ||
       (isProductSource(file) &&
-        /^src\/(?:main\/external-conversations\/|main\/runtime\/rpc\/methods\/connector\.ts$|cli\/(?:handlers|specs)\/connector\.ts$|shared\/rpc-contract\/connector-params\.ts$)/.test(
+        /^src\/(?:main\/external-conversations\/|main\/runtime\/rpc\/methods\/connector\.ts$|cli\/(?:connectors|specs)\/connector\.ts$|shared\/rpc-contract\/connectors\/connector-params\.ts$)/.test(
           file
         ))
   }

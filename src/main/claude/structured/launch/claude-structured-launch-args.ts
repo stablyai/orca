@@ -1,4 +1,4 @@
-import { StructuredAgentArgumentsError } from '../../../native-chat/structured-agent-arguments-error'
+import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
 
 /** Flags supplied by the SDK or owned by Orca's structured transport. */
 const OWNED_FLAGS = new Set([

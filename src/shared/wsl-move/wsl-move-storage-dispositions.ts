@@ -51,8 +51,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     [
       'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',
       'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
+      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
+      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',
@@ -139,7 +139,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
     'test-fixture',
-  'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
+  'src/main/ai-vault/scanner-fixtures/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'

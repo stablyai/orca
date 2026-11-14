@@ -20,7 +20,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
-import { ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE } from '../../orcad/orcad-host-unavailable'
+import { ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE } from '../../orcad/diagnostics/orcad-host-unavailable'
 import {
   ORCAD_WINDOWS_HOST_SCRIPT,
   ORCAD_WINDOWS_HOST_SCRIPT_FILENAME,

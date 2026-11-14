@@ -1,5 +1,5 @@
 import { gitLabPipelineJobOutcome } from '../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
-import type { CheckStatus } from '../../../shared/github/pull-request-types'
+import type { CheckStatus } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../../shared/gitlab-types'
 
 import { summarizeProviderChecks } from '../../../shared/source-control/checks/provider-check-summary'
@@ -65,6 +65,8 @@ type GitLabMRRaw = {
   updatedAt?: string
   sha?: string
   has_conflicts?: boolean
+  /** Absent from list responses; null until GitLab persists a diff with commits. */
+  changes_count?: string | null
   detailed_merge_status?: string
   /** Deprecated since GitLab 15.6, but the only merge signal older instances return. */
   merge_status?: string
@@ -110,14 +112,20 @@ export function settleManualPipelineStatus(
 }
 
 function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
-  if (data.has_conflicts === true) {
+  // GitLab marks merge requests without commits unmergeable (has_conflicts, broken_status), but
+  // with no diff there is nothing to conflict.
+  const noDiff = data.changes_count === null
+  if (data.has_conflicts === true && !noDiff) {
     return 'CONFLICTING'
   }
   // Only positive mergeable is stable enough to enable merging; pending prerequisites remain unknown.
   if (data.detailed_merge_status === 'mergeable') {
     return 'MERGEABLE'
   }
-  if (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') {
+  if (
+    (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') &&
+    !noDiff
+  ) {
     return 'CONFLICTING'
   }
   // GitLab <15.6 supplies only legacy merge_status; trust its positive value while conflicts use has_conflicts.
@@ -184,6 +192,7 @@ type GitLabMRRawForWorkItem = {
   source_project_id?: number
   target_project_id?: number
   has_conflicts?: boolean
+  changes_count?: string | null
   detailed_merge_status?: string
 }
 

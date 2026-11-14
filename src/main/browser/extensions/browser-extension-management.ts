@@ -1,3 +1,4 @@
+import { recordBrowserExtensionInstalled } from '../../telemetry/browser-extensions-banner'
 import { isAbsolute } from 'node:path'
 import type {
   BrowserExtensionActionResult,
@@ -243,6 +244,9 @@ export function addUnpackedBrowserExtension(
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
+      if (!existing) {
+        recordBrowserExtensionInstalled('unpacked')
+      }
     })
     notifyBrowserExtensionListChanged()
   })
@@ -258,6 +262,6 @@ export function openBrowserExtensionOptions(
     if (!extension) {
       throw new Error('Turn the extension on to open its options')
     }
-    await openBrowserExtensionOptionsPage(browserProfileId, extension)
+    await openBrowserExtensionOptionsPage(browserProfileId, extension, { active: true })
   })
 }

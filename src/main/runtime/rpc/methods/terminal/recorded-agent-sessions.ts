@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   RecordedAgentSessionsParams,
   ResumeRecordedAgentSessionParams
-} from '../../../../../shared/rpc-contract/recorded-agent-session-params'
+} from '../../../../../shared/rpc-contract/terminal/recorded-agent-session-params'
 
 export const RECORDED_AGENT_SESSION_METHODS = [
   defineMethod({

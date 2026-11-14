@@ -20,11 +20,14 @@ const QUEUED_HIT_SLOP = { top: 8, bottom: 8 }
 export function MobileAgentMessageSenders({
   from,
   compact = false,
-  queued = false
+  queued = false,
+  bare = false
 }: {
   from: AgentMessageSource
   compact?: boolean
   queued?: boolean
+  /** Names only, without the queued line's "From": the row draws its own lead. */
+  bare?: boolean
 }) {
   const open = useContext(MobileAgentMessageOpenContext)
   const t = useMobileTranslation()
@@ -36,7 +39,7 @@ export function MobileAgentMessageSenders({
       pointerEvents="box-none"
       style={[styles.senders, compact && styles.compactSenders, queued && styles.queuedSenders]}
     >
-      {queued ? (
+      {queued && !bare ? (
         <Text style={[styles.meta, styles.queuedLead]}>
           {t('session.agentMessageAttribution.fromSender', 'From')}
         </Text>
@@ -45,7 +48,7 @@ export function MobileAgentMessageSenders({
         <Text
           pointerEvents={compact ? 'none' : undefined}
           numberOfLines={compact || queued ? 1 : undefined}
-          style={queued ? styles.meta : styles.name}
+          style={queued ? [styles.meta, styles.queuedMeta] : styles.name}
         >
           {unnamed}
         </Text>
@@ -67,7 +70,7 @@ export function MobileAgentMessageSenders({
             />
             {/* Outside the name, so truncating a long name keeps "A…, B". */}
             {queued && index < shown.length - 1 ? (
-              <Text style={[styles.meta, styles.queuedComma]}>,</Text>
+              <Text style={[styles.meta, styles.queuedMeta, styles.queuedComma]}>,</Text>
             ) : null}
           </Fragment>
         )
@@ -75,7 +78,7 @@ export function MobileAgentMessageSenders({
       {more > 0 ? (
         <Text
           pointerEvents={compact ? 'none' : undefined}
-          style={[styles.meta, compact && styles.compactMoreSenders]}
+          style={[styles.meta, queued && styles.queuedMeta, compact && styles.compactMoreSenders]}
         >
           +{more}
         </Text>
@@ -119,7 +122,11 @@ function SenderName({
     >
       <Text
         numberOfLines={compact || queued ? 1 : undefined}
-        style={queued ? [styles.meta, canOpen && styles.queuedOpenableName] : styles.name}
+        style={
+          queued
+            ? [styles.meta, styles.queuedMeta, canOpen && styles.queuedOpenableName]
+            : styles.name
+        }
       >
         {name}
       </Text>

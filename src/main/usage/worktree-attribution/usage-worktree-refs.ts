@@ -21,7 +21,7 @@ export function getUsageWorktreeFingerprint(
 }
 
 export function createWorktreeRefs(
-  repos: Repo[],
+  repos: readonly Pick<Repo, 'id'>[],
   worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
 ): UsageScanWorktreeRef[] {
   const refs: UsageScanWorktreeRef[] = []

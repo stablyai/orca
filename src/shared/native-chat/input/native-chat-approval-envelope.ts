@@ -81,7 +81,7 @@ export type NativeChatStartupMenuChoice = { label: string; send: string }
 
 const STARTUP_MENU_LABEL_MAX = 300
 // Room for a full screen of warning text, which the user reads before answering.
-const STARTUP_MENU_DESCRIPTION_MAX = 4000
+export const STARTUP_MENU_DESCRIPTION_MAX = 4000
 const STARTUP_MENU_CHOICES_MAX = 9
 
 function isStartupMenuText(value: unknown, max: number): value is string {
@@ -108,11 +108,11 @@ export function parseNativeChatStartupMenuEnvelope(
   for (const choice of menu.choices.slice(0, STARTUP_MENU_CHOICES_MAX)) {
     const label: unknown = choice?.label
     const send: unknown = choice?.send
-    // Only arrow keys then Return; anything else is not a menu-choice keystroke.
+    // Arrow keys then Return, or Escape (a footer action such as reject all); nothing else is a menu keystroke.
     if (
       !isStartupMenuText(label, STARTUP_MENU_LABEL_MAX) ||
       typeof send !== 'string' ||
-      !MENU_KEYS_RE.test(send)
+      (send !== ESCAPE && !MENU_KEYS_RE.test(send))
     ) {
       return null
     }

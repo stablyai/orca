@@ -101,6 +101,10 @@ CREATE TABLE IF NOT EXISTS federation_relay_items (
 CREATE INDEX IF NOT EXISTS idx_federation_relay_pending
   ON federation_relay_items(dispatch_id, direction, acked_at, sequence);
 
+-- Holds only what is still unacknowledged, so a paired Orca's mail pull costs what is pending, not every conversation it ever had.
+CREATE INDEX IF NOT EXISTS idx_federation_relay_unacked
+  ON federation_relay_items(direction, dispatch_id) WHERE acked_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS remote_questions (
   message_id        TEXT PRIMARY KEY,
   dispatch_id       TEXT NOT NULL,

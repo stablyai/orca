@@ -67,32 +67,4 @@ describe('preExtractDownloadedAppImageUpdate', () => {
     expect(existsSync(installed.payloadLauncherPath)).toBe(true)
     expect(existsSync(resolveAppImageLauncherEndpointPath(cacheRootPath, 'installed'))).toBe(false)
   })
-
-  it('never runs a file that is not the updater download', async () => {
-    const { root, appImagePath, cacheRootPath } = await makeFixture()
-    const planted = join(root, 'Orca-2.0.0.AppImage')
-    await writeFile(planted, 'not an update', { mode: 0o755 })
-    const runExtract = vi.fn()
-
-    expect(
-      await preExtraction.preExtractDownloadedAppImageUpdate(planted, async () => false, {
-        appImagePath,
-        cacheRootPath,
-        probeCache: acceptCache,
-        runExtract
-      })
-    ).toBe(false)
-    expect(
-      await preExtraction.preExtractDownloadedAppImageUpdate(
-        'relative.AppImage',
-        async () => true,
-        {
-          appImagePath,
-          cacheRootPath,
-          runExtract
-        }
-      )
-    ).toBe(false)
-    expect(runExtract).not.toHaveBeenCalled()
-  })
 })

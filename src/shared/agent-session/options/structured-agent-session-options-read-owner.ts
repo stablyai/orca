@@ -197,7 +197,6 @@ export function createStructuredAgentSessionOptionsReadOwner(
           ...current,
           record: cloneStructuredAgentSessionOptionRecord(current.record),
           reportedPermissionMode: undefined,
-          reportedModel: undefined,
           reportedEffort: undefined,
           sessionNeverStarted: undefined,
           catalogNamesConfiguredModel: undefined,
@@ -217,7 +216,6 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 ...current,
                 record: cloneStructuredAgentSessionOptionRecord(current.record),
                 reportedPermissionMode: undefined,
-                reportedModel: undefined,
                 reportedEffort: undefined,
                 sessionNeverStarted: undefined
               }

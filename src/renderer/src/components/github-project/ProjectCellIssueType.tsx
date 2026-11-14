@@ -8,7 +8,10 @@ import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtim
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
+import type {
+  GitHubIssueType,
+  GitHubProjectRow
+} from '../../../../shared/github/projects/project-types'
 import { chipStyle, colorHex, singleSelectChipColors } from './project-cell-chip-colors'
 
 export function ProjectIssueTypeCell({

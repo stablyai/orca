@@ -32,7 +32,7 @@ export async function applyAcpMessageOptions(
     if (
       value === undefined ||
       session.options.appliedInput.get(key) === value ||
-      (key === 'model' && session.options.matchesNativeRestoredModel(value)) ||
+      session.options.matchesNativeRestoredOption(key, value) ||
       (key === 'effort' && !session.options.offersEffort(value))
     ) {
       continue

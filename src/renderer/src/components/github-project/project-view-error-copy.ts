@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import type { GitHubProjectViewError } from '../../../../shared/github/projects/project-result-types'
 
 type ProjectViewErrorCopyContext = {
   /** Host of the failing surface, used when an older host omits `error.host`. */

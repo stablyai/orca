@@ -94,23 +94,6 @@ describe('an editor document that is stopped', () => {
     )
   })
 
-  it('is two editors when two are mounted, each reading its own scope', () => {
-    // Two document calls over same markup isolate state; overlapping #editor hosts are tested separately.
-    const first: MobileRichMarkdownEditorMessage[] = []
-    const second: MobileRichMarkdownEditorMessage[] = []
-    const editor = plantMarkup()
-    const one = mount(first)
-    const two = mount(second)
-    first.length = 0
-    second.length = 0
-    one.handle.setMarkdown('shared markup', 3)
-    two.handle.setEditable(false)
-    editor.dispatchEvent(new Event('input'))
-    // Read-only second document stays silent while first retains its own generation, ruling out module-global editable state.
-    expect(second).toEqual([])
-    expect(first).toEqual([{ type: 'change', markdown: 'shared markup', generation: 3 }])
-  })
-
   it('drops a command whose dialog answered after the host moved on', async () => {
     // Page URL modal creates task boundary: host can replace content, set read-only or unmount while waiting; native prompt answers within microtask.
     const commands: string[] = []

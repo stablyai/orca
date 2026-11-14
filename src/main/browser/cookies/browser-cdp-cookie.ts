@@ -17,3 +17,12 @@ export type CdpCookie = {
   partitionKey?: CdpCookiePartitionKey | null
   partitionKeyOpaque?: boolean
 }
+
+/** Reads the `cookies` array from a `Network.getAllCookies` reply. */
+export function cdpCookiesFromCommand(value: unknown): CdpCookie[] {
+  if (typeof value !== 'object' || value === null || !('cookies' in value)) {
+    return []
+  }
+  const cookies = value.cookies
+  return Array.isArray(cookies) ? cookies : []
+}

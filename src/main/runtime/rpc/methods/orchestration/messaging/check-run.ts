@@ -9,7 +9,7 @@ import { deliveryReceipt, exposeMessages, handsOverBatch } from './mailbox-messa
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from './mailbox-page-routing'
 import { resolveRunScope } from '../runs/run-scope'
-import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
@@ -167,7 +167,7 @@ export async function checkRunMailbox(args: {
 
   const rearmRelays = setInterval(() => {
     try {
-      runtime.ensureOrchestrationFederationRelay(run.id)
+      runtime.ensureOrchestrationFederationRelay(run.id, { keepAwake: true })
     } catch (error) {
       console.warn('[orchestration] federation relay re-arm failed during check --wait', error)
     }

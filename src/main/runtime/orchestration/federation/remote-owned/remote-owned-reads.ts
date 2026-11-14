@@ -131,7 +131,7 @@ export type RemoteWorkerListRow = ReturnType<typeof remoteWorkerListRow>
 
 function remoteWorkerListRow(
   record: ReturnType<typeof listRemoteDispatches>[number],
-  name: (environmentId: string) => string
+  name: (environmentId: string, recorded: string | null) => string
 ) {
   return {
     dispatchId: record.dispatch_id,
@@ -142,7 +142,7 @@ function remoteWorkerListRow(
     agentTerminalHandle: null,
     terminalState: null,
     resource: null,
-    server: remoteWorkerServer(record, record.link_state, name)
+    server: remoteWorkerServer(record, record.link_state, (id) => name(id, record.server_name))
   }
 }
 
@@ -177,9 +177,10 @@ export function withRemoteWorkerRows<Page extends WorkerListPage>(
     return { ...page, page: { ...page.page, total: page.page.total + total } }
   }
   const names = new Map<string, string>()
-  const name = (id: string): string => {
-    const known = names.get(id) ?? remoteServerName(runtime, id)
-    names.set(id, known)
+  const name = (id: string, recorded: string | null): string => {
+    const key = `${id}\n${recorded ?? ''}`
+    const known = names.get(key) ?? remoteServerName(runtime, id, recorded)
+    names.set(key, known)
     return known
   }
   const rows = listRemoteDispatches(db, { runId: params.run, limit: Math.max(0, maxRows) }).map(

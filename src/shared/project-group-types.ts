@@ -1,9 +1,11 @@
+import type { RepoHookSettings } from './orca-yaml-hook-types'
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
   id: string
   name: string
   parentPath: string | null
+  hookSettings?: RepoHookSettings
   /** SSH target ID for folder-backed groups imported from a remote root. */
   connectionId?: string | null
   /** Renderer-owned host stamp for groups fetched from a runtime environment. */
@@ -19,7 +21,7 @@ export type ProjectGroup = {
 }
 
 export type ProjectGroupUpdate = Partial<
-  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings'>
 > & { rootProjectOrder?: number | null }
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }

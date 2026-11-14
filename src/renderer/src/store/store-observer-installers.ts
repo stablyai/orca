@@ -1,5 +1,5 @@
 import type { AppState } from './types'
-import { installTerminalParkingInputs } from './terminals/terminal-parking-input-transitions'
+import { installTerminalParkingInputs } from './terminals/parking/terminal-parking-input-transitions'
 
 export type StoreObserverHost = {
   getState: () => AppState
