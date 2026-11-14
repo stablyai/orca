@@ -77,7 +77,12 @@ it.each(['edited', 'POST', 'unknown'])(
           'ipc-message',
           { sender: guest, senderFrame: mainFrame },
           BROWSER_GUEST_PROTECTION_REPORT,
-          { generation: mainFrame.send.mock.lastCall?.[1], dirty }
+          {
+            generation: mainFrame.send.mock.lastCall?.[1],
+            dirty,
+            pictureInPicture: false,
+            contentType: 'text/html'
+          }
         )
       }
       const navigate = (url: string, method = 'GET', committed = true): void => {

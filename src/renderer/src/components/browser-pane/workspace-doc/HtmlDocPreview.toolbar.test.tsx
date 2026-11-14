@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
+import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/drag/webview-drag-passthrough'
 
 const confirmExternalLink = async (): Promise<boolean> => false
 
@@ -128,7 +128,7 @@ const storeState = {
   }
 }
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector?: (state: typeof storeState) => unknown) =>
       selector ? selector(storeState) : storeState,

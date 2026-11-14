@@ -1,4 +1,7 @@
-import { protectBrowserGuestMedia } from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
+import {
+  protectBrowserGuestMedia,
+  registerBrowserSessionNotificationGrant
+} from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import { isRemoteCliDrivenGuest } from '../../desktop-browser-bridge/remote-cli-driven-workspaces'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { Session } from 'electron'
@@ -94,6 +97,13 @@ export function installBrowserSessionPermissionHandlers(
     options.sitePermissions === 'session'
       ? sessionBrowserSitePermissions(partition)
       : savedBrowserSitePermissions(profile.id)
+  registerBrowserSessionNotificationGrant(sess, (pageUrl) =>
+    isBrowserSitePermissionAllowed({
+      source: { pageUrl, frameOrigin: pageUrl },
+      memory: siteMemory,
+      permissions: ['notifications']
+    })
+  )
   sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
     if (
       permission === 'openExternal' &&

@@ -2,10 +2,9 @@ import type { BrowserGuestDiscardProtectionChange } from '../../../../../shared/
 
 export type BrowserGuestActivity = {
   webview: Electron.WebviewTag
-  visible: boolean
+  visible: boolean | null
+  visibilityGeneration: number
   revision: number
-  lastSelectedAt: number
-  lastUsed: number
   protection?: BrowserGuestDiscardProtectionChange['protection']
 }
 
@@ -27,7 +26,7 @@ export function setBrowserGuestResourceRetired(
 }
 
 const listeners = new Set<(pageId: string) => void>()
-let useSequence = 0
+let visibilityGeneration = 0
 
 export function onBrowserGuestActivity(listener: (pageId: string) => void): () => void {
   listeners.add(listener)
@@ -50,17 +49,15 @@ export function touchBrowserGuestActivity(pageId: string): void {
   if (!entry) {
     return
   }
-  entry.lastUsed = ++useSequence
   invalidateBrowserGuestActivity(pageId)
 }
 
 export function registerBrowserGuestActivity(pageId: string, webview: Electron.WebviewTag): void {
   browserGuestActivity.set(pageId, {
     webview,
-    visible: false,
-    revision: 0,
-    lastUsed: ++useSequence,
-    lastSelectedAt: 0
+    visible: null,
+    visibilityGeneration: ++visibilityGeneration,
+    revision: 0
   })
   touchBrowserGuestActivity(pageId)
 }
@@ -77,8 +74,9 @@ export function setBrowserGuestVisible(pageId: string, visible: boolean): void {
   if (!entry || entry.visible === visible) {
     return
   }
-  entry.lastSelectedAt = Date.now()
   entry.visible = visible
+  entry.visibilityGeneration = ++visibilityGeneration
+  reportBrowserGuestVisibility(pageId)
   touchBrowserGuestActivity(pageId)
 }
 
@@ -96,4 +94,21 @@ export function updateBrowserGuestProtection(event: BrowserGuestDiscardProtectio
   }
   entry.protection = event.protection
   invalidateBrowserGuestActivity(event.browserPageId)
+}
+
+export function reportBrowserGuestVisibility(pageId: string): void {
+  const entry = browserGuestActivity.get(pageId)
+  if (!entry || typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.api?.browser.reportGuestVisibility?.({
+      browserPageId: pageId,
+      webContentsId: entry.webview.getWebContentsId(),
+      generation: entry.visibilityGeneration,
+      visible: entry.visible
+    })
+  } catch {
+    // Registration will report again when the native identity is available.
+  }
 }

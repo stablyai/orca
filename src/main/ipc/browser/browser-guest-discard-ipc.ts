@@ -1,3 +1,13 @@
+import {
+  setBrowserGuestSemanticVisibility,
+  readBrowserGuestDiscardAdmission
+} from '../../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection'
+import { getBrowserPageIdleDiscard } from '../../browser/guest-lifecycle/browser-page-idle-discard'
+import type {
+  BrowserGuestIdleDiscardToken,
+  BrowserGuestVisibilityReport,
+  BrowserGuestIdleDiscardRequest
+} from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import { ipcMain, webContents } from 'electron'
 import { normalizeBrowserGuestSrc } from '../../../shared/browser/extensions/browser-extension-url'
 import {
@@ -9,6 +19,39 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 export function registerBrowserGuestDiscardHandlers(): void {
+  const scheduler = getBrowserPageIdleDiscard()
+  ipcMain.removeAllListeners('browser:reportGuestVisibility')
+  ipcMain.on('browser:reportGuestVisibility', (event, report: BrowserGuestVisibilityReport) => {
+    if (
+      !isTrustedBrowserRenderer(event.sender) ||
+      typeof report?.browserPageId !== 'string' ||
+      typeof report.webContentsId !== 'number' ||
+      !Number.isSafeInteger(report.generation) ||
+      (report.visible !== null && typeof report.visible !== 'boolean')
+    ) {
+      return
+    }
+    const guest = browserManager.getAuthorizedGuest(report.browserPageId, event.sender.id)
+    if (guest?.id === report.webContentsId) {
+      if (
+        scheduler.report(report, event.sender.id, (request) =>
+          event.sender.send('browser:guest-idle-discard-due', request)
+        )
+      ) {
+        setBrowserGuestSemanticVisibility(guest, report.visible)
+      }
+    }
+  })
+  ipcMain.removeAllListeners('browser:refuseGuestIdleDiscard')
+  ipcMain.on('browser:refuseGuestIdleDiscard', (event, request: BrowserGuestIdleDiscardRequest) => {
+    if (
+      isTrustedBrowserRenderer(event.sender) &&
+      typeof request?.browserPageId === 'string' &&
+      request.policyToken?.rendererId === event.sender.id
+    ) {
+      scheduler.refuse(request.browserPageId, request.webContentsId, request.policyToken)
+    }
+  })
   ipcMain.removeHandler('browser:preparePageAttach')
   ipcMain.handle(
     'browser:preparePageAttach',
@@ -31,7 +74,14 @@ export function registerBrowserGuestDiscardHandlers(): void {
   ipcMain.removeAllListeners('browser:reserveGuestDiscard')
   ipcMain.on(
     'browser:reserveGuestDiscard',
-    (event, args: { browserPageId?: unknown; webContentsId?: unknown }) => {
+    (
+      event,
+      args: {
+        browserPageId?: unknown
+        webContentsId?: unknown
+        policyToken?: BrowserGuestIdleDiscardToken
+      }
+    ) => {
       let committed = false
       try {
         if (
@@ -46,6 +96,15 @@ export function registerBrowserGuestDiscardHandlers(): void {
           return
         }
         if (
+          args.policyToken &&
+          (args.policyToken.rendererId !== event.sender.id ||
+            !scheduler.admit(args.browserPageId, guest.id, args.policyToken))
+        ) {
+          return
+        }
+        if (
+          (!args.policyToken ||
+            readBrowserGuestDiscardAdmission(guest, true).protection === 'discardable') &&
           !browserManager.isGuestMemoryProtected(args.browserPageId) &&
           reserveBrowserPageDiscard(args.browserPageId, guest)
         ) {
@@ -60,6 +119,14 @@ export function registerBrowserGuestDiscardHandlers(): void {
       } catch {
         console.warn('[BrowserManager] Guest discard admission failed')
       } finally {
+        if (
+          !committed &&
+          typeof args?.browserPageId === 'string' &&
+          typeof args.webContentsId === 'number' &&
+          args.policyToken?.rendererId === event.sender.id
+        ) {
+          scheduler.refuse(args.browserPageId, args.webContentsId, args.policyToken)
+        }
         event.returnValue = committed
       }
     }

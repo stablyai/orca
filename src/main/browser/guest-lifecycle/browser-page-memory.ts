@@ -1,3 +1,4 @@
+import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
 import { BrowserError } from '../browser-error'
 import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
@@ -205,6 +206,7 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
   page.retired.set(guest.id, { guest, rendererId: page.rendererId })
   retiredGuests.set(guest.id, { pageId, guest, rendererId: page.rendererId })
   page.guest = null
+  getBrowserPageIdleDiscard().retired(pageId, guest.id)
   delete page.invalidation
   const releaseThrottle = page.releaseThrottle
   page.releaseThrottle = null
@@ -241,10 +243,12 @@ export async function acknowledgeBrowserPageRemoval(
     page.invalidation?.notify()
   }
   retiredGuests.delete(guest.id)
+  getBrowserPageIdleDiscard().destroyed(pageId, guest.id)
   return true
 }
 
 export function closeBrowserMemoryPage(pageId: string): void {
+  getBrowserPageIdleDiscard().close(pageId)
   const page = pages.get(pageId)
   claims.delete(pageId)
   if (!page) {

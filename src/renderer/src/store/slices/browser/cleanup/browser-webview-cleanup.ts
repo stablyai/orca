@@ -3,7 +3,7 @@ import type {
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
 import { closePersistentBrowserPage } from '../../../../components/browser-pane/host-guest/browser-webview-disposal'
-import { releaseBrowserPageMount } from '../../../../components/browser-pane/host-guest/browser-page-mount-admission'
+import { releaseBrowserPageMount } from '../../../../components/browser-pane/host-guest/retention/browser-page-mount-admission'
 
 // Release admission with guest destruction on close, purge, conversion or eviction.
 export function destroyRemovedBrowserWebview(browserPageId: string): void {

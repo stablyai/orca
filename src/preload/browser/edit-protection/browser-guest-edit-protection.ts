@@ -10,11 +10,21 @@ export function installBrowserGuestEditProtection(port: {
 }): void {
   let dirty = false
   let generation: string | null = null
-  let lastReportedDirty: boolean | undefined
+  let lastReported: string | undefined
   const report = (snapshot = false): void => {
-    if (generation && (snapshot || dirty !== lastReportedDirty)) {
-      lastReportedDirty = dirty
-      port.send(BROWSER_GUEST_PROTECTION_REPORT, { generation, dirty })
+    if (!generation) {
+      return
+    }
+    const payload = {
+      generation,
+      dirty,
+      pictureInPicture: isPictureInPicture(),
+      contentType: document.contentType
+    }
+    const key = `${dirty} ${payload.pictureInPicture} ${payload.contentType}`
+    if (snapshot || key !== lastReported) {
+      lastReported = key
+      port.send(BROWSER_GUEST_PROTECTION_REPORT, payload)
     }
   }
   const edited = (): void => {
@@ -24,6 +34,21 @@ export function installBrowserGuestEditProtection(port: {
   // Capture before page handlers; reset, submit and SPA steps do not retire the document's edits.
   window.addEventListener('input', edited, true)
   window.addEventListener('change', edited, true)
+  // Video picture-in-picture events bubble from the element; a document picture-in-picture
+  // window reports its own close.
+  const pictureInPictureChanged = (): void => report()
+  window.addEventListener('enterpictureinpicture', pictureInPictureChanged, true)
+  window.addEventListener('leavepictureinpicture', pictureInPictureChanged, true)
+  const documentPictureInPicture: unknown = Reflect.get(window, 'documentPictureInPicture')
+  if (documentPictureInPicture instanceof EventTarget) {
+    documentPictureInPicture.addEventListener('enter', () => {
+      report()
+      const pictureInPictureWindow: unknown = Reflect.get(documentPictureInPicture, 'window')
+      if (pictureInPictureWindow instanceof EventTarget) {
+        pictureInPictureWindow.addEventListener('pagehide', pictureInPictureChanged)
+      }
+    })
+  }
   port.on(BROWSER_GUEST_PROTECTION_CHALLENGE, (payload) => {
     if (typeof payload !== 'string') {
       return
@@ -37,4 +62,14 @@ export function installBrowserGuestEditProtection(port: {
     }
   })
   port.send(BROWSER_GUEST_PROTECTION_REPORT, { ready: true })
+}
+
+function isPictureInPicture(): boolean {
+  if (document.pictureInPictureElement) {
+    return true
+  }
+  const documentPictureInPicture: unknown = Reflect.get(window, 'documentPictureInPicture')
+  return Boolean(
+    documentPictureInPicture && Reflect.get(Object(documentPictureInPicture), 'window')
+  )
 }

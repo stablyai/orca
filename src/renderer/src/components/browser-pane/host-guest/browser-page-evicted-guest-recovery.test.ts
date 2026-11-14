@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBrowserPageWebviewGuestSession } from './browser-page-webview-guest-session'
+import { createBrowserPageWebviewGuestSession } from './lifecycle/browser-page-webview-guest-session'
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(async () => {}),

@@ -2,6 +2,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => new Map<number, Electron.WebContents>())
+const clock = vi.hoisted(() => ({ now: 0 }))
+vi.mock('../../../../power/awake-clock', () => ({
+  getSystemAwakeClock: () => ({ now: () => clock.now })
+}))
 const channels = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>())
 vi.mock('electron', () => ({
   app: { getPath: () => '/downloads' },
@@ -42,10 +46,13 @@ import {
   isRetiredBrowserGuest
 } from '../../browser-page-memory'
 import { pages } from '../../browser-page-memory-state'
-import {
-  browserGuestActivity,
-  retiredBrowserGuestResources
-} from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
+import { installBrowserGuestPageRetention } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-page-retention'
+import { setBrowserGuestVisible } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
+import type {
+  BrowserGuestIdleDiscardRequest,
+  BrowserGuestVisibilityReport
+} from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
+import { retiredBrowserGuestResources } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
 
 const registry = await vi.importActual<{
   registerPersistentWebview: (id: string, webview: Electron.WebviewTag) => void
@@ -56,6 +63,7 @@ const registry = await vi.importActual<{
 let fleet: ReturnType<typeof createEligibilityFleet> | undefined
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
   fleet?.close()
   for (const id of fleet?.pageIds ?? ['oldest']) {
     registry.unregisterPersistentWebview(id)
@@ -154,6 +162,7 @@ it.each([false, true])(
     expect(reserve({ browserPageId: pageId, webContentsId: guest.id })).toBe(false)
     expect(webview.isConnected).toBe(true)
     expect(acknowledge).not.toHaveBeenCalled()
+    expect(fleet.attempt()).toBe(true)
     await removal
     expect(webview.isConnected).toBe(false)
     expect(acknowledge).toHaveBeenCalledWith({
@@ -183,103 +192,74 @@ it.each([false, true])(
   }
 )
 
-it.each([
-  [33, 1, 32],
-  [36, 4, 32],
-  [37, 4, 33]
-])(
-  'retires only the surplus of %i hidden guests through native settlement',
-  async (count, pendingCount, retainedCount) => {
-    const pending = new Map<number, { release: () => void; completion: Promise<boolean> }>()
-    fleet = createEligibilityFleet(native, count, true, registry.discardPersistentWebview)
-    const current = fleet
-    const renderer = native.get(99)
-    if (!renderer) {
-      throw new Error('Renderer missing')
+it('validates due policy through native refusal, then removes and destroys only after the next show/hide deadline', async () => {
+  vi.useFakeTimers()
+  clock.now = 0
+  fleet = createEligibilityFleet(native, 1)
+  const { guest, pageId } = fleet
+  const renderer = native.get(99)!
+  let due: (request: BrowserGuestIdleDiscardRequest) => void = () => {}
+  const send = renderer.send.bind(renderer)
+  vi.spyOn(renderer, 'send').mockImplementation((channel, ...args) => {
+    if (channel === 'browser:guest-idle-discard-due') {
+      due(args[0])
+    } else {
+      send(channel, ...args)
     }
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        browser: {
-          reserveGuestDiscard: (args: unknown) => invokeGuestDiscard(renderer, args),
-          acknowledgeGuestRemoval: (args: { browserPageId: string; webContentsId: number }) => {
-            const guest = native.get(args.webContentsId)
-            if (!guest) {
-              throw new Error('Retired native guest missing')
-            }
-            let release = (): void => {}
-            const gate = new Promise<void>((resolve) => {
-              release = resolve
-            })
-            const completion = gate.then(() =>
-              acknowledgeBrowserPageRemoval(args.browserPageId, guest, renderer.id)
-            )
-            pending.set(guest.id, { release, completion })
-            return completion
-          }
-        }
+  })
+  const reserve = vi.fn((args: unknown) => invokeGuestDiscard(renderer, args))
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      browser: {
+        reportGuestVisibility: (report: BrowserGuestVisibilityReport) =>
+          channels.get('browser:reportGuestVisibility')?.({ sender: renderer }, report),
+        onGuestIdleDiscardDue: (callback: typeof due) => {
+          due = callback
+          return () => {}
+        },
+        refuseGuestIdleDiscard: (request: BrowserGuestIdleDiscardRequest) =>
+          channels.get('browser:refuseGuestIdleDiscard')?.({ sender: renderer }, request),
+        reserveGuestDiscard: reserve,
+        acknowledgeGuestRemoval: () =>
+          acknowledgeBrowserPageRemoval(pageId, guest.asWebContents(), renderer.id)
       }
-    })
-    const mount = (guest: EligibilityGuest, id: string): Promise<void> => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the DOM element supplies the exact native identity for the real registry path.
-      const webview = Object.assign(document.createElement('webview'), {
-        getWebContentsId: () => guest.id
-      }) as unknown as Electron.WebviewTag
-      document.body.append(webview)
-      registry.registerPersistentWebview(id, webview)
-      guest.clean()
-      guest.stopLoading()
-      return guest.finishRestore(id)
     }
-    await Promise.all([...current.pageIds].map((id, index) => mount(current.guests[index], id)))
-    await Promise.resolve()
-    expect(current.freed).toHaveLength(pendingCount)
-    expect(current.freed[0]).toBe('oldest')
-    expect(document.querySelectorAll('webview')).toHaveLength(retainedCount)
-    expect(retiredBrowserGuestResources.size).toBe(pendingCount)
-    expect(current.guests.every((guest) => !guest.isDestroyed())).toBe(true)
-    if (count === 33) {
-      current.attempts.length = 0
-      for (const guest of current.guests) {
-        guest.stopLoading()
-      }
-      await Promise.resolve()
-      expect(current.attempts).toEqual([])
-      expect(pending.has(1)).toBe(true)
-      for (let id = 1; id <= 4; id++) {
-        const pageId = `new-${id}`
-        await mount(current.attach(2000 + id, pageId), pageId)
-      }
-      expect(current.freed).toEqual(['oldest', 'held-1', 'held-2', 'held-3'])
-      expect(retiredBrowserGuestResources.size).toBe(4)
-      expect(document.querySelectorAll('webview')).toHaveLength(33)
-      expect(current.manager.getAuthorizedGuest('new-4', renderer.id)).toBe(native.get(2004))
-      expect(current.guests.every((guest) => !guest.isDestroyed())).toBe(true)
-      return
-    }
-    if (count === 37) {
-      const first = pending.get(1)
-      if (!first) {
-        throw new Error('Oldest acknowledgement missing')
-      }
-      pending.delete(1)
-      first.release()
-      await first.completion
-      await Promise.resolve()
-      expect(current.guest.isDestroyed()).toBe(true)
-      expect(current.freed).toEqual(['oldest', 'held-1', 'held-2', 'held-3', 'held-4'])
-      expect(document.querySelectorAll('webview')).toHaveLength(32)
-      expect(retiredBrowserGuestResources.size).toBe(4)
-    }
-    await Promise.all(
-      [...pending.values()].map(async (ack) => {
-        ack.release()
-        await ack.completion
-      })
-    )
-    await Promise.resolve()
-    expect(retiredBrowserGuestResources.size).toBe(0)
-    expect(browserGuestActivity.size).toBe(32)
-    expect(current.guests.filter((guest) => !guest.isDestroyed())).toHaveLength(32)
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this DOM guest implements the exact native identity used by the real commit path.
+  const webview = Object.assign(document.createElement('webview'), {
+    getWebContentsId: () => guest.id
+  }) as unknown as Electron.WebviewTag
+  document.body.append(webview)
+  registry.registerPersistentWebview(pageId, webview)
+  const stop = installBrowserGuestPageRetention({
+    isBlocked: () => false,
+    discard: registry.discardPersistentWebview
+  })
+  try {
+    guest.clean()
+    setBrowserGuestVisible(pageId, false)
+    clock.now = 14_400_000
+    await vi.advanceTimersByTimeAsync(14_400_000)
+    expect(reserve).toHaveBeenCalledTimes(1)
+    expect(webview.isConnected).toBe(true)
+    guest.stopLoading()
+    await guest.finishRestore(pageId)
+    clock.now = 28_800_000
+    await vi.advanceTimersByTimeAsync(14_400_000)
+    expect(reserve).toHaveBeenCalledTimes(1)
+    expect(webview.isConnected).toBe(true)
+    setBrowserGuestVisible(pageId, true)
+    setBrowserGuestVisible(pageId, false)
+    clock.now = 43_199_999
+    await vi.advanceTimersByTimeAsync(14_399_999)
+    expect(webview.isConnected).toBe(true)
+    clock.now = 43_200_000
+    await vi.advanceTimersByTimeAsync(1)
+    expect(webview.isConnected).toBe(false)
+    expect(guest.isDestroyed()).toBe(true)
+    expect(reserve).toHaveBeenCalledTimes(2)
+  } finally {
+    stop()
   }
-)
+})

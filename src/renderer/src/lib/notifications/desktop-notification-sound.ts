@@ -1,8 +1,10 @@
+import { usesCustomNotificationSound } from '../../../../shared/notification-settings-types'
+
 export async function playDesktopNotificationSound(
   customSoundId: string | null | undefined,
   customSoundVolume?: number | null
 ): Promise<boolean> {
-  if (!customSoundId || customSoundId === 'system') {
+  if (!usesCustomNotificationSound(customSoundId)) {
     return false
   }
 

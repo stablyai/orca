@@ -47,12 +47,16 @@ import { invalidateBrowserGuestDiscardProtection } from './browser-guest-discard
 
 const { onBrowserGuestPaintRetentionChange } = await vi.importActual<{
   onBrowserGuestPaintRetentionChange: (listener: (pageId: string) => void) => () => void
-}>('../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-paint-retention')
+}>(
+  '../../../../../renderer/src/components/browser-pane/host-guest/retention/browser-guest-paint-retention'
+)
 const { acquireBrowserAutomationVisibility, releaseBrowserAutomationVisibility } =
   await vi.importActual<{
     acquireBrowserAutomationVisibility: (pageId: string) => string
     releaseBrowserAutomationVisibility: (token: string) => boolean
-  }>('../../../../../renderer/src/components/browser-pane/host-guest/browser-automation-visibility')
+  }>(
+    '../../../../../renderer/src/components/browser-pane/host-guest/retention/browser-automation-visibility'
+  )
 
 let fleet: ReturnType<typeof createEligibilityFleet> | undefined
 const stops: (() => void)[] = []
@@ -229,6 +233,8 @@ it.each(['lease', 'lifecycle', 'viewport'] as const)(
     guest.devtools = false
     guest.emit('devtools-closed')
     await Promise.resolve()
+    expect(freed).toEqual([])
+    expect(fleet.attempt()).toBe(true)
     expect(freed).toEqual([pageId])
   }
 )
@@ -245,15 +251,18 @@ it('publishes native DevTools acquisition from a clean debugger-free page', asyn
   guest.devtools = false
   guest.emit('devtools-closed')
   await Promise.resolve()
+  expect(freed).toEqual([])
+  expect(fleet.attempt()).toBe(true)
   expect(freed).toEqual([pageId])
 })
 
-it('repairs a missed acquisition hint once and never inherits a closed page hold', async () => {
+it('refuses explicit admission with a missed hint and never inherits a closed page hold', async () => {
   fleet = createEligibilityFleet(native, 32)
   const { guest, pageId, attempts, freed } = fleet
   await clean(guest, pageId)
   guest.debugged = true
   fleet.attach(3, 'pressure')
+  fleet.attempt()
   await Promise.resolve()
   expect(attempts).toEqual([pageId])
   for (let i = 0; i < 5; i++) {
@@ -269,5 +278,7 @@ it('repairs a missed acquisition hint once and never inherits a closed page hold
   const replacement = fleet.attach(5)
   invalidateBrowserGuestDiscardProtection(guest.asWebContents())
   await clean(replacement, pageId)
+  expect(freed).toEqual([])
+  expect(fleet.attempt()).toBe(true)
   expect(freed).toEqual([pageId])
 })

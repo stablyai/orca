@@ -9,7 +9,7 @@ import type {
 import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
 
 export type BrowserTabPageState = Partial<

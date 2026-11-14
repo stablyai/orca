@@ -1,3 +1,11 @@
+import {
+  installBrowserGuestIdleProtection,
+  readBrowserGuestIdleProtection
+} from './browser-guest-idle-protection'
+export {
+  setBrowserGuestSemanticVisibility,
+  registerBrowserSessionNotificationGrant
+} from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
 import {
   installBrowserGuestHistoryProvenance,
@@ -12,6 +20,9 @@ import {
 type ProtectionOwner = BrowserGuestHistoryProtection & {
   generation: string | null
   unavailable: boolean
+  // Null until the private observer reports them for the current challenge.
+  pictureInPicture: boolean | null
+  pdf: boolean | null
   changed: () => void
 }
 const initialGuests = new WeakSet<Electron.WebContents>()
@@ -20,7 +31,6 @@ export function markInitialBrowserGuest(guest: Electron.WebContents): void {
 }
 
 const owners = new WeakMap<Electron.WebContents, ProtectionOwner>()
-
 export function invalidateBrowserGuestDiscardProtection(guest: Electron.WebContents): void {
   try {
     owners.get(guest)?.changed()
@@ -50,6 +60,15 @@ export function readBrowserGuestDiscardProtection(
   if (owner.dirty) {
     return result('protected', 'edits')
   }
+  if (owner.pictureInPicture === null || owner.pdf === null) {
+    return result('unknown', 'observer')
+  }
+  if (owner.pictureInPicture) {
+    return result('protected', 'picture-in-picture')
+  }
+  if (owner.pdf) {
+    return result('protected', 'pdf')
+  }
   if (guest.isCurrentlyAudible()) {
     return result('protected', 'audio')
   }
@@ -60,6 +79,13 @@ export function readBrowserGuestDiscardProtection(
     return result('protected', 'history')
   }
   return result('discardable', 'clean')
+}
+
+export function readBrowserGuestDiscardAdmission(
+  guest: Electron.WebContents,
+  proactive: boolean
+): BrowserGuestDiscardProtection {
+  return readBrowserGuestIdleProtection(guest, readBrowserGuestDiscardProtection(guest), proactive)
 }
 
 export function installBrowserGuestDiscardProtection(
@@ -80,7 +106,9 @@ export function installBrowserGuestDiscardProtection(
     historyEdits: !initial,
     historyMethodUnknown: !initial,
     mediaGranted: false,
-    episode: null
+    episode: null,
+    pictureInPicture: null,
+    pdf: null
   }
   owners.set(guest, owner)
   let published: BrowserGuestDiscardProtection | undefined
@@ -99,6 +127,8 @@ export function installBrowserGuestDiscardProtection(
   const invalidate = (): void => {
     owner.generation = null
     owner.dirty = null
+    owner.pictureInPicture = null
+    owner.pdf = null
     publish(true)
   }
   const snapshot = (): void => {
@@ -107,6 +137,8 @@ export function installBrowserGuestDiscardProtection(
     }
     owner.generation = randomUUID()
     owner.dirty = null
+    owner.pictureInPicture = null
+    owner.pdf = null
     publish(true)
     try {
       guest.mainFrame.send(BROWSER_GUEST_PROTECTION_CHALLENGE, owner.generation)
@@ -161,6 +193,15 @@ export function installBrowserGuestDiscardProtection(
       owner.currentEdited = true
     }
     owner.dirty = owner.currentEdited || payload.dirty
+    // An observer that omits a field cannot prove its document safe.
+    owner.pictureInPicture =
+      'pictureInPicture' in payload && typeof payload.pictureInPicture === 'boolean'
+        ? payload.pictureInPicture
+        : null
+    owner.pdf =
+      'contentType' in payload && typeof payload.contentType === 'string'
+        ? payload.contentType === 'application/pdf'
+        : null
     rederiveSoleHistory()
     publish()
   }
@@ -199,12 +240,12 @@ export function installBrowserGuestDiscardProtection(
     owner.coverageUnknown = true
     publish()
   }
-  const audioChanged = (): void => publish()
   const inPageNavigation = (_event: Electron.Event, _url: string, isMainFrame: boolean): void => {
     if (isMainFrame) {
       publish()
     }
   }
+  const stopIdleProtection = installBrowserGuestIdleProtection(guest, publish)
   guest.on('ipc-message', report)
   guest.on('dom-ready', settled)
   guest.on('did-stop-loading', loadStopped)
@@ -212,10 +253,10 @@ export function installBrowserGuestDiscardProtection(
   guest.on('unresponsive', unresponsive)
   guest.on('render-process-gone', unresponsive)
   guest.on('frame-created', frameCreated)
-  guest.on('audio-state-changed', audioChanged)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
     stopHistory()
+    stopIdleProtection()
     if (owners.get(guest) === owner) {
       owners.delete(guest)
     }
@@ -226,7 +267,6 @@ export function installBrowserGuestDiscardProtection(
     guest.off('unresponsive', unresponsive)
     guest.off('render-process-gone', unresponsive)
     guest.off('frame-created', frameCreated)
-    guest.off('audio-state-changed', audioChanged)
     guest.off('did-navigate-in-page', inPageNavigation)
   }
 }

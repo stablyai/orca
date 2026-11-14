@@ -3,9 +3,10 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { hydrateBrowserRemoteViewerPages } from '../../../runtime/browser/ownership/browser-remote-viewer-store'
-import { invalidateBrowserGuestActivity, setBrowserGuestVisible } from './browser-guest-activity'
+import { browserGuestActivity, setBrowserGuestVisible } from './browser-guest-activity'
 import { registerPersistentWebview, unregisterPersistentWebview } from './webview-registry'
 import { useTerminalBrowserRetention } from '../../use-terminal-browser-retention'
+import type { BrowserGuestIdleDiscardRequest } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
 const state = vi.hoisted(() => ({
   settings: { browserGuestWorktreeRetentionBudget: false },
@@ -21,7 +22,14 @@ function Host({ enabled }: { enabled: boolean }): null {
 async function fixture() {
   let requested: (event: { downloadId: string; browserPageId: string }) => void = () => {}
   let finished: (event: { downloadId: string }) => void = () => {}
+  let due: (request: BrowserGuestIdleDiscardRequest) => void = () => {}
   const browser = {
+    reportGuestVisibility: () => {},
+    onGuestIdleDiscardDue: (callback: typeof due) => {
+      due = callback
+      return () => {}
+    },
+    refuseGuestIdleDiscard: () => {},
     onDownloadRequested: (callback: typeof requested) => {
       requested = callback
       return () => {}
@@ -60,6 +68,17 @@ async function fixture() {
   }
   return {
     addGuest,
+    due: (id: number) =>
+      due({
+        browserPageId: `page-${id}`,
+        webContentsId: id,
+        visible: false,
+        generation: browserGuestActivity.get(`page-${id}`)!.visibilityGeneration,
+        policyToken: {
+          rendererId: 99,
+          generation: browserGuestActivity.get(`page-${id}`)!.visibilityGeneration
+        }
+      }),
     render,
     run,
     webviews,
@@ -80,139 +99,46 @@ async function fixture() {
 
 afterEach(() => vi.useRealTimers())
 
-it('keeps downloads and paired viewers protected across retention toggles, without protecting idle siblings', async () => {
+it('protects downloads and paired viewers at a due attempt, without retrying on release', async () => {
   const f = await fixture()
   try {
-    await f.render(false)
-    for (let id = 1; id <= 33; id++) {
-      f.addGuest(id)
-    }
+    await f.render(true)
+    f.addGuest(1)
+    f.addGuest(2)
+    f.addGuest(3)
     f.startDownload()
     hydrateBrowserRemoteViewerPages(['page-2'])
-    await f.render(true)
-    await vi.waitFor(() => expect(f.webviews.get(3)?.isConnected).toBe(false))
-    await f.render(false)
-    await f.render(true)
-    for (let id = 34; id <= 66; id++) {
-      f.addGuest(id)
-    }
-    await vi.waitFor(() => expect(f.webviews.get(7)?.isConnected).toBe(false))
+    await f.run(() => {
+      f.due(1)
+      f.due(2)
+      f.due(3)
+    })
     expect(f.webviews.get(1)?.isConnected).toBe(true)
     expect(f.webviews.get(2)?.isConnected).toBe(true)
-    f.finishDownload()
-    for (let id = 67; id <= 99; id++) {
-      f.addGuest(id)
-    }
-    await vi.waitFor(() => expect(f.webviews.get(1)?.isConnected).toBe(false))
-    hydrateBrowserRemoteViewerPages([])
-    for (let id = 100; id <= 132; id++) {
-      f.addGuest(id)
-    }
-    await vi.waitFor(() => expect(f.webviews.get(2)?.isConnected).toBe(false))
+    expect(f.webviews.get(3)?.isConnected).toBe(false)
+    await f.run(f.finishDownload)
+    await f.run(() => hydrateBrowserRemoteViewerPages([]))
+    expect(f.webviews.get(1)?.isConnected).toBe(true)
+    expect(f.webviews.get(2)?.isConnected).toBe(true)
+    expect(f.reserve).toHaveBeenCalledTimes(1)
   } finally {
     await f.close()
   }
 })
 
-it.each(['release', 'use', 'refusal', 'reinstall'])(
-  'retains canonical oldest-eligible order through download %s',
-  async (mode) => {
-    const f = await fixture()
-    try {
-      await f.render(false)
-      for (let id = 1; id <= 32; id++) {
-        f.addGuest(id)
-      }
-      f.startDownload()
-      await f.render(true)
-      expect(f.reserve).not.toHaveBeenCalled()
-      await f.run(f.finishDownload)
-      expect(f.reserve).not.toHaveBeenCalled()
-      if (mode === 'use') {
-        await f.run(() => {
-          setBrowserGuestVisible('page-1', true)
-          setBrowserGuestVisible('page-1', false)
-        })
-      }
-      if (mode === 'reinstall') {
-        await f.render(false)
-        await f.render(true)
-      }
-      if (mode === 'refusal') {
-        f.reserve.mockReturnValue(false)
-      }
-      await f.run(() => f.addGuest(33))
-      expect(f.reserve.mock.calls[0]?.[0]).toEqual({
-        browserPageId: mode === 'use' ? 'page-2' : 'page-1',
-        webContentsId: mode === 'use' ? 2 : 1
-      })
-      if (mode === 'refusal') {
-        f.reserve.mockClear()
-        f.reserve.mockReturnValue(true)
-        await f.run(() => invalidateBrowserGuestActivity('page-1'))
-        expect(f.reserve.mock.calls[0]?.[0]).toEqual({ browserPageId: 'page-1', webContentsId: 1 })
-        expect(f.webviews.get(1)?.isConnected).toBe(false)
-      }
-    } finally {
-      await f.close()
-    }
+it('protects an active page and refuses policy attempts while the existing retention setting is disabled', async () => {
+  const f = await fixture()
+  try {
+    await f.render(false)
+    f.addGuest(1)
+    await f.run(() => f.due(1))
+    expect(f.reserve).not.toHaveBeenCalled()
+    await f.render(true)
+    setBrowserGuestVisible('page-1', true)
+    await f.run(() => f.due(1))
+    expect(f.reserve).not.toHaveBeenCalled()
+    expect(f.webviews.get(1)?.isConnected).toBe(true)
+  } finally {
+    await f.close()
   }
-)
-
-it.each(['pressure', 'reinstall', 'deadline', 'no-pressure'])(
-  'uses the original recent-selection deadline after download re-entry: %s',
-  async (mode) => {
-    vi.useFakeTimers()
-    const epoch = 3 * 60 * 60_000
-    const minute = 60_000
-    vi.setSystemTime(epoch)
-    const f = await fixture()
-    const select = (id: number): void => {
-      setBrowserGuestVisible(`page-${id}`, true)
-      setBrowserGuestVisible(`page-${id}`, false)
-    }
-    try {
-      await f.render(false)
-      for (let id = 1; id <= 32; id++) {
-        f.addGuest(id)
-      }
-      select(1)
-      vi.setSystemTime(epoch + minute)
-      f.startDownload()
-      vi.setSystemTime(epoch + 10 * minute)
-      for (let id = 2; id <= 32; id++) {
-        select(id)
-      }
-      await f.render(true)
-      vi.setSystemTime(epoch + 20 * minute)
-      await f.run(f.finishDownload)
-      if (mode === 'reinstall') {
-        await f.render(false)
-        await f.render(true)
-      }
-      expect(f.reserve).not.toHaveBeenCalled()
-      if (mode === 'pressure' || mode === 'reinstall') {
-        vi.setSystemTime(epoch + 31 * minute)
-        await f.run(() => f.addGuest(33))
-      } else {
-        if (mode === 'deadline') {
-          await f.run(() => {
-            f.addGuest(33)
-            select(33)
-          })
-          expect(f.reserve).not.toHaveBeenCalled()
-        }
-        await act(async () => vi.advanceTimersByTimeAsync(10 * minute))
-      }
-      if (mode === 'no-pressure') {
-        expect(f.reserve).not.toHaveBeenCalled()
-      } else {
-        expect(f.reserve.mock.calls[0]?.[0]).toEqual({ browserPageId: 'page-1', webContentsId: 1 })
-        expect(f.webviews.get(1)?.isConnected).toBe(false)
-      }
-      expect(f.webviews.get(2)?.isConnected).toBe(true)
-    } finally {
-      await f.close()
-    }
-  }
-)
+})

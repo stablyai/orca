@@ -218,7 +218,7 @@ it.each(['popup-999', 'closed-page'])(
 
 it('authorizes a live popup through its opener and rejects another worktree', async () => {
   const f = fixture([['opener', 'W']])
-  native.set(999, mockWebContents(999))
+  native.set(999, Object.assign(mockWebContents(999), { once: vi.fn() }))
   f.popups.push({ browserPageId: 'popup-999', webContentsId: 999, openerBrowserPageId: 'opener' })
   await expect(
     f.commands.browserSnapshot({ page: 'popup-999', worktree: 'elsewhere' })

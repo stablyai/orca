@@ -41,11 +41,12 @@ afterEach(() => {
 })
 
 it.each([true, false])(
-  'retries the oldest clean page after both native load and restore settle (load first=%s)',
+  'refuses unresolved native load and restore, and permits a later explicit attempt (load first=%s)',
   async (loadFirst) => {
     fleet = createEligibilityFleet(native)
     const { guest, pageId, attempts, freed } = fleet
     guest.clean()
+    fleet.attempt()
     await Promise.resolve()
     expect(attempts).toEqual([pageId])
     expect(freed).toEqual([])
@@ -66,13 +67,15 @@ it.each([true, false])(
       guest.stopLoading()
     }
     await Promise.resolve()
+    expect(freed).toEqual([])
+    expect(fleet.attempt()).toBe(true)
     expect(freed).toEqual([pageId])
     expect(attempts.every((id) => id === pageId)).toBe(true)
   }
 )
 
 it.each(['operation', 'devtools', 'debugger', 'grab', 'popup', 'route-popup'])(
-  'retries only the affected page after its %s terminal',
+  'refuses an explicit discard during %s and permits it after release',
   async (kind) => {
     fleet = createEligibilityFleet(native)
     const { manager, guest, pageId, freed } = fleet
@@ -144,10 +147,13 @@ it.each(['operation', 'devtools', 'debugger', 'grab', 'popup', 'route-popup'])(
     guest.stopLoading()
     await guest.finishRestore(pageId)
     await Promise.resolve()
+    expect(fleet.attempt()).toBe(false)
     expect(freed).toEqual([])
     release()
     await grabbed
     await Promise.resolve()
+    expect(freed).toEqual([])
+    expect(fleet.attempt()).toBe(true)
     expect(freed).toEqual([pageId])
   }
 )
@@ -163,6 +169,7 @@ it('keeps repeated default viewport resets debugger-free through actual pool res
   guest.stopLoading()
   await guest.finishRestore(pageId)
   await Promise.resolve()
+  expect(fleet.attempt()).toBe(true)
   expect(freed).toEqual([pageId])
 })
 
@@ -176,7 +183,7 @@ it('does not apply a queued old-guest default reset to its replacement', async (
   expect(replacement.debugger.sendCommand).not.toHaveBeenCalled()
 })
 
-it('does not free a page from age or lifecycle notifications without count pressure', async () => {
+it('does not initiate discard from generic lifecycle notifications', async () => {
   fleet = createEligibilityFleet(native, 32)
   fleet.guest.clean()
   fleet.guest.stopLoading()
@@ -201,21 +208,18 @@ it('does not let an old claim release wake a replacement logical page', async ()
   await replacement.finishRestore(fleet.pageId)
 })
 
-it('retries the current guest only when its retired predecessor is actually destroyed', async () => {
+it('refuses explicit retirement while the previous native guest is still alive', async () => {
   fleet = createEligibilityFleet(native)
-  const { guest, pageId, freed } = fleet
+  const { guest, pageId } = fleet
   guest.clean()
   guest.stopLoading()
   await guest.finishRestore(pageId)
-  await Promise.resolve()
-  expect(freed).toEqual([pageId])
+  expect(fleet.attempt()).toBe(true)
   const replacement = fleet.attach(3)
   replacement.clean()
   replacement.stopLoading()
   await replacement.finishRestore(pageId)
-  await Promise.resolve()
-  expect(freed).toEqual([pageId])
+  expect(fleet.attempt()).toBe(false)
   guest.destroy()
-  await Promise.resolve()
-  expect(freed).toEqual([pageId, pageId])
+  expect(fleet.attempt()).toBe(true)
 })

@@ -1,9 +1,9 @@
-import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
+import { retireBrowserGuestMetadata } from './metadata/browser-guest-metadata-cache'
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
-} from './browser-page-viewport'
+} from './viewport/browser-page-viewport'
 import {
   moveFocusToRendererBeforeWebviewDetach,
   registeredWebContentsIds,

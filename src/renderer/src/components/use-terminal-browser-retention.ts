@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { onBrowserGuestPaintRetentionChange } from './browser-pane/host-guest/browser-guest-paint-retention'
-import { browserPageVetoesGuestEviction } from './browser-pane/host-guest/browser-guest-eviction-veto'
+import { onBrowserGuestPaintRetentionChange } from './browser-pane/host-guest/retention/browser-guest-paint-retention'
+import { browserPageVetoesGuestEviction } from './browser-pane/host-guest/retention/browser-guest-eviction-veto'
 import { installBrowserPageDownloadActivityTracking } from './browser-pane/navigate/browser-page-download-activity'
 import {
   touchBrowserGuestActivity,
@@ -9,7 +9,7 @@ import {
 } from './browser-pane/host-guest/browser-guest-activity'
 import { installBrowserGuestPageRetention } from './browser-pane/host-guest/browser-guest-page-retention'
 import { discardPersistentWebview } from './browser-pane/host-guest/webview-registry'
-import { releaseBrowserPageMount } from './browser-pane/host-guest/browser-page-mount-admission'
+import { releaseBrowserPageMount } from './browser-pane/host-guest/retention/browser-page-mount-admission'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 export function useTerminalBrowserRetention({
@@ -35,13 +35,11 @@ export function useTerminalBrowserRetention({
   }, [])
 
   useEffect(() => {
-    if (!browserGuestRetentionBudgetEnabled) {
-      return
-    }
     return installBrowserGuestPageRetention({
-      isBlocked: browserPageVetoesGuestEviction,
-      discard: (pageId, webview, webContentsId) => {
-        const discarded = discardPersistentWebview(pageId, webview, webContentsId)
+      isBlocked: (pageId) =>
+        !browserGuestRetentionBudgetEnabled || browserPageVetoesGuestEviction(pageId),
+      discard: (pageId, webview, webContentsId, policyToken) => {
+        const discarded = discardPersistentWebview(pageId, webview, webContentsId, policyToken)
         if (discarded) {
           releaseBrowserPageMount(pageId)
         }

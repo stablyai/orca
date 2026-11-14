@@ -10,7 +10,7 @@ import {
 } from '@/components/browser-pane/ssh-workspace-browser-verified-routes'
 import { webviewRegistry } from '@/components/browser-pane/host-guest/webview-registry'
 import { replacePersistentWebview } from '@/components/browser-pane/host-guest/browser-webview-disposal'
-import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 
 export function reconcileBrowserProfileGuests(get: BrowserSliceGet, workspaceId: string): void {
   const state = get()

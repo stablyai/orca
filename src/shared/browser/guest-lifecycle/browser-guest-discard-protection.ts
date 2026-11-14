@@ -16,6 +16,11 @@ export type BrowserGuestDiscardProtection = {
     | 'held'
     | 'debugger'
     | 'devtools'
+    | 'picture-in-picture'
+    | 'pdf'
+    | 'url'
+    | 'notifications'
+    | 'background-activity'
 }
 
 export type BrowserGuestDiscardProtectionChange = BrowserGuestDiscardProtection & {
@@ -23,12 +28,19 @@ export type BrowserGuestDiscardProtectionChange = BrowserGuestDiscardProtection 
 }
 
 export type BrowserGuestDiscardApi = {
+  reportGuestVisibility: (report: BrowserGuestVisibilityReport) => void
+  onGuestIdleDiscardDue: (callback: (request: BrowserGuestIdleDiscardRequest) => void) => () => void
+  refuseGuestIdleDiscard: (request: BrowserGuestIdleDiscardRequest) => void
   preparePageAttach: (args: {
     browserPageId: string
     partition: string
     url: string
   }) => Promise<string>
-  reserveGuestDiscard: (args: { browserPageId: string; webContentsId: number }) => boolean
+  reserveGuestDiscard: (args: {
+    browserPageId: string
+    webContentsId: number
+    policyToken?: BrowserGuestIdleDiscardToken
+  }) => boolean
   acknowledgeGuestRemoval: (args: {
     browserPageId: string
     webContentsId: number
@@ -40,4 +52,18 @@ export type BrowserGuestDiscardApi = {
   onGuestDiscardProtectionChanged: (
     callback: (event: BrowserGuestDiscardProtectionChange) => void
   ) => () => void
+}
+
+export type BrowserGuestIdleDiscardToken = {
+  rendererId: number
+  generation: number
+}
+export type BrowserGuestVisibilityReport = {
+  browserPageId: string
+  webContentsId: number
+  generation: number
+  visible: boolean | null
+}
+export type BrowserGuestIdleDiscardRequest = BrowserGuestVisibilityReport & {
+  policyToken: BrowserGuestIdleDiscardToken
 }

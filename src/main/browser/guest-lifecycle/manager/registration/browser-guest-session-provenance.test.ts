@@ -186,7 +186,12 @@ it('certifies default-profile GET commits through the installed request policy, 
         'ipc-message',
         { sender: guest, senderFrame: mainFrame },
         BROWSER_GUEST_PROTECTION_REPORT,
-        { generation: mainFrame.send.mock.lastCall?.[1], dirty: false }
+        {
+          generation: mainFrame.send.mock.lastCall?.[1],
+          dirty: false,
+          pictureInPicture: false,
+          contentType: 'text/html'
+        }
       )
       const clean = mode === 'clean'
       expect(readBrowserGuestDiscardProtection(guest).protection).toBe(

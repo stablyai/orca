@@ -18,7 +18,7 @@ vi.mock('../host-guest/webview-registry', () => ({
   webviewRegistry: registryMocks.webviewRegistry
 }))
 
-import { ensureBrowserPageWebview } from '../host-guest/browser-page-webview'
+import { ensureBrowserPageWebview } from '../host-guest/lifecycle/browser-page-webview'
 
 function createContainer(id: string): HTMLDivElement {
   const container = document.createElement('div')

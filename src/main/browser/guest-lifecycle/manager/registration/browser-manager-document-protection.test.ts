@@ -54,7 +54,9 @@ class DocumentGuest extends DestroyedGuestTestContents {
       BROWSER_GUEST_PROTECTION_REPORT,
       {
         generation: this.mainFrame.send.mock.lastCall?.[1],
-        dirty: false
+        dirty: false,
+        pictureInPicture: false,
+        contentType: 'text/html'
       }
     )
   }

@@ -2,8 +2,11 @@ import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 import {
   installBrowserGuestDiscardProtection,
+  readBrowserGuestDiscardAdmission,
   readBrowserGuestDiscardProtection,
-  markInitialBrowserGuest
+  markInitialBrowserGuest,
+  registerBrowserSessionNotificationGrant,
+  setBrowserGuestSemanticVisibility
 } from './browser-guest-discard-protection'
 import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
@@ -33,7 +36,7 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
       'ipc-message',
       { sender: guest, senderFrame: mainFrame },
       BROWSER_GUEST_PROTECTION_REPORT,
-      { generation, dirty }
+      { generation, dirty, pictureInPicture: false, contentType: 'text/html' }
     )
   }
   let requestId = 0
@@ -70,12 +73,14 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
       'ipc-message',
       { sender: guest, senderFrame: mainFrame },
       BROWSER_GUEST_PROTECTION_REPORT,
-      { generation: firstGeneration, dirty: false }
+      { generation: firstGeneration, dirty: false, pictureInPicture: false, contentType: '' }
     )
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     guest.emit('ipc-message', { sender: guest, senderFrame: {} }, BROWSER_GUEST_PROTECTION_REPORT, {
       generation: mainFrame.send.mock.lastCall?.[1],
-      dirty: false
+      dirty: false,
+      pictureInPicture: false,
+      contentType: 'text/html'
     })
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     report(false)
@@ -149,7 +154,7 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
       'ipc-message',
       { sender: guest, senderFrame: mainFrame },
       BROWSER_GUEST_PROTECTION_REPORT,
-      { generation: oldGeneration, dirty: false }
+      { generation: oldGeneration, dirty: false, pictureInPicture: false, contentType: 'text/html' }
     )
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     report(false)
@@ -162,5 +167,113 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('gone')
   } finally {
     stop()
+  }
+})
+
+it('protects active page features from the private observer and at idle admission', () => {
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  let url = 'https://example.test/'
+  let audible = false
+  let captured = false
+  let loading = false
+  const grants = new Set<string>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 8,
+    mainFrame,
+    session: {},
+    getURL: () => url,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    isLoading: () => loading,
+    isBeingCaptured: () => captured,
+    isCurrentlyAudible: () => audible,
+    navigationHistory: { length: () => 1, getActiveIndex: () => 0 }
+  }) as unknown as Electron.WebContents
+  registerBrowserSessionNotificationGrant(guest.session, (pageUrl) =>
+    grants.has(new URL(pageUrl).origin)
+  )
+  markInitialBrowserGuest(guest)
+  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const report = (fields: object): void => {
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      { generation: mainFrame.send.mock.lastCall?.[1], dirty: false, ...fields }
+    )
+  }
+  const admission = (proactive = true): string =>
+    readBrowserGuestDiscardAdmission(guest, proactive).reason
+  try {
+    guest.emit('did-start-navigation', {
+      url,
+      frame: mainFrame,
+      isMainFrame: true,
+      isSameDocument: false
+    })
+    reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', {
+      id: 1,
+      url,
+      method: 'GET',
+      frame: guest.mainFrame,
+      resourceType: 'mainFrame',
+      webContentsId: 8,
+      timestamp: 0
+    })
+    guest.emit('did-navigate', {}, url, 200, 'OK')
+    guest.emit('dom-ready')
+    // An observer that predates these fields cannot prove the document safe.
+    report({})
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
+    report({ pictureInPicture: true, contentType: 'text/html' })
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('picture-in-picture')
+    report({ pictureInPicture: false, contentType: 'application/pdf' })
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('pdf')
+    report({ pictureInPicture: false, contentType: 'text/html' })
+    expect(admission()).toBe('clean')
+
+    audible = true
+    guest.emit('audio-state-changed', { audible })
+    audible = false
+    guest.emit('audio-state-changed', { audible })
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('clean')
+    vi.advanceTimersByTime(59_000)
+    expect(admission(false)).toBe('audio')
+    vi.advanceTimersByTime(1_000)
+    expect(admission(false)).toBe('clean')
+
+    captured = true
+    expect(admission(false)).toBe('capture')
+    captured = false
+    url = 'file:///Users/me/notes.html'
+    expect(admission(false)).toBe('url')
+    url = 'https://example.test/'
+    grants.add('https://example.test')
+    expect(admission(false)).toBe('clean')
+    expect(admission()).toBe('notifications')
+    grants.clear()
+
+    // Load churn, visible pages and unreported visibility are not background activity.
+    guest.emit('page-title-updated', {}, 'Inbox')
+    setBrowserGuestSemanticVisibility(guest, true)
+    guest.emit('page-title-updated', {}, 'Inbox (1)')
+    setBrowserGuestSemanticVisibility(guest, false)
+    loading = true
+    guest.emit('page-title-updated', {}, 'Inbox (2)')
+    guest.emit('page-favicon-updated', {}, ['https://example.test/a.ico'])
+    loading = false
+    guest.emit('page-title-updated', {}, 'Inbox (2)')
+    expect(admission()).toBe('clean')
+    guest.emit('page-favicon-updated', {}, ['https://example.test/unread.ico'])
+    expect(admission()).toBe('background-activity')
+    expect(admission(false)).toBe('clean')
+    // Showing the page does not clear the background activity latch.
+    setBrowserGuestSemanticVisibility(guest, true)
+    expect(admission()).toBe('background-activity')
+  } finally {
+    stop()
+    vi.useRealTimers()
   }
 })

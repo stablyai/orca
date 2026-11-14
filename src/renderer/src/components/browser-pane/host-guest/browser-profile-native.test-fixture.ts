@@ -5,7 +5,7 @@ import { readBrowserGuestMetadata } from '../../../../../main/browser/guest-life
 import {
   acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata
-} from './browser-guest-metadata-cache'
+} from './metadata/browser-guest-metadata-cache'
 import {
   DestroyedGuestTestContents,
   DestroyedGuestTestManager
@@ -22,8 +22,8 @@ import {
 } from '../../../../../main/browser/guest-lifecycle/browser-page-memory'
 import { registeredWebContentsIds, webviewRegistry } from './webview-registry'
 import { closePersistentBrowserPage } from './browser-webview-disposal'
-import { releaseBrowserPageMount } from './browser-page-mount-admission'
-import { registerBrowserOverlaySlotViewport } from './browser-page-viewport'
+import { releaseBrowserPageMount } from './retention/browser-page-mount-admission'
+import { registerBrowserOverlaySlotViewport } from './viewport/browser-page-viewport'
 
 export class ProfileTestGuest extends DestroyedGuestTestContents {
   readonly hostWebContents = { id: 99 }

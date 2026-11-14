@@ -2,7 +2,7 @@ import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-life
 import {
   acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata
-} from './host-guest/browser-guest-metadata-cache'
+} from './host-guest/metadata/browser-guest-metadata-cache'
 import { vi } from 'vitest'
 
 type Listener<T> = (event: T) => void

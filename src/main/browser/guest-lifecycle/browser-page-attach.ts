@@ -1,3 +1,4 @@
+import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
@@ -119,6 +120,7 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   attach.page.guest = guest
   renewHeldThrottle(attach.page)
   guest.once('destroyed', () => {
+    getBrowserPageIdleDiscard().destroyed(attach.pageId, guest.id)
     if (attach.page.retired.delete(guest.id)) {
       attach.page.invalidation?.notify()
     }

@@ -109,7 +109,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/scanners/devin/session-scanner-devin-db.test.ts',
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/git/repositories/discovery/repo-detection.test.ts',
-  'src/renderer/src/components/browser-pane/annotate/browser-grab-toast-owner-cleanup.test.tsx',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
   'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
   'src/main/providers/working-directory/validation.test.ts',

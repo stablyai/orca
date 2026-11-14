@@ -4,19 +4,19 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import {
   createBrowserPageWebviewGuestSession,
   type BrowserPageWebviewGuestSession
-} from './browser-page-webview-guest-session'
+} from './lifecycle/browser-page-webview-guest-session'
 import {
   registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
 import { closePersistentBrowserPage, replacePersistentWebview } from './browser-webview-disposal'
-import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
+import { createBrowserPageWebviewLoadingHandlers } from './lifecycle/browser-page-webview-loading-handlers'
 import {
   admitBrowserPageMount,
   isBrowserPageMountAdmitted,
   releaseBrowserPageMount
-} from './browser-page-mount-admission'
+} from './retention/browser-page-mount-admission'
 
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 

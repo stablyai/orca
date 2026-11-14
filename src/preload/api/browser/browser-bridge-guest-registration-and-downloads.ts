@@ -1,3 +1,4 @@
+import { browserGuestDiscardApi } from './browser-bridge-guest-discard'
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
@@ -21,19 +22,7 @@ import { browserClientPageRendererRequests } from '../../renderer/renderer-runti
 import type { PreloadApi } from '../../api-types'
 
 export const browserGuestRegistrationAndDownloadsApi = {
-  preparePageAttach: (args) => ipcRenderer.invoke('browser:preparePageAttach', args),
-  reserveGuestDiscard: (args) => ipcRenderer.sendSync('browser:reserveGuestDiscard', args) === true,
-  acknowledgeGuestRemoval: (args) => ipcRenderer.invoke('browser:acknowledgeGuestRemoval', args),
-  getGuestDiscardProtection: (args) =>
-    ipcRenderer.invoke('browser:getGuestDiscardProtection', args),
-  onGuestDiscardProtectionChanged: (callback): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0]
-    ): void => callback(data)
-    ipcRenderer.on('browser:guest-discard-protection-changed', listener)
-    return () => ipcRenderer.removeListener('browser:guest-discard-protection-changed', listener)
-  },
+  ...browserGuestDiscardApi,
   onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
   readClientHostId: (): string | null => readBrowserClientHostIdArgument(process.argv),
   getGuestMetadata: (args: {

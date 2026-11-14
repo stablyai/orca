@@ -82,7 +82,7 @@ vi.mock('@/lib/workspace/ownership/worktree-host-connection-phase', () => ({
     connectedEpoch: 'target-a:1'
   })
 }))
-vi.mock('../annotate/guest-annotation-viewport-bridge', () => ({
+vi.mock('../annotate/viewport/guest-annotation-viewport-bridge', () => ({
   syncGuestAnnotationViewportBridge: () => {}
 }))
 vi.mock('@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher', () => ({
@@ -107,9 +107,8 @@ import {
 import { registerBrowserRequestIpcBridge } from '@/hooks/ipc-events/browser-request-ipc-bridge'
 import BrowserPane from '../assemble-chrome/browser-workspace-pane'
 import { useBrowserPageWebviewLifecycle } from './use-browser-page-webview-lifecycle'
-import { useBrowserPageWebviewPartition } from './use-browser-page-webview-partition'
-import { ensureBrowserPageViewport } from './browser-page-viewport'
-import { installBrowserGuestPageRetention } from './browser-guest-page-retention'
+import { useBrowserPageWebviewPartition } from './lifecycle/use-browser-page-webview-partition'
+import { ensureBrowserPageViewport } from './viewport/browser-page-viewport'
 import { verifiedPartitionByRoute } from '../ssh-workspace-browser-verified-routes'
 import {
   installProfileNativeFixture,
@@ -120,7 +119,7 @@ import {
   admitBrowserPageMount,
   isBrowserPageMountAdmitted,
   releaseBrowserPageMount
-} from './browser-page-mount-admission'
+} from './retention/browser-page-mount-admission'
 import {
   browserMemoryGeneration,
   claimBrowserMemoryPage,
@@ -556,19 +555,10 @@ it('preserves unresolved hidden loads and wakes a retired admission while anothe
   aGuest.finish()
   await waitForBrowserPageReady(a.id, aGuest.asWebContents())
   await act(async () => {
-    const stop = installBrowserGuestPageRetention({
-      limit: 0,
-      isBlocked: (pageId) => pageId !== a.id,
-      discard: (pageId, webview, guestId) => {
-        const discarded = discardPersistentWebview(pageId, webview, guestId)
-        if (discarded) {
-          releaseBrowserPageMount(pageId)
-        }
-        return discarded
-      }
-    })
-    await Promise.resolve()
-    stop()
+    const webview = webviewRegistry.get(a.id)!
+    const discarded = discardPersistentWebview(a.id, webview, webview.getWebContentsId())
+    expect(discarded).toBe(true)
+    releaseBrowserPageMount(a.id)
   })
   expect(webviewRegistry.has(a.id)).toBe(false)
   expect(isBrowserPageMountAdmitted(a.id)).toBe(false)

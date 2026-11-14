@@ -4372,6 +4372,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Two Tone",
+            "silent": "Silent",
             "017abebfa6": "System Default"
           }
         }
@@ -8975,7 +8976,19 @@
           "f2765fbbf6": "GitLab API budget",
           "8cdbaf4b03": "Jira key casing",
           "fdbcd676b0": "GitHub API budget",
-          "074f7aa0d6": "Default compare base"
+          "074f7aa0d6": "Default compare base",
+          "prAutoRefreshUpdateFailed": "Could not update PR auto-refresh on this host.",
+          "prAutoRefreshDefault": "Automatic",
+          "prAutoRefreshReduced": "Less often",
+          "prAutoRefreshOff": "Manual",
+          "prAutoRefreshAbout": "About PR Updates",
+          "prAutoRefreshHintAutomatic": "Keeps pull requests and checks up to date.",
+          "prAutoRefreshHintLessOften": "Checks GitHub less often. Useful if you hit GitHub rate limits.",
+          "prAutoRefreshTitle": "PR Updates",
+          "prAutoRefreshDescription": "How often Orca checks GitHub for pull request and CI changes.",
+          "prAutoRefreshHintOff": "Updates when you push or click Refresh.",
+          "prAutoRefreshUnsupportedHost": "Update Orca on {{host}} to change this",
+          "prAutoRefreshUnknownHost": "the selected server"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",

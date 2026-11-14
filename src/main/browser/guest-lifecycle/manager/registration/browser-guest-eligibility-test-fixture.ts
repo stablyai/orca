@@ -20,7 +20,6 @@ import {
   unregisterBrowserGuestActivity,
   updateBrowserGuestProtection
 } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
-import { installBrowserGuestPageRetention } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-page-retention'
 import { registerBrowserGuestDiscardHandlers } from '../../../../ipc/browser/browser-guest-discard-ipc'
 import type { BrowserGuestDiscardProtectionChange } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
@@ -37,7 +36,9 @@ vi.mock('../../../../ipc/browser/browser-renderer-trust', () => ({
 // The renderer project owns these types; the main fixture executes the production veto.
 const { browserPageVetoesGuestEviction } = await vi.importActual<{
   browserPageVetoesGuestEviction: (pageId: string) => boolean
-}>('../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-eviction-veto')
+}>(
+  '../../../../../renderer/src/components/browser-pane/host-guest/retention/browser-guest-eviction-veto'
+)
 
 export class EligibilityGuest extends DestroyedGuestTestContents {
   readonly hostWebContents = { id: 99 }
@@ -70,6 +71,9 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
   }
   readonly executeJavaScript = vi.fn(() => new Promise<unknown>(() => {}))
 
+  isBeingCaptured(): boolean {
+    return false
+  }
   isCrashed(): boolean {
     return false
   }
@@ -110,7 +114,12 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
       'ipc-message',
       { sender: this, senderFrame: this.mainFrame },
       BROWSER_GUEST_PROTECTION_REPORT,
-      { generation: this.mainFrame.send.mock.lastCall?.[1], dirty: false }
+      {
+        generation: this.mainFrame.send.mock.lastCall?.[1],
+        dirty: false,
+        pictureInPicture: false,
+        contentType: 'text/html'
+      }
     )
   }
 
@@ -190,27 +199,29 @@ export function createEligibilityFleet(
       getWebContentsId: () => 1000 + i
     } as Electron.WebviewTag)
   }
-  const stop = installBrowserGuestPageRetention({
-    isBlocked: (id) =>
-      browserGuestActivity.get(id)?.protection === undefined || browserPageVetoesGuestEviction(id),
-    discard: (id, webview, guestId) => {
-      attempts.push(id)
-      const accepted = discard
-        ? discard(id, webview, guestId)
-        : invokeGuestDiscard(renderer, {
-            browserPageId: id,
-            webContentsId: guestId
-          })
-      if (!accepted) {
-        return false
-      }
+  const attempt = (id = pageId): boolean => {
+    const entry = browserGuestActivity.get(id)
+    if (!entry || browserPageVetoesGuestEviction(id)) {
+      return false
+    }
+    attempts.push(id)
+    const guestId = entry.webview.getWebContentsId()
+    const accepted = discard
+      ? discard(id, entry.webview, guestId)
+      : invokeGuestDiscard(renderer, {
+          browserPageId: id,
+          webContentsId: guestId
+        })
+    if (accepted) {
       freed.push(id)
       unregisterBrowserGuestActivity(id)
-      return true
     }
-  })
+    return accepted
+  }
+
   return {
     manager,
+    attempt,
     guest,
     pageId,
     attempts,
@@ -219,7 +230,6 @@ export function createEligibilityFleet(
     pageIds,
     attach,
     close: () => {
-      stop()
       manager.unregisterAll()
       for (const item of guests) {
         item.destroy()
