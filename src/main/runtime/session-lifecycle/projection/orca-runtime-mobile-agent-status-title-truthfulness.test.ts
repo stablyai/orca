@@ -269,6 +269,7 @@ describe('mobile session tabs: a process started after its pane last reported', 
         'restoredUnconfirmed'
       )
       rows.length = 0
+      expect(await projectAgentStatus(runtime)).toBeUndefined()
       vi.setSystemTime(T0 + 40)
       runtime.onPtyData(PTY_ID, '\x1b]0;⠧ New turn\x07', T0 + 40)
       const successor = await projectAgentStatus(runtime)

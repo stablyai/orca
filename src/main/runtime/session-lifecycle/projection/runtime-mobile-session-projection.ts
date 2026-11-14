@@ -180,19 +180,24 @@ export function projectRuntimeMobileSessionTabs(
       ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
       : null
     const acceptedRow = retainedAgentStatus ?? hookAgentStatus.live
-    // Resolve the host record once; identity-only and title fallbacks are already adjudicated.
-    const resolvedHostStatus =
+    // A published sleep marker refers to the host owner; it cannot outlive that record.
+    const resolvedHostProjection =
       tab.agentStatus &&
-      acceptedRow?.payload.state === 'done' &&
-      (tab.agentStatus.state === 'done' || tab.agentStatus.updatedAt <= acceptedRow.updatedAt)
+      (tab.agentStatus.paneSleep ||
+        (acceptedRow?.payload.state === 'done' &&
+          (tab.agentStatus.state === 'done' || tab.agentStatus.updatedAt <= acceptedRow.updatedAt)))
         ? host.buildPtyStatus(statusPty, tab, null, retainedAgentStatus, getHookRowsForPane)
-            .agentStatus
         : null
-    const normalizedTabAgentStatus = resolvedHostStatus
-      ? {
-          ...resolvedHostStatus,
-          updatedAt: Math.max(resolvedHostStatus.updatedAt, tab.agentStatus?.updatedAt ?? 0)
-        }
+    const normalizedTabAgentStatus = resolvedHostProjection
+      ? resolvedHostProjection.agentStatus
+        ? {
+            ...resolvedHostProjection.agentStatus,
+            updatedAt: Math.max(
+              resolvedHostProjection.agentStatus.updatedAt,
+              tab.agentStatus?.updatedAt ?? 0
+            )
+          }
+        : null
       : renewRuntimeMobileAgentStatusFromPtyTitle(
           tab.agentStatus
             ? normalizeCompatibleAgentStatusEntryForOwner(
@@ -241,6 +246,7 @@ export function projectRuntimeMobileSessionTabs(
     const terminalHandle = terminalPty ? host.issuePtyHandle(terminalPty) : null
     const projectedAgentStatus =
       agentStatus ??
+      resolvedHostProjection ??
       host.buildPtyStatus(
         // Main layout supplies the live pane leaf whose terminal owns status.
         ORCA_LAYOUT_OWNER_IS_MAIN ? (liveLeafPty ?? mobileStatusPty) : mobileStatusPty,
