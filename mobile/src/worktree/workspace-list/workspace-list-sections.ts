@@ -1,4 +1,3 @@
-import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
 import { orderMainWorktreeFirst } from '../../../../src/shared/sidebar-list/sections/section-order'
 import { withFolderWorkspacesLast } from './folder-workspace-lane-order'
 import { prGroupOfPsLinkedPR } from '../../../../src/shared/sidebar-list/feed-facts/workspace-review-facts'
@@ -35,6 +34,7 @@ import { getWorktreeRowIdentity } from '../row-presentation/worktree-host-row-id
 import { NO_WORKTREE_HOST_CONTEXT } from '../row-presentation/worktree-host-context-labels'
 import type { WorktreeHostContextOf } from '../row-presentation/worktree-host-context-labels'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../src/shared/execution-host'
