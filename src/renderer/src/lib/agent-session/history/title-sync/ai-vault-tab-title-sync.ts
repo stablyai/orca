@@ -59,6 +59,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
   let writing = false
   const lastSettledAttemptAt = new Map<string, number>()
   const dirty = new Set<string>()
+  const liveRefreshingKeys = new Set<string>()
 
   const writeTitle = (
     request: AiVaultTitleRequest,
@@ -153,23 +154,34 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         dirty.delete(key)
       }
     }
+    for (const key of liveRefreshingKeys) {
+      if (!currentKeys.has(key)) {
+        liveRefreshingKeys.delete(key)
+      }
+    }
     const now = Date.now()
     const requestsToScan = requests.filter((request) => {
+      const key = aiVaultTitleRequestKey(request)
       const stored = tabsById.get(request.tabId)?.aiVaultTitle
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
       if (stored && !identityMatches) {
         writeTitle(request, null)
       }
-      const last = lastSettledAttemptAt.get(aiVaultTitleRequestKey(request))
+      const justStoppedRefreshing = !request.refresh && liveRefreshingKeys.delete(key)
+      if (request.refresh) {
+        liveRefreshingKeys.add(key)
+      }
+      const last = lastSettledAttemptAt.get(key)
       return (
         !identityMatches ||
         !stored?.title.trim() ||
         (request.refresh && last === undefined) ||
         // Titles saved before they carried a kind are asked for once, so a sleeping session's name can outrank its quick-command label.
         (!stored?.kind && last === undefined) ||
+        (justStoppedRefreshing && stored?.kind !== 'named') ||
         (request.refresh &&
-          (dirty.has(aiVaultTitleRequestKey(request)) ||
+          (dirty.has(key) ||
             now - last! >=
               titleRefreshInterval(state, request) /
                 (supportsSessionTitleRefresh(state, request) ? 2 : 1)))

@@ -4,6 +4,7 @@ import type {
 } from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { BrowserLoadError } from '../../../../../src/shared/browser-workspace-types'
+import { sameAiVaultSessionTitle } from '../../../../../src/shared/ai-vault/contracts/ai-vault-session-title'
 import { browserLoadErrorsEqual } from '../../../../../src/shared/browser-load-failure'
 import { translate } from '../../../i18n/mobile-i18n'
 
@@ -165,7 +166,7 @@ function mobileSessionTabEqual(
         // Names decide whether the title is agent evidence, so a name-only change must re-render.
         a.customTitle === b.customTitle &&
         a.quickCommandLabel === b.quickCommandLabel &&
-        a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
+        sameAiVaultSessionTitle(a.aiVaultTitle, b.aiVaultTitle) &&
         a.generatedTitle === b.generatedTitle &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         JSON.stringify(a.nativeChatIdentity ?? null) ===

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AI_VAULT_TITLE_AGENTS } from '../../ai-vault/contracts/ai-vault-session-title'
 import { isTerminalLeafId } from '../../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
@@ -133,7 +134,7 @@ const MovePaneToNewTabCommand = z.object({
 })
 
 const AiVaultTitle = z.object({
-  agent: z.enum(['claude', 'codex']),
+  agent: z.enum(AI_VAULT_TITLE_AGENTS),
   sessionId: z.string(),
   title: z.string(),
   kind: z.enum(['named', 'fallback']).optional().catch(undefined)
