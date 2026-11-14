@@ -92,8 +92,13 @@ export function useMobileChatForkSheet(input: {
             target,
             forkFrom
           )
-        } catch {
-          current.showToast(chatForkCopy.unconfirmed(TUI_AGENT_DISPLAY_NAMES[target.agent]), 4000)
+        } catch (error) {
+          // runChatFork reports its own launch outcomes; a throw past it is a plain failure.
+          const detail = error instanceof Error ? error.message.trim() : ''
+          current.showToast(
+            chatForkCopy.failed(TUI_AGENT_DISPLAY_NAMES[target.agent], detail),
+            4000
+          )
         } finally {
           busyRef.current = false
           setBusy(false)

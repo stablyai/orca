@@ -128,15 +128,20 @@ export async function runChatFork(
         : { kind: 'copy', terminal: source.terminal, forkFrom }
     }
     deps.onProgress(chatForkCopy.opening(target.hostLabel))
-    const outcome = await launchChatForkInWorkspace(held.client, worktreeId, target.agent, launch)
     const agentName = TUI_AGENT_DISPLAY_NAMES[target.agent]
-    if (outcome.kind !== 'failed') {
-      deps.openSession(target.hostId, worktreeId, workspace.name)
-    }
-    if (outcome.kind === 'unconfirmed') {
+    // Past this point the fork may exist, so an unexpected throw reads as unconfirmed.
+    try {
+      const outcome = await launchChatForkInWorkspace(held.client, worktreeId, target.agent, launch)
+      if (outcome.kind !== 'failed') {
+        deps.openSession(target.hostId, worktreeId, workspace.name)
+      }
+      if (outcome.kind === 'unconfirmed') {
+        report(chatForkCopy.unconfirmed(agentName))
+      } else if (outcome.kind === 'failed') {
+        report(chatForkCopy.failed(agentName, outcome.message || chatForkCopy.unsupported()))
+      }
+    } catch {
       report(chatForkCopy.unconfirmed(agentName))
-    } else if (outcome.kind === 'failed') {
-      report(chatForkCopy.failed(agentName, outcome.message || chatForkCopy.unsupported()))
     }
   } finally {
     held.release()
