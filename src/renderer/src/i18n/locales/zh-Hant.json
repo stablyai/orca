@@ -3889,7 +3889,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "該終端機不會自動恢復。取消並將工作區置於睡眠狀態以便稍後恢復。",
             "1d1a7a9c1f": "取消",
             "stop_agent_title": "停止此代理程式？",
             "stop_command_title": "停止執行中的命令？",

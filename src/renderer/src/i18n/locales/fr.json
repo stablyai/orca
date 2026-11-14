@@ -3733,8 +3733,7 @@
             "stop_command_description": "Fermer ce terminal interrompra la commande qui s'y exécute.",
             "dont_ask_again": "Ne plus demander pour les terminaux en cours d'exécution",
             "stop_agent_confirm": "Arrêter l'agent",
-            "stop_command_confirm": "Arrêter et fermer",
-            "automatic_resume_warning": "Ce terminal ne reprendra pas automatiquement. Annulez et mettez l'espace de travail en veille pour le reprendre plus tard."
+            "stop_command_confirm": "Arrêter et fermer"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Reprendre",

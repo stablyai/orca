@@ -16804,7 +16804,6 @@
             "hostTerminalCap": "O host já está executando o máximo de terminais permitido pelo Orca. Feche um terminal de que não precisa mais e tente novamente."
           },
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Este terminal não vai retomar automaticamente. Cancele e coloque o espaço de trabalho em suspensão para retomá-lo depois.",
             "1d1a7a9c1f": "Cancelar",
             "stop_agent_title": "Parar este agente?",
             "stop_command_title": "Parar o comando em execução?",

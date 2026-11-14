@@ -9,7 +9,6 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
-import { readStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 
 export function createWorkspaceTabCloseCommands({
@@ -81,7 +80,6 @@ export function createWorkspaceTabCloseCommands({
               useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
                 // Consent belongs to this attempt; a reused tab ID must not inherit its dialog.
                 terminalTabId: createBrowserUuid(),
-                tabLabel: readStructuredChatTabName(item, useAppStore.getState()),
                 copyKind: 'chat-agent',
                 onConfirm: confirmed,
                 onCancel: resolve

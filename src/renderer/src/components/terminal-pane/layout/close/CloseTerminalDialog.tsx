@@ -17,15 +17,12 @@ export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 export default function CloseTerminalDialog({
   open,
   copyKind = 'command',
-  tabLabel,
   subjectKey,
   onCancel,
   onConfirm
 }: {
   open: boolean
   copyKind?: CloseTerminalDialogCopyKind
-  /** Name off-focus tab-strip/middle-click targets; omit for focused-pane keyboard closes. */
-  tabLabel?: string
   /** Changing queued subject clears the previous tab’s opt-out without reopening the dialog. */
   subjectKey?: string
   onCancel: () => void
@@ -52,8 +49,6 @@ export default function CloseTerminalDialog({
     }
   }
 
-  const trimmedTabLabel = tabLabel?.trim()
-
   return (
     <Dialog
       open={open}
@@ -66,7 +61,6 @@ export default function CloseTerminalDialog({
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <CloseTerminalDialogBody
           copyKind={copyKind}
-          trimmedTabLabel={trimmedTabLabel}
           checkboxId={checkboxId}
           dontAskAgain={dontAskAgain}
           setDontAskAgain={setDontAskAgain}
@@ -81,7 +75,6 @@ export default function CloseTerminalDialog({
 // Keep translation and element construction behind the dialog portal's mount boundary.
 function CloseTerminalDialogBody({
   copyKind,
-  trimmedTabLabel,
   checkboxId,
   dontAskAgain,
   setDontAskAgain,
@@ -89,7 +82,6 @@ function CloseTerminalDialogBody({
   onConfirm
 }: {
   copyKind: CloseTerminalDialogCopyKind
-  trimmedTabLabel: string | undefined
   checkboxId: string
   dontAskAgain: boolean
   setDontAskAgain: (value: boolean) => void
@@ -130,19 +122,6 @@ function CloseTerminalDialogBody({
                 )}
         </DialogDescription>
       </DialogHeader>
-      {copyKind === 'agent' ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.terminal.pane.CloseTerminalDialog.automatic_resume_warning',
-            'This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.'
-          )}
-        </p>
-      ) : null}
-      {trimmedTabLabel ? (
-        <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
-          {trimmedTabLabel}
-        </p>
-      ) : null}
       <div className="flex items-center gap-2">
         <Checkbox
           id={checkboxId}

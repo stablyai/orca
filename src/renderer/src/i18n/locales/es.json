@@ -3462,8 +3462,7 @@
             "stop_command_description": "Al cerrar esta terminal, se detendrá el comando que se está ejecutando en ella.",
             "dont_ask_again": "No volver a preguntar para terminales en ejecución",
             "stop_agent_confirm": "Detener agente",
-            "stop_command_confirm": "Detener y cerrar",
-            "automatic_resume_warning": "Esta terminal no se reanudará automáticamente. Cancele y ponga el espacio de trabajo en suspensión para reanudarlo más tarde."
+            "stop_command_confirm": "Detener y cerrar"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Recuperar control",
