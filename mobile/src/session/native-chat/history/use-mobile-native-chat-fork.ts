@@ -36,12 +36,21 @@ export type MobileNativeChatForkRun = (
   forkFrom: StructuredAgentSessionForkSource
 ) => Promise<void>
 
+/** A copy of the chat's own history, or another agent's recap of it. */
+export type MobileNativeChatForkKind = 'copy' | 'recap'
+
 export type MobileNativeChatFork = {
   subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
   fork: (message: NativeChatMessage) => void
   /** Forks from this response through `run`; false when it can't fork now or one is running. */
-  forkWith: (message: NativeChatMessage, run: MobileNativeChatForkRun) => boolean
+  forkWith: (
+    message: NativeChatMessage,
+    run: MobileNativeChatForkRun,
+    kind: MobileNativeChatForkKind
+  ) => boolean
+  /** Whether the same agent can take a copy of this chat; another agent's recap always can. */
+  copyOffered: () => boolean
   /** The newest response that can fork now. */
   latestForkable: () => NativeChatMessage | undefined
   /** Whether this host can fork a chat into a new worktree. */
@@ -123,8 +132,11 @@ export function useMobileNativeChatFork(input: {
     [turnJournal]
   )
   const terminal = input.terminal === true
-  const terminalForkSupported =
-    terminal && input.hostCapabilities?.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY) === true
+  // Copying a terminal chat cuts Claude's transcript on the host; a recap needs neither.
+  const copyOffered =
+    !terminal ||
+    (agent === 'claude' &&
+      input.hostCapabilities?.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY) === true)
   // A terminal chat has no session journal: a reply ends where the next message is yours.
   const terminalForkPoints = useMemo(() => {
     const ids = new Set<string>()
@@ -135,7 +147,11 @@ export function useMobileNativeChatFork(input: {
         message.role === 'assistant' &&
         message.source === 'transcript' &&
         !message.agentStart &&
-        (next ? next.role === 'user' : !agentWorking) &&
+        // A queued send waits on the running reply; it ends nothing until the agent is idle.
+        (next
+          ? next.role === 'user' &&
+            (!agentWorking || (!next.queued && next.pendingSend !== 'queued'))
+          : !agentWorking) &&
         (!last || !agentWorking)
       ) {
         ids.add(message.id)
@@ -152,7 +168,7 @@ export function useMobileNativeChatFork(input: {
         return 'hidden'
       }
       if (terminal) {
-        return !terminalForkSupported || !sessionId || agent !== 'claude'
+        return !sessionId || !isTuiAgent(agent ?? '')
           ? 'hidden'
           : !terminalForkPoints.has(message.id)
             ? 'reserved'
@@ -190,13 +206,17 @@ export function useMobileNativeChatFork(input: {
       support,
       terminal,
       terminalForkPoints,
-      terminalForkSupported,
       turns
     ]
   )
   const start = useCallback(
-    (message: NativeChatMessage, create: MobileNativeChatForkRun): boolean => {
+    (
+      message: NativeChatMessage,
+      create: MobileNativeChatForkRun,
+      kind: MobileNativeChatForkKind
+    ): boolean => {
       if (
+        (kind === 'copy' && !copyOffered) ||
         inFlight.current ||
         offerFor(message) !== 'available' ||
         !sessionId ||
@@ -221,10 +241,10 @@ export function useMobileNativeChatFork(input: {
         })
       return true
     },
-    [agent, messages, offerFor, sessionId, terminal]
+    [agent, copyOffered, messages, offerFor, sessionId, terminal]
   )
   const fork = useCallback(
-    (message: NativeChatMessage) => void start(message, createFork),
+    (message: NativeChatMessage) => void start(message, createFork, 'copy'),
     [createFork, start]
   )
   const latestForkable = useCallback(
@@ -239,6 +259,7 @@ export function useMobileNativeChatFork(input: {
     start,
     latestForkable,
     worktreeForkSupported,
+    copyOffered,
     hostCapabilities: input.hostCapabilities
   })
   const listeners = useRef(new Set<() => void>())
@@ -249,12 +270,21 @@ export function useMobileNativeChatFork(input: {
       start,
       latestForkable,
       worktreeForkSupported,
+      copyOffered,
       hostCapabilities: input.hostCapabilities
     }
     for (const listener of listeners.current) {
       listener()
     }
-  }, [offerFor, fork, start, latestForkable, worktreeForkSupported, input.hostCapabilities])
+  }, [
+    offerFor,
+    fork,
+    start,
+    latestForkable,
+    worktreeForkSupported,
+    copyOffered,
+    input.hostCapabilities
+  ])
   return useMemo(
     () => ({
       subscribe: (listener) => {
@@ -263,7 +293,8 @@ export function useMobileNativeChatFork(input: {
       },
       offerFor: (message) => latest.current.offerFor(message),
       fork: (message) => latest.current.fork(message),
-      forkWith: (message, run) => latest.current.start(message, run),
+      forkWith: (message, run, kind) => latest.current.start(message, run, kind),
+      copyOffered: () => latest.current.copyOffered,
       latestForkable: () => latest.current.latestForkable(),
       worktreeForkOffered: () => latest.current.worktreeForkSupported,
       hostCapabilities: () => latest.current.hostCapabilities

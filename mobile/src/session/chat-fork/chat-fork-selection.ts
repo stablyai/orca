@@ -27,6 +27,8 @@ export type ChatForkSource = {
   agent: TuiAgent
   /** The agent has hit its usage limit: another agent is the useful default. */
   usageLimited: boolean
+  /** The chat's history can be copied for the same agent (a terminal chat only for Claude). */
+  canCopy: boolean
   /** This host can export the chat's transcript for another host. */
   canExport: boolean
   canNewWorktree: boolean
@@ -83,7 +85,8 @@ export function resolveChatForkSelection(input: {
   const sameHost = hostId === source.hostId
   const target = input.hosts.find((host) => host.hostId === hostId)
   const hostReady = sameHost || target?.status === 'ready'
-  const sameAgentAllowed = sameHost || (source.canExport && target?.canImport === true)
+  const sameAgentAllowed =
+    source.canCopy && (sameHost || (source.canExport && target?.canImport === true))
   const otherAgentAllowed = target?.canFirstMessage === true
   const others = (input.targetAgents ?? []).filter((agent) => agent !== source.agent)
   const agentChoices = [

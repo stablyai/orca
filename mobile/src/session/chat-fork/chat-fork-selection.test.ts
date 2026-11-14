@@ -11,6 +11,7 @@ const source: ChatForkSource = {
   hostId: 'desk',
   agent: 'claude',
   usageLimited: false,
+  canCopy: true,
   canExport: true,
   canNewWorktree: true,
   canSubagent: true
@@ -34,6 +35,12 @@ function resolve(overrides: Partial<Parameters<typeof resolveChatForkSelection>[
 }
 
 describe('resolveChatForkSelection', () => {
+  it('starts a chat whose history cannot be copied with another agent’s recap', () => {
+    const selection = resolve({ source: { ...source, agent: 'codex', canCopy: false } })
+    expect(selection.agent).toBe('claude')
+    expect(selection.agentChoices).toContainEqual({ agent: 'codex', enabled: false })
+  })
+
   it('defaults to a copy of this chat beside it, on this host, with the same agent', () => {
     const selection = resolve()
     expect(selection).toMatchObject({
