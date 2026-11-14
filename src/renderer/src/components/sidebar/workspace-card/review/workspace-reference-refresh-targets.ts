@@ -16,18 +16,87 @@ import {
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { readWorkspaceReferenceDetails } from './workspace-reference-detail-read'
 import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
-import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
+import {
+  selectIsSleepingWorktree,
+  selectWorktreeIdsWithLiveAgent
+} from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
-export function getWorkspaceReferenceRefreshTargets(
+function workspaceReferenceWorkspaces(state: AppState, options?: { selectedOnly?: boolean }) {
+  return [...getVisibleHostedReviewWorkspaces(state, options)].filter(({ worktree }) =>
+    getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue')
+  )
+}
+
+export function createWorkspaceReferenceRefreshTargetsSelector(options?: {
+  selectedOnly?: boolean
+}) {
+  let workspaces: ReturnType<typeof workspaceReferenceWorkspaces> = []
+  let inputs: readonly unknown[] = []
+  let sleeping = new Map<string, boolean>()
+  let liveWorktreeIds: ReadonlySet<string> = new Set()
+  let result: VisibleHostedReviewRefreshTarget[] = []
+  return (state: AppState, reviewInputsChanged: boolean): VisibleHostedReviewRefreshTarget[] => {
+    const reset = inputs.length === 0 || reviewInputsChanged
+    if (reset) {
+      workspaces = workspaceReferenceWorkspaces(state, options)
+    }
+    const next = [
+      state.tabsByWorktree,
+      state.ptyIdsByTabId,
+      state.browserTabsByWorktree,
+      state.unifiedTabsByWorktree,
+      state.structuredChatSleptAtByPaneKey,
+      state.agentStatusByPaneKey,
+      state.agentStatusEpoch
+    ]
+    if (!reset && next.every((value, index) => value === inputs[index])) {
+      return result
+    }
+    const topologyChanged =
+      reset || next.slice(0, 5).some((value, index) => value !== inputs[index])
+    inputs = next
+    const nextLiveWorktreeIds =
+      workspaces.length > 0 ? selectWorktreeIdsWithLiveAgent(state) : liveWorktreeIds
+    let changed = reset
+    if (topologyChanged) {
+      const nextSleeping = new Map<string, boolean>()
+      for (const { worktree } of workspaces) {
+        if (nextSleeping.has(worktree.id)) {
+          continue
+        }
+        const value = selectIsSleepingWorktree(state, worktree.id)
+        changed ||= value !== sleeping.get(worktree.id)
+        nextSleeping.set(worktree.id, value)
+      }
+      sleeping = nextSleeping
+    } else if (nextLiveWorktreeIds !== liveWorktreeIds) {
+      // Why: only tracked workspaces can change the result, and status updates replace the live
+      // set without changing membership, so diff just those instead of walking both sets.
+      for (const [id, previous] of sleeping) {
+        if (liveWorktreeIds.has(id) === nextLiveWorktreeIds.has(id)) {
+          continue
+        }
+        const value = selectIsSleepingWorktree(state, id)
+        changed ||= value !== previous
+        sleeping.set(id, value)
+      }
+    }
+    liveWorktreeIds = nextLiveWorktreeIds
+    if (changed) {
+      result = referenceRefreshTargets(state, workspaces, sleeping)
+    }
+    return result
+  }
+}
+
+function referenceRefreshTargets(
   state: AppState,
-  options?: { selectedOnly?: boolean }
+  workspaces: ReturnType<typeof workspaceReferenceWorkspaces>,
+  sleeping: ReadonlyMap<string, boolean>
 ): VisibleHostedReviewRefreshTarget[] {
   const targets = new Map<string, VisibleHostedReviewRefreshTarget>()
-  for (const { worktree, repo, candidate, selected } of getVisibleHostedReviewWorkspaces(
-    state,
-    options
-  )) {
-    if (selectIsSleepingWorktree(state, worktree.id)) {
+  for (const { worktree, repo, candidate, selected } of workspaces) {
+    if (sleeping.get(worktree.id)) {
       continue
     }
     const branchKey = getHostedReviewCacheKey(

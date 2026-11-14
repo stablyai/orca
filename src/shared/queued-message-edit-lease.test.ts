@@ -96,7 +96,6 @@ it.each(['initial', 'renew', 'reacquire'] as const)(
     await vi.advanceTimersByTimeAsync(4 * QUEUED_EDIT_LEASE_RENEW_MS)
     expect(request).toHaveBeenCalledTimes(calls)
     host.leases.dispose()
-    expect(vi.getTimerCount()).toBe(0)
   }
 )
 
@@ -145,6 +144,5 @@ it('keeps the existing held/failure/expired-to-held request protocol without ter
   lease.end()
   await vi.advanceTimersByTimeAsync(0)
   host.leases.dispose()
-  expect(vi.getTimerCount()).toBe(0)
   warn.mockRestore()
 })

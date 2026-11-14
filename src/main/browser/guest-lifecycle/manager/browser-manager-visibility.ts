@@ -25,6 +25,8 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
   })
 
+  private agentLeadListener: ((guestWebContentsId: number, led: boolean) => void) | null = null
+
   protected readonly pageEvents = new BrowserPageEvents()
   protected readonly pageInputCredit = new BrowserPageInputCredit()
 
@@ -39,13 +41,32 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
     const lease = this.agentActivity.beginCommand(browserPageId)
-    const guestId =
+    const pageGuestId =
       this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+    // An SSH route popup has no guest policies, so its opener carries the lead.
+    const guestId =
+      pageGuestId === null
+        ? null
+        : (resolveBrowserRouteGuestPopupOpener(pageGuestId) ?? pageGuestId)
     // Only attached guests, whose teardown releases the lead.
     if (lease.agent && guestId !== null && this.policyAttachedGuestIds.has(guestId)) {
-      this.agentLedGuestIds.add(guestId)
+      this.leadAgent(guestId)
     }
     return lease
+  }
+
+  /** Tells the page's frames when the agent takes or gives up its lead, so they can refuse system dialogs. */
+  setAgentLeadListener(
+    listener: ((guestWebContentsId: number, led: boolean) => void) | null
+  ): void {
+    this.agentLeadListener = listener
+  }
+
+  private leadAgent(guestWebContentsId: number): void {
+    if (!this.agentLedGuestIds.has(guestWebContentsId)) {
+      this.agentLedGuestIds.add(guestWebContentsId)
+      this.agentLeadListener?.(guestWebContentsId, true)
+    }
   }
 
   /** A popup opened from a page the agent leads starts led too. */
@@ -54,13 +75,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
       this.agentLedGuestIds.has(openerWebContentsId) &&
       this.policyAttachedGuestIds.has(popupWebContentsId)
     ) {
-      this.agentLedGuestIds.add(popupWebContentsId)
+      this.leadAgent(popupWebContentsId)
     }
   }
 
   /** The desktop user's own input takes the page back from the agent. */
-  protected releaseAgentLead(guestWebContentsId: number): void {
-    this.agentLedGuestIds.delete(guestWebContentsId)
+  releaseAgentLead(guestWebContentsId: number): void {
+    if (this.agentLedGuestIds.delete(guestWebContentsId)) {
+      this.agentLeadListener?.(guestWebContentsId, false)
+    }
   }
 
   /** Clears the agent marking from every page this SSH host was driving. */
@@ -88,15 +111,37 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
   }
 
+  /** An agent drove the page this guest shows since the desktop user last gave it input. */
+  isAgentLedGuest(guestWebContentsId: number): boolean {
+    // SSH route popups skip guest policies, so they follow their opener's lead.
+    return this.agentLedGuestIds.has(
+      resolveBrowserRouteGuestPopupOpener(guestWebContentsId) ?? guestWebContentsId
+    )
+  }
+
   /** An agent drives the page this guest shows (a tab or a popup), or drove it since the desktop user last gave it input. */
   isAgentLeadingGuest(guestWebContentsId: number): boolean {
-    // SSH route popups skip guest policies, so they follow their opener's lead.
-    const leadingGuestId =
-      resolveBrowserRouteGuestPopupOpener(guestWebContentsId) ?? guestWebContentsId
     return (
-      this.agentLedGuestIds.has(leadingGuestId) ||
+      this.isAgentLedGuest(guestWebContentsId) ||
       this.isAgentUsingPage(this.pageIdForGuest(guestWebContentsId))
     )
+  }
+
+  /** A page the agent leads refused its own print dialog, which would take the foreground; tell the agent. */
+  reportRefusedPrint(guestWebContentsId: number, origin: string): void {
+    if (!this.isAgentLedGuest(guestWebContentsId)) {
+      return
+    }
+    // Reach a command on the popup page itself as well as one on the tab that owns it.
+    const pageIds = new Set([
+      this.pageIdForGuest(guestWebContentsId),
+      this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    ])
+    for (const pageId of pageIds) {
+      if (pageId) {
+        this.pageEvents.emit(pageId, { kind: 'print', origin })
+      }
+    }
   }
 
   private pageIdForGuest(guestWebContentsId: number): string {

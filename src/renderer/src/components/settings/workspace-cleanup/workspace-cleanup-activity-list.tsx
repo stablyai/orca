@@ -72,9 +72,17 @@ export function WorkspaceCleanupActivityList({
           run={run}
           open={toggled.get(run.id) ?? index === 0}
           onToggle={() =>
-            setToggled((previous) =>
-              new Map(previous).set(run.id, !(previous.get(run.id) ?? index === 0))
-            )
+            setToggled((previous) => {
+              // Carry only shown runs so ids that left the capped history drop out.
+              const next = new Map<string, boolean>()
+              for (const { id } of runs) {
+                const value = previous.get(id)
+                if (value !== undefined) {
+                  next.set(id, value)
+                }
+              }
+              return next.set(run.id, !(previous.get(run.id) ?? index === 0))
+            })
           }
         />
       ))}

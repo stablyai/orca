@@ -3,11 +3,12 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
 import type { ProjectGroup } from '../../project-group-types'
 import type { Repo } from '../../repo-types'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../workspace-view/workspace-row-filters'
-import { ALL_GROUP_KEY } from '../sections/group-keys'
+import { ALL_GROUP_KEY, getLineageGroupKey } from '../sections/group-keys'
 import { IDLE_WORKSPACE_ACTIVITY } from '../feed-facts/workspace-activity-facts'
 import { composeWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import type { HostSectionRow } from '../hosts/host-section-rows'
 import { normalizePairedServerRow } from '../feed-facts/paired-server-rows'
+import { lineageIdentities } from '../worktree-lineage-range'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import {
   buildSidebarFeedRows,
@@ -146,6 +147,28 @@ describe('buildSidebarFeedRows nests each paired server’s own lineage', () => 
       pairedServerRows: new Map((reversed ? rows.toReversed() : rows).map((row) => [row.key, row]))
     })
   }
+
+  it.each([false, true])('carries host-qualified descendants when collapsed: %s', (collapsed) => {
+    const built = buildSidebarFeedRows(
+      feed(false),
+      catalog(repos),
+      view({
+        collapsedGroups: collapsed ? new Set([getLineageGroupKey('runtime:a|r::/r/p')]) : new Set()
+      })
+    )
+    const parent = built.sectionRows.find(
+      (row) =>
+        row.type === 'item' && row.worktree.hostId === 'runtime:a' && row.worktree.id === 'r::/r/p'
+    )
+    if (parent?.type !== 'item') {
+      throw new Error('Missing parent')
+    }
+    expect([...lineageIdentities(parent.lineageDescendantIdentities ?? [])]).toEqual([
+      'runtime:a|r::/r/c'
+    ])
+    expect(parent.lineageCollapsed).toBe(collapsed)
+    expect(outline(built.sectionRows).includes('runtime:a|r::/r/c@1')).toBe(!collapsed)
+  })
 
   it('brings back a server’s filtered-out parent above its own child, not its twin’s', () => {
     // Only server A's child is awake: B's same-id rows stay asleep.

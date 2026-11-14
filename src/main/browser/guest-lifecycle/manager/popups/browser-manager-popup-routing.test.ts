@@ -249,6 +249,61 @@ describe('browserManager', () => {
     ])
   })
 
+  it("tells the agent's page it leads it, so its print is refused and reported, until the user uses the page", () => {
+    const { guest, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    const leads: [number, boolean][] = []
+    browserManager.setAgentLeadListener((guestId, led) => leads.push([guestId, led]))
+    const events: unknown[] = []
+    browserManager.observePageEvents('browser-1', (event) => events.push(event))
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    ).end()
+
+    browserManager.reportRefusedPrint(guest.id, 'https://shop.example.com')
+    pressMouse()
+    browserManager.reportRefusedPrint(guest.id, 'https://shop.example.com')
+
+    expect(leads).toEqual([
+      [guest.id, true],
+      [guest.id, false]
+    ])
+    expect(events).toEqual([{ kind: 'print', origin: 'https://shop.example.com' }])
+  })
+
+  it('reports a refused print to an agent command on the popup page that asked', () => {
+    const { guest } = attachGuest()
+    registerAsTab(guest)
+    const onDidCreateWindow = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-create-window'
+    )?.[1]
+    onDidCreateWindow({ webContents: { ...guest, id: 146 } })
+    const events: unknown[] = []
+    browserManager.observePageEvents('popup-146', (event) => events.push(event))
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('popup-146')
+    ).end()
+
+    browserManager.reportRefusedPrint(146, 'https://pay.example.com')
+    expect(events).toEqual([{ kind: 'print', origin: 'https://pay.example.com' }])
+  })
+
+  it('leads an SSH route popup the agent drives directly through its opener', () => {
+    const { guest } = attachGuest()
+    registerAsTab(guest)
+    registerBrowserRouteGuestPopup({ popupWebContentsId: 147, openerWebContentsId: guest.id })
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('popup-147')
+    ).end()
+
+    const led = browserManager.isAgentLedGuest(147)
+    releaseBrowserRouteGuestPopup(147)
+    expect(led).toBe(true)
+  })
+
   it("opens the system browser for a page with no tab only on the desktop user's own click", async () => {
     const { guest, openLink, pressMouse } = attachGuest()
 

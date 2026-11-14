@@ -252,6 +252,22 @@
       "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
       "keywordShow": "show",
       "keywordUnhide": "unhide"
+    },
+    "cardSlot": {
+      "needsYouLabel": "Waiting on you",
+      "failedLabel": "Last turn failed",
+      "markedUnread": "Marked unread by you",
+      "unread": "Unread result",
+      "working": "Working",
+      "monitoring": "Monitoring",
+      "offlineLabel": "Host offline",
+      "offline": "offline",
+      "needYouCount": "{{count}} need you",
+      "needsYou": "Needs you",
+      "failed": "Failed",
+      "detailsRow": "Details row",
+      "workspaceUnread": "Unread in this workspace",
+      "unreadTab": "Unread tab"
     }
   },
   "app": {
@@ -677,6 +693,10 @@
       "wordSeparators": {
         "description": "Characters treated as word boundaries for double-click selection, including space.",
         "noSpaceHint": "No space included — double-click will select across spaces."
+      },
+      "fontSize": {
+        "decrease": "Decrease font size",
+        "increase": "Increase font size"
       }
     },
     "appearance": {
@@ -794,6 +814,10 @@
           "undecodable": "Could not decode the selected image.",
           "saveFailed": "Could not save the custom icon."
         }
+      },
+      "uiZoom": {
+        "zoomOut": "Zoom out",
+        "zoomIn": "Zoom in"
       }
     },
     "browser": {
@@ -1422,6 +1446,7 @@
         "recipeDescription": "Clean up dictated text before it lands."
       }
     },
+    "experimental": {},
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
@@ -8682,12 +8707,6 @@
             "title": "Agent sleep",
             "toggleLabel": "Toggle agent sleep"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "title": "New card style",
-            "toggleLabel": "Toggle new card style"
-          },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
@@ -8715,6 +8734,13 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "worktreeCardStyle": {
+            "title": "Card style",
+            "copy": "Choose how workspace cards look in the sidebar.",
+            "ariaLabel": "Card style",
+            "classic": "Classic",
+            "experimental": "Experimental"
           }
         },
         "FloatingWorkspacePane": {
@@ -10903,11 +10929,9 @@
             "newWorktreeCardStyle": {
               "card": "card",
               "cards": "cards",
-              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
               "menu": "menu",
               "metadata": "metadata",
               "status": "status",
-              "title": "New card style",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -10930,6 +10954,10 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
+            },
+            "worktreeCardStyle": {
+              "title": "Card style",
+              "description": "Choose how workspace cards look in the sidebar."
             }
           }
         },
@@ -18539,8 +18567,6 @@
           "18763ded26": "Schedule",
           "dbef8dc110": "This SSH automation runs only while Orca can reach the SSH host. If reconnect needs interactive credentials or the host is unavailable, the run is recorded as skipped.",
           "1f6026358e": "Delete automation",
-          "d79452fb30": "Resume automation",
-          "91a4155e95": "Pause automation",
           "2fb1605beb": "Run Now",
           "221916d93c": "Create an automation to start scheduling agent work.",
           "b09b2384fd": "Paused",
@@ -18570,7 +18596,9 @@
           "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported",
           "createdBy": "Created by",
           "createdByPluginTitle": "Plugin {{plugin}}",
-          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation",
+          "active": "Active",
+          "runNowStarting": "Starting…"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -18626,18 +18654,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "9974a2b429": "Status",
           "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "53fc5f07ab": "Run history",
-          "a00e38d1a3": "n/a",
+          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Run context",
-          "33741dd973": "Back to runs"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Minute",
@@ -18663,10 +18685,8 @@
           "5ad314118e": "Session"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Select an automation to view runs.",
           "295698292f": "Rerun",
           "0e110a3469": "Runs",
-          "bb1b2cd31e": "Overview",
           "25060635c6": "Add new",
           "d207ab4c25": "Start from a template",
           "15e0bfb13b": "Delete",
@@ -18704,8 +18724,6 @@
           "8500baacb4": "external source",
           "36f71740a7": "Selected workspace",
           "cd8397cc32": "New workspace each run",
-          "pendingAutomationMissing": "Automation no longer available.",
-          "pendingAutomationRunMissing": "Run history no longer available.",
           "paused": "Paused",
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
@@ -18714,7 +18732,6 @@
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
-          "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
           "tableHost": "Host",
@@ -18724,7 +18741,6 @@
           "rowActions": "Automation actions",
           "tableLastRun": "Last run",
           "ownerChanged": "This automation changed hosts. Refresh and try again.",
-          "runError": "Error:",
           "setupSkippedChanged": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved when the automation was saved. Save the automation again to review the current commands.",
           "deleteAutomationDescription": "Delete <name/> and its run history. Workspaces created by previous runs are not deleted.",
           "deleteExternalAutomationDescription": "Delete <name/> from <provider/> on <host/>.",
@@ -18990,11 +19006,11 @@
           "local": "Local",
           "remote": "Remote",
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
-          "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only."
+          "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
+          "searchLabel": "Search runs"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Automations breadcrumb",
-          "runDetails": "Run details"
+          "ariaLabel": "Automations breadcrumb"
         },
         "extraAgentArgs": {
           "advanced": "Advanced",
@@ -19037,7 +19053,7 @@
           "runStatusDispatchFailed": "Failed"
         },
         "runContent": {
-          "noOutput": "No output content available."
+          "noOutput": "No output."
         },
         "runViewState": {
           "viewRun": "View run",
@@ -19054,12 +19070,13 @@
         },
         "runWorkspaceDisplay": {
           "notLaunched": "Not launched",
-          "namedWorkspaceGone": "{{name}} (no longer available)"
+          "removed": "Removed",
+          "namedRemoved": "{{name}} was removed"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/a"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19081,6 +19098,45 @@
         },
         "launchSettings": {
           "needsFreshSession": "Agent launch settings require a fresh session for every run."
+        },
+        "runNotFound": {
+          "crumbRun": "Run not found",
+          "crumbAutomation": "Automation not found",
+          "runTitle": "This run no longer exists",
+          "automationTitle": "This automation no longer exists",
+          "runDescription": "It was deleted or dropped from the retained run history.",
+          "automationDescription": "It was deleted, or its host no longer lists it.",
+          "goToAutomations": "Go to Automations",
+          "openThisAutomation": "Open automation"
+        },
+        "recentRuns": {
+          "title": "Recent runs",
+          "allRuns": "All {{count}} runs",
+          "allRuns_one": "All {{count}} run",
+          "allRuns_other": "All {{count}} runs"
+        },
+        "runIdentity": {
+          "triggerManual": "Run now",
+          "triggerScheduled": "Scheduled",
+          "newerRun": "Newer run",
+          "olderRun": "Older run",
+          "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
+          "signIn": "Sign in to {{host}}",
+          "output": "Output",
+          "details": "Details",
+          "runNumber": "Run #{{number}}",
+          "runFailed": "Run failed.",
+          "scheduledAt": "Scheduled {{time}}",
+          "startedAt": "Started {{time}}",
+          "noFailureReason": "This run did not start, and no reason was recorded."
+        },
+        "runTable": {
+          "result": "Result"
+        },
+        "listGroups": {
+          "attention": "Needs attention",
+          "active": "Active",
+          "paused": "Paused"
         }
       },
       "agent": {
@@ -25142,6 +25198,16 @@
         "settingUp": "The project is still being set up on the selected automation host.",
         "error": "Project setup failed on the selected automation host.",
         "unsupported": "The selected automation host does not support this project."
+      },
+      "blocked": {
+        "trustWorkspace": "The agent is waiting for you to trust this folder.",
+        "trustWorkspaceNamed": "{{agent}} is waiting for you to trust this folder.",
+        "update": "The agent is waiting for you to answer an update prompt.",
+        "folder": "The agent is asking which folder to work in.",
+        "model": "The agent is asking you to choose a model.",
+        "approval": "The agent is waiting for you to approve an action.",
+        "signIn": "The agent is waiting for you to sign in.",
+        "prompt": "The agent stopped at a prompt that needs your answer."
       }
     },
     "extraAgentArgs": {
