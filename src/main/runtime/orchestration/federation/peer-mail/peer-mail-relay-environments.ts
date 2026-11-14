@@ -6,24 +6,22 @@ export function peerMailRelayEnvironments(db: OrchestrationDb): Set<string> {
   return new Set([...db.listHomePeerMailEnvironments(), ...listLiveRemoteRunLinkEnvironments(db)])
 }
 
-/** Whether a server's pull loop still has a reason to run; a store read error keeps it running. Runs
- *  every pull, so it asks about this one server only: closed links' history never enters it. */
+// Every pull asks about one server only, so closed links' history never enters it: an index seek
+// for a home conversation, then one per live link state, stopping at the first row. One equality
+// per state, because an IN list builds a temporary set on every call.
+const RELAY_WANTS_SQL = `
+SELECT 1 FROM peer_mail_conversations WHERE role = 'home' AND environment_id = ?1
+UNION ALL
+SELECT 1 FROM remote_run_links WHERE environment_id = ?1 AND state = 'open'
+UNION ALL
+SELECT 1 FROM remote_run_links WHERE environment_id = ?1 AND state = 'cancel_owed'
+LIMIT 1`
+
+/** Whether a server's pull loop still has a reason to run; a store read error keeps it running. */
 export function peerMailRelayWants(db: OrchestrationDb, environmentId: string): boolean {
   try {
-    return db.hasHomePeerMailEnvironment(environmentId) || hasLiveRemoteRunLink(db, environmentId)
+    return db.db.prepare(RELAY_WANTS_SQL).get(environmentId) !== undefined
   } catch {
     return true
   }
-}
-
-/** A seek on this server's own (environment_id, state) index rows, however many closed links it keeps. */
-function hasLiveRemoteRunLink(db: OrchestrationDb, environmentId: string): boolean {
-  return (
-    db.db
-      .prepare(
-        `SELECT 1 FROM remote_run_links
-         WHERE environment_id = ? AND state IN ('open', 'cancel_owed') LIMIT 1`
-      )
-      .get(environmentId) !== undefined
-  )
 }

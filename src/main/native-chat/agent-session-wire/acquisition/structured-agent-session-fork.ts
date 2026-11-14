@@ -2,8 +2,7 @@ import {
   admitStructuredAgentSessionFork,
   type StructuredAgentSessionForkInput
 } from './structured-agent-session-fork-source'
-import { prepareForkSnapshot } from './structured-agent-session-fork-snapshot'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import {
   normalizeAgentSessionConversationName,
@@ -24,6 +23,7 @@ export async function prepareStructuredAgentSessionFork(
   const name = acpAgentName(input.agent)
   const {
     record,
+    proof,
     metadata,
     transcriptImport,
     selected,
@@ -69,7 +69,7 @@ export async function prepareStructuredAgentSessionFork(
       'providerRejected'
     )
   })
-  const current = await requireCurrent()
+  await requireCurrent()
   if (!copy.sessionId.trim() || copy.sessionId === providerSessionId) {
     fail(`${name} did not save an independent chat copy. Try again.`)
   }
@@ -85,9 +85,8 @@ export async function prepareStructuredAgentSessionFork(
     nativeId: transcriptImport.handleNamesTranscript ? copy.filePath! : copy.sessionId,
     ...(copy.resumeCursor ? { resumeCursor: copy.resumeCursor } : {})
   }
-  const prepared = prepareForkSnapshot({
-    snapshot: current.snapshot,
-    nextItemId: current.boundary.nextItemId,
+  const prepared = await host.deps.journalDatabase.prepareForkCopy({
+    source: proof,
     ...(input.agent === 'codex'
       ? { sourceThreadId: providerSessionId, childThreadId: copy.sessionId }
       : {})
@@ -101,6 +100,11 @@ export async function prepareStructuredAgentSessionFork(
         await requireCurrent()
       },
       prepared,
+      withAdmission: (run) =>
+        host.withForkSourceAdmission(record.sessionId, async () => {
+          await requireCurrent()
+          return run()
+        }),
       ...(copy.coverage
         ? {
             historyOrigin: {

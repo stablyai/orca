@@ -18,11 +18,11 @@ const entry = `
 import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/MobileNativeChatPageScroll'
+import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/viewport/MobileNativeChatPageScroll'
 import {
   MobileNativeChatPinchZoom,
   useMobileNativeChatPinchGesture
-} from './src/session/native-chat/transcript/mobile-native-chat-pinch-zoom'
+} from './src/session/native-chat/transcript/viewport/mobile-native-chat-pinch-zoom'
 
 function Transcript() {
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')

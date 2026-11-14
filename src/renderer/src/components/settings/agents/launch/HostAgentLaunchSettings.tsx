@@ -158,7 +158,10 @@ export function HostAgentLaunchSettings({
   }
   if (read.kind !== 'ready') {
     return (
-      <div className="space-y-2 text-sm text-muted-foreground">
+      <div
+        data-agent-settings-state={read.kind}
+        className="space-y-2 text-sm text-muted-foreground"
+      >
         <p>
           {read.kind === 'unsupported'
             ? t(

@@ -10,13 +10,13 @@ import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/t
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/input/terminal-user-input-signal'
 import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/clipboard/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
-import type { PreviewTerminalLinkHandlers } from '../dashboard-popout/preview-terminal-links'
-import { installPreviewTerminalCompatibility } from '../dashboard-popout/preview-terminal-compatibility'
-import { createPreviewClipboardPaster } from '../dashboard-popout/preview-terminal-paste'
-import { installPreviewImeBridge } from '../dashboard-popout/preview-terminal-ime-bridge'
-import { installPreviewTerminalKeyHandler } from '../dashboard-popout/preview-terminal-key-handler'
-import { installPreviewTerminalAppMenuClipboard } from '../dashboard-popout/preview-terminal-app-menu-clipboard'
-import { installPreviewTerminalRightClickPaste } from '../dashboard-popout/preview-terminal-right-click-paste'
+import type { PreviewTerminalLinkHandlers } from './rendering/preview-terminal-links'
+import { installPreviewTerminalCompatibility } from './rendering/preview-terminal-compatibility'
+import { createPreviewClipboardPaster } from './input/preview-terminal-paste'
+import { installPreviewImeBridge } from './input/preview-terminal-ime-bridge'
+import { installPreviewTerminalKeyHandler } from './input/preview-terminal-key-handler'
+import { installPreviewTerminalAppMenuClipboard } from './input/preview-terminal-app-menu-clipboard'
+import { installPreviewTerminalRightClickPaste } from './input/preview-terminal-right-click-paste'
 
 export type StandaloneTerminalArgs = {
   container: HTMLElement

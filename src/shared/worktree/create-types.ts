@@ -1,6 +1,6 @@
-import type { WorktreeCatalogVersion } from './catalog-version'
+import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { ExecutionHostId } from '../execution-host'
-import type { ArchiveHookOverride } from './archive-hook-removal-gate'
+import type { ArchiveHookOverride } from './removal/archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceKey } from '../workspace-scope'
@@ -28,25 +28,18 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from './launch-types'
+} from './creation/launch-types'
 import type {
   PreparedCheckoutMissReason,
   PreparedCheckoutOrigin,
   PreparedCheckoutReset,
   WorktreeCreateExecutionHost
-} from './create-timing-vocabulary'
+} from './creation/create-timing-vocabulary'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion,
   WorktreeBaseStatusEvent
-} from './base-ref-drift-types'
-
-export type {
-  PreparedCheckoutMissReason,
-  PreparedCheckoutOrigin,
-  PreparedCheckoutReset,
-  WorktreeCreateExecutionHost
-}
+} from './base-refs/base-ref-drift-types'
 
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 

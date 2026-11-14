@@ -7,7 +7,7 @@ import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-h
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { LastActiveCycleWorkspace, SidebarWorkspacePreview } from './worktree-keyboard-cycle'
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'

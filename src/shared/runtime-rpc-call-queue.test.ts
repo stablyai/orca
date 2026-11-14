@@ -270,3 +270,68 @@ describe('runtime RPC call queue', () => {
     ).resolves.toBe('recovered')
   })
 })
+
+it('keeps actions and status runnable while timed PR snapshots wait', async () => {
+  const pool = new RuntimeRpcCallQueuePool()
+  const release = Promise.withResolvers<void>()
+  const started: string[] = []
+  const timers = [0, 1, 2].map((row) =>
+    pool.enqueue(
+      'host',
+      'github.prForBranch',
+      async () => {
+        started.push(`timer-${row}`)
+        await release.promise
+      },
+      0,
+      undefined,
+      { reason: 'swr' }
+    )
+  )
+  expect(started).toEqual(['timer-0', 'timer-1'])
+  for (const reason of ['manual', 'active', 'post-push', 'visible', undefined, 'swr']) {
+    await expect(
+      pool.enqueue('host', 'github.prForBranch', async () => 'current', 0, undefined, {
+        reason,
+        userRefresh: reason === 'swr'
+      })
+    ).resolves.toBe('current')
+  }
+  await expect(pool.enqueue('host', 'git.status', async () => 'clean')).resolves.toBe('clean')
+  await expect(pool.enqueue('host', 'hostedReview.forBranch', async () => 'review')).resolves.toBe(
+    'review'
+  )
+  expect(started).toEqual(['timer-0', 'timer-1'])
+  release.resolve()
+  await Promise.all(timers)
+  expect(started).toEqual(['timer-0', 'timer-1', 'timer-2'])
+})
+
+it('shares pending and byte limits across ordinary and timed PR lanes and removes cancelled calls', async () => {
+  const pool = new RuntimeRpcCallQueuePool(1, 1, 1, 5, 4)
+  const release = Promise.withResolvers<void>()
+  const active = pool.enqueue('host', 'github.prForBranch', () => release.promise, 1, undefined, {
+    reason: 'swr'
+  })
+  const controller = new AbortController()
+  const queued = pool.enqueue(
+    'host',
+    'github.prForBranch',
+    async () => 'unused',
+    1,
+    controller.signal,
+    { reason: 'swr' }
+  )
+  await expect(pool.enqueue('host', 'git.status', async () => 'overflow')).rejects.toMatchObject({
+    scope: 'selector'
+  })
+  const cancelled = expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await cancelled
+  await expect(pool.enqueue('host', 'git.status', async () => 'clean', 3)).resolves.toBe('clean')
+  await expect(pool.enqueue('host', 'git.status', async () => 'oversize', 4)).rejects.toMatchObject(
+    { scope: 'memory' }
+  )
+  release.resolve()
+  await active
+})

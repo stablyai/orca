@@ -1,51 +1,51 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
-} from './mobile-native-chat-draft-store'
-import { useMobileNativeChatComposerDictation } from './use-mobile-native-chat-composer-dictation'
+} from './drafts/mobile-native-chat-draft-store'
+import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
-} from './mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
-import { MobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
+} from './drafts/mobile-native-chat-draft-inputs'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { MobileNativeChatComposerSuggestions } from './MobileNativeChatComposerMenu'
-import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
-import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import { MobileNativeChatComposerAttachButton } from './MobileNativeChatComposerAttachButton'
+import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
+import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
+import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
+import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
+import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatSessionOptionPickersProps
-} from '../input/MobileNativeChatSessionOptionPickers'
-import { useMobileNativeChatPickerPresentation } from '../input/use-mobile-native-chat-picker-presentation'
-import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+} from '../input/session-options/MobileNativeChatSessionOptionPickers'
+import { useMobileNativeChatPickerPresentation } from '../input/session-options/use-mobile-native-chat-picker-presentation'
+import type { MobileNativeChatSteerHead } from './menus/use-mobile-native-chat-composer-tray'
+import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
 import {
   mobileNativeChatComposerPasteHandler,
   type MobilePastedImages
-} from './mobile-native-chat-composer-paste'
-import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
-import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+} from './attachments/mobile-native-chat-composer-paste'
+import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
+import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
-import { MobileNativeChatComposerSendSlot } from './MobileNativeChatComposerSendSlot'
-import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
-import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
-import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
-import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
-import type { MobileNativeChatMicProps } from './MobileNativeChatComposerMic'
-import { MobileNativeChatDictationLeading } from './MobileNativeChatDictationLeading'
-import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
-import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
-import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
+import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
+import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
+import { useMobileNativeChatContextRing } from './commands/MobileNativeChatContextUsageRing'
+import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
+import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
+import type { MobileNativeChatMicProps } from './dictation/MobileNativeChatComposerMic'
+import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
+import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
+import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
+import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []

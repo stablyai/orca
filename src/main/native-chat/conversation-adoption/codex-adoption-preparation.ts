@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { NativeCodexResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { getSystemCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import type { StructuredAgentSessionAdoption } from './structured-agent-session-history-adoption'

@@ -7,7 +7,7 @@ import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from '.
 import {
   WorkspaceRowsSnapshotSchema,
   type WorkspaceRow
-} from '../../src/shared/sidebar-list/workspace-rows'
+} from '../../src/shared/sidebar-list/feed-facts/workspace-rows'
 
 test.skip(
   !SIDEBAR_INPUTS_BUILD,

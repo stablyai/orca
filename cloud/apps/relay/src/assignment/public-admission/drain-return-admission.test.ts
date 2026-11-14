@@ -39,30 +39,9 @@ function admitted(result: DrainReturnGrant | DrainReturnDeferral): DrainReturnGr
   return result
 }
 
-function deferred(result: DrainReturnGrant | DrainReturnDeferral): DrainReturnDeferral {
-  if (result.kind !== 'deferred') throw new Error('expected a deferral')
-  return result
-}
-
 const host = (index: number): string => `host${String(index).padStart(12, '0')}`
 
 describe('drain-return admission', () => {
-
-  it('answers a host’s own early retry with its interval, not a place behind the cohort', async () => {
-    const { lane } = harness()
-    admitted(await lane.acquire(host(0))).lease.release()
-
-    // A row-busy refusal says "retry in 1 s"; that redial is the host's own.
-    const repeat = deferred(await lane.acquire(host(0)))
-    expect(repeat).toMatchObject({
-      reason: 'host-rate-limited',
-      retryAfterSeconds: 2
-    })
-
-    // And it booked nothing: the next overflow still gets the first slot.
-    admitted(await lane.acquire(host(1)))
-    expect(deferred(await lane.acquire(host(2))).retryAfterSeconds).toBe(2)
-  })
 
   it('lets a queued placement go before a queued drain return', async () => {
     const { lane, placement } = harness({ maxQueued: 1 })

@@ -13,7 +13,7 @@ import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useAppStore } from '@/store/index'
 import { STATUS_COLORS } from '../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
-import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
+import { getUntitledFileRoot } from '@/components/editor/panel/untitled-rename/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import {

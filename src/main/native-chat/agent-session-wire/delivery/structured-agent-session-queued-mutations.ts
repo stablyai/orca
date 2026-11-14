@@ -2,6 +2,7 @@
 // Published cards own rendered text; mutation answers carry none.
 
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { isSystemMailWithdrawalCaller } from '../../agent-session-journal/writing/mail-withdrawal-receipts'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
@@ -26,10 +27,6 @@ import {
   canSteerStructuredQueuedMessage,
   structuredQueueHold
 } from './structured-agent-session-queued-gate'
-import {
-  structuredInputExecutionWorking,
-  structuredInputHandoverWorking
-} from './structured-agent-session-input-selection'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
@@ -54,11 +51,11 @@ function invalid(message: string): {
   return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
 }
 
-function submissionFor(
+async function submissionFor(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
-): AgentJournalSubmission | undefined {
-  return ctx.journal.submission(clientMessageId)
+): Promise<AgentJournalSubmission | undefined> {
+  return ctx.journal.reads.submission(clientMessageId)
 }
 
 function submissionRowReceipt(
@@ -68,7 +65,11 @@ function submissionRowReceipt(
   if (submission?.submittedSequence === undefined) {
     throw new Error('an acknowledged hand-off requires its submission row')
   }
-  return { kind: 'journal-row', epoch: ctx.journal.epoch, sequence: submission.submittedSequence }
+  return {
+    kind: 'journal-row',
+    epoch: ctx.journal.cursor().epoch,
+    sequence: submission.submittedSequence
+  }
 }
 
 export function mutateQueued<TValue>(
@@ -100,13 +101,14 @@ export function sendQueuedStructuredAgentMessage(
     conversationWrite: true,
     commandReceipt: {
       result: (row) => journalRowReceiptResult(row, 'submission'),
+      binding: { at: 'last', kinds: ['submission'], answer: 'journal-row' },
       unwritten: (value, ctx) =>
         submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
       // Send-now overrides working/FIFO/stored holds, preserving stronger gates.
       const record = context.deps.store.getRecord(ctx.sessionId)
-      const work = contextStructuredAgentSessionCurrentWork(ctx)
+      const work = await contextStructuredAgentSessionCurrentWork(ctx)
       const hold = structuredQueueHold({ record, work })
       if (hold === 'blocked') {
         return structuredAgentSessionSendBlock(record) ?? invalid('This conversation cannot send.')
@@ -114,7 +116,7 @@ export function sendQueuedStructuredAgentMessage(
       if (hold === 'prompt') {
         return invalid('Answer the pending request before sending this message.')
       }
-      const row = ctx.journal.queuedMessages.get(messageId)
+      const row = await Promise.resolve(ctx.journal.queuedMessages.get(messageId))
       if (!row) {
         return invalid('No queued message by that id.')
       }
@@ -122,7 +124,8 @@ export function sendQueuedStructuredAgentMessage(
         return invalid('This queued message was withdrawn.')
       }
       if (row.state === 'dispatched') {
-        const submission = row.consumedAs === null ? undefined : submissionFor(ctx, row.consumedAs)
+        const submission =
+          row.consumedAs === null ? undefined : await submissionFor(ctx, row.consumedAs)
         return submission
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
@@ -132,15 +135,15 @@ export function sendQueuedStructuredAgentMessage(
         return invalid("A command can't be sent while the agent is working.")
       }
       if (
-        structuredInputExecutionWorking(ctx.journal, work) &&
+        (work.activeTurnId() !== null || work.queueState().owedEnteredSubmissions.length > 0) &&
         (work.activeTurnId() === null ||
-          structuredInputHandoverWorking(ctx.journal, work) ||
+          work.queueState().owedEnteredSubmissions.length > 0 ||
           !canSteerStructuredQueuedMessage(
             {
               record,
               work,
               child: context.sessions.get(ctx.sessionId)?.child,
-              stopping: context.readStopping(ctx.sessionId),
+              stopping: await context.readStopping(ctx.sessionId),
               adapter: context.deps.adapter
             },
             row
@@ -190,7 +193,7 @@ export function sendQueuedStructuredAgentMessage(
               )
             }
           }
-          await ctx.journal.queuedMessages.withdraw([messageId])
+          await ctx.journal.queuedMessages.withdraw([messageId], undefined, true)
           return {
             ok: false,
             refusal: refuse(
@@ -202,17 +205,18 @@ export function sendQueuedStructuredAgentMessage(
         }
         throw error
       }
-      const submission = submissionFor(ctx, submissionId)
+      const submission = await ctx.journal.reads.submission(submissionId)
       if (!submission) {
         throw new Error('agent_session_submission_lost')
       }
       return { ok: true, value: { clientMessageId: submissionId, submission } }
     },
     // Replay the receipt’s original handoff, never the card’s newer handoff.
-    replay: (ctx, _outcome, receipt) => {
+    replay: async (ctx, _outcome, receipt) => {
       const submission =
-        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
-          ? ctx.journal.inputOrder.submissionAt(receipt.sequence)
+        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.cursor().epoch
+          ? (await ctx.journal.reads.input({ kind: 'submission-at', sequence: receipt.sequence }))
+              .submission
           : undefined
       return submission?.queuedMessageId === messageId
         ? { clientMessageId: submission.clientMessageId, submission }
@@ -235,6 +239,7 @@ export function deleteQueuedStructuredAgentMessage(
     conversationWrite: true,
     commandReceipt: {
       result: () => ({ kind: 'queued-draft', messageId }),
+      binding: { at: 'last', answer: { kind: 'queued-draft', messageId } },
       unwritten: (value) =>
         value.deleted
           ? null
@@ -244,7 +249,7 @@ export function deleteQueuedStructuredAgentMessage(
             }
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionQueuedMessageDeleteResult>> => {
-      const row = ctx.journal.queuedMessages.get(messageId)
+      const row = await Promise.resolve(ctx.journal.queuedMessages.get(messageId))
       if (!row) {
         return { ok: true, value: { deleted: false, messageId, disposition: 'missing' } }
       }
@@ -255,7 +260,11 @@ export function deleteQueuedStructuredAgentMessage(
         return { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
       }
       // Withdrawal commits wake delivery; removing a returned head can unblock later cards.
-      const withdrawn = await ctx.journal.queuedMessages.withdraw([messageId], ctx.operationReceipt)
+      const withdrawn = await ctx.journal.queuedMessages.withdraw(
+        [messageId],
+        ctx.operationReceipt,
+        isSystemMailWithdrawalCaller(caller.callerKey, params.envelope.sessionId)
+      )
       return withdrawn.length > 0
         ? { ok: true, value: { deleted: true, messageId } }
         : { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
@@ -283,6 +292,7 @@ export function resumeStructuredAgentQueue(
     conversationWrite: true,
     commandReceipt: {
       result: (row) => journalRowReceiptResult(row, 'tombstone'),
+      binding: { at: 'last', kinds: ['tombstone'], answer: 'journal-row' },
       unwritten: () => ({ kind: 'no-op', outcome: { kind: 'queue-resume', resumed: false } })
     },
     run: async (ctx) => ({

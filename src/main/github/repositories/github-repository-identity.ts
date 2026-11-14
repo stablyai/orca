@@ -61,6 +61,15 @@ export async function withGitHubRepoExecution<T>(
   return operations.run(context, operation)
 }
 
+export function captureGitHubRepoExecution(): <T>(operation: () => Promise<T>) => Promise<T> {
+  const context = operations.getStore()
+  return (operation) => (context ? operations.run(context, operation) : operation())
+}
+
+export function outsideGitHubRepoExecution<T>(operation: () => T): T {
+  return operations.exit(operation)
+}
+
 export function githubRepoContext(
   repoPath: string,
   connectionId?: string | null,

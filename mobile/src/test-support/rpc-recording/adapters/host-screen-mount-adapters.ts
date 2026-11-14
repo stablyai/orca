@@ -1,6 +1,6 @@
 import type * as HostViewSettingsModule from '../../../host-screen/view-settings/use-host-view-settings'
 import type { MountAdapter } from '../recording-scenario'
-import { INITIAL_MOBILE_VIEW } from '../../../worktree/workspace-view-settings'
+import { INITIAL_MOBILE_VIEW } from '../../../worktree/workspace-list/workspace-view-settings'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { operationModuleLoader } from '../operation-module-loader'

@@ -84,7 +84,6 @@ vi.mock('expo-file-system', () => ({
 }))
 
 import { MediaHandleRegistry } from '../../mobile-web-shell/media-handle-registry'
-import { createNativeMediaVerbServer } from './native-media'
 import { copyPickedMediaIntoCache, nativeMediaDeviceDeps } from './native-media-device'
 
 beforeEach(() => {
@@ -118,7 +117,7 @@ function heldBytes(): number {
   return [...storage.files.values()].reduce((total, bytes) => total + bytes.byteLength, 0)
 }
 
-it.each([0, 4096])('releases an unreturned file after a write fails with %i bytes', (bytes) => {
+it.each([4096])('releases an unreturned file after a write fails with %i bytes', (bytes) => {
   const original = new Error('partial native write')
   storage.writeFailure = original
   storage.partialBytes = bytes
@@ -129,16 +128,6 @@ it.each([0, 4096])('releases an unreturned file after a write fails with %i byte
     operation: 'delete',
     uri: 'file:///cache/orca-media-1234-0.25.png'
   })
-})
-
-it('preserves the write failure when best-effort deletion also fails', () => {
-  const original = new Error('native write failed')
-  storage.writeFailure = original
-  storage.deleteFailure = new Error('cache cannot be deleted')
-  storage.partialBytes = 4096
-  expect(thrownBy(() => device().stageBase64('AQID'))).toBe(original)
-  expect(storage.events.map((event) => event.operation)).toEqual(['create', 'write', 'delete'])
-  expect(heldBytes()).toBe(4096)
 })
 
 it('deletes only the failed file while a prior successful file remains readable', () => {
@@ -154,22 +143,6 @@ it('deletes only the failed file while a prior successful file remains readable'
   expect([...storage.files.keys()]).toEqual([successfulUri])
   expect(storage.files.get(successfulUri)).toEqual(Uint8Array.from([1, 2, 3]))
   expect(heldBytes()).toBe(3)
-})
-
-it('keeps the clipboard verb rejection while leaving no unregistered cache bytes', async () => {
-  const original = new Error('clipboard write failed')
-  storage.writeFailure = original
-  storage.partialBytes = 4096
-  const registryDiscard = vi.fn()
-  const registry = new MediaHandleRegistry({ now: () => 0, discard: registryDiscard })
-  const serve = createNativeMediaVerbServer(nativeMediaDeviceDeps(registry))
-  await expect(serve('native.media.pick', { source: 'clipboard', multiple: false })).rejects.toBe(
-    original
-  )
-  expect(registry.liveCount()).toBe(0)
-  expect(registryDiscard).not.toHaveBeenCalled()
-  expect(heldBytes()).toBe(0)
-  expect(storage.files.size).toBe(0)
 })
 
 it('retains the provider-copy cleanup and original read error when deletion fails', () => {

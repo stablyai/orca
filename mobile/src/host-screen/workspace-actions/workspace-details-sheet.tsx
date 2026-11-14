@@ -11,8 +11,8 @@ import {
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { prStateColor } from '../../components/WorktreeMetaGlyphs'
-import { PrStateIcon } from '../../components/PrStateIcon'
+import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
+import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import {
   LIST_LEADING_INSET,
   LIST_LEADING_SLOT,
@@ -21,15 +21,15 @@ import {
   ListRow
 } from '../../components/list/ListGroup'
 import { TaskProviderLogo } from '../../components/TaskProviderLogo'
-import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/row-display/git-identity-display'
 import {
   buildWorkspaceDetailLinks,
   buildWorkspaceOrigin,
   workspaceNotes,
   type WorkspaceDetailLink,
   type WorkspaceOrigin
-} from '../../worktree/workspace-details-model'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from './workspace-details-model'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 

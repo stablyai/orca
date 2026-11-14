@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
-} from '../../../../shared/sidebar-list/smart-attention'
+} from '../../../../shared/sidebar-list/sorting/smart-attention'
 import {
   orderRecentWorkspaceTabs,
   type RecentWorkspaceTabRow

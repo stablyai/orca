@@ -14,25 +14,25 @@ import {
 import type { Store } from '../../../../persistence/loading-store/store'
 import type { PluginConsentRequest } from '../../../../../shared/plugins/approval/plugin-consent-request'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
-import { listPluginsForClients } from '../../../../plugins/plugin-client-list'
+import { listPluginsForClients } from '../../../../plugins/discovery/plugin-client-list'
 import type { PluginService } from '../../../../plugins/plugin-service'
-import type { PluginCliCatalogs } from '../../../../plugins/plugin-cli-catalog-candidates'
+import type { PluginCliCatalogs } from '../../../../plugins/cli/plugin-cli-catalog-candidates'
 import {
   installPluginFromCli,
   type PluginCliInstallDeps
-} from '../../../../plugins/plugin-cli-install'
+} from '../../../../plugins/cli/plugin-cli-install'
 import {
   updateAllApprovalError,
   updateAllPluginsFromCli,
   updatePluginFromCli
-} from '../../../../plugins/plugin-cli-update'
+} from '../../../../plugins/cli/plugin-cli-update'
 import {
   addPluginCatalogFromCli,
   listPluginCatalogsFromCli,
   removePluginCatalogFromCli
-} from '../../../../plugins/plugin-cli-catalogs'
+} from '../../../../plugins/cli/plugin-cli-catalogs'
 import { uninstallInstalledPlugin } from '../../../../plugins/installation/plugin-uninstall'
-import { assertPluginSystemEnabled } from '../../../../plugins/plugin-dev-folders'
+import { assertPluginSystemEnabled } from '../../../../plugins/development/plugin-dev-folders'
 
 /** What install, update, uninstall and catalog RPCs need beyond the plugin service. */
 export type PluginInstallRpcServices = {

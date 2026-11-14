@@ -4,7 +4,7 @@ import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
 import {
   buildMobileDiffLines,
   type MobileDiffLine
-} from '../../source-control/review/mobile-diff-lines'
+} from '../../source-control/review/diff-state/mobile-diff-lines'
 import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 import {
   fileTabDiffRead,

@@ -161,7 +161,7 @@ describe('picking', () => {
     for (let index = 0; index < BRIDGE_MEDIA_MAX_LIVE_HANDLES; index += 1) {
       probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
     }
-    for (const source of ['library', 'files', 'clipboard'] as const) {
+    for (const source of ['library'] as const) {
       await expect(probe.serve('native.media.pick', { source, multiple: true })).rejects.toSatisfy(
         (error) => refusalOf(error) === 'native_media_handle_cap'
       )

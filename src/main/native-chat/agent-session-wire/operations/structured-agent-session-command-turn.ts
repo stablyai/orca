@@ -1,3 +1,9 @@
+import { isStructuredAgentSessionStopNote } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
+export {
+  isStructuredAgentSessionStopNote,
+  structuredAgentSessionStopNoteIdentity
+} from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 // Delivery opens command turns; provider receipts settle sends and translator frames end turns.
 // Running commands block input; the host ends refused commands or recovers exited children.
 
@@ -11,16 +17,12 @@ import {
   type AgentJournalDispatchRejection,
   type AgentSessionFailureWordsContext
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalMessageItem,
-  type AgentJournalSubmission
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type {
+  AgentJournalItemBody,
+  AgentJournalMessageItem,
+  AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentSessionCompactCommandText,
   type AgentSessionConversationCommand
@@ -28,11 +30,6 @@ import {
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import {
-  agentJournalTurnBody,
-  readAgentJournalTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type {
   AgentSessionCommandAdmission,
@@ -70,9 +67,9 @@ type AwaitedSubmission = Pick<
 >
 
 export type StructuredAgentSessionAwaitedCommandJournal = {
-  inputOrder?: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
+  inputOrder?: { recoverableSubmissions: () => readonly AwaitedSubmission[] }
   submissions?: () => readonly AwaitedSubmission[]
-  itemBody: AgentSessionJournal['itemBody']
+  itemBody: (itemId: string) => AgentJournalItemBody | null
 }
 
 /** Find the oldest awaited command so failed starts preserve the command for explicit retry. */
@@ -108,31 +105,23 @@ export function isStructuredAgentSessionCommandTurnId(turnId: string): boolean {
   return turnId.startsWith('compact:')
 }
 
-const STOP_NOTE_PREFIX = 'stop:'
-
-export function structuredAgentSessionStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
-  return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${stopKey}` }
-}
-
-export function isStructuredAgentSessionStopNote(itemId: string): boolean {
-  const identity = parseAgentJournalItemKey(itemId)
-  return identity?.provider === 'orca' && identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
-}
-
 /** Read Stop from the journal so cached state cannot outlive the command. */
-export function structuredAgentSessionCommandWasStopped(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>,
+export async function structuredAgentSessionCommandWasStopped(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   turnId: string
-): boolean {
+): Promise<boolean> {
   const { itemId } = structuredAgentSessionCommandTurn(turnId.slice('compact:'.length))
-  return journal
-    .itemsRead()
-    .items.some(
-      (item) =>
-        item.turnScope?.kind === 'turn' &&
-        item.turnScope.turnItemId === itemId &&
-        isStructuredAgentSessionStopNote(item.itemId)
-    )
+  let stopped = false
+  await journal.reads.visitItems(
+    { kinds: ['status'] },
+    (noteId, _sequence, _body, { turnScope }) => {
+      stopped ||=
+        turnScope?.kind === 'turn' &&
+        turnScope.turnItemId === itemId &&
+        isStructuredAgentSessionStopNote(noteId)
+    }
+  )
+  return stopped
 }
 
 export type StructuredAgentSessionCommandHandoverContext = {
@@ -141,10 +130,11 @@ export type StructuredAgentSessionCommandHandoverContext = {
   fence: number
   adapter: StructuredAgentSessionAdapter
   agents: StructuredAgentRegistry
+  readWork?: JournalWorkReader
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
   /** Recheck execution-host ownership at admission and handover. */
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
   childWork: () => readonly AgentChildWorkView[] | undefined
   childWorkOpen: () => boolean
   now: () => number
@@ -156,7 +146,7 @@ export async function handOverStructuredAgentSessionCommand(
   body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
-  const blocked = commandBlocked(ctx, body)
+  const blocked = await commandBlocked(ctx, body)
   if (blocked) {
     const refused = {
       state: 'rejected' as const,
@@ -215,37 +205,20 @@ async function openCommandTurn(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission
 ) {
-  const { clientMessageId } = submission
-  const turn = structuredAgentSessionCommandTurn(clientMessageId)
-  await ctx.journal.resolveDispatch({
-    clientMessageId,
-    state: 'pending',
+  return ctx.journal.openCommand({
+    clientMessageId: submission.clientMessageId,
+    submittedAt: submission.submittedAt,
     fence: ctx.fence,
-    // Join only current execution, never ended-generation turns.
-    turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+    turnScope: (await contextStructuredAgentSessionCurrentWork(ctx)).turnScope()
   })
-  const startedAt = ctx.now()
-  const running = agentJournalTurnBody({
-    turnId: turn.turnId,
-    state: 'running',
-    userItemId: agentJournalSubmissionKey(clientMessageId),
-    requestedAt: structuredAgentSessionHandoverOrigin(ctx.journal, submission),
-    startedAt
-  })
-  await ctx.journal.appendItem(turn.identity, running, {
-    fence: ctx.fence,
-    observedAt: startedAt,
-    turnScope: AGENT_JOURNAL_THREAD_SCOPE
-  })
-  return { turn, running }
 }
 
 /** Start work timing at handover, excluding waits behind commands/startup. */
-export function structuredAgentSessionHandoverOrigin(
+export async function structuredAgentSessionHandoverOrigin(
   journal: AgentSessionJournal,
   submission: AgentJournalSubmission
-): number {
-  const handedOver = journal.submission(submission.clientMessageId)
+): Promise<number> {
+  const handedOver = await journal.reads.submission(submission.clientMessageId)
   return handedOver?.handedOverAt ?? submission.submittedAt
 }
 
@@ -258,54 +231,27 @@ async function settleUnsentCommand(
     | { state: 'unknown'; reason: string },
   rowFailure?: AgentSessionFailureFact
 ): Promise<void> {
-  const turn = structuredAgentSessionCommandTurn(clientMessageId)
-  const running = readAgentJournalTurn(ctx.journal.itemBody(turn.itemId) ?? undefined)
-  await ctx.journal.resolveDispatch({ clientMessageId, ...unsent, fence: ctx.fence })
-  if (running?.state !== 'running') {
-    return
-  }
-  const refused = unsent.state === 'rejected'
-  const mutations: JournalLifecycleMutationInput[] = [
-    ...(refused
-      ? [
-          {
-            kind: 'item' as const,
-            identity: turn.resultIdentity,
-            body: {
-              kind: 'status' as const,
-              ...agentSessionFailureWords(rowFailure ?? unsent.rejection, {
-                ...ctx.failureTextContext,
-                surface: 'row'
-              }),
-              tone: 'error' as const
-            },
-            turnScope: { kind: 'turn' as const, turnItemId: turn.itemId }
+  await ctx.journal.settleCommand({
+    dispatch: { clientMessageId, ...unsent, fence: ctx.fence },
+    ...(unsent.state === 'rejected'
+      ? {
+          failureBody: {
+            kind: 'status',
+            ...agentSessionFailureWords(rowFailure ?? unsent.rejection, {
+              ...ctx.failureTextContext,
+              surface: 'row'
+            }),
+            tone: 'error'
           }
-        ]
-      : []),
-    {
-      kind: 'item',
-      identity: turn.identity,
-      body: agentJournalTurnBody({
-        ...running,
-        ...(refused
-          ? { state: 'completed', outcome: 'failure', completedAt: ctx.now() }
-          : { state: 'unverifiable' })
-      }),
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }
-  ]
-  await ctx.journal.appendLifecycleBatch({
-    settlementId: `command-settled:${clientMessageId}`,
-    fence: ctx.fence,
-    mutations
+        }
+      : {})
   })
 }
 
-function commandBlocked(
+async function commandBlocked(
   ctx: StructuredAgentSessionCommandHandoverContext,
   body: AgentJournalMessageItem
-): SubmissionRejectionFact | null {
+): Promise<SubmissionRejectionFact | null> {
   if (body.command?.name !== STRUCTURED_AGENT_SESSION_COMPACT_COMMAND) {
     return agentSessionFailureFact('commandRefused')
   }
@@ -319,7 +265,7 @@ function commandBlocked(
     return agentSessionFailureFact('commandRefused')
   }
   const childWork = () => ({ views: ctx.childWork(), open: ctx.childWorkOpen() })
-  const refusal = conversationCommandBlocked(
+  const refusal = await conversationCommandBlocked(
     ctx,
     record,
     compactionChildWork(capabilities, childWork),

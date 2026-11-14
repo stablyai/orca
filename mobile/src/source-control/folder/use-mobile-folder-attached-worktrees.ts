@@ -12,9 +12,9 @@ import {
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { useHostQuery } from '../../query/host-query'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
-import { relaysToServers } from '../../worktree/execution-host-scoped-rpc-client'
-import type { MobileLineageStores } from '../../worktree/mobile-workspace-lineage'
-import { WorkspaceServerContext } from '../../worktree/workspace-server-context'
+import { relaysToServers } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
+import type { MobileLineageStores } from '../../worktree/agent-lineage/mobile-workspace-lineage'
+import { WorkspaceServerContext } from '../../worktree/execution-hosts/workspace-server-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
@@ -24,7 +24,7 @@ import {
   toFolderListRow,
   type FolderListRow
 } from './mobile-folder-attached-worktrees'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 
 type FolderLineage = {
   /** The catalog rows last seen. */

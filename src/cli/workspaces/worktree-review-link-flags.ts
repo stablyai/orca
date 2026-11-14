@@ -1,5 +1,5 @@
 import { getOptionalNullableNumberFlag, getOptionalNumberFlag } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalWorktreeLinkFlagValue } from './worktree-link-flag-value'
 import { getOptionalGitLabLinkFlag } from './worktree-gitlab-link'
 

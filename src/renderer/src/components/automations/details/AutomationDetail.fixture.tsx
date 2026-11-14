@@ -35,10 +35,8 @@ function renderDetail(props: Partial<React.ComponentProps<typeof AutomationDetai
         projectDefaultBaseRef="main"
         runNowAvailability={{ canRunNow: true, reason: 'available', message: null }}
         now={NOW}
-        onRunNow={noop}
-        onEdit={noop}
-        onToggle={noop}
-        onDelete={noop}
+        onOpenRun={noop}
+        onShowAllRuns={noop}
         {...props}
       />
     </div>

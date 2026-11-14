@@ -10,7 +10,7 @@ import {
   getOptionalStringFlag,
   getRepeatedStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export type SearchCommand =
   | { kind: 'index-status' }

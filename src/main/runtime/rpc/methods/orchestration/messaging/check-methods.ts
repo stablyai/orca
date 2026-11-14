@@ -5,7 +5,8 @@ import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
-import { checkedMailboxes, withReportFollowUps } from './mailbox-message-receipt'
+import { CheckMailReconciliation } from './check-mail-reconciliation'
+import { checkedMailboxes, handsOverBatch, withReportFollowUps } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
@@ -55,86 +56,132 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
       const releasing = <T>(result: T): T => {
-        if (consumingCheck) {
+        if (consumingCheck && params.ack && !params.wait) {
           runtime.withdrawStaleChatMail(checkedMailboxes(result))
         }
-        return withReportFollowUps(db, result)
+        return consumingCheck && !(params.ack && !params.wait)
+          ? result
+          : withReportFollowUps(db, result)
       }
-      if (params.run || boundRun) {
-        const result = await checkRunMailbox({
-          params,
-          runtime,
-          db,
-          handle,
-          paneKey,
-          callerSession: orchestrationCaller,
-          typeFilter,
-          signal,
-          legacyCoordinatorRunId,
-          revalidateLegacyCoordinator,
-          orchestrationCompatibilityEvidence,
-          recordMutationReceipt
-        })
-        return releasing(
-          consumingCheck && !(params.ack && !params.wait)
-            ? await withRunCheckNext(runtime, result)
-            : result
-        )
+      const livePane = runtime.getTerminalPaneKey(handle)
+      const process = runtime.getTerminalProcessIncarnation(handle)
+      const revalidateCaller = () => {
+        if (
+          runtime.getTerminalPaneKey(handle) !== livePane ||
+          runtime.getTerminalProcessIncarnation(handle) !== process
+        ) {
+          throw new OrchestrationError(
+            'consumer_fenced',
+            'This mailbox caller was replaced while checking mail.'
+          )
+        }
       }
-
-      const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
-      // Why: reading another pane's Dispatch mail is wrong in every mode, so peek is fenced too.
-      if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
-        throw dispatchFenced()
-      }
-      const remoteAttachment =
-        !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
-      if (
-        remoteAttachment &&
-        !db.isRemoteAttachmentProcessCurrent({
-          dispatchId: remoteAttachment.dispatch_id,
-          paneKey: paneKey ?? null,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
-        })
-      ) {
-        throw new OrchestrationError(
-          'dispatch_inactive',
-          `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
-        )
-      }
-      if (activeDispatch || remoteAttachment) {
-        return releasing(
-          await checkWorkerMailbox({
+      const reconciliation = new CheckMailReconciliation(runtime, db, signal)
+      try {
+        if (params.run || boundRun) {
+          const result = await checkRunMailbox({
             params,
             runtime,
             db,
             handle,
             paneKey,
+            callerSession: orchestrationCaller,
             typeFilter,
             signal,
-            activeDispatch,
-            remoteAttachment,
+            legacyCoordinatorRunId,
+            revalidateLegacyCoordinator,
+            orchestrationCompatibilityEvidence,
             recordMutationReceipt,
-            acknowledgeOnly: !params.wait
+            reconciliation,
+            revalidateCaller
+          })
+          return releasing(
+            consumingCheck && !(params.ack && !params.wait) && !handsOverBatch(result)
+              ? await withRunCheckNext(runtime, result)
+              : result
+          )
+        }
+
+        const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
+        // Why: reading another pane's Dispatch mail is wrong in every mode, so peek is fenced too.
+        if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
+          throw dispatchFenced()
+        }
+        const remoteAttachment =
+          !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+        if (
+          remoteAttachment &&
+          !db.isRemoteAttachmentProcessCurrent({
+            dispatchId: remoteAttachment.dispatch_id,
+            paneKey: paneKey ?? null,
+            processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+          })
+        ) {
+          throw new OrchestrationError(
+            'dispatch_inactive',
+            `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
+          )
+        }
+        if (activeDispatch || remoteAttachment) {
+          return releasing(
+            await checkWorkerMailbox({
+              params,
+              runtime,
+              db,
+              handle,
+              paneKey,
+              typeFilter,
+              signal,
+              activeDispatch,
+              remoteAttachment,
+              recordMutationReceipt,
+              reconciliation,
+              revalidateCaller,
+              acknowledgeOnly: !params.wait
+            })
+          )
+        }
+        // A superseded Attempt must receive a stop signal, not an empty checkpoint; this outranks pane rebind advice.
+        const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
+        if (settledDispatch && isSupersededDispatch(settledDispatch)) {
+          throw dispatchFenced()
+        }
+        // Without a live pane or Dispatch, an empty consuming inbox would disguise a stale caller as still waiting.
+        if (!hasRunBindingKey(caller) && consumingCheck) {
+          throw new OrchestrationError(
+            'stable_pane_required',
+            `Terminal ${handle} has no live pane and no active Dispatch, so a consuming check here can never receive mail. Run check from the agent's own live terminal.`,
+            orchestrationSkillRecoveryData()
+          )
+        }
+        return releasing(
+          await checkDirectMailbox({
+            params,
+            runtime,
+            db,
+            handle,
+            typeFilter,
+            signal,
+            reconciliation,
+            recordMutationReceipt,
+            revalidateConsumer: () => {
+              revalidateCaller()
+              if (
+                db.getCurrentRunForCoordinator(caller) ||
+                db.getActiveDispatchForIdentity(handle, paneKey) ||
+                (paneKey && db.findActiveRemoteAttachmentForPane(paneKey))
+              ) {
+                throw new OrchestrationError(
+                  'consumer_fenced',
+                  'This direct mailbox became owned by a Run or Dispatch while checking mail.'
+                )
+              }
+            }
           })
         )
+      } finally {
+        reconciliation.dispose()
       }
-      // A superseded Attempt must receive a stop signal, not an empty checkpoint; this outranks pane rebind advice.
-      const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
-      if (settledDispatch && isSupersededDispatch(settledDispatch)) {
-        throw dispatchFenced()
-      }
-      // Without a live pane or Dispatch, an empty consuming inbox would disguise a stale caller as still waiting.
-      if (!hasRunBindingKey(caller) && consumingCheck) {
-        throw new OrchestrationError(
-          'stable_pane_required',
-          `Terminal ${handle} has no live pane and no active Dispatch, so a consuming check here can never receive mail. Run check from the agent's own live terminal.`,
-          orchestrationSkillRecoveryData()
-        )
-      }
-      return releasing(
-        await checkDirectMailbox({ params, runtime, db, handle, typeFilter, signal })
-      )
     }
   })
 ]

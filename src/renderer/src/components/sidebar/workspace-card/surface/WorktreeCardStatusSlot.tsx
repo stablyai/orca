@@ -13,6 +13,7 @@ import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
+import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -35,6 +36,8 @@ type WorktreeCardStatusSlotProps = {
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
+  /** A collapsed descendant's needs-you, failed or working state; replaces a quieter own status. */
+  lineageStatus?: WorktreeStatus | null
   unreadTooltip: string
   onToggleUnread: React.MouseEventHandler<HTMLButtonElement>
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
@@ -61,9 +64,10 @@ const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
 // The whole sleeping row is dimmed; extra glyph tint would double-dim it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
-// Overlay unread without widening the status lane; ring-sidebar separates the dot from busy glyphs.
+// Overlay unread on the glyph's corner without widening the lane; the ring separates it from busy glyphs.
+// Blue, not amber: the lane already spends yellow and orange on working, pending checks and needs-you.
 const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+  'pointer-events-none absolute right-0 bottom-0 size-[6px] rounded-full bg-unread ring-2 ring-worktree-sidebar'
 
 function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
@@ -114,9 +118,6 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay, t: Translate = tran
   if (outcome === 'success') {
     return t('workspace.reviewStatus.checksPassing', '{{review}} checks: Passing', values)
   }
-  if (!review.state && !outcome) {
-    return getReviewLabel(review)
-  }
   return t('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
@@ -125,6 +126,7 @@ export function WorktreeCardStatusSlot({
   showStatus,
   showUnreadAction,
   isUnread,
+  lineageStatus = null,
   unreadTooltip,
   onToggleUnread,
   onPointerDown,
@@ -139,7 +141,7 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = useWorktreeActivityStatus(worktreeId)
+  const status = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({
@@ -151,17 +153,14 @@ export function WorktreeCardStatusSlot({
   const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
+  // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
+  const canShowSleepingStatus =
+    newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     (prDisplay !== null || Boolean(collectionChecks)) &&
-    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  // Review outranks sleep: the dimmed row already shows sleep, only the glyph can show the PR.
-  const canShowSleepingStatus =
-    newCardStyle &&
-    showStatus &&
-    isSleeping &&
-    !canShowReviewStatus &&
+    !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
@@ -184,14 +183,10 @@ export function WorktreeCardStatusSlot({
     isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${t('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
-  const laneLabel =
-    canShowReviewStatus && isSleeping
-      ? `${reviewLabel} · ${getSleepingStatusLabel(t)}`
-      : reviewLabel
   const passiveStatusAnnouncement =
     newCardStyle && isUnread
-      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: laneLabel })
-      : laneLabel
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
+      : reviewLabel
   // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'

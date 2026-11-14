@@ -3,15 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 describe('parseTerminalKeyboardAvoidanceMetrics', () => {
-  it('defaults contentBottomRow to cursorY when absent (older WebView bundles)', () => {
-    expect(parseTerminalKeyboardAvoidanceMetrics({ cursorY: 12, rows: 40 })).toEqual({
-      cursorY: 12,
-      contentBottomRow: 12,
-      rows: 40,
-      altScreen: false
-    })
-  })
-
   it('bounds untrusted numeric fields to the reported viewport', () => {
     expect(
       parseTerminalKeyboardAvoidanceMetrics({

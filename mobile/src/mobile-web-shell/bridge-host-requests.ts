@@ -4,7 +4,7 @@ import {
   GITHUB_TARGET_CHECK_TIMED_OUT,
   requireExactGitHubOperations,
   githubOperationResponse
-} from '../source-control/review/github-target-invocation'
+} from '../source-control/review/github-operations/github-target-invocation'
 import { openRpcRequestBudget } from '../transport/rpc/rpc-request-budget'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
+import { revealDashboardAgent } from './navigation/reveal-dashboard-agent'
+import { AgentKanbanBoard } from './board/AgentKanbanBoard'
 import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
+import type { DashboardRevealAgentArgs as AgentRevealArgs } from '../../../../shared/dashboard-snapshot'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
@@ -14,9 +14,9 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../sidebar/workspace-chrome-metrics'
-import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
-import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
+import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
+import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
+import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
 import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
 

@@ -29,7 +29,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     if (stream.isClosed()) {
       return
     }
-    // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
+    // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
     dispose = await host.subscribe({
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),

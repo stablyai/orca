@@ -4,7 +4,7 @@
   "ignorePatterns": [
     "src/components/mobile-markdown-mdast-nodes.d.ts",
     "src/terminal/document/terminal-webview-engine.generated.ts",
-    "src/components/pr-sidebar/mermaid-page-engine.generated.ts",
+    "src/components/mermaid/mermaid-page-engine.generated.ts",
     "src/components/katex-page-style.generated.ts"
   ],
   "rules": {

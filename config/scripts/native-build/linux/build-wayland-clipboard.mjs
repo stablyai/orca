@@ -22,6 +22,17 @@ export function waylandClipboardFingerprint(root, arch) {
   return hash.digest('hex')
 }
 
+export function linuxNativeToolchainImage(root, docker) {
+  const nativeDir = join(root, 'native', 'wayland-clipboard')
+  const imageHash = createHash('sha256')
+    .update(readFileSync(join(nativeDir, 'Dockerfile')))
+    .digest('hex')
+    .slice(0, 16)
+  const image = `orca-wayland-clipboard-build:${imageHash}`
+  docker(['build', '-t', image, nativeDir])
+  return image
+}
+
 export function buildWaylandClipboard({
   arch = process.arch,
   root = resolve(import.meta.dirname, '../../../..'),
@@ -49,11 +60,6 @@ export function buildWaylandClipboard({
   mkdirSync(outputDir, { recursive: true })
   rmSync(stamp, { force: true })
   rmSync(output, { force: true })
-  const imageHash = createHash('sha256')
-    .update(readFileSync(join(nativeDir, 'Dockerfile')))
-    .digest('hex')
-    .slice(0, 16)
-  const image = `orca-wayland-clipboard-build:${imageHash}`
   function docker(args) {
     const result = run('docker', args, { stdio: 'inherit', cwd: root })
     if (result.error) {
@@ -65,7 +71,7 @@ export function buildWaylandClipboard({
       throw new Error(`Wayland clipboard ${args[0]} failed; see the build output above.`)
     }
   }
-  docker(['build', '-t', image, nativeDir])
+  const image = linuxNativeToolchainImage(root, docker)
   // Compile against the supported glibc floor, including when packaging another architecture.
   docker([
     'run',

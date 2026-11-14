@@ -24,7 +24,7 @@ import {
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
 } from '../../../workspaces/creation/worktree-create-candidates'
 import { isGeneratedWorktreeCreateName } from '../../../../shared/new-workspace/worktree-create-retry-policy'
-import { createRetiredNameLookup } from '../../../../shared/worktree/retired-name-registry'
+import { createRetiredNameLookup } from '../../../../shared/worktree/naming/retired-name-registry'
 import { getRetiredNameRegistryForRepo } from '../../../workspaces/removal/retirement/worktree-name-retirement'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import {
@@ -39,10 +39,8 @@ import {
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
-import {
-  assertNoPendingWorktreeRemovalConflict,
-  findPendingWorktreeRemovalConflict
-} from '../../../workspaces/removal/worktree-removal-table'
+import { assertNoPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
+import { isWorktreePathReserved } from '../../../workspaces/creation/reserved-worktree-path'
 import type { WorktreeCreatePathClaim } from '../../../workspaces/creation/worktree-create-in-flight'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
@@ -138,9 +136,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
       args.workspaceRoot
     )
-    // Orca owns the path until background removal settles.
+    // Orca owns the path until background removal settles, and while it is archived.
     return (
-      !findPendingWorktreeRemovalConflict(args.repo.path, { worktreePath }) &&
+      !isWorktreePathReserved(args.store, args.repo, worktreePath) &&
       !(await runtimePathExists(worktreePath)) &&
       args.pathClaim.claim(worktreePath)
     )

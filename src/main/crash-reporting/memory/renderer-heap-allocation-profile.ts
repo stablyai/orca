@@ -14,8 +14,10 @@ import {
 const SAMPLING_INTERVAL_BYTES = 512 * 1024
 const START_HEAP_RATIO = 0.6
 const STOP_HEAP_RATIO = 0.5
-// Main refreshes independently because hidden renderers throttle memory samples.
-const PROFILE_REFRESH_MS = 30_000
+// Each profile read forces a full renderer GC, so after the first read require this much growth.
+const PROFILE_READ_GROWTH_RATIO = 0.05
+// Main checks the heap itself because hidden renderers throttle memory samples.
+const HEAP_CHECK_MS = 30_000
 
 export type ProfiledDebugger = {
   isAttached(): boolean
@@ -61,8 +63,8 @@ export function profiledRendererFor(contents: WebContents): ProfiledRenderer {
 
 export type RendererHeapReading = {
   heapRatio: number
+  heapLimitBytes: number
   rendererSurface: string
-  isHighwaterMark: boolean
 }
 
 type SamplingSession = {
@@ -70,9 +72,13 @@ type SamplingSession = {
   startedAtPct: number
   startedAtMs: number
   trustedScriptPrefix: string | null
+  heapLimitBytes: number
+  admittedHeapRatio: number
+  profileReadAdmitted: boolean
   // Wait for startSampling before requesting a profile.
   ready: boolean
   reading: boolean
+  checking: boolean
   stop: () => void
 }
 
@@ -94,23 +100,31 @@ export function noteRendererHeapReading(
     }
     return
   }
-  if (reading.heapRatio < STOP_HEAP_RATIO) {
+  noteSessionHeapRatio(renderer, session, reading.heapRatio, false, record)
+}
+
+function noteSessionHeapRatio(
+  renderer: ProfiledRenderer,
+  session: SamplingSession,
+  heapRatio: number,
+  fromHeapCheck: boolean,
+  record: (data: CrashReportBreadcrumbData) => void
+): void {
+  if (heapRatio < STOP_HEAP_RATIO) {
     session.stop()
     return
   }
-  if (reading.isHighwaterMark) {
-    refreshProfile(renderer, session, record)
-  }
-}
-
-function refreshProfile(
-  renderer: ProfiledRenderer,
-  session: SamplingSession,
-  record: (data: CrashReportBreadcrumbData) => void
-): void {
   if (!session.ready || session.reading) {
     return
   }
+  // The first heap check reads even without growth so a steady high heap still has evidence.
+  const firstReadDue = fromHeapCheck && !session.profileReadAdmitted
+  if (!firstReadDue && heapRatio < session.admittedHeapRatio + PROFILE_READ_GROWTH_RATIO) {
+    return
+  }
+  // Admission, not success, consumes the allowance: a failed read may already have paid for its GC.
+  session.profileReadAdmitted = true
+  session.admittedHeapRatio = Math.max(session.admittedHeapRatio, heapRatio)
   session.reading = true
   void renderer.debugger
     .sendCommand('HeapProfiler.getSamplingProfile')
@@ -137,7 +151,7 @@ function startSampling(
   record: (data: CrashReportBreadcrumbData) => void
 ): void {
   const debug = renderer.debugger
-  // Do not take over a debugger attached by DevTools or another diagnostic client.
+  // Only sees Orca's own debugger client (the lag capture); other CDP sessions are not visible here.
   if (debug.isAttached()) {
     return
   }
@@ -159,7 +173,7 @@ function startSampling(
     debug.removeListener('detach', onDetach)
     unwatch()
     if (!renderer.isDestroyed() && debug.isAttached()) {
-      void debug.sendCommand('HeapProfiler.stopSampling').catch(() => undefined)
+      // Detaching ends the inspector session, which stops sampling without stopSampling's forced GC.
       try {
         debug.detach()
       } catch {
@@ -175,8 +189,12 @@ function startSampling(
     startedAtPct: Math.round(reading.heapRatio * 100),
     startedAtMs: Date.now(),
     trustedScriptPrefix: trustedScriptPrefixFor(renderer.getURL()),
+    heapLimitBytes: reading.heapLimitBytes,
+    admittedHeapRatio: reading.heapRatio,
+    profileReadAdmitted: false,
     ready: false,
     reading: false,
+    checking: false,
     stop
   }
   sessions.set(renderer.id, session)
@@ -192,13 +210,38 @@ function startSampling(
         return
       }
       session.ready = true
-      refreshTimer = setInterval(
-        () => refreshProfile(renderer, session, record),
-        PROFILE_REFRESH_MS
-      )
+      refreshTimer = setInterval(() => checkHeap(renderer, session, record), HEAP_CHECK_MS)
       refreshTimer.unref?.()
     })
     .catch(stop)
+}
+
+function checkHeap(
+  renderer: ProfiledRenderer,
+  session: SamplingSession,
+  record: (data: CrashReportBreadcrumbData) => void
+): void {
+  if (session.checking) {
+    return
+  }
+  session.checking = true
+  void renderer.debugger
+    .sendCommand('Runtime.getHeapUsage')
+    .then((result) => {
+      const used =
+        result && typeof result === 'object' && 'usedSize' in result ? result.usedSize : undefined
+      if (
+        typeof used === 'number' &&
+        Number.isFinite(used) &&
+        sessions.get(renderer.id) === session
+      ) {
+        noteSessionHeapRatio(renderer, session, used / session.heapLimitBytes, true, record)
+      }
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      session.checking = false
+    })
 }
 
 export function profileRendererMemoryBreadcrumb(
@@ -217,21 +260,29 @@ export function profileRendererMemoryBreadcrumb(
 function readHeapReading(
   args: { name?: unknown; data?: unknown } | undefined
 ): RendererHeapReading | null {
-  const isHighwaterMark = args?.name === 'renderer_memory_highwater'
   const data = args?.data
-  if ((!isHighwaterMark && args?.name !== 'renderer_memory') || !data || typeof data !== 'object') {
+  if (
+    (args?.name !== 'renderer_memory_highwater' && args?.name !== 'renderer_memory') ||
+    !data ||
+    typeof data !== 'object'
+  ) {
     return null
   }
   const used = 'usedHeapMB' in data ? data.usedHeapMB : undefined
   const limit = 'heapLimitMB' in data ? data.heapLimitMB : undefined
-  if (typeof used !== 'number' || typeof limit !== 'number' || !(limit > 0)) {
+  if (
+    typeof used !== 'number' ||
+    !Number.isFinite(used) ||
+    typeof limit !== 'number' ||
+    !(limit > 0)
+  ) {
     return null
   }
   const surface = 'rendererSurface' in data ? data.rendererSurface : undefined
   return {
     heapRatio: used / limit,
-    rendererSurface: typeof surface === 'string' ? surface : 'unknown',
-    isHighwaterMark
+    heapLimitBytes: limit * 1024 * 1024,
+    rendererSurface: typeof surface === 'string' ? surface : 'unknown'
   }
 }
 

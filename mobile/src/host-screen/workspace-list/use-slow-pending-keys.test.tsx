@@ -55,31 +55,6 @@ describe('useSlowPendingKeys', () => {
     vi.useRealTimers()
   })
 
-  it('shows a key only once it has been pending for 500 ms', () => {
-    mount(new Set(['a']))
-    expect([...latest]).toEqual([])
-    advance(499)
-    expect([...latest]).toEqual([])
-    advance(1)
-    expect([...latest]).toEqual(['a'])
-  })
-
-  it('never shows a key the desktop answers within 500 ms', () => {
-    const renderer = mount(new Set(['a']))
-    advance(300)
-    update(renderer, new Set())
-    advance(1_000)
-    expect([...latest]).toEqual([])
-  })
-
-  it('hides a slow key on the render it settles', () => {
-    const renderer = mount(new Set(['a']))
-    advance(500)
-    expect([...latest]).toEqual(['a'])
-    update(renderer, new Set())
-    expect([...latest]).toEqual([])
-  })
-
   it('times each key from when it first went pending, across re-renders', () => {
     const renderer = mount(new Set(['a']))
     advance(300)

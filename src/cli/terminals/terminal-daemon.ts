@@ -4,7 +4,7 @@ import {
   type PtyProcessCeilingState
 } from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 type SeveredDaemonStatus = {
   pid: number

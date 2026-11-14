@@ -4,9 +4,9 @@
 import {
   agentSessionLeaseAdmitsWriter,
   agentSessionLeaseIsReleased
-} from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+} from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 import {
   isOrcaSessionId,

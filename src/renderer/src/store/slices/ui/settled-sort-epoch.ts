@@ -4,7 +4,7 @@ import {
   INITIAL_SORT_SETTLE_STATE,
   reduceSortSettle,
   type SortSettleEvent
-} from '../../../../../shared/sidebar-list/sort-settle'
+} from '../../../../../shared/sidebar-list/sorting/sort-settle'
 import type { AppState } from '../../types'
 import { getIndexedAllWorktrees } from '../worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'

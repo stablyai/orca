@@ -16,7 +16,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import {
   isFolderRepoCreateBusy,

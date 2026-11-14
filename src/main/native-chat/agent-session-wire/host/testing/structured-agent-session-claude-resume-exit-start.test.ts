@@ -6,7 +6,7 @@ import {
 } from '../../../../claude/structured/claude-structured-session-test-support'
 import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import { withObservedProviderExit } from '../../startup/structured-agent-session-failure-text'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionSinkBarrier } from '../../journal-ingress/structured-agent-session-event-sink'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../startup/structured-agent-session-startup-attempt-contract'
 import {
@@ -18,7 +18,7 @@ import {
   registerStartupAttemptHostTests,
   restartWith,
   submission
-} from './structured-agent-session-startup-attempt-host-test-support'
+} from './structured-agent-session-startup-attempt-host.test-fixture'
 
 registerStartupAttemptHostTests()
 

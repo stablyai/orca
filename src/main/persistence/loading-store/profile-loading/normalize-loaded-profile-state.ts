@@ -8,7 +8,7 @@ import { normalizeOrcadMigrationImportReceipts } from '../../../../shared/orcad-
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
-import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/cross-store-lineage-records'
+import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget

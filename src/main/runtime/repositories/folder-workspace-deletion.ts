@@ -1,4 +1,7 @@
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
+import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
+import { gateFolderWorkspaceRemovalOnArchiveHook } from '../../workspaces/removal/folder-workspace-archive-hook'
 import {
   assertWslMoveProjectWritable,
   isLocalWslMoveRow
@@ -9,11 +12,16 @@ import {
 } from './folder-workspace-unique-id-mutation'
 import type { RuntimeProjectGroupDependencies } from './runtime-project-group-controller'
 
+export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
+  runHooks?: boolean
+  allowFailedArchiveHook?: boolean
+}
+
 export async function deleteFolderWorkspaceRow(
   deps: RuntimeProjectGroupDependencies,
   folderWorkspaceId: string,
-  options: FolderWorkspaceMutationOptions
-): Promise<{ deleted: boolean }> {
+  options: FolderWorkspaceDeleteOptions
+): Promise<{ deleted: boolean; archiveHookOverride?: ArchiveHookOverride }> {
   const store = deps.getStore()
   if (!store?.removeFolderWorkspace) {
     throw new Error('runtime_unavailable')
@@ -30,9 +38,25 @@ export async function deleteFolderWorkspaceRow(
     | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
     | undefined
   let cleanupState: void | Promise<void> = undefined
+  let archiveHookOverride: ArchiveHookOverride | undefined
   try {
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
+      const group = store
+        .getProjectGroups?.()
+        .find((entry) => entry.id === workspace.projectGroupId)
+      const owner = group && projectGroupHookOwner(group)
+      if (owner) {
+        archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
+          repo: owner,
+          worktreeId,
+          displayName: workspace.name,
+          workspacePath: workspace.folderPath,
+          runArchive: options.runHooks === true,
+          allowFailure: options.allowFailedArchiveHook === true,
+          runtimeTarget: () => undefined
+        })
+      }
       // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
       try {
@@ -71,7 +95,7 @@ export async function deleteFolderWorkspaceRow(
       }
     }
     await cleanupState
-    return { deleted }
+    return { deleted, ...(archiveHookOverride ? { archiveHookOverride } : {}) }
   } finally {
     await gate?.finish(false)
   }

@@ -1,3 +1,7 @@
+import type * as MobileBranchBaseRefModule from '../../../source-control/branches/mobile-branch-base-ref'
+import type * as MobileGitHistoryModule from '../../../source-control/history/mobile-git-history'
+import type * as MobileCommitMessageAiModule from '../../../source-control/commits/mobile-commit-message-ai'
+import type * as MobilePrLinkModule from '../../../source-control/review/creation/mobile-pr-link'
 import type { MountAdapter } from '../recording-scenario'
 import { operationModuleLoader } from '../operation-module-loader'
 
@@ -8,8 +12,8 @@ export function sourceControlMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'source-control.branch-base-ref': ({ client }) => {
-      const resolve = modules.load<typeof import('../../../source-control/mobile-branch-base-ref')>(
-        'mobile/src/source-control/mobile-branch-base-ref.ts'
+      const resolve = modules.load<typeof MobileBranchBaseRefModule>(
+        'mobile/src/source-control/branches/mobile-branch-base-ref.ts'
       ).resolveMobileBranchCompareBaseRef
       let baseRef: unknown = 'unresolved'
       return {
@@ -23,8 +27,8 @@ export function sourceControlMountAdapters(
       }
     },
     'source-control.git-history': ({ client }) => {
-      const history = modules.load<typeof import('../../../source-control/mobile-git-history')>(
-        'mobile/src/source-control/mobile-git-history.ts'
+      const history = modules.load<typeof MobileGitHistoryModule>(
+        'mobile/src/source-control/history/mobile-git-history.ts'
       )
       let rows: unknown = 'unloaded'
       return {
@@ -38,8 +42,8 @@ export function sourceControlMountAdapters(
       }
     },
     'source-control.commit-message': ({ client }) => {
-      const ai = modules.load<typeof import('../../../source-control/mobile-commit-message-ai')>(
-        'mobile/src/source-control/mobile-commit-message-ai.ts'
+      const ai = modules.load<typeof MobileCommitMessageAiModule>(
+        'mobile/src/source-control/commits/mobile-commit-message-ai.ts'
       )
       let generated: unknown = 'ungenerated'
       return {
@@ -57,8 +61,8 @@ export function sourceControlMountAdapters(
       }
     },
     'source-control.pr-link': ({ client }) => {
-      const link = modules.load<typeof import('../../../source-control/mobile-pr-link')>(
-        'mobile/src/source-control/mobile-pr-link.ts'
+      const link = modules.load<typeof MobilePrLinkModule>(
+        'mobile/src/source-control/review/creation/mobile-pr-link.ts'
       )
       let outcome: unknown = 'unlinked'
       let linkedPR: unknown = 'unread'

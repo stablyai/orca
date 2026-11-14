@@ -1,4 +1,4 @@
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { useAppStore } from '@/store'

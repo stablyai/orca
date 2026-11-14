@@ -584,6 +584,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Agents installés",
+      "availableRegion": "Agents disponibles à l’installation",
       "codexTerminalServerIsolation": {
         "title": "Exécutez chaque terminal Codex sur son propre serveur",
         "description": "Maintient le bon fonctionnement du statut d'Orca et des onglets de fermeture. Désactivez-la pour utiliser le serveur partagé du Codex et l'aperçu de ses agents. S'applique aux nouveaux terminaux."
@@ -7890,12 +7892,6 @@
             "title": "Mise en veille des agents",
             "toggleLabel": "Activer la mise en veille des agents"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Prévisualise la nouvelle mise en page des cartes de worktree, l'emplacement des métadonnées, les options du menu d'affichage des cartes et la présentation des statuts.",
-            "description": "Prévisualise la nouvelle mise en page des cartes de worktree, l'emplacement des métadonnées, les options du menu d'affichage des cartes et la présentation des statuts.",
-            "title": "Nouveau style de carte",
-            "toggleLabel": "Activer le nouveau style de carte"
-          },
           "ca2219fe5e": "Affiche un petit compagnon animé épinglé dans le coin inférieur droit. Choisissez un personnage (Claudino, OpenCode, Gremlin) ou importez votre propre PNG, APNG, GIF, WebP, JPG ou SVG depuis le menu compagnon de la barre d'état. Masquez-le à tout moment depuis le même menu sans désactiver ce réglage.",
           "dd6f0a1d45": "Compagnon",
           "0e89a574ae": "Compagnon animé flottant dans le coin inférieur droit.",
@@ -10056,11 +10052,9 @@
             "newWorktreeCardStyle": {
               "card": "carte",
               "cards": "cartes",
-              "description": "Prévisualise la nouvelle mise en page des cartes de worktree, l'emplacement des métadonnées, les options du menu d'affichage des cartes et la présentation des statuts.",
               "menu": "menu",
               "metadata": "métadonnées",
               "status": "statut",
-              "title": "Nouveau style de carte",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -17154,7 +17148,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensions Chrome",
+                        "title": "Apportez vos extensions Chrome",
+                        "everydayTitle": "Vos outils de navigation du quotidien, dans Orca",
                         "body": "Installez des extensions depuis le Chrome Web Store et épinglez-les à côté de la barre d’adresse.",
                         "action": "Ouvrir le Web Store",
                         "secondaryAction": "Compris"
@@ -17535,8 +17530,6 @@
           "18763ded26": "Planification",
           "dbef8dc110": "Cette automatisation SSH ne s'exécute que si Orca peut joindre l'hôte SSH. Si la reconnexion exige des identifiants interactifs ou si l'hôte est indisponible, l'exécution est enregistrée comme ignorée.",
           "1f6026358e": "Supprimer l'automatisation",
-          "d79452fb30": "Reprendre l'automatisation",
-          "91a4155e95": "Mettre l'automatisation en pause",
           "2fb1605beb": "Exécuter maintenant",
           "221916d93c": "Créez une automatisation pour planifier le travail des agents.",
           "b09b2384fd": "En pause",
@@ -17623,18 +17616,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aucune exécution pour l'instant.",
-          "9974a2b429": "Statut",
           "13988187b3": "Tokens",
           "86a248187e": "Dépense",
           "149c0b49c7": "Espace de travail",
           "8faaa00726": "Exécution",
-          "53fc5f07ab": "Historique des exécutions",
-          "a00e38d1a3": "n/d",
+          "a00e38d1a3": "—",
           "historyUnavailable": "L'historique des exécutions n'est pas disponible sur cet hôte. Cela ne signifie pas que l’automatisation a échoué ou qu’elle n’a pas été exécutée."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Contexte d'exécution",
-          "33741dd973": "Retour aux exécutions"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Minute",
@@ -17660,10 +17647,8 @@
           "5ad314118e": "Session"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Sélectionnez une automatisation pour voir ses exécutions.",
           "295698292f": "Relancer",
           "0e110a3469": "Exécutions",
-          "bb1b2cd31e": "Vue d'ensemble",
           "25060635c6": "Ajouter",
           "d207ab4c25": "Partir d'un modèle",
           "15e0bfb13b": "Supprimer",
@@ -17698,8 +17683,6 @@
           "8500baacb4": "source externe",
           "36f71740a7": "Espace de travail sélectionné",
           "cd8397cc32": "Nouvel espace de travail à chaque exécution",
-          "pendingAutomationMissing": "Cette automatisation n'est plus disponible.",
-          "pendingAutomationRunMissing": "L'historique d'exécution n'est plus disponible.",
           "paused": "En pause",
           "missingWorkspace": "Espace de travail manquant",
           "usageUnavailable": "Utilisation indisponible",
@@ -17708,7 +17691,6 @@
           "latestSavedOutput": "Dernière sortie enregistrée",
           "fullOutputUnavailable": "Impossible de charger la sortie complète.",
           "retryFullOutput": "Réessayer",
-          "backToList": "Toutes les automatisations",
           "tableName": "Nom",
           "tableProject": "Projet",
           "tableStatus": "Statut",
@@ -17721,7 +17703,6 @@
           "moveOriginalUnverified": "Créé sur {host}, mais la suppression d'origine n'a pas pu être vérifiée. Vérifiez l'ancien hôte avant de réessayer.",
           "tableHost": "Hôte",
           "ownerChanged": "Cette automatisation a changé d'hôtes. Actualisez et réessayez.",
-          "runError": "Erreur :",
           "deleteAutomationDescription": "Supprimer <name/> et son historique d’exécution. Les espaces de travail créés par les exécutions précédentes ne seront pas supprimés.",
           "deleteExternalAutomationDescription": "Supprimer <name/> de <provider/> sur <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} (est.) · {{tokens}} token",
@@ -17993,8 +17974,7 @@
           "historyUnavailable_many": "L’historique d’exécution est indisponible pour {{count}} automatisations. Les décomptes incluent uniquement l’historique disponible."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Fil d'Ariane des automatisations",
-          "runDetails": "Détails de l'exécution"
+          "ariaLabel": "Fil d'Ariane des automatisations"
         },
         "extraAgentArgs": {
           "advanced": "Avancé",
@@ -18056,14 +18036,13 @@
           "noWorkspaceLaunched": "Aucun espace de travail lancé"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Non lancé",
-          "namedWorkspaceGone": "{{name}} (plus disponible)"
+          "notLaunched": "Non lancé"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/d"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "Hôte SSH",
@@ -19067,7 +19046,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
+            "openWith": "Ouvrir avec (sauf pendant la saisie dans un champ de texte d’Orca)"
           }
         },
         "pluginInstallCount": {
@@ -19911,8 +19890,7 @@
         "stateMonitoringCount": "{{value0}} en surveillance",
         "stateUnverifiableCount": "{{value0}} au statut indisponible",
         "stateWaitingCount": "{{value0}} en attente",
-        "stateWorkingCount": "{{value0}} en cours",
-        "showAgent": "Afficher {{value0}} dans la conversation"
+        "stateWorkingCount": "{{value0}} en cours"
       },
       "railLabel": "Vos messages",
       "railImageMessage": "Image jointe",
@@ -20316,7 +20294,8 @@
         "unconfirmedDetail": "La conversation s’est peut-être ouverte malgré tout. Consultez l’historique des sessions avant de réessayer.",
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
-        "failedDetail": "Votre conversation est inchangée. Réessayez."
+        "failedDetail": "Votre conversation est inchangée. Réessayez.",
+        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée."
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",

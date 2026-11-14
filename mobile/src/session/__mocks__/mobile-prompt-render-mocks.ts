@@ -58,10 +58,10 @@ vi.mock('lucide-react-native', () =>
     ].map((x) => [x, x])
   )
 )
-vi.mock('../native-chat/transcript/MobileNativeChatMessage', () => ({
+vi.mock('../native-chat/transcript/messages/MobileNativeChatMessage', () => ({
   MobileNativeChatMessage: 'ChatMessage'
 }))
-vi.mock('../native-chat/transcript/MobileNativeChatRowOverlaysHost', () => ({
+vi.mock('../native-chat/transcript/message-actions/MobileNativeChatRowOverlaysHost', () => ({
   MobileNativeChatRowOverlaysHost: 'View'
 }))
 vi.mock('../native-chat/visual/MobileNativeChatVisual', () => ({
@@ -70,14 +70,16 @@ vi.mock('../native-chat/visual/MobileNativeChatVisual', () => ({
 vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
   useReducedMotionEnabled: () => null
 }))
-vi.mock('../native-chat/transcript/MobileNativeChatLiveLine', () => ({
+vi.mock('../native-chat/transcript/messages/MobileNativeChatLiveLine', () => ({
   MobileNativeChatLiveLine: 'LiveStatus'
 }))
-vi.mock('../native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('../native-chat/input/prompts/MobileNativeChatAsk', () => ({
+  MobileNativeChatAsk: 'ChatAsk'
+}))
+vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
+vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))

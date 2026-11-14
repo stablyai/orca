@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { View, StyleSheet } from 'react-native'
-import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
+import { mobilePrSidebarStyles } from '../source-control/review/pull-request/mobile-pr-sidebar-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { SessionDockPanelContentProps } from './SessionDockPanelContent'

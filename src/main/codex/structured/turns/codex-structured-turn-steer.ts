@@ -2,7 +2,7 @@ import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
 } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
-import type { CodexTurnHost } from './codex-structured-turn-start'
+import type { CodexTurnHost } from './codex-structured-turn-contract'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
 import { turnInputFor } from './codex-structured-message-options'

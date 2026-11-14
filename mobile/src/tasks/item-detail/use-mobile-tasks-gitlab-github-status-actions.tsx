@@ -1,4 +1,4 @@
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import type { ProjectFileMergeActionsModel } from '../project-board/use-mobile-tasks-project-file-merge-actions'
 import { useCallback } from 'react'

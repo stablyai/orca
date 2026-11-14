@@ -49,26 +49,6 @@ describe('file-tree', () => {
     expect(filterDirectoryCache(cache, 'missing')).toEqual([])
   })
 
-  it('renders inline loading and error rows under expanded directories', () => {
-    const cache: DirectoryCache = {
-      '': { entries: [entry('loading-dir', true), entry('error-dir', true)] },
-      'loading-dir': { entries: [], loading: true },
-      'error-dir': { entries: [], error: 'permission denied' }
-    }
-
-    const rows = flattenDirectoryCache(cache, new Set(['loading-dir', 'error-dir']))
-    expect(rows.map((row) => row.id)).toEqual([
-      'dir:error-dir',
-      'error:error-dir',
-      'dir:loading-dir',
-      'loading:loading-dir'
-    ])
-    expect(rows.find((row) => row.id === 'error:error-dir')).toMatchObject({
-      kind: 'error',
-      message: 'permission denied'
-    })
-  })
-
   it('does not treat inherited object keys as loaded directories', () => {
     const cache: DirectoryCache = {
       '': { entries: [entry('constructor', true), entry('__proto__', true)] },

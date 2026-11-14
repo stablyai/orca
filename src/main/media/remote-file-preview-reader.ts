@@ -3,8 +3,8 @@ import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-
 import { remoteFileRequest } from '../../shared/file-access/remote-file-locator'
 import { isRenewableTerminalFileGrantRefusal } from '../../shared/file-access/terminal-file-grant-refusal'
 import type { RuntimeFileReadChunkResult } from '../../shared/file-content/runtime-file-read'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 
 const STAT_TIMEOUT_MS = 15_000
 // Why: previews share a two-call lane; a stalled chunk must free it well before a download's minute.

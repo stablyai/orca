@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   claudeFrame as frame,
   claudeWasSent as wrote
@@ -7,13 +7,16 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   CALLER,
   declareClaudeCapabilities,
   fixture
-} from './structured-agent-session-claude-stop-contract-test-fixture'
-import { eventually, openTurn } from './structured-agent-session-claude-stop-contract-test-actions'
+} from './structured-agent-session-claude-stop-contract.test-fixture'
+import {
+  eventually,
+  openTurn
+} from './structured-agent-session-claude-stop-contract-test-actions.test-fixture'
 
 declareClaudeCapabilities()
 

@@ -35,10 +35,11 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/worktree/ownership'
+} from '../../../../../../shared/external-worktree-visibility'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
 import { getRepoHeaderCreateState } from './repo-header-create-state'

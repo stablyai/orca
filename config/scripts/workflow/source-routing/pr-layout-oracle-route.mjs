@@ -22,6 +22,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Window-side layout writers the layout-holder stack replaces; widened while it is open.
   'src/renderer/src/store/slices/tabs',
   'src/renderer/src/store/terminals/',
+  'src/renderer/src/components/sidebar/workspace-card/activity/worktree-terminal-record-selector.ts',
   'src/renderer/src/store/workspace-layout/workspace-layout-cache',
   'src/renderer/src/components/terminal-pane/',
   'src/renderer/src/components/agent-session-continuation/AgentSessionContinuationMenuItem.tsx',

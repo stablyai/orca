@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath

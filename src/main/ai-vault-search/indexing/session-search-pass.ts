@@ -1,3 +1,7 @@
+import {
+  physicalSessionCandidates,
+  type SessionFileChoice
+} from '../../ai-vault/session-scanner-types'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   cursorChatMetaRefusals,
@@ -108,7 +112,10 @@ export async function runSessionSearchPass(
           roots,
           // Only unlimited discovery can prove a synthetic session is absent from its container.
           enumeratedContainers: args.full
-            ? sessionSearchEnumeratedContainers(swept.candidates, issues)
+            ? sessionSearchEnumeratedContainers(
+                swept.candidates.flatMap(physicalSessionCandidates),
+                issues
+              )
             : undefined,
           emptiedRoots: previousRootsWithFiles
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
@@ -153,11 +160,13 @@ export async function runSessionSearchPass(
 /** Retire undiscovered rows; recent cycles check only the newest rows under discovered roots. */
 function retirementCandidates(
   rows: ReadonlyMap<string, SessionSearchFileRow>,
-  swept: { candidates: readonly { file: { path: string } }[] },
+  swept: { candidates: readonly SessionFileChoice[] },
   roots: readonly string[],
   full: boolean
 ): string[] {
-  const discovered = new Set(swept.candidates.map((candidate) => candidate.file.path))
+  const discovered = new Set(
+    swept.candidates.flatMap(physicalSessionCandidates).map((candidate) => candidate.file.path)
+  )
   const undiscovered = [...rows.values()].filter((row) => !discovered.has(row.path))
   if (full) {
     return undiscovered.map((row) => row.path)

@@ -1,4 +1,5 @@
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordAcceptance } from '../../../runtime/agent-session/records/agent-session-store-mutation'
+import type { JournalReceiptRowBinding } from '../../agent-session-journal/journal-writer-effects'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from '../options/structured-agent-session-option-observation'
@@ -10,7 +11,7 @@ import {
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
 } from '../../../../shared/agent-session/agent-session-message-source'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -55,7 +56,7 @@ export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
-  acceptanceRecord?: (record: AgentSessionRecord) => AgentSessionRecord
+  acceptanceRecord?: AgentSessionRecordAcceptance
   /** Needs no writer lease. */
   conversationWrite?: true
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
@@ -64,7 +65,7 @@ export type MutationPlan<TValue> = {
     ctx: AgentSessionReplayContext,
     outcome: AgentSessionOperationOutcome,
     receipt?: CommandReceiptResult
-  ) => TValue | null
+  ) => TValue | null | Promise<TValue | null>
   rerunWhenReplayMissing?: (ctx: AgentSessionReplayContext) => boolean
   recoverUnknownFromDurableState?: boolean
 } & (
@@ -90,6 +91,7 @@ export type MutationPlan<TValue> = {
 
 /** Insert acceptance with its effect, if absent. */
 export type MutationCommandReceipt<TValue> = {
+  binding: JournalReceiptRowBinding
   /** Resolve inside the effect transaction; draft writes have no journal row. */
   result: (row: JournalRow | undefined) => CommandReceiptResult
   /** Commit a standalone receipt before answering a row-free result; null records nothing. */
@@ -98,6 +100,12 @@ export type MutationCommandReceipt<TValue> = {
 
 function submissionOrDraftReceipt<TValue>(clientMessageId: string): MutationCommandReceipt<TValue> {
   return {
+    binding: {
+      at: 'last',
+      kinds: ['submission'],
+      answer: 'journal-row',
+      absent: { kind: 'queued-draft', messageId: clientMessageId }
+    },
     result: (row) =>
       row
         ? journalRowReceiptResult(row, 'submission')
@@ -122,7 +130,7 @@ export function sendPlan(
     userSend?: true
     /** Host-sent personal text; userSend always implies this. */
     personsMessage?: true
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }
 ): MutationPlan<AgentSessionSendResult> {
   // Match operation ID to optimistic client message ID for durable reconciliation.
@@ -149,12 +157,12 @@ export function sendPlan(
         body: params.body
       })
     },
-    replay: (ctx, outcome) => {
-      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
+    replay: async (ctx, outcome) => {
+      const queued = await queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return queued
       }
-      const submission = ctx.journal.submission(clientMessageId)
+      const submission = await ctx.journal.reads.submission(clientMessageId)
       if (submission) {
         return { clientMessageId, submission: { ...submission } }
       }
@@ -212,14 +220,14 @@ export function conversationCommandPlan(params: {
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
-    replay: (ctx) => {
-      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
+    replay: async (ctx) => {
+      const queued = await queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return 'queued' in queued
           ? { queued: queued.queued }
           : { clientMessageId: queued.submission.clientMessageId }
       }
-      if (ctx.journal.submission(clientMessageId) !== undefined) {
+      if ((await ctx.journal.reads.submission(clientMessageId)) !== undefined) {
         return { clientMessageId }
       }
       const prior = params.priorRecord()
