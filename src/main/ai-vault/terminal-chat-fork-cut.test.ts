@@ -65,3 +65,16 @@ it('leaves a fork without a cut to the ordinary path', async () => {
     })
   ).resolves.toBeNull()
 })
+
+it('refuses a cut it cannot honor instead of returning an uncut copy', async () => {
+  await expect(
+    copyTerminalChatForkCut({
+      agent: 'claude',
+      filePath: sourcePath,
+      codexHome: null,
+      executionHostId: 'local',
+      fork: true,
+      forkThroughEntryId: 'entry-1'
+    })
+  ).rejects.toThrow('cannot be forked at that message')
+})

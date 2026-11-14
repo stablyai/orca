@@ -12,12 +12,18 @@ import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 
 /** A terminal Claude chat's fork: a new conversation ending at one transcript entry, placed in the
  *  project folder Claude resumes from (the destination worktree's, or the source's). Null when the
- *  request asks for no cut, so the ordinary fork path handles it. */
+ *  request asks for no cut, so the ordinary path handles it; a cut it cannot honor throws. */
 export async function copyTerminalChatForkCut(
   args: AiVaultPrepareSessionResumeArgs
 ): Promise<AiVaultPrepareSessionResumeResult | null> {
-  if (!args.fork || args.agent !== 'claude' || !args.forkThroughEntryId || !args.sessionId) {
+  if (!args.forkThroughEntryId) {
     return null
+  }
+  // An uncut fallback would hand back messages after the requested point.
+  if (!args.fork || args.agent !== 'claude' || !args.sessionId) {
+    throw new Error(
+      'This chat cannot be forked at that message. Open the chat again and try again.'
+    )
   }
   const bucket = claudeDestinationBucket(args.destinationCwd)
   // Sessions sit in <home>/projects/<bucket>/<id>.jsonl, so the destination is a sibling bucket.
