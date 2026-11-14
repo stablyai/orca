@@ -1,7 +1,7 @@
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 
 // Share lazy component identities across surfaces; a second lazy wrapper over the same module causes separate boundaries and remounts.
-export const MonacoEditor = lazy(() => import('./MonacoEditor'))
+export const MonacoEditor = lazy(() => import('./monaco/MonacoEditor'))
 export const DiffViewer = lazy(() => import('./diff/monaco-view/DiffViewer'))
 export const CombinedDiffViewer = lazy(() => import('./combined-diff/CombinedDiffViewer'))
 export const RichMarkdownEditor = lazy(

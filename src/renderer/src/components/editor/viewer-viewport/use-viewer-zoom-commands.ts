@@ -1,5 +1,5 @@
 import { useContext, useEffect } from 'react'
-import { EditorCommandOwnerContext } from '../editor-command-owner-context'
+import { EditorCommandOwnerContext } from '../commands/editor-command-owner-context'
 import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
 import type { PanZoomViewport } from './use-pan-zoom-viewport'
 import { listenForViewerZoomRequests } from './viewer-zoom-request'
