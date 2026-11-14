@@ -10,6 +10,8 @@ export type LocalBuildFeed = {
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve) => {
     server.close(() => resolve())
+    // Stalled downloads must release their streams before the candidate files can close.
+    server.closeAllConnections()
   })
 }
 
