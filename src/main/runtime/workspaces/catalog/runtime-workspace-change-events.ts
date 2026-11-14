@@ -1,9 +1,10 @@
 import type { RuntimeWorktreeLifecycleEvent } from '../lifecycle/worktree-lifecycle-event'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
-import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import { NativeChatLaunchDraftOwner } from '../../agent-session/launch/native-chat-launch-draft-owner'
 
 export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraftOwner {
@@ -64,5 +65,11 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
   notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.notifier?.automationsChanged?.(payload)
     this.emitClientEvent({ type: 'automationsChanged', ...payload })
+  }
+
+  /** The cleanup runner finished a run on this host; clients may toast. */
+  notifyWorkspaceCleanupRunFinished(run: WorkspaceCleanupRunFinishedEvent['run']): void {
+    this.notifier?.workspaceCleanupRunFinished?.(run)
+    this.emitClientEvent({ type: 'workspaceCleanupRunFinished', run })
   }
 }

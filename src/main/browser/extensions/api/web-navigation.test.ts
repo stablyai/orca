@@ -36,7 +36,7 @@ const registry = await import('../api-runtime/browser-extension-namespace-regist
 const { observeBrowserExtensionWebNavigation, registerWebNavigationNamespace } =
   await import('./web-navigation')
 const { PRELOAD_DOCUMENT_TARGETS_NAMESPACE } =
-  await import('../../../../preload/browser-extension-document-targets')
+  await import('../../../../preload/browser/extensions/documents/browser-extension-document-targets')
 
 function frame(frameTreeNodeId: number, url: string, parent: FakeFrame | null = null): FakeFrame {
   const created: FakeFrame = {

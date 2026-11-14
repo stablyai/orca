@@ -4,7 +4,7 @@ import type {
   ResumableTuiAgent
 } from '../../agent-session/lifecycle/agent-session-resume'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
-import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/sleeping-agent-launch-config'
+import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'

@@ -43,6 +43,8 @@ const buttonVariants = cva(
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
+        // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
+        'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
         icon: 'size-9',
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",

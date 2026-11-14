@@ -2,7 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'

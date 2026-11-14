@@ -1,18 +1,25 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import {
+  acceptedAgentStatuses,
+  AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import WorktreeCardAgents from './WorktreeCardAgents'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -264,3 +271,99 @@ it('updates mounted card status when Done membership moves without a flag change
   expect(outputs.get('folder-a')).toEqual(['done', 'done'])
   expect(renders.get('ssh-b')).toBe(unrelatedRenders)
 })
+
+it.each([100, 1000])(
+  "host-scoped compact card skips its %i sleeping roots on other workspaces' writes",
+  (count) => {
+    const roots = Array.from({ length: count }, (_, i) => makePaneKey(`tab-wide-${i}`, LEAF))
+    const rootKeys = new Set<string>(roots)
+    const other = makePaneKey('tab-other', LEAF)
+    const tabOf = (paneKey: string) => paneKey.slice(0, paneKey.indexOf(':'))
+    const update = (paneKey: string, worktreeId: string) => ({
+      paneKey,
+      payload: {
+        state: 'done' as const,
+        agentType: 'claude',
+        prompt: worktreeId,
+        paneSleep: { ptyId: `pty-${tabOf(paneKey)}` }
+      },
+      metadata: { providerSession: { key: 'session_id' as const, id: `session-${paneKey}` } },
+      timing: { updatedAt: 2_000_000, stateStartedAt: 2_000_000 },
+      routing: { tabId: tabOf(paneKey), worktreeId }
+    })
+    useAppStore.setState({
+      agentActivityDisplayMode: 'compact',
+      tabsByWorktree: {
+        wide: roots.map((key) => makeTab({ id: tabOf(key), worktreeId: 'wide' })),
+        other: [makeTab({ id: 'tab-other', worktreeId: 'other' })]
+      },
+      ptyIdsByTabId: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(),
+      acknowledgedAgentsByPaneKey: Object.fromEntries(roots.map((key) => [key, 2_000_000]))
+    })
+    useAppStore.getState().setAgentStatuses([
+      ...roots.map((key) => update(key, 'wide')),
+      {
+        ...update(other, 'other'),
+        payload: { state: 'working' as const, agentType: 'claude', prompt: 'other' }
+      }
+    ])
+    let commits = 0
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <Profiler id="wide" onRender={() => commits++}>
+            <WorktreeCardAgents worktreeId="wide" executionHostId="local" />
+          </Profiler>
+        </TooltipProvider>
+      )
+    )
+    const label = () =>
+      container.querySelector('.compact-agent-summary-button')!.getAttribute('aria-label')!
+    expect(label()).toContain(String(count))
+    expect(label()).not.toContain('unread')
+    const committed = commits
+    // Upstream addressed reads of this card's roots are counted apart from its renders.
+    const statusReads = vi.spyOn(AcceptedAgentStatuses.prototype, 'get')
+    const rowReads = vi.spyOn(AgentStatusProjection.prototype, 'row')
+    const rootReads = () =>
+      [...statusReads.mock.calls, ...rowReads.mock.calls].filter(([key]) => rootKeys.has(key))
+        .length
+    act(() =>
+      useAppStore
+        .getState()
+        .setAgentStatus(
+          other,
+          { state: 'done', agentType: 'claude', prompt: 'other finished' },
+          undefined,
+          { updatedAt: 2_000_001, stateStartedAt: 2_000_001 },
+          { tabId: 'tab-other', worktreeId: 'other' }
+        )
+    )
+    act(() =>
+      useAppStore.setState((s) => ({
+        ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [['tab-other', ['pty-other']]])
+      }))
+    )
+    act(() => useAppStore.getState().acknowledgeAgents([other]))
+    act(() => useAppStore.getState().dropAgentStatus(other))
+    act(() => useAppStore.getState().setAgentStatuses([update(other, 'other')]))
+    act(() => useAppStore.getState().acknowledgeAgents([other]))
+    act(() => useAppStore.getState().dropAgentStatusByTabPrefix('tab-other'))
+    expect(rootReads()).toBe(0)
+    expect(commits).toBe(committed)
+    statusReads.mockRestore()
+    rowReads.mockRestore()
+
+    act(() => useAppStore.getState().unacknowledgeAgents([roots[0]]))
+    expect(label()).toContain('1 unread')
+    expect(label()).not.toContain(String(count - 1))
+    act(() =>
+      useAppStore.setState((s) => ({
+        ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [['tab-wide-1', ['ssh:remote@@pty']]])
+      }))
+    )
+    expect(label()).toContain(String(count - 1))
+    expect(label()).toContain('1 unread')
+  }
+)

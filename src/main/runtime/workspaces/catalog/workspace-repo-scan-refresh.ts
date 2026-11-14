@@ -110,7 +110,12 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       },
       {
         scan: async () => {
-          const scan = await scanLocalRepoWorktreesForResolution(repo.path, gitOptions)
+          const scan = await withRepositoryGitCause(
+            repo.path,
+            gitOptions,
+            { family: 'catalog', reason: 'runtime-catalog', cache: 'refresh' },
+            () => scanLocalRepoWorktreesForResolution(repo.path, gitOptions)
+          )
           if (scan.ok) {
             return { kind: 'rows', worktrees: scan.worktrees }
           }
@@ -198,3 +203,4 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     this.notifyReposChanged()
   }
 }
+import { withRepositoryGitCause } from '../../../git/repository-git-cause'

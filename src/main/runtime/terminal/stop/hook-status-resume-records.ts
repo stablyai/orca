@@ -7,7 +7,7 @@ import {
   statusRetainsResumableIdentity,
   type ResumeRecordStatus,
   type ResumeRecordTab
-} from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import {
   isPaneSleepRecord,
   normalizeAgentProviderSession,

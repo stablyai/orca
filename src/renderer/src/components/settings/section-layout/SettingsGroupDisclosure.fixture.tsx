@@ -44,13 +44,12 @@ export const expanded = defineFixture({
   }
 })
 
-// An active settings search force-opens the disclosure and disables its toggle.
-export const forcedOpenBySearch = defineFixture({
+// Unsaved edits force the disclosure open and disable its toggle.
+export const forcedOpen = defineFixture({
   width: 420,
-  store: { settingsSearchQuery: 'font' },
   render: () => (
     <SettingsGroup>
-      <SettingsGroupDisclosure>
+      <SettingsGroupDisclosure forceOpen>
         <AdvancedFontControls />
       </SettingsGroupDisclosure>
     </SettingsGroup>

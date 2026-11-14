@@ -1,6 +1,7 @@
 import { isRepoOnCatalogHost } from '../../../shared/execution-host'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
 import type { Repo } from '../../../shared/repo-types'
-import type { ArchiveHookOverride } from '../../../shared/worktree/archive-hook-removal-gate'
+import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
 import { removeFolderSetupRunnerFiles } from '../../workspace-hooks/folder-setup-runner-files'
 import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
 import type { HookRuntimeTarget } from '../../workspace-hooks/hook-runtime-target'
@@ -12,9 +13,10 @@ import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gat
  * Only the host holding the folder runs it; others own no files there.
  */
 export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreeId: string
   displayName: string
+  workspacePath?: string
   runArchive: boolean
   allowFailure: boolean
   runtimeTarget: () => HookRuntimeTarget | undefined
@@ -28,7 +30,11 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
     return undefined
   }
   const result = await runHook('archive', repo.path, repo, repo.path, args.runtimeTarget(), {
-    identity: { worktreeId: args.worktreeId, displayName: args.displayName },
+    identity: {
+      worktreeId: args.worktreeId,
+      displayName: args.displayName,
+      ...(args.workspacePath !== undefined ? { workspacePath: args.workspacePath } : {})
+    },
     hooks
   })
   return gateWorktreeRemovalOnArchiveHook({

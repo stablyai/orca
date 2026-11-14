@@ -12,7 +12,8 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(async () => Buffer.from('')),
   realpath: vi.fn(async (path: string) => path),
   access: vi.fn(async () => undefined),
-  rm: vi.fn(async () => undefined)
+  rm: vi.fn(async () => undefined),
+  writeFile: vi.fn(async () => undefined)
 }))
 
 import { ExternalChromiumBrowserSession } from './external-chromium-browser-session'
@@ -39,6 +40,37 @@ describe('orcad external-chromium agent-browser environment', () => {
   beforeEach(() => {
     runProcessMock.mockReset()
     vi.mocked(mkdir).mockClear()
+  })
+
+  it('launches headless with only Orca agent-browser settings', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: JSON.stringify([{ success: true, result: { url: 'about:blank' } }]),
+      stderr: '',
+      timedOut: false
+    })
+    vi.stubEnv('AGENT_BROWSER_HEADED', '1')
+    vi.stubEnv('agent_browser_extensions', '/ext')
+    vi.stubEnv('AGENT_BROWSER_SOCKET_DIR', '/tmp/ab-sockets')
+    try {
+      await new ExternalChromiumBrowserSession(
+        '/opt/orca/agent-browser',
+        { executablePath: BASE.executablePath, provider: 'chromium' },
+        '/state'
+      ).run(['get', 'url'])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    const [spec] = runProcessMock.mock.calls[0]
+    const headed = spec.args?.indexOf('--headed') ?? -1
+    expect(spec.args?.slice(headed, headed + 2)).toEqual(['--headed', 'false'])
+    expect(spec.env).toMatchObject({
+      AGENT_BROWSER_SOCKET_DIR: '/tmp/ab-sockets',
+      AGENT_BROWSER_CONFIG: join('/state', 'agent-browser-config.json')
+    })
+    expect(spec.env).not.toHaveProperty('AGENT_BROWSER_HEADED')
+    expect(spec.env).not.toHaveProperty('agent_browser_extensions')
   })
 
   it('reports a ref whose element is gone as stale', async () => {

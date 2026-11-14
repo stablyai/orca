@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getSidebarLineageAncestors
-} from '../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeMap

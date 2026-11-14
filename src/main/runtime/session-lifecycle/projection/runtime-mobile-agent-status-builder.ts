@@ -211,6 +211,9 @@ export function buildRuntimeMobileAgentStatus(
       ownerAgent,
       ownerOptions
     )
+    if (liveRow.paneSleep) {
+      return { agentStatus: liveStatus }
+    }
     // A live question outranks only the shell title that currently obscures it.
     const renewedStatus = renewRuntimeMobileAgentStatusFromPtyTitle(liveStatus, pty, {
       preserveQuestionUnderShellTitle: true

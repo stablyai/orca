@@ -4,7 +4,7 @@ import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import { stopReachesUnrecordedWork } from '../delivery/structured-agent-session-queued-stop'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 import { structuredAgentSessionStoppedTurnId } from '../termination/structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
@@ -27,7 +27,7 @@ export type ChatStopTarget = {
 }
 
 /** Late/empty Stops are accepted no-ops and must not withdraw or interrupt newer work. */
-export function captureChatStopTarget(
+export async function captureChatStopTarget(
   ctx: AgentSessionTurnContext,
   input: {
     child: StructuredAgentSessionProviderChild | null
@@ -37,23 +37,21 @@ export function captureChatStopTarget(
     stoppedSend?: boolean
     withdrawsContinue?: boolean
   }
-): ChatStopTarget | null {
+): Promise<ChatStopTarget | null> {
   const { child, turnId } = input
-  const reached = stopReachesUnrecordedWork(ctx, turnId)
+  const reached = await stopReachesUnrecordedWork(ctx, turnId)
   if (reached === 'late') {
     return null
   }
-  const queued = ctx.journal.inputOrder
-    .recoverableSubmissions()
-    .some(isQueuedAgentJournalSubmission)
+  const queued = (
+    await ctx.journal.reads.input({ kind: 'recoverable-submissions' })
+  ).submissions.some(isQueuedAgentJournalSubmission)
+  const live = await readContextStructuredAgentSessionTurn(ctx)
   const target = {
     child,
-    turnId: structuredAgentSessionStoppedTurnId(
-      contextStructuredAgentSessionCurrentWork(ctx),
-      turnId
-    ),
+    turnId: structuredAgentSessionStoppedTurnId({ activeTurnId: () => live.activeTurnId }, turnId),
     named: turnId !== undefined,
-    turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope(),
+    turnScope: live.turnScope,
     eventTurnId: input.endsSession ? null : (turnId ?? null),
     queued
   }
@@ -68,7 +66,7 @@ export function captureChatStopTarget(
     ctx.agent !== undefined && ctx.agents.capabilities(ctx.agent)?.threadGoal === true
   if (
     !child ||
-    (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx) && !canHaveGoal)
+    (turnId === undefined && !input.stoppedSend && !(await isMainAgentWorking(ctx)) && !canHaveGoal)
   ) {
     return queued || input.stoppedPrePrompt || input.withdrawsContinue
       ? { ...target, reach: 'withdraw', marks: true }

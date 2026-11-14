@@ -31,7 +31,7 @@ import {
 } from './delete-worktree-dialog-copy'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import { useDeleteWorktreeAtRiskLocalFiles } from './use-delete-worktree-at-risk-local-files'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
@@ -330,11 +330,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {isBatchDelete
-              ? t('auto.components.sidebar.DeleteWorktreeDialog.86f0ae1257', 'Delete Workspaces')
-              : t('auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf', 'Delete Workspace')}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DeleteWorktreeDialogDescription
             showUnknownChangeLossWarning={hasUnknownChangeState}
             targetClassName={deleteCopy.targetClassName}
@@ -389,10 +385,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             isDetachingChildren={isDetachingChildren}
             deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
             canForceDelete={canForceDelete}
-            isBatchDelete={isBatchDelete}
-            worktreeCount={worktrees.length}
-            canDeleteAllLineage={deleteAllLineage}
-            lineageDeleteTargetCount={lineageDelete.deleteAllTargets.length}
             onCancel={() => handleOpenChange(false)}
             onForceDelete={
               preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)

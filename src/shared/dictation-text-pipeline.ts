@@ -1,4 +1,5 @@
-import { createDictationDictionary, type DictationTerm } from './dictation-dictionary'
+import type { DictationTerm } from './dictation-dictionary'
+import { createDictationDictionary } from './dictation-term-spelling'
 import { engineDictationLanguage } from './dictation-language'
 import { removeFillerWords } from './dictation-filler-words'
 import type { SpeechModelManifest, VoiceSettings } from './speech-types'
@@ -41,7 +42,7 @@ export function createDictationTextPipeline(
     settings?.removeFillerWords === false
       ? null
       : (text: string) => removeFillerWords(text, languages, settings?.correctionWord)
-  const spellTerms = createDictationDictionary(terms)
+  const spellTerms = createDictationDictionary(terms, languages)
   if (!dropFillers || !spellTerms) {
     return dropFillers ?? spellTerms
   }

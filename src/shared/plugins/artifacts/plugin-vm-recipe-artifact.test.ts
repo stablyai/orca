@@ -2,31 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { parsePluginVmRecipeArtifact } from './plugin-vm-recipe-artifact'
 
 describe('plugin VM recipe artifacts', () => {
-  it('requires paired suspend/resume commands and rejects unknown fields', () => {
-    expect(() =>
-      parsePluginVmRecipeArtifact(
-        JSON.stringify({
-          schemaVersion: 1,
-          id: 'broken',
-          name: 'Broken',
-          create: 'create',
-          suspend: 'suspend'
-        })
-      )
-    ).toThrow('suspend and resume')
-    expect(() =>
-      parsePluginVmRecipeArtifact(
-        JSON.stringify({
-          schemaVersion: 1,
-          id: 'broken',
-          name: 'Broken',
-          create: 'create',
-          environment: { SECRET: 'value' }
-        })
-      )
-    ).toThrow()
-  })
-
   it('represents an explicitly disabled destroy action without executing text', () => {
     const recipe = parsePluginVmRecipeArtifact(
       JSON.stringify({

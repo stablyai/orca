@@ -2,7 +2,7 @@ import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-cont
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
 
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeHeadlessTerminal,
@@ -57,6 +57,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
+  protected abstract onPtyStopSettled(ptyId: string, stopped: boolean): void
 
   abstract getPtyLivenessVerdict(
     ...args: Calls.GetPtyLivenessVerdictArgs

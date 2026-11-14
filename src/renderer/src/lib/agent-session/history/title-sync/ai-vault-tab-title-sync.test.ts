@@ -3,7 +3,7 @@ import type { AiVaultSessionTitlesArgs } from '../../../../../../shared/ai-vault
 import { removeLayoutLeaf } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { AppState } from '@/store/types'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { resolveTerminalTabTitle } from '../../../../../../shared/tab-title-resolution'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 

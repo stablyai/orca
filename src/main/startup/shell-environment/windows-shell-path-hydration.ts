@@ -4,8 +4,8 @@ import {
   resolveEffectiveWindowsPowerShell,
   type WindowsPowerShellImplementation,
   type WindowsPowerShellShellFamily
-} from '../../providers/windows-powershell'
-import { resolveWindowsPowerShellSpawnChain } from '../../providers/windows-powershell-executable'
+} from '../../providers/shell-launch/windows/powershell'
+import { resolveWindowsPowerShellSpawnChain } from '../../providers/shell-launch/windows/powershell-executable'
 import {
   configureWindowsShellPathHydration,
   hydrateShellPath,

@@ -28,10 +28,11 @@ import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layo
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressing/groups/structured-worker-group-addressing'
 import {
-  retitleStructuredConversationTab,
+  retitleStructuredConversationTabs,
   titleStructuredConversationTabs
 } from '../../session-tabs/structured-conversation-tab-title'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
+import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
   protected pruneMobileSessionTabGroupLayout(
@@ -81,8 +82,10 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    snapshot = titleStructuredConversationTabs(snapshot, (sessionId) =>
-      this.structuredConversationTabName(snapshot.worktree, sessionId)
+    snapshot = titleStructuredConversationTabs(
+      snapshot,
+      (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId),
+      structuredConversationForked
     )
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
   }
@@ -92,11 +95,18 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (!snapshot) {
       return
     }
-    const next = retitleStructuredConversationTab(
-      snapshot,
-      sessionId,
-      this.structuredConversationTabName(workspaceId, sessionId)
-    )
+    // An older fork's shown name reads its source's, so the source's open forks retitle with it.
+    const store = getStructuredAgentSessionHost()?.deps?.store
+    const names = new Map([[sessionId, this.structuredConversationTabName(workspaceId, sessionId)]])
+    for (const tab of snapshot.tabs) {
+      if (
+        tab.type === 'agent-session' &&
+        store?.getConversation(tab.sessionId)?.forkedFrom?.sessionId === sessionId
+      ) {
+        names.set(tab.sessionId, this.structuredConversationTabName(workspaceId, tab.sessionId))
+      }
+    }
+    const next = retitleStructuredConversationTabs(snapshot, names, structuredConversationForked)
     if (next) {
       this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(workspaceId, next))
     }
@@ -108,8 +118,11 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     const customLabel = this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[
       workspaceId
     ]?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)?.customLabel
+    const store = getStructuredAgentSessionHost()?.deps?.store
     const conversationName =
-      record?.location.workspaceId === workspaceId ? record.conversationName : null
+      store && record?.location.workspaceId === workspaceId
+        ? agentSessionRecordShownName(store, record)
+        : null
     return structuredChatDisplayName(customLabel, conversationName, '') || null
   }
 
@@ -299,4 +312,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
   }
+}
+
+function structuredConversationForked(sessionId: string): boolean {
+  return !!getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)?.forkedFrom
 }

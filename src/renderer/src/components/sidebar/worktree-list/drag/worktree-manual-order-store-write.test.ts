@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'

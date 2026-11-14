@@ -24,11 +24,6 @@ import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import { formatUiAutomationSchedule } from '../details/automation-schedule-label'
-import {
-  getExecutionHostLabel,
-  getLocalExecutionHostLabel,
-  getRepoExecutionHostId
-} from '../../../../../shared/execution-host'
 import type { SshConnectionState } from '../../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -40,12 +35,13 @@ import {
   getLocalAutomationLastRunSnapshot
 } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
-import { formatAutomationDateTimeWithRelative } from '../automation-page-parts'
+import { formatAutomationRelativeTime, formatAutomationDateTime } from '../automation-page-parts'
 import { getAutomationTargetAvailability } from '../hosts/automation-target-availability'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
 import { formatAutomationUsageSummary } from '../runs/automation-usage-model'
-import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { automationsTableGridClass } from './automations-table-layout'
+import { automationRowHostLabel } from './automation-list-host'
 import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_SELECTED_CLASS,
@@ -55,7 +51,7 @@ import {
   isPortaledRowMenuClick,
   isRowActivationKey
 } from '@/lib/list-interaction/list-row-interaction'
-import { AutomationListStatusCell } from './AutomationListStatusCell'
+import { AutomationListNextRunCell } from './AutomationListNextRunCell'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
@@ -79,6 +75,8 @@ export type AutomationListLocalRowProps = {
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled?: (row: AutomationListRow, action: AutomationRowAction) => boolean
   needsMigration?: (row: AutomationListRow) => boolean
+  /** The list spans more than one host. */
+  showHost?: boolean
   onSelect: (rowKey: string) => void
   onRunNow: (row: AutomationListRow) => void
   onEdit: (row: AutomationListRow) => void
@@ -108,6 +106,7 @@ export function AutomationListLocalRow({
   hostLabelById = EMPTY_HOST_LABELS,
   isActionEnabled,
   needsMigration,
+  showHost = false,
   onSelect,
   onRunNow,
   onEdit,
@@ -146,22 +145,16 @@ export function AutomationListLocalRow({
     automationProjectName(automation, automationRepo, repoMap, !!needsMigration?.(row)) ??
     t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
   const scheduleLabel = formatUiAutomationSchedule(automation.rrule, t, intlLocale)
-  const nextRunLabel = automation.enabled
-    ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow, t, intlLocale)
-    : t('auto.components.automations.enablement.paused', 'Paused')
+  const nextRunLabel =
+    formatAutomationRelativeTime(automation.nextRunAt, relativeNow, t, intlLocale) ??
+    formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
+  const nextRunTitle = formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
   const isSelected = isSelectedLocal && selectedRowKey === row.key
   const movedToDistro = useAppStore(
     (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
   )
   const agentLabel = getAgentLabel(automation.agentId)
-  const hostId =
-    automation.runContext?.hostId ??
-    (automationRepo ? getRepoExecutionHostId(automationRepo) : null)
-  const hostLabel =
-    row.hostLabel ||
-    (hostId
-      ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
-      : getLocalExecutionHostLabel())
+  const hostLabel = automationRowHostLabel(row, automationRepo, hostLabelById)
   const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${formatAutomationUsageSummary(row.usageSummary ?? undefined, t, intlLocale)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
   const lastRun = lastRunByAutomationId.get(automation.id)
@@ -248,6 +241,7 @@ export function AutomationListLocalRow({
           tabIndex={0}
           data-automation-row-id={row.key}
           data-current={isSelected ? 'true' : undefined}
+          aria-label={`${automation.name}, ${scheduleLabel}`}
           onClick={(event) => {
             // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
@@ -263,46 +257,50 @@ export function AutomationListLocalRow({
             onSelect(row.key)
           }}
           className={cn(
-            AUTOMATIONS_TABLE_GRID_CLASS,
+            automationsTableGridClass(showHost),
             LIST_TABLE_ROW_CLASS,
             isSelected && LIST_TABLE_ROW_SELECTED_CLASS
           )}
         >
-          <span className={LIST_TABLE_STICKY_ROW_CELL_CLASS}>
-            <span className="min-w-0 truncate font-medium">{automation.name}</span>
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={scheduleLabel}>
-            {scheduleLabel}
+          <span className={cn(LIST_TABLE_STICKY_ROW_CELL_CLASS, 'gap-2.5')}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex shrink-0 items-center" aria-label={agentTooltipLabel}>
+                  <AgentIcon agent={automation.agentId} size={16} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {agentTooltipLabel}
+              </TooltipContent>
+            </Tooltip>
+            <span className="flex min-w-0 flex-col">
+              <span className="min-w-0 truncate font-medium">{automation.name}</span>
+              <span
+                className="min-w-0 truncate text-xs text-muted-foreground"
+                title={scheduleLabel}
+              >
+                {scheduleLabel}
+              </span>
+            </span>
           </span>
           <span className="min-w-0 truncate text-muted-foreground" title={projectLabel}>
             {projectLabel}
           </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={hostLabel}>
-            {hostLabel}
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={nextRunLabel}>
-            {nextRunLabel}
+          {showHost ? (
+            <span className="min-w-0 truncate text-muted-foreground" title={hostLabel}>
+              {hostLabel}
+            </span>
+          ) : null}
+          <span className="min-w-0" title={automation.enabled ? nextRunTitle : undefined}>
+            <AutomationListNextRunCell
+              enabled={automation.enabled}
+              nextRunLabel={nextRunLabel}
+              movedToDistro={movedToDistro}
+              needsMigration={needsMigration?.(row)}
+              setupSkipped={Boolean(setupReview)}
+            />
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell
-            enabled={automation.enabled}
-            movedToDistro={movedToDistro}
-            needsMigration={needsMigration?.(row)}
-            setupSkipped={Boolean(setupReview)}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className="flex items-center justify-center text-muted-foreground"
-                aria-label={agentTooltipLabel}
-              >
-                <AgentIcon agent={automation.agentId} size={16} />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {agentTooltipLabel}
-            </TooltipContent>
-          </Tooltip>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

@@ -25,6 +25,7 @@ import {
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import { isWslHostOffForForge } from '../../../github/repositories/wsl-host-off-forge'
+import type { PRSnapshotReply } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 export function* getVisibleHostedReviewWorkspaces(
   state: AppState,
@@ -180,13 +181,16 @@ export function getVisibleHostedReviewRefreshTargets(
           ? null
           : fetchedAt,
       selected,
+      refreshOnForeground:
+        !!runtime && knownGitHub && (review?.state === 'open' || review?.state === 'draft'),
       intervalMs: reviewRefreshIntervalMs({
         state: review?.state,
         checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
         hasReview: review ? true : fetchedAt !== null ? false : null,
         selected
       }),
-      refresh: async (force = true) => {
+      refresh: async (force = true, signal, intent) => {
+        let outcome: PRSnapshotReply | undefined
         const before = getState()
         const beforeFetchedAt = knownGitHub
           ? before.prCache[candidate.cacheKey]?.fetchedAt
@@ -194,7 +198,12 @@ export function getVisibleHostedReviewRefreshTargets(
         await (runtime
           ? before.fetchPRForBranch(candidate.repoPath, candidate.branch, {
               force: true,
-              reason: 'visible',
+              signal,
+              reason: (intent ? intent === 'discovery' : force) ? 'active' : 'swr',
+              selected,
+              onReadOutcome: (next) => {
+                outcome = next
+              },
               repoId: candidate.repoId,
               repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
               worktreeId: id,
@@ -214,6 +223,12 @@ export function getVisibleHostedReviewRefreshTargets(
               admissionTier: selected ? 'interactive' : 'background'
             }))
         const after = getState()
+        if (runtime && outcome) {
+          return {
+            succeeded: !('kind' in outcome) || outcome.kind !== 'upstream-error',
+            retryAfterMs: outcome.revalidation?.retryAfterMs
+          }
+        }
         const afterFetchedAt = knownGitHub
           ? after.prCache[candidate.cacheKey]?.fetchedAt
           : after.hostedReviewCache[key]?.fetchedAt
@@ -256,12 +271,6 @@ export function visibleHostedReviewRefreshInputsChanged(
     // A WSL host turning ready brings its rows back into the refresh (E9).
     state.wslHostStatuses !== previous.wslHostStatuses ||
     state.prCache !== previous.prCache ||
-    state.hostedReviewCache !== previous.hostedReviewCache ||
-    state.tabsByWorktree !== previous.tabsByWorktree ||
-    state.ptyIdsByTabId !== previous.ptyIdsByTabId ||
-    state.browserTabsByWorktree !== previous.browserTabsByWorktree ||
-    state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
-    state.agentStatusEpoch !== previous.agentStatusEpoch
+    state.hostedReviewCache !== previous.hostedReviewCache
   )
 }

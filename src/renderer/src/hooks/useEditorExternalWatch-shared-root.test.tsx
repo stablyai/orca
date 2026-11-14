@@ -53,9 +53,9 @@ vi.mock('./editor-runtime-file-watch', () => ({
     _target: unknown,
     _onPayload: unknown,
     _onError: unknown,
-    onFirstReady?: () => void
+    onCatchUp?: () => void
   ) => {
-    onFirstReady?.()
+    onCatchUp?.()
     return vi.fn()
   }
 }))

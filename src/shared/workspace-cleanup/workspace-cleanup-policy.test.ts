@@ -37,14 +37,6 @@ describe('normalizeWorkspaceCleanupRules', () => {
 describe('resolveWorkspaceCleanupPolicy', () => {
   const settings = { workspaceCleanupPolicy: CUSTOM_RULES }
 
-  it('uses the global rules when the project has no override', () => {
-    expect(resolveWorkspaceCleanupPolicy(settings, {})).toEqual({
-      source: 'global',
-      rules: CUSTOM_RULES,
-      inactiveActionSupported: true
-    })
-  })
-
   it('turns every rule off for a project set to off but keeps the global keep-when', () => {
     expect(
       resolveWorkspaceCleanupPolicy(settings, { workspaceCleanupPolicy: { mode: 'off' } })

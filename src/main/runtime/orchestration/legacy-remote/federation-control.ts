@@ -19,7 +19,7 @@ import {
   FederationFleetSnapshotParams,
   FederationOutputReadParams,
   FederationReadParams
-} from '../../../../shared/rpc-contract/orchestration-federation-control-params'
+} from '../../../../shared/rpc-contract/orchestration/orchestration-federation-control-params'
 
 export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   defineOrchestrationMethod({

@@ -77,6 +77,11 @@ export function demoteRuntimeMobileAgentStatus(
   status: AgentStatusEntry,
   pty: RuntimePtyWorktreeRecord | null
 ): AgentStatusEntry {
+  if (status.state === 'done') {
+    const completedStatus = { ...status }
+    delete completedStatus.terminalTitle
+    return completedStatus
+  }
   return {
     state: 'done',
     prompt: '',

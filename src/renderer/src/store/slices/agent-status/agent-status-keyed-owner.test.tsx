@@ -4,7 +4,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppStateViewContext } from '../../retained-views/app-state-view'
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
 import {
@@ -15,7 +15,7 @@ import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layou
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-types'
 import { resetWebSessionTabsSyncTestState } from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
+import { useAgentBucketCounts } from '@/components/dashboard/bucket-counts/useAgentBucketCounts'
 import { acceptedAgentStatuses, AcceptedAgentStatuses } from './accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 

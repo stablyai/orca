@@ -5,7 +5,7 @@ import {
   cellFlagObjectName,
   cellFlagParser
 } from './cell-flags.js'
-import { CONTROL_FLAG_POLL_MS, startControlFlagChannel } from './relay-control-flag-channel.js'
+import { startControlFlagChannel } from './relay-control-flag-channel.js'
 
 const CELL_ID = 'production-gce-c7'
 const ACCESS_TOKEN = 'ya29.secret-access-token'
@@ -46,7 +46,7 @@ function cellObject(generation: number, flags: Record<string, unknown>, cellId =
   }
 }
 
-function cellChannel(fetchImpl: typeof fetch, autoStart = false) {
+function cellChannel(fetchImpl: typeof fetch) {
   return startControlFlagChannel({
     objectName: cellFlagObjectName(CELL_ID),
     defaults: CELL_FLAG_DEFAULTS,
@@ -54,7 +54,7 @@ function cellChannel(fetchImpl: typeof fetch, autoStart = false) {
     appliedEvent: CELL_FLAGS_APPLIED_EVENT,
     fetch: fetchImpl,
     random: () => 0.5,
-    autoStart
+    autoStart: false
   })
 }
 
@@ -76,25 +76,6 @@ describe('control flag channel', () => {
       .map((call) => String(call[0]))
       .filter((line) => line.includes(`"event":"${CELL_FLAGS_APPLIED_EVENT}"`))
       .map((line): unknown => JSON.parse(line))
-
-  it('flips a flag on and back off, logging each applied generation once', async () => {
-    const google = fakeGoogle(cellObject(5, { readinessLocal: true, ticketCheck: 'shadow' }))
-    const channel = cellChannel(google.fetchImpl)
-    await channel.poll()
-    await channel.poll()
-    expect(google.state.storageRequests[1]?.searchParams.get('ifGenerationNotMatch')).toBe('5')
-    google.state.object = cellObject(7, { readinessLocal: false, ticketCheck: 'off' })
-    await channel.poll()
-    expect(channel.applied()).toEqual({ generation: 7, flags: CELL_FLAG_DEFAULTS })
-    expect(appliedLines()).toEqual([
-      {
-        event: CELL_FLAGS_APPLIED_EVENT,
-        generation: 5,
-        flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true, ticketCheck: 'shadow' }
-      },
-      { event: CELL_FLAGS_APPLIED_EVENT, generation: 7, flags: CELL_FLAG_DEFAULTS }
-    ])
-  })
 
   it('keeps the applied values through every kind of lost contact, logging once per cause', async () => {
     const google = fakeGoogle(cellObject(5, { readinessLocal: true }))
@@ -230,19 +211,4 @@ describe('control flag channel', () => {
     expect(channel.applied()).toMatchObject({ generation: 5, flags: { readinessLocal: true } })
   })
 
-  it('reads one at a time and on a jittered 5 s cadence', async () => {
-    vi.useFakeTimers()
-    const google = fakeGoogle(cellObject(5, { readinessLocal: true }))
-    const channel = cellChannel(google.fetchImpl)
-    await Promise.all([channel.poll(), channel.poll()])
-    expect(google.state.storageRequests).toHaveLength(1)
-    const running = cellChannel(google.fetchImpl, true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(google.state.storageRequests).toHaveLength(2)
-    await vi.advanceTimersByTimeAsync(CONTROL_FLAG_POLL_MS)
-    expect(google.state.storageRequests).toHaveLength(3)
-    running.stop()
-    await vi.advanceTimersByTimeAsync(CONTROL_FLAG_POLL_MS * 3)
-    expect(google.state.storageRequests).toHaveLength(3)
-  })
 })

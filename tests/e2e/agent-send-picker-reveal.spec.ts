@@ -83,7 +83,7 @@ for (const host of ['local', 'ssh'] as const) {
                       leafId
                     })
                   ).id
-                : 'picker-agent-pty'
+                : `${ssh.hostId}@@picker-agent-pty`
             await window.api.ui.set({ groupBy: 'none', collapsedGroups })
             state.setSidebarOpen(true)
             state.setShowSleepingWorkspaces(true)

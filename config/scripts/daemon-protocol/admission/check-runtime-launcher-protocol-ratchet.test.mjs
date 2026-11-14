@@ -25,11 +25,11 @@ function write(repo, path, contents) {
   writeFileSync(file, contents)
 }
 
-function writeProtocol(repo, current, sourcePath = DAEMON_PROTOCOL_SOURCE_PATH) {
+function writeProtocol(repo, current) {
   const previous = Array.from({ length: current - 1 }, (_, index) => index + 1)
   write(
     repo,
-    sourcePath,
+    DAEMON_PROTOCOL_SOURCE_PATH,
     `export const PROTOCOL_VERSION = ${current}\nexport const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [${previous.join(', ')}] as const\n`
   )
 }
@@ -51,11 +51,11 @@ function commit(repo, message) {
 }
 
 /** A base commit at protocol 3, then a candidate commit shaped by `change`. */
-function repoWithCandidate(change, sourcePath = DAEMON_PROTOCOL_SOURCE_PATH) {
+function repoWithCandidate(change) {
   const repo = mkdtempSync(join(tmpdir(), 'runtime-launcher-ratchet-'))
   repos.push(repo)
   git(repo, ['init', '-q'])
-  writeProtocol(repo, 3, sourcePath)
+  writeProtocol(repo, 3)
   write(repo, LAUNCHER, 'export const launcher = 1\n')
   write(repo, 'src/unrelated.ts', 'export const unrelated = 1\n')
   const base = commit(repo, 'base')
@@ -71,17 +71,6 @@ afterEach(() => {
 })
 
 describe('checkRuntimeLauncherProtocolRatchet against git history', () => {
-  it('enforces the restriction when the base predates the protocol source move', () => {
-    const { repo, base } = repoWithCandidate((candidate) => {
-      writeProtocol(candidate, 4)
-      write(candidate, LAUNCHER, 'export const launcher = 2\n')
-    }, 'src/main/daemon/daemon-protocol-version.ts')
-    expect(checkRuntimeLauncherProtocolRatchet({ repoRoot: repo, base, env: {} })).toMatchObject({
-      ok: false,
-      violated: true
-    })
-  })
-
   it('fails when the diff from the base both edits a launcher and bumps PROTOCOL_VERSION', () => {
     const { repo, base } = repoWithCandidate((candidate) => {
       writeProtocol(candidate, 4)

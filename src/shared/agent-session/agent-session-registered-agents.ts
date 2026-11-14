@@ -2,7 +2,7 @@
 
 import * as z from 'zod'
 import type { AgentSessionCapabilities } from './agent-session-capabilities'
-import { isStructuredAgentId } from './lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from './lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openEnum } from '../zod-salvage'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'

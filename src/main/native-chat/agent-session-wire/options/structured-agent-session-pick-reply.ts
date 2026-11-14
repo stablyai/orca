@@ -1,5 +1,5 @@
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
-import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
+import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
 import type { AgentModelCatalogService } from '../../agent-model-catalog/agent-model-catalog-service-contract'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
 

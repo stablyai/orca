@@ -5,7 +5,7 @@ import type { AppState } from '../../types'
 import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusUpdate } from './agent-status-contract'
 import { createAgentConversationCapacityIndex } from './agent-conversation-capacity-index'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 function conversation(key: string): AgentPaneConversationIdentity {
   return {

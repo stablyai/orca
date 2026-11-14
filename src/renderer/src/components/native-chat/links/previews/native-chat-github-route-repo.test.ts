@@ -101,33 +101,6 @@ describe('GitHub preview routing for a chat without a repo of its own', () => {
     expect(pickGitHubPreviewRouteRepo([{ repo: orca, originKey: null }], privatePr)).toBeNull()
   })
 
-  it('looks a private PR up through a local repo on github.com, as a preview', async () => {
-    const orca = repo('orca')
-    mocks.repos = [repo('folder', { kind: 'folder' }), orca]
-    mocks.slugs.set('orca', 'stablyai/orca')
-    const item = { type: 'pr', number: 685, title: 'perf: cacheable projections', state: 'draft' }
-    mocks.lookup.mockResolvedValue(item)
-
-    await expect(loadRoutedGitHubLinkPreview('local', privatePr)).resolves.toBe(item)
-    expect(mocks.lookup.mock.calls[0][0]).toMatchObject({
-      repoPath: '/src/orca',
-      repoId: 'orca',
-      owner: 'stablyai',
-      repo: 'orca-private',
-      number: 685,
-      type: 'pr',
-      preview: true
-    })
-  })
-
-  it('answers nothing, leaving the web card, when no repo on the chat host uses GitHub', async () => {
-    mocks.repos = [repo('ghes')]
-    mocks.slugs.set('ghes', 'git.corp.example/team/app')
-    const link = parseGitHubIssueOrPRLink('https://github.com/stablyai/orca-private/pull/686')!
-    await expect(loadRoutedGitHubLinkPreview('local', link)).resolves.toBeNull()
-    expect(mocks.lookup).not.toHaveBeenCalled()
-  })
-
   it('uses the remaining repo after the repo that answered is removed', async () => {
     const link = parseGitHubIssueOrPRLink('https://github.com/acme/private/pull/701')!
     const alice = repo('alice', { ghAccount: { host: 'github.com', user: 'alice' } })

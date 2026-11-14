@@ -116,12 +116,13 @@ export function projectRuntimeMobileSessionTabs(
     }
     const mobileStatusPty = livePty ?? pty
     // Use one main hook lookup for both headless title ownership and status to prevent divergence.
-    const retainedAgentStatus = tab.agentStatus
-      ? null
-      : host.getRetainedStatus(paneKey, liveLeafPty ?? mobileStatusPty, tab, getStatusRows)
-    const hookAgentStatus = tab.agentStatus
-      ? selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
-      : null
+    const retainedAgentStatus = host.getRetainedStatus(
+      paneKey,
+      liveLeafPty ?? mobileStatusPty,
+      tab,
+      getStatusRows
+    )
+    const hookAgentStatus = selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
     // Do not revive rejected persisted tab.ptyId; after restart it may name another pane and publish its title here.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
     const displayLeaf = leaf
@@ -183,20 +184,38 @@ export function projectRuntimeMobileSessionTabs(
     const statusPty = nativeStatusPty
       ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
       : null
-    const normalizedTabAgentStatus = renewRuntimeMobileAgentStatusFromPtyTitle(
-      tab.agentStatus
-        ? normalizeCompatibleAgentStatusEntryForOwner(
-            {
-              ...tab.agentStatus,
-              ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
-            },
-            ownerAgent,
-            ownerOptions
-          )
-        : null,
-      statusPty,
-      { preserveQuestionUnderShellTitle: true }
-    )
+    const acceptedRow = retainedAgentStatus ?? hookAgentStatus.live
+    // A published sleep marker refers to the host owner; it cannot outlive that record.
+    const resolvedHostProjection =
+      tab.agentStatus &&
+      (tab.agentStatus.paneSleep ||
+        (acceptedRow?.payload.state === 'done' && tab.agentStatus.state === 'done'))
+        ? host.buildPtyStatus(statusPty, tab, null, retainedAgentStatus, getHookRowsForPane)
+        : null
+    const normalizedTabAgentStatus = resolvedHostProjection
+      ? resolvedHostProjection.agentStatus
+        ? {
+            ...resolvedHostProjection.agentStatus,
+            updatedAt: Math.max(
+              resolvedHostProjection.agentStatus.updatedAt,
+              tab.agentStatus?.updatedAt ?? 0
+            )
+          }
+        : null
+      : renewRuntimeMobileAgentStatusFromPtyTitle(
+          tab.agentStatus
+            ? normalizeCompatibleAgentStatusEntryForOwner(
+                {
+                  ...tab.agentStatus,
+                  ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
+                },
+                ownerAgent,
+                ownerOptions
+              )
+            : null,
+          statusPty,
+          { preserveQuestionUnderShellTitle: true }
+        )
     // Live prompt/tool status must survive non-agent titles or interactivePrompt disappears.
     const hasLiveAgentSignal =
       normalizedTabAgentStatus?.interactivePrompt != null ||
@@ -231,6 +250,7 @@ export function projectRuntimeMobileSessionTabs(
     const terminalHandle = terminalPty ? host.issuePtyHandle(terminalPty) : null
     const projectedAgentStatus =
       agentStatus ??
+      resolvedHostProjection ??
       host.buildPtyStatus(
         // Main layout supplies the live pane leaf whose terminal owns status.
         ORCA_LAYOUT_OWNER_IS_MAIN ? (liveLeafPty ?? mobileStatusPty) : mobileStatusPty,

@@ -3,31 +3,31 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { DiffComment } from '../../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { getWorktreeLabel } from '../../worktree/worktree-label'
-import { getUnsentMobileDiffComments } from './mobile-diff-comment-edit'
+import { getWorktreeLabel } from '../../worktree/row-presentation/worktree-label'
+import { getUnsentMobileDiffComments } from './review-notes/mobile-diff-comment-edit'
 import {
   buildMobileDiffReviewQueue,
   filterMobileDiffReviewQueue,
   type MobileDiffReviewQueueFilter
-} from './mobile-diff-review-queue'
-import { useMobileDiffReviewSelection } from './use-mobile-diff-review-selection'
-import type { MobileDiffReviewInitialTarget } from './mobile-diff-review-positioning'
-import { useMobileDiffReviewSnapshot } from './use-mobile-diff-review-snapshot'
-import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
-import { canOpenMobileBranchCompareDiff } from '../mobile-branch-compare'
+} from './diff-state/mobile-diff-review-queue'
+import { useMobileDiffReviewSelection } from './diff-state/use-mobile-diff-review-selection'
+import type { MobileDiffReviewInitialTarget } from './diff-state/mobile-diff-review-positioning'
+import { useMobileDiffReviewSnapshot } from './diff-loading/use-mobile-diff-review-snapshot'
+import { useMobileDiffReviewDiffLoading } from './diff-loading/use-mobile-diff-review-diff-loading'
+import { canOpenMobileBranchCompareDiff } from '../branches/mobile-branch-compare'
 import {
   NO_REVIEW_SHEETS,
   reduceReviewSheets,
   reviewComposer,
   reviewSheetIntents
-} from './mobile-diff-review-sheets'
-import { useMobileDiffReviewInteractions } from './use-mobile-diff-review-interactions'
+} from './diff-actions/mobile-diff-review-sheets'
+import { useMobileDiffReviewInteractions } from './diff-actions/use-mobile-diff-review-interactions'
 import { resolveMobileAgentLaunchAvailability } from '../../session/agent-launch/mobile-agent-launch-availability'
-import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
-import { useMobileDiffReviewGitHub } from './use-mobile-diff-review-github'
-import { mobileDiffReviewThreadsForItem } from './mobile-diff-review-github'
-import { mobileDiffReviewNotesForItem } from './mobile-diff-comments'
-import { useMobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
+import { useMobilePrSidebarController } from './pull-request/use-mobile-pr-sidebar-controller'
+import { useMobileDiffReviewGitHub } from './diff-actions/use-mobile-diff-review-github'
+import { mobileDiffReviewThreadsForItem } from './diff-actions/mobile-diff-review-github'
+import { mobileDiffReviewNotesForItem } from './review-notes/mobile-diff-comments'
+import { useMobileDiffReviewNoteDraft } from './review-notes/use-mobile-diff-review-note-draft'
 import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 

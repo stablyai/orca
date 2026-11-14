@@ -11,7 +11,7 @@ import type {
   AgentStatusCacheIdentity,
   RefusedPaneResume
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   retireProcessAuthority(paneKey: string): void {

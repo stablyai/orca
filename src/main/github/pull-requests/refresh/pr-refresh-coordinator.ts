@@ -1,14 +1,18 @@
+import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
+import {
+  deliverablePRBranchOutcome,
+  type PRBranchReadResult
+} from '../../client/lookup/pr-branch-read-resources'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRRefreshOutcome,
+  PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { getPRForBranchOutcome } from '../../client/lookup/pr-for-branch-outcome'
+import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
   aliasFromCandidate,
-  hostedReviewOptionArgs,
-  isBackground,
-  MANUAL_MERGEABILITY_PENDING_REFRESH_MS,
   refreshKey,
   shouldBroadcastQueued,
   validateCandidate
@@ -26,13 +30,9 @@ import {
   type PRWatchJob,
   type PRWatchJobHooks
 } from './pr-refresh-watch-jobs'
-import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
-import {
-  blockedWslDistroForPath,
-  wslDistroForPath
-} from '../../../wsl/filesystem/wsl-unc-access-gate'
+import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -46,7 +46,7 @@ export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver):
 }
 
 export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
-  drainer.setRegistrationCheck(check)
+  drainer.registrationCheck = check
 }
 
 export function setPRWatchJobHooks(hooks: PRWatchJobHooks | null): void {
@@ -72,11 +72,71 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
  *  so a desktop read in flight for the same checkout keeps its follow-up. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
-  read: () => Promise<PRRefreshOutcome>
+  read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead,
+  didRead: () => boolean = () => true,
+  release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
-  const outcome = await read()
-  events.observe(candidate, outcome)
-  return outcome
+  try {
+    if (typeof read !== 'function') {
+      const result = await read.readResult((outcome) => {
+        events.observe(candidate, outcome)
+        return outcome
+      })
+      return result!.outcome
+    }
+    const outcome = await read()
+    if (didRead()) {
+      events.observe(candidate, outcome)
+    }
+    return outcome
+  } finally {
+    if (typeof read !== 'function') {
+      read.release()
+    } else {
+      release()
+    }
+  }
+}
+
+export async function runHostedPRSnapshot(
+  candidate: GitHubPRRefreshCandidate,
+  prepared: PreparedPRBranchRead,
+  deadline: number,
+  signal?: AbortSignal,
+  acceptRevalidationOnly = false
+): Promise<PRSnapshotReply> {
+  if (prepared.cached() || drainer.hostedJobs.has(prepared)) {
+    return drainer.hostedJobs.read(prepared, candidate, deadline, signal, acceptRevalidationOnly)
+  }
+  if (acceptRevalidationOnly && !prepared.canRetain()) {
+    return drainer.hostedJobs.complete(prepared, candidate, null, acceptRevalidationOnly)
+  }
+  const pending = prepared.pending()
+  if (pending) {
+    const timeout = new Error('Pull request snapshot wait timed out')
+    let result: PRBranchReadResult
+    try {
+      result = await sharedPromiseSettlementWaiters(pending).wait({
+        signal,
+        ...(acceptRevalidationOnly
+          ? { timeoutMs: Math.max(0, deadline - Date.now()), createTimeoutError: () => timeout }
+          : {}),
+        createAbortError: () => new Error('Pull request wait was cancelled')
+      })
+    } catch (error) {
+      if (error === timeout) {
+        return drainer.hostedJobs.complete(prepared, candidate, null, acceptRevalidationOnly)
+      }
+      throw error
+    }
+    return drainer.hostedJobs.complete(
+      prepared,
+      candidate,
+      acceptRevalidationOnly ? deliverablePRBranchOutcome(prepared, result) : result.outcome,
+      acceptRevalidationOnly
+    )
+  }
+  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
 }
 
 function removeInvisibleVisibleRefreshes(): void {
@@ -139,6 +199,7 @@ export function reportVisiblePRRefreshCandidates(
   generation: number,
   windowId: number
 ): void {
+  refreshPRPolicyContext()
   const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
   if (!visibility.report(candidates, generation, windowId)) {
     return
@@ -178,110 +239,15 @@ export function _getPRRefreshAliasCountForTests(key: string): number {
   return queue.aliasCount(key)
 }
 
-export async function refreshPRNow(
+export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
-): Promise<PRRefreshOutcome> {
-  const alias = aliasFromCandidate(candidate)
-  const key = refreshKey(candidate)
-  const existing = queue.get(key)
-  const aliasMap = new Map(existing ? existing.aliases : [])
-  aliasMap.set(alias.cacheKey, alias)
-  const aliases = Array.from(aliasMap.values())
-  const skippedReason = validateCandidate(candidate)
-  if (skippedReason) {
-    queue.removeInvalidAlias(key, alias)
-    const outcome: PRRefreshOutcome = {
-      kind: 'upstream-error',
-      errorType: 'unknown',
-      message: `Cannot refresh PR for this worktree: ${skippedReason}`,
-      fetchedAt: Date.now()
-    }
-    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
-    return outcome
-  }
-  // E9: renderer fallbacks reach here with automatic reasons; only a manual refresh may start a stopped distro.
-  if (
-    isBackground(reason) &&
-    wslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro) &&
-    (await blockedWslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro))
-  ) {
-    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason: 'fresh' })
-    // Local callers keep their cached PR on an upstream error; nothing is recorded or retried here.
-    return {
-      kind: 'upstream-error',
-      errorType: 'unknown',
-      message: 'WSL distro is not running',
-      fetchedAt: Date.now()
-    }
-  }
-
-  const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)
-  const gateUntil = Math.max(primaryGateUntil ?? 0, retry.manualGateUntil(key))
-  if (gateUntil > Date.now()) {
-    queue.protectBackgroundUntil(key, gateUntil)
-    queue.set(key, {
-      key,
-      candidate,
-      aliases: aliasMap,
-      reason,
-      priority: 40,
-      dueAt: gateUntil,
-      queuedAt: queue.nextOrder()
-    })
-    events.broadcast({
-      aliases,
-      reason,
-      status: 'paused',
-      pausedUntil: gateUntil,
-      skippedReason: 'rate-limit'
-    })
-    drainer.schedule(Math.max(1_000, gateUntil - Date.now()))
-    return {
-      kind: 'upstream-error',
-      errorType: 'rate_limited',
-      message: 'GitHub is temporarily limiting requests. Try again after the limit resets.',
-      fetchedAt: Date.now(),
-      nextAutoRetryAt: gateUntil,
-      retryDisabledUntil: gateUntil
-    }
-  }
-
-  queue.delete(key)
-  const requestSequence = events.nextSequence()
-  const requestStartedAt = Date.now()
-  queue.noteRequestStarted(key, requestSequence)
-  events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
-  const outcome = await getPRForBranchOutcome(
-    candidate.repoPath,
-    candidate.branch,
-    candidate.linkedPRNumber ?? null,
-    candidate.connectionId ?? null,
-    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason, options)
+): Promise<PRSnapshotReply> {
+  return runImmediatePRRefresh(
+    { queue, retry, visibility, events, drainer },
+    candidate,
+    reason,
+    options
   )
-  if (!queue.ownsRequest(key, requestSequence)) {
-    events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
-    return outcome
-  }
-  let plannedRetryAt: number | undefined
-  let broadcastOutcome = outcome
-  if (outcome.kind === 'upstream-error' && visibility.has(key)) {
-    plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
-    broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
-  }
-  events.observe(candidate, outcome, aliases)
-  retry.noteManualGate(key, broadcastOutcome)
-  events.broadcast(
-    { aliases, reason, outcome: broadcastOutcome, requestStartedAt },
-    requestSequence
-  )
-  drainer.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
-    plannedRetryAt,
-    ...(reason === 'manual'
-      ? { pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS }
-      : {})
-  })
-  return broadcastOutcome
 }

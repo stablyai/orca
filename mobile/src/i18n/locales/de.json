@@ -647,7 +647,10 @@
       "busy": "Ein anderer Chat oder ein Terminal wird geöffnet. Warte und zweige dann den {{agent}}-Chat erneut ab.",
       "unconfirmed": "{{agent}} konnte das Abzweigen nicht bestätigen. Der Chat wurde möglicherweise dennoch geöffnet; prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
       "failed": "{{agent}} konnte diesen Chat nicht abzweigen. {{detail}}",
-      "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut."
+      "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
+      "mark": "Zweig ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Zweig: {{name}}"
     }
   },
   "common": {
@@ -1593,7 +1596,6 @@
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
       "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
       "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
-      "deleteWorktree": "Worktree löschen",
       "pin": "Anheften",
       "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
       "removeHost": "Host entfernen",
@@ -1765,7 +1767,6 @@
       "daysAgo_one": "vor {{count}} Tag",
       "daysAgo_other": "vor {{count}} Tagen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
-      "deleteConfirmTitle": "Kommentar löschen?",
       "editPlaceholder": "Kommentar bearbeiten…",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
@@ -2386,7 +2387,6 @@
       "addTitle": "Schnellbefehl hinzufügen",
       "chooseAgentTitle": "Agenten auswählen",
       "deleteConfirmMessage": "Dieser Schnellbefehl wird aus der Liste gespeicherter Befehle entfernt.",
-      "deleteConfirmTitle": "„{{label}}“ löschen?",
       "editTitle": "Schnellbefehl bearbeiten",
       "editorDescription": "Terminal-Befehle oder Agenten-Prompts für den Schnellzugriff speichern.",
       "title": "Schnellbefehle",
@@ -4109,7 +4109,6 @@
       "outcome": "Ergebnis",
       "allOutcomes": "Alle Ergebnisse",
       "couldNotStart": "Start nicht möglich",
-      "deleteAutomationTitle": "Automatisierung löschen?",
       "deleteRetained": "„{{name}}“ und die gespeicherten Ausführungen löschen?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Das ursprüngliche Agentenfenster konnte nicht überprüft werden. Verbinde dich erneut und versuche es noch einmal.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Das ursprüngliche Agentenfenster kann nicht mehr geöffnet werden. Gespeicherte Ausgaben bleiben hier.",

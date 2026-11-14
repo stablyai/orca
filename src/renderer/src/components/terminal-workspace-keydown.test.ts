@@ -5,8 +5,8 @@ import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-ac
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../hooks/ipc-tab-switch'
-import '@/components/floating-terminal/floating-workspace-terminal-actions'
-import '@/components/floating-terminal/floating-workspace-tab-creation'
+import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
 import '@/lib/workspace/tabs/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
@@ -71,13 +71,13 @@ vi.mock('../hooks/ipc-tab-switch', () => ({
   handleSwitchTabAcrossAllTypes: vi.fn(),
   handleSwitchTerminalTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-terminal-actions', () => ({
   handleEmptyFloatingWorkspacePanelCloseShortcut: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-tab-creation', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-tab-creation', () => ({
   createFloatingWorkspaceBrowserTab: vi.fn(),
   createFloatingWorkspaceMarkdownTab: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn()

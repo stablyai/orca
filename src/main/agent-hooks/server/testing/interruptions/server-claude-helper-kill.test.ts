@@ -2,7 +2,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hook-server'
+import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hooks/server/agent-hook-server'
 import { selectFreshExplicitAgentStatus } from '../../../../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { selectRuntimeHookAgentRowForPane } from '../../../../runtime/session-lifecycle/projection/runtime-mobile-agent-status-projection'
 import { buildRunningAgentChildRowModels } from '../../../../../shared/running-agent-child-rows'

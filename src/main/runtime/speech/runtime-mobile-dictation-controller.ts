@@ -1,5 +1,5 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
-import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech/speech-params'
 import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
@@ -16,7 +16,7 @@ import { hostDictationTerms } from './runtime-dictation-terms'
 import { dictationTextSettingsFor } from '../../../shared/dictation-cleanup'
 import type { DictationTerm } from '../../../shared/dictation-dictionary'
 import { cleanUpDictatedText } from '../../speech/dictation-cleanup-service'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot

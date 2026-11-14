@@ -1,3 +1,4 @@
+import { linkRecordWrite } from '../../keyed-record-transitions'
 import type { AppState } from '../../types'
 import type { DropAgentStatusByTabPrefixOptions } from './agent-status-contract'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
@@ -67,6 +68,7 @@ export function buildAgentStatusTabPrefixDropPatch(
       for (const k of ackKeys) {
         delete nextAck[k]
       }
+      linkRecordWrite(nextAck, s.acknowledgedAgentsByPaneKey, ackKeys)
     }
     const nextClosedTabs = opts?.paneKeys
       ? s.recentlyClosedAgentStatusTabIds

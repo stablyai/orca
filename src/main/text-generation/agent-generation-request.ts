@@ -10,11 +10,11 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
-import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
-import { runLocalPlanForAgent } from './source-control-local-generation'
+import { copilotUnavailableModelRetryPlan } from './failures/copilot-unavailable-model-retry'
+import { runLocalPlanForAgent } from './execution/source-control-local-generation'
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
-import { cleanAgentAnswer, emptyResultFailure } from './source-control-agent-failure'
-import { runRemoteSourceControlPlan } from './source-control-remote-generation'
+import { cleanAgentAnswer, emptyResultFailure } from './failures/source-control-agent-failure'
+import { runRemoteSourceControlPlan } from './execution/source-control-remote-generation'
 import type {
   CommitMessageGenerationTarget,
   InternalTextGenerationResult,

@@ -2,8 +2,8 @@ import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
 import type * as pty from 'node-pty'
 import type { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
-import type { IPtyProvider } from '../pty-provider-contract'
-import type { PtyDataEvent } from '../pty-provider-events'
+import type { IPtyProvider } from '../pty/provider-contract'
+import type { PtyDataEvent } from '../pty/events'
 import { getSpawnedShellName, normalizeLocalCallerSessionId } from './local-pty-launch-context'
 
 export type PtyShutdownOperation = {

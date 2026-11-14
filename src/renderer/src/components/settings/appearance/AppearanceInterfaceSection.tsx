@@ -6,10 +6,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
-import {
-  SettingsSearchableSelect,
-  type SettingsSearchableSelectOption
-} from '../form-controls/SettingsSearchableSelect'
+import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
 import { useAppStore } from '../../../store/index'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
@@ -17,17 +14,16 @@ import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import {
+  APPEARANCE_EDITOR_THEME_SETTING_ID,
   getCodeEditorThemeEntries,
-  getLanguageEntries,
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
-import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
+import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
-import type { UiLanguage } from '../../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import {
@@ -35,7 +31,8 @@ import {
   AppearanceThemeSlotSelect,
   CodeEditorThemeSelect
 } from './themes/AppearanceThemeControl'
-import { useIconThemePickerLabels, useUiLanguagePickerLabels } from './use-appearance-picker-labels'
+import { useIconThemePickerLabels } from './use-appearance-picker-labels'
+import { AppearanceLanguageSetting } from './AppearanceLanguageSetting'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -62,7 +59,6 @@ export function AppearanceInterfaceSection({
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const iconThemes = useIconThemePickerLabels()
   const pluginIconThemes = iconThemes.themes
-  const languages = useUiLanguagePickerLabels()
   const themeSlots = [
     {
       base: 'light' as const,
@@ -99,7 +95,6 @@ export function AppearanceInterfaceSection({
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
-  const languageEntry = getLanguageEntries()[0]
   const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
@@ -108,29 +103,6 @@ export function AppearanceInterfaceSection({
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
-  const languageOptions: SettingsSearchableSelectOption[] = [
-    ...UI_LANGUAGE_CHOICES.map((choice, index) => ({
-      value: choice.value,
-      label: languages.choices[index],
-      keywords: [choice.value]
-    })),
-    ...languages.packs.map((pack) => ({
-      value: pack.id,
-      label: languages.packLabels.get(pack.id) ?? pack.locale,
-      keywords: [pack.id, pack.locale]
-    }))
-  ]
-  if (!languageOptions.some((option) => option.value === settings.uiLanguage)) {
-    languageOptions.push({
-      value: settings.uiLanguage,
-      label: t(
-        'auto.components.settings.AppearanceInterfaceSection.languageUnavailable',
-        '{{value0}} (unavailable)',
-        { value0: settings.uiLanguage }
-      ),
-      disabled: true
-    })
-  }
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
@@ -138,7 +110,6 @@ export function AppearanceInterfaceSection({
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
-  const languageTitle = t('settings.appearance.language.title', 'Language')
 
   return (
     <>
@@ -200,6 +171,8 @@ export function AppearanceInterfaceSection({
       {editorThemeSlots.map((slot) => (
         <SearchableSetting
           key={slot.base}
+          // The light row comes first, so it stands for both editor theme rows.
+          id={slot.base === 'light' ? APPEARANCE_EDITOR_THEME_SETTING_ID : undefined}
           title={slot.title}
           description={editorThemeEntry?.description}
           keywords={editorThemeEntry?.keywords ?? []}
@@ -268,28 +241,11 @@ export function AppearanceInterfaceSection({
       ) : null}
 
       {SHOW_UI_LANGUAGE_SETTING ? (
-        <SearchableSetting
-          title={languageTitle}
-          description={languageEntry?.description}
-          keywords={languageEntry?.keywords ?? []}
+        <AppearanceLanguageSetting
+          uiLanguage={settings.uiLanguage}
+          updateSettings={updateSettings}
           forceVisible={forceVisiblePrimary}
-        >
-          <SettingsRow
-            label={languageTitle}
-            control={
-              <SettingsSearchableSelect
-                ariaLabel={languageTitle}
-                value={settings.uiLanguage}
-                groups={[{ key: 'ui-languages', options: languageOptions }]}
-                onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
-                searchPlaceholder={t(
-                  'auto.components.settings.SettingsSearchableSelect.searchLanguages',
-                  'Search languages…'
-                )}
-              />
-            }
-          />
-        </SearchableSetting>
+        />
       ) : null}
 
       <SearchableSetting

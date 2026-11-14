@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
 import { buildWindowApi } from './ipc-events-agent-status-window-test-fixtures'
-import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '../store/terminals/testing/terminal-tab.test-fixture'
 import { registerAgentStatusIpcBridge } from './ipc-events/agent-status-ipc-bridge'
 import { useAppStore } from '../store'
 

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,10 +13,10 @@ import { getCommitMessageModel } from '../../shared/source-control/ai/generation
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
-} from '../text-generation/commit-message-agent-environment'
-import { resolveTextGenerationParams } from '../text-generation/commit-message-text-generation'
-import { generateDictationCleanup } from '../text-generation/dictation-cleanup-generation-request'
-import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
+} from '../text-generation/execution/commit-message-agent-environment'
+import { resolveCommitMessageSettings as resolveTextGenerationParams } from '../text-generation/commit-message-text-generation'
+import { generateDictationCleanup } from '../text-generation/requests/dictation-cleanup-generation-request'
+import { cancelLocalGeneration } from '../text-generation/execution/source-control-generation-lanes'
 
 export type DictationCleanupDeps = {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] & { voice?: VoiceSettings }
@@ -48,6 +49,8 @@ export async function cleanUpDictatedText(
   }
   let stopped = false
   const cwd = cleanupFolder()
+  // Cleanups share the folder, so each gets its own cancel lane; a skip or timeout stops only its own agent.
+  const laneId = randomUUID()
   try {
     const resolved = resolveTextGenerationParams(settings, undefined, 'dictationCleanup')
     if (!resolved.ok) {
@@ -70,7 +73,7 @@ export async function cleanUpDictatedText(
       voice: settings.voice,
       terms: input.terms,
       params,
-      target: { kind: 'local', cwd, ...(prepared.env ? { env: prepared.env } : {}) }
+      target: { kind: 'local', cwd, laneId, ...(prepared.env ? { env: prepared.env } : {}) }
     })
     const outcome = await Promise.race([generation, stop.promise])
     if (typeof outcome === 'string') {
@@ -99,7 +102,7 @@ export async function cleanUpDictatedText(
     }
     // Stops the agent still running after a timeout or a skip.
     if (stopped) {
-      cancelLocalGeneration('dictation-cleanup', cwd)
+      cancelLocalGeneration('dictation-cleanup', cwd, laneId)
     }
   }
 }

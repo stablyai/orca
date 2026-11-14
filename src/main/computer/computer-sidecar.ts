@@ -59,6 +59,9 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
     case 'listApps': {
       return await provider.listApps()
     }
+    case 'launchApp': {
+      return await provider.launchApp(params)
+    }
     case 'listWindows': {
       return await provider.listWindows(params)
     }

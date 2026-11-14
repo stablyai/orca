@@ -1,4 +1,4 @@
-import { clearClaudeAnsweredQuestionWait } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { clearClaudeAnsweredQuestionWait } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 
 import {
   isAskUserQuestionTool,

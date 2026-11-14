@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import { classifyAgentPaneConversation } from './agent-pane-conversation'
 import type { AgentConversationSource } from './agent-conversation-continuity'
 import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'

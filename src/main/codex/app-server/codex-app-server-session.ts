@@ -25,7 +25,7 @@ export type CodexAppServerInvocation = {
   env?: Record<string, string>
   /** Keys stripped after the overlay, e.g. CODEX_HOME when targeting the real ~/.codex. */
   envToDelete?: readonly string[]
-  timeoutMs: number
+  timeoutMs: number | null
   signal?: AbortSignal
   experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
@@ -186,15 +186,18 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
     rejectDeadline(error)
   }
-  const deadline = setTimeout(
-    () =>
-      endSession(
-        new CodexAppServerTimeoutError(
-          `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+  const deadline =
+    invocation.timeoutMs === null
+      ? undefined
+      : setTimeout(
+          () =>
+            endSession(
+              new CodexAppServerTimeoutError(
+                `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+              )
+            ),
+          invocation.timeoutMs
         )
-      ),
-    invocation.timeoutMs
-  )
   const onAbort = (): void => endSession(new Error('codex app-server session stopped'))
   if (invocation.signal?.aborted) {
     onAbort()

@@ -1,8 +1,9 @@
 import type { AppState } from '@/store/types'
+import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
+import { createWorktreeRecordSelector } from '@/components/sidebar/workspace-card/activity/worktree-terminal-record-selector'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 // Why frozen and exported: card hooks return these from their inactive branch,
@@ -23,8 +24,9 @@ type WorktreeAgentRowsState = Pick<
   unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
 }
 
-type TabWorktreeIndexCache = {
+type LiveTabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+  unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
   tabIdToWorktreeId: Map<string, string>
 }
 
@@ -34,7 +36,7 @@ type MigrationUnsupportedByWorktreeCache = {
   entriesByWorktree: Map<string, MigrationUnsupportedPtyEntry[]>
 }
 
-let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
+let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
 
 // Share exact array reuse with WorktreeList so equal epoch-derived rows do not rerender cards.
@@ -50,20 +52,28 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
   return previous
 }
 
-// Settings reuses this tab index to avoid rescanning every bucket on each store write.
-export function getTabIdToWorktreeId(
-  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+export { getTabIdToWorktreeId }
+
+/** Terminal tabs plus agent-session chat tabs: the tab map live status is bucketed by. */
+export function getLiveTabIdToWorktreeId(
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree'],
+  unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
 ): Map<string, string> {
-  if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
-    return tabWorktreeIndexCache.tabIdToWorktreeId
+  if (
+    liveTabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree &&
+    liveTabWorktreeIndexCache.unifiedTabsByWorktree === unifiedTabsByWorktree
+  ) {
+    return liveTabWorktreeIndexCache.tabIdToWorktreeId
   }
-  const tabIdToWorktreeId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+  const tabIdToWorktreeId = new Map(getTabIdToWorktreeId(tabsByWorktree))
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
     for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
+      if (tab.contentType === 'agent-session') {
+        tabIdToWorktreeId.set(tab.id, worktreeId)
+      }
     }
   }
-  tabWorktreeIndexCache = { tabsByWorktree, tabIdToWorktreeId }
+  liveTabWorktreeIndexCache = { tabsByWorktree, unifiedTabsByWorktree, tabIdToWorktreeId }
   return tabIdToWorktreeId
 }
 

@@ -2,7 +2,7 @@ import { RelaySessionGenerations } from './server-relay-sessions'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
+import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
 
 import { AgentHookServerStatusApplication } from './server-status-application'
 

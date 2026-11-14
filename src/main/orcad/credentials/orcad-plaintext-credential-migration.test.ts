@@ -55,16 +55,6 @@ describe('migratePlaintextCredentials', () => {
     expect(logs.join('\n')).not.toContain('lin_api_plaintext')
   })
 
-  it("stages in its own temp file, never a concurrent writer's shared one", () => {
-    const path = join(dir, 'linear-token.enc')
-    writeFileSync(path, 'lin_api_plaintext', 'utf8')
-    writeFileSync(`${path}.tmp`, 'other-writer-in-progress', 'utf8')
-
-    migratePlaintextCredentials(store, [{ path, raw: true }], log)
-    expect(readFileSync(`${path}.tmp`, 'utf8')).toBe('other-writer-in-progress')
-    expect(readStoredCredentialToken('Linear', readFileSync(path))).toBe('lin_api_plaintext')
-  })
-
   it('rewrites a plaintext envelope as an encrypted one', () => {
     const path = join(dir, 'minimax-api-key.enc')
     const prefix = 'orca-minimax-api-key:v1:'

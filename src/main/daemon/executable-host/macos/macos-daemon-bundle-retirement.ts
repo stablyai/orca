@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { rm } from '../../../filesystem/asar-transparent-fs'
-import { macDaemonCopyBundlePath } from './macos-daemon-bundle'
+import { MAC_TERMINAL_HOST_BUNDLE } from './macos-daemon-bundle'
 
 const LSREGISTER =
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
@@ -27,13 +27,20 @@ export async function retireUnusedMacDaemonCopy(directory: string): Promise<void
     if (!unused) {
       return
     }
-    // Direct execution may register this copy with LaunchServices.
-    await runProcess({
-      program: LSREGISTER,
-      args: ['-u', macDaemonCopyBundlePath(directory)],
-      timeoutMs: 5_000,
-      maxOutputBytes: 8192
-    }).catch(() => {})
+    // Old copies retain their original bundle name when the helper is renamed.
+    const parent = join(directory, 'app.noindex')
+    const bundles = await readdir(parent).catch(() => [])
+    for (const bundle of bundles) {
+      if (bundle !== MAC_TERMINAL_HOST_BUNDLE && bundle !== 'Orca Terminal Host.app') {
+        continue
+      }
+      await runProcess({
+        program: LSREGISTER,
+        args: ['-u', join(parent, bundle)],
+        timeoutMs: 5_000,
+        maxOutputBytes: 8192
+      }).catch(() => {})
+    }
     await rm(directory, { recursive: true, force: true })
   } catch {
     // Retain code when its use cannot be verified.

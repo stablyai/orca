@@ -717,7 +717,10 @@
       "busy": "Открывается другой чат или терминал. Подождите и повторите создание ответвления чата {{agent}}.",
       "unconfirmed": "{{agent}} не удалось подтвердить создание ответвления. Возможно, оно всё же открылось; проверьте историю сеансов, прежде чем повторить попытку.",
       "failed": "{{agent}} не удалось создать ответвление этого чата. {{detail}}",
-      "unsupported": "На этом хосте установлена старая версия Orca. Обновите Orca на хосте и повторите попытку."
+      "unsupported": "На этом хосте установлена старая версия Orca. Обновите Orca на хосте и повторите попытку.",
+      "mark": "Форк ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Форк: {{name}}"
     }
   },
   "common": {
@@ -1675,7 +1678,6 @@
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
       "deleteDestroysEnvironment": "Также будет уничтожено окружение «{{environment}}», созданное для него Orca, вместе с незакоммиченными изменениями и запущенными терминалами.",
       "deleteKeepsEnvironment": "Окружение «{{environment}}», созданное для него Orca, продолжит работать: в его рецепте нет шага уничтожения.",
-      "deleteWorktree": "Удалить рабочее дерево",
       "pin": "Закрепить",
       "primaryWorktreeDeleteHint": "Основное рабочее дерево нельзя удалить. Вместо этого уберите проект.",
       "removeHost": "Удалить сервер",
@@ -1849,7 +1851,6 @@
       "daysAgo_one": "{{count}} дн. назад",
       "daysAgo_other": "{{count}} дн. назад",
       "deleteConfirmMessage": "Комментарий на GitHub будет удалён безвозвратно.",
-      "deleteConfirmTitle": "Удалить комментарий?",
       "editPlaceholder": "Измените комментарий…",
       "hoursAgo_few": "{{count}} ч назад",
       "hoursAgo_many": "{{count}} ч назад",
@@ -2526,7 +2527,6 @@
       "addTitle": "Добавить быструю команду",
       "chooseAgentTitle": "Выбрать агента",
       "deleteConfirmMessage": "Эта быстрая команда будет удалена из сохранённого списка.",
-      "deleteConfirmTitle": "Удалить «{{label}}»?",
       "editTitle": "Изменить быструю команду",
       "editorDescription": "Сохраняйте команды терминала или запросы агентам для быстрого доступа.",
       "title": "Быстрые команды",
@@ -4310,7 +4310,6 @@
       "outcome": "Результат",
       "allOutcomes": "Все результаты",
       "couldNotStart": "Не удалось запустить",
-      "deleteAutomationTitle": "Удалить автоматизацию?",
       "deleteRetained": "Удалить «{{name}}» и сохранённые запуски?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Не удалось проверить исходную панель агента. Подключитесь заново и повторите попытку.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Исходную панель агента больше нельзя открыть. Сохранённый вывод остаётся здесь.",

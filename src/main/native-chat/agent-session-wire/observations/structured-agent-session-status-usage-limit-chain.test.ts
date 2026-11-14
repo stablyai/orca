@@ -104,13 +104,41 @@ async function chainOfOne(journal: AgentSessionJournal, rows: number) {
   })
 }
 
+async function readProjection(
+  projections: StructuredAgentSessionJournalProjections,
+  journal: AgentSessionJournal
+) {
+  return projections.readSql(
+    journal,
+    () => ({
+      contextId: null,
+      authority: {
+        handle: journal.observationHandle(),
+        record: null,
+        child: null,
+        handingOver: [],
+        continuingUnadmitted: [],
+        finalizing: [],
+        openedThrough: journal.openingCursor(),
+        reopenFloor: null,
+        operationalRevision: 0,
+        stopRevision: 0,
+        stop: null
+      }
+    }),
+    () => {
+      throw new Error('unexpected projection invalidation')
+    }
+  )
+}
+
 it('stops counting a link when its earlier usage limit is revised to another reset', async () => {
   const journal = await fixture.open()
   const projections = new StructuredAgentSessionJournalProjections()
   await chainOfOne(journal, 0)
-  expect(projections.read(journal, null).usageLimitCut?.chain).toBe(1)
+  expect((await readProjection(projections, journal))!.usageLimitCut?.chain).toBe(1)
   // The provider rewrites the first turn's failure under the same row with a later reset.
-  const first = projections.read(journal, null).usageLimitCut
+  const first = (await readProjection(projections, journal))!.usageLimitCut
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'first-limit' },
     {
@@ -122,7 +150,7 @@ it('stops counting a link when its earlier usage limit is revised to another res
     },
     { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn-first' } }
   )
-  const revised = projections.read(journal, null).usageLimitCut
+  const revised = (await readProjection(projections, journal))!.usageLimitCut
   expect(revised?.turnItemId).toBe(first?.turnItemId)
   expect(revised?.chain).toBe(0)
 })
@@ -141,7 +169,7 @@ it.each([
       { turnItemId: first.turnScope.turnItemId, resetsAt: 60_000 },
       2_000
     )
-    await journal.markPendingSubmissionsUnknown(1)
+    await journal.write({ kind: 'pending-unknown', fence: 1 })
     // The provider's echo opens the turn before any receipt names it.
     const echo = { provider: 'orca' as const, clientMessageId: 'provider-echo' }
     await journal.appendItem(
@@ -170,13 +198,16 @@ it.each([
         resetsAt: 180_000 + link * 60_000
       })
     }
-    expect(projections.read(journal, null).usageLimitCut?.chain).toBe(laterLinks)
-    await journal.acceptLate({
-      clientMessageId: late,
-      state: 'accepted',
-      providerIdentity: echo,
-      fence: 1
+    expect((await readProjection(projections, journal))!.usageLimitCut?.chain).toBe(laterLinks)
+    await journal.write({
+      kind: 'accept-late',
+      input: {
+        clientMessageId: late,
+        state: 'accepted',
+        providerIdentity: echo,
+        fence: 1
+      }
     })
-    expect(projections.read(journal, null).usageLimitCut?.chain).toBe(laterLinks + 1)
+    expect((await readProjection(projections, journal))!.usageLimitCut?.chain).toBe(laterLinks + 1)
   }
 )

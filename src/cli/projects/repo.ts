@@ -11,7 +11,7 @@ import {
   getRequiredStringFlag
 } from '../arguments/flags'
 import { resolveRepoPathArgument } from './repo-path-arguments'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from '../workspaces/worktree-setup-decision-recovery'
 import { resolveHostFlagTarget } from '../hosts/execution-host-flag'
 

@@ -1,7 +1,7 @@
 import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
@@ -102,7 +102,7 @@ describe('a live listing beside the account-level discovery', () => {
     expect(read?.models[0]?.defaultEffort).toBe('high')
   })
 
-  it('still refreshes the account listing after ten minutes of live saves', async () => {
+  it('keeps discovery across elapsed time and live saves until the user refreshes', async () => {
     let configured = 'grok-4'
     const run = harness(async () => discovery(configured))
     expect(await run.defaultOf()).toBe('grok-4')
@@ -113,7 +113,10 @@ describe('a live listing beside the account-level discovery', () => {
       run.advance(60_000)
       run.saveLive()
     }
-    expect(run.store.shouldRefresh(agentModelCatalogFingerprintForRecord(RECORD))).toBe(true)
+    expect(run.store.shouldRefresh(agentModelCatalogFingerprintForRecord(RECORD))).toBe(false)
+    await run.catalog.demand({ agent: 'grok' })
+    expect(await run.defaultOf()).toBe('grok-4')
+    run.store.refreshInputs(true)
     await run.catalog.demand({ agent: 'grok' })
     await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(2))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-3-mini'))

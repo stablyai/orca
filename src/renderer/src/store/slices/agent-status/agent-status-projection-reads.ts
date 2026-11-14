@@ -1,6 +1,9 @@
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { IDLE, type WorktreeAttention } from '../../../../../shared/sidebar-list/smart-attention'
+import {
+  IDLE,
+  type WorktreeAttention
+} from '../../../../../shared/sidebar-list/sorting/smart-attention'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 
 export function readProjectionAttention(
