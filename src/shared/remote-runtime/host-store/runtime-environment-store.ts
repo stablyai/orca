@@ -29,6 +29,12 @@ import {
   assertNoIndependentSshAccess,
   assertPairingReplaceableByAdd
 } from './runtime-environment-pairing-replace-guards'
+import {
+  deferLastUsed,
+  LAST_USED_PERSIST_INTERVAL_MS,
+  withDeferredLastUsed,
+  writeMarkedUse
+} from './runtime-environment-last-used-writes'
 
 export function listEnvironments(
   userDataPath: string,
@@ -224,9 +230,6 @@ export function resolveEnvironmentPairingOffer(
   return getPreferredPairingOffer(resolveEnvironment(userDataPath, selector))
 }
 
-// Throttle lastUsedAt: per-RPC secure-file/Windows ACL rewrites block main; coarse freshness is enough.
-const LAST_USED_PERSIST_INTERVAL_MS = 60_000
-
 export function markEnvironmentUsed(
   userDataPath: string,
   selector: string,
@@ -257,8 +260,10 @@ export function markEnvironmentUsed(
     environment.lastUsedAt != null &&
     now >= environment.lastUsedAt &&
     now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
-  if (!runtimeIdChanged && !pairedDeviceIdChanged && lastUsedIsFresh) {
-    return
+  if (!runtimeIdChanged && !pairedDeviceIdChanged) {
+    if (lastUsedIsFresh || deferLastUsed(userDataPath, environment.id, now)) {
+      return
+    }
   }
   if (runtimeIdChanged || pairedDeviceIdChanged) {
     const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environment.id)
@@ -282,9 +287,9 @@ export function markEnvironmentUsed(
           lastUsedAt: now,
           updatedAt: now
         }
-      : entry
+      : withDeferredLastUsed(userDataPath, entry)
   )
-  writeEnvironmentStore(userDataPath, { version: 1, environments: next })
+  writeMarkedUse(userDataPath, next, now)
 }
 
 function preferredDeviceToken(environment: PersistedRuntimeEnvironment): string | undefined {

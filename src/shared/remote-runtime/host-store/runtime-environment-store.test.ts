@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments,
+  markEnvironmentUsed
+} from './runtime-environment-store'
 import {
   RuntimeEnvironmentStoreError,
   getEnvironmentStorePath,
@@ -29,6 +33,7 @@ describe('runtime environment store', () => {
   const tempDirs: string[] = []
 
   afterEach(async () => {
+    vi.useRealTimers()
     await removeTempDirs(tempDirs.splice(0))
   })
 
@@ -77,4 +82,54 @@ describe('runtime environment store', () => {
     expect(readdirSync(userDataPath)).toEqual(['orca-environments.json'])
     expect(readFileSync(getEnvironmentStorePath(userDataPath), 'utf8')).toBe(contents)
   })
+
+  it('carries lastUsedAt for servers used within a minute of a write on the next write', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-last-used-'))
+    tempDirs.push(userDataPath)
+    const [alpha, beta, gamma] = addServers(userDataPath, ['alpha', 'beta', 'gamma'])
+    const storeText = (): string => readFileSync(getEnvironmentStorePath(userDataPath), 'utf8')
+    const lastUsed = (): (number | null)[] =>
+      listEnvironments(userDataPath).map((environment) => environment.lastUsedAt)
+
+    markEnvironmentUsed(userDataPath, alpha!)
+    const firstUse = Date.now()
+    const afterFirstWrite = storeText()
+    vi.advanceTimersByTime(10_000)
+    markEnvironmentUsed(userDataPath, beta!)
+    markEnvironmentUsed(userDataPath, alpha!)
+    vi.advanceTimersByTime(10_000)
+    markEnvironmentUsed(userDataPath, gamma!)
+
+    expect(storeText()).toBe(afterFirstWrite)
+    expect(lastUsed()).toEqual([firstUse, null, null])
+
+    vi.advanceTimersByTime(40_000)
+
+    expect(lastUsed()).toEqual([firstUse, firstUse + 10_000, firstUse + 20_000])
+  })
+
+  it('writes a changed runtime at once, carrying lastUsedAt still waiting for a write', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-last-used-change-'))
+    tempDirs.push(userDataPath)
+    const [alpha, beta] = addServers(userDataPath, ['alpha', 'beta'])
+
+    markEnvironmentUsed(userDataPath, alpha!)
+    vi.advanceTimersByTime(5_000)
+    markEnvironmentUsed(userDataPath, beta!)
+    vi.advanceTimersByTime(5_000)
+    markEnvironmentUsed(userDataPath, alpha!, { runtimeId: 'restarted-runtime' })
+
+    const [savedAlpha, savedBeta] = listEnvironments(userDataPath)
+    expect(savedAlpha).toMatchObject({ runtimeId: 'restarted-runtime', lastUsedAt: Date.now() })
+    expect(savedBeta?.lastUsedAt).toBe(Date.now() - 5_000)
+  })
 })
+
+function addServers(userDataPath: string, names: string[]): string[] {
+  return names.map((name, index) => {
+    const code = pairingCode(`ws://127.0.0.1:${6768 + index}`, undefined, index + 1)
+    return addEnvironmentFromPairingCode(userDataPath, { name, pairingCode: code }).id
+  })
+}
