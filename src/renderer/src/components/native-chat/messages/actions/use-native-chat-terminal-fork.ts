@@ -120,7 +120,6 @@ export function useNativeChatTerminalFork(input: {
             forkableItemIds: NO_ITEMS,
             offersRow: (slot: NativeChatMessageSlot) =>
               terminalForkPoint(slot.message) &&
-              slot.depth === 0 &&
               !slot.activeTurnIsWorking &&
               slot.endsResponse !== false,
             forkLatest: () => 'none' as const,
