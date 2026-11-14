@@ -651,6 +651,7 @@
         "fontKeywordTypeface": "yazı tipi",
         "fontKeywordTypography": "tipografi",
         "inheritFont": "IDE yazı tipiyle aynı",
+        "systemFont": "Sistem yazı tipi",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
         "title": "Sohbet arayüzü",

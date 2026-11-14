@@ -437,6 +437,7 @@
         "fontFamily": "Police",
         "fontFamilyDescription": "Police des messages, de l’activité et de la zone de saisie.",
         "inheritFont": "Même police que l’IDE",
+        "systemFont": "Police système",
         "fontPreviewLabel": "Aperçu de la police du chat",
         "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
         "title": "Interface de chat",

@@ -755,6 +755,7 @@
         "fontKeywordTypeface": "typeface",
         "fontKeywordTypography": "typography",
         "inheritFont": "Same as IDE font",
+        "systemFont": "System font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat UI",

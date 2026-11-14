@@ -2,7 +2,11 @@ import './native-chat-appearance.css'
 import { useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { resolveNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  DEFAULT_NATIVE_CHAT_FONT_SIZE,
+  resolveNativeChatAppearanceSettings
+} from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import { resolveConfiguredTerminalColors } from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '../../../../../shared/monospace-font-family'
@@ -26,6 +30,7 @@ export type NativeChatAppearanceStyle = CSSProperties &
   Record<`--${string}`, string | number> & {
     '--chat-font-size': string
     '--chat-ui-font-size': string
+    '--chat-line-height': string
     '--chat-code-font-size': string
     '--chat-content-max-width': string
     '--chat-inline-code-ratio': string
@@ -39,6 +44,27 @@ export function nativeChatColumnWidthBucket(width: number | null | undefined): n
   return typeof width === 'number' && Number.isFinite(width) && width > 0
     ? Math.max(1, Math.floor(width / 32) * 32)
     : null
+}
+
+/** The chat's own default face; a chosen chat or IDE font replaces it. */
+const NATIVE_CHAT_SYSTEM_FONT_FAMILY =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'
+
+/** 20px at the default 13px, rounded so lines land on whole pixels at every size. */
+function nativeChatLineHeightPx(fontSize: number): number {
+  return Math.round((fontSize * 20) / 13)
+}
+
+/** Labels, icons and spacing keep their 14px size at the 13px default; elsewhere they match Text size. */
+function nativeChatUiFontSize(fontSize: number): number {
+  return fontSize === DEFAULT_NATIVE_CHAT_FONT_SIZE ? 14 : Math.max(12, Math.min(20, fontSize))
+}
+
+export function usesNativeChatSystemFont(
+  settings: Partial<GlobalSettings> | null | undefined
+): boolean {
+  const appFont = settings?.appFontFamily?.trim() ?? ''
+  return !appFont || appFont.toLowerCase() === DEFAULT_APP_FONT_FAMILY.toLowerCase()
 }
 
 export function selectNativeChatAppearanceSettings(
@@ -57,6 +83,7 @@ export function selectNativeChatAppearanceSettings(
     terminalColorOverridesLight: settings?.terminalColorOverridesLight,
     pluginAppThemeDark: settings?.pluginAppThemeDark,
     pluginAppThemeLight: settings?.pluginAppThemeLight,
+    appFontFamily: settings?.appFontFamily,
     editorFontFamily: settings?.nativeChatAppearance?.matchTerminalInterface
       ? undefined
       : settings?.editorFontFamily,
@@ -68,11 +95,11 @@ export function selectNativeChatAppearanceSettings(
   }
 }
 
+/** Body text mix: 88% at 100; 50 and 150 keep their earlier ends. */
 export function nativeChatContrastMix(contrast: number, light: boolean): number {
   const value = Number.isFinite(contrast) ? Math.min(150, Math.max(50, contrast)) : 100
-  return light
-    ? Math.min(100, Math.max(55, 82 + (value - 100) * 0.36))
-    : Math.min(100, Math.max(50, 78 + (value - 100) * 0.44))
+  const lowest = light ? 64 : 56
+  return value < 100 ? 88 - ((100 - value) * (88 - lowest)) / 50 : 88 + ((value - 100) * 12) / 50
 }
 
 /** Chat surfaces in the terminal's colors; the app theme already paints them under Match Terminal. */
@@ -161,7 +188,9 @@ export function nativeChatAppearanceStyle(
   const fontSize = matching ? terminalFontSize : appearance.fontSize
   const codeFontSize = matching ? terminalFontSize : appearance.codeFontSize
   // Message text follows the terminal (10-24); labels, controls and spacing stay in the chat's 12-20.
-  const uiFontSize = Math.max(12, Math.min(20, fontSize))
+  const uiFontSize = matching
+    ? Math.max(12, Math.min(20, fontSize))
+    : nativeChatUiFontSize(fontSize)
   const maxWidthPx = width === 'wide' ? 960 : width === 'full' ? Number.POSITIVE_INFINITY : 736
   const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
   const columnWidthPx = Math.min(
@@ -173,10 +202,11 @@ export function nativeChatAppearanceStyle(
   const style: NativeChatAppearanceStyle = {
     '--chat-font-size': `${fontSize}px`,
     '--chat-ui-font-size': `${uiFontSize}px`,
+    '--chat-line-height': `${nativeChatLineHeightPx(fontSize)}px`,
     '--chat-code-font-size': `${codeFontSize}px`,
     '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',
     '--chat-inline-code-ratio': `${codeFontSize / fontSize}em`,
-    '--chat-estimated-line-height': (22 * fontSize) / 14,
+    '--chat-estimated-line-height': (22 * fontSize) / DEFAULT_NATIVE_CHAT_FONT_SIZE,
     '--chat-estimated-chars-per-line': Math.max(
       1,
       Math.floor((((96 * columnWidthPx) / 736) * 14) / fontSize)
@@ -185,7 +215,9 @@ export function nativeChatAppearanceStyle(
     '--chat-code-font-family': codeFont,
     ...(appearance.fontFamily
       ? { '--chat-font-family': buildAppFontFamily(appearance.fontFamily) }
-      : {})
+      : usesNativeChatSystemFont(settings)
+        ? { '--chat-font-family': NATIVE_CHAT_SYSTEM_FONT_FAMILY }
+        : {})
   }
   let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)
   const appMatchesTerminal =
@@ -223,7 +255,8 @@ export function nativeChatAppearanceStyle(
   }
   const bodyMix = matching ? 100 : nativeChatContrastMix(appearance.contrast, light)
   style['--chat-foreground-mix'] = `${bodyMix}%`
-  style['--chat-strong-mix'] = `${Math.min(100, bodyMix + (light ? 10 : 12))}%`
+  // The lift hover, in-progress and the user bubble brighten to; chat bold text stays body-colored.
+  style['--chat-strong-mix'] = `${Math.min(100, bodyMix + 10)}%`
   return style
 }
 

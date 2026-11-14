@@ -56,7 +56,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--split-divider` | Divider between split tab groups | no | Orca's built-in color |
 | `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
 | `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
-| `--chat-bold-foreground` | Bold text in chat messages | no | the color of chat headings |
+| `--chat-bold-foreground` | Bold text in chat messages | no | the chat text color around it |
 | `--chat-muted-foreground` | Secondary chat text: tool rows, status lines, timestamps and hunk headers | no | `--muted-foreground` as chat paints it |
 | `--chat-inline-code` | Inline code in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
 | `--chat-inline-code-foreground` | Inline code text in chat | no | `--foreground` mixed 85% into the chat background |

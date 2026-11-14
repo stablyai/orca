@@ -39,10 +39,13 @@ it('normalizes, saves, reloads, and removes chat appearance overrides', async ()
     width: 'wide'
   })
   reopened.updateSettings({
-    nativeChatAppearance: { fontSize: 14, codeFontSize: 12, width: 'comfortable' }
+    nativeChatAppearance: { fontSize: 13, codeFontSize: 12, width: 'comfortable' }
   })
   reopened.flush()
   expect(readDataFile()).not.toHaveProperty('settings.nativeChatAppearance')
+  reopened.updateSettings({ nativeChatAppearance: { fontSize: 14 } })
+  reopened.flush()
+  expect(readDataFile()).toHaveProperty('settings.nativeChatAppearance', { fontSize: 14 })
   reopened.updateSettings({ nativeChatAppearance: { fontSize: 16 } })
   reopened.updateSettings({ nativeChatAppearance: undefined })
   reopened.flush()

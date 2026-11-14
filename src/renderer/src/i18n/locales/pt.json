@@ -1360,6 +1360,7 @@
         "fontFamily": "Fonte",
         "fontFamilyDescription": "Fonte usada nas mensagens, na atividade e na caixa de mensagem.",
         "inheritFont": "Mesma fonte do IDE",
+        "systemFont": "Fonte do sistema",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
         "title": "Interface de chat",
