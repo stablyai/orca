@@ -82,8 +82,8 @@ it('drops the subscriber a client unsubscribes, and keeps its sibling (U-02)', a
 })
 
 // #39926: a frame the transport fails to send must end the stream, never leave it open and silent.
-// The opening catch-up already sends a batch after the snapshot, so this covers a failure inside open.
-it('ends the stream once when a frame fails to send', async () => {
+// An opening snapshot can be superseded by live work; either first data frame can fail.
+it('ends the stream once when an opening frame fails to send', async () => {
   await foundRestTestChat(rig)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const frames: RpcResponse[] = []
@@ -96,7 +96,7 @@ it('ends the stream once when a frame fails to send', async () => {
       params: { sessionId: SESSION }
     },
     (raw) => {
-      if (raw.includes('"type":"batch"')) {
+      if (!raw.includes('"type":"end"')) {
         throw new Error('frame could not be sent')
       }
       frames.push(JSON.parse(raw))
@@ -109,10 +109,7 @@ it('ends the stream once when a frame fails to send', async () => {
 
   await ended.promise
   expect(subscriberCount()).toBe(0)
-  expect(frames.map((frame) => JSON.stringify(frame).match(/"type":"(\w+)"/)?.[1])).toEqual([
-    'snapshot',
-    'end'
-  ])
+  expect(frames.map((frame) => JSON.stringify(frame).match(/"type":"(\w+)"/)?.[1])).toEqual(['end'])
 
   // Later publications reach no one and end nothing twice.
   const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
