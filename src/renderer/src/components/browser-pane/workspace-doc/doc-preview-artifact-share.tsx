@@ -94,7 +94,7 @@ async function readDocPreviewGrantFile(
 }
 
 /** Reads the document from the host its grant was minted for, never the one selected now. */
-export async function readDocPreviewArtifactRequest(
+async function readDocPreviewArtifactRequest(
   location: DocPreviewGrantLocation,
   filePath: string,
   sourceKey: string
