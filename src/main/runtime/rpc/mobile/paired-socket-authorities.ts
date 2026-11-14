@@ -7,7 +7,7 @@ export class PairedSocketAuthorities {
   private readonly refresh: ReturnType<typeof setInterval>
   private readonly cleanups = new Map<WebSocket, () => void>()
 
-  constructor(registry: DeviceRegistry) {
+  constructor(private readonly registry: DeviceRegistry) {
     this.refresh = setInterval(() => {
       try {
         registry.refreshAuthority()
@@ -35,6 +35,7 @@ export class PairedSocketAuthorities {
 
   dispose(): void {
     clearInterval(this.refresh)
+    this.registry.retireCapturedAuthority()
     for (const cleanup of this.cleanups.values()) {
       cleanup()
     }
