@@ -82,8 +82,11 @@ export function prepareProfileStateFieldParts(
     return undefined
   }
   const fieldDepth =
-    WORKSPACE_SESSION_DOMAINS.indexOf(patch.domain as (typeof WORKSPACE_SESSION_DOMAINS)[number]) +
-    1
+    patch.domain === WORKSPACE_SESSION_DOMAINS[0]
+      ? 1
+      : patch.domain === WORKSPACE_SESSION_DOMAINS[1]
+        ? 2
+        : 0
   for (const operation of patch.operations) {
     if (
       operation.kind !== 'set' ||

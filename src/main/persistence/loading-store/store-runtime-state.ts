@@ -36,7 +36,7 @@ import type { AutomationRun } from '../../../shared/automations/history/automati
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/terminal-history/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
 import { ProfileStateSaveIntent } from './profile-writing/profile-state-save-intent'
-import { WorkspaceSessionFieldCapture } from './profile-writing/profile-state-split-snapshots'
+import { WorkspaceSessionFieldCapture } from './profile-writing/workspace-session-field-capture'
 
 export type DurableProfileStateMutation<T> = {
   value: T

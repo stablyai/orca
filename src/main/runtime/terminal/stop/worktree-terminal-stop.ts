@@ -136,7 +136,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     }
     const refusal = await this.store.runDurableMutation<Error | undefined>(() => {
       // SAFETY: Keep the original late lookup and failure if this capability disappears.
-      const session = cloneWorkspaceSessionState(borrowWorkspaceSession(this.store, hostId))
+      const session = cloneWorkspaceSessionState(borrowWorkspaceSession(this.store, hostId)!)
       const next = edit(session)
       if (next instanceof Error) {
         return { value: next, persist: false }
@@ -147,12 +147,12 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       // SAFETY: Keep the original late lookup and failure if this capability disappears.
       setBorrowedWorkspaceSession(this.store, next, hostId)
       // SAFETY: Keep the original late lookup and failure if this capability disappears.
-      const staged = cloneWorkspaceSessionState(borrowWorkspaceSession(this.store, hostId))
+      const staged = cloneWorkspaceSessionState(borrowWorkspaceSession(this.store, hostId)!)
       return {
         value: undefined,
         rollback: () => {
           // SAFETY: Keep the original late lookup and failure if this capability disappears.
-          const current = borrowWorkspaceSession(this.store, hostId)
+          const current = borrowWorkspaceSession(this.store, hostId)!
           const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
           if (rolledBack !== current) {
             // SAFETY: Keep the original late lookup and failure if this capability disappears.

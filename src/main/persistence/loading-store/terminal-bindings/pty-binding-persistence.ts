@@ -1,4 +1,3 @@
-import { borrowWorkspaceSession } from '../workspace-sessions/session-host-partitions'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -11,7 +10,7 @@ import type { PtyBindingSourceExpectation } from '../store'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
 // oxfmt-ignore
-import { resolveHostId, type SessionHostPartitionOperations } from '../workspace-sessions/session-host-partitions'
+import { borrowWorkspaceSession, resolveHostId, type SessionHostPartitionOperations } from '../workspace-sessions/session-host-partitions'
 import {
   withdrawUnstartedPane,
   type UnstartedPaneKept

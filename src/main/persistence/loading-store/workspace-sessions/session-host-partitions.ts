@@ -1,7 +1,8 @@
+import { sessionDomain } from '../../workspace-session-domains'
+export { sessionDomain } from '../../workspace-session-domains'
 import { withRequiredWorkspaceSessionMaps } from './workspace-session-partitions'
 export { withRequiredWorkspaceSessionMaps } from './workspace-session-partitions'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import {
@@ -74,7 +75,7 @@ export class SessionHostPartitionOperations {
     }
   }
 
-  getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
+  getWorkspaceSession(hostId?: string | null): WorkspaceSessionState {
     this[sessionHostPartitionOperationsContext].runtime.workspaceSessionFieldCapture.expose(
       sessionDomain(hostId)
     )
@@ -274,32 +275,31 @@ export function setHostWorkspaceSession(
   )
 }
 
+type FullSessionReader = Pick<SessionHostPartitionOperations, 'getWorkspaceSession'>
 type SessionReader = {
-  getWorkspaceSession?(hostId?: string | null): WorkspaceSessionState | undefined
+  getWorkspaceSession?(hostId?: string | null): Partial<WorkspaceSessionState> | undefined
 }
 function ownsSessionContext(owner: SessionReader): owner is SessionHostPartitionOperations {
   return sessionHostPartitionOperationsContext in owner
 }
 
-export function sessionDomain(hostId?: string | null): string {
-  return resolveHostId(hostId) === LOCAL_EXECUTION_HOST_ID
-    ? 'workspaceSession'
-    : 'workspaceSessionsByHostId'
-}
-
 /** Only audited internal readers may borrow; all unknown implementations retain their public contract. */
 export function borrowWorkspaceSession(
-  owner: SessionHostPartitionOperations,
+  owner: FullSessionReader,
   hostId?: string | null
 ): WorkspaceSessionState
 export function borrowWorkspaceSession(
-  owner: SessionReader | null | undefined,
+  owner: Partial<FullSessionReader> | null | undefined,
   hostId?: string | null
 ): WorkspaceSessionState | undefined
 export function borrowWorkspaceSession(
   owner: SessionReader | null | undefined,
   hostId?: string | null
-): WorkspaceSessionState | undefined {
+): Partial<WorkspaceSessionState> | undefined
+export function borrowWorkspaceSession(
+  owner: SessionReader | null | undefined,
+  hostId?: string | null
+): Partial<WorkspaceSessionState> | undefined {
   if (!owner) {
     return undefined
   }

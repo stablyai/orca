@@ -18,7 +18,9 @@ const depths = new Map<string, number>([
 type FieldVector = Map<string, unknown>
 type Candidate = { domain: string; epoch: number; fields: FieldVector }
 
-function ownValue(object: object, key: string): unknown {
+type JsonContainer = Record<string, unknown> | unknown[]
+
+function ownValue(object: JsonContainer, key: string): unknown {
   const descriptor = Object.getOwnPropertyDescriptor(object, key)
   if (!descriptor || !Object.hasOwn(descriptor, 'value')) {
     throw unsupported
@@ -26,7 +28,7 @@ function ownValue(object: object, key: string): unknown {
   return descriptor.value
 }
 
-function admitToJson(value: object): void {
+function admitToJson(value: JsonContainer): void {
   const descriptor = Object.getOwnPropertyDescriptor(value, 'toJSON')
   if (
     descriptor &&
@@ -110,6 +112,13 @@ function vector(value: unknown, depth: number): FieldVector {
   return fields
 }
 
+function ancestorVector(value: unknown): FieldVector {
+  if (!(value instanceof Map)) {
+    throw unsupported
+  }
+  return value
+}
+
 function changes(
   current: FieldVector,
   previous: FieldVector,
@@ -120,12 +129,11 @@ function changes(
   for (const [key, value] of current) {
     appendProfileStateOwnValue(path, key)
     if (depth > 1 && previous.has(key)) {
-      // SAFETY: vectors contain Maps at every ancestor level and live values only at field depth.
-      changes(value as FieldVector, previous.get(key) as FieldVector, depth - 1, path, operations)
+      changes(ancestorVector(value), ancestorVector(previous.get(key)), depth - 1, path, operations)
     } else if (!previous.has(key) || !Object.is(value, previous.get(key))) {
       const fragment = serializeProfileStateDomainFragment(
         key,
-        depth === 1 ? value : vectorValue(value as FieldVector, depth - 1)
+        depth === 1 ? value : vectorValue(ancestorVector(value), depth - 1)
       )
       if (fragment === '{}') {
         throw unsupported
@@ -156,7 +164,7 @@ function vectorValue(fields: FieldVector, depth: number): Record<string, unknown
   const value: Record<string, unknown> = {}
   for (const [key, child] of fields) {
     Object.defineProperty(value, key, {
-      value: depth === 1 ? child : vectorValue(child as FieldVector, depth - 1),
+      value: depth === 1 ? child : vectorValue(ancestorVector(child), depth - 1),
       enumerable: true
     })
   }

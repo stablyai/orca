@@ -1,4 +1,3 @@
-import { borrowWorkspaceSession } from '../loading-store/workspace-sessions/session-host-partitions'
 import type { LayoutClientVisibility } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
@@ -10,6 +9,7 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { LayoutLiveContext } from './pane-admission/terminal-pane-admission'
 import {
+  borrowWorkspaceSession,
   resolveHostId,
   type SessionHostPartitionOperations
 } from '../loading-store/workspace-sessions/session-host-partitions'
