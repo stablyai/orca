@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../extensions/profile-sessions/browser-extension-session-loader', () => ({
+vi.mock('../../../extensions/profile-sessions/browser-extension-profile-demand', () => ({
   retainBrowserExtensionPage: async () => {}
 }))
 
