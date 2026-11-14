@@ -22047,6 +22047,10 @@
       "copySignInLink": "Bunun yerine oturum açma bağlantısını kopyala",
       "signInLinkCopied": "Oturum açma bağlantısı kopyalandı. Farklı bir hesapla oturum açmak için bağlantıyı gizli pencerede açın.",
       "signInLinkCopyFailed": "Bağlantı kopyalanamadı.",
+      "worktreeAccount": {
+        "followSelection": "Seçili hesabı izle",
+        "submenu": "Claude hesabı"
+      },
       "switchSessions": {
         "title": "{{account}} hesabına geçildi",
         "dontAskAgain": "Bir daha sorma (otomatik yeniden başlat)",
@@ -22076,6 +22080,7 @@
         "selectGroup": "{{group}} grubundaki tüm oturumları seç",
         "reasonWsl": "WSL terminali",
         "reasonOwnFolder": "Kendi Claude klasörünüzü kullanıyor",
+        "reasonPinnedWorktree": "Çalışma alanı kendi hesabını kullanıyor",
         "reasonUnknownAccount": "Hesap bilinmiyor",
         "reasonNoSession": "Sürdürülemiyor",
         "notMovedOne": "Diğer 1 oturum taşınmadı.",

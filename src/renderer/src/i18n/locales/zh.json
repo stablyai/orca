@@ -23382,6 +23382,10 @@
       "copySignInLink": "改为复制登录链接",
       "signInLinkCopied": "已复制登录链接，请在隐私窗口中打开它以使用其他账户登录",
       "signInLinkCopyFailed": "无法复制链接",
+      "worktreeAccount": {
+        "followSelection": "跟随所选账号",
+        "submenu": "Claude 账号"
+      },
       "switchSessions": {
         "busy": "工作中",
         "idle": "空闲",
@@ -23411,6 +23415,7 @@
         "selectGroup": "选择 {{group}} 中的所有会话",
         "reasonWsl": "WSL 终端",
         "reasonOwnFolder": "使用你自己的 Claude 文件夹",
+        "reasonPinnedWorktree": "工作区使用自己的账号",
         "reasonUnknownAccount": "账户未知",
         "reasonNoSession": "无法恢复",
         "notMovedOne": "另有 1 个会话未移动",

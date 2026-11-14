@@ -7,6 +7,8 @@ import type {
 export type ClaudeAccountSelectionTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+  /** The launch's worktree; a pinned one runs its own account instead of the selection (#9496). */
+  worktreeId?: string
 }
 
 export type NormalizedClaudeAccountSelectionTarget = {

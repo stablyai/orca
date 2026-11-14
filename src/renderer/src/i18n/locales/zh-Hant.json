@@ -21584,6 +21584,10 @@
       "copySignInLink": "改為複製登入連結",
       "signInLinkCopied": "已複製登入連結。請在隱私視窗中開啟它以使用其他帳戶登入。",
       "signInLinkCopyFailed": "無法複製連結。",
+      "worktreeAccount": {
+        "followSelection": "跟隨所選帳號",
+        "submenu": "Claude 帳號"
+      },
       "switchSessions": {
         "title": "已切換至 {{account}}",
         "dontAskAgain": "不再詢問（自動重新啟動）",
@@ -21613,6 +21617,7 @@
         "selectGroup": "選取 {{group}} 中的所有工作階段",
         "reasonWsl": "WSL 終端機",
         "reasonOwnFolder": "使用自己的 Claude 資料夾",
+        "reasonPinnedWorktree": "工作區使用自己的帳號",
         "reasonUnknownAccount": "帳戶不明",
         "reasonNoSession": "無法繼續",
         "notMovedOne": "另有 1 個工作階段未移轉。",

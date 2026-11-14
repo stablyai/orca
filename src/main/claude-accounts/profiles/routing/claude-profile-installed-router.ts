@@ -39,9 +39,10 @@ export function getClaudeWslProfileRouter(): ClaudeWslProfileRouter | undefined 
 
 export function withClaudeProfileTerminalEnv<Env extends Record<string, string> | undefined>(
   env: Env,
-  target: ClaudeAccountSelectionTarget
+  target: ClaudeAccountSelectionTarget,
+  worktreeId?: string
 ): Env | Record<string, string> {
-  const profileEnv = installed?.terminalEnv(target)
+  const profileEnv = installed?.terminalEnv(target, worktreeId)
   return profileEnv ? { ...env, ...profileEnv } : env
 }
 

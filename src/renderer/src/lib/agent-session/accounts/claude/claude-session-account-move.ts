@@ -172,6 +172,7 @@ export type ClaudeSessionCantMoveReason =
   | 'unknown-account'
   | 'no-session'
   | 'shared-session'
+  | 'pinned-worktree'
 
 /** Running Claude sessions a switch can see, by what a restart would do for them. */
 export type ClaudeSwitchSessions = {
@@ -193,6 +194,7 @@ function scanPane(
     saved: readonly ClaudeManagedAccount[]
     host: ClaudeHostFolders | undefined
     hostSwitch: boolean
+    pins: Readonly<Record<string, string>>
     fromAccountId: string | null
     toAccountId: string | null
   }
@@ -202,6 +204,10 @@ function scanPane(
     return args.hostSwitch && isWslLane(pane.laneKey)
       ? { group: 'cantMove', pane, reason: 'wsl-terminal' }
       : null
+  }
+  // Why: a pinned worktree keeps launching on its own account, so the selection must not restart it.
+  if (args.hostSwitch && args.pins[pane.worktreeId]) {
+    return { group: 'cantMove', pane, reason: 'pinned-worktree' }
   }
   const folder = resolveClaudePaneFolder(pane.transcriptPath, args.saved, args.host)
   if (!folder) {
@@ -277,6 +283,7 @@ export async function findClaudeSwitchSessions(args: {
     saved: state.settings?.claudeManagedAccounts ?? [],
     host: hostSwitch ? args.host : undefined,
     hostSwitch,
+    pins: state.settings?.claudeAccountPinsByWorktree ?? {},
     fromAccountId: args.fromAccountId,
     toAccountId: args.toAccountId
   }

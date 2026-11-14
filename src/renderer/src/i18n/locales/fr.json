@@ -22186,6 +22186,10 @@
       "copySignInLink": "Copier plutôt le lien de connexion",
       "signInLinkCopied": "Lien de connexion copié. Ouvrez-le dans une fenêtre privée pour vous connecter avec un autre compte.",
       "signInLinkCopyFailed": "Impossible de copier le lien.",
+      "worktreeAccount": {
+        "followSelection": "Suivre le compte sélectionné",
+        "submenu": "Compte Claude"
+      },
       "switchSessions": {
         "busy": "En activité",
         "idle": "Inactif",
@@ -22213,6 +22217,7 @@
         "selectGroup": "Sélectionner toutes les sessions de {{group}}",
         "reasonWsl": "Terminal WSL",
         "reasonOwnFolder": "Utilise votre propre dossier Claude",
+        "reasonPinnedWorktree": "L’espace de travail garde son propre compte",
         "reasonUnknownAccount": "Compte inconnu",
         "reasonNoSession": "Reprise impossible",
         "notMovedOne": "1 autre session n'a pas été déplacée.",

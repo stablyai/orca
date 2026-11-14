@@ -21907,6 +21907,10 @@
       "copySignInLink": "Stattdessen Anmeldelink kopieren",
       "signInLinkCopied": "Anmeldelink kopiert. In einem privaten Fenster öffnen, um sich mit einem anderen Konto anzumelden.",
       "signInLinkCopyFailed": "Der Link konnte nicht kopiert werden.",
+      "worktreeAccount": {
+        "followSelection": "Ausgewähltem Konto folgen",
+        "submenu": "Claude-Konto"
+      },
       "switchSessions": {
         "title": "Zu {{account}} gewechselt",
         "dontAskAgain": "Nicht erneut fragen (automatisch neu starten)",
@@ -21936,6 +21940,7 @@
         "selectGroup": "Alle Sitzungen in {{group}} auswählen",
         "reasonWsl": "WSL-Terminal",
         "reasonOwnFolder": "Verwendet den eigenen Claude-Ordner",
+        "reasonPinnedWorktree": "Arbeitsbereich behält sein eigenes Konto",
         "reasonUnknownAccount": "Konto unbekannt",
         "reasonNoSession": "Fortsetzen nicht möglich",
         "notMovedOne": "1 weitere Sitzung wurde nicht umgestellt.",

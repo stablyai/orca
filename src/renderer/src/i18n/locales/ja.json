@@ -22969,6 +22969,10 @@
       "copySignInLink": "代わりにサインインリンクをコピー",
       "signInLinkCopied": "サインインリンクをコピーしました。別のアカウントでサインインするには、プライベートウィンドウで開いてください。",
       "signInLinkCopyFailed": "リンクをコピーできませんでした。",
+      "worktreeAccount": {
+        "followSelection": "選択中のアカウントに従う",
+        "submenu": "Claude アカウント"
+      },
       "switchSessions": {
         "busy": "作業中",
         "idle": "アイドル",
@@ -22996,6 +23000,7 @@
         "selectGroup": "{{group}} のセッションをすべて選択",
         "reasonWsl": "WSL ターミナル",
         "reasonOwnFolder": "独自の Claude フォルダーを使用",
+        "reasonPinnedWorktree": "ワークスペースは専用アカウントを使用",
         "reasonUnknownAccount": "アカウント不明",
         "reasonNoSession": "再開できません",
         "notMovedOne": "他の 1 件のセッションは移動されませんでした。",

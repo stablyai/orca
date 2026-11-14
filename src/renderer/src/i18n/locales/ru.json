@@ -22601,6 +22601,10 @@
       "copySignInLink": "Скопировать ссылку входа",
       "signInLinkCopied": "Ссылка входа скопирована. Откройте её в приватном окне для входа в другую учётную запись.",
       "signInLinkCopyFailed": "Не удалось скопировать ссылку.",
+      "worktreeAccount": {
+        "followSelection": "Следовать выбранному аккаунту",
+        "submenu": "Аккаунт Claude"
+      },
       "switchSessions": {
         "title": "Выбрана учётная запись {{account}}",
         "dontAskAgain": "Больше не спрашивать (перезапускать автоматически)",
@@ -22630,6 +22634,7 @@
         "selectGroup": "Выбрать все сессии в группе «{{group}}»",
         "reasonWsl": "Терминал WSL",
         "reasonOwnFolder": "Использует вашу папку Claude",
+        "reasonPinnedWorktree": "Рабочая область использует свой аккаунт",
         "reasonUnknownAccount": "Учётная запись неизвестна",
         "reasonNoSession": "Нельзя продолжить",
         "notMovedOne": "Ещё одна сессия не перенесена.",

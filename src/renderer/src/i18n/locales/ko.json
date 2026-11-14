@@ -21513,6 +21513,10 @@
       "copySignInLink": "대신 로그인 링크 복사",
       "signInLinkCopied": "로그인 링크를 복사했습니다. 다른 계정으로 로그인하려면 비공개 창에서 여세요.",
       "signInLinkCopyFailed": "링크를 복사할 수 없습니다.",
+      "worktreeAccount": {
+        "followSelection": "선택한 계정 따르기",
+        "submenu": "Claude 계정"
+      },
       "switchSessions": {
         "busy": "작업 중",
         "idle": "유휴",
@@ -21540,6 +21544,7 @@
         "selectGroup": "{{group}}의 세션 모두 선택",
         "reasonWsl": "WSL 터미널",
         "reasonOwnFolder": "자체 Claude 폴더 사용",
+        "reasonPinnedWorktree": "작업 공간이 자체 계정을 유지함",
         "reasonUnknownAccount": "계정 알 수 없음",
         "reasonNoSession": "재개할 수 없음",
         "notMovedOne": "다른 세션 1개는 옮겨지지 않았습니다.",

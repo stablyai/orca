@@ -161,6 +161,11 @@ function cantMoveReasonLabel(
       return t('accounts.claude.switchSessions.reasonWsl', 'WSL terminal')
     case 'own-folder':
       return t('accounts.claude.switchSessions.reasonOwnFolder', 'Uses your own Claude folder')
+    case 'pinned-worktree':
+      return t(
+        'accounts.claude.switchSessions.reasonPinnedWorktree',
+        'Workspace keeps its own account'
+      )
     case 'unknown-account':
       return t('accounts.claude.switchSessions.reasonUnknownAccount', 'Account unknown')
     case 'no-session':

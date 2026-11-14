@@ -22880,6 +22880,10 @@
       "copySignInLink": "Copiar link de login",
       "signInLinkCopied": "Link de login copiado. Abra-o em uma janela privativa para entrar com outra conta.",
       "signInLinkCopyFailed": "Não foi possível copiar o link.",
+      "worktreeAccount": {
+        "followSelection": "Seguir a conta selecionada",
+        "submenu": "Conta do Claude"
+      },
       "switchSessions": {
         "title": "Conta alterada para {{account}}",
         "dontAskAgain": "Não perguntar novamente (reiniciar automaticamente)",
@@ -22907,6 +22911,7 @@
         "selectGroup": "Selecionar todas as sessões em {{group}}",
         "reasonWsl": "Terminal WSL",
         "reasonOwnFolder": "Usa sua própria pasta do Claude",
+        "reasonPinnedWorktree": "O espaço de trabalho mantém sua própria conta",
         "reasonUnknownAccount": "Conta desconhecida",
         "reasonNoSession": "Não é possível retomar",
         "notMovedOne": "1 outra sessão não foi movida.",

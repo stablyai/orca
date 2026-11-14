@@ -1,18 +1,23 @@
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
 
-/** The account a launch runs under is the current selection; the receipt records what it used. */
+/** The account a launch runs under is its worktree's pin, else the current selection; the receipt records what it used. */
 export async function prepareClaudeLaunchAccount(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string
+  recordHome: string,
+  location?: AgentSessionExecutionLocation
 ): Promise<ClaudeAccountRecipe> {
   if (!router) {
     return { route: 'system', home: recordHome, configDir: env.CLAUDE_CONFIG_DIR ?? null }
   }
-  const preparation = await router.prepareLaunch()
+  const preparation = await router.prepareLaunch(
+    // Why: pins cover host accounts only; WSL launches keep following the selection.
+    location && location.wslDistro === null ? location.workspaceId : undefined
+  )
   const home =
     preparation.provenance === 'system'
       ? await resolveStructuredClaudeAccountHomePath({

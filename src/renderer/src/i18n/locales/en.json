@@ -23965,6 +23965,10 @@
       "copySignInLink": "Copy sign-in link instead",
       "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
       "signInLinkCopyFailed": "Could not copy the link.",
+      "worktreeAccount": {
+        "followSelection": "Follow selected account",
+        "submenu": "Claude Account"
+      },
       "switchSessions": {
         "title": "Switched to {{account}}",
         "dontAskAgain": "Don't ask again (restart automatically)",
@@ -23994,6 +23998,7 @@
         "selectGroup": "Select all sessions in {{group}}",
         "reasonWsl": "WSL terminal",
         "reasonOwnFolder": "Uses your own Claude folder",
+        "reasonPinnedWorktree": "Workspace keeps its own account",
         "reasonUnknownAccount": "Account unknown",
         "reasonNoSession": "Can't resume",
         "reasonSharedSession": "Also open in another pane",

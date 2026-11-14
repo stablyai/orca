@@ -7,6 +7,7 @@ import type { BrowserLinkOpeningSettings } from '../browser/navigation/browser-l
 import type { BrowserPasswordsGlobalSettings } from '../browser/passwords/browser-passwords-types'
 import type { BrowserMemorySaverGlobalSettings } from '../browser/guest-lifecycle/browser-memory-saver'
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
+import type { WorktreeAccountPinSettings } from '../worktree-account-pin-settings'
 import type { ExternalConversationSettings } from '../connectors/external-conversation-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/native-chat-idle-stop'
@@ -41,6 +42,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
+  WorktreeAccountPinSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &

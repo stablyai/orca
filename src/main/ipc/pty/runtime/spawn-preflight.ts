@@ -100,10 +100,13 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget, args.worktreeId)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth({
+          ...ctx.codexSelectionTarget,
+          worktreeId: args.worktreeId
+        })
       : null
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true

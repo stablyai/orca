@@ -1,6 +1,7 @@
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
+import { pinnedClaudeTerminalEnv, preparePinnedClaudeLaunch } from './claude-worktree-account-pin'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -50,6 +51,7 @@ export type ClaudeProfileRouterSettings = Pick<
   | 'claudeManagedAccounts'
   | 'activeClaudeManagedAccountId'
   | 'activeClaudeManagedAccountIdsByRuntime'
+  | 'claudeAccountPinsByWorktree'
   | 'agentStatusHooksEnabled'
   | 'disabledTuiAgents'
 >
@@ -59,7 +61,7 @@ export class ClaudeProfileRouter {
   readonly pointerPath: string
   private readonly setups = new Map<string, Promise<ClaudeProfileSetupReport>>()
   private env: NodeJS.ProcessEnv
-  private readonly envReady: Promise<unknown>
+  readonly envReady: Promise<unknown>
   private envResolved: boolean
   constructor(
     private readonly args: {
@@ -165,14 +167,18 @@ export class ClaudeProfileRouter {
     return true
   }
 
-  private setUpInBackground(profile: ClaudeProfileDescriptor): void {
+  setUpInBackground(profile: ClaudeProfileDescriptor): void {
     this.setUp(profile).catch((error: unknown) => {
       console.warn('[claude-profile] Account setup failed:', error)
     })
   }
 
   /** Initial setup must succeed; later refreshes may time out without blocking launch. */
-  async prepareLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
+  async prepareLaunch(worktreeId?: string): Promise<ClaudeRuntimeAuthPreparation> {
+    const pinned = await preparePinnedClaudeLaunch(this, this.args, worktreeId)
+    if (pinned) {
+      return pinned
+    }
     const selected = this.selectedProfile()
     // Only fallback routing needs the shell env; account setup waits for it separately.
     if (!selected || !this.accountLogin(selected.accountId)) {
@@ -220,7 +226,7 @@ export class ClaudeProfileRouter {
     return readUserClaudeConfigDir(this.env)
   }
 
-  private describe(accountId: string): ClaudeProfileDescriptor {
+  describe(accountId: string): ClaudeProfileDescriptor {
     return describeClaudeProfile(this.args.dataRoot, accountId, {
       executionHostId: 'local',
       runtime: 'host'
@@ -228,7 +234,7 @@ export class ClaudeProfileRouter {
   }
 
   /** Reuse in-flight setup per account. */
-  private setUp(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
+  setUp(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
     const running = this.setups.get(profile.accountId)
     if (running) {
       return running
@@ -269,7 +275,7 @@ export class ClaudeProfileRouter {
   }
 
   /** A broken account selection must not prevent opening a terminal. */
-  terminalEnv(target?: ClaudeAccountSelectionTarget): ClaudeEnvPatch {
+  terminalEnv(target?: ClaudeAccountSelectionTarget, worktreeId?: string): ClaudeEnvPatch {
     // Pass the pointer without waiting on the guest.
     if (target?.runtime === 'wsl') {
       return { [CLAUDE_PROFILE_POINTER_ENV]: `~/${wslClaudeProfilePointer(this.args.dataRoot)}` }
@@ -279,6 +285,10 @@ export class ClaudeProfileRouter {
     const base: ClaudeEnvPatch = {
       [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
       ...(userConfigDir ? { [CLAUDE_USER_CONFIG_DIR_ENV]: userConfigDir } : {})
+    }
+    const pinned = pinnedClaudeTerminalEnv(this, this.args.getSettings(), base, worktreeId)
+    if (pinned) {
+      return pinned
     }
     // Defer routing until the shell env resolves; the shell function will read the updated pointer.
     if (!this.envResolved) {
