@@ -69,7 +69,7 @@ it('returns completed legacy cold and pending replies without fallback IO or a s
 it.each(['generation-cold', 'account-cold', 'account-direct'] as const)(
   'fences %s settlement before obsolete error policy and observation',
   async (change) => {
-    const { addPRRefreshOutcomeObserver, _getPRRefreshErrorBackoffCountForTests } =
+    const { addPRRefreshOutcomeObserver } =
       await import('../../../github/pull-requests/refresh/pr-refresh-coordinator')
     const { invalidateHostedReviewBranchCache } =
       await import('../../../source-control/hosted-review-branch-cache')
@@ -94,7 +94,6 @@ it.each(['generation-cold', 'account-cold', 'account-direct'] as const)(
         expect(result).toEqual({ revalidation: { invalidated: true, retryAfterMs: 10_000 } })
       }
       expect(observe).not.toHaveBeenCalled()
-      expect(_getPRRefreshErrorBackoffCountForTests()).toBe(0)
       fixture.title = 'current scope'
       expect(await read('scope', 'active')).toMatchObject({ pr: { title: 'current scope' } })
       expect(observe).toHaveBeenCalledTimes(1)

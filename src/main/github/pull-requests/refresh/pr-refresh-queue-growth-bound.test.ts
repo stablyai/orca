@@ -36,8 +36,7 @@ describe('pr-refresh queue growth bounds', () => {
   })
 
   it('keeps the newer alias when a branch switch lands mid-request', async () => {
-    const { reportVisiblePRRefreshCandidates } =
-      await import('./pr-refresh-coordinator')
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
 
     const churnCandidate = (index: number): GitHubPRRefreshCandidate =>
       makeCandidate({

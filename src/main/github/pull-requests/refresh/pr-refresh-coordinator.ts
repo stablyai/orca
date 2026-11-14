@@ -127,7 +127,8 @@ export async function runHostedPRSnapshot(
       acceptRevalidationOnly
     )
   }
-  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
+  const settle = registerPRRefreshRequest(candidate, 'h', false)
+  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly).finally(settle)
 }
 
 function removeInvisibleVisibleRefreshes(): void {

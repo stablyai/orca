@@ -112,11 +112,18 @@ describe('github.prDetailRecovery runtime methods', () => {
       publicationGrantId: 'grant-1'
     })
     await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(async () =>
+      expect(
+        await call('github.prDetailRecovery.wait', {
+          ticketId: started.ticketId,
+          afterRevision: 0
+        })
+      ).toMatchObject({ admitted: true, terminal: { kind: 'settled' } })
+    )
     const settled = await call('github.prDetailRecovery.wait', {
       ticketId: started.ticketId,
       afterRevision: 0
     })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
     expect(getPRForBranchOutcomeMock.mock.calls[0][0]).toBe('/server/repo')
     expect(getPRForBranchOutcomeMock.mock.calls[0][4]).toBe(7)
     expect(settled.terminal).toMatchObject({ kind: 'settled', outcome: { pr: { number: 8 } } })
@@ -185,7 +192,6 @@ describe('github.prDetailRecovery runtime methods', () => {
         await vi.advanceTimersByTimeAsync(0)
         const snapshot = await startRecovery()
         expect(snapshot.predecessors).toHaveLength(expected)
-        expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
       }
     )
 

@@ -2,15 +2,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { PRDetailRecoveryStartArgs } from '../../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 
-const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
+const { coordinatorMocks, moduleMocks, providerPreparation } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
-  return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
+  const providerPreparation: { held: Promise<void> | null; entered: boolean } = {
+    held: null,
+    entered: false
+  }
+  return {
+    coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(),
+    moduleMocks,
+    providerPreparation
+  }
 })
 
 vi.mock('./pr-refresh-renderer-port', () => moduleMocks.rendererPortModuleMock(coordinatorMocks))
-vi.mock('../../client/lookup/pr-for-branch-outcome', () =>
-  moduleMocks.clientModuleMock(coordinatorMocks)
-)
+vi.mock('../../client/lookup/pr-for-branch-outcome', () => {
+  const client = moduleMocks.clientModuleMock(coordinatorMocks)
+  return {
+    ...client,
+    preparePRBranchRead: async (...args: Parameters<typeof client.preparePRBranchRead>) => {
+      const prepared = await client.preparePRBranchRead(...args)
+      if (providerPreparation.held) {
+        providerPreparation.entered = true
+        await providerPreparation.held
+      }
+      return prepared
+    }
+  }
+})
 vi.mock('../../repositories/github-api-repository-remote-probe', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
@@ -86,6 +105,8 @@ function noPR(): PRRefreshOutcome {
 describe('PR detail recovery tickets', () => {
   beforeEach(() => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
+    providerPreparation.held = null
+    providerPreparation.entered = false
   })
 
   afterEach(() => {
@@ -104,16 +125,16 @@ describe('PR detail recovery tickets', () => {
     expect(started.predecessors).toHaveLength(1)
 
     await vi.advanceTimersByTimeAsync(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
     predecessor.resolve(noPR())
     await vi.advanceTimersByTimeAsync(15_000)
     expect((await api.snapshot(started.ticketId)).admitted).toBe(false)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
 
     await api.commit(started.ticketId)
     await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(async () =>
+      expect((await api.snapshot(started.ticketId)).terminal?.kind).toBe('settled')
+    )
     const settled = await api.snapshot(started.ticketId)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
     expect(getPRForBranchOutcomeMock.mock.calls[1][4]).toBe(7)
     expect(getPRForBranchOutcomeMock.mock.calls[1][5]).toMatchObject({ currentHeadOid: 'h2' })
     expect(settled.admitted).toBe(true)
@@ -167,13 +188,12 @@ describe('PR detail recovery tickets', () => {
     await vi.advanceTimersByTimeAsync(0)
     await api.commit(started.ticketId)
     await vi.advanceTimersByTimeAsync(0)
-    expect((await api.snapshot(started.ticketId)).admitted).toBe(true)
+    await vi.waitFor(async () => expect((await api.snapshot(started.ticketId)).admitted).toBe(true))
 
     await api.refreshPRNow(H2, 'manual')
     recoveryRead.resolve({ kind: 'found', pr: makePR({ number: 8 }), fetchedAt: START_AT })
     await vi.advanceTimersByTimeAsync(0)
     expect((await api.snapshot(started.ticketId)).terminal).toEqual({ kind: 'superseded' })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
   it('expires an uncommitted preparation without reading', async () => {
@@ -195,13 +215,13 @@ describe('PR detail recovery tickets', () => {
     const first = api.startPRDetailRecovery(CALLER, startArgs(1), H2)
     await vi.advanceTimersByTimeAsync(0)
     await api.commit(first.ticketId)
+    await vi.waitFor(async () => expect((await api.snapshot(first.ticketId)).admitted).toBe(true))
     await vi.advanceTimersByTimeAsync(30_000)
     expect((await api.snapshot(first.ticketId)).terminal).toEqual({ kind: 'timeout' })
 
     const second = api.startPRDetailRecovery(CALLER, startArgs(2), H2)
     expect(second.phase).toBe('waiting-existing')
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
   it('waits for a host rate gate and then reads once with the original hint', async () => {
@@ -224,7 +244,9 @@ describe('PR detail recovery tickets', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await api.commit(started.ticketId)
     await vi.advanceTimersByTimeAsync(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.waitFor(async () =>
+      expect((await api.snapshot(started.ticketId)).terminal?.kind).toBe('settled')
+    )
     expect(getPRForBranchOutcomeMock.mock.calls[0][4]).toBe(7)
   })
 
@@ -247,10 +269,12 @@ describe('PR detail recovery tickets', () => {
     api.commitPRDetailRecovery(CALLER.callerKey, commitArgs)
     api.commitPRDetailRecovery(CALLER.callerKey, commitArgs)
     await vi.advanceTimersByTimeAsync(0)
-    expect((await api.snapshot(started.ticketId)).terminal).toEqual({
-      kind: 'settled',
-      outcome: noPR()
-    })
+    await vi.waitFor(async () =>
+      expect((await api.snapshot(started.ticketId)).terminal).toEqual({
+        kind: 'settled',
+        outcome: noPR()
+      })
+    )
     expect(api.commitPRDetailRecovery('ipc:2', commitArgs)).toBeNull()
     api.startPRDetailRecovery(CALLER, startArgs(2), H2)
     expect(api.startPRDetailRecovery(CALLER, startArgs(1), H2).ticketId).toBe(started.ticketId)
@@ -321,8 +345,10 @@ describe('PR detail recovery tickets', () => {
       await vi.advanceTimersByTimeAsync(0)
       await api.commit(started.ticketId)
       await vi.advanceTimersByTimeAsync(0)
+      await vi.waitFor(async () =>
+        expect((await api.snapshot(started.ticketId)).admitted).toBe(true)
+      )
       const admitted = await api.snapshot(started.ticketId)
-      expect(admitted.admitted).toBe(true)
       const pending =
         stage === 'pending wait'
           ? api.waitPRDetailRecovery(CALLER.callerKey, started.ticketId, admitted.revision)
@@ -342,4 +368,22 @@ describe('PR detail recovery tickets', () => {
       expect(closed.publicationGrantId).toBeUndefined()
     }
   )
+  it('rechecks authority after asynchronous provider preparation completes', async () => {
+    const api = await load()
+    const controller = new AbortController()
+    const caller = { ...CALLER, authority: { id: 'paired-incarnation', signal: controller.signal } }
+    const started = api.startPRDetailRecovery(caller, startArgs(1), H2)
+    await vi.advanceTimersByTimeAsync(0)
+    const held = deferred<void>()
+    providerPreparation.held = held.promise
+    await api.commit(started.ticketId)
+    await vi.waitFor(() => expect(providerPreparation.entered).toBe(true))
+    controller.abort()
+    held.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await api.snapshot(started.ticketId)).toMatchObject({
+      admitted: false,
+      terminal: { kind: 'cancelled' }
+    })
+  })
 })

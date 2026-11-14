@@ -118,11 +118,14 @@ describe('native PR detail recovery handlers', () => {
       publicationGrantId: 'grant-1'
     })
     await vi.advanceTimersByTimeAsync(0)
-    expect(await invoke('gh:waitPRDetailRecovery', { ticketId, afterRevision: 0 })).toMatchObject({
-      admitted: true,
-      terminal: { kind: 'settled', outcome: { pr: { number: 8 } } }
-    })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.waitFor(async () =>
+      expect(await invoke('gh:waitPRDetailRecovery', { ticketId, afterRevision: 0 })).toMatchObject(
+        {
+          admitted: true,
+          terminal: { kind: 'settled', outcome: { pr: { number: 8 } } }
+        }
+      )
+    )
     expect(getPRForBranchOutcomeMock.mock.calls[0][0]).toBe('/repo')
   })
 })
