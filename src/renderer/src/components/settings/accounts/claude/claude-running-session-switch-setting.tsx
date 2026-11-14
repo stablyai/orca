@@ -25,7 +25,7 @@ export function ClaudeRunningSessionSwitchSetting({
   )
   const description = t(
     'accounts.claude.switchSessions.settingDescription',
-    'Restarting continues each terminal conversation on the new account.'
+    'Restarting continues each terminal conversation on the new account. Busy sessions stop their current work.'
   )
   return (
     <SearchableSetting

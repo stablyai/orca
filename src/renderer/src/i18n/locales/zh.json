@@ -21872,7 +21872,7 @@
         "dontAskAgainHint": "可在设置 → AI 服务商账户中关闭此选项",
         "listLabel": "待重启的 Claude 会话",
         "settingTitle": "Claude 在终端中运行期间切换账户时",
-        "settingDescription": "重启后，每个终端对话都会在新账户上继续。",
+        "settingDescription": "重启后，每个终端对话都会在新账户上继续。忙碌的会话会中断当前工作。",
         "settingRestart": "总是重启",
         "session": "Claude 会话",
         "restartingOther": "正在 {{account}} 上重启 {{count}} 个 Claude 会话",
@@ -21893,10 +21893,12 @@
         "review": "查看",
         "restartCount_other": "重启 {{count}} 个会话",
         "reviewBody_other": "其他 {{count}} 个 Claude 会话未移至 {{next}}",
-        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启",
+        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会中断当前工作并立即重启",
         "reasonSharedSession": "在另一个窗格中也已打开",
         "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
-        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。"
+        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
+        "strandedOne": "1 个 Claude 会话可能仍在 {{previous}} 上。Orca 无法恢复它，请自行重启以切换",
+        "strandedOther": "{{count}} 个 Claude 会话可能仍在 {{previous}} 上。Orca 无法恢复它们，请自行重启以切换"
       },
       "oauthUsage": {
         "title": "Claude 用量轮询",

@@ -1,8 +1,5 @@
 /** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
-import {
-  isTerminalLeafId,
-  makePaneKey
-} from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
 import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -10,7 +7,6 @@ import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
 } from '@/lib/agent-session/accounts/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
 import { isForeignMachineCodexPtyId } from '@/lib/agent-session/accounts/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
@@ -80,14 +76,6 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     }
     // Mounted tabs register before transport bind; taking over in that gap would kill the PTY being attached.
     if (hasRegisteredRuntimeTerminalTab(located.tab.id, located.worktreeId)) {
-      return
-    }
-    // Why: a Claude restart waits out the turn; the scheduler re-sweeps on status changes.
-    if (
-      state.pendingPaneAccountRestarts[ptyId] === 'claude' &&
-      located.leafId &&
-      isClaudePaneMidTurn(state, makePaneKey(located.tab.id, located.leafId))
-    ) {
       return
     }
     const agent = useAppStore.getState().consumePendingPaneAccountRestart(ptyId)

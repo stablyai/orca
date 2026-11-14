@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { createIpcPtySessionHandlers } from '../../pty-transport/ipc/ipc-pty-session-handlers'
+import { createPtyOutputProcessor } from '../../pty-transport/output/pty-output-processor'
 
 import {
   installCodexDetachedPaneRestartExecutor,
@@ -59,18 +62,6 @@ function seedClaudePane(
   })
 }
 
-function setPaneState(state: AgentStatusEntry['state']): void {
-  const paneKey = makePaneKey('tab-1', LEAF_ID)
-  const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: { ...entry, state } } })
-}
-
-async function settle(): Promise<void> {
-  for (let i = 0; i < 5; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-}
-
 describe('detached Claude account-move restart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
@@ -119,19 +110,11 @@ describe('detached Claude account-move restart', () => {
     }
   })
 
-  it('restarts a mid-turn session once its turn ends, via the store subscription', async () => {
+  it('interrupts a working session and restarts it at once, via the store subscription', async () => {
     const uninstall = installCodexDetachedPaneRestartExecutor()
     try {
       seedClaudePane({ state: 'working' })
       useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
-      await settle()
-      // Why waiting: Claude's hooks report a permission prompt or question as waiting, mid-turn.
-      setPaneState('waiting')
-      await settle()
-      expect(window.api.pty.spawn).not.toHaveBeenCalled()
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
-
-      setPaneState('done')
 
       await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
       await vi.waitFor(() => expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({}))
@@ -139,4 +122,102 @@ describe('detached Claude account-move restart', () => {
       uninstall()
     }
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'restarts a queued %s pane after mounted ownership and its handler are released',
+    async (agent) => {
+      seedClaudePane({ state: 'working' })
+      const unregister = registerRuntimeTerminalTab({
+        tabId: 'tab-1',
+        worktreeId: 'wt1',
+        getManager: () => null,
+        getContainer: () => null,
+        getPtyIdForPane: () => OLD_PTY,
+        getTabWideAgentHintLeafId: () => LEAF_ID
+      })
+      const handlers = createIpcPtySessionHandlers({
+        outputProcessor: createPtyOutputProcessor({}),
+        getPtyId: () => OLD_PTY,
+        getCallbacks: () => ({}),
+        getSuppressAttentionEvents: () => false,
+        markExited: () => {}
+      })
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      try {
+        useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], agent)
+        await Promise.resolve()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        // No transport bound before the queue; cleanup can also release an existing handler.
+        handlers.registerData(OLD_PTY)
+        unregister()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        handlers.unregisterAll(OLD_PTY)
+        await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
+        expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+        unregister()
+        await Promise.resolve()
+        expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+      } finally {
+        unregister()
+        handlers.unregisterAll(OLD_PTY)
+        uninstall()
+      }
+    }
+  )
+
+  it.each([10, 100])(
+    'bounds registry-burst work with %i pending restarts and ignores empty queues or uninstall',
+    async (count) => {
+      seedClaudePane({ state: 'working' })
+      const tab = {
+        tabId: 'tab-1',
+        worktreeId: 'wt1',
+        getManager: () => null,
+        getContainer: () => null,
+        getPtyIdForPane: () => OLD_PTY,
+        getTabWideAgentHintLeafId: () => LEAF_ID
+      }
+      const unregister = registerRuntimeTerminalTab(tab)
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      await Promise.resolve()
+      const microtasks = vi.spyOn(globalThis, 'queueMicrotask')
+      try {
+        for (let i = 0; i < count; i++) {
+          registerRuntimeTerminalTab(tab)
+        }
+        expect(microtasks).not.toHaveBeenCalled()
+        const pendingPtyIds = Array.from({ length: count }, (_, i) =>
+          i === 0 ? OLD_PTY : `wt1@@unlocated-${i}`
+        )
+        useAppStore.getState().queuePaneAccountRestarts(pendingPtyIds, 'claude')
+        await Promise.resolve()
+        expect(Object.keys(useAppStore.getState().pendingPaneAccountRestarts)).toHaveLength(count)
+        microtasks.mockClear()
+        const enumerations = vi.spyOn(Object, 'keys')
+        try {
+          for (let i = 0; i < 10 * count; i++) {
+            registerRuntimeTerminalTab(tab)
+          }
+          expect(enumerations).toHaveBeenCalledTimes(1)
+        } finally {
+          enumerations.mockRestore()
+        }
+        expect(microtasks).toHaveBeenCalledTimes(1)
+        await Promise.resolve()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        unregister()
+        uninstall()
+        await Promise.resolve()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        microtasks.mockClear()
+        const release = registerRuntimeTerminalTab(tab)
+        release()
+        expect(microtasks).not.toHaveBeenCalled()
+      } finally {
+        microtasks.mockRestore()
+        uninstall()
+        unregister()
+      }
+    }
+  )
 })
