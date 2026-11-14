@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { readClaudeApiEndpointEnv } from './claude-api-endpoint'
+import { restrictEndpointSettings } from './claude-profile-endpoint-settings'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 import {
   claudeProfileMarkerPath,
@@ -83,6 +85,9 @@ export async function provisionClaudeAccountProfile(args: {
     const status = installHooks({ configDir: home })
     if (status.state !== 'installed') {
       throw new Error(status.detail ?? `Claude hooks ${status.state}`)
+    }
+    if (readClaudeApiEndpointEnv(home)) {
+      restrictEndpointSettings(join(home, 'settings.json'))
     }
     return 'merged'
   })

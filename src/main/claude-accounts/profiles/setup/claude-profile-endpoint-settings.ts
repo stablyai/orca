@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { getManagedScriptFileName, removeManagedHooks } from '../../../claude/hooks/hook-settings'
 import { writeEndpointCredentialFile } from './claude-api-endpoint'
 import { readClaudeProfileObject } from '../claude-profile-paths'
@@ -58,4 +60,22 @@ export function copySettingsWithEndpoint(
   // Restricts the file on Windows too, where a POSIX mode would be ignored.
   writeEndpointCredentialFile(target, `${JSON.stringify(desired, null, 2)}\n`)
   return 'synced'
+}
+
+// Hook installation replaces settings.json with a new file, which on Windows takes the folder's
+// inherited DACL instead of the owner-only one. Publish it again restricted, or remove it.
+export function restrictEndpointSettings(target: string): void {
+  if (lstatIfPresent(target)?.isSymbolicLink()) {
+    return
+  }
+  let contents: string
+  try {
+    contents = readFileSync(target, 'utf8')
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return
+    }
+    throw error
+  }
+  writeEndpointCredentialFile(target, contents)
 }
