@@ -342,7 +342,7 @@ beforeEach(async () => {
     activeWorkspaceExecutionHostId: null,
     runtimeEnvironments: [],
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     acknowledgedAgentsByPaneKey: {},
     manuallyUnreadTurnsByPaneKey: {},
     unreadTerminalTabs: {},

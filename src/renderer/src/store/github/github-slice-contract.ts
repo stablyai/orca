@@ -92,6 +92,8 @@ export type GitHubSlice = {
       /** Refresh or a check action: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
       userRefresh?: boolean
+      /** The checks panel's own timer: a paired host may answer at its PR auto-refresh cadence. */
+      background?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (

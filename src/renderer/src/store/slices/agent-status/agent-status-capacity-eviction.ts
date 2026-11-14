@@ -1,58 +1,56 @@
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status-contract'
 import '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
-
-const MAX_RETAINED_AGENTS = 500
-
-export function capRetainedAgents(
-  retained: Record<string, RetainedAgentEntry>,
-  maxEntries = MAX_RETAINED_AGENTS
-): Record<string, RetainedAgentEntry> {
-  const keys = Object.keys(retained)
-  if (keys.length <= maxEntries) {
-    return retained
-  }
-  const capped: Record<string, RetainedAgentEntry> = {}
-  for (const key of keys.slice(keys.length - maxEntries)) {
-    capped[key] = retained[key]
-  }
-  return capped
-}
 
 // Why: missed pane teardown can leak heavy live rows in any state and amplify every status-map copy (#9872).
 export const MAX_LIVE_AGENT_STATUSES = 500
 
 type PaneLiveness = 'live' | 'dead' | 'unprovable'
 
-// Why: only a rooted tab proves which leaves are mounted; rootless and headless rows may still be live (#2962).
-export function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => PaneLiveness {
-  const rootedLeafKeys = new Set<string>()
-  const rootedTabIds = new Set<string>()
-  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
-    if (!layout?.root) {
-      continue
-    }
-    rootedTabIds.add(tabId)
-    const stack: TerminalPaneLayoutNode[] = [layout.root]
+const leavesByRoot = new WeakMap<TerminalPaneLayoutNode, ReadonlySet<string>>()
+
+export function paneKeyCandidateTabIds(paneKey: string): string[] {
+  const ids: string[] = []
+  for (let colon = paneKey.indexOf(':'); colon !== -1; colon = paneKey.indexOf(':', colon + 1)) {
+    ids.push(paneKey.slice(0, colon))
+  }
+  return ids
+}
+
+function rootHasLeaf(root: TerminalPaneLayoutNode, leafId: string): boolean {
+  let leaves = leavesByRoot.get(root)
+  if (!leaves) {
+    const found = new Set<string>()
+    const stack = [root]
     while (stack.length > 0) {
       const node = stack.pop()!
       if (node.type === 'leaf') {
-        rootedLeafKeys.add(`${tabId}:${node.leafId}`)
+        found.add(node.leafId)
       } else {
         stack.push(node.first, node.second)
       }
     }
+    leavesByRoot.set(root, (leaves = found))
   }
+  return leaves.has(leafId)
+}
+
+// Only exact rooted leaves prove placement; legacy colon-containing owners still match full keys.
+export function classifyPaneKeyLiveness(
+  layouts: AppState['terminalLayoutsByTabId']
+): (paneKey: string) => PaneLiveness {
   return (paneKey) => {
-    if (rootedLeafKeys.has(paneKey)) {
-      return 'live'
+    for (const tabId of paneKeyCandidateTabIds(paneKey)) {
+      const root = layouts[tabId]?.root
+      if (root && rootHasLeaf(root, paneKey.slice(tabId.length + 1))) {
+        return 'live'
+      }
     }
     const tabId = getTabIdFromPaneKey(paneKey)
-    return tabId !== null && rootedTabIds.has(tabId) ? 'dead' : 'unprovable'
+    return tabId !== null && layouts[tabId]?.root ? 'dead' : 'unprovable'
   }
 }
 

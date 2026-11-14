@@ -9,7 +9,7 @@
 1 src/renderer/src/components/LinuxPackageInstallRecoveryCard.tsx
 1 src/renderer/src/components/StarNagCard.tsx
 1 src/renderer/src/components/UpdateErrorCardContent.tsx
-1 src/renderer/src/components/browser-pane/assemble-chrome/browser-page-context-menu-items.tsx
+1 src/renderer/src/components/browser-pane/assemble-chrome/context-menu/browser-page-context-menu-items.tsx
 1 src/renderer/src/components/browser-pane/assemble-chrome/browser-page-toolbar.tsx
 1 src/renderer/src/components/browser-pane/assemble-chrome/browser-page-viewport-overlays.tsx
 1 src/renderer/src/components/browser-pane/client-hosted-browser-load-failure.tsx

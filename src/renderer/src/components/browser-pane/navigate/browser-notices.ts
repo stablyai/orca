@@ -7,7 +7,7 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import { isChromiumCertificateErrorCode } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import {
   BROWSER_LOAD_FAILURE_COPY as COPY,
   formatBrowserLoadFailureText,

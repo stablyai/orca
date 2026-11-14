@@ -1,4 +1,4 @@
-import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import '../../../../../shared/constants'
 import {

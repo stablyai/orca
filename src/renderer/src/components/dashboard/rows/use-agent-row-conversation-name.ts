@@ -79,7 +79,7 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
   if (structuredName) {
     return { name: structuredName, forked: chatNaming.forkSourceId !== null }
   }
-  // Why: retained row snapshots need a fallback after their live tab disappears.
+  // Why: attributed rows can arrive before their tab metadata.
   const name = getAgentRowConversationName(
     liveTab ?? agent.tab,
     agent.agentType,
