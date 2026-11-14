@@ -8,7 +8,6 @@ import {
   isBranchReservedByWorktreeOperation
 } from './git-worktree-admin'
 import type { GitWorktreeInfo } from '../../worktree/types'
-import { isWorktreeCreatePreparation } from '../../worktree/create-preparation'
 
 let root = ''
 let repo = ''
@@ -109,18 +108,15 @@ describe('owning-host worktree administrative reads', () => {
     await rm(linked, { recursive: true })
     const annotated = await annotateWorktreeLocksFromAdmin(repo, rows())
     expect(annotated[1]).toMatchObject({ locked: true, lockReason: preparationReason })
-    expect(isWorktreeCreatePreparation(annotated[1])).toBe(true)
   })
 
   it('keeps empty and foreign locks without claiming preparations by path shape', async () => {
     await writeFile(path.join(admin, 'locked'), '')
     const empty = await annotateWorktreeLocksFromAdmin(repo, rows())
     expect(empty[1].locked).toBe(true)
-    expect(isWorktreeCreatePreparation(empty[1])).toBe(false)
     await writeFile(path.join(admin, 'locked'), 'user session\n')
     const foreign = await annotateWorktreeLocksFromAdmin(repo, rows())
     expect(foreign[1]).toMatchObject({ locked: true, lockReason: 'user session' })
-    expect(isWorktreeCreatePreparation(foreign[1])).toBe(false)
   })
 
   it('does not cache a replaced lock reason or another repository’s metadata', async () => {

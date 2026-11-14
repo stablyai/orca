@@ -2,14 +2,14 @@ import { ipcRenderer } from 'electron'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../shared/worktree/base-ref-drift-types'
+} from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { CreateWorktreeProgressEvent } from '../../../shared/worktree/create-types'
 import type {
   GitStatusMetadataChangedEvent,
   WorktreeHeadIdentity
 } from '../../../shared/worktree/types'
 import type { PreloadApi } from '../../api-types'
-import type { WorkspaceMetadataSet } from '../../../shared/worktree/workspace-metadata-set'
+import type { WorkspaceMetadataSet } from '../../../shared/worktree/metadata/workspace-metadata-set'
 
 export const worktreesApi = {
   listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),

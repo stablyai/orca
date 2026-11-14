@@ -6,7 +6,7 @@ import {
 } from './workspace-attachments'
 import { normalizeWorkspaceAttachments } from './workspace-attachment-normalization'
 
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../worktree/hosted-review-links'
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../worktree/hosted-review/hosted-review-links'
 
 const pr = (number: number): WorkspaceAttachment => ({ provider: 'github', type: 'pr', number })
 

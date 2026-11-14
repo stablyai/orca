@@ -12,15 +12,15 @@ import {
   pairedServerRowOfWorktree,
   type PairedServerHostFacts,
   type PairedServerWorkspaceRow
-} from '../../../../../../shared/sidebar-list/paired-server-rows'
+} from '../../../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import { describePairedServerHosts } from '../../../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
-import { validCrossStoreLineage } from '../../../../../../shared/worktree/cross-store-lineage-records'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
+import { validCrossStoreLineage } from '../../../../../../shared/worktree/lineage/cross-store-lineage-records'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { folderLineageEdgeOf } from '../../../../../../shared/worktree/folder-lineage-parents'
+import { folderLineageEdgeOf } from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(

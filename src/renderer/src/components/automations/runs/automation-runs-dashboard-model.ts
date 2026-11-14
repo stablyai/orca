@@ -2,22 +2,46 @@ import type {
   AutomationRun,
   AutomationRunStatus
 } from '../../../../../shared/automations/history/automation-run'
+import type { AutomationRunWorkspaceRecord } from './automation-run-view-state'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import type { AutomationActionNotice } from '../hosts/automation-row-action-dispatch'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 
-export type AutomationRunsDashboardRun = Pick<
-  AutomationRun,
-  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger'
->
+export type AutomationRunsDashboardRun = AutomationRunWorkspaceRecord &
+  Pick<
+    AutomationRun,
+    | 'id'
+    | 'title'
+    | 'scheduledFor'
+    | 'status'
+    | 'trigger'
+    | 'runNumber'
+    | 'workspaceId'
+    | 'workspaceDisplayName'
+  > & {
+    /** Only the spend survives projection; the full usage record stays with the host. */
+    estimatedCostUsd: number | null
+    usageKnown: boolean
+  }
 
 export function projectAutomationRunsDashboardRun(run: AutomationRun): AutomationRunsDashboardRun {
   return {
+    runContext: run.runContext,
+    sessionKind: run.sessionKind,
+    chatSessionId: run.chatSessionId,
+    terminalPaneKey: run.terminalPaneKey,
+    terminalPtyId: run.terminalPtyId,
+    dispatchedAt: run.dispatchedAt,
     id: run.id,
     title: run.title,
     scheduledFor: run.scheduledFor,
     status: run.status,
-    trigger: run.trigger
+    trigger: run.trigger,
+    runNumber: run.runNumber,
+    workspaceId: run.workspaceId,
+    workspaceDisplayName: run.workspaceDisplayName,
+    estimatedCostUsd: run.usage?.estimatedCostUsd ?? null,
+    usageKnown: run.usage?.status === 'known'
   }
 }
 

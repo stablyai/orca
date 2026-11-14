@@ -1,4 +1,4 @@
-import { useRef, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -8,6 +8,7 @@ import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheet
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
 import { sourceFileDiffOpenRun } from '../../files/session-documents/mobile-source-file-open-operations'
+import { selectOpenedSessionDiff } from './select-opened-session-diff'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
@@ -73,6 +74,14 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
 
   // Bumped by every file the reader picks, so a slow save or stage never overrides a newer pick.
   const navigationRef = useRef(0)
+  // Open in session waits for the desktop's tab; leaving first must not replace the route the user went to.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const {
     clearSavedNote,
@@ -169,23 +178,38 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       ) {
         return
       }
-      const response = await sourceFileDiffOpenRun.request(client, {
-        worktree: `id:${worktreeId}`,
+      const target = {
+        worktreeId,
         relativePath: currentItem.filePath,
         staged: currentItem.scope === 'staged'
-      })
-      try {
-        sourceFileDiffOpenRun.interpret(response)
-      } catch (error) {
-        setActionError(
-          refusedRpcMessageOrFallback(
-            error,
-            translate('session.useDiffReviewInteractions.openFailed', 'Unable to open in session')
-          )
-        )
-        return
       }
-      onOpenSession()
+      setBusyAction('open-in-session')
+      try {
+        const response = await sourceFileDiffOpenRun.request(client, {
+          worktree: `id:${worktreeId}`,
+          relativePath: target.relativePath,
+          staged: target.staged
+        })
+        try {
+          sourceFileDiffOpenRun.interpret(response)
+        } catch (error) {
+          setActionError(
+            refusedRpcMessageOrFallback(
+              error,
+              translate('session.useDiffReviewInteractions.openFailed', 'Unable to open in session')
+            )
+          )
+          return
+        }
+        const isCurrent = () => mountedRef.current
+        // Best effort: the session still opens, on this phone's previous tab, if selecting the diff fails.
+        await selectOpenedSessionDiff(client, target, isCurrent).catch(() => {})
+        if (isCurrent()) {
+          onOpenSession()
+        }
+      } finally {
+        setBusyAction(null)
+      }
     },
     openSendSheet,
     retryAction: connectionRetryAction({

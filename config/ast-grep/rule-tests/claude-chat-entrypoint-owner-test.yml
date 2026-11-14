@@ -1,8 +1,0 @@
-id: claude-chat-entrypoint-owner
-valid:
-  - 'const env = withOrcaClaudeChatEntrypoint(configured, platform)'
-  - "const binary = 'orca'"
-invalid:
-  - "const env = { CLAUDE_CODE_ENTRYPOINT: 'orca' }"
-  - "env['claude_code_entrypoint'] = 'other'"
-  - "const identity = 'sdk-cli'"

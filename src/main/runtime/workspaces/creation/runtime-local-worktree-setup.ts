@@ -3,7 +3,7 @@ import type {
   SetupDecision,
   SetupTrustMismatch
 } from '../../../../shared/worktree/create-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../../../shared/workspace-hook-owner'
 import { loadHooks, runHook } from '../../../workspace-hooks/hooks'
 import {
   createSetupRunnerScript,
@@ -37,7 +37,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     RuntimeManagedWorktreeCreateArgs,
     'runHooks' | 'setupDecision' | 'approvedSetupHash' | 'approvedSetupHashes'
   >
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreePath: string
   settings: ReturnType<RuntimeStore['getSettings']>
   runtimeTarget: { wslDistro?: string } | undefined

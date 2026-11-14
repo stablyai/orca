@@ -35,7 +35,7 @@ test('Resource Manager ends a tab-less terminal this run spawned', async ({
       cols: 80,
       rows: 24,
       cwd: folderPath,
-      worktreeId: `folder:${folder.id}`,
+      worktreeId: `folder:${folder.folderWorkspace.id}`,
       initiallyHidden: true
     })
     return spawned.id

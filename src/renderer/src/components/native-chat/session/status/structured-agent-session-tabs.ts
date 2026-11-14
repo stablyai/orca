@@ -182,11 +182,17 @@ export function getStructuredAgentSessionTabs(
   return list
 }
 
+const emptyPaneTabs: ReadonlyMap<string, StructuredTab> = new Map()
 const paneTabs = new WeakMap<readonly StructuredTab[], ReadonlyMap<string, StructuredTab>>()
 export function getStructuredAgentSessionTabsByPaneKey(
-  tabs: TabsByWorktree
+  tabs: TabsByWorktree | Tab[] | undefined
 ): ReadonlyMap<string, StructuredTab> {
-  const structuredTabs = getStructuredAgentSessionTabs(tabs)
+  if (!tabs) {
+    return emptyPaneTabs
+  }
+  const structuredTabs = Array.isArray(tabs)
+    ? structuredTabsOf(tabs, undefined)
+    : getStructuredAgentSessionTabs(tabs)
   const cached = paneTabs.get(structuredTabs)
   if (cached) {
     return cached

@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 
 export type WorktreeBatchDeleteOptions = {
   forceConfirm?: boolean

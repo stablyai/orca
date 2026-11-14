@@ -94,7 +94,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
       await Promise.all([
         (refreshRemote ?? refreshRateLimits)(),
-        refreshDetectedAgents(undefined, { wakeWslDistro: true })
+        refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
       ])
     } finally {
       if (mountedRef.current) {

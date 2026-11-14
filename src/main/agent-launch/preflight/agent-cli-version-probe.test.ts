@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { checkAgentCliVersion } from './agent-cli-version-probe'
+import { checkAgentCliVersion, readAgentCliVersion } from './agent-cli-version-probe'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess }))
@@ -38,6 +38,17 @@ describe('checkAgentCliVersion', () => {
     )
   })
 
+  it('propagates owner cancellation instead of certifying a missing CLI', async () => {
+    const owner = new AbortController()
+    const closed = Promise.withResolvers<unknown>()
+    runProcess.mockReturnValue(closed.promise)
+    const read = checkAgentCliVersion({ ...INPUT, operation: { signal: owner.signal } }, [])
+    const observed = expect(read).rejects.toThrow('superseded')
+    owner.abort(new Error('superseded'))
+    closed.resolve({ code: null, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: false })
+    await observed
+  })
+
   it('reads a version printed only on stderr, as Pi 0.73 does', async () => {
     prints('', { stderr: '0.73.1\n' })
     expect(await checkAgentCliVersion(INPUT, ['0.84.0'])).toEqual({
@@ -46,4 +57,16 @@ describe('checkAgentCliVersion', () => {
       minimumVersion: '0.84.0'
     })
   })
+})
+
+it('allows a catalog version prerequisite to complete late without changing normal preflight limits', async () => {
+  const answer = Promise.withResolvers<unknown>()
+  runProcess.mockReturnValueOnce(answer.promise)
+  const catalog = readAgentCliVersion({ ...INPUT, timeoutMs: null })
+  expect(runProcess.mock.lastCall?.[0].timeoutMs).toBeNull()
+  answer.resolve({ code: 0, stdout: '1.18.31', stderr: '', timedOut: false })
+  expect(await catalog).toEqual({ version: '1.18.31' })
+  runProcess.mockResolvedValueOnce({ code: null, stdout: '', stderr: '', timedOut: true })
+  expect(await readAgentCliVersion(INPUT)).toEqual({ version: null })
+  expect(runProcess.mock.lastCall?.[0].timeoutMs).toBe(5_000)
 })

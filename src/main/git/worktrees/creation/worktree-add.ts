@@ -1,9 +1,9 @@
 import { GitCommandTimeoutError } from '../../../../shared/git/commands/git-command-timeout'
-import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
+import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-refs/base-ref'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
-} from '../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'

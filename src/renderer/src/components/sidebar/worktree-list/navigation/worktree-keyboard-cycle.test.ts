@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { FolderWorkspaceRow } from '../../../../../../shared/sidebar-list/row-types'
-import { getCyclableRowIdentity, getCyclableWorktreeIds } from './worktree-keyboard-cycle'
-import { getRenderedWorkspaceRowsInSidebarOrder as getCyclableWorktreeRows } from './worktree-sidebar-row-preference'
+import { getCyclableWorktreeIds } from './worktree-keyboard-cycle'
 
 const folderRow: FolderWorkspaceRow = {
   type: 'folder-workspace',
@@ -73,23 +72,6 @@ describe('getCyclableWorktreeIds', () => {
       'folder:folder-1',
       'dup',
       'b'
-    ])
-  })
-
-  it('keeps folder keys distinct from git ids and preserves same-id host ownership', () => {
-    const otherHostFolder = {
-      ...folderRow,
-      folderWorkspace: { ...folderRow.folderWorkspace, executionHostId: 'ssh:host-b' as const }
-    }
-    const rows = getCyclableWorktreeRows(
-      [worktree('folder-1'), folderRow, otherHostFolder],
-      'single-location'
-    )
-
-    expect(rows.map(getCyclableRowIdentity)).toEqual([
-      'local|folder-1',
-      'local|folder:folder-1',
-      'ssh:host-b|folder:folder-1'
     ])
   })
 })

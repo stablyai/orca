@@ -1,3 +1,5 @@
+import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
@@ -9,18 +11,16 @@ import {
 import { hashOrcaHookScript } from './orca-hook-trust'
 import type { OrcaHookTrustKind } from '../../../../shared/orca-hook-trust-entries'
 import { getVmRecipeTrustContent } from './vm-recipe-trust-content'
+import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 import { getIssueCommandTrustContent, isUserOwnedIssueCommand } from './issue-command-trust-content'
 import {
   checkRuntimeHooks,
+  checkRuntimeGroupHooks,
   readRuntimeIssueCommand,
   type IssueCommandReadResult
 } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
-import {
-  getRepoExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 
@@ -35,36 +35,6 @@ function enqueueTrustPrompt<T>(task: () => Promise<T>): Promise<T> {
 
 export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
-}
-
-function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
-  return hostId
-    ? state.repos.find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
-    : state.repos.find((repo) => repo.id === repoId)
-}
-
-/** Inspect on the captured runtime owner, then explicit host, then repo owner; never substitute focused host, including server-owned SSH repos. */
-function hookRepoOwnerHostId(
-  state: AppState,
-  repoId: string,
-  hostId?: ExecutionHostId,
-  runtimeOwnerEnvironmentId?: string | null
-): ExecutionHostId {
-  const ownerEnvironmentId = runtimeOwnerEnvironmentId?.trim()
-  if (ownerEnvironmentId) {
-    return toRuntimeExecutionHostId(ownerEnvironmentId)
-  }
-  const rows = hostId ? [] : state.repos.filter((entry) => entry.id === repoId)
-  // Why: with the id on two hosts, trusting one row's script could run the other's unseen.
-  if (rows.length > 1) {
-    throw new Error('The project exists on more than one host.')
-  }
-  const repo = rows[0] ?? null
-  const ownerHostId = hostId ?? (repo ? getRepoExecutionHostId(repo) : null)
-  if (!ownerHostId) {
-    throw new Error('The project host is unknown.')
-  }
-  return ownerHostId
 }
 
 /** A run carries the approved content's hash (empty content included) unless the whole repo is trusted. */
@@ -260,7 +230,9 @@ export async function ensureHooksApproved(
   hostId?: ExecutionHostId,
   runtimeOwnerEnvironmentId?: string | null,
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Setup for a create: read orca.yaml at the ref it checks out, not the project checkout. */
+  createSource?: SetupHooksCreateSource
 ): Promise<HookTrustApproval> {
   return enqueueTrustPrompt(async () => {
     if (isCancelled() || signal?.aborted) {
@@ -303,10 +275,16 @@ export async function ensureHooksApproved(
         if (sourcePolicy === 'local-only') {
           return RUN_ANY
         }
-        const result = await checkRuntimeHooks(
-          hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-          repoId
+        const group = state.projectGroups.find(
+          (entry) => projectGroupHookTrustKey(entry) === repoId
         )
+        const result = group
+          ? await checkRuntimeGroupHooks(getRepoExecutionHostId(group), group.id)
+          : await checkRuntimeHooks(
+              hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
+              repoId,
+              scriptKind === 'setup' && createSource ? { createSource } : {}
+            )
         if (result.status === 'error') {
           return SKIP
         }

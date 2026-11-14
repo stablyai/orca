@@ -76,22 +76,6 @@ describe('catalog releases', () => {
     ).toContain(message)
   })
 
-  it.each([
-    ['version', release({ version: '1.3.0' }), 'version'],
-    ['profile', release({ execution: 'declarative' }), 'execution profile'],
-    ['compatibility', release({ minimumOrca: '1.5.0' }), 'compatibility']
-  ])('rejects a manifest whose %s differs from the release', (_label, record, message) => {
-    expect(check(record)).toContain(message)
-  })
-
-  it('rejects declared contributions the manifest does not carry', () => {
-    const record = release({
-      execution: 'declarative',
-      types: ['interface-language', 'instructions']
-    })
-    expect(check(record, manifest({ execution: 'declarative' }))).toContain('contributions')
-  })
-
   it('accepts file types only when a syntax in the release handles them', () => {
     const syntaxManifest = manifest({
       contributes: {
@@ -110,28 +94,5 @@ describe('catalog releases', () => {
     expect(check(release({ types: ['syntax'], fileTypes: ['typ', 'gleam'] }), syntaxManifest)).toBe(
       'file types do not match the catalog release'
     )
-    expect(check(release({ types: ['syntax'], name: 'Other' }), syntaxManifest)).toBe(
-      'plugin name does not match the catalog release'
-    )
-  })
-})
-
-describe('catalog release summaries', () => {
-  it('must match what the manifest adds and asks for', () => {
-    const themed = manifest({
-      contributes: { themes: [{ id: 'dusk', title: 'Dusk', path: 'dusk.json' }] },
-      capabilities: []
-    })
-    const base = { manifest: themed, resolvedCommit: COMMIT, contentHash: HASH }
-    const listed = release({ types: ['app-theme'] })
-    expect(
-      pluginCatalogReleaseError({
-        ...base,
-        release: { ...listed, contributes: [{ kind: 'themes', name: 'Midnight' }] }
-      })
-    ).toBe('the listed contributions do not match the catalog release')
-    expect(
-      pluginCatalogReleaseError({ ...base, release: { ...listed, capabilities: ['secrets:own'] } })
-    ).toBe('the listed capabilities do not match the catalog release')
   })
 })

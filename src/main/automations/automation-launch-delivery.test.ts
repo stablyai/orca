@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { AutomationService } from './automation-service'
+import { AutomationRunLaunchError } from './launch/automation-launch'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 
@@ -80,4 +82,82 @@ describe('headless dispatch prompt delivery', () => {
       service.stop()
     }
   )
+
+  it('records launch evidence once the agent terminal exists, and keeps it after retention clears the pane', async () => {
+    const { store, service, run, row, settle } = await heldLaunch('delivery')
+    await vi.waitFor(() => expect(row()?.terminalPaneKey).toBe(OPENED.terminalPaneKey))
+    await settle("Aider started, but Orca could not send this run's prompt.")
+    const launchedAt = row()?.launchedAt
+    expect(launchedAt).toEqual(expect.any(Number))
+    expect(row()?.dispatchedAt).toBeNull()
+
+    // Dead-PTY retention forgets the terminal but must not forget that the agent launched.
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatch_failed',
+      error: row()?.error ?? null,
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    })
+    expect(row()).toMatchObject({ terminalPaneKey: null, launchedAt })
+    service.stop()
+  })
+})
+
+/** Launches one automation per error, each with a launcher that throws that error. */
+async function failingLaunches(errors: Error[]) {
+  const store = await createStore()
+  store.addRepo({ id: 'r1', path: '/repo', displayName: 'repo', badgeColor: '#fff', addedAt: 1 })
+  const pending = [...errors]
+  const service = new AutomationService(store, {
+    tickMs: 60_000,
+    allowRemoteHostScheduling: true,
+    terminalLauncher: {
+      launch: async () => {
+        throw pending.shift() ?? new Error('Unexpected launch.')
+      },
+      available: () => true
+    }
+  })
+  const rows: (AutomationRun | undefined)[] = []
+  for (const [index] of errors.entries()) {
+    const automation = store.createAutomation({
+      name: `Nightly ${index}`,
+      prompt: 'Fix the flaky test',
+      agentId: 'aider',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: Date.UTC(2026, 4, 12)
+    })
+    const run = await service.runNow(automation.id)
+    await service.runInAutomationLane(automation.id, async () => undefined)
+    const row = () => store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)
+    await vi.waitFor(() => expect(row()?.status).toBe('dispatch_failed'))
+    rows.push(row())
+  }
+  service.stop()
+  return rows
+}
+
+describe('launch evidence when the launcher throws', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-automation-launch-evidence-'))
+  })
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('records a partial start that opened the agent terminal, but not a launch that opened nothing', async () => {
+    const [partial, preOpen] = await failingLaunches([
+      new AutomationRunLaunchError('Prompt paste failed.', OPENED),
+      new Error('No window to open the terminal in.')
+    ])
+    expect(partial?.launchedAt).toEqual(expect.any(Number))
+    // Safety: a failure before any terminal or session opened leaves no launch evidence.
+    expect(preOpen?.launchedAt).toBeUndefined()
+  })
 })

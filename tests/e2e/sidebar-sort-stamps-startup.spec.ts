@@ -12,7 +12,7 @@ import {
 import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady } from './helpers/store'
 import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
-import { WorkspaceRowsSnapshotSchema } from '../../src/shared/sidebar-list/workspace-rows'
+import { WorkspaceRowsSnapshotSchema } from '../../src/shared/sidebar-list/feed-facts/workspace-rows'
 
 test.skip(
   !SIDEBAR_INPUTS_BUILD,
@@ -79,7 +79,7 @@ test('a restart clears a tier nothing backs, keeps a hook row’s and an SSH hos
       if (!folder) {
         throw new Error('Expected a folder workspace')
       }
-      return folder.id
+      return folder.folderWorkspace.id
     }, folderPath)
     folderToRemove = folderPath
     const goneId = `folder:${goneFolderId}`

@@ -3,7 +3,7 @@ import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-sta
 import type { ExecutionHostId } from '../execution-host'
 import type { HostedReviewProvider } from '../source-control/hosted-review/hosted-review-contracts'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
-import type { WorktreeAtRiskLocalFiles } from '../worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../worktree/removal/at-risk-local-files'
 import type { AutomationWorkspaceProvenance } from '../worktree/types'
 import {
   isFinalAutomationRunStatus,
