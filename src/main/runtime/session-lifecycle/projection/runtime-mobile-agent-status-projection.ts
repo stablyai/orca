@@ -50,6 +50,19 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
     agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
   const titleEvidenceAt = pty.lastOscTitleEpochMs
+  // Idle/shutdown titles describe presence, not a second end of an already completed turn.
+  if (
+    status.state === 'done' &&
+    (status.paneSleep ||
+      (status.restoredUnconfirmed !== true &&
+        pty.lastAgentStatus !== 'working' &&
+        pty.lastAgentStatus !== 'permission'))
+  ) {
+    const updatedAt = Math.max(status.updatedAt, titleEvidenceAt ?? 0)
+    return updatedAt === status.updatedAt
+      ? status
+      : { ...status, updatedAt, evidenceObservedAt: agentStatusAuthorityObservedAt(status) }
+  }
   if (titleEvidenceAt === null) {
     return richStatusCanOwnTitleInterval ? status : null
   }
@@ -218,6 +231,14 @@ export function resolveRuntimeHookLiveAgentRow(
     return live
   }
   if (live.payload.interactivePrompt != null) {
+    return live
+  }
+  if (
+    !terminalTitleBlocksExplicitAgentStatus(pty?.lastOscTitle) &&
+    live.payload.state === 'done' &&
+    pty?.lastAgentStatus !== 'working' &&
+    pty?.lastAgentStatus !== 'permission'
+  ) {
     return live
   }
   if (workingHookOwnsIdleTitleInterval(live.payload, agentStatusAuthorityObservedAt(live), pty)) {

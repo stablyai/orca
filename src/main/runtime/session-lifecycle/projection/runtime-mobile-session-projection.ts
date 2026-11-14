@@ -178,11 +178,19 @@ export function projectRuntimeMobileSessionTabs(
     const statusPty = nativeStatusPty
       ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
       : null
+    const acceptedRow = hookAgentStatus?.live
+    // A renderer's finished copy cannot replace the host's accepted completion identity.
+    const acceptedStatus =
+      tab.agentStatus &&
+      acceptedRow?.payload.state === 'done' &&
+      (tab.agentStatus.state === 'done' || tab.agentStatus.updatedAt <= acceptedRow.updatedAt)
+        ? host.buildPtyStatus(statusPty, tab, null, null, getHookRowsForPane).agentStatus
+        : null
     const normalizedTabAgentStatus = renewRuntimeMobileAgentStatusFromPtyTitle(
       tab.agentStatus
         ? normalizeCompatibleAgentStatusEntryForOwner(
             {
-              ...tab.agentStatus,
+              ...(acceptedStatus ?? tab.agentStatus),
               ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
             },
             ownerAgent,
