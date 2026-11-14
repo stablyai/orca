@@ -71,6 +71,16 @@ orca computer get-app-state --app com.microsoft.edgemac --json
 
 App names work when unambiguous (`--app Spotify`). Use `--app pid:<number>` only when bundle ID and name both collide.
 
+## Starting an app
+
+`list-apps` shows only running apps. To start a closed one without pulling you away from what you're doing, use `launch-app`:
+
+```
+orca computer launch-app TextEdit --json
+```
+
+It asks macOS and Windows to start the app in the background and leaves an app that's already running alone. Some apps still come forward on their own, so the result's `delivery` says whether the app ended up in front. `--activate` brings it forward instead. Linux doesn't support it yet.
+
 ## Available actions
 
 ```
