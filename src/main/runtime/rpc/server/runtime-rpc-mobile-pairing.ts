@@ -8,6 +8,10 @@ import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-exposure-guidance'
 import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
 import type { PairingOffersRpcContext } from '../core'
+import {
+  canPreservePairingBind,
+  PROTECTED_PROXY_PAIRING_GUIDANCE
+} from './pairing/protected-proxy-pairing'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import {
@@ -32,16 +36,25 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     name?: string
     rotate?: boolean
     offerTtlMs?: number
+    preserveBind?: boolean
   }): Promise<MobilePairingOffer> {
-    // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
-    try {
-      await this.ensureNetworkExposure()
-    } catch (error) {
-      console.error(
-        '[runtime] Network exposure failed while creating a mobile pairing offer:',
-        error
-      )
-      return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+    if (args.preserveBind) {
+      if (
+        args.connectionMode !== 'local-only' ||
+        !canPreservePairingBind(this.getNetworkExposureBindHost(), args.address)
+      ) {
+        return pairingUnavailable('invalid_advertised_endpoint', PROTECTED_PROXY_PAIRING_GUIDANCE)
+      }
+    } else {
+      try {
+        await this.ensureNetworkExposure()
+      } catch (error) {
+        console.error(
+          '[runtime] Network exposure failed while creating a mobile pairing offer:',
+          error
+        )
+        return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+      }
     }
     if (args.connectionMode === 'local-only') {
       this.mobilePairingOfferGeneration += 1
@@ -91,6 +104,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       name?: string
       rotate?: boolean
       offerTtlMs?: number
+      preserveBind?: boolean
     },
     generation: number
   ): Promise<MobilePairingOffer> {
@@ -100,7 +114,12 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     for (const expired of this.deviceRegistry?.listExpiredPairingOffers('mobile') ?? []) {
       this.discardPendingMobilePairingDevice(expired.deviceId)
     }
-    const pending = this.deviceRegistry?.getPendingDevice('mobile', args.offerTtlMs)
+    const pending = this.deviceRegistry?.getPendingDevice(
+      'mobile',
+      args.offerTtlMs,
+      [],
+      args.preserveBind ? 'this-computer' : undefined
+    )
     // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
     const switchingPendingMode =
       pending != null &&
@@ -119,7 +138,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     const direct = this.createPairingOffer({
       ...args,
       rotate: args.rotate || switchingPendingMode,
-      scope: 'mobile'
+      scope: 'mobile',
+      ...(args.preserveBind ? { reach: 'this-computer' as const } : {})
     })
     if (!direct.available) {
       return direct

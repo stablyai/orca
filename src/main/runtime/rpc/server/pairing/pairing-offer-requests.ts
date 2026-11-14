@@ -5,6 +5,7 @@ import type {
   PairingCreateOfferResult
 } from '../../../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 import { classifyRemotePairingHostname } from '../../../../../shared/remote-runtime/pairing/remote-pairing-address'
+import { canPreservePairingBind, PROTECTED_PROXY_PAIRING_GUIDANCE } from './protected-proxy-pairing'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import { renderServePairingQr } from '../../../../server/serve-pairing-output'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './network/network-exposure-guidance'
@@ -33,6 +34,7 @@ export type PairingOfferServer = Pick<
     name?: string
     rotate?: boolean
     offerTtlMs?: number
+    preserveBind?: boolean
   }): Promise<MobilePairingOffer>
 }
 
@@ -65,6 +67,7 @@ export async function requestMobilePairingOffer(
     rotate?: boolean
     // Unset leaves the offer without an expiry, as headless serve/orcad mint today.
     offerTtlMs?: number
+    preserveBind?: boolean
   },
   lookup: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<
@@ -82,7 +85,8 @@ export async function requestMobilePairingOffer(
     connectionMode: args.connectionMode,
     rotate: args.rotate,
     name: `Mobile ${new Date().toLocaleDateString()}`,
-    offerTtlMs: args.offerTtlMs
+    offerTtlMs: args.offerTtlMs,
+    ...(args.preserveBind ? { preserveBind: true } : {})
   })
   if (!offer.available) {
     return offer
@@ -99,6 +103,7 @@ export async function requestRuntimePairingOffer(
     reach?: RuntimePairingReach
     grants?: readonly RuntimeDeviceGrant[]
     offerTtlMs?: number
+    preserveBind?: boolean
   },
   lookup: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<ReturnType<PairingOfferServer['createPairingOffer']>> {
@@ -107,7 +112,10 @@ export async function requestRuntimePairingOffer(
     return pairingUnavailable('invalid_advertised_endpoint', NO_PAIRING_ADDRESS_GUIDANCE)
   }
   // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
-  const thisComputerOnly = servesThisComputerOnly(args.reach, ip)
+  if (args.preserveBind && !canPreservePairingBind(server.getNetworkExposureBindHost(), ip)) {
+    return pairingUnavailable('invalid_advertised_endpoint', PROTECTED_PROXY_PAIRING_GUIDANCE)
+  }
+  const thisComputerOnly = args.preserveBind || servesThisComputerOnly(args.reach, ip)
   if (!thisComputerOnly) {
     try {
       await server.ensureNetworkExposure()
@@ -144,7 +152,8 @@ export async function createOwnerPairingOffer(
         address: params.address,
         // A headless host has no Relay; Relay stays an explicit opt-in here as on the desktop.
         connectionMode: params.relay ? 'automatic' : 'local-only',
-        rotate: params.rotate
+        rotate: params.rotate,
+        ...(params.preserveBind ? { preserveBind: true } : {})
       },
       lookup
     )
@@ -167,6 +176,7 @@ export async function createOwnerPairingOffer(
     {
       address: params.address,
       rotate: params.rotate,
+      ...(params.preserveBind ? { preserveBind: true } : {}),
       grants: params.grantDesktopControl ? ['desktop-control'] : []
     },
     lookup
