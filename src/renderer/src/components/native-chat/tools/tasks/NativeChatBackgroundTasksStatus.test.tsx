@@ -41,7 +41,7 @@ it("shows an agent by the provider's id, beside its own Stop, and leaves command
       onShowAgent={onShowAgent}
     />
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Show child a in the conversation' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Open child a' }))
   expect(onShowAgent).toHaveBeenCalledWith('provider-a')
   expect(onStop).not.toHaveBeenCalled()
   expect(screen.queryByRole('button', { name: /Show child s/ })).toBeNull()

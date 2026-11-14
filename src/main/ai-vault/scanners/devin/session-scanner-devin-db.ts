@@ -1,15 +1,15 @@
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { wasWslDistroLastSeenRunningSettled } from '../../../wsl/discovery/wsl-background-distro-gate'
-import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../../../native-chat/wsl-transcript-running-admission'
+import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../../../native-chat/transcript-filesystem/wsl-transcript-running-admission'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { dirname, join } from 'node:path'
-import { wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
+import { wslGatedStat } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { readOpenCodeDatabase } from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
 import type { SessionSidecarObservation } from '../../parse-cache/session-sidecar-stat'
-import { asRecord } from '../../session-scanner-record-value'
-import { numberValue } from '../../session-scanner-token-values'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { numberValue } from '../../parsing/session-scanner-token-values'
+import { extractString } from '../../../../shared/trimmed-string'
 
 // Devin stores workspace metadata absent from Windows transcripts in a sibling sessions.db.
 

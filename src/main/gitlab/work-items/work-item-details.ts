@@ -24,7 +24,7 @@ import { gitLabRunTimes } from '../pipelines/gitlab-run-times'
 import { acquire, release } from '../requests/glab-request-admission'
 import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { resolveIssueSource } from '../issues/gitlab-issue-source-resolution'
 import type { ProjectRef } from '../projects/project-ref-parser'
 

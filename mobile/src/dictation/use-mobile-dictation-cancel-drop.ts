@@ -1,6 +1,7 @@
 import { useCallback, type RefObject } from 'react'
 import type { GestureResponderEvent, HostInstance } from 'react-native'
-import { measurePageBox, type PageBox } from '../platform/page-box'
+import { measurePageBox } from '../platform/view-measurement/page-box'
+import type { PageBox } from '../platform/view-measurement/page-box-contract'
 
 // A dragging finger lands less precisely than a tap, so the drop zone reaches past ✕.
 const DROP_SLOP = 12

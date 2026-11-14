@@ -1,5 +1,5 @@
 import React from 'react'
-import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
+import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 

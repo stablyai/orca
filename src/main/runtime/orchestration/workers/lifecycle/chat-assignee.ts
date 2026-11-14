@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 

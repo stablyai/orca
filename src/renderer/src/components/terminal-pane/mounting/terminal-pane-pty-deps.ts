@@ -6,6 +6,7 @@ import {
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
+import { clearRetainedInlineScrollback } from '../snapshots/terminal-scrollback-ref-hydration'
 
 export function createTerminalPanePtyDeps(args: {
   deps: UseTerminalPaneLifecycleDeps
@@ -34,6 +35,12 @@ export function createTerminalPanePtyDeps(args: {
     cwd: startupCwd,
     startup: deps.startup,
     mountFollowsTerminalPark,
+    invalidateRetainedInlineScrollback: (leafId) => {
+      deps.initialLayoutRef.current = clearRetainedInlineScrollback(
+        deps.initialLayoutRef.current,
+        leafId
+      )
+    },
     paneTransportsRef: deps.paneTransportsRef,
     paneMode2031Ref: deps.paneMode2031Ref,
     paneKittyKeyboardModesRef: deps.paneKittyKeyboardModesRef,

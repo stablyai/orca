@@ -5,12 +5,12 @@ import {
   remoteAgentDetectionRead,
   sshRepoConnectRun,
   sshRepoStateRead
-} from '../tasks/mobile-workspace-source-operations'
+} from '../new-workspace/creation/mobile-workspace-source-operations'
 import {
   deriveWorkspaceSshGate,
   type WorkspaceSshGate,
   type WorkspaceSshRecord
-} from '../tasks/workspace-ssh-gate'
+} from '../new-workspace/creation/workspace-ssh-gate'
 
 type DetectedAgentIdsState = {
   client: RpcClient

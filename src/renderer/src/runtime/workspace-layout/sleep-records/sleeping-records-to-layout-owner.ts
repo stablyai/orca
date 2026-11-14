@@ -1,7 +1,7 @@
 // Window still captures agent resume records; main must record every change because layout frames omit them.
 
 import { useAppStore } from '@/store/index'
-import { recordSleepingRecordChangesThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
+import { recordSleepingRecordChangesThroughLayoutOwner } from '@/store/terminals/sleep/terminal-sleep-layout-owner'
 
 let following = false
 

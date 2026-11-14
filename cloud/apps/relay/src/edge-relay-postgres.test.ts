@@ -140,11 +140,9 @@ describePostgres('relay edge on PostgreSQL', () => {
          current_expires_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [host.userId, host.relayHostId, 'phone-a', 'hash-phone-a', 2, 1_900_000_000_000, 1_800_000_000_000]
     )
-    const pushed: unknown[] = []
     let held: EdgeDeviceRow[] = []
     const admin = {
       assign: async (body: EdgeAssignBody) => {
-        pushed.push(body)
         if (body.devices) { held = body.devices }
         return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
       },

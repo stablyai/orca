@@ -12,7 +12,7 @@ import {
 } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { structuredAgentSessionBlocksTooLarge } from '../../../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { structuredAgentSessionBlocksTooLarge } from '../../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   structuredAgentSessionSendEvidence,

@@ -1,3 +1,4 @@
+import type { BrowserPageInitializationAction } from '../../../../../shared/browser/client-hosting/browser-page-initialization-action'
 import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import { useCallback } from 'react'
 import type { MutableRefObject, RefObject } from 'react'
@@ -11,6 +12,7 @@ import type { BrowserPageUrlSetter, BrowserTabPageState } from '../describe-page
 
 /** Resolve workspace documents before URLs; refuse local file: access and defer navigation until a staged guest attaches. */
 export function useClientHostedPageUrlSubmission(params: {
+  onInitializationAction?: (action: BrowserPageInitializationAction) => void
   browserTabId: string
   worktreeId: string
   webviewRef: RefObject<Electron.WebviewTag | null>
@@ -21,6 +23,7 @@ export function useClientHostedPageUrlSubmission(params: {
 }): (value: string) => void {
   const {
     browserTabId,
+    onInitializationAction,
     worktreeId,
     webviewRef,
     activeLoadFailureRef,
@@ -47,12 +50,16 @@ export function useClientHostedPageUrlSubmission(params: {
       const browserModelUrl = redactKagiSessionToken(submission.url)
       activeLoadFailureRef.current = null
       setAddressBarValue(toDisplayUrl(browserModelUrl))
+      onInitializationAction?.({ type: 'navigate', url: submission.url })
       onSetUrl(browserTabId, browserModelUrl)
       onUpdatePageState(browserTabId, {
         loading: true,
         loadError: null,
         title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
       })
+      if (onInitializationAction) {
+        return
+      }
       const webview = webviewRef.current
       if (!webview) {
         deferBrowserPageNavigation(browserTabId, submission.url)
@@ -66,6 +73,7 @@ export function useClientHostedPageUrlSubmission(params: {
     [
       activeLoadFailureRef,
       browserTabId,
+      onInitializationAction,
       onUpdatePageState,
       onSetUrl,
       setAddressBarValue,

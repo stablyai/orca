@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { titleAfterConfirmedShell } from '../../../../../../shared/workspace-layout/terminal-pane-title-reset'
+import { titleAfterConfirmedShell } from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-title-reset'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 // Clear only agent-named titles on confirmed shell return; plain codex/grok can leave OSC titles the shell never repaints.

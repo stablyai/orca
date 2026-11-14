@@ -1,4 +1,4 @@
-import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import type {
   BrowserSnapshotResult,
   BrowserClickResult,
@@ -88,7 +88,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     browserPageId?: string,
     options: { reportEffects?: boolean } = {}
   ): Promise<BrowserGotoResult> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {

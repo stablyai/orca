@@ -7,10 +7,10 @@ import {
   requireInstalledStructuredHost,
   requireStructuredCleanupHost
 } from '../creation/structured-agent-session-gate'
-import { HoldParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+import { HoldParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 
 export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
   defineMethod({

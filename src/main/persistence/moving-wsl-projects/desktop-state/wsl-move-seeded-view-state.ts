@@ -5,7 +5,7 @@
  * cannot rewrite) and closed-terminal-tab tombstones. Only for workspaces seeded in this run, so
  * anything the user since changed on the host stays as it is.
  */
-import type { ClosedTerminalTabTombstone } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstone } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { ownedEditorFileId } from '../../../../shared/workspace-session/workspace-session-pane-ownership'
 import { isHostBoundOpenFile } from '../../migrating-orcad-catalog/source/worktrees/orcad-source-draft-rename'

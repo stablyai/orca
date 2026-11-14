@@ -1,5 +1,5 @@
 import type { ClaudeProfileRouter, ClaudeProfileRouterSettings } from './claude-profile-router'
-import { claudeLaunchDestinationHome } from '../../../claude/claude-launch-destination-home'
+import { claudeLaunchDestinationHome } from '../../../claude/structured/launch/claude-launch-destination-home'
 
 /** Every native switcher destination, even an account whose setup has not created its home. */
 export async function claudeProfileSelectionHomes(

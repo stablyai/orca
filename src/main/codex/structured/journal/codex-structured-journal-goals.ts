@@ -1,13 +1,10 @@
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionLifecycleJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
+  codexGoalAccounting,
   codexGoalJournalDigest,
   codexGoalJournalIdentity,
-  parseCodexGoalJournalItemId,
-  type CodexGoalJournalState
+  type CodexGoalAccounting
 } from './codex-goal-journal-identity'
 import {
   codexGoalGeneration,
@@ -22,30 +19,19 @@ import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
 import { appendCodexLifecycleTransition } from './codex-structured-journal-sink'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
 
-type GoalAccounting = { key: string; timeUsedSeconds: number; tokenBudget: number | null }
-
 type GoalThreadState = {
   signature: string
   occurrence: string
-  accounting: GoalAccounting | null
+  accounting: CodexGoalAccounting | null
 }
 
 // Throttle persisted accounting revisions; readers extrapolate while the turn runs.
 const GOAL_ACCOUNTING_REVISION_SECONDS = 30
 
-function goalAccounting(body: AgentJournalItemBody | undefined): GoalAccounting | null {
-  if (body?.kind !== 'status' || body.threadGoal?.state !== 'set') {
-    return null
-  }
-  const { tokenBudget, tokensUsed, timeUsedSeconds, updatedAt } = body.threadGoal.goal
-  return {
-    key: JSON.stringify([tokenBudget, tokensUsed, timeUsedSeconds, updatedAt]),
-    timeUsedSeconds,
-    tokenBudget
-  }
-}
-
-function accountingOutgrew(previous: GoalAccounting | null, next: GoalAccounting): boolean {
+function accountingOutgrew(
+  previous: CodexGoalAccounting | null,
+  next: CodexGoalAccounting
+): boolean {
   return (
     previous === null ||
     previous.tokenBudget !== next.tokenBudget ||
@@ -56,9 +42,6 @@ function accountingOutgrew(previous: GoalAccounting | null, next: GoalAccounting
 /** Persists provider-owned goal lifecycle notifications outside generic-row policy. */
 export class CodexJournalGoals {
   private readonly stateByThread = new Map<string, GoalThreadState>()
-  private readonly durableStateByThread = new Map<string, GoalThreadState>()
-  private durableJournal: StructuredAgentSessionLifecycleJournal | null = null
-  private durableEpoch: string | null = null
   private transientEpoch: string | null = null
 
   constructor(
@@ -92,7 +75,7 @@ export class CodexJournalGoals {
     if (!translated) {
       return { accepted: false, reason: 'untranslated' }
     }
-    const accounting = goalAccounting(translated.body)
+    const accounting = codexGoalAccounting(translated.body)
     const previous = this.stateByThread.get(thread)
     const sameGoal = previous?.signature === signatureKey
     if (
@@ -111,18 +94,16 @@ export class CodexJournalGoals {
           ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signatureKey]))
           : codexGoalJournalDigest(JSON.stringify([thread, signatureKey]))
     const state = { signature: signatureKey, occurrence, accounting }
+    // The writer chooses the occurrence against the thread's newest saved goal row.
     const admission = appendCodexLifecycleTransition(
       this.sink,
       codexGoalJournalIdentity(thread, signatureKey, occurrence),
-      translated.body,
-      (journal) =>
-        this.persistedGoalIdentity(
-          journal,
-          thread,
-          signatureKey,
-          accounting,
-          event.method === 'thread/goal/cleared'
-        ),
+      {
+        thread,
+        signature: signatureKey,
+        body: translated.body,
+        requirePrevious: event.method === 'thread/goal/cleared'
+      },
       // Goals belong to the thread across turns.
       this.attributionFor(event.threadId, null)
     )
@@ -135,9 +116,6 @@ export class CodexJournalGoals {
 
   clear(): void {
     this.stateByThread.clear()
-    this.durableStateByThread.clear()
-    this.durableJournal = null
-    this.durableEpoch = null
     this.transientEpoch = null
   }
 
@@ -166,63 +144,5 @@ export class CodexJournalGoals {
       this.stateByThread.clear()
     }
     this.transientEpoch = epoch
-  }
-
-  private persistedGoalIdentity(
-    journal: StructuredAgentSessionLifecycleJournal,
-    thread: string,
-    signature: string,
-    accounting: GoalAccounting | null,
-    requirePrevious: boolean
-  ): AgentJournalItemIdentity | null {
-    this.seedDurableState(journal)
-    const previous = this.durableStateByThread.get(thread) ?? null
-    if (previous?.signature === signature) {
-      if (accounting === null || previous.accounting?.key === accounting.key) {
-        return null
-      }
-      previous.accounting = accounting
-      return codexGoalJournalIdentity(thread, signature, previous.occurrence)
-    }
-    // Codex sends a cleared snapshot while resuming threads that never had a goal.
-    if (previous === null && requirePrevious) {
-      return null
-    }
-    const occurrence = previous
-      ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signature]))
-      : codexGoalJournalDigest(JSON.stringify([thread, signature]))
-    this.durableStateByThread.set(thread, { signature, occurrence, accounting })
-    return codexGoalJournalIdentity(thread, signature, occurrence)
-  }
-
-  private seedDurableState(journal: StructuredAgentSessionLifecycleJournal): void {
-    if (this.durableJournal === journal && this.durableEpoch === journal.epoch) {
-      return
-    }
-    const latest = new Map<
-      string,
-      { state: CodexGoalJournalState; sequence: number; accounting: GoalAccounting | null }
-    >()
-    journal.visitItems((itemId, sequence, body) => {
-      const state = parseCodexGoalJournalItemId(itemId)
-      const previous = state ? latest.get(state.thread) : undefined
-      if (state && (!previous || sequence > previous.sequence)) {
-        latest.set(state.thread, { state, sequence, accounting: goalAccounting(body) })
-      }
-    })
-    this.durableStateByThread.clear()
-    for (const [thread, { state, accounting }] of latest) {
-      this.durableStateByThread.set(thread, {
-        signature: state.signature,
-        occurrence: state.occurrence,
-        accounting
-      })
-    }
-    this.durableJournal = journal
-    this.durableEpoch = journal.epoch
-    if (this.transientEpoch !== null && this.transientEpoch !== journal.epoch) {
-      this.stateByThread.clear()
-    }
-    this.transientEpoch = journal.epoch
   }
 }

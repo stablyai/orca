@@ -18,6 +18,7 @@ import {
   getBrowserPasskeyRequest
 } from '../../webauthn/browser-passkey-requests'
 import { formatBrowserPasskeyRequest } from '../../../../shared/browser-passkey-request'
+import { browserGuestHasNothingToReload } from '../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
 import { captureRemoteCliBrowserRevocation } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
@@ -214,23 +215,29 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
     })
   }
 
   async forward(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
     })
   }
 
   async reload(worktreeId?: string, browserPageId?: string): Promise<BrowserReloadResult> {
     // Reload directly because a process swap can destroy the helper session mid-command.
-    return this.enqueuePageAction(worktreeId, browserPageId, async (_sessionName, target) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
+      }
+      if (browserGuestHasNothingToReload({ url: wc.getURL(), loading: wc.isLoading() })) {
+        throw new BrowserError(
+          'browser_error',
+          'Nothing to reload: this page never finished loading. Navigate to its URL instead.'
+        )
       }
       wc.reload()
       await new Promise<void>((resolve) => {
@@ -261,6 +268,14 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           fallbackTimer.unref()
         }
       })
+      // did-fail-load also ends the wait; the page then shows an error document, not a reload.
+      const loadError = this.browserManager.getBrowserPageLoadError(target.browserPageId)
+      if (loadError) {
+        throw new BrowserError(
+          'browser_error',
+          `Reload failed: ${loadError.description} (${loadError.code})`
+        )
+      }
       return { url: wc.getURL(), title: wc.getTitle() }
     })
   }

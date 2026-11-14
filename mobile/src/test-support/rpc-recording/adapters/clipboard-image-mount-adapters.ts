@@ -1,7 +1,7 @@
 import type * as MobileClipboardImageModule from '../../../files/attachments/mobile-clipboard-image'
 import type * as MobileImageAttachmentModule from '../../../files/attachments/mobile-image-attachment'
-import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/mobile-native-chat-image-attachment'
-import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/mobile-native-chat-image-send'
+import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/attachments/mobile-native-chat-image-attachment'
+import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/delivery/mobile-native-chat-image-send'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -78,7 +78,7 @@ export function clipboardImageMountAdapters(
     },
     'nativeChat.image-upload': ({ client, effect }) => {
       const upload = modules.load<typeof MobileNativeChatImageAttachment>(
-        'mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts'
+        'mobile/src/session/native-chat/composer/attachments/mobile-native-chat-image-attachment.ts'
       ).uploadMobileNativeChatImages
       let uploaded: unknown = 'unuploaded'
       let failure: unknown = null
@@ -112,7 +112,7 @@ export function clipboardImageMountAdapters(
     },
     'nativeChat.image-paste': ({ client }) => {
       const paste = modules.load<typeof MobileNativeChatImageSend>(
-        'mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts'
+        'mobile/src/session/native-chat/composer/delivery/mobile-native-chat-image-send.ts'
       ).pasteMobileNativeChatImagePaths
       let pasted: unknown = 'unpasted'
       let failure: unknown = null

@@ -5,9 +5,14 @@ import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-messag
 
 export const QUEUED_MESSAGE_EDIT_LEASE_MS = 120_000
 
-type EditLeaseKey = { callerKey: string; editId: string }
+export type EditLeaseKey = { callerKey: string; editId: string }
 
-type EditLease = Pick<QueuedMessageRow, 'messageId' | 'fingerprint' | 'state' | 'consumedAs'> & {
+export type QueuedMessageEditLease = Pick<
+  QueuedMessageRow,
+  'messageId' | 'fingerprint' | 'state' | 'consumedAs'
+>
+
+type EditLease = QueuedMessageEditLease & {
   until: number
 }
 
@@ -22,10 +27,9 @@ export class QueuedMessageEditLeases {
   private revision = 0
 
   constructor(
-    private readonly rows: () => readonly QueuedMessageRow[],
+    private readonly rows?: () => readonly QueuedMessageRow[],
     private readonly now: () => number = () => performance.now(),
-    private readonly get: (id: string) => QueuedMessageRow | null | undefined = (id) =>
-      this.rows().find((row) => row.messageId === id)
+    private readonly get?: (id: string) => QueuedMessageRow | null | undefined
   ) {}
 
   /** Wake the queue even when no journal activity follows expiry. */
@@ -38,13 +42,13 @@ export class QueuedMessageEditLeases {
     return this.revision
   }
 
-  isHeld(messageId: string): boolean {
+  isHeld(messageId: string, rows?: readonly QueuedMessageRow[]): boolean {
     this.expire()
     if (!this.byId.has(messageId)) {
       return false
     }
     const revision = this.revision
-    const row = this.get(messageId)
+    const row = this.row(messageId, rows)
     for (const key of this.byId.get(messageId) ?? []) {
       const lease = this.leases.get(key)!
       if (!row || !leaseMatchesRow(lease, row)) {
@@ -62,13 +66,27 @@ export class QueuedMessageEditLeases {
     this.expire()
     const snapshot = rows && new Map(rows.map((row) => [row.messageId, row]))
     for (const [key, lease] of this.leases) {
-      const row = snapshot ? snapshot.get(lease.messageId) : this.get(lease.messageId)
+      const row = snapshot ? snapshot.get(lease.messageId) : this.row(lease.messageId)
       if (!row || !leaseMatchesRow(lease, row)) {
         this.remove(key)
       }
     }
     this.schedule()
     return new Set(this.byId.keys())
+  }
+
+  /** SQL validates these finite live identities against its own selected cards. */
+  snapshot(): QueuedMessageEditLease[] {
+    this.expire()
+    return [...this.leases.values()].map(({ until: _until, ...lease }) => ({ ...lease }))
+  }
+
+  private row(messageId: string, rows?: readonly QueuedMessageRow[]) {
+    return rows
+      ? rows.find((row) => row.messageId === messageId)
+      : this.get
+        ? this.get(messageId)
+        : this.rows?.().find((row) => row.messageId === messageId)
   }
 
   private remove(key: string): void {
@@ -102,17 +120,18 @@ export class QueuedMessageEditLeases {
   /** Repeated acquisition returns the same lease without extending it. */
   acquire(
     key: EditLeaseKey,
-    input: { messageId: string; fingerprint: string }
+    input: { messageId: string; fingerprint: string },
+    rows?: readonly QueuedMessageRow[]
   ): AgentSessionQueuedMessageEditHoldResult {
     this.expire()
-    this.isHeld(this.leases.get(leaseKey(key))?.messageId ?? input.messageId)
+    this.isHeld(this.leases.get(leaseKey(key))?.messageId ?? input.messageId, rows)
     const existing = this.leases.get(leaseKey(key))
     if (existing) {
       return existing.messageId === input.messageId && existing.fingerprint === input.fingerprint
         ? this.answer(existing)
         : { status: 'changed' }
     }
-    const row = this.get(input.messageId)
+    const row = this.row(input.messageId, rows)
     if (this.disposed || !row || !isUnsettledQueuedMessage(row)) {
       return { status: 'gone' }
     }
@@ -136,8 +155,12 @@ export class QueuedMessageEditLeases {
   }
 
   /** Expired/invalidated editors must acquire a new lease. */
-  renew(key: EditLeaseKey, messageId: string): AgentSessionQueuedMessageEditHoldResult {
-    this.isHeld(messageId)
+  renew(
+    key: EditLeaseKey,
+    messageId: string,
+    rows?: readonly QueuedMessageRow[]
+  ): AgentSessionQueuedMessageEditHoldResult {
+    this.isHeld(messageId, rows)
     const lease = this.leases.get(leaseKey(key))
     if (!lease || lease.messageId !== messageId) {
       return { status: 'expired' }
@@ -224,11 +247,22 @@ function leaseKey(key: EditLeaseKey): string {
 }
 
 /** Handoffs/returns invalidate leases even when text is unchanged. */
-function leaseMatchesRow(lease: EditLease, row: QueuedMessageRow): boolean {
+export function leaseMatchesRow(lease: QueuedMessageEditLease, row: QueuedMessageRow): boolean {
   return (
     isUnsettledQueuedMessage(row) &&
     row.fingerprint === lease.fingerprint &&
     row.state === lease.state &&
     row.consumedAs === lease.consumedAs
   )
+}
+
+export function queuedMessageEditLeaseHolds(leases: readonly QueuedMessageEditLease[]) {
+  const byId = new Map<string, QueuedMessageEditLease[]>()
+  for (const lease of leases) {
+    const group = byId.get(lease.messageId) ?? []
+    group.push(lease)
+    byId.set(lease.messageId, group)
+  }
+  return (row: QueuedMessageRow | null): boolean =>
+    row !== null && byId.get(row.messageId)?.some((lease) => leaseMatchesRow(lease, row)) === true
 }

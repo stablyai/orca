@@ -1,3 +1,7 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createHardScrollUpDetectorState,
@@ -214,7 +218,9 @@ export function useWorktreeListScrollToTop({
     clearIdleTimer()
     suppressDetectionUntilRef.current =
       window.performance.now() + HARD_SCROLL_UP.suppressAfterJumpMs
+    supersedeVirtualizedScrollAnchorRestore(scrollElement, 0)
     scrollElement.scrollTo({ top: 0, behavior: 'auto' })
+    requestVirtualizedScrollAnchorRecord(scrollElement)
     scrollElement.focus({ preventScroll: true })
   }, [clearIdleTimer, onUserScrollIntent, publishVisible, scrollElement])
 

@@ -5,7 +5,7 @@ import { requestEditorSaveQuiesce } from '@/components/editor/autosave/editor-au
 import {
   beginEditorPathMove,
   settleEditorPathMove
-} from '@/components/editor/editor-path-move-inflight'
+} from '@/components/editor/file-ownership/editor-path-move-inflight'
 import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/remap-open-editor-tabs-for-path-change'
 import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'

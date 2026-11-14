@@ -2,10 +2,21 @@ import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
 import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
+import { hasUnsafeProviderSessionIdChars } from '../../agent-session/lifecycle/agent-session-resume'
 import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema
 } from './plugin-panel-bridge-protocol'
+
+/** An agent's own session id, as it reports it; `agent.resume` takes it. */
+export const pluginAgentSessionIdSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine(
+    (id) => id === id.trim() && !id.startsWith('-') && !hasUnsafeProviderSessionIdChars(id),
+    'invalid session id'
+  )
 
 const pluginRequestParams = z.strictObject({
   name: pluginBridgeNameSchema,
@@ -16,6 +27,7 @@ const pluginRequestParams = z.strictObject({
 const pluginRequestResult = z.object({ output: z.json() })
 
 export const PLUGIN_AGENT_LIST_LIMIT = 50
+export const PLUGIN_AGENT_TASK_TITLE_MAX = 512
 const agentsListParams = z.strictObject({}).optional()
 const agentsListResult = z.object({
   agents: z
@@ -29,7 +41,17 @@ const agentsListResult = z.object({
         agent: z.string().max(128).nullable(),
         state: z.enum(AGENT_STATUS_STATES),
         /** When it entered `state`, in ms since the epoch. */
-        stateStartedAt: z.number().finite()
+        stateStartedAt: z.number().finite(),
+        /** The agent's own session id, which `agent.resume` takes; null when Orca has none.
+         *  Absent before host API 1.8. */
+        sessionId: pluginAgentSessionIdSchema.nullable().optional(),
+        /** The orchestration task Orca dispatched to this agent and that is still open, with its
+         *  title (`''` when the task has none); null when it runs none, including once its task
+         *  completed or failed. Absent before host API 1.9. */
+        task: z
+          .object({ title: z.string().max(PLUGIN_AGENT_TASK_TITLE_MAX) })
+          .nullable()
+          .optional()
       })
     )
     .max(PLUGIN_AGENT_LIST_LIMIT)
@@ -53,7 +75,7 @@ export const PLUGIN_PANEL_BRIDGE_API = {
   }),
   'agents.list': spec({
     summary:
-      'The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after.',
+      'The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.',
     since: 2,
     scope: 'active-workspace',
     capability: 'agent:read',

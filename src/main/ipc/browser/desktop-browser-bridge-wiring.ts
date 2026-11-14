@@ -32,8 +32,8 @@ import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/runtime-environment-manual-disconnect'
+import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import {
   isDesktopBrowserBridgeHostStopped,
   setDesktopBrowserBridgeControl

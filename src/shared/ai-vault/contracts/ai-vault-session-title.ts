@@ -11,6 +11,15 @@ export type AiVaultSessionTitle = {
   kind?: AiVaultSessionTitleKind
 }
 
+/** A tab's provider title names only the pane running that session, not every pane in the tab. */
+export function aiVaultTitleOfSession(
+  title: AiVaultSessionTitle | null | undefined,
+  agent: string | null | undefined,
+  sessionId: string | undefined
+): AiVaultSessionTitle | null {
+  return title && title.agent === agent && title.sessionId === sessionId ? title : null
+}
+
 export type AiVaultSessionTitleRequest = {
   agent: AiVaultSessionTitle['agent']
   sessionId: string

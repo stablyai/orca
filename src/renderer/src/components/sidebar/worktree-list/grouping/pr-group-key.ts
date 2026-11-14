@@ -6,7 +6,7 @@ import {
   prGroupOfReviewFact,
   readWorkspaceReviewFact,
   type PRCacheView
-} from '../../../../../../shared/sidebar-list/workspace-review-facts'
+} from '../../../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 
 export function getPRGroupKey(
   worktree: Worktree,

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import pg from 'pg'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
-import { keepPostgresClientErrorsHandled, PostgresDatabase } from './database.js'
+import { PostgresDatabase } from './database.js'
 import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
 
 class FakePoolClient extends EventEmitter {
@@ -108,14 +108,4 @@ describe('database rejection fence', () => {
     ])
   })
 
-})
-
-describe('permanent PostgreSQL client error listener', () => {
-  it('leaves every client with a listener for its whole life', () => {
-    const pool = new EventEmitter()
-    keepPostgresClientErrorsHandled(pool as never)
-    const client = new EventEmitter()
-    pool.emit('connect', client)
-    expect(() => client.emit('error', new Error('Connection terminated unexpectedly'))).not.toThrow()
-  })
 })

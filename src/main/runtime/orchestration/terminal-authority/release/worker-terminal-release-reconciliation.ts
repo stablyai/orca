@@ -1,7 +1,7 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import { inspectRemoteAttachment } from '../../legacy-remote/federation-attachment-observation'
 import { releaseRemoteAttachment } from '../../legacy-remote/federated-worker-release-host'
-import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/worker-release-completion'
+import { completeWorkerTerminalRelease } from '../../../rpc/methods/orchestration/worker/release/worker-release-completion'
 
 export type WorkerTerminalReleaseReconciliationResult = {
   attempted: number
@@ -65,7 +65,11 @@ async function runReconciliationPasses(
 async function reconcileRequestedWorkerTerminalReleasesOnce(
   runtime: WorkerTerminalReleaseRuntime
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
-  const db = runtime.getOrchestrationDb()
+  // Startup reconciles for everyone; a profile without a database has nothing to release.
+  const db = runtime.getExistingOrchestrationDb()
+  if (!db) {
+    return emptyResult()
+  }
   const backlog = db.listWorkerTerminalReleaseBacklog()
   const result = { ...emptyResult(), attempted: backlog.length }
   for (const resource of backlog) {

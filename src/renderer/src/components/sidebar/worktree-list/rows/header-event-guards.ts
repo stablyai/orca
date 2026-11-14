@@ -1,7 +1,7 @@
 import type React from 'react'
 import '../drag/project-header-drag'
 import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
-import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 
 export function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
   if (event.key === 'Enter' || event.key === ' ') {

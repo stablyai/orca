@@ -5,7 +5,7 @@ import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-ab
 import {
   resolveClaudeGlobalConfigFile,
   updateClaudeGlobalConfig
-} from '../../../claude/claude-folder-trust-file'
+} from '../../../claude/configuration/claude-folder-trust-file'
 import { publishFileWithoutOverwrite } from '../../../filesystem/atomic-file-publication'
 import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from '../claude-profile-paths'

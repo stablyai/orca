@@ -1,36 +1,41 @@
-import { observeAutomationChatRun } from './runtime-chat-run-observer'
-import { readAutomationRunReceipt } from './automation-run-receipt'
-import { publishedLaunchTarget } from './automation-agent-run-result'
-import { launchAutomationChatAgent } from './automation-chat-agent-launch'
+import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
+import { readAutomationRunReceipt } from './launch/automation-run-receipt'
+import { publishedLaunchTarget } from './launch/automation-agent-run-result'
+import { launchAutomationChatAgent } from './launch/automation-chat-agent-launch'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence/loading-store/store'
-import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { AutomationService } from './service'
-import { createRunTerminalRetention, type RunTerminalRetention } from './run-terminal-retention'
+import { AutomationService } from './automation-service'
+import {
+  createRunTerminalRetention,
+  type RunTerminalRetention
+} from './terminal-retention/run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { launchAutomationTerminalAgent, runOwnHandle } from './automation-terminal-launch'
+import { launchAutomationTerminalAgent, runOwnHandle } from './launch/automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver
-} from './runtime-terminal-run-observer'
-import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
-import { automationRunSetupSkip } from './automation-run-setup-skip'
-import { automationSystemSettled } from './automation-wake-settle'
+} from './observation/runtime-terminal-run-observer'
+import { closeEarlierHookReviewRunTerminals } from './terminal-retention/hook-review-blocked-run-terminals'
+import {
+  runPaneKeepsRunPty,
+  runTabWasFocused
+} from './terminal-retention/run-terminal-workspace-session'
+import { automationRunSetupSkip } from './launch/automation-run-setup-skip'
+import { automationSystemSettled } from './dispatch/automation-wake-settle'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
 export function createRuntimeAutomationService(input: {
   store: Store
   runtime: OrcaRuntimeService
-  claudeUsage?: ClaudeUsageStore
-  codexUsage?: CodexUsageStore
+  claudeUsage?: AutomationUsageClient
+  codexUsage?: AutomationUsageClient
   /** Only server processes execute remote_host_service schedules. */
   allowRemoteHostScheduling: boolean
 }): AutomationService {
@@ -210,16 +215,6 @@ export function createRuntimeAutomationService(input: {
   return service
 }
 
-/** A desktop visit stamps the shown tab's focus; main-created run tabs start unstamped. */
-function runTabWasFocused(runtime: OrcaRuntimeService, run: AutomationRun): boolean {
-  const tabs = run.workspaceId
-    ? runtime.getWorkspaceSessionForWorktree(run.workspaceId)?.unifiedTabs?.[run.workspaceId]
-    : undefined
-  return Boolean(
-    tabs?.some((tab) => tab.id === run.terminalSessionId && tab.lastFocusedAt !== undefined)
-  )
-}
-
 function createRuntimeRunTerminalRetention(
   service: AutomationService,
   store: Store,
@@ -234,6 +229,7 @@ function createRuntimeRunTerminalRetention(
       return run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown'
     },
     runTerminalAlive: (run) => runOwnHandle(runtime, run) !== null,
+    runPaneKept: (run) => runPaneKeepsRunPty(runtime, run),
     shellAloneAtPrompt: (run) =>
       run.terminalPtyId
         ? runtime.confirmTerminalShellAlone(run.terminalPtyId)
@@ -282,7 +278,7 @@ function createRuntimeRunTerminalRetention(
     },
     inAutomationLane: (automationId, operation) =>
       service.runInAutomationLane(automationId, operation),
-    forgetRunTerminal: async (run) => {
+    forgetRunTerminal: async (run, keepPane) => {
       // An idle shell proves a dispatched run exited without a completion result.
       const unfinished = run.status === 'dispatched'
       await service.markDispatchResult({
@@ -291,8 +287,7 @@ function createRuntimeRunTerminalRetention(
         error: unfinished
           ? (run.error ?? 'The agent exited without reporting completion.')
           : run.error,
-        terminalSessionId: null,
-        terminalPaneKey: null,
+        ...(keepPane ? {} : { terminalSessionId: null, terminalPaneKey: null }),
         terminalPtyId: null
       })
     }

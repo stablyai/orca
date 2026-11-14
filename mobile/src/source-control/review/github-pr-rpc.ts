@@ -1,21 +1,24 @@
 import { GITHUB_CONNECTION_CHANGED, githubOperationResponse } from './github-target-invocation'
 import { captureMobilePRCheckContract } from './pr-check-observation-contract'
-import { acceptPRCheckObservation } from '../../../../src/shared/github/complete-pr-check-owner'
+import { acceptPRCheckObservation } from '../../../../src/shared/github/checks/complete-pr-check-owner'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { withGitHubTargetOperation } from '../../tasks/github-work-item-operation'
-import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-item-target'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/github/check-types'
+import { withGitHubTargetOperation } from './github-work-item-operation'
+import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-items/work-item-target'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../src/shared/github/checks/check-types'
 import type {
   GitHubAssignableUser,
-  GitHubOwnerRepo,
   PRInfo
-} from '../../../../src/shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
-import '../mobile-pr-create'
-import { mobileRepoSelectorFromWorktreeId } from '../mobile-hosted-review-service'
+import './creation/mobile-pr-create'
+import { mobileRepoSelectorFromWorktreeId } from './creation/mobile-hosted-review-service'
 import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
 import {
   githubPrAssignableUsersRead,

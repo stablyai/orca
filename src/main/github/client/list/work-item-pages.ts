@@ -1,16 +1,15 @@
 import type { ClassifiedError } from '../../../../shared/classified-error'
-import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
+import { classifyGitHubUnavailable } from '../../../../shared/github/api/api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { sortWorkItemsByNumber } from '../../../../shared/work-items/work-item-order'
+import { classifyListIssuesError, classifyListPrsError } from '../../api/gh-error-classification'
 import {
-  classifyListIssuesError,
-  classifyListPrsError,
   ghRepoExecOptions,
   githubRepoContext,
-  type LocalGitExecOptions,
-  type OwnerRepo
-} from '../../gh-utils'
-import { githubHostExecOptions } from '../../github-api-repository'
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import { githubPRStackExecutionScope } from './../github-exec-scope'
 import { hydrateWorkItemRepositoryMergeMetadata } from './../detect/hydrate-work-item-merge-metadata'
 import type { MainWorkItem } from './../map/work-item-field-coercion'

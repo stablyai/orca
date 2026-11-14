@@ -1,7 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
 import { JsonlRpcPeer } from '../../jsonl-rpc/peer'
-import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../native-chat/testing/agent-session-record-test-fixture'
 import {
   closePiRpcAdapterFixtures,
   file,

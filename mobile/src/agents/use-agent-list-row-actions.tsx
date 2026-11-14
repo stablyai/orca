@@ -4,7 +4,7 @@ import { Alert } from 'react-native'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { TransientToast, useTransientToast } from '../components/TransientToast'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useClipboardWriter } from '../platform/clipboard'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import type { HostProfile } from '../host-catalog/host-profile'
 import type { AgentActivityChange, AgentListRow } from './agent-list-rows'
@@ -35,6 +35,8 @@ export function useAgentListRowActions(
         hostId: row.hostId,
         worktreeId: row.entry.worktreeId,
         name: row.entry.workspaceName,
+        // Home's lists span desktops, so Back returns to them rather than to this desktop's list.
+        standalone: true,
         ...(withPane ? { paneKey: row.entry.agent.paneKey } : {})
       }),
     [openMobileSession]

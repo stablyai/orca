@@ -6,7 +6,7 @@ import {
   _resetClosedPaneFencesForTests,
   fencedIfLayoutOwner,
   partitionsFence
-} from '../../persistence/terminal-topology/closed-pane-binding-fence'
+} from '../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import { Store } from '../../persistence/loading-store/store'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'

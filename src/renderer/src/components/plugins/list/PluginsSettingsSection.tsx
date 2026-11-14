@@ -1,7 +1,7 @@
 import { isPluginAutoUpdateOn } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { PluginHostInstallSource } from '../../../../../preload/api/plugin-host-api'
+import type { PluginHostInstallSource } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -334,7 +334,7 @@ export function PluginsSettingsSection({
       {...sectionPresentation}
       description={<PluginsSectionDescription text={sectionPresentation.description} />}
       hideHeader={featureEnabled && page.openKey !== null}
-      bodyClassName="space-y-6 rounded-none border-0 bg-transparent p-0 shadow-none"
+      bodyClassName="gap-6"
       headerAction={
         <PluginsHeaderActions
           featureEnabled={featureEnabled}

@@ -1,3 +1,4 @@
+import { normalizeFeatureTipIds } from '../../../../shared/feature-tips'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
@@ -143,6 +144,12 @@ export class ProfilePreferences {
       notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
     }
     return this.getSettings()
+  }
+
+  getFeatureTipsSeenIds(): string[] {
+    return normalizeFeatureTipIds(
+      this[profilePreferencesContext].runtime.state.ui?.featureTipsSeenIds
+    )
   }
 
   getUI(): PersistedState['ui'] {

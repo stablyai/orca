@@ -1,327 +1,145 @@
-import { resolveHistoryLimit } from './agent-session-history-limit'
-import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { snapshotLatestTurn } from './agent-session-history-latest-turn'
-
-import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
-  AgentJournalRenderItem,
-  AgentJournalSnapshot
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { projectJournalBatch } from './agent-session-journal-batch'
-import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
-import {
-  boundHistoryItemsByBytes,
-  isSubagentRow,
-  historyContentBytes,
-  type HistoryReader,
-  type HistoryPageInput,
-  measureHistoryItem,
-  newestWholeSequenceGroups,
-  wholeSubagentGroupsStart,
-  oversizedHistoryItem,
-  submissionBytesByItemId
-} from './agent-session-history-page-bounds'
-import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
-
-// Backward pages use the reduced timeline so compaction retains live items. Catch-up reads rows:
-// late revisions keep old creation positions and would be skipped by item windows. Only catch-up
-// can therefore return cursor_compacted.
-
-import {
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage,
-  type AgentSessionHistoryRequest,
-  type AgentSessionHistoryResult
+  AgentSessionHistoryRequest,
+  AgentSessionHistoryResult,
+  AgentSessionHistoryPage
 } from '../../../../../shared/agent-session/agent-session-wire'
+import type { HistoryReader } from './agent-session-history-page-bounds'
+import { heldQueuedImageHistoryPolicy } from './agent-session-queued-image-reader'
+import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
+import type { JournalDomainHistoryWork } from '../../../agent-session-journal/journal-domain-history-page'
+import type { JournalSqlWorkResult } from '../../../agent-session-journal/journal-work-read'
 
-/** In-process only: both scopes window by own-agent rows; own-agent also excludes other producers. */
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
-/** Window by own-agent rows, retaining contiguous subagent work and whole sibling groups within byte bounds. */
-function conversationWindow(
-  items: readonly AgentJournalRenderItem[],
-  limit: number
-): AgentJournalRenderItem[] {
-  const own = items.filter((item) => isRootAgentJournalItem(item) && !isSubagentRow(item))
-  if (own.length === items.length) {
-    return newestWholeSequenceGroups(items, limit)
-  }
-  const ownWindow = newestWholeSequenceGroups(own, limit)
-  const start = ownWindow.length < own.length ? ownWindow[0]?.sequence : undefined
-  if (start === undefined) {
-    return [...items]
-  }
-  const reach = newestWholeSequenceGroups(own, 2 * limit)
-  const floor = reach.length < own.length ? reach[0]!.sequence : Number.NEGATIVE_INFINITY
-  const whole = wholeSubagentGroupsStart(items, start, floor)
-  return items.filter((item) => item.sequence >= whole)
-}
-
-export function readAgentSessionHistory(
-  journal: AgentSessionJournal,
+/** The worker chooses and bounds rows before advancing the page cursor. */
+export async function readAgentSessionHistory(
+  journal: SqlAgentSessionJournal,
   request: AgentSessionHistoryRequest,
-  {
-    view = journal.publicRead(),
-    snapshot,
-    scope = 'every-agent',
-    reader = CLIENT_HISTORY_READER,
-    rowReplay = false
-  }: {
-    /** Reuse a snapshot across synchronous catch-up pages to avoid repeated full reduction. */
-    snapshot?: AgentJournalSnapshot
-    view?: ReturnType<AgentSessionJournal['publicRead']>
-    scope?: AgentSessionHistoryScope
-    reader?: HistoryReader
-    /** Internal catch-up and older item-backed clients keep their existing row replay. */
-    rowReplay?: boolean
-  } = {}
-): AgentSessionHistoryResult {
-  const limit = resolveHistoryLimit(request.limit)
-  if (request.direction === 'after') {
-    const readSnapshot = snapshot ? () => snapshot! : view.snapshotForItems
-    snapshot ??= readSnapshot(new Set())
-    if (
-      !rowReplay &&
-      request.cursor?.epoch === snapshot.cursor.epoch &&
-      request.cursor.sequence <= snapshot.cursor.sequence &&
-      view.normalizationKey !== ''
-    ) {
-      return historyReset(journal, 'cursor_compacted', reader)
-    }
-    return readForward(journal, snapshot, request.cursor, limit, reader, readSnapshot)
-  }
-  snapshot ??= view.currentSnapshot()
-  const cursor = request.direction === 'before' ? request.cursor : undefined
-  if (cursor) {
-    if (cursor.epoch !== snapshot.cursor.epoch) {
-      return historyReset(journal, 'epoch_changed', reader)
-    }
-    if (cursor.sequence > snapshot.cursor.sequence) {
-      return historyReset(journal, 'cursor_ahead', reader)
-    }
-  }
-  snapshot = reader.snapshot?.(journal, snapshot) ?? snapshot
-  const scoped =
-    scope === 'own-agent' ? snapshot.items.filter(isRootAgentJournalItem) : snapshot.items
-  const older = cursor ? scoped.filter((item) => item.sequence < cursor.sequence) : scoped
-  const windowed = conversationWindow(older, limit)
-  const { items, dropped } = boundHistoryItemsByBytes(
-    windowed,
-    'newest',
-    submissionBytesByItemId(snapshot.submissions),
-    reader.budgetBytes,
-    reader.form
-  )
-  return {
-    ok: true,
-    page: buildPage({
-      snapshot,
-      direction: request.direction,
-      items,
-      hasOlder: older.length > windowed.length || dropped > 0,
-      hasNewer: older.length < scoped.length,
-      fallbackCursor: cursor ?? { epoch: snapshot.cursor.epoch, sequence: 0 },
-      nextCursor: items[0]
-        ? { epoch: snapshot.cursor.epoch, sequence: items[0].sequence }
-        : undefined,
-      subagentRoster: offPageSubagentRoster(scoped, items)
-    })
-  }
+  options: HistoryReadOptions = {}
+): Promise<AgentSessionHistoryResult> {
+  return (await readAgentSessionHistoryFrame(journal, request, options)).result
 }
 
-/** Reuse reduced state until the complete journal source changes. */
+type HistoryReadOptions = {
+  scope?: AgentSessionHistoryScope
+  reader?: HistoryReader
+  rowReplay?: boolean
+}
+
+export type AgentSessionHistoryFrame<T> = { result: T; work?: JournalSqlWorkResult }
+
+/** The page and any requested work share one reader snapshot. `inLane`: the caller already holds
+ *  the chat's command lane, which is not reentrant. */
+export async function readAgentSessionHistoryFrame(
+  journal: SqlAgentSessionJournal,
+  request: AgentSessionHistoryRequest,
+  { scope = 'every-agent', reader = CLIENT_HISTORY_READER, rowReplay = false }: HistoryReadOptions,
+  work?: JournalDomainHistoryWork,
+  inLane = false
+): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
+  const read = async (): Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> => {
+    const frame = await journal.history(
+      {
+        ...request,
+        scope,
+        rowReplay,
+        reader: {
+          form: reader.wireForm ?? 'client',
+          budgetBytes: reader.budgetBytes,
+          ...(reader.queueSourceIds
+            ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
+            : {})
+        }
+      },
+      work
+    )
+    return {
+      ...frame,
+      result: {
+        ...frame.result,
+        page: await projectPage(
+          journal,
+          frame.result.page,
+          reader,
+          request.direction === 'after' && frame.result.ok
+        )
+      }
+    }
+  }
+  return reader.queueSourceIds && !inLane ? journal.readInOrder(read) : read()
+}
+
+/** Subscriber catch-up reads inside its held frame capture. */
 export function createAgentSessionCatchUpReader(
-  journal: AgentSessionJournal,
-  reader: HistoryReader = CLIENT_HISTORY_READER,
-  initialView = journal.publicRead()
-): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
-  let view = initialView
-  return (request) => {
-    const live = journal.publicRead()
-    if (view !== live) {
-      view = live
-    }
-    return readAgentSessionHistory(journal, request, { view, reader, rowReplay: true })
-  }
+  journal: SqlAgentSessionJournal,
+  reader: HistoryReader = CLIENT_HISTORY_READER
+): (
+  request: AgentSessionHistoryRequest,
+  work?: JournalDomainHistoryWork
+) => Promise<AgentSessionHistoryFrame<AgentSessionHistoryResult>> {
+  return (request, work) =>
+    readAgentSessionHistoryFrame(journal, request, { reader, rowReplay: true }, work, true)
 }
 
-export function readAgentSessionHydrationPage(
-  journal: AgentSessionJournal,
+export async function readAgentSessionHydrationPage(
+  journal: SqlAgentSessionJournal,
+  fence?: number,
+  reader: HistoryReader = CLIENT_HISTORY_READER
+): Promise<AgentSessionHistoryPage> {
+  return (await readAgentSessionHydrationFrame(journal, fence, reader)).result
+}
+
+export async function readAgentSessionHydrationFrame(
+  journal: SqlAgentSessionJournal,
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER,
-  snapshot: AgentJournalSnapshot = journal.currentRead()
-): AgentSessionHistoryPage {
-  return buildHydrationPage(reader.snapshot?.(journal, snapshot) ?? snapshot, fence, reader)
-}
-
-function buildHydrationPage(
-  snapshot: AgentJournalSnapshot,
-  fence: number | undefined,
-  reader: HistoryReader
-): AgentSessionHistoryPage {
-  const items = conversationWindow(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
-  const bounded = boundHistoryItemsByBytes(
-    items,
-    'newest',
-    submissionBytesByItemId(snapshot.submissions),
-    reader.budgetBytes,
-    reader.form
-  )
-  return buildPage({
-    snapshot,
-    direction: 'tail',
-    items: bounded.items,
-    hasOlder: snapshot.items.length > items.length || bounded.dropped > 0,
-    hasNewer: false,
-    fallbackCursor: { epoch: snapshot.cursor.epoch, sequence: 0 },
-    nextCursor: bounded.items[0]
-      ? { epoch: snapshot.cursor.epoch, sequence: bounded.items[0].sequence }
-      : undefined,
-    fence,
-    subagentRoster: offPageSubagentRoster(snapshot.items, bounded.items)
-  })
-}
-
-function historyReset(
-  journal: AgentSessionJournal,
-  reset: Extract<AgentSessionHistoryResult, { ok: false }>['reset'],
-  reader: HistoryReader
-): AgentSessionHistoryResult {
-  return {
-    ok: false,
-    reset,
-    page: readAgentSessionHydrationPage(journal, undefined, reader)
-  }
-}
-
-function readForward(
-  journal: AgentSessionJournal,
-  snapshot: AgentJournalSnapshot,
-  cursor: AgentJournalCursor | undefined,
-  limit: number,
-  reader: HistoryReader,
-  readSnapshot: (ids: ReadonlySet<string>) => AgentJournalSnapshot
-): AgentSessionHistoryResult {
-  if (!cursor) {
-    // Why: forward paging replays rows after a position; without one there is
-    // nothing to be after, and silently serving the tail would hand the client
-    // a page it cannot place.
-    return historyReset(journal, 'cursor_ahead', reader)
-  }
-  // One lookahead determines hasNewer without rereading the whole remaining journal.
-  const since = journal.readSince(cursor, limit + 1)
-  if (!since.ok) {
-    return historyReset(journal, since.reset, reader)
-  }
-  let submissionBytes = submissionBytesByItemId(snapshot.submissions)
-  // Shrink the row window; clipping items after advancing the cursor would permanently lose revisions.
-  let rows = since.rows.slice(0, limit)
-  const project = (window: typeof rows) => {
-    const result = projectJournalBatch({
-      rows: window,
-      snapshot,
-      afterSequence: cursor.sequence,
-      canonicalItemId: (itemId) => journal.canonicalItemId(itemId),
-      hasSubmission: (id) => journal.submission(id) !== undefined,
-      queueSourceIds: reader.queueSourceIds?.bind(undefined, journal),
-      readSnapshot: (ids) => {
-        const selected = readSnapshot(ids)
-        return reader.snapshot?.(journal, selected, ids) ?? selected
-      }
-    })
-    if (!result.ok) {
-      return result
-    }
-    submissionBytes = submissionBytesByItemId(result.batch.submissions)
-    return { ...result, batch: { ...result.batch, items: result.batch.items.map(reader.form) } }
-  }
-  let projected = project(rows)
-  if (!projected.ok) {
-    return historyReset(journal, projected.reset, reader)
-  }
-  let contentBytes = historyContentBytes(
-    projected.batch.items,
-    projected.batch.removedItemIds,
-    submissionBytes
-  )
-  while (rows.length > 1 && contentBytes > reader.budgetBytes) {
-    rows = rows.slice(0, Math.ceil(rows.length / 2))
-    const shrunk = project(rows)
-    if (!shrunk.ok) {
-      return historyReset(journal, shrunk.reset, reader)
-    }
-    projected = shrunk
-    contentBytes = historyContentBytes(
-      projected.batch.items,
-      projected.batch.removedItemIds,
-      submissionBytes
+  work?: JournalDomainHistoryWork,
+  inLane = false
+): Promise<AgentSessionHistoryFrame<AgentSessionHistoryPage>> {
+  const read = async (): Promise<AgentSessionHistoryFrame<AgentSessionHistoryPage>> => {
+    const frame = await journal.history(
+      {
+        direction: 'hydrate',
+        fence,
+        reader: {
+          form: reader.wireForm ?? 'client',
+          budgetBytes: reader.budgetBytes,
+          ...(reader.queueSourceIds
+            ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
+            : {})
+        }
+      },
+      work
     )
+    return { ...frame, result: await projectPage(journal, frame.result.page, reader, false) }
   }
-  let items = projected.batch.items
-  if (contentBytes > reader.budgetBytes) {
-    items = items.map((formed) => {
-      const bytes = formed.bytes + (submissionBytes.get(formed.item.itemId) ?? 0)
-      return bytes > reader.budgetBytes
-        ? measureHistoryItem(oversizedHistoryItem(formed.item))
-        : formed
-    })
-    contentBytes = historyContentBytes(items, projected.batch.removedItemIds, submissionBytes)
-  }
-  if (contentBytes > reader.budgetBytes) {
-    // A single row's semantic payload — in practice a pre-bounding oversized
-    // removal id — can never fit any page, and truncating a removal id would
-    // break the client's keying. A bounded tail replaces the client's state
-    // wholesale, which applies the removal without carrying the id, and the
-    // client resumes from the live cursor past this row.
-    return historyReset(journal, 'cursor_compacted', reader)
-  }
-  const hasNewer = since.rows.length > rows.length
-  // A complete read moves past trailing writes that saved nothing. `through` cannot run ahead of
-  // `snapshot`: each write commits and adopts its state in one synchronous step on the write lane.
-  const lastSequence = hasNewer ? (rows.at(-1)?.seq ?? cursor.sequence) : since.through
-  return {
-    ok: true,
-    page: buildPage({
-      snapshot,
-      submissions: projected.batch.submissions,
-      direction: 'after',
-      items: items.map(({ item }) => item),
-      removedItemIds: projected.batch.removedItemIds,
-      hasOlder: cursor.sequence > 0,
-      hasNewer,
-      fallbackCursor: cursor,
-      nextCursor: { epoch: cursor.epoch, sequence: lastSequence }
-    })
-  }
+  return reader.queueSourceIds && !inLane ? journal.readInOrder(read) : read()
 }
 
-function buildPage(input: HistoryPageInput): AgentSessionHistoryPage {
-  const epoch = input.snapshot.cursor.epoch
-  const pageItemIds = new Set(input.items.map((item) => item.itemId))
-  const oldest = input.items[0]
-  const newest = input.items.at(-1)
+async function projectPage(
+  journal: SqlAgentSessionJournal,
+  page: AgentSessionHistoryPage,
+  reader: HistoryReader,
+  forward: boolean
+): Promise<AgentSessionHistoryPage> {
+  if (!reader.snapshot) {
+    return page
+  }
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: page.sessionId,
+    cursor: page.liveCursor ?? page.window.nextCursor,
+    items: page.items,
+    submissions: page.submissions
+  }
+  const touched = forward
+    ? new Set([...page.items.map((item) => item.itemId), ...page.removedItemIds])
+    : undefined
+  const projected = await reader.snapshot(journal, snapshot, touched)
   return {
-    sessionId: input.snapshot.sessionId,
-    epoch,
-    ...(input.fence !== undefined ? { fence: input.fence } : {}),
-    direction: input.direction,
-    items: input.items,
-    removedItemIds: input.removedItemIds ?? [],
-    submissions: (input.submissions ?? input.snapshot.submissions).filter((submission) =>
-      pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-    ),
-    window: {
-      oldest: oldest ? { epoch, sequence: oldest.sequence } : null,
-      newest: newest ? { epoch, sequence: newest.sequence } : null,
-      nextCursor: input.nextCursor ?? input.fallbackCursor
-    },
-    liveCursor: input.snapshot.cursor,
-    hasOlder: input.hasOlder,
-    hasNewer: input.hasNewer,
-    ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
-    // Read the whole timeline: long turns can begin below this page.
-    latestTurn: snapshotLatestTurn(input.snapshot)
+    ...page,
+    items: projected.items.map((item) => reader.form(item).item),
+    submissions: projected.submissions
   }
 }

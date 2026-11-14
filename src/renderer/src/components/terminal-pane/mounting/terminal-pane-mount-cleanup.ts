@@ -14,7 +14,7 @@ import {
   releaseDeferredSplitPaneHandoff,
   type DeferredSplitPaneHandoffHandle
 } from '../layout/split/deferred-split-pane-handoff'
-import { isTerminalTabPresent } from '@/store/terminals/terminal-tab-retirement'
+import { isTerminalTabPresent } from '@/store/terminals/retirement/terminal-tab-retirement'
 import { clearTerminalFontSizeOverride } from '../appearance/terminal-font-size-overrides'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { useAppStore } from '@/store/index'

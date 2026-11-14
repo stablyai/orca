@@ -11,9 +11,9 @@ import type {
   SessionOptionSelectChoice,
   SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
-import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
-import { isFastServiceTier } from '../../../../../../../shared/agent-session/options/structured-agent-session-discovered-model'
-import { loneFastTier } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
+import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
+import { isFastServiceTier } from '../../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
+import { loneFastTier } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 
 /** A lone Fast tier toggles like Claude's Fast; anything else opens a list instead of a segmented switcher. */

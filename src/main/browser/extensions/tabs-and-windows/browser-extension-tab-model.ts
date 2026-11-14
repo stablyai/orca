@@ -295,7 +295,7 @@ export function recentWorktreeIdForBrowserProfile(profileId: string): string | u
 export async function openBrowserExtensionTab(
   browserProfileId: string,
   url: string,
-  active: boolean
+  placement: { active: boolean; worktreeId?: string }
 ): Promise<number> {
   const profile = getBrowserExtensionProfile(browserProfileId)
   // Why wait: extensions open tabs as they load (onInstalled), before Orca's window can take them.
@@ -306,10 +306,10 @@ export async function openBrowserExtensionTab(
   const { browserPageId } = await createBrowserTabInRenderer(
     { getAuthoritativeWindow: () => mainWindow },
     url,
-    undefined,
+    placement.worktreeId,
     profile.id,
     profile.partition,
-    active,
+    placement.active,
     undefined,
     recentWorktreeIdForBrowserProfile(profile.id)
   )
@@ -340,7 +340,7 @@ export async function closeBrowserExtensionTab(entry: BrowserExtensionTabEntry):
 export async function activateBrowserExtensionTab(entry: BrowserExtensionTabEntry): Promise<void> {
   const popout = getPopoutWindowForWebContents(entry.contents)
   if (popout) {
-    presentBrowserExtensionWindow(popout, true)
+    presentBrowserExtensionWindow(popout, 'focused')
     return
   }
   const browserPageId = browserManager.getTabIdForWebContentsId(entry.contents.id)

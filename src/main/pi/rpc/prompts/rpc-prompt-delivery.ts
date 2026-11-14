@@ -7,6 +7,7 @@ import { agentSessionFailureWords } from '../../../../shared/agent-session/failu
 import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { JsonlRpcRecord } from '../../../jsonl-rpc/peer'
 import { piRpcPromptReplySchema } from '../rpc-protocol'
+import { PI_RPC_PEER_OPTIONS } from './rpc-prompt'
 
 type Submission = {
   id: string
@@ -101,7 +102,10 @@ export class PiRpcPromptDelivery {
       throw new Error('Pi prompt queue unavailable')
     }
     const bytes = Buffer.byteLength(JSON.stringify(frame))
-    if (this.pending.size >= 128 || this.heldBytes + bytes > 32 * 1024 * 1024) {
+    if (
+      this.pending.size >= 128 ||
+      this.heldBytes + bytes > PI_RPC_PEER_OPTIONS.maxQueuedWriteBytes
+    ) {
       return {
         state: 'rejected',
         ...agentSessionFailureWords(agentSessionFailureFact('queueFull'), {

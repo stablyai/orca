@@ -1,25 +1,30 @@
 import { expect, it, vi } from 'vitest'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { agentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { journalIdentityFor } from '../../acquisition/structured-agent-session-attach'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { digestPayload } from '../../../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   CALLER,
   attach,
   attachParams,
+  envelope,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 
 it("creates a chat while another saved chat's owner check fails", async () => {
   await attach()
@@ -65,7 +70,7 @@ it('keeps a send a crash cut off as sent when its chat reattaches', async () => 
   await prior.host.close(HOST_TEST_SESSION, 'evict')
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, attachParams()),
-    database: openTestJournalHostDatabase(prior.root)
+    database: await openTestAgentSessionDatabase(prior.root)
   })
   await journal.appendSubmission({
     clientMessageId: 'crashed-send',
@@ -100,4 +105,49 @@ it('keeps a send a crash cut off as sent when its chat reattaches', async () => 
     }
   })
   expect(prior.dispatch).not.toHaveBeenCalled()
+})
+
+it('rejects reopened-chat sends while its conversation runs in a terminal and resumes after it exits', async () => {
+  await attach()
+  const { host, dispatch } = hostTestState()
+  await host.close(HOST_TEST_SESSION, 'evict')
+  let terminalWriting = true
+  host.deps.assertNoTerminalWriter = async () => {
+    if (terminalWriting) {
+      throw agentSessionRefusalError('agent_session_conflict', {
+        reason: 'conversationHeldElsewhere'
+      })
+    }
+  }
+  await host.revealSession(HOST_TEST_SESSION)
+  const send = async (text: string) => {
+    const body = hostTestMessage(text)
+    const request = envelope('agentSession.send', { body })
+    expect(await host.send(CALLER, { envelope: request, body })).toMatchObject({ ok: true })
+    return request.clientOperationId
+  }
+  const submission = async (clientMessageId: string) =>
+    (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions.find(
+      (entry) => entry.clientMessageId === clientMessageId
+    )
+
+  for (const text of ['first', 'second']) {
+    const id = await send(text)
+    await vi.waitFor(
+      async () =>
+        expect(await submission(id)).toMatchObject({
+          dispatchState: 'rejected',
+          rejection: { kind: 'conversationOpenInTerminal' }
+        }),
+      { timeout: 10_000 }
+    )
+  }
+  expect(dispatch).not.toHaveBeenCalled()
+
+  terminalWriting = false
+  const id = await send('after the terminal exits')
+  await vi.waitFor(
+    async () => expect(await submission(id)).toMatchObject({ dispatchState: 'accepted' }),
+    { timeout: 10_000 }
+  )
 })

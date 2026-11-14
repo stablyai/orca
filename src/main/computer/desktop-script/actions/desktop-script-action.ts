@@ -150,21 +150,39 @@ export function verifyDesktopAction(
     return action
   }
   const actual = refreshedElementValue(snapshot, targetElement, elementIndex)
-  if (actual === expected) {
+  if (actual === undefined || readbackCannotDecide(actual, expected)) {
     return {
       ...action,
-      verification: { state: 'verified', property: 'value', expected, actualPreview: actual }
+      verification: {
+        state: 'unverified',
+        reason: actual === undefined ? 'provider_unavailable' : 'readback_unsupported'
+      }
     }
+  }
+  if (actual === expected) {
+    return { ...action, verification: { state: 'verified', property: 'value' } }
   }
   return {
     ...action,
-    verification: {
-      state: 'unverified',
-      reason: actual === undefined ? 'provider_unavailable' : 'value_mismatch',
-      expected,
-      actualPreview: actual ?? null
-    }
+    verification: { state: 'unverified', reason: 'value_mismatch', actualPreview: actual }
   }
+}
+
+// Why: runtime.ps1 and runtime.py show secure fields as "[redacted]" and cut values past 500
+// characters (UTF-16 units / code points) to a prefix plus "...", which can't prove or disprove the write.
+const PROVIDER_VALUE_TEXT_LIMIT = 500
+
+function readbackCannotDecide(actual: string, expected: string): boolean {
+  if (actual === '[redacted]') {
+    return true
+  }
+  const shown = actual.endsWith('...') ? actual.slice(0, -3) : undefined
+  return (
+    shown !== undefined &&
+    shown.length >= PROVIDER_VALUE_TEXT_LIMIT &&
+    shown.length < expected.length &&
+    expected.startsWith(shown)
+  )
 }
 
 function refreshedElementValue(

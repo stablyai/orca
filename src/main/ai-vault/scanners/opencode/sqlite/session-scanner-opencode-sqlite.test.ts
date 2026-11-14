@@ -7,7 +7,7 @@ import { buildOpenCodeSqliteCandidatePath } from '../../../../../shared/opencode
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
-import { withFullFirstUserPromptCapture } from '../../../session-scanner-first-user-prompt-capture'
+import { withFullFirstUserPromptCapture } from '../../../prompts/session-scanner-first-user-prompt-capture'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 
 let tempDirs: string[] = []

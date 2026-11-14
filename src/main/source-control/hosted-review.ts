@@ -1,4 +1,7 @@
-import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
+import {
+  githubRepoContext,
+  withGitHubRepoExecution
+} from '../github/repositories/github-repository-identity'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   cachedHostedReviewOutcome,
