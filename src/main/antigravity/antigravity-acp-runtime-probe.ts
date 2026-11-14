@@ -1,8 +1,9 @@
 // Initialize under a disposable home to verify the pinned server without signing in.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import {
   createAcpAgentConnection,
   type AcpAgentConnection
@@ -114,7 +115,9 @@ async function initializeFromDisposableFolder(
     )
     outcome.failed = true
   }
-  await rm(folder, { recursive: true, force: true })
+  await removeTree(folder).catch((error: unknown) => {
+    console.warn('[antigravity] probe folder cleanup failed:', error)
+  })
   return outcome
 }
 
@@ -169,7 +172,11 @@ export async function probeAntigravityAcpServer(
     (home) => ({
       command,
       args: process.platform === 'linux' ? ['--uid='] : [],
-      env: { ...ANTIGRAVITY_ACP_ENV, GEMINI_HOME: home, TMPDIR: home, TEMP: home, TMP: home },
+      env: {
+        ...ANTIGRAVITY_ACP_ENV,
+        GEMINI_HOME: home,
+        ...(process.platform === 'win32' ? {} : { TMPDIR: home, TEMP: home, TMP: home })
+      },
       envToDelete: scrubAntigravityAcpEnvironment({}, process.env)
     }),
     PROBE_TIMEOUT_MS,
