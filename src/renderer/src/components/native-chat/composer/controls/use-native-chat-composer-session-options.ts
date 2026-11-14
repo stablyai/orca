@@ -17,6 +17,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
   | 'structuredTransport'
+  | 'launchSeed'
 > &
   Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
 
@@ -31,7 +32,8 @@ export function useNativeChatComposerSessionOptions({
   onSwitchToTerminal,
   readTerminalScreen,
   paneKey,
-  structuredTransport
+  structuredTransport,
+  launchSeed
 }: ComposerSessionOptionsArgs): {
   isDispatching: boolean
   pty: ReturnType<typeof useNativeChatSessionOptions>
@@ -43,7 +45,14 @@ export function useNativeChatComposerSessionOptions({
     disabled,
     onSlashCommand,
     onSubmitted,
-    resolveTarget
+    resolveTarget,
+    hasInjectedLaunchDraft: !!(
+      launchSeed?.launchDraft &&
+      !launchSeed.launchDraftResolved &&
+      !launchSeed.launchDraft.resolved &&
+      !launchSeed.launchDraft.fromTerminal &&
+      launchSeed.launchDraft.agent === agent
+    )
   })
   const pty = useNativeChatSessionOptions({
     agent,

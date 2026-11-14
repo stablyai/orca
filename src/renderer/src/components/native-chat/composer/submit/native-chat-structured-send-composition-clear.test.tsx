@@ -33,6 +33,7 @@ vi.mock('../../../../store/index', () => {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
     agentStatusByPaneKey: {},
+    tabsByWorktree: {},
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: vi.fn(),
     markNativeChatLaunchDraftAdopted: vi.fn()

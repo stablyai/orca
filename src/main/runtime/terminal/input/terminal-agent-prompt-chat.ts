@@ -1,10 +1,9 @@
-import type { NativeChatPromptBinding } from '../../../../shared/native-chat/input/native-chat-prompt-observation'
 import { readRuntimeElapsedClock } from '../../hosts/runtime-elapsed-clock'
 import {
   terminalChatPromptSchedule,
   type TerminalChatPromptSchedule
 } from '../../../../shared/terminal/input/terminal-chat-prompt-budget'
-import { OrcaRuntimeWithTerminalChatReceiver } from './terminal-chat-receiver'
+import { OrcaRuntimeWithTerminalChatInputWriter } from './terminal-chat-input-writer'
 import {
   assertLegacyAiVaultResumeCommandAllowed,
   hasLegacyAiVaultResumeCommand
@@ -12,12 +11,7 @@ import {
 import type { TerminalChatInput } from './terminal-chat-input-ownership'
 import type { AgentPromptExpectedBinding } from './agent-prompt-write-options'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import { assertTerminalInputAdmitted } from './terminal-input-admission'
-import {
-  assertAgentPromptRequestActive,
-  waitForAgentPromptDelay,
-  waitForAgentPromptPromise
-} from './agent-prompt-signals'
+import { waitForAgentPromptDelay, waitForAgentPromptPromise } from './agent-prompt-signals'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 import {
   buildNativeChatPasteBytes,
@@ -29,13 +23,9 @@ import type {
   RuntimeTerminalSend,
   TerminalChatPrompt
 } from '../../../../shared/runtime-terminal-send-contract'
-import {
-  writeUnverifiable,
-  writeRefused,
-  type WriteSettlement
-} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import { writeRefused } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithTerminalChatReceiver {
+export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithTerminalChatInputWriter {
   sendTerminalChatPrompt(
     handle: string,
     prompt: TerminalChatPrompt,
@@ -123,76 +113,48 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithT
     schedule: TerminalChatPromptSchedule,
     expiresAtMs?: number
   ): Promise<RuntimeTerminalSend> {
-    let bytesWritten = 0
-    let effectPossible = false
-    let weak = false
-    let chatPromptBinding: NativeChatPromptBinding | undefined
-    const result = (accepted: boolean, writeSettlement?: WriteSettlement): RuntimeTerminalSend => ({
+    let agent = agentHint
+    let platform: ReturnType<typeof this.getPtyWriteHostPlatform>
+    return this.runTerminalChatInput(
       handle,
-      accepted,
-      bytesWritten,
-      ...(chatPromptBinding ? { chatPromptBinding } : {}),
-      writeSettlement: writeSettlement ?? writeRefused('provider_refused_write')
-    })
-    const assertWritable = (): void => {
-      entry.assertActive()
-      assertAgentPromptRequestActive(entry.signal)
-      this.assertAgentPromptGeneration(binding.ptyId, binding.generation)
-      this.assertAgentPromptExpectedBinding(handle, binding)
-      this.assertLiveTerminalHandleTargetsPty(handle, binding.ptyId)
-      if (!this.ptysById.get(binding.ptyId)?.connected || this.isPtyStopRequested(binding.ptyId)) {
-        throw new Error('terminal_not_writable')
-      }
-      assertTerminalInputAdmitted(this, binding.ptyId, 'desktop')
-    }
-    const write = async (data: string): Promise<void> => {
-      assertWritable()
-      const controller = this.ptyController
-      if (!controller) {
-        throw new Error('terminal_not_writable')
-      }
-      // A provider can throw after handoff, before returning its settlement promise.
-      effectPossible = true
-      const settlement = this.promptInputs.withChatWrite(binding.ptyId, binding.generation, () => {
-        if (controller.writeWithSettlement) {
-          return controller.writeWithSettlement(binding.ptyId, data, 'driving')
-        }
-        return { outcome: 'refused' as const, reason: 'provider_cannot_settle' as const }
-      })
-      // A provider call may already have handed bytes off even when its reply never arrives.
-      let settled = await waitForAgentPromptPromise(Promise.resolve(settlement), entry.signal)
-      if (settled.outcome === 'refused' && settled.reason === 'provider_cannot_settle') {
-        assertWritable()
-        const accepted = this.promptInputs.withChatWrite(binding.ptyId, binding.generation, () =>
-          controller.write(binding.ptyId, data, 'driving')
-        )
-        settled = accepted
-          ? { outcome: 'accepted' }
-          : { outcome: 'refused', reason: 'provider_refused_write' }
-        weak = true
-      }
-      if (settled.outcome === 'refused') {
-        // Only a first proven refusal can undo the conservative handoff assumption.
-        if (bytesWritten === 0) {
-          effectPossible = false
-        }
-        throw settled
-      }
-      if (settled.outcome === 'unverifiable') {
-        throw settled
-      }
-      bytesWritten += Buffer.byteLength(data)
-    }
-    const queued = this.serializeAgentPromptSubmission(
-      binding.ptyId,
-      binding.generation,
-      async () => {
+      binding,
+      entry,
+      async (write, assertWritable) => {
+        const frames = entry.frames!
+        const scheduleText = frames[0]
+        await write(frames[1])
+        const joined = agentPromptSubmitJoinsPasteFrame(agent)
+        const gate = joined
+          ? null
+          : this.createAgentPromptRenderGate(
+              binding.ptyId,
+              schedule.ingestMs(platform),
+              scheduleText,
+              () => performance.now()
+            )
         try {
+          gate?.arm()
+          await write(frames[2] + (joined ? NATIVE_CHAT_SUBMIT : ''))
+          if (gate) {
+            await waitForAgentPromptPromise(gate.wait(), entry.signal)
+            assertWritable()
+          }
+        } finally {
+          gate?.dispose()
+        }
+        if (!joined) {
+          await waitForAgentPromptDelay(schedule.submitDelayMs(platform, agent), entry.signal)
+          await write(NATIVE_CHAT_SUBMIT)
+        }
+      },
+      'desktop',
+      {
+        start: async (assertWritable) => {
           assertWritable()
           const frames = entry.frames!
           const scheduleText = frames[0]
           const pty = this.ptysById.get(binding.ptyId)
-          const agent = pty?.foregroundAgent ?? pty?.launchAgent ?? agentHint
+          agent = pty?.foregroundAgent ?? pty?.launchAgent ?? agentHint
           const requiredMs = schedule.scheduleMs(
             this.getPtyWriteHostPlatform(binding.ptyId),
             agent,
@@ -208,7 +170,7 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithT
           }
           entry.start(schedule.executionMs(requiredMs))
           assertWritable()
-          const platform = this.getPtyWriteHostPlatform(binding.ptyId)
+          platform = this.getPtyWriteHostPlatform(binding.ptyId)
           if (
             hasLegacyAiVaultResumeCommand(scheduleText) &&
             (await waitForAgentPromptPromise(this.chatReceiverIsShell(binding), entry.signal))
@@ -234,49 +196,9 @@ export abstract class OrcaRuntimeWithTerminalChatPrompt extends OrcaRuntimeWithT
             }
           }
           assertWritable()
-          chatPromptBinding = this.captureChatPromptBinding(handle, binding)
-          await write(frames[1])
-          const joined = agentPromptSubmitJoinsPasteFrame(agent)
-          const gate = joined
-            ? null
-            : this.createAgentPromptRenderGate(
-                binding.ptyId,
-                schedule.ingestMs(platform),
-                scheduleText,
-                () => performance.now()
-              )
-          try {
-            gate?.arm()
-            await write(frames[2] + (joined ? NATIVE_CHAT_SUBMIT : ''))
-            if (gate) {
-              await waitForAgentPromptPromise(gate.wait(), entry.signal)
-              assertWritable()
-            }
-          } finally {
-            gate?.dispose()
-          }
-          if (!joined) {
-            await waitForAgentPromptDelay(schedule.submitDelayMs(platform, agent), entry.signal)
-            await write(NATIVE_CHAT_SUBMIT)
-          }
-          return weak
-            ? result(false, writeUnverifiable('transport_settlement_lost', true))
-            : result(true, { outcome: 'accepted' })
-        } catch {
-          return effectPossible
-            ? result(false, writeUnverifiable('partial_write', true))
-            : result(false)
-        } finally {
-          entry.finish()
+          return this.captureChatPromptBinding(handle, binding)
         }
       }
     )
-    try {
-      return await waitForAgentPromptPromise(queued, entry.signal)
-    } catch {
-      return effectPossible
-        ? result(false, writeUnverifiable('partial_write', true))
-        : result(false)
-    }
   }
 }

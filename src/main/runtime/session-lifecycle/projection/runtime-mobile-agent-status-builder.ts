@@ -1,3 +1,4 @@
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
@@ -55,17 +56,20 @@ export function buildRuntimeMobileAgentStatus(
   if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
     return {}
   }
-  const providerSession = hookRow.providerSession
-    ? {
-        providerSession: hookRow.providerSession,
-        ...(hookRow.orcaSessionId !== undefined ? { orcaSessionId: hookRow.orcaSessionId } : {})
-      }
-    : retained?.providerSession
+  const providerSession: Pick<AgentStatusEntry, 'providerSession' | 'orcaSessionId'> =
+    hookRow.providerSession
       ? {
-          providerSession: retained.providerSession,
-          ...(retained.orcaSessionId !== undefined ? { orcaSessionId: retained.orcaSessionId } : {})
+          providerSession: hookRow.providerSession,
+          ...(hookRow.orcaSessionId !== undefined ? { orcaSessionId: hookRow.orcaSessionId } : {})
         }
-      : {}
+      : retained?.providerSession
+        ? {
+            providerSession: retained.providerSession,
+            ...(retained.orcaSessionId !== undefined
+              ? { orcaSessionId: retained.orcaSessionId }
+              : {})
+          }
+        : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
   const titleCandidate = pty
@@ -190,6 +194,15 @@ export function buildRuntimeMobileAgentStatus(
     const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
       {
         ...liveRow.payload,
+        model:
+          providerSession.providerSession &&
+          !agentProviderSessionsEqual(
+            ownerAgent ?? liveRow.payload.agentType,
+            liveRow.providerSession,
+            providerSession.providerSession
+          )
+            ? undefined
+            : liveRow.payload.model,
         paneKey,
         updatedAt: liveRow.updatedAt,
         ...(liveRow.evidenceObservedAt !== undefined

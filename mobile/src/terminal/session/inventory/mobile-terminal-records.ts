@@ -25,22 +25,23 @@ export type MobileTerminalSessionTab = Partial<
     RuntimeMobileSessionTerminalTab,
     'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle'
   >
-> & {
-  type: 'terminal'
-  id: string
-  title: string
-  parentTabId?: string
-  leafId?: string
-  status?: 'pending-handle' | 'ready'
-  terminal: string | null
-  agentStatus?: AgentStatusEntry | null
-  nativeChatIdentity?: unknown
-  /** Host-provided launch context still parked as an unsent TUI-input draft. */
-  launchDraft?: string
-  launchDraftCreatedAt?: number
-  terminalTheme?: RuntimeMobileTerminalTheme
-  isActive: boolean
-}
+> &
+  Pick<RuntimeMobileSessionTerminalTab, 'ptyId' | 'incarnationId'> & {
+    type: 'terminal'
+    id: string
+    title: string
+    parentTabId?: string
+    leafId?: string
+    status?: 'pending-handle' | 'ready'
+    terminal: string | null
+    agentStatus?: AgentStatusEntry | null
+    nativeChatIdentity?: unknown
+    /** Host-provided launch context still parked as an unsent TUI-input draft. */
+    launchDraft?: string
+    launchDraftCreatedAt?: number
+    terminalTheme?: RuntimeMobileTerminalTheme
+    isActive: boolean
+  }
 
 type MobileSessionTabLike =
   | MobileTerminalSessionTab
@@ -156,6 +157,8 @@ function mobileSessionTabEqual(
     case 'terminal':
       return (
         b.type === 'terminal' &&
+        a.ptyId === b.ptyId &&
+        a.incarnationId === b.incarnationId &&
         a.parentTabId === b.parentTabId &&
         a.leafId === b.leafId &&
         a.status === b.status &&

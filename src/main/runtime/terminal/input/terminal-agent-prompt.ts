@@ -36,6 +36,7 @@ import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-
 import type { OrcaRuntimeWithCreateAgentPromptRenderGate } from './terminal-agent-prompt-render'
 
 export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
+  protected abstract readCaughtUpComposerTypedText(ptyId: string): string | null
   protected abstract createAgentPromptRenderGate(
     ...args: Parameters<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
   ): ReturnType<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>

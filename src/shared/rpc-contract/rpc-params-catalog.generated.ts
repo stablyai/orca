@@ -698,6 +698,7 @@ import { RenameParams } from './structured-agent-session/structured-agent-sessio
 import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
 import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
+import { TerminalModelControlParams } from './terminal-model-control-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
@@ -1616,6 +1617,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.inspectProcess': TerminalInspectProcess,
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
+  'terminal.model-control': TerminalModelControlParams,
   'terminal.multiplex': TerminalMultiplex,
   'terminal.openInputSession': TerminalOpenInputSession,
   'terminal.read': TerminalRead,

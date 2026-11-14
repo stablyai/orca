@@ -20,11 +20,15 @@ import {
   isFlipOnlyMidSession,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
-import type {
-  NativeChatSessionOptionDispatchCommand,
-  NativeChatSessionOptionDispatchResult
+import {
+  createSerializedApplyQueue,
+  type NativeChatSessionOptionDispatchCommand,
+  type NativeChatSessionOptionDispatchResult
 } from './native-chat-session-option-dispatch'
-import { SessionOptionApplyError } from './native-chat-session-option-apply-failure'
+import {
+  SessionOptionApplyError,
+  assertControlNotBlocked
+} from './native-chat-session-option-apply-failure'
 import {
   resolveEffectiveNativeChatModelId,
   type NativeChatSessionOptionMode
@@ -32,6 +36,9 @@ import {
 
 type SessionOptionApplyContext = {
   mode: NativeChatSessionOptionMode
+  runOperation?: <T>(run: () => Promise<T>) => Promise<T>
+  canCommit: () => boolean
+  settle: <T>(mutate: () => T) => T | undefined
   catalog: AgentSessionOptionCatalog
   getModels: () => CatalogModel[]
   getRecord: () => NativeChatSessionOptionRecord
@@ -47,19 +54,6 @@ type SessionOptionApplyContext = {
     value: SessionOptionValue,
     source: 'applied' | 'dispatched'
   ) => string | null
-}
-
-/** Serialize absolute targets so they observe prior flips instead of stale baselines. */
-function createSerializedApplyQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
-  let tail: Promise<unknown> = Promise.resolve()
-  return <T>(fn: () => Promise<T>): Promise<T> => {
-    const run = tail.then(fn, fn)
-    tail = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
 }
 
 function currentApply(
@@ -97,7 +91,7 @@ function finish(
   const snapshot = ctx.publish()
   const record = ctx.getRecord()
   const draftModelId = trackedModelId(record)
-  if (ctx.mode === 'draft' && draftModelId !== null) {
+  if (ctx.canCommit() && ctx.mode === 'draft' && draftModelId !== null) {
     ctx.onDraftValuesChanged?.(flattenNativeChatSessionOptionRecord(record, draftModelId))
   }
   return { snapshot }
@@ -105,14 +99,19 @@ function finish(
 
 async function handleAgentPicker(
   ctx: SessionOptionApplyContext,
+  optionId: string,
   midSession: Extract<CatalogMidSessionApply, { kind: 'agent-picker' }>
 ): Promise<SessionOptionSetResult> {
-  await (midSession.delivery
-    ? ctx.dispatchCommand(midSession.command, { delivery: midSession.delivery })
-    : ctx.dispatchCommand(midSession.command))
-  ctx.clearModelTruth()
+  const result = await ctx.dispatchCommand(midSession.command, {
+    intent: { kind: 'picker', optionId },
+    ...(midSession.delivery ? { delivery: midSession.delivery } : {})
+  })
+  applyDispatchOutcome(ctx, result)
+  ctx.settle(() => ctx.clearModelTruth())
   const snapshot = ctx.publish()
-  ctx.onAgentPicker?.()
+  if (ctx.canCommit()) {
+    ctx.onAgentPicker?.()
+  }
   return { snapshot }
 }
 
@@ -149,23 +148,32 @@ async function dispatchLiveCommand(
     args.optionId === 'model' && typeof args.value === 'string'
       ? (findCatalogModel({ ...ctx.catalog, models }, args.value)?.label ?? args.value)
       : undefined
-  return detectAgentInteraction
-    ? await ctx.dispatchCommand(command, {
-        detectAgentInteraction,
-        expectedChoiceLabel
-      })
-    : await ctx.dispatchCommand(command)
+  return ctx.dispatchCommand(command, {
+    intent: {
+      kind: 'set',
+      optionId: args.optionId,
+      value: args.value,
+      ...(args.modelId
+        ? {
+            modelId: args.modelId,
+            values: flattenNativeChatSessionOptionRecord(record, args.modelId)
+          }
+        : {})
+    },
+    ...(detectAgentInteraction ? { detectAgentInteraction, expectedChoiceLabel } : {})
+  })
 }
 
 function applyDispatchOutcome(
   ctx: SessionOptionApplyContext,
   dispatchResult: NativeChatSessionOptionDispatchResult | void
 ): SessionOptionSetResult | null {
+  assertControlNotBlocked(dispatchResult)
   if (dispatchResult?.outcome === 'rejected') {
     throw new SessionOptionApplyError('modelRejected')
   }
   if (dispatchResult?.outcome === 'unknown') {
-    ctx.clearModelTruth()
+    ctx.settle(() => ctx.clearModelTruth())
     ctx.publish()
     throw new SessionOptionApplyError('modelUnverified')
   }
@@ -225,40 +233,50 @@ async function applySetOption(
     return early
   }
 
-  const record = ctx.getRecord()
-  if (id === 'model' && previousModelId !== value) {
-    record.model = undefined
-    if (ctx.mode === 'live' && typeof value === 'string') {
-      // Model switches can reset destination effort and toggles.
-      delete record.valuesByModel[value]
-    }
-  }
+  return (
+    ctx.settle(() => {
+      const record = ctx.getRecord()
+      if (id === 'model' && previousModelId !== value) {
+        record.model = undefined
+        if (ctx.mode === 'live' && typeof value === 'string') {
+          // Model switches can reset destination effort and toggles.
+          delete record.valuesByModel[value]
+        }
+      }
 
-  if (liveFlipOnly) {
-    // Mid-dispatch reports, typed flips or model changes supersede this target’s baseline.
-    if (trackedModelId(record) !== trackedModelBeforeDispatch) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    if (getTrackedOption(record, previousModelId, id) !== trackedToggle) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    // Keep unconfirmed flip-only state out of durable defaults.
-    ctx.setTrackedValue(id, value, source)
-    return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-  }
+      if (liveFlipOnly) {
+        // Mid-dispatch reports, typed flips or model changes supersede this target’s baseline.
+        if (trackedModelId(record) !== trackedModelBeforeDispatch) {
+          return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+        }
+        if (getTrackedOption(record, previousModelId, id) !== trackedToggle) {
+          return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+        }
+        // Keep unconfirmed flip-only state out of durable defaults.
+        ctx.setTrackedValue(id, value, source)
+        return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+      }
 
-  if (ctx.mode === 'live' && id !== 'model') {
-    // Newer model/option records supersede this dispatch; never persist its value under the new model.
-    if (
-      trackedModelId(record) !== trackedModelBeforeDispatch ||
-      getTrackedOption(record, previousModelId, id) !== trackedBeforeDispatch
-    ) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-  }
+      if (ctx.mode === 'live' && id !== 'model') {
+        // Newer model/option records supersede this dispatch; never persist its value under the new model.
+        if (
+          trackedModelId(record) !== trackedModelBeforeDispatch ||
+          getTrackedOption(record, previousModelId, id) !== trackedBeforeDispatch
+        ) {
+          return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+        }
+      }
 
-  const modelId = ctx.setTrackedValue(id, value, source)
-  return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
+      const modelId = ctx.setTrackedValue(id, value, source)
+      return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
+    }) ??
+    finish(ctx, {
+      modelId: id === 'model' && typeof value === 'string' ? value : previousModelId,
+      optionId: id,
+      value,
+      skipPersist: liveFlipOnly
+    })
+  )
 }
 
 async function applyInvokeAction(
@@ -274,7 +292,7 @@ async function applyInvokeAction(
     if (ctx.mode !== 'live') {
       throw new SessionOptionApplyError('afterStartOnly')
     }
-    return handleAgentPicker(ctx, apply.midSession)
+    return handleAgentPicker(ctx, id, apply.midSession)
   }
   if (!isFlipOnlyMidSession(apply.midSession)) {
     throw new SessionOptionApplyError('valueRequired')
@@ -286,17 +304,27 @@ async function applyInvokeAction(
     throw new SessionOptionApplyError('toggleValueKnown')
   }
   // Inverting an unknown baseline still leaves an unknown absolute value.
-  await ctx.dispatchCommand(apply.midSession.command)
+  const result = await ctx.dispatchCommand(apply.midSession.command, {
+    intent: { kind: 'toggle', optionId: id, ...(modelId ? { modelId } : {}) }
+  })
+  applyDispatchOutcome(ctx, result)
   return finish(ctx)
 }
 
-export function createSessionOptionAppliers(ctx: SessionOptionApplyContext): {
-  setOption: (id: string, value: SessionOptionValue) => Promise<SessionOptionSetResult>
-  invokeAction: (id: string) => Promise<SessionOptionSetResult>
-} {
+export function createSessionOptionAppliers(ctx: SessionOptionApplyContext) {
   const serialize = createSerializedApplyQueue()
   return {
-    setOption: (id, value) => serialize(() => applySetOption(ctx, id, value)),
-    invokeAction: (id) => serialize(() => applyInvokeAction(ctx, id))
+    setOption: (id: string, value: SessionOptionValue) =>
+      serialize(() =>
+        ctx.runOperation
+          ? ctx.runOperation(() => applySetOption(ctx, id, value))
+          : applySetOption(ctx, id, value)
+      ),
+    invokeAction: (id: string) =>
+      serialize(() =>
+        ctx.runOperation
+          ? ctx.runOperation(() => applyInvokeAction(ctx, id))
+          : applyInvokeAction(ctx, id)
+      )
   }
 }

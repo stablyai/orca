@@ -40,6 +40,8 @@ export type MobileSessionTab =
       Partial<
         Pick<
           RuntimeMobileSessionTerminalTab,
+          | 'ptyId'
+          | 'incarnationId'
           | 'parentTabId'
           | 'leafId'
           | 'customTitle'

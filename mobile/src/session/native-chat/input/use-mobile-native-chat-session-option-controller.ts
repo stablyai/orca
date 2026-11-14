@@ -1,10 +1,17 @@
+import type { MobileNativeChatTab } from '../mobile-native-chat-eligibility'
+import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'
+import type { NativeChatSessionOptionOwner } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
+import { readNativeChatSessionOptionSeedBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
+import { createNativeChatSessionOptionOwner } from '../../../../../src/shared/native-chat/input/native-chat-session-option-owner'
+import type { NativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
+import type { MutableRefObject } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionDescriptor,
@@ -13,6 +20,13 @@ import type {
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
+import type { NativeChatSessionOptionDispatchOptions } from '../../../../../src/shared/native-chat/input/native-chat-session-option-dispatch'
+import { sendMobileNativeChatModelControl } from './mobile-native-chat-model-control'
+import { sameNativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite
+} from '../composer/mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,
@@ -26,9 +40,16 @@ function isAuthoritativeListing(catalog: AgentSessionOptionCatalog | null): bool
 export function useMobileNativeChatSessionOptionController(args: {
   client?: RpcClient | null
   activeChatStructured: boolean
+  activeSessionTab?: MobileNativeChatTab | null
+  readSessionTab?: (tabId: string) => MobileSessionTab | null
+  activeHandleRef?: MutableRefObject<string | null>
   activeSessionTabId: string | null
   agent: string | null
   dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
+  onSendError?: (message: string) => void
+  hasSeededLaunchDraft?: () => boolean
+  deviceTokenRef?: MutableRefObject<string | null>
+  terminalInputEnabled?: boolean
   hostId: string
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
@@ -99,14 +120,140 @@ export function useMobileNativeChatSessionOptionController(args: {
     },
     [client]
   )
+  const selectedTab = args.activeSessionTab
+  const optionScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
+  const bindingFor = (
+    tab: MobileNativeChatTab,
+    fallbackAgent: string
+  ): NativeChatSessionOptionBinding => ({
+    agent: tab.agentStatus?.agentType ?? tab.launchAgent ?? fallbackAgent,
+    connectionId: hostId,
+    worktreeId,
+    terminalHandle: tab.terminal ?? tab.agentStatus?.terminalHandle,
+    ptyId: tab.ptyId,
+    incarnationId: tab.incarnationId,
+    providerSession: tab.agentStatus?.providerSession
+  })
+  const candidate =
+    agent && selectedTab?.type === 'terminal' ? { ...bindingFor(selectedTab, agent), agent } : null
+  const [heldOwner, setHeldOwner] = useState<{
+    scopeKey: string | null
+    owner: NativeChatSessionOptionOwner
+  } | null>(null)
+  let selectedOwner = heldOwner
+  if (!args.readSessionTab || !activeSessionTabId || !agent || !candidate) {
+    selectedOwner = null
+  } else if (
+    !heldOwner ||
+    heldOwner.scopeKey !== optionScopeKey ||
+    !sameNativeChatSessionOptionBinding(heldOwner.owner.getSnapshot(), candidate)
+  ) {
+    selectedOwner = {
+      scopeKey: optionScopeKey,
+      owner: createNativeChatSessionOptionOwner(
+        optionScopeKey
+          ? readNativeChatSessionOptionSeedBinding(optionScopeKey, candidate)
+          : candidate,
+        () => {
+          const tab = args.readSessionTab?.(activeSessionTabId)
+          return tab?.type === 'terminal' ? bindingFor(tab, agent) : null
+        }
+      )
+    }
+  }
+  if (selectedOwner !== heldOwner) {
+    setHeldOwner(selectedOwner)
+  }
+  const owner = selectedOwner?.owner
+  useLayoutEffect(() => {
+    if (candidate) {
+      owner?.captureBinding(candidate)
+    }
+  }, [owner, candidate])
+  const dispatchOptionCommand = useCallback(
+    async (command: string, options?: NativeChatSessionOptionDispatchOptions) => {
+      if (args.terminalInputEnabled === false) {
+        return 'rejected' as const
+      }
+      const binding = owner?.currentBinding()
+      if (owner && !binding) {
+        return 'rejected' as const
+      }
+      const clientId = args.deviceTokenRef?.current
+      if (
+        client &&
+        owner &&
+        binding?.terminalHandle &&
+        clientId &&
+        options?.intent &&
+        !args.hasSeededLaunchDraft?.()
+      ) {
+        if (!acquireMobileNativeChatTerminalWrite(binding.terminalHandle)) {
+          return 'rejected' as const
+        }
+        let result
+        try {
+          result = await sendMobileNativeChatModelControl({
+            client,
+            terminal: binding.terminalHandle,
+            incarnationId: binding.incarnationId,
+            clientId,
+            control: {
+              agent: binding.agent,
+              intent: options.intent,
+              observation: {
+                detectAgentInteraction: options.detectAgentInteraction,
+                expectedChoiceLabel: options.expectedChoiceLabel
+              }
+            },
+            isCurrent: () => {
+              const current = owner.currentBinding()
+              return (
+                current !== null &&
+                sameNativeChatSessionOptionBinding(binding, current) &&
+                (!args.activeHandleRef || args.activeHandleRef.current === binding.terminalHandle)
+              )
+            }
+          })
+        } finally {
+          releaseMobileNativeChatTerminalWrite(binding.terminalHandle)
+        }
+        if (result) {
+          return result
+        }
+      }
+      return dispatchCommand(command)
+    },
+    [
+      client,
+      owner,
+      args.hasSeededLaunchDraft,
+      args.activeHandleRef,
+      args.deviceTokenRef,
+      args.terminalInputEnabled,
+      dispatchCommand
+    ]
+  )
   const sessionOptions = useMobileNativeChatSessionOptions({
+    owner,
+    isDispatchTargetCurrent: () => {
+      if (!owner) {
+        return true
+      }
+      const current = owner.currentBinding()
+      return (
+        current !== null &&
+        (!args.activeHandleRef || args.activeHandleRef.current === current.terminalHandle)
+      )
+    },
     discoveredModels,
     modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
-    scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
+    scopeKey: optionScopeKey,
     reportedModel,
-    dispatchCommand,
+    dispatchCommand: dispatchOptionCommand,
     onAgentPicker: handleAgentPicker,
+    onControlError: args.onSendError,
     writeSettings
   })
   // Kept with nothing to pick (OMP lists no models): the "/" menu reads the chat's commands from it.

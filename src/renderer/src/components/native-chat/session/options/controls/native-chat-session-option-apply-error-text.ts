@@ -5,7 +5,17 @@ import {
   type SessionOptionApplyFailureCode
 } from '../../../../../../../shared/native-chat/input/native-chat-session-option-apply-failure'
 
-const COPY: Record<SessionOptionApplyFailureCode, (id: string) => string> = {
+const COPY: Record<SessionOptionApplyFailureCode, (id: string, agent: string) => string> = {
+  controlUnavailable: (_id, agent) =>
+    translate(
+      'components.native-chat.sessionOptionErrors.controlUnavailable',
+      EN.controlUnavailable,
+      { agent }
+    ),
+  controlNotSent: (_id, agent) =>
+    translate('components.native-chat.sessionOptionErrors.controlNotSent', EN.controlNotSent, {
+      agent
+    }),
   startOnly: () => translate('components.native-chat.sessionOptionErrors.startOnly', EN.startOnly),
   modelRejected: () =>
     translate('components.native-chat.sessionOptionErrors.modelRejected', EN.modelRejected),
@@ -31,5 +41,5 @@ const COPY: Record<SessionOptionApplyFailureCode, (id: string) => string> = {
 }
 
 export function sessionOptionApplyErrorText(error: SessionOptionApplyError): string {
-  return COPY[error.code](error.optionId ?? '')
+  return COPY[error.code](error.optionId ?? '', error.agent ?? '')
 }

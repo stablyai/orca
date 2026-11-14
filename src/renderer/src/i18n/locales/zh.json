@@ -19719,6 +19719,8 @@
         "commandRejected": "终端未接受该命令"
       },
       "sessionOptionErrors": {
+        "controlUnavailable": "{{agent}} 无法在此会话中通过聊天更改选项。",
+        "controlNotSent": "{{agent}} 未收到选项更改。请重试。",
         "startOnly": "此选项只能在会话启动时设置",
         "modelRejected": "Claude 保留了当前模型",
         "modelUnverified": "无法验证模型变更，请打开终端检查",

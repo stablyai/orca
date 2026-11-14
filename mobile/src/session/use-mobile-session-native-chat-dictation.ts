@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useMobileSessionTabReader } from './use-mobile-session-tab-reader'
 import { useMobileSessionDictation } from './use-mobile-session-dictation'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
@@ -46,6 +47,7 @@ export function useMobileSessionNativeChatDictation(
     activeHandle,
     connected: connState === 'connected'
   })
+  const { readSessionTab } = useMobileSessionTabReader(hostId, worktreeId, scope.sessionTabsRef)
   const nativeChatController = useMobileNativeChatController({
     client,
     pairedHostClient,
@@ -53,6 +55,7 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    readSessionTab,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,

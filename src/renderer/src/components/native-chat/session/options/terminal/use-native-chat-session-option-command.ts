@@ -19,6 +19,7 @@ import {
 } from './claude-model-switch-confirmation'
 import type { NativeChatSessionOptionDispatchCommand } from '../../../../../../../shared/native-chat/input/native-chat-session-option-dispatch'
 import { translate } from '@/i18n/i18n'
+import { sendNativeChatHostModelControl } from './native-chat-host-model-control'
 
 export function useNativeChatSessionOptionCommand(args: {
   agent: AgentType
@@ -26,8 +27,10 @@ export function useNativeChatSessionOptionCommand(args: {
   onSlashCommand?: (command: string) => void
   onSubmitted?: () => void
   resolveTarget: () => NativeChatResolvedTarget | null
+  hasInjectedLaunchDraft?: boolean
 }): { dispatch: NativeChatSessionOptionDispatchCommand; isDispatching: boolean } {
-  const { agent, disabled, onSlashCommand, onSubmitted, resolveTarget } = args
+  const { agent, disabled, onSlashCommand, onSubmitted, resolveTarget, hasInjectedLaunchDraft } =
+    args
   const mountedRef = useRef(true)
   const activeObserversRef = useRef(new Set<ClaudeModelSwitchConfirmationObserver>())
   const activeSendsRef = useRef(new Set<AbortController>())
@@ -62,12 +65,43 @@ export function useNativeChatSessionOptionCommand(args: {
           )
         )
       }
-      onSubmitted?.()
       const sendController = new AbortController()
       activeSendsRef.current.add(sendController)
       setIsDispatching(true)
       let observer: ClaudeModelSwitchConfirmationObserver | null = null
       try {
+        if (options?.intent && !hasInjectedLaunchDraft) {
+          const result = await sendNativeChatHostModelControl({
+            ...target,
+            control: {
+              agent,
+              intent: options.intent,
+              observation: {
+                detectAgentInteraction: options.detectAgentInteraction,
+                expectedChoiceLabel: options.expectedChoiceLabel
+              }
+            },
+            isCurrent: () => mountedRef.current && !sendController.signal.aborted
+          })
+          if (result) {
+            if (
+              mountedRef.current &&
+              !sendController.signal.aborted &&
+              (result.outcome === 'applied' ||
+                result.outcome === 'dispatched' ||
+                result.outcome === 'picker-opened')
+            ) {
+              onSubmitted?.()
+              onSlashCommand?.(command.trim())
+              emitNativeChatMessageSent({
+                agent,
+                runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+              })
+            }
+            return result
+          }
+        }
+        onSubmitted?.()
         // Drain delayed chat Enter/Ctrl+U before observing so they cannot answer the model dialog or hide confirmation markers.
         cancelNativeChatPtySends(target.ptyId)
         await waitForNativeChatPtyIdle(target.ptyId)
@@ -129,7 +163,7 @@ export function useNativeChatSessionOptionCommand(args: {
         }
       }
     },
-    [agent, disabled, onSlashCommand, onSubmitted, resolveTarget]
+    [agent, disabled, onSlashCommand, onSubmitted, resolveTarget, hasInjectedLaunchDraft]
   )
 
   return { dispatch, isDispatching }

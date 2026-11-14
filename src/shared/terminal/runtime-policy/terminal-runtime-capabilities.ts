@@ -13,6 +13,7 @@ export const TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY = 'terminal.prompt-deli
 export const TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY =
   'terminal.chat-prompt-expiry.v1' as const
 export const TERMINAL_CHAT_PROMPT_RUNTIME_CAPABILITY = 'terminal.chat-prompt.v1' as const
+export const TERMINAL_MODEL_CONTROL_RUNTIME_CAPABILITY = 'terminal.model-control.v1' as const
 // Why: paired clients may unmount xterm only when the host can return a
 // bounded, sequenced scrollback snapshot for lossless reveal.
 export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parking.v1' as const
@@ -43,6 +44,7 @@ export const TERMINAL_RUNTIME_CAPABILITIES = [
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_CHAT_PROMPT_RUNTIME_CAPABILITY,
+  TERMINAL_MODEL_CONTROL_RUNTIME_CAPABILITY,
   TERMINAL_CHAT_PROMPT_EXPIRY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY,

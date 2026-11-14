@@ -163,6 +163,7 @@ export function buildAgentStatusLiveEntry(
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
+  const sameAgent = existing?.agentType === identity.agentType
   // Only the host names conversations. Its row naming the conversation is authoritative, a missing
   // stamp included (a settled miss clears a pending null); an ID-less local update keeps the
   // id only for the very same agent, owner and provider key (locator included).
@@ -193,8 +194,7 @@ export function buildAgentStatusLiveEntry(
     ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
     ...turnEnd,
     agentType: identity.agentType,
-    model:
-      payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
+    model: payload.model ?? (!providerSessionChanged && sameAgent ? existing?.model : undefined),
     ...(payload.modelSwitchCommand ? { modelSwitchCommand: payload.modelSwitchCommand } : {}),
     paneKey,
     terminalHandle: statusTerminalHandle,
