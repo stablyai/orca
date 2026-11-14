@@ -211,7 +211,7 @@ it('rechecks unsaved editor text before the Archive failure toast waives removal
   await retry?.()
   expect(folderWorkspacesDelete).toHaveBeenLastCalledWith({
     folderWorkspaceId: 'folder-workspace-1',
-    runHooks: false,
+    runHooks: true,
     allowFailedArchiveHook: true
   })
   expect(store.getState().folderWorkspaces).toEqual([])
