@@ -90,6 +90,14 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
         '--outcome is only valid with --type worker_done.'
       )
     }
+    const rawBody = flags.get('body')
+    if (type === 'worker_done' && typeof rawBody === 'string' && rawBody.trim() === '') {
+      // `--body "$(cat missing-file)"` expands to ''; completing with it would drop the report.
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'worker_done --body is empty. Pass a nonempty completion summary, or omit --body.'
+      )
+    }
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
       !getOptionalStringFlag(flags, 'from') &&
