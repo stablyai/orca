@@ -103,9 +103,9 @@ it.each(['dedicated', 'arguments'] as const)(
       ok: true,
       tokens: [
         'antigravity',
-        '--dangerously-skip-permissions',
         '--model',
         'gemini-3.8-flash',
+        '--dangerously-skip-permissions',
         '--add-dir',
         'docs'
       ]
@@ -136,9 +136,9 @@ it.each(['dedicated', 'arguments'] as const)(
       ok: true,
       tokens: [
         'antigravity',
-        '--dangerously-skip-permissions',
         '--model',
         'gemini-3.8-flash',
+        '--dangerously-skip-permissions',
         '--add-dir',
         'docs'
       ]
@@ -215,7 +215,7 @@ it.each(['button', 'enter'] as const)(
     expect(launch.mock.lastCall![0]).toMatchObject({ agent: 'antigravity', kind: 'cli' })
     expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
       ok: true,
-      tokens: ['antigravity', '--dangerously-skip-permissions', '--model', 'gemini-3.8-flash-low']
+      tokens: ['antigravity', '--model', 'gemini-3.8-flash-low', '--dangerously-skip-permissions']
     })
     fireEvent.keyDown(
       document.querySelector<HTMLElement>(

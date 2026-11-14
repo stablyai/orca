@@ -55,7 +55,7 @@ it('keeps terminal effort discovery separate from Chat and preserves a saved pai
     kind: 'choice',
     patch: { options: { effort: '' } }
   })
-  expect(agentPickerPanelArguments(entry, cleared).choices.model).toBe('gemini-3.8-flash')
+  expect(agentPickerPanelArguments(entry, cleared).choices.model).toBe('gemini-3.8-flash-medium')
   expect(agentPickerPanelArguments(entry, cleared).choices.options?.effort).toBeUndefined()
   const removed = applyAgentPickerEdit(entry, draft, { kind: 'remove-chip', key: 'effort' })
   expect(agentPickerPanelArguments(entry, removed).choices.model).toBe('gemini-3.8-flash-medium')
