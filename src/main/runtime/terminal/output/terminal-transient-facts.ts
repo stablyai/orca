@@ -22,6 +22,7 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
+  protected abstract wakeInterestedTerminalDelivery(ptyId: string): void
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -63,6 +64,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     if (pty) {
       pty.tailPendingAnsi = ''
       pty.commandPaint = undefined
+      pty.lastExplicitAgentStatus = null
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''
@@ -71,6 +73,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
+    this.wakeInterestedTerminalDelivery(ptyId)
   }
 
   /** Record one derived side-effect fact: batched per chunk while applying

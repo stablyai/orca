@@ -11,6 +11,7 @@ import { isShellProcess } from '../../../shared/agent-status/process/shell-proce
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { isRetiredPtyMaster } from './node-pty-master-fd-retirement'
 import { readPtsName } from './node-pty-pts-name'
+import { foregroundProcessInputMode } from './foreground-process-input-mode'
 import {
   normalizePtyTty,
   readTerminalTty,
@@ -173,11 +174,26 @@ export async function observePtyForeground(
       continue
     }
     const sample = resolvePtyForegroundMembers(rows, before)
+    const inputMode =
+      sample.verdict === 'observed' && sample.foregroundKind === 'non-shell'
+        ? await foregroundProcessInputMode(rows, before, deadlineMs)
+        : undefined
+    if (
+      !alive() ||
+      Date.now() > deadlineMs ||
+      (group !== undefined && readPtyForegroundGroup(proc) !== before)
+    ) {
+      return unknown('session_changed')
+    }
     return {
       ...sample,
       source: group === undefined ? 'posix-process-table' : 'pty-master',
       ...(sample.verdict === 'observed'
-        ? { tty: normalizePtyTty(tty) ?? tty, foregroundPgid: before }
+        ? {
+            tty: normalizePtyTty(tty) ?? tty,
+            foregroundPgid: before,
+            ...(inputMode ? { inputMode, processName: 'claude' } : {})
+          }
         : {})
     }
   }

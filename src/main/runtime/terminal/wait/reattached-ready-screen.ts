@@ -1,3 +1,4 @@
+import type { TerminalContentOrigin } from '../../../../shared/terminal/output/terminal-content-origin'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -18,7 +19,8 @@ type ReattachedReadyScreen = { kind: 'idle' } | { kind: 'recheck'; afterMs: numb
 function readReattachedReadyScreen(
   agent: TerminalAgent | null,
   screen: RuledScreen | null,
-  outputClockAt: number | null
+  outputClockAt: number | null,
+  contentScope?: TerminalContentOrigin
 ): ReattachedReadyScreen {
   if (!isTuiAgent(agent) || !readsTrustedScreen(agent)) {
     return null
@@ -26,7 +28,10 @@ function readReattachedReadyScreen(
   if (!screen) {
     return { kind: 'recheck', afterMs: TUI_IDLE_QUIESCENCE_MS }
   }
-  const verdict = evaluateAgentStateRules(agent, { readScreenLines: () => screen.lines })
+  const verdict = evaluateAgentStateRules(agent, {
+    readScreenLines: () => screen.lines,
+    contentScope
+  })
   if (verdict?.state !== 'idle' || verdict.strength !== 'strong') {
     return null
   }
@@ -43,6 +48,7 @@ export type ReattachedReadyScreenRestore = {
   agent: TerminalAgent
   readScreen: () => RuledScreen | null
   readOutputClockAt: () => number | null
+  readContentScope?: () => TerminalContentOrigin | undefined
   /** False once a respawn, exit or live status decides instead. */
   isCurrent: () => boolean
   applyIdle: () => void
@@ -56,7 +62,8 @@ export function restoreFromReattachedReadyScreen(
   const ready = readReattachedReadyScreen(
     restore.agent,
     restore.readScreen(),
-    restore.readOutputClockAt()
+    restore.readOutputClockAt(),
+    restore.readContentScope?.()
   )
   if (ready?.kind === 'idle') {
     restore.applyIdle()

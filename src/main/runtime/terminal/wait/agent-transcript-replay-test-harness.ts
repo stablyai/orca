@@ -7,6 +7,7 @@ import { appendNormalizedToTailBuffer } from '../output/tail/terminal-tail-buffe
 import { buildPreview } from '../output/tail/terminal-tail-state'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { visibleNonBlankTerminalLines } from '../output/tail/terminal-tail-read'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 const DEFAULT_CHUNK_CHARS = 64
 
@@ -110,18 +111,26 @@ export async function finalReplayFrame(
   return last
 }
 
-/** terminal read --screen projection with composer draft blanked. */
-export async function finalReadProjection(
+/** A provider's current frame, without replaying the recording into the runtime. */
+export async function finalProviderSnapshot(
   name: string,
   cols: number,
   rows: number
-): Promise<{ lines: string[]; draft?: string }> {
+): Promise<PtyProviderBufferSnapshot> {
   const emulator = new HeadlessEmulator({ cols, rows })
   try {
     for (const chunk of splitTranscriptIntoChunks(readRuntimeFixture(name))) {
       await emulator.write(chunk)
     }
-    return projectTerminalVisibleLines(emulator)
+    const snapshot = emulator.getSnapshot({ scrollbackRows: 0 })
+    return {
+      data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
+      cols: snapshot.cols,
+      rows: snapshot.rows,
+      seq: 0,
+      source: 'headless',
+      alternateScreen: emulator.isAlternateScreen
+    }
   } finally {
     emulator.dispose()
   }

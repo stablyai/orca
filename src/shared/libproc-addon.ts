@@ -44,6 +44,56 @@ export type LibprocAddon = {
    * Absent from a #35987 pty.node, which still reads the table: cwd and path then come from lsof. */
   readProcessCwd?: (pid: number) => Promise<string | null>
   readProcessPath?: (pid: number) => Promise<string | null>
+  readProcessArgv?: (pid: number) => Promise<LibprocProcessArgv | null>
+}
+
+export type LibprocProcessArgv = {
+  pid: number
+  pgid: number
+  tpgid: number
+  executable: string
+  argv: string[]
+}
+
+let outstandingArgvReads = 0
+
+/** Exact selected-process argv; older addons and a saturated worker pool supply no capability. */
+export async function readLibprocProcessArgv(
+  pid: number,
+  group: number,
+  timeoutMs: number
+): Promise<LibprocProcessArgv | null> {
+  const read = loadLibprocAddon()?.readProcessArgv
+  if (!read || outstandingArgvReads >= 2 || timeoutMs <= 0) {
+    return null
+  }
+  outstandingArgvReads++
+  let submitted = false
+  try {
+    const pending = read(pid)
+    submitted = true
+    pending.then(
+      () => {
+        outstandingArgvReads--
+      },
+      () => {
+        outstandingArgvReads--
+      }
+    )
+    const result = await beforeDeadline(pending, monotonicNow() + timeoutMs)
+    return result !== DEADLINE_PASSED &&
+      result?.pid === pid &&
+      result.pgid === group &&
+      result.tpgid === group
+      ? result
+      : null
+  } catch {
+    return null
+  } finally {
+    if (!submitted) {
+      outstandingArgvReads--
+    }
+  }
 }
 
 const requireFromHere = createRequire(__filename)

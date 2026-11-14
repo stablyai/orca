@@ -42,6 +42,8 @@ export type TerminalTitleFactMeta = {
 export type AgentIdleEdgeMeta = TerminalTitleFactMeta & { status?: AgentIdleStatus }
 
 type TerminalTitleTrackerChunkOptions = {
+  initialAlternateScreen?: boolean
+  onObservedTitle?: (title: string, end: number) => void
   titleScanData?: string
   mode2031PendingSubscribe?: boolean
   /** The chunk's OSC 7501 activity changes, offsets in `data`; applied in byte order with its titles. */
@@ -93,7 +95,7 @@ export type TerminalTitleTracker = {
 
 export function createTerminalTitleTracker(
   callbacks: TerminalTitleTrackerCallbacks,
-  options: { initialTitle?: string } = {}
+  options: { initialTitle?: string; qualifyCommandScreen?: boolean } = {}
 ): TerminalTitleTracker {
   const {
     onTitle,
@@ -114,7 +116,9 @@ export function createTerminalTitleTracker(
     onCommandFinished || onCommandStarted
       ? createOsc133CommandFinishedScanner(
           (exitCode) => onCommandFinished?.(exitCode),
-          onCommandStarted ? () => onCommandStarted() : undefined
+          options.qualifyCommandScreen ? undefined : onCommandStarted,
+          options.qualifyCommandScreen ? onCommandStarted : undefined,
+          { qualifyScreen: options.qualifyCommandScreen }
         )
       : null
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
@@ -204,6 +208,7 @@ export function createTerminalTitleTracker(
       clearStaleTitleTimer()
       titles.forEach((entry, index) => {
         applyActivityBefore(index)
+        options.onObservedTitle?.(entry.title, entry.end - tailLength)
         applyObservedTitle(entry.title)
       })
     }
@@ -234,7 +239,7 @@ export function createTerminalTitleTracker(
     }
     // Fact order (matches renderer drain): titles → command-finished → pr-link → 2031-subscribe → bell; bell last.
     if (!transientFactScanningSuppressed) {
-      commandFinishedScanner?.scan(data)
+      commandFinishedScanner?.scan(data, options.initialAlternateScreen)
       if (prLinkDetector) {
         for (const link of prLinkDetector(data)) {
           onPrLink?.(link)

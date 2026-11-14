@@ -33,6 +33,7 @@ async function runRereads(): Promise<void> {
 function watchedLaunch(options: {
   foreground?: () => LaunchedAgentForeground | Promise<LaunchedAgentForeground>
   replay?: string
+  alternateScreen?: boolean
 }) {
   let listener: (data: string) => void = () => {}
   let recent = options.replay ?? ''
@@ -43,7 +44,8 @@ function watchedLaunch(options: {
       listener = next
       return unsubscribe
     },
-    readRecentTerminalOutput: () => recent
+    readRecentTerminalOutput: () => recent,
+    readKnownTerminalAlternateScreen: () => options.alternateScreen
   }
   let finishWait: (value: string) => void = () => {}
   let waitSignal: AbortSignal | undefined
@@ -110,6 +112,16 @@ describe('a launched agent exiting during readiness', () => {
     await runRereads()
 
     expect(launch.settled).not.toHaveBeenCalled()
+  })
+
+  it('seeds only live application markers from the existing screen context', async () => {
+    const launch = watchedLaunch({ replay: ZSH_RUNS_LAUNCH_LINE, alternateScreen: true })
+    launch.emit('\x1b]133;B\x07\x1b]133;C\x07answer\x1b]133;D;0\x07')
+    await runRereads()
+    expect(launch.settled).not.toHaveBeenCalled()
+    launch.emit(`\x1b[?1049l${ZSH_PROMPT_AFTER_EXIT}`)
+    await runRereads()
+    await expect(launch.result).rejects.toThrow("The agent's launch command exited")
   })
 })
 

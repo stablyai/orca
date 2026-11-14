@@ -22,6 +22,13 @@ import {
 } from './launched-agent-exit-watch'
 import { showsHoldAnchor } from '../../agent-state-rules/agent-state-text-anchors'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import {
+  joinedTerminalOrigins,
+  terminalSupportQuery,
+  lowercaseTerminalSupport,
+  type TerminalContentOrigin,
+  type TerminalSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
 
 export type LaunchedAgentReadinessLane = 'composer-marker' | 'tui-idle'
 
@@ -119,15 +126,21 @@ function waitWatchingForAgentExit(
 /** Startup dialogs and hold anchors veto signals; Codex's provisional loading header discards input. */
 export function readFreshComposerHold(
   waitText: string,
-  screenLines: readonly string[] | null
+  screenLines: readonly string[] | null,
+  support?: TerminalSupportQuery,
+  scope?: TerminalContentOrigin
 ): 'dialog' | 'starting' | null {
+  const screen = screenLines ? joinedTerminalOrigins(screenLines) : null
   if (
-    detectTerminalWaitBlockedReason(waitText) !== null ||
-    (screenLines !== null && detectTerminalWaitBlockedReason(screenLines.join('\n')) !== null)
+    detectTerminalWaitBlockedReason(waitText, support) !== null ||
+    (screen !== null &&
+      detectTerminalWaitBlockedReason(screen.text, terminalSupportQuery(screen.origins, scope)) !==
+        null)
   ) {
     return 'dialog'
   }
-  return showsHoldAnchor(waitText.toLowerCase()) ? 'starting' : null
+  const lower = lowercaseTerminalSupport(waitText, support)
+  return showsHoldAnchor(lower.text, lower.query) ? 'starting' : null
 }
 
 /** Workers wait for proven markers or tui-idle; their pre-Enter render wait avoids the desktop paste's later cue. */

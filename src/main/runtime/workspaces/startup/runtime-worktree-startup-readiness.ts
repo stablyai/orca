@@ -27,6 +27,8 @@ const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
 const DEADLINE_SETTLE_CHECK_MS = 2_000
 
 export type WorktreeStartupReadinessHost = {
+  readInputMode?: (ptyId: string) => 'noninteractive' | undefined
+  watchInputMode?: (ptyId: string, changed: () => void) => () => void
   getPtyId: (handle: string) => string | null
   getForegroundProcess: (ptyId: string) => Promise<string | null>
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
@@ -42,7 +44,7 @@ export function pasteWorktreeStartupDraftWhenReady(
 ): void {
   void waitForWorktreeStartupDraft(host, handle, draft.agent)
     .then((ptyId) => {
-      if (!ptyId) {
+      if (!ptyId || host.readInputMode?.(ptyId) === 'noninteractive') {
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
@@ -68,6 +70,9 @@ export async function deliverStartupFollowupPrompt(
   const { signal } = options
   try {
     const ptyId = host.getPtyId(handle)
+    if (ptyId && host.readInputMode?.(ptyId) === 'noninteractive') {
+      return false
+    }
     // Where no read proves the agent in front (Windows), its process must be seen first: a lone shell's prompt also reads as ready.
     if (ptyId && runtime.launchedAgentHostProvesAgent?.(ptyId) === false) {
       if (!(await waitForWorktreeStartupFollowup(host, handle, agent, signal))) {
@@ -78,6 +83,9 @@ export async function deliverStartupFollowupPrompt(
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
+        if (host.readInputMode?.(ptyId) === 'noninteractive') {
+          return false
+        }
         host.write(ptyId, `${prompt}\r`, 'launch')
         return true
       }
@@ -151,7 +159,7 @@ export function waitForWorktreeStartupDraft(
   options: StartupDraftReadinessOptions = {}
 ): Promise<string | null> {
   const ptyId = host.getPtyId(handle)
-  if (!ptyId || options.signal?.aborted) {
+  if (!ptyId || options.signal?.aborted || host.readInputMode?.(ptyId) === 'noninteractive') {
     return Promise.resolve(null)
   }
   const signal = resolvePasteReadySignal(TUI_AGENT_CONFIG[agent], options.submit === true)
@@ -166,6 +174,7 @@ export function waitForWorktreeStartupDraft(
     let hardTimer: NodeJS.Timeout | null = null
     let deadlineCheckTimer: NodeJS.Timeout | null = null
     let unsubscribe: (() => void) | null = null
+    let stopInputMode: (() => void) | undefined
     // A check begun before a shell handoff cannot settle after it.
     let handoffs = 0
     let handoffCarry = ''
@@ -189,6 +198,7 @@ export function waitForWorktreeStartupDraft(
         clearTimeout(deadlineCheckTimer)
       }
       unsubscribe?.()
+      stopInputMode?.()
       options.signal?.removeEventListener('abort', onAbort)
       resolve(value)
     }
@@ -280,6 +290,11 @@ export function waitForWorktreeStartupDraft(
     }
     options.signal?.addEventListener('abort', onAbort)
     unsubscribe = host.subscribeToData(ptyId, observe)
+    stopInputMode = host.watchInputMode?.(ptyId, () => {
+      if (host.readInputMode?.(ptyId) === 'noninteractive') {
+        finish(null)
+      }
+    })
     // A deadline during submit grace gets one final settle check.
     const onDeadline = (): void => {
       if (!graceTimer && !graceElapsed) {

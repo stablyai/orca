@@ -16,7 +16,7 @@ import type {
 } from '../records/runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
-import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
+import type { createTerminalAgentStatusProcessor } from '../../../../shared/program-status/terminal-agent-status-processor'
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -145,7 +145,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   // OSC 9999 status frames can span PTY chunks.
   protected agentStatusOscProcessorsByPtyId = new Map<
     string,
-    ReturnType<typeof createAgentStatusOscProcessor>
+    ReturnType<typeof createTerminalAgentStatusProcessor>
   >()
 
   // PTYs whose last OSC 7501 facet dies with the program; their exit must clear it.

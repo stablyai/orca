@@ -3,12 +3,16 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
+import {
+  joinedTerminalOrigins,
+  terminalSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { createTerminalWaitTailReader } from './terminal-wait-tail-state'
 import { settlesForMidTurnInput } from './terminal-delivery-refusal'
 import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
@@ -42,7 +46,7 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   /** Whether the pane's running command has painted anything of its own. */
   hasCommandPainted(ptyId: string): boolean
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
-  readVisibleScreen(ptyId: string): Promise<string | null> | null
+  readVisibleScreen(ptyId: string): Promise<string | readonly string[] | null> | null
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
@@ -52,6 +56,7 @@ type IdlePollEntry = {
   foregroundPollInFlight: boolean
   screenReadInFlight: boolean
   recheckTimer?: ReturnType<typeof setTimeout>
+  stopStartupObservation?: () => void
 }
 
 /** One reading of a waiter's pane, and the results it would settle with. */
@@ -73,8 +78,16 @@ export class RuntimeTerminalIdlePolls {
 
   /** `verdict` is what the caller just evaluated; weak ready is checked at once, not a sweep later. */
   start(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord, verdict?: TuiIdleVerdict): void {
-    const entry = { waiter, pty, foregroundPollInFlight: false, screenReadInFlight: false }
+    const entry: IdlePollEntry = {
+      waiter,
+      pty,
+      foregroundPollInFlight: false,
+      screenReadInFlight: false
+    }
     this.entries.add(entry)
+    entry.stopStartupObservation = this.deps.startupObservation?.watch(pty.ptyId, () => {
+      void this.tick(entry)
+    })
     entry.waiter.cancelIdlePoll = () => this.stop(entry)
     // Share one sweep timer so idle main wakeups do not scale with waiter count.
     if (!this.sweepTimer) {
@@ -113,13 +126,14 @@ export class RuntimeTerminalIdlePolls {
     }
   }
 
-  private sample(entry: IdlePollEntry): IdlePollSample {
+  private sample(
+    entry: IdlePollEntry,
+    tail: ReturnType<typeof createTerminalWaitTailReader>
+  ): IdlePollSample {
     const { handle } = entry.waiter
     // PTY records mutate in place, so this captured reference remains live.
     const { pty } = entry
-    const readWaitText = () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    const evidence = ptyTuiIdleEvidence(this.deps, pty, readWaitText)
+    const evidence = ptyTuiIdleEvidence(this.deps, pty, tail.readText, tail.readBlockedReason)
     const verdict = evaluateTuiIdle({ ...evidence, launchReadiness: entry.waiter.launchReadiness })
     return {
       verdict,
@@ -141,8 +155,12 @@ export class RuntimeTerminalIdlePolls {
     }
     let startedForegroundPoll = false
     try {
-      const sample = this.sample(entry)
-      const { verdict, ptyId } = sample
+      this.deps.startupObservation?.refresh(entry.pty.ptyId)
+      const tail = createTerminalWaitTailReader(entry.pty)
+      let sample = this.sample(entry, tail)
+      let { verdict } = sample
+      const { ptyId } = sample
+      const isCurrent = this.deps.captureGeneration?.(ptyId) ?? (() => true)
       if (verdict.kind === 'blocked') {
         this.settle(entry, sample.blocked(verdict.reason))
         return
@@ -160,8 +178,22 @@ export class RuntimeTerminalIdlePolls {
       const screenRead = this.readScreenBlockedReason(entry, ptyId)
       // Why await only a real read: a pane with no screen model keeps its tick synchronous.
       const screenBlockedReason = screenRead ? await screenRead : null
-      if (!this.entries.has(entry)) {
+      if (!this.entries.has(entry) || !isCurrent()) {
         return
+      }
+      if (screenRead) {
+        sample = this.sample(entry, tail)
+        verdict = sample.verdict
+        if (verdict.kind === 'ready-strong' || verdict.kind === 'blocked') {
+          this.settle(
+            entry,
+            verdict.kind === 'blocked' ? sample.blocked(verdict.reason) : sample.ready()
+          )
+          return
+        }
+        if (verdict.kind === 'working') {
+          return
+        }
       }
       if (screenBlockedReason) {
         this.settle(entry, sample.blocked(screenBlockedReason))
@@ -172,9 +204,12 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       const lane = verdict.quietForeground
+      if (lane === 'closed') {
+        return
+      }
       // Why quiet before the read too: a streaming or not-yet-painted pane cannot settle, so it
       // must not pay a process inspection every tick for a whole turn.
-      if (lane !== 'closed' && !entry.foregroundPollInFlight && sample.isQuiet(lane)) {
+      if (!entry.foregroundPollInFlight && sample.isQuiet(lane)) {
         const foregroundRead = this.deps.getForegroundProcess(ptyId)
         if (!foregroundRead) {
           return
@@ -182,7 +217,21 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
-        if (foreground && !isShellProcess(foreground) && sample.isQuiet(lane)) {
+        if (!this.entries.has(entry) || !isCurrent()) {
+          return
+        }
+        sample = this.sample(entry, tail)
+        const latest = sample.verdict
+        if (latest.kind === 'blocked') {
+          this.settle(entry, sample.blocked(latest.reason))
+        } else if (
+          latest.kind === 'ready-strong' ||
+          (latest.kind === 'pending' &&
+            latest.quietForeground !== 'closed' &&
+            foreground &&
+            !isShellProcess(foreground) &&
+            sample.isQuiet(latest.quietForeground))
+        ) {
           this.settle(entry, sample.ready())
         }
       }
@@ -201,16 +250,36 @@ export class RuntimeTerminalIdlePolls {
     entry: IdlePollEntry,
     ptyId: string
   ): Promise<RuntimeTerminalWaitBlockedReason | null> | null {
+    if (this.noninteractive(ptyId)) {
+      return null
+    }
     const screenRead = this.deps.readVisibleScreen(ptyId)
     if (!screenRead) {
       return null
     }
     entry.screenReadInFlight = true
     return screenRead
-      .then((screen) => (screen ? detectTerminalWaitBlockedReason(screen) : null))
+      .then((screen) => {
+        if (!screen || this.noninteractive(ptyId)) {
+          return null
+        }
+        if (typeof screen === 'string') {
+          return detectTerminalWaitBlockedReason(screen)
+        }
+        const joined = joinedTerminalOrigins(screen)
+        return detectTerminalWaitBlockedReason(
+          joined.text,
+          terminalSupportQuery(joined.origins, entry.pty.commandPaint?.contentOrigin)
+        )
+      })
       .finally(() => {
         entry.screenReadInFlight = false
       })
+  }
+
+  private noninteractive(ptyId: string): boolean {
+    const observed = this.deps.startupObservation?.read(ptyId)
+    return observed?.kind === 'agent' && observed.inputMode === 'noninteractive'
   }
 
   private settle(entry: IdlePollEntry, result: RuntimeTerminalWait): void {
@@ -222,6 +291,7 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.delete(entry)) {
       return
     }
+    entry.stopStartupObservation?.()
     entry.waiter.cancelIdlePoll = null
     clearTimeout(entry.recheckTimer)
     if (this.entries.size === 0 && this.sweepTimer) {

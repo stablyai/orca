@@ -144,6 +144,10 @@ export type TuiIdleEvaluationInput = {
   /** When the PTY's own current title was observed; null when it has none or no clock. */
   titleObservedAtEpochMs: number | null
   agent: TuiAgent | null | undefined
+  terminalAgent?: TerminalAgent | null
+  commandBoundaryPending?: boolean
+  startupPending?: boolean
+  shellStartup?: boolean
   firstPartyStatus: FirstPartyAgentStatus
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
@@ -201,6 +205,9 @@ export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
 }
 
 function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
+  if (input.commandBoundaryPending) {
+    return { kind: 'pending', quietForeground: 'closed' }
+  }
   const hookVerdict = input.readHookTurn ? evaluateHookTurn(input.agent, input.readHookTurn) : null
   if (hookVerdict) {
     return hookVerdict
@@ -217,6 +224,11 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     return Date.now() >= blockedAt
       ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
       : { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
+  }
+  if (input.startupPending) {
+    return hasFreshDoneFirstPartyStatus(input.firstPartyStatus)
+      ? READY_STRONG
+      : { kind: 'pending', quietForeground: 'closed' }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
@@ -275,6 +287,9 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
   if (input.record.lastAgentStatus === 'working') {
     return WORKING
+  }
+  if (input.shellStartup) {
+    return { kind: 'pending', quietForeground: 'closed' }
   }
   // Screen rules veto weak name/process guesses and replace sustained-title inference.
   const ruled = input.readAgentRuleVerdict()

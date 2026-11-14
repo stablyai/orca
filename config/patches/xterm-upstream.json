@@ -136,6 +136,29 @@
           "args": ["run", "esbuild-package"]
         }
       ]
+    },
+    {
+      "name": "@xterm/headless",
+      "version": "6.1.0-beta.334",
+      "packageDir": ".",
+      "publishedDir": "headless",
+      "sourceMaps": ["lib-headless/xterm-headless.js.map", "lib-headless/xterm-headless.mjs.map"],
+      "cleanPaths": ["out", "out-esbuild", "headless/lib-headless", "headless/typings"],
+      "sourcePatch": "config/patches/xterm-src/@xterm__headless@6.1.0-beta.334.src.patch",
+      "patch": "config/patches/@xterm__headless@6.1.0-beta.334.patch",
+      "generatedPaths": ["lib-headless/"],
+      "build": [
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package-headless"]
+        }
+      ]
     }
   ],
   "forbiddenBuildScripts": {

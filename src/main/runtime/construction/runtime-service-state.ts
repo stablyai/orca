@@ -50,6 +50,8 @@ import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-scr
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
+  protected abstract readonly ptyOutputSequenceById: Map<string, number>
+
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -153,6 +155,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
+    getOutputSequence: (ptyId) => this.ptyOutputSequenceById.get(ptyId),
     getController: () => this.ptyController,
     getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
@@ -205,6 +208,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     flushPendingBlockedStamp: (ptyId) => this.flushPendingWaitBlockedCheck(ptyId),
     readScreenClearingBlockedTail: (ptyId, lastOutputAt) =>
       readScreenClearingBlockedTail({
+        contentScope: this.ptysById.get(ptyId)?.commandPaint?.contentOrigin,
         lastOutputAt,
         quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
         agent: () => this.getPaneAgentForTuiIdle(ptyId),

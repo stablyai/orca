@@ -21,6 +21,7 @@ type PointerSubmitDependencies = {
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
+  isAgentSettledForDelivery?: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -86,6 +87,7 @@ export function submitOrchestrationMailboxPointer(
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
+        deps.isAgentSettledForDelivery?.(input.ptyId)
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {

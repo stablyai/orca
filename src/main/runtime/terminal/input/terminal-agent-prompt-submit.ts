@@ -34,6 +34,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
     payload: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
+    this.assertTerminalAgentPromptInputSupported(handle)
     const generation = this.getPtyLifecycleGeneration(ptyId)
     for (;;) {
       if (options.onPermission === 'wait') {
@@ -75,6 +76,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
     const paneKey = this.getPaneKeyForTerminalHandle(handle)
     return waitWhileAgentPromptBlocked({
       isBlocked: () => {
+        this.assertTerminalAgentPromptInputSupported(handle)
         this.assertAgentPromptGeneration(ptyId, generation)
         this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
         const activity = this.getAgentPromptActivity(handle, ptyId)

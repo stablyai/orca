@@ -1,3 +1,4 @@
+import type { TerminalSupportQuery } from '../../../../shared/terminal/output/terminal-content-origin'
 import {
   detectAgentStatusFromTitle,
   isQuarterCircleSpinnerOnlyAgentTitle
@@ -26,6 +27,7 @@ import { buildTerminalWaitText } from '../wait/terminal-wait-tail-state'
 
 export type RuntimeTerminalAgentStatusSnapshot = {
   waitText: string
+  waitTextSupport?: TerminalSupportQuery
   waitBlockedAt: number | null
   title: string | null
   titleStatus: AgentStatus | null

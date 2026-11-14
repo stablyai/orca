@@ -10,7 +10,10 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './provider-snapshot-budget'
-import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
+import {
+  projectTerminalVisibleLines,
+  restoreProjectedComposerDraft
+} from '../view/orca-runtime-terminal-projection'
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
@@ -61,23 +64,9 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
 
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    const outputSequence = this.getPtyOutputSequence(ptyId)
     const cached = this.readCurrentProviderVisibleState(ptyId)
     if (cached) {
       return cached
-    }
-    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (trackedMode && !trackedMode.isAlternateScreen) {
-      const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
-      return headlessState
-        ? { ...headlessState, isAlternateScreen: false }
-        : {
-            lines: [],
-            isAlternateScreen: false,
-            sequence: outputSequence,
-            generation
-          }
     }
     return this.captureProviderVisibleState(ptyId)
   }
@@ -131,7 +120,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       ...projection,
       isAlternateScreen: snapshot.alternateScreen ?? false,
       sequence: snapshot.seq,
-      generation
+      generation,
+      grid: { cols: snapshot.cols, rows: snapshot.rows }
     }
     this.providerVisibleStateByPtyId.set(ptyId, visibleState)
     return visibleState
@@ -153,10 +143,14 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return null
     }
     return {
-      ...projectTerminalVisibleLines(state.emulator),
+      ...projectTerminalVisibleLines(
+        state.emulator,
+        this.ptysById.get(ptyId)?.commandPaint?.contentOrigin
+      ),
       isAlternateScreen: state.emulator.isAlternateScreen,
       sequence: state.outputSequence,
-      generation
+      generation,
+      grid: state.emulator.getAppliedSize()
     }
   }
 
@@ -184,34 +178,67 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
   protected readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null {
     const state = this.readWholeScreenModel(ptyId)
     // Why unawaited writeChain: callers are synchronous; a grid one chunk behind is re-read next poll.
-    return state ? projectTerminalVisibleLines(state.emulator).lines : null
+    return state
+      ? projectTerminalVisibleLines(
+          state.emulator,
+          ptyId ? this.ptysById.get(ptyId)?.commandPaint?.contentOrigin : undefined
+        ).lines
+      : null
   }
 
   /** The ruled grid only once it has applied every PTY chunk; a lagging grid could miss a new dialog. */
   protected readCaughtUpRuledScreen(ptyId: string): RuledScreen | null {
-    return this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId)
-      ? this.readRuledScreen(ptyId)
-      : null
+    const local = this.readWholeScreenModel(ptyId)
+    return this.readRuledScreen(
+      ptyId,
+      local?.outputSequence === this.getPtyOutputSequence(ptyId) ? local : null
+    )
+  }
+
+  protected readCaughtUpProjectedScreen(ptyId: string): readonly string[] | null {
+    const local = this.readWholeScreenModel(ptyId)
+    return local?.outputSequence === this.getPtyOutputSequence(ptyId)
+      ? projectTerminalVisibleLines(
+          local.emulator,
+          this.ptysById.get(ptyId)?.commandPaint?.contentOrigin
+        ).lines
+      : (this.readCurrentProviderVisibleState(ptyId)?.lines ?? null)
   }
 
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */
-  protected readRuledScreen(ptyId: string | null | undefined): RuledScreen | null {
-    const state = this.readWholeScreenModel(ptyId)
-    if (!ptyId || !state || state.unrepaintedReflowGrid !== undefined) {
+  protected readRuledScreen(
+    ptyId: string | null | undefined,
+    state = this.readWholeScreenModel(ptyId)
+  ): RuledScreen | null {
+    if (!ptyId || this.headlessTerminals.get(ptyId)?.unrepaintedReflowGrid !== undefined) {
       return null
     }
+    const provider = state ? null : this.readCurrentProviderVisibleState(ptyId)
     // Why: a TUI painted for another grid garbles on this one, and a screen rule would refuse it.
-    const ptySize = this.getTerminalSize(ptyId)
-    const grid = state.emulator.getAppliedSize()
-    if (!ptySize || ptySize.cols !== grid.cols || ptySize.rows !== grid.rows) {
+    const ptySize = this.getTerminalSize(ptyId) ?? provider?.grid
+    const grid = state?.emulator.getAppliedSize() ?? provider?.grid
+    if (!ptySize || !grid || ptySize.cols !== grid.cols || ptySize.rows !== grid.rows) {
       return null
     }
     // Why raw rows, not the read projection: it blanks a composer it takes for a draft, and Cline's
     // placeholder reads as one, so a typed draft and an empty composer would look the same.
-    return {
-      lines: visibleNonBlankTerminalLines(state.emulator.getVisibleLines()),
-      alternateScreen: state.emulator.isAlternateScreen
-    }
+    return state
+      ? {
+          lines: visibleNonBlankTerminalLines(
+            this.ptysById.get(ptyId)?.commandPaint
+              ? state.emulator.getVisibleActionLines(
+                  this.ptysById.get(ptyId)!.commandPaint!.contentOrigin
+                )
+              : state.emulator.getVisibleLines()
+          ),
+          alternateScreen: state.emulator.isAlternateScreen
+        }
+      : provider
+        ? {
+            lines: restoreProjectedComposerDraft(provider.lines, provider.draft),
+            alternateScreen: provider.isAlternateScreen
+          }
+        : null
   }
 
   protected readWholeScreenModel(ptyId: string | null | undefined): RuntimeHeadlessTerminal | null {

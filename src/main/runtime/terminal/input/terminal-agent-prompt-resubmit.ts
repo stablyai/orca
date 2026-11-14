@@ -12,6 +12,7 @@ import {
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 type HeldAgentPrompt = {
+  isCurrent?: () => boolean
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
   prompt: string | undefined
@@ -19,6 +20,15 @@ type HeldAgentPrompt = {
 }
 
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithTitlelessPaneAgentIdentity {
+  protected assertAgentPromptPermissionSafe(
+    baseline: AgentPromptActivity,
+    current: AgentPromptActivity
+  ): void {
+    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
+      throw new Error('agent_prompt_blocked')
+    }
+  }
+
   /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt. */
   protected async resubmitHeldAgentPrompt(
     ptyId: string,
@@ -41,6 +51,9 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     let gatedResubmits = 0
     try {
       do {
+        if (held.isCurrent?.() === false) {
+          return resubmits
+        }
         const waitMs = blind ? retryDelayMs : Math.min(retryDelayMs, deadline - Date.now())
         if (await agentPromptSettledWithin(held, Math.max(0, waitMs), options.signal)) {
           return resubmits
@@ -70,7 +83,10 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
         }
-        if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
+        if (
+          held.isCurrent?.() === false ||
+          !this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
+        ) {
           return resubmits
         }
         resubmits += 1

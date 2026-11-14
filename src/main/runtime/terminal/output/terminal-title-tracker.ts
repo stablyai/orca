@@ -184,7 +184,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
         }
       },
-      initialTitle !== null ? { initialTitle } : {}
+      { ...(initialTitle !== null ? { initialTitle } : {}), qualifyCommandScreen: true }
     )
     tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
     const entry: RuntimePtyTitleTrackerEntry = {

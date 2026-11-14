@@ -9,6 +9,11 @@ import {
   MAX_TERMINAL_READ_LIMIT
 } from './terminal-tail-limits'
 import { buildTailLines } from './terminal-tail-state'
+import {
+  getTerminalLineOrigins,
+  setTerminalLineOrigins,
+  sliceTerminalOrigins
+} from '../../../../../shared/terminal/output/terminal-content-origin'
 
 export function terminalReadLimit(limit: number | undefined, defaultLimit: number): number {
   if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
@@ -42,6 +47,14 @@ function trimTerminalPreviewToCharacterBudget(
     slicedFirstLine = true
   }
 
+  const origins = getTerminalLineOrigins(lines)
+  if (origins) {
+    const kept = origins.slice(omittedLineCount)
+    if (slicedFirstLine) {
+      kept[0] = sliceTerminalOrigins(kept[0], totalCharacters - characterBudget)
+    }
+    setTerminalLineOrigins(tail, kept)
+  }
   return { tail, limited: true, omittedLineCount, slicedFirstLine }
 }
 
@@ -136,8 +149,31 @@ export function shouldFallbackToVisibleTerminalSnapshot(
   return hasSubstantialBlankTail && read.tail.every((line) => line.trim().length === 0)
 }
 
+const nonBlankActionLines = new WeakMap<
+  string[],
+  { origins: ReturnType<typeof getTerminalLineOrigins>; lines: string[] }
+>()
+
 export function visibleNonBlankTerminalLines(lines: string[]): string[] {
-  return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
+  const origins = getTerminalLineOrigins(lines)
+  const cached = origins ? nonBlankActionLines.get(lines) : undefined
+  if (cached?.origins === origins && cached) {
+    return cached.lines
+  }
+  const indices = lines.flatMap((line, index) => (line.trim() ? [index] : []))
+  const result = indices.map((index) => lines[index]!.trimEnd())
+  if (origins) {
+    setTerminalLineOrigins(
+      result,
+      indices.map((index) =>
+        sliceTerminalOrigins(origins[index], 0, lines[index]!.trimEnd().length)
+      )
+    )
+  }
+  if (origins) {
+    nonBlankActionLines.set(lines, { origins, lines: result })
+  }
+  return result
 }
 
 export function buildVisibleSnapshotReadFallback(
@@ -149,6 +185,10 @@ export function buildVisibleSnapshotReadFallback(
 ): RuntimeTerminalRead {
   const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
   const lineBoundedTail = visibleLines.slice(-lineLimit)
+  const origins = getTerminalLineOrigins(visibleLines)
+  if (origins) {
+    setTerminalLineOrigins(lineBoundedTail, origins.slice(-lineLimit))
+  }
   const charBoundedTail = trimTerminalPreviewToCharacterBudget(
     lineBoundedTail,
     MAX_TERMINAL_PREVIEW_CHARS

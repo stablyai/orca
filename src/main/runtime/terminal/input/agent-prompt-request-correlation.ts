@@ -1,3 +1,4 @@
+import type { TerminalCommandBoundary } from './terminal-command-paint'
 import type { AgentPromptTurnStartEvidence } from './agent-prompt-submission-verification'
 
 /** Attribute each PTY-wide turn to the oldest eligible queued prompt; one turn cannot settle multiple requests. */
@@ -5,11 +6,18 @@ import type { AgentPromptTurnStartEvidence } from './agent-prompt-submission-ver
 // Stalled entries persist until PTY/generation removal; bound the backlog.
 const REQUESTS_PER_PTY_LIMIT = 1_024
 
-export type AgentPromptRequestBaseline = {
-  generation: number
-  requestId: string
+type AgentPromptRequestBaseline = {
   baselineWorkingSequence: number
   baselineExplicitWorkingStartedAt: number | null
+}
+
+export type AgentPromptOperation = {
+  generation: number
+  requestId?: string
+  phase: 'provisional' | 'accepted' | 'retired'
+  bindingIsCurrent?: () => boolean
+  baseline?: AgentPromptRequestBaseline
+  permitsStart?: (boundary: TerminalCommandBoundary) => boolean
 }
 
 type TurnStartClaim = {
@@ -17,95 +25,163 @@ type TurnStartClaim = {
   kind: 'hook' | 'lifecycle'
   /** Hook turn-start timestamp, or the lifecycle working sequence the turn was attributed to. */
   value: number
-  requestId: string
+  operation: AgentPromptOperation
 }
 
 export class AgentPromptRequestCorrelation {
-  private readonly requestsByPty = new Map<string, AgentPromptRequestBaseline[]>()
+  private readonly requestsByPty = new Map<string, AgentPromptOperation[]>()
   private readonly claimsByPty = new Map<string, TurnStartClaim[]>()
 
-  register(ptyId: string, request: AgentPromptRequestBaseline): void {
+  begin(
+    ptyId: string,
+    generation: number,
+    requestId?: string,
+    permitsStart?: AgentPromptOperation['permitsStart'],
+    bindingIsCurrent?: () => boolean
+  ): AgentPromptOperation {
     const requests = this.requestsByPty.get(ptyId) ?? []
-    const existing = requests.findIndex(
-      (candidate) =>
-        candidate.generation === request.generation && candidate.requestId === request.requestId
-    )
-    if (existing !== -1) {
-      requests.splice(existing, 1)
+    const retained = requests.filter((candidate) => {
+      if (requestId && candidate.generation === generation && candidate.requestId === requestId) {
+        this.retire(candidate)
+        return false
+      }
+      return true
+    })
+    const operation: AgentPromptOperation = {
+      generation,
+      requestId,
+      phase: 'provisional',
+      permitsStart,
+      bindingIsCurrent
     }
-    requests.push(request)
-    if (requests.length > REQUESTS_PER_PTY_LIMIT) {
-      requests.splice(0, requests.length - REQUESTS_PER_PTY_LIMIT)
+    retained.push(operation)
+    while (retained.length > REQUESTS_PER_PTY_LIMIT) {
+      this.retire(retained.shift()!)
     }
-    this.requestsByPty.set(ptyId, requests)
+    this.requestsByPty.set(ptyId, retained)
+    return operation
   }
 
-  forget(ptyId: string, generation: number, requestId: string): void {
+  acceptBaseline(operation: AgentPromptOperation, baseline: AgentPromptRequestBaseline): boolean {
+    if (operation.phase !== 'provisional' || operation.bindingIsCurrent?.() === false) {
+      return false
+    }
+    operation.baseline = baseline
+    operation.phase = 'accepted'
+    return true
+  }
+
+  find(
+    ptyId: string,
+    generation: number,
+    requestId: string,
+    baseline: AgentPromptRequestBaseline
+  ): AgentPromptOperation | undefined {
+    return this.requestsByPty
+      .get(ptyId)
+      ?.find(
+        (candidate) =>
+          candidate.phase === 'accepted' &&
+          candidate.bindingIsCurrent?.() !== false &&
+          candidate.generation === generation &&
+          candidate.requestId === requestId &&
+          candidate.baseline?.baselineWorkingSequence === baseline.baselineWorkingSequence &&
+          candidate.baseline.baselineExplicitWorkingStartedAt ===
+            baseline.baselineExplicitWorkingStartedAt
+      )
+  }
+
+  forget(ptyId: string, operation: AgentPromptOperation): void {
+    this.retire(operation)
     const requests = this.requestsByPty.get(ptyId)
-    const index = requests?.findIndex(
-      (candidate) => candidate.generation === generation && candidate.requestId === requestId
-    )
-    if (requests && index !== undefined && index !== -1) {
-      requests.splice(index, 1)
+    const index = requests?.indexOf(operation) ?? -1
+    if (index !== -1) {
+      requests!.splice(index, 1)
+    }
+  }
+
+  retireForBoundary(ptyId: string, boundary: TerminalCommandBoundary): void {
+    const requests = this.requestsByPty.get(ptyId)
+    if (!requests) {
+      return
+    }
+    const retained: AgentPromptOperation[] = []
+    for (const operation of requests) {
+      if (boundary.kind === 'start' && operation.permitsStart?.(boundary)) {
+        operation.permitsStart = undefined
+        retained.push(operation)
+      } else {
+        this.retire(operation)
+      }
+    }
+    if (retained.length) {
+      this.requestsByPty.set(ptyId, retained)
+    } else {
+      this.requestsByPty.delete(ptyId)
     }
   }
 
   clearForPty(ptyId: string): void {
+    for (const operation of this.requestsByPty.get(ptyId) ?? []) {
+      this.retire(operation)
+    }
     this.requestsByPty.delete(ptyId)
     this.claimsByPty.delete(ptyId)
   }
 
+  private retire(operation: AgentPromptOperation): void {
+    operation.phase = 'retired'
+    operation.permitsStart = undefined
+    operation.bindingIsCurrent = undefined
+  }
+
   acceptTurnStart(
     ptyId: string,
-    generation: number,
-    requestId: string,
-    baselineWorkingSequence: number,
-    baselineExplicitWorkingStartedAt: number | null,
+    operation: AgentPromptOperation,
     evidence: AgentPromptTurnStartEvidence
   ): boolean {
+    const baseline = operation.baseline
     if (
-      !isTurnStartAfterBaseline(evidence, {
-        baselineWorkingSequence,
-        baselineExplicitWorkingStartedAt
-      })
+      operation.phase !== 'accepted' ||
+      operation.bindingIsCurrent?.() === false ||
+      !operation.requestId ||
+      !baseline ||
+      !isTurnStartAfterBaseline(evidence, baseline)
     ) {
       return false
     }
     const requests = this.requestsByPty.get(ptyId) ?? []
-    const request = requests.find(
-      (candidate) => candidate.generation === generation && candidate.requestId === requestId
-    )
-    // Restart-restored receipts lack registrations; keep queued rather than claim an unrelated turn.
-    if (
-      !request ||
-      request.baselineWorkingSequence !== baselineWorkingSequence ||
-      request.baselineExplicitWorkingStartedAt !== baselineExplicitWorkingStartedAt
-    ) {
+    if (!requests.includes(operation)) {
       return false
     }
     let claim: TurnStartClaim | null
     if (evidence.kind === 'lifecycle') {
-      this.allocateLifecycleClaims(ptyId, generation, evidence)
-      claim = this.findClaim(ptyId, generation, requestId)
+      this.allocateLifecycleClaims(ptyId, operation.generation, evidence)
+      claim = this.findClaim(ptyId, operation)
     } else {
       const first = requests.find(
         (candidate) =>
-          candidate.generation === generation && isTurnStartAfterBaseline(evidence, candidate)
+          candidate.phase === 'accepted' &&
+          candidate.bindingIsCurrent?.() !== false &&
+          candidate.requestId &&
+          candidate.baseline &&
+          candidate.generation === operation.generation &&
+          isTurnStartAfterBaseline(evidence, candidate.baseline)
       )
-      if (first && first.requestId !== requestId) {
+      if (first !== operation) {
         return false
       }
-      claim = this.nextFreeClaim(ptyId, generation, baselineWorkingSequence, evidence, requestId)
+      claim = this.nextFreeClaim(ptyId, operation, evidence)
     }
     if (!claim) {
       return false
     }
     const owner = this.claimOwner(ptyId, claim)
-    if (owner && owner !== requestId) {
+    if (owner && owner !== operation) {
       return false
     }
     this.recordClaim(ptyId, claim)
-    this.forget(ptyId, generation, requestId)
+    this.forget(ptyId, operation)
     return true
   }
 
@@ -116,35 +192,29 @@ export class AgentPromptRequestCorrelation {
   ): void {
     for (const candidate of this.requestsByPty.get(ptyId) ?? []) {
       if (
+        candidate.phase !== 'accepted' ||
+        candidate.bindingIsCurrent?.() === false ||
+        !candidate.requestId ||
+        !candidate.baseline ||
         candidate.generation !== generation ||
-        !isTurnStartAfterBaseline(evidence, candidate) ||
-        this.findClaim(ptyId, generation, candidate.requestId)
+        !isTurnStartAfterBaseline(evidence, candidate.baseline) ||
+        this.findClaim(ptyId, candidate)
       ) {
         continue
       }
       // A later baseline may have no free sequence while an earlier one still can claim; keep scanning.
-      const claim = this.nextFreeClaim(
-        ptyId,
-        generation,
-        candidate.baselineWorkingSequence,
-        evidence,
-        candidate.requestId
-      )
+      const claim = this.nextFreeClaim(ptyId, candidate, evidence)
       if (claim) {
         this.recordClaim(ptyId, claim)
       }
     }
   }
 
-  private findClaim(ptyId: string, generation: number, requestId: string): TurnStartClaim | null {
-    return (
-      this.claimsByPty
-        .get(ptyId)
-        ?.find((claim) => claim.generation === generation && claim.requestId === requestId) ?? null
-    )
+  private findClaim(ptyId: string, operation: AgentPromptOperation): TurnStartClaim | null {
+    return this.claimsByPty.get(ptyId)?.find((claim) => claim.operation === operation) ?? null
   }
 
-  private claimOwner(ptyId: string, claim: TurnStartClaim): string | null {
+  private claimOwner(ptyId: string, claim: TurnStartClaim): AgentPromptOperation | null {
     return (
       this.claimsByPty
         .get(ptyId)
@@ -153,7 +223,7 @@ export class AgentPromptRequestCorrelation {
             existing.generation === claim.generation &&
             existing.kind === claim.kind &&
             existing.value === claim.value
-        )?.requestId ?? null
+        )?.operation ?? null
     )
   }
 
@@ -178,25 +248,24 @@ export class AgentPromptRequestCorrelation {
 
   private nextFreeClaim(
     ptyId: string,
-    generation: number,
-    baselineWorkingSequence: number,
-    evidence: AgentPromptTurnStartEvidence,
-    requestId: string
+    operation: AgentPromptOperation,
+    evidence: AgentPromptTurnStartEvidence
   ): TurnStartClaim | null {
+    const generation = operation.generation
     if (evidence.kind === 'hook') {
-      return { generation, kind: 'hook', value: evidence.workingStartedAt, requestId }
+      return { generation, kind: 'hook', value: evidence.workingStartedAt, operation }
     }
     const claimed = new Set(
       (this.claimsByPty.get(ptyId) ?? [])
         .filter((claim) => claim.generation === generation && claim.kind === 'lifecycle')
         .map((claim) => claim.value)
     )
-    let sequence = baselineWorkingSequence + 1
+    let sequence = operation.baseline!.baselineWorkingSequence + 1
     while (claimed.has(sequence)) {
       sequence += 1
     }
     return sequence <= evidence.workingSequence
-      ? { generation, kind: 'lifecycle', value: sequence, requestId }
+      ? { generation, kind: 'lifecycle', value: sequence, operation }
       : null
   }
 }

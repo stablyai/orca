@@ -206,6 +206,7 @@ patchedDependencies:
   '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.330': 17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e
   '@xterm/addon-webgl@0.20.0-beta.329': 0d63e956bc68b3f56942e2ed9325e2bf2b1dab76ab403a0690b94232b5ef4aab
+  '@xterm/headless@6.1.0-beta.334': c7a4bbdc8a3ed9f9f5d9fa95c4588b1a9297a2471dfd61e1deb1ccfca95bb8c0
   '@xterm/xterm@6.1.0-beta.336': 4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c
   glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
@@ -214,7 +215,7 @@ patchedDependencies:
   minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
   minimatch@9.0.9: c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
-  node-pty@1.1.0: 37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5
+  node-pty@1.1.0: 999f8f0af92c2f90dcd50bf0d122d9891d8fbe1d3b211184003e2298f93d5694
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   pdfjs-dist@6.3.289: 424fde648e16c965ce45c55bdda49ecb3a4aa992c856900714c841c3f13f8415
   prosemirror-view@1.42.3: 3340ccbcc4e3302f3ae1c0eda3911015966add2e7e0df76abd89fbef4f3902f7
@@ -246,7 +247,7 @@ importers:
         version: 0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c))
       '@xterm/headless':
         specifier: 6.1.0-beta.334
-        version: 6.1.0-beta.334
+        version: 6.1.0-beta.334(patch_hash=c7a4bbdc8a3ed9f9f5d9fa95c4588b1a9297a2471dfd61e1deb1ccfca95bb8c0)
       agent-browser:
         specifier: ~0.39.4
         version: 0.39.4
@@ -267,7 +268,7 @@ importers:
         version: 3.0.2
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5)
+        version: 1.1.0(patch_hash=999f8f0af92c2f90dcd50bf0d122d9891d8fbe1d3b211184003e2298f93d5694)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -11518,7 +11519,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c)
 
-  '@xterm/headless@6.1.0-beta.334': {}
+  '@xterm/headless@6.1.0-beta.334(patch_hash=c7a4bbdc8a3ed9f9f5d9fa95c4588b1a9297a2471dfd61e1deb1ccfca95bb8c0)': {}
 
   '@xterm/xterm@6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c)': {}
 
@@ -14150,7 +14151,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5):
+  node-pty@1.1.0(patch_hash=999f8f0af92c2f90dcd50bf0d122d9891d8fbe1d3b211184003e2298f93d5694):
     dependencies:
       node-addon-api: 7.1.1
 
