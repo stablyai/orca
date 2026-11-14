@@ -22,7 +22,7 @@ export function activeTeamRole(
   return raw === 'owner' || raw === 'admin' ? raw : 'member'
 }
 
-/** Owner or admin of the active team: who sees Settings › Enterprise. */
+/** Owner or admin of the active team: who sees Settings › Cloud workspaces. */
 export function isActiveTeamAdmin(status: OrcaProfileAuthStatus | null | undefined): boolean {
   const role = activeTeamRole(status)
   return role === 'owner' || role === 'admin'

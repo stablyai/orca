@@ -1,4 +1,4 @@
-// "Manage in browser": team, billing and Enterprise settings live in the Orca Cloud web console.
+// "Manage in browser": team, billing and admin settings live in the Orca Cloud web console.
 // Main asks auth for a single-use login code and opens the page in the system browser; without a
 // code the browser asks the person to sign in, so a failed request still opens the page.
 import { toast } from 'sonner'

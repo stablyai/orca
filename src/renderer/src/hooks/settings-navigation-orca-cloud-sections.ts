@@ -4,13 +4,12 @@ import {
 } from '@/components/settings/cloud-api/cloud-api-search'
 import {
   getOrcaCloudBillingSearchEntries,
-  getOrcaCloudEnterpriseSearchEntries,
   getOrcaCloudEnvironmentsSearchEntries,
   getOrcaCloudLocalCommandsSearchEntries,
   getOrcaCloudMcpSearchEntries,
   getOrcaCloudSkillsSearchEntries,
   getOrcaCloudSecretsSearchEntries,
-  getOrcaCloudTeamSearchEntries,
+  getOrcaCloudTeamAdminSearchEntries,
   getOrcaCloudWorkspacesSearchEntries
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
@@ -24,13 +23,11 @@ import {
   BookOpenText,
   Boxes,
   Cloud,
-  Building2,
   CreditCard,
   KeySquare,
   LockKeyhole,
   Plug,
   SquareTerminal,
-  Users,
   Workflow
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
@@ -57,18 +54,9 @@ export function buildOrcaCloudSettingsSections(
       searchEntries: getOrcaCloudBillingSearchEntries(),
       group
     },
-    {
-      id: 'cloud-team',
-      title: t('auto.components.billing.team.title', 'Team'),
-      description: t(
-        'auto.components.billing.team.createHint',
-        'Share one Orca Cloud plan with your teammates.'
-      ),
-      icon: Users,
-      searchEntries: getOrcaCloudTeamSearchEntries(),
-      group
-    },
-    // Team owners and admins only; members and personal accounts never see the entry.
+    // Team owners and admins only; members and personal accounts never see the entry. Team,
+    // billing and admin (single sign-on, audit log) are managed in the web console, reached from
+    // the Account page's "Team & admin" row; the desktop has no page for them.
     ...(isOrcaTeamAdmin
       ? [
           {
@@ -80,17 +68,6 @@ export function buildOrcaCloudSettingsSections(
             ),
             icon: Cloud,
             searchEntries: getOrcaCloudWorkspacesSearchEntries(),
-            group
-          },
-          {
-            id: 'cloud-enterprise',
-            title: t('settings.enterprise.title', 'Enterprise'),
-            description: t(
-              'settings.enterprise.description',
-              'Single sign-on, sign-in policies and the audit log for your team.'
-            ),
-            icon: Building2,
-            searchEntries: getOrcaCloudEnterpriseSearchEntries(),
             group
           }
         ]
@@ -190,12 +167,16 @@ const ORCA_CLOUD_LEAD_IDS: readonly string[] = ['orca-account']
 /** Where Plan & billing lives inside the combined Account + Billing page (scroll anchor). */
 export const ACCOUNT_BILLING_PLAN_ANCHOR = 'orca-account-plan-billing'
 
+/** The Account page's "Team & admin" row, which opens the web console (scroll anchor). */
+export const ACCOUNT_TEAM_ADMIN_ANCHOR = 'orca-account-team-admin'
+
 /**
  * JA-16: in Orca Cloud builds the Orca account leads the one Orca Cloud group instead of sitting in
  * Set up. Agent accounts stays in AI capabilities: it covers this computer and hosts as much as
  * Orca Cloud, and its Orca Cloud part is deep-linked from every cloud entry point.
  * Neil: the account and Plan & billing are one page, "Account + Billing" (account on top). Billing's
- * search entries move onto it and land on its Plan & billing part.
+ * search entries move onto it and land on its Plan & billing part. Searching for members, single
+ * sign-on or the audit log lands on its "Team & admin" row, which opens the web console.
  */
 export function gatherOrcaCloudSettingsGroup(
   sections: readonly SettingsNavSection[],
@@ -208,6 +189,10 @@ export function gatherOrcaCloudSettingsGroup(
   const billingEntries = (billing?.searchEntries ?? []).map((entry) => ({
     ...entry,
     targetSectionId: ACCOUNT_BILLING_PLAN_ANCHOR
+  }))
+  const teamAdminEntries = getOrcaCloudTeamAdminSearchEntries().map((entry) => ({
+    ...entry,
+    targetSectionId: ACCOUNT_TEAM_ADMIN_ANCHOR
   }))
   const leadIds = ORCA_CLOUD_LEAD_IDS
   const leads = leadIds
@@ -222,7 +207,7 @@ export function gatherOrcaCloudSettingsGroup(
         'settings.accountBilling.description',
         'Your Orca account, plan, sandbox hours and payment.'
       ),
-      searchEntries: [...section.searchEntries, ...billingEntries]
+      searchEntries: [...section.searchEntries, ...billingEntries, ...teamAdminEntries]
     }))
   const rest = sections.filter(
     (section) => !leadIds.includes(section.id) && section.id !== 'cloud-billing'
