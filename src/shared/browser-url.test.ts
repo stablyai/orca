@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   isEligibleLocalCertificateHost,
@@ -41,6 +41,30 @@ describe('browser-url helpers', () => {
   it('rejects non-web schemes for in-app navigation', () => {
     expect(normalizeBrowserNavigationUrl('javascript:alert(1)')).toBeNull()
     expect(normalizeExternalBrowserUrl('about:blank')).toBeNull()
+  })
+
+  describe('file path backslashes', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('preserves backslashes as filename characters on POSIX hosts', () => {
+      vi.stubGlobal('navigator', { userAgent: 'Linux' })
+      expect(normalizeBrowserNavigationUrl('/tmp/site\\draft.html')).toBe(
+        'file:///tmp/site%5Cdraft.html'
+      )
+    })
+
+    it('normalizes backslashes to separators on Windows hosts', () => {
+      vi.stubGlobal('navigator', { userAgent: 'Windows' })
+      expect(normalizeBrowserNavigationUrl('/foo\\bar.html')).toBe('file:///foo/bar.html')
+      expect(normalizeBrowserNavigationUrl('C:\\site\\draft.html')).toBe(
+        'file:///C:/site/draft.html'
+      )
+      expect(normalizeBrowserNavigationUrl('\\\\server\\share\\draft.html')).toBe(
+        'file://server/share/draft.html'
+      )
+    })
   })
 
   // Refuse file URLs externally: a remote page must not drive Finder/Explorer to arbitrary paths.
