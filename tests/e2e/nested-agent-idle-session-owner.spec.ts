@@ -22,7 +22,7 @@ import {
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient } from './helpers/paired-mobile-client'
 import { readAgentProcess } from '../../src/shared/agent-status/process/agent-process-presence-probe'
-import { resolveMobileNativeChat } from '../../mobile/src/session/native-chat/mobile-native-chat-eligibility'
+import { resolveMobileNativeChat } from '../../mobile/src/session/native-chat/conversation/mobile-native-chat-eligibility'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 
 const SESSION = '11111111-2222-4333-8444-555555555555'

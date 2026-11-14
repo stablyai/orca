@@ -1,7 +1,7 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import type { StructuredMobileSendAttachment } from './composer/use-mobile-structured-send-with-outcome'
+import type { StructuredMobileSendAttachment } from './composer/delivery/use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
@@ -9,8 +9,8 @@ import type {
   NativeChatAnswerSource
 } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
-import type { MobileChatPermission } from './input/mobile-native-chat-permission'
-import type { MobileChatQuestion } from './input/mobile-native-chat-question'
+import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
@@ -22,19 +22,19 @@ import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-cha
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
-} from './composer/mobile-native-chat-send'
-import type { MobileNativeChatCommandRefusalCauses } from './composer/use-mobile-native-chat-send-error'
-import type { MobileStructuredQueuedMessageControls } from './input/use-mobile-structured-queued-message-controls'
-import type { MobileStructuredThreadGoal } from './input/use-mobile-structured-thread-goal'
-import type { MobileStructuredBackgroundTasks } from './input/use-mobile-structured-background-tasks'
-import type { MobileStructuredInterruptedContinue } from './composer/use-mobile-structured-interrupted-continue'
+} from './composer/delivery/mobile-native-chat-send'
+import type { MobileNativeChatCommandRefusalCauses } from './composer/delivery/use-mobile-native-chat-send-error'
+import type { MobileStructuredQueuedMessageControls } from './input/queued-messages/use-mobile-structured-queued-message-controls'
+import type { MobileStructuredThreadGoal } from './input/tasks/use-mobile-structured-thread-goal'
+import type { MobileStructuredBackgroundTasks } from './input/tasks/use-mobile-structured-background-tasks'
+import type { MobileStructuredInterruptedContinue } from './composer/delivery/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './transcript/mobile-native-chat-pending-echo'
-import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
-import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
+import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
+import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
-import type { useMobileStructuredSessionCommands } from './composer/use-mobile-structured-session-commands'
-import type { MobileNativeChatUsageLimit } from './use-mobile-native-chat-usage-limit'
+import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
+import type { MobileNativeChatUsageLimit } from './status/use-mobile-native-chat-usage-limit'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean

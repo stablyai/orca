@@ -10,7 +10,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   MobileNativeChatForkContext,
   type MobileNativeChatForkOffer
-} from '../use-mobile-native-chat-fork'
+} from '../history/use-mobile-native-chat-fork'
 
 const NO_FORK = { subscribe: () => () => {}, offer: (): MobileNativeChatForkOffer => 'hidden' }
 

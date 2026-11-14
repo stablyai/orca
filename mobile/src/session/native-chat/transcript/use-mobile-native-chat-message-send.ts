@@ -8,27 +8,27 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
-} from '../composer/mobile-native-chat-send'
+} from '../composer/delivery/mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
-import { healMobileNativeChatStaleInput } from '../composer/mobile-native-chat-stale-input'
-import { classifyMobileNativeChatSend } from '../composer/mobile-native-chat-send-classification'
-import { readMobileNativeChatSkillOrigin } from '../composer/mobile-native-chat-draft-store'
+import { healMobileNativeChatStaleInput } from '../composer/delivery/mobile-native-chat-stale-input'
+import { classifyMobileNativeChatSend } from '../composer/delivery/mobile-native-chat-send-classification'
+import { readMobileNativeChatSkillOrigin } from '../composer/drafts/mobile-native-chat-draft-store'
 import { nativeChatSendTextOwner } from './mobile-native-chat-send-text-owner'
 import {
   beginMobileNativeChatInFlightSend,
   settleMobileNativeChatInFlightSend
-} from '../composer/mobile-native-chat-in-flight-sends'
+} from '../composer/delivery/mobile-native-chat-in-flight-sends'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../composer/mobile-native-chat-terminal-write-lock'
+} from '../composer/delivery/mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import {
   UNCONFIRMED_SEND_MESSAGE,
   UNCONFIRMED_SEND_RESTORED_MESSAGE
-} from '../composer/use-mobile-native-chat-unconfirmed-sends'
-import type { MobileNativeChatLaunchDraftSeed } from '../composer/use-mobile-native-chat-launch-draft-seed'
+} from '../composer/delivery/use-mobile-native-chat-unconfirmed-sends'
+import type { MobileNativeChatLaunchDraftSeed } from '../composer/drafts/use-mobile-native-chat-launch-draft-seed'
 import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/composer/native-chat-paste-bytes'
 
 export type MobileNativeChatMessageSend = {

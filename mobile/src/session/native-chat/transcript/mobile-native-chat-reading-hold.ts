@@ -1,4 +1,4 @@
-import { visible } from '../mobile-native-chat-lower-geometry'
+import { visible } from '../lower-region/mobile-native-chat-lower-geometry'
 
 export function createMobileNativeChatReadingHold(viewport: HTMLElement, content: HTMLElement) {
   let hold: { element: HTMLElement; offset: number } | null = null

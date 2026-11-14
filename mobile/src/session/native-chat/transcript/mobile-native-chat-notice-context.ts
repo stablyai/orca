@@ -1,6 +1,6 @@
 import { createContext } from 'react'
-import type { MobileStructuredInterruptedContinue } from '../composer/use-mobile-structured-interrupted-continue'
-import type { MobileNativeChatUsageLimit } from '../use-mobile-native-chat-usage-limit'
+import type { MobileStructuredInterruptedContinue } from '../composer/delivery/use-mobile-structured-interrupted-continue'
+import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 
 /** What a notice row needs: the Orca host behind the chat (null when unnamed), the agent, and Continue for an Orca-stopped turn. */
 export type MobileNativeChatNoticeView = {

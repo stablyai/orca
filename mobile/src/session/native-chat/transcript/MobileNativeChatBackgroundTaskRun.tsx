@@ -6,8 +6,8 @@ import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { sayMobileBackgroundTask } from '../input/mobile-background-task-copy'
-import { BackgroundTaskKindIcon } from '../input/MobileNativeChatBackgroundTasks'
+import { sayMobileBackgroundTask } from '../input/tasks/mobile-background-task-copy'
+import { BackgroundTaskKindIcon } from '../input/tasks/MobileNativeChatBackgroundTasks'
 import { scaledType } from './mobile-native-chat-message-styles'
 
 const ICON_SIZE = 14

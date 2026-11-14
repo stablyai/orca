@@ -4,7 +4,7 @@ import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatRewindButton } from './MobileNativeChatRewindButton'
 import { MobileNativeChatResponseActions } from './MobileNativeChatResponseActions'
-import { mobileNativeChatRowHoldsForkSlot } from '../use-mobile-native-chat-fork'
+import { mobileNativeChatRowHoldsForkSlot } from '../history/use-mobile-native-chat-fork'
 import { styles } from './mobile-native-chat-message-styles'
 
 /** A chat turn's time, then its actions together: copy, and rewind on a user row the chat can rewind to. */

@@ -19,8 +19,8 @@ import {
 } from '../../../../../src/shared/native-chat/native-chat-terminal-turn'
 import { deriveNativeChatStreamingText } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
-import type { MobileNativeChatSession } from '../use-mobile-native-chat-session'
-import type { MobileNativeChatResolution } from '../mobile-native-chat-eligibility'
+import type { MobileNativeChatSession } from '../conversation/use-mobile-native-chat-session'
+import type { MobileNativeChatResolution } from '../conversation/mobile-native-chat-eligibility'
 
 import {
   pendingSendsAsMessages,

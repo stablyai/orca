@@ -19,7 +19,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
+import { useMobileNativeChatOpenFile } from '../links/mobile-native-chat-open-file-context'
 
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
   useMobileColorScheme()

@@ -7,8 +7,8 @@ import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
 import {
   MobileNativeChatForkContext,
   useMobileNativeChatFork
-} from './native-chat/use-mobile-native-chat-fork'
-import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+} from './native-chat/history/use-mobile-native-chat-fork'
+import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 /** The chat's "Fork from this response" and the chat a "Forked from" divider opens. */

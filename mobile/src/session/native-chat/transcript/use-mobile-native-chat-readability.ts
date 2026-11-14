@@ -7,7 +7,7 @@ import {
 } from '../../agent-launch/mobile-runtime-repo-operations'
 import { isFloatingWorkspaceWorktreeId } from '../../floating-workspace'
 import { resumeFolderWorkspaceListRead } from '../../../agent-history/mobile-agent-history-operations'
-import { isMobileFolderNativeChatReadable } from '../mobile-native-chat-eligibility'
+import { isMobileFolderNativeChatReadable } from '../conversation/mobile-native-chat-eligibility'
 import { isNativeChatTranscriptLocalReadable } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-readability'
 
 type ReadabilityState = {
