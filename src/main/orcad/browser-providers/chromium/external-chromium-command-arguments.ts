@@ -1,69 +1,9 @@
-import { BrowserError } from '../../../browser/browser-error'
 import { agentBrowserSetMediaArguments } from '../../../browser/agent-browser/protocol/agent-browser-set-media-arguments'
 import { agentBrowserWaitArguments } from '../../../browser/agent-browser/protocol/agent-browser-wait-arguments'
-const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
-  '--args': true,
-  '--cdp': true,
-  '--executable-path': true,
-  '--profile': true,
-  '--session': true
-}
-const TARGET_OVERRIDE_FLAG_PREFIXES = Object.keys(TARGET_OVERRIDE_FLAGS).map((flag) => `${flag}=`)
-
-function parseExecArguments(input: string): string[] {
-  const args: string[] = []
-  let value = ''
-  let quote: '"' | "'" | null = null
-  let escaped = false
-  for (const char of input.trim()) {
-    if (escaped) {
-      value += char
-      escaped = false
-    } else if (char === '\\' && quote !== "'") {
-      escaped = true
-    } else if (quote) {
-      if (char === quote) {
-        quote = null
-      } else {
-        value += char
-      }
-    } else if (char === '"' || char === "'") {
-      quote = char
-    } else if (/\s/.test(char)) {
-      if (value) {
-        args.push(value)
-        value = ''
-      }
-    } else {
-      value += char
-    }
-  }
-  if (escaped) {
-    value += '\\'
-  }
-  if (quote) {
-    throw new BrowserError('invalid_argument', 'Browser command has an unclosed quote.')
-  }
-  if (value) {
-    args.push(value)
-  }
-  return args
-}
-function stripTargetOverrideArguments(args: string[]): string[] {
-  const stripped: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index]
-    if (TARGET_OVERRIDE_FLAGS[arg]) {
-      index++
-      continue
-    }
-    if (TARGET_OVERRIDE_FLAG_PREFIXES.some((prefix) => arg.startsWith(prefix))) {
-      continue
-    }
-    stripped.push(arg)
-  }
-  return stripped
-}
+import {
+  assertAgentBrowserPassthroughStaysOnPage,
+  splitAgentBrowserCommandLine
+} from '../../../browser/agent-browser/protocol/agent-browser-passthrough-arguments'
 
 export function externalChromiumWaitCommand(
   params: Record<string, unknown>
@@ -98,16 +38,6 @@ function cookieSetArguments(params: Record<string, unknown>): string[] {
   }
   if (params.httpOnly) {
     args.push('--httpOnly')
-  }
-  return args
-}
-function cookieDeleteArguments(params: Record<string, unknown>): string[] {
-  const args = ['cookies', 'clear']
-  if (params.name) {
-    args.push('--name', String(params.name))
-  }
-  if (params.domain) {
-    args.push('--domain', String(params.domain))
   }
   return args
 }
@@ -199,8 +129,6 @@ export function externalChromiumCommandArguments(
       return ['highlight', text('selector')]
     case 'browserCookieGet':
       return ['cookies', 'get']
-    case 'browserCookieDelete':
-      return cookieDeleteArguments(params)
     case 'browserSetGeolocation':
       return ['set', 'geo', text('latitude'), text('longitude')]
     case 'browserInterceptDisable':
@@ -214,8 +142,11 @@ export function externalChromiumCommandArguments(
       return ['network', 'har', 'start']
     case 'browserCaptureStop':
       return ['network', 'har', 'stop']
-    case 'browserExec':
-      return stripTargetOverrideArguments(parseExecArguments(text('command')))
+    case 'browserExec': {
+      const args = splitAgentBrowserCommandLine(text('command'))
+      assertAgentBrowserPassthroughStaysOnPage(args)
+      return args
+    }
     case 'browserSetViewport':
       if (
         params.mobile === true ||

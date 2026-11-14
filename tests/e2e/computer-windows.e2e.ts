@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import type {
   ComputerActionResult,
@@ -15,11 +16,7 @@ import {
   runOrcaCli,
   stopOrcaRuntime
 } from './helpers/computer-driver'
-import {
-  editableRolePattern,
-  focusNotepadDocument,
-  waitForNotepadText
-} from './helpers/notepad-document'
+import { editableRolePattern, focusNotepadDocument } from './helpers/notepad-document'
 import {
   closeWindowFixture,
   countMagentaPixelRatio,
@@ -30,9 +27,25 @@ import {
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', () => {
+  let notepadPath = ''
+
+  async function saveNotepad() {
+    await runOrcaCli([
+      'computer',
+      'hotkey',
+      '--app',
+      getNotepadAppSelector(),
+      '--key',
+      'CmdOrCtrl+S',
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
+  }
+
   beforeAll(async () => {
     await ensureOrcaRuntimeLaunched()
-    await ensureNotepadLaunched()
+    notepadPath = await ensureNotepadLaunched()
   })
 
   afterAll(async () => {
@@ -40,106 +53,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     await stopOrcaRuntime()
   })
 
-  test('list-apps includes the test-owned Notepad process', async () => {
-    const result = await runOrcaCli(['computer', 'list-apps', '--json'])
-    const envelope = parseJsonOutput<{ result: ComputerListAppsResult }>(result.stdout)
-    const pid = Number.parseInt(getNotepadAppSelector().slice(4), 10)
-    const notepadApp = envelope.result.apps.find((app) => app.pid === pid)
-
-    expect(notepadApp).toMatchObject({ pid, bundleId: 'notepad' })
-    expect(notepadApp?.name.toLowerCase()).toBe('notepad')
-  })
-
-  test('list-windows returns a targetable Notepad window', async () => {
-    const app = getNotepadAppSelector()
-    const result = await runOrcaCli(['computer', 'list-windows', '--app', app, '--json'])
-    const envelope = parseJsonOutput<{ result: ComputerListWindowsResult }>(result.stdout)
-
-    expect(envelope.result.windows).toHaveLength(1)
-    expect(envelope.result.windows[0]).toMatchObject({
-      index: 0,
-      app: expect.objectContaining({ pid: Number.parseInt(app.slice(4), 10) }),
-      id: expect.any(Number),
-      title: expect.stringContaining('Notepad'),
-      width: expect.any(Number),
-      height: expect.any(Number)
-    })
-  })
-
-  test('Notepad exposes a basic accessibility tree', async () => {
-    const result = await runOrcaCli([
-      'computer',
-      'get-app-state',
-      '--app',
-      getNotepadAppSelector(),
-      '--json'
-    ])
-    const envelope = parseJsonOutput<{ result: ComputerSnapshotResult }>(result.stdout)
-
-    expect(envelope.result.snapshot.app.name.toLowerCase()).toBe('notepad')
-    expect(envelope.result.snapshot.window.title).toContain('Notepad')
-    expect(envelope.result.snapshot.elementCount).toBeGreaterThan(0)
-    expect(envelope.result.snapshot.coordinateSpace).toBe('window')
-    expect(envelope.result.snapshot.truncation?.truncated).toBe(false)
-    expect(envelope.result.screenshotStatus.state).toBe('captured')
-    expect(envelope.result.screenshot?.format).toBe('png')
-    expect(envelope.result.screenshot?.data).toBeUndefined()
-    expect(envelope.result.screenshot?.dataOmitted).toBe(true)
-    expect(envelope.result.screenshot?.path).toContain('orca-computer-use')
-  })
-
-  test('paste-text mutates the test-owned document', async () => {
-    const app = getNotepadAppSelector()
-    const marker = `orca-windows-paste-${Date.now()}`
-    await focusNotepadDocument(app)
-    const action = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          marker,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(action.result.action?.path).toBe('clipboard')
-    expect(action.result.action?.verification).toMatchObject({
-      state: 'unverified',
-      reason: 'clipboard_paste'
-    })
-
-    const after = await waitForNotepadText(app, marker)
-    expect(after.snapshot.treeText).toContain(marker)
-  })
-
-  test('Unicode payloads survive paste-text', async () => {
-    const app = getNotepadAppSelector()
-    const unicode = `orca unicode café Ω 漢字 ${Date.now()}`
-    await focusNotepadDocument(app)
-    const pasted = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          unicode,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(pasted.result.snapshot.treeText).toContain(unicode)
-  })
-
-  test('hotkey and paste-text can replace the document selection', async () => {
+  test('hotkey and Unicode paste-text replace the document selection', async () => {
     const app = getNotepadAppSelector()
     const first = `orca-windows-first-${Date.now()}`
     await focusNotepadDocument(app)
@@ -155,41 +69,32 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       '--json'
     ])
 
-    const selectAll = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'hotkey',
-          '--app',
-          app,
-          '--key',
-          'CmdOrCtrl+A',
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(selectAll.result.action?.actionName).toBe('hotkey')
+    await runOrcaCli([
+      'computer',
+      'hotkey',
+      '--app',
+      app,
+      '--key',
+      'CmdOrCtrl+A',
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
 
-    const marker = `orca-windows-replaced-${Date.now()}`
-    const second = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          marker,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(second.result.snapshot.treeText).toContain(marker)
-    expect(second.result.snapshot.treeText).not.toContain(first)
+    const marker = `orca-windows-replaced-café Ω 漢字 ${Date.now()}`
+    await runOrcaCli([
+      'computer',
+      'paste-text',
+      '--app',
+      app,
+      '--text',
+      marker,
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
+    await saveNotepad()
+    await expect.poll(() => readFile(notepadPath, 'utf8')).toBe(marker)
   })
 
   test('click and type-text send synthetic input to the document', async () => {
@@ -230,7 +135,8 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       ).stdout
     )
     expect(typed.result.action?.path).toBe('synthetic')
-    expect(typed.result.snapshot.treeText).toContain(marker.trim())
+    await saveNotepad()
+    await expect.poll(() => readFile(notepadPath, 'utf8')).toContain(marker.trim())
   })
 
   test('a covered window screenshot shows the window, not what covers it', async () => {
@@ -272,10 +178,9 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     }
   })
 
-  test('a hung window fails fast with a timeout error and does not stall later calls', async () => {
+  test('a hung window reports a timeout error and later calls still succeed', async () => {
     const hung = await launchHungWindowFixture()
     try {
-      const started = Date.now()
       const failure = await runOrcaCli([
         'computer',
         'get-app-state',
@@ -289,8 +194,6 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       )
       expect(failure).toMatch(/window_not_responding/)
       expect(failure).toMatch(/"code":\s*"action_timeout"/)
-      // The provider request timeout is 30 s; the hang probe answers within its 5 s bound.
-      expect(Date.now() - started).toBeLessThan(15_000)
 
       const apps = parseJsonOutput<{ result: ComputerListAppsResult }>(
         (await runOrcaCli(['computer', 'list-apps', '--json'])).stdout

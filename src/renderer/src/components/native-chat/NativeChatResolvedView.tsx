@@ -9,8 +9,8 @@ import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
-import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatTerminalTranscriptProviders } from './messages/actions/NativeChatTerminalForkProvider'
+import { NativeChatForkableTranscripts } from './messages/actions/NativeChatTerminalForkProvider'
+import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -304,7 +304,6 @@ export function NativeChatResolvedView({
     onFind: find.open
   })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
-  const transcript = { isVisible, find, agent, sessionId, transcriptPath, terminalTabId }
 
   const root = (
     <div
@@ -327,6 +326,7 @@ export function NativeChatResolvedView({
         }
         rootInput.onKeyDownCapture(event)
       }}
+      onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
@@ -351,19 +351,20 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatTerminalTranscriptProviders {...transcript} messages={session.messages}>
-            <NativeChatMessageList
-              ref={messageListRef}
-              session={sessionWithPending}
-              isVisible={isVisible}
-              isWorking={turnActive}
-              expandSignal={false}
-              {...turnTiming}
-              awaitingInput={awaitingInput}
-              deliveryNotices={deliveryNotices}
-              runtimeContext={imageRuntimeContext}
-            />
-          </NativeChatTerminalTranscriptProviders>
+          <NativeChatForkableTranscripts
+            fork={{ agent, sessionId, transcriptPath, terminalTabId, messages: session.messages }}
+            find={find}
+            paneKey={paneKey}
+            ref={messageListRef}
+            session={sessionWithPending}
+            isVisible={isVisible}
+            isWorking={turnActive}
+            expandSignal={false}
+            {...turnTiming}
+            awaitingInput={awaitingInput}
+            deliveryNotices={deliveryNotices}
+            runtimeContext={imageRuntimeContext}
+          />
         )}
       </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}

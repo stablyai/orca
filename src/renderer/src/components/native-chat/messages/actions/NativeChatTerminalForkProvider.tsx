@@ -4,8 +4,8 @@ import { useNativeChatWorktreeForkRequest } from './native-chat-worktree-fork-re
 import { useNativeChatTerminalFork } from './use-native-chat-terminal-fork'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
+import { NativeChatSubagentTranscripts } from '../../subagents/NativeChatSubagentTranscripts'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { NativeChatToolRunWindowProvider } from '../../tools/runs/native-chat-tool-run-window-context'
 
 /** Gives a terminal chat's rows the same Fork as a chat session, through the CLI's own resume. */
 export function NativeChatTerminalForkProvider({
@@ -54,17 +54,16 @@ export function NativeChatTerminalForkProvider({
   )
 }
 
-/** The terminal transcript's providers: tool-run windowing plus the terminal Fork. */
-export function NativeChatTerminalTranscriptProviders({
-  isVisible,
-  find,
-  children,
-  ...fork
-}: Omit<Parameters<typeof NativeChatTerminalForkProvider>[0], 'children'> &
-  Parameters<typeof NativeChatToolRunWindowProvider>[0]): React.JSX.Element {
+/** The transcript view, with the terminal Fork available to its rows. */
+export function NativeChatForkableTranscripts({
+  fork,
+  ...transcripts
+}: React.ComponentProps<typeof NativeChatSubagentTranscripts> & {
+  fork: Omit<React.ComponentProps<typeof NativeChatTerminalForkProvider>, 'children'>
+}): React.JSX.Element {
   return (
-    <NativeChatToolRunWindowProvider isVisible={isVisible} find={find}>
-      <NativeChatTerminalForkProvider {...fork}>{children}</NativeChatTerminalForkProvider>
-    </NativeChatToolRunWindowProvider>
+    <NativeChatTerminalForkProvider {...fork}>
+      <NativeChatSubagentTranscripts {...transcripts} />
+    </NativeChatTerminalForkProvider>
   )
 }

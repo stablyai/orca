@@ -2,7 +2,7 @@ import {
   ManagedServerRecover,
   ManagedServerSelector,
   ManagedServerUpdate
-} from '../../../../../shared/rpc-contract/managed-server-params'
+} from '../../../../../shared/rpc-contract/host-management/managed-server-params'
 import {
   getManagedServerActions,
   type ManagedServerActions

@@ -137,7 +137,18 @@ export type NativeChatSubagentEntry = {
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
+  /** The child's role (Claude's `subagent_type`), when it has one. */
+  agentType?: string
+  model?: string
+  /** Reasoning effort, in the provider's own words. */
+  effort?: string
+  /** The tool it is running now; only while it works. */
+  operation?: NativeChatSubagentOperation
+  /** The newest thing it said; once settled, its result. */
+  lastMessage?: string
 }
+
+export type NativeChatSubagentOperation = { toolName: string; input?: string }
 
 /** Provider-neutral roster revised in place by Claude/Codex activity. */
 export type NativeChatSubagentGroupBlock = {

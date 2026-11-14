@@ -9,7 +9,7 @@ import {
 import {
   planWorktreeSortOrderUpdates,
   type WorktreeSortOrderUpdate
-} from '../../shared/worktree/sort-order-update'
+} from '../../shared/worktree/metadata/sort-order-update'
 import { resolveWorktreeMetaOwner } from './host-qualified-worktree-meta'
 import { createRepoRowExecutionHostLookup } from '../../shared/execution-host/worktree-execution-host-resolution'
 

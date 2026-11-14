@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react'
 import type { Components } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
-import CodeBlockCopyButton from '../../CodeBlockCopyButton'
-import MermaidBlock from '../../MermaidBlock'
-import { useMermaidDiagramExpand } from '../../use-mermaid-diagram-expand'
+import CodeBlockCopyButton from './CodeBlockCopyButton'
+import MermaidBlock from '../../diagrams/MermaidBlock'
+import { useMermaidDiagramExpand } from '../../diagrams/use-mermaid-diagram-expand'
 import {
   getMarkdownDocLinkAnchor,
   parseMarkdownDocLinkHref,

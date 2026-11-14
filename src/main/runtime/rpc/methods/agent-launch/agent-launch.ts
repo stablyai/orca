@@ -32,7 +32,7 @@ import {
   AgentLaunch,
   AgentLaunchReplay,
   type AgentLaunchParams
-} from '../../../../../shared/rpc-contract/agent-launch-params'
+} from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {

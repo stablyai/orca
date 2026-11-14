@@ -159,10 +159,6 @@ export async function readFreshNativeTable(
   }
 }
 
-export function nativeReadWaitersForTests(): number {
-  return slotWaiters.size
-}
-
 export function resetNativeReadsForTests(): void {
   sharedReads.clear()
   slotWaiters.clear()

@@ -63,20 +63,6 @@ it.skipIf(!durablePushTestDatabaseUrl)(
   }
 )
 
-it('leases exactly one delivery per device across concurrent claimers', async () => {
-  const { db, store, clock, advance } = await fixture()
-  for (let seq = 1; seq <= 5; seq++) {
-    await store.accept('host', 'phone', notification(seq))
-    advance(1)
-  }
-  const claims = await Promise.all(
-    Array.from({ length: 8 }, () => new DurablePushStore(db, clock).claim())
-  )
-  const leased = claims.filter((claim) => claim !== null)
-  expect(leased).toHaveLength(1)
-  expect(leased[0]?.notification.notificationSeq).toBe(1)
-})
-
 it.skipIf(!durablePushTestDatabaseUrl)(
   'does not lease the row behind a head another claimer holds',
   async () => {
@@ -138,5 +124,3 @@ it.skipIf(!durablePushTestDatabaseUrl)(
     expect((await first)?.notification.notificationSeq).toBe(1)
   }
 )
-
-

@@ -50,8 +50,7 @@ export function useNativeChatTranscriptSlots({
     expandedTurnKeys,
     isWorking,
     lifecycleWorking,
-    subagentSections,
-    subagentChoices,
+    subagentHeads,
     forkOffer
   } = input
   const { tailRow, thinking, stopping = false, activityText } = line
@@ -102,8 +101,7 @@ export function useNativeChatTranscriptSlots({
         expandedTurnKeys,
         isWorking,
         lifecycleWorking,
-        subagentSections,
-        subagentChoices,
+        subagentHeads,
         liveReasoningId,
         forkOffer
       }),
@@ -118,8 +116,7 @@ export function useNativeChatTranscriptSlots({
       messages,
       openedPullRequests,
       receipts,
-      subagentChoices,
-      subagentSections,
+      subagentHeads,
       turnDiffs,
       turnKeys,
       turnStatuses,

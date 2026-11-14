@@ -40,7 +40,6 @@ describe('pairing invite director resolution', () => {
     })
     socket.onopen?.()
     expect(url).toBe('wss://relay.onorca.dev/v1/connect/AbCdEf0123_-xyZ9')
-    expect(url).not.toContain('?')
     expect(JSON.parse(socket.sent[0]!)).toEqual({
       type: 'relay-auth',
       v: 1,

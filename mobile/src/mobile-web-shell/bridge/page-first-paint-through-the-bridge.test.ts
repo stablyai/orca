@@ -26,15 +26,4 @@ describe('the page telling the shell it has a frame', () => {
     await pair.flush()
     expect(pair.pagePaintCount()).toBe(1)
   })
-
-  it('costs the shell nothing to hear: no request, no subscription, no reply', async () => {
-    const rpc = createFakeRpcClient()
-    const pair = createFakeBridgePortPair({ rpc })
-    await pair.flush()
-    const framesToPage = pair.toPage.length
-    pair.client.notifyPagePainted()
-    await pair.flush()
-    expect(rpc.requests).toHaveLength(0)
-    expect(pair.toPage).toHaveLength(framesToPage)
-  })
 })

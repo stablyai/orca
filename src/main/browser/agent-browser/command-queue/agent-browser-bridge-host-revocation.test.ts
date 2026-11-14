@@ -20,7 +20,8 @@ vi.mock('fs', () => ({
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
-  webContents: { fromId: webContentsFromIdMock }
+  webContents: { fromId: webContentsFromIdMock },
+  BrowserWindow: { fromWebContents: () => null }
 }))
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []

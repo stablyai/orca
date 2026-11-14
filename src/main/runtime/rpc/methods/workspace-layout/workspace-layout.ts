@@ -10,8 +10,8 @@ import {
   LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
-} from '../../../../../shared/rpc-contract/workspace-layout-params'
-import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout-held-panes-params'
+} from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-held-panes-params'
 import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { getAppEnvironment } from '../../../../../shared/app-environment'

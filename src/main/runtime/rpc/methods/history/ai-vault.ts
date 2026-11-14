@@ -38,7 +38,7 @@ import {
   AiVaultPrepareSessionHandoffParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
-} from '../../../../../shared/rpc-contract/ai-vault-params'
+} from '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
 
 export const AI_VAULT_METHODS = [
   defineMethod({

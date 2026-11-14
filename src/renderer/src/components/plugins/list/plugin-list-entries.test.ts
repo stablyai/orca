@@ -3,7 +3,7 @@ import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-l
 import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
-} from '../../../../../preload/api/plugin-host-api'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { buildPluginListEntries } from './plugin-list-entries'
 
 function listing(pluginKey: string, extra: Partial<PluginMarketplaceHostListing> = {}) {

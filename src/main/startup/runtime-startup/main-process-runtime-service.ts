@@ -25,10 +25,10 @@ import { agentHookRuntimeDeps } from '../../agent-hooks/runtime/agent-hook-runti
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
-import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/orchestration-environment-transport'
-import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/runtime-environment-verified-transitions'
-import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/runtime-environment-status-owner'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/requests/orchestration-environment-transport'
+import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/status/runtime-environment-verified-transitions'
+import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/status/runtime-environment-status-owner'
 import { mainProcessState as state } from '../main-process-state'
 import { suspendEphemeralVmWorkspace } from '../../ephemeral-vm/workspace-suspend'
 import {
@@ -41,7 +41,7 @@ import {
   isRecipeVmSshTargetAsleep,
   setRecipeVmAsleepStoreRoot
 } from '../../ephemeral-vm/recipe-vm-asleep'
-import { openRecipeVmEnvironment } from '../../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
+import { openRecipeVmEnvironment } from '../../ipc/runtime-environments/managed-orcad/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findWorkspaceEphemeralVmRuntime } from '../../../shared/ephemeral-vm-workspace-runtime'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
@@ -61,7 +61,7 @@ import {
 import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import { openOffscreenBrowserPageLink } from '../../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {

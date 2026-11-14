@@ -6,6 +6,7 @@ import type {
 export type NativeMethod =
   | 'handshake'
   | 'listApps'
+  | 'launchApp'
   | 'listWindows'
   | 'getAppState'
   | 'click'
@@ -20,7 +21,7 @@ export type NativeMethod =
 
 export type NativeActionMethod = Exclude<
   NativeMethod,
-  'handshake' | 'listApps' | 'listWindows' | 'getAppState'
+  'handshake' | 'listApps' | 'launchApp' | 'listWindows' | 'getAppState'
 >
 
 export type BridgeFrame = {
@@ -40,6 +41,7 @@ export type BridgeElement = {
   className?: string
   value?: string
   isSelected?: boolean
+  isDisabled?: boolean
   nativeWindowHandle?: number
   frame?: BridgeFrame | null
   actions?: string[]
@@ -124,6 +126,9 @@ export type BridgeResponse = {
     pid: number
   }
   windows?: BridgeWindow[]
+  /** launch_app: false when the app was already running. */
+  launched?: boolean
+  delivery?: 'background' | 'foreground'
   snapshot?: BridgeSnapshot
   action?: ComputerActionMetadata
 }
@@ -158,4 +163,6 @@ export type BridgeRequest = {
   windowIndex?: number
   noScreenshot?: boolean
   restoreWindow?: boolean
+  /** launch_app: let the started app take the foreground. */
+  activate?: boolean
 }

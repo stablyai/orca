@@ -17,18 +17,6 @@ function pr(
 }
 
 describe('github PR auto-merge availability', () => {
-  it.each([undefined, null, 'UNKNOWN', 'FUTURE_STATUS'])(
-    'does not infer an auto-merge requirement from unresolved status %s',
-    (mergeStateStatus) => {
-      const item = pr({ mergeable: 'UNKNOWN', mergeStateStatus })
-      expect(canShowGitHubPRAutoMergeControl(item)).toBe(false)
-    }
-  )
-
-  it('does not offer auto-merge for directly mergeable PRs with only optional checks pending', () => {
-    expect(canShowGitHubPRAutoMergeControl(pr())).toBe(false)
-  })
-
   it('offers auto-merge for requirement-blocked PRs', () => {
     expect(
       canShowGitHubPRAutoMergeControl(

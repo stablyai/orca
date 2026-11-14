@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import { CircleCheck, CircleDashed, LoaderCircle } from 'lucide-react'
-import type { PtyManagementFolderAccessMismatch } from '../../../../preload/api/pty-management-api'
+import type { PtyManagementFolderAccessMismatch } from '../../../../preload/api/terminal/pty-management-api'
 import { isMacTccFolderClass } from '../../../../shared/daemon-adoption-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'

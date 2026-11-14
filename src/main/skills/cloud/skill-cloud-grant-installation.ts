@@ -14,7 +14,7 @@ import type {
   SkillInstallRequest
 } from '../../../shared/skill-install-contract'
 import type { SkillCloudDownloadGrant } from '../../../shared/skill-cloud-contract'
-import { getRuntimeEnvironmentStatus } from '../../ipc/runtime-environments/runtime-environment-status-probe'
+import { getRuntimeEnvironmentStatus } from '../../ipc/runtime-environments/status/runtime-environment-status-probe'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { skillInstallFailureFromError } from '../install/skill-install-operation-error'
 import { recordSkillCapabilityAbsence } from '../observability/skill-operation-observability'

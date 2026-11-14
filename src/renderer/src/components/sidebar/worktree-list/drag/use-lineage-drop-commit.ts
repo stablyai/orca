@@ -11,7 +11,7 @@ import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-c
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,
   getReorderUnnestRows,

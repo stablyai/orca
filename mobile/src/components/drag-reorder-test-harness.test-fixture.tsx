@@ -241,7 +241,10 @@ vi.mock('../layout/use-shell-side-rail', () => ({ useDirectionPadAvailable: () =
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {} }
 }))
-vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn(), triggerSelection: vi.fn() }))
+vi.mock('../platform/haptics/haptics', () => ({
+  triggerMediumImpact: vi.fn(),
+  triggerSelection: vi.fn()
+}))
 
 import { DragReorderList } from './DragReorderList'
 

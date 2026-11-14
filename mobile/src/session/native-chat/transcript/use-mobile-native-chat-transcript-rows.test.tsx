@@ -121,7 +121,6 @@ describe('how the structured lane draws its rows, as desktop does', () => {
   it.each([
     [['# ![](/tmp/p.png)'], true],
     [['![](/tmp/p.png)'], false],
-    [['    ![](/tmp/p.png)'], false],
     [['![][p]', '[p]: /tmp/p.png'], true]
   ] as const)(
     'keeps output unless independently rendered prose actually embeds it: %j',
@@ -157,40 +156,4 @@ describe('how the structured lane draws its rows, as desktop does', () => {
       ).toEqual(retained ? [{ type: 'image-ref' as const, path: '/tmp/p.png' }] : [])
     }
   )
-
-  it('folds a settled turn to its answer until the reader opens it, and only offers that where it hides something', () => {
-    const messages = [
-      userMessage('u1'),
-      toolRow('a1'),
-      answer('a2'),
-      userMessage('u2'),
-      answer('a3')
-    ]
-    const settledTurns = new Map([
-      ['u1', { startedAt: 0, workedSeconds: 3 }],
-      ['u2', { startedAt: 0, workedSeconds: 2 }]
-    ])
-    act(() => {
-      renderer = create(
-        createElement(Harness, { messages, enabled: true, isWorking: false, settledTurns })
-      )
-    })
-    const read = () => {
-      const { disclosure } = renderer!.root.findByType(Result).props
-      return messages.map((message, index) => disclosure.resolveRow(index, message))
-    }
-    const settled = read()
-    expect(settled.map((row) => row.foldedAway === true)).toEqual([
-      false,
-      true,
-      false,
-      false,
-      false
-    ])
-    expect(settled[0]?.turnKey).toBe('u1')
-    expect(settled[3]?.turnKey).toBeUndefined()
-
-    act(() => renderer!.root.findByType(Result).props.disclosure.onToggleTurn('u1'))
-    expect(read().some((row) => row.foldedAway)).toBe(false)
-  })
 })

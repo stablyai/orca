@@ -4,7 +4,7 @@
     "src/main/index.ts",
     "src/preload/index.ts",
     "src/preload/browser-guest.ts",
-    "src/preload/browser-passkey-request.ts",
+    "src/preload/browser-system-dialogs.ts",
     "src/main/daemon/daemon-entry.ts",
     "src/main/plugins/workers/plugin-host-entry.ts",
     "src/main/computer/computer-sidecar.ts",
@@ -60,7 +60,7 @@
     "src/**/*.test-fixture.{ts,tsx}",
     "src/main/runtime/rpc/dispatch/rpc-params-type-parity.ts",
     "src/main/runtime/rpc/methods/client-state/ui-state-schema-parity-checks.ts",
-    "src/renderer/src/components/editor/monaco-internal-test-module-types.ts",
+    "src/renderer/src/components/editor/monaco/monaco-internal-test-module-types.ts",
     "mobile/**/*.{ts,tsx}",
     "cloud/**/*.{ts,tsx,mjs}"
   ],

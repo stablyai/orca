@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { defineHostQuery, fetchHostQuery } from '../../query/host-query'
 import { hostQueryKey, type HostQueryTarget } from '../../query/host-query-key'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { gitStatusQuery } from '../mobile-git-status-query'
+import { gitStatusQuery } from '../changes/mobile-git-status-query'
 import type {
   BranchCompareLoadResult,
   MobileBranchCompareCache

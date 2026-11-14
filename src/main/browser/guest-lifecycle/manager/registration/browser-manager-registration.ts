@@ -222,6 +222,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.unregisterGuest(browserTabId)
     }
     this.policyAttachedGuestIds.clear()
+    this.agentLedGuestIds.clear()
     this.offscreenGuestIds.clear()
     // Also clean up guests attached before registration.
     for (const cleanup of this.policyCleanupByGuestId.values()) {

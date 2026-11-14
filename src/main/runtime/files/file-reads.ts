@@ -28,7 +28,11 @@ import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
-import { filePreviewForPath } from '../../../shared/file-preview/file-preview-kind'
+import {
+  filePreviewExtension,
+  filePreviewForPath
+} from '../../../shared/file-preview/file-preview-kind'
+import { detectImageFileSignature } from '../../../shared/image-file-signature'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
@@ -211,15 +215,20 @@ export class RuntimeFileReads {
       const imagePath = await resolveLocalFileRequestPath(filePath, CHAT_IMAGE_ACCESS, store)
       // Paths inside project roots skip the rule's type check.
       const preview = filePreviewForPath(imagePath)
-      if (preview?.kind !== 'image') {
+      const extensionless = filePreviewExtension(imagePath) === ''
+      if (preview?.kind !== 'image' && !extensionless) {
         throw new Error('not_an_image')
       }
-      const { mimeType } = preview
       const buffer = await readPreviewBytes(
         windowsFsPath(imagePath),
         binaryPreviewMaxBytes(maxContentBytes),
         { regularFileOnly: true }
       )
+      const mimeType =
+        preview?.kind === 'image' ? preview.mimeType : detectImageFileSignature(buffer)?.mimeType
+      if (!mimeType) {
+        throw new Error('not_an_image')
+      }
       return assertPreviewWithinTransportBudget(
         { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
         maxContentBytes

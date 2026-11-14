@@ -2,7 +2,7 @@ import { normalizeRuntimePathSeparators } from './cross-platform-path'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from './worktree/visibility-sources'
+} from './worktree/visibility/visibility-sources'
 import type { WorktreeVisibilityDefaults } from './global-settings-types'
 import type { ExternalWorktreeVisibility, Repo } from './repo-types'
 
