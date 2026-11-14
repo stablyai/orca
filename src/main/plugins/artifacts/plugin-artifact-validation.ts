@@ -15,7 +15,7 @@ import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../../shared/plugins/frames/plu
 import {
   isPluginWorktreeBadgeSvgIcon,
   PLUGIN_WORKTREE_BADGE_SVG_MAX_BYTES
-} from '../../shared/plugins/contributions/plugin-worktree-badge-contribution'
+} from '../../../shared/plugins/contributions/plugin-worktree-badge-contribution'
 import {
   PLUGIN_WORKER_ENTRY_MAX_BYTES,
   readContainedPluginArtifactBytes,

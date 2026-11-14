@@ -14,7 +14,7 @@ import { PluginKvStore } from '../../storage/plugin-storage-store'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
-import type { PluginCommandWorkspaceResolver } from '../../plugin-command-invocation'
+import type { PluginCommandWorkspaceResolver } from '../../commands/plugin-command-invocation'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 
 export type PluginRuntimeDelegate = {
