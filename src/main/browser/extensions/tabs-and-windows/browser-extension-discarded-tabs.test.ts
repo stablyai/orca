@@ -47,7 +47,7 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
       new Map([...mocks.pageByGuest].map(([id, pageId]) => [pageId, id])),
     getTabIdForWebContentsId: (id: number) => mocks.pageByGuest.get(id) ?? null,
     getWorktreeIdForTab: () => undefined,
-    isAgentUsingGuest: () => false,
+    isAgentLeadingGuest: () => false,
     findAgentPageInSession: () => null
   }
 }))

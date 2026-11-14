@@ -25,7 +25,7 @@ export function findBrowserExtensionCallerAgentPage(
   caller: BrowserExtensionCaller
 ): AgentPage | null {
   // Why first: an agent's click on an extension page also counts as that page's user gesture.
-  if (caller.webContents && browserManager.isAgentUsingGuest(caller.webContents.id)) {
+  if (caller.webContents && browserManager.isAgentLeadingGuest(caller.webContents.id)) {
     return pageOfGuest(caller.webContents.id)
   }
   if (hasBrowserExtensionUserGesture(caller)) {
