@@ -19669,7 +19669,7 @@
       "queuedMessages": {
         "steer": "引導",
         "send": "傳送",
-        "steerHint": "提交且不中斷模型",
+        "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
         "moreActions": "更多操作",

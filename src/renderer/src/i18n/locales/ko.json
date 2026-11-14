@@ -19228,7 +19228,7 @@
         "listLabel": "대기 중인 메시지",
         "steer": "지금 보내기",
         "send": "보내기",
-        "steerHint": "모델을 중단하지 않고 보냅니다",
+        "steerHint": "에이전트가 작업하는 동안 지금 보냅니다",
         "sendHint": "이 메시지를 지금 보냅니다",
         "delete": "삭제",
         "moreActions": "추가 작업",

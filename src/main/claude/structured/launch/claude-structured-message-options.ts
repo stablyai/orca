@@ -74,6 +74,30 @@ export async function applyClaudeMessageOptions(
   throwIfSignalAborted(signal)
 }
 
+// Bounded so an unanswered request still lets the steer through.
+const CLAUDE_STEER_BACKGROUND_TIMEOUT_MS = 5_000
+
+/** A steer interrupts the running step but waits on foreground subagents and commands, so they keep running in the background. */
+async function backgroundClaudeWorkForSteer(
+  session: ClaudeSession,
+  input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
+  logger: StructuredAgentSessionLogger
+): Promise<void> {
+  try {
+    await session.connection.backgroundTasks({ timeoutMs: CLAUDE_STEER_BACKGROUND_TIMEOUT_MS })
+  } catch (error) {
+    neverThrowingStructuredAgentSessionLogger(logger).warn(
+      'moving Claude foreground work to the background for a steer failed',
+      {
+        scope: 'claude-message-options',
+        sessionId: input.sessionId,
+        clientMessageId: input.clientMessageId,
+        error
+      }
+    )
+  }
+}
+
 export async function dispatchClaudeMessage(
   session: ClaudeSession,
   input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
@@ -84,6 +108,9 @@ export async function dispatchClaudeMessage(
   const outcome = await dispatchClaudeTurn(session, input, async () => {
     try {
       input.signal?.throwIfAborted()
+      const steers =
+        session.translator?.openTurnHasInputWork === true &&
+        input.body.from?.orchestration?.message !== 'mail-notice'
       // Input joining a running turn, and Orca mail notices, run on the choices Claude already has;
       // new choices apply at the next new turn.
       const messageOptions =
@@ -99,11 +126,18 @@ export async function dispatchClaudeMessage(
       }
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
+      if (steers) {
+        await waitForPromiseWithSignal(
+          backgroundClaudeWorkForSteer(session, input, logger),
+          input.signal
+        )
+      }
       input.onExecutionSnapshot?.()
       ranOptions = claudeExecutionObservations(session)
       if (messageOptions?.model && ranOptions.model !== messageOptions.model) {
         delete ranOptions.model
       }
+      return { steers }
     } catch (error) {
       neverThrowingStructuredAgentSessionLogger(logger).warn(
         'applying Claude message choices failed',

@@ -19541,7 +19541,7 @@
         "listLabel": "Mensajes en cola",
         "steer": "Enviar ahora",
         "send": "Enviar",
-        "steerHint": "Enviar sin interrumpir al modelo",
+        "steerHint": "Enviar ahora, mientras el agente sigue trabajando",
         "sendHint": "Enviar este mensaje ahora",
         "delete": "Eliminar",
         "moreActions": "Más acciones",

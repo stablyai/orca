@@ -19976,7 +19976,7 @@
       "queuedMessages": {
         "steer": "Steuern",
         "send": "Senden",
-        "steerHint": "Ohne Unterbrechung des Modells übermitteln",
+        "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
         "moreActions": "Weitere Aktionen",
