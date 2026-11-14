@@ -6,7 +6,7 @@ import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type P
 import { StripeError, assertKeyMode, type StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
 import { orgIdOf, type MembershipSource } from './membership'
-import { setupCheckoutReturnUrls } from './cloud-setup-urls'
+import { pagesOrigin, setupCheckoutReturnUrls } from './cloud-setup-urls'
 import { accountTerms } from './entitlements'
 import { entitlementsMode } from './entitlements-mode'
 import { loadCatalog } from './catalog'
@@ -20,9 +20,14 @@ export const CheckoutRequestSchema = z
     interval: z.enum(BILLING_INTERVALS).default('month'),
     seats: z.number().int().min(1).max(MAX_TEAM_SEATS).default(1),
     // The in-app plans dialog joins an open setup session: Checkout returns to its next step.
-    setupSessionId: z.string().regex(/^cs_[A-Za-z0-9_-]{22}$/).optional()
+    setupSessionId: z.string().regex(/^cs_[A-Za-z0-9_-]{22}$/).optional(),
+    // Started from the web console: Checkout returns to the team's console billing page.
+    returnTo: z.literal('console').optional()
   })
   .strict()
+
+/** POST /v1/billing/portal: an empty body is the desktop; `returnTo: 'console'` the web console. */
+export const PortalRequestSchema = z.object({ returnTo: z.literal('console').optional() }).strict()
 
 export const OPEN_STATUSES = new Set(['active', 'trialing', 'past_due', 'incomplete', 'unpaid', 'paused'])
 
@@ -35,6 +40,25 @@ function returnUrl(env: Env, params: Record<string, string>): string {
   }
   // Stripe substitutes this literal placeholder; URLSearchParams would percent-encode the braces.
   return url.toString().replace('CHECKOUT_SESSION_ID_PLACEHOLDER', '{CHECKOUT_SESSION_ID}')
+}
+
+/**
+ * The team's billing page in the web console (served by Orca Cloud auth), for flows the console
+ * started. Built only from this Worker's config and the caller's own account, never from the
+ * request, so it cannot be pointed anywhere else. `CONSOLE_URL` unset: the auth origin, which
+ * forwards /console to the console's own host.
+ */
+export function consoleBillingUrl(env: Env, accountId: string, notice?: string): string | null {
+  const orgId = orgIdOf(accountId)
+  if (!orgId) {
+    return null
+  }
+  const origin = (env.CONSOLE_URL ?? pagesOrigin(env)).replace(/\/$/, '')
+  const url = new URL(`${origin}/console/orgs/${encodeURIComponent(orgId)}/billing`)
+  if (notice) {
+    url.searchParams.set('notice', notice)
+  }
+  return url.toString()
 }
 
 async function ensureCustomer(env: Env, stripe: StripeClient, caller: BillingCaller, now: number): Promise<string> {
@@ -54,7 +78,7 @@ export async function createCheckout(
   request: { plan: PlanId; interval: BillingInterval; seats: number },
   now: number,
   membership: MembershipSource,
-  options: { setupSessionId?: string } = {}
+  options: { setupSessionId?: string; returnTo?: 'console' } = {}
 ): Promise<CheckoutOutcome> {
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
@@ -109,7 +133,11 @@ export async function createCheckout(
     interval: request.interval,
     ...(options.setupSessionId ? { setup_session_id: options.setupSessionId } : {})
   }
-  const setupReturn = options.setupSessionId ? setupCheckoutReturnUrls(env, options.setupSessionId) : null
+  const setupReturn = options.setupSessionId
+    ? setupCheckoutReturnUrls(env, options.setupSessionId)
+    : options.returnTo === 'console'
+      ? consoleCheckoutReturnUrls(env, caller.accountId)
+      : null
   const session = await stripe.createCheckoutSession(
     {
       mode: 'subscription',
@@ -146,7 +174,18 @@ async function seatPriceFor(env: Env, plan: PlanId, interval: BillingInterval, n
   return checkoutPrice(catalog, plan, interval)?.stripe_price_id ?? null
 }
 
-export async function createPortal(env: Env, stripe: StripeClient, caller: BillingCaller): Promise<CheckoutOutcome> {
+function consoleCheckoutReturnUrls(env: Env, accountId: string): { success: string; cancel: string } | null {
+  const success = consoleBillingUrl(env, accountId, 'checkout_success')
+  const cancel = consoleBillingUrl(env, accountId, 'checkout_canceled')
+  return success && cancel ? { success, cancel } : null
+}
+
+export async function createPortal(
+  env: Env,
+  stripe: StripeClient,
+  caller: BillingCaller,
+  options: { returnTo?: 'console' } = {}
+): Promise<CheckoutOutcome> {
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
   }
@@ -155,7 +194,13 @@ export async function createPortal(env: Env, stripe: StripeClient, caller: Billi
     return { ok: false, status: 404, error: 'no_billing_account' }
   }
   const session = await stripe.createPortalSession(
-    { customer, returnUrl: returnUrl(env, { portal: 'return' }), configuration: env.STRIPE_PORTAL_CONFIGURATION },
+    {
+      customer,
+      returnUrl:
+        (options.returnTo === 'console' ? consoleBillingUrl(env, caller.accountId, 'portal_returned') : null) ??
+        returnUrl(env, { portal: 'return' }),
+      configuration: env.STRIPE_PORTAL_CONFIGURATION
+    },
     `portal:${caller.accountId}:${crypto.randomUUID()}`
   )
   return { ok: true, url: session.url }

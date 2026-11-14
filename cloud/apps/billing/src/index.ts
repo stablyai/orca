@@ -47,7 +47,7 @@ import { SeatSyncSchema, reconcileSeats, syncSeats } from './seats'
 import { MembershipUnavailableError, authMembershipSource, type MembershipSource } from './membership'
 import { TeamPlansRequestSchema, authOrgMemberCheck, teamPlans, type OrgMemberCheck } from './team-plans'
 import { currentSubscription, graceExpiredAccounts } from './store'
-import { CheckoutRequestSchema, createCheckout, createPortal, OPEN_STATUSES } from './checkout'
+import { CheckoutRequestSchema, PortalRequestSchema, createCheckout, createPortal, OPEN_STATUSES } from './checkout'
 import { checkStart, computeEntitlement, entitlementsMode } from './entitlements'
 import { CatalogUnavailableError, loadCatalog, policyFor } from './catalog'
 import { backfillGrants } from './entitlements-backfill'
@@ -441,7 +441,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        const { setupSessionId, ...checkout } = body.data
+        const { setupSessionId, returnTo, ...checkout } = body.data
         if (setupSessionId) {
           // The plans dialog joins the open setup session only for its own user and team.
           const session = await loadSetupSession(env, setupSessionId, now)
@@ -449,7 +449,15 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
             return json({ error: 'setup_session_mismatch' }, 409)
           }
         }
-        const outcome = await createCheckout(env, stripe, caller, checkout, now, membership, setupSessionId ? { setupSessionId } : {})
+        const outcome = await createCheckout(
+          env,
+          stripe,
+          caller,
+          checkout,
+          now,
+          membership,
+          setupSessionId ? { setupSessionId } : returnTo ? { returnTo } : {}
+        )
         return outcome.ok ? json({ url: outcome.url }) : json({ error: outcome.error }, outcome.status)
       }
 
@@ -501,7 +509,12 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)
         }
-        const outcome = await createPortal(env, stripe, caller)
+        // Older desktops send no body; the web console sends { returnTo: 'console' }.
+        const body = PortalRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        const outcome = await createPortal(env, stripe, caller, body.data)
         return outcome.ok ? json({ url: outcome.url }) : json({ error: outcome.error }, outcome.status)
       }
 

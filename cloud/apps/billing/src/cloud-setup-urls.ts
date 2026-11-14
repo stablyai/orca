@@ -9,7 +9,7 @@ export class SetupPagesConfigError extends Error {
   }
 }
 
-function pagesOrigin(env: Env): string {
+export function pagesOrigin(env: Env): string {
   if (!env.CLOUD_SETUP_PAGES_URL && env.BILLING_ENV === 'prod') {
     // Prod must name its pages origin; the fallback below is only a dev/staging convenience.
     throw new SetupPagesConfigError()

@@ -119,6 +119,52 @@ describe('checkout and portal', () => {
   })
 })
 
+describe('checkout and portal started from the web console', () => {
+  it('returns to the team’s console billing page, and only there', async () => {
+    const h = await createHarness()
+    h.env.CONSOLE_URL = 'https://app.example.test/'
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    const auth = { authorization: `Bearer ${token}` }
+    const started = await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 2, returnTo: 'console' }, headers: auth })
+    expect(started.status).toBe(200)
+    const checkout = h.stripe.calls.find((call) => call.method === 'POST' && call.path === '/v1/checkout/sessions')!
+    expect(checkout.form.get('success_url')).toBe('https://app.example.test/console/orgs/o1/billing?notice=checkout_success')
+    expect(checkout.form.get('cancel_url')).toBe('https://app.example.test/console/orgs/o1/billing?notice=checkout_canceled')
+    // Anything else is refused rather than used as a return address.
+    for (const returnTo of ['https://evil.example', 'desktop', true]) {
+      expect((await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', returnTo }, headers: auth })).status).toBe(400)
+    }
+  })
+
+  it('keeps the desktop return page for desktop-started flows', async () => {
+    const { h, auth } = await subscribedTeam()
+    h.env.CONSOLE_URL = 'https://app.example.test'
+    await h.call('POST', '/v1/billing/portal', { headers: auth })
+    await h.call('POST', '/v1/billing/portal', { body: {}, headers: auth })
+    await h.call('POST', '/v1/billing/portal', { body: { returnTo: 'console' }, headers: auth })
+    const urls = h.stripe.calls
+      .filter((entry) => entry.path === '/v1/billing_portal/sessions')
+      .map((entry) => entry.form.get('return_url'))
+    expect(urls[0]).toBe(urls[1])
+    expect(urls[0]).toContain('portal=return')
+    expect(urls[0]).not.toContain('/console/')
+    expect(urls[2]).toBe('https://app.example.test/console/orgs/o1/billing?notice=portal_returned')
+    expect((await h.call('POST', '/v1/billing/portal', { body: { returnTo: 'x' }, headers: auth })).status).toBe(400)
+  })
+
+  it('falls back to the setup pages origin, which forwards /console to the console host', async () => {
+    const h = await createHarness()
+    h.env.CLOUD_SETUP_PAGES_URL = 'https://auth.example.test'
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    await h.call('POST', '/v1/billing/checkout', {
+      body: { plan: 'team', returnTo: 'console' },
+      headers: { authorization: `Bearer ${token}` }
+    })
+    const checkout = h.stripe.calls.find((call) => call.method === 'POST' && call.path === '/v1/checkout/sessions')!
+    expect(checkout.form.get('success_url')).toBe('https://auth.example.test/console/orgs/o1/billing?notice=checkout_success')
+  })
+})
+
 describe('webhooks', () => {
   it('rejects unsigned or mis-signed deliveries without touching state', async () => {
     const { h, subscription, customer } = await subscribedTeam()
