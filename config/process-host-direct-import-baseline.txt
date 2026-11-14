@@ -28,8 +28,6 @@ src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editors/external-editor-launch.ts
 src/main/git/command-runner/process-capture/exec-file-capture.ts
-src/main/git/command-runner/git-exec-file-sync.ts
-src/main/git/command-runner/git-spawn.ts
 src/main/git/command-runner/git-stream-stdout.ts
 src/main/git/command-runner/process-capture/spawn-command-capture.ts
 src/main/git/command-runner/process-capture/spawned-command-tree-kill.ts
@@ -56,7 +54,7 @@ src/main/network/macos-tailscale-dns-diagnostic.ts
 src/main/plugins/workers/parent-process/plugin-host-process.ts
 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
-src/main/providers/process-cwd.ts
+src/main/providers/working-directory/process-cwd.ts
 src/main/pty/process-retirement/pty-descendant-fresh-table.ts
 src/main/rate-limits/providers/gemini/gemini-cli-oauth-extractor.ts
 src/main/runtime/rpc/server/pairing/network/windows-default-route-interfaces.ts
@@ -73,4 +71,4 @@ src/shared/fish-binary-requirement.ts
 src/shared/process-table-ps-capture.ts
 src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
 src/shared/terminal/pty/native-process/shell-process-readiness.ts
-src/wsl-guest/preflight-handler.ts
+src/wsl-guest/commands/preflight-handler.ts

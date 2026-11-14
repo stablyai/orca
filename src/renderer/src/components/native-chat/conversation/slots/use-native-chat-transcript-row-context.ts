@@ -24,7 +24,7 @@ export function useNativeChatTranscriptRowContext({
   runtimeContext,
   structuredAttachments,
   onToggleExpandedTurn,
-  subagentDisclosure,
+  onOpenSubagent,
   onScrollMessageToTop,
   onRevealDiff
 }: NativeChatTranscriptRowContextInput): NativeChatTranscriptRowContext {
@@ -41,7 +41,7 @@ export function useNativeChatTranscriptRowContext({
       runtimeContext,
       structuredAttachments,
       onToggleExpandedTurn,
-      subagentDisclosure,
+      onOpenSubagent,
       onScrollMessageToTop,
       onRevealDiff
     }),
@@ -58,7 +58,7 @@ export function useNativeChatTranscriptRowContext({
       structuredAttachments,
       onScrollMessageToTop,
       taskListPredecessors,
-      subagentDisclosure,
+      onOpenSubagent,
       onToggleExpandedTurn
     ]
   )

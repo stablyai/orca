@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
-} from '../../../../../shared/rpc-contract/usage-credentials-params'
+} from '../../../../../shared/rpc-contract/accounts/usage-credentials-params'
 import {
   assertMiniMaxCredentialOpensHere,
   clearMiniMaxApiKeyCredential,

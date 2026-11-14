@@ -51,8 +51,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     [
       'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',
       'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
+      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
+      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',

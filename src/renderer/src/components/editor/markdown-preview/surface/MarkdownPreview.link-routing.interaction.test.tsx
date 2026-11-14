@@ -189,6 +189,31 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     })
   }
 
+  it('plain left-click opens an HTTP link in Orca even when openLinksInApp is false', () => {
+    registerHttpLinkStoreAccessor(() => ({
+      settings: { openLinksInApp: false, activeRuntimeEnvironmentId: null },
+      setActiveWorktree: setActiveWorktreeMock,
+      createBrowserTab: createBrowserTabMock
+    }))
+    const anchor = render()
+    click(anchor, { button: 0 })
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('middle-click opens an HTTP link in the system browser', () => {
+    const anchor = render()
+    act(() => {
+      anchor.dispatchEvent(
+        new window.MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
+      )
+    })
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
   it('Cmd+Shift-click opens the link in the system default browser', () => {
     const anchor = render()
     click(anchor, { metaKey: true, shiftKey: true })

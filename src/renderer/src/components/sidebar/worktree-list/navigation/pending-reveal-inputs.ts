@@ -1,3 +1,5 @@
+import { supersedeVirtualizedScrollAnchorRestore } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -12,7 +14,7 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
@@ -176,4 +178,32 @@ export function resolvePendingWorktreeRevealTarget(
           ) && !isRevealTargetInHiddenProject(args.worktrees, args.defaultHostId, request)
       })
   return { targetIndex, outcome }
+}
+
+export function preparePendingSidebarRowReveal(
+  args: PendingSidebarRevealArgs,
+  request: PendingSidebarRowReveal
+): boolean {
+  const isProjectHeaderTarget =
+    request.rowKey.startsWith('project-group:') ||
+    request.rowKey.startsWith('project:') ||
+    request.rowKey.startsWith('repo:')
+  if (isProjectHeaderTarget && args.groupBy !== 'repo') {
+    return false
+  }
+
+  supersedeVirtualizedScrollAnchorRestore(args.scrollRef.current)
+  let toggledAncestor = false
+  for (const groupKey of getSidebarRowRevealAncestorKeys({
+    rowKey: request.rowKey,
+    repoMap: args.repoMap,
+    projectGroups: args.projectGroups,
+    projectGrouping: args.projectGrouping
+  })) {
+    if (args.collapsedGroups.has(groupKey)) {
+      args.toggleGroup(groupKey)
+      toggledAncestor = true
+    }
+  }
+  return !toggledAncestor
 }

@@ -13,7 +13,7 @@ import { View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { Check, ExternalLink } from 'lucide-react-native'
 import { TextField } from '../../components/composer-input/TextField'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { styles } from '../mobile-tasks-legacy-styles'
 
 export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentationModel) {

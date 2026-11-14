@@ -9,10 +9,24 @@ import {
 import { BranchRefSnapshotStore, BranchSnapshotIdentityChanged } from './branch-ref-snapshot-store'
 import { subscribeGitRefChanges } from '../git-ref-change-signal'
 import { readTranslatedWorktreeGraph } from '../../worktrees/catalog/worktree-list-reader'
+import { withRepositoryGitCause } from '../../repository-git-cause'
 
 const snapshots = new BranchRefSnapshotStore({ subscribe: subscribeGitRefChanges })
 
 async function withIdentity<T>(
+  path: string,
+  git: LocalGitExecOptions,
+  read: (identity: BranchSnapshotIdentity) => Promise<T>
+): Promise<T> {
+  return withRepositoryGitCause(
+    path,
+    git,
+    { family: 'refs', reason: 'branch-snapshot', cache: 'uncached' },
+    () => readWithIdentity(path, git, read)
+  )
+}
+
+async function readWithIdentity<T>(
   path: string,
   git: LocalGitExecOptions,
   read: (identity: BranchSnapshotIdentity) => Promise<T>

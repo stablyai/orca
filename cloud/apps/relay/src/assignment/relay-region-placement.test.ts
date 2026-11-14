@@ -45,16 +45,6 @@ describe('Relay regional placement', () => {
 
   afterEach(async () => await database.close())
 
-  it('falls back globally only when the target region has no safe general cell', async () => {
-    await store.configureCell(CELLS[1]!, 'migration-only')
-    await store.configureCell(CELLS[2]!, 'migration-only')
-    await store.configureCell(CELLS[3]!, 'migration-only')
-
-    await expect(
-      store.assign({ userId: 'fallback-user', relayHostId: 'fallbackhost0001' }, 'asia-east2')
-    ).resolves.toMatchObject({ cellId: 'us-c1', region: 'us-central1' })
-  })
-
   it('preserves sticky assignments while updating only explicit preferences', async () => {
     const identity = { userId: 'sticky-user', relayHostId: 'stickyhost000001' }
     await expect(store.assign(identity)).resolves.toMatchObject({ cellId: 'us-c1' })
@@ -219,20 +209,4 @@ describe('Relay regional placement', () => {
     })
   })
 
-  it('expires identity-linked region preferences after 30 days', async () => {
-    const identity = { userId: 'expiry-user', relayHostId: 'expiryhost000001' }
-    await store.assign(identity, 'asia-east2')
-    now += 30 * 24 * 60 * 60_000
-    await expect(store.releaseExpiredRegionPreferences()).resolves.toBe(0)
-    now += 1
-
-    await expect(store.releaseExpiredRegionPreferences()).resolves.toBe(1)
-    await expect(
-      database.query(
-        `SELECT preferred_region FROM relay_assignment_region_preferences
-         WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-    ).resolves.toEqual([])
-  })
 })

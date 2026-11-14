@@ -2,8 +2,8 @@ import { ProducerRevision } from '../../sidebar-inputs/producer-revision'
 import type {
   WorkspaceLifecycleHint,
   WorkspaceLifecycleKind
-} from '../../../../shared/sidebar-list/workspace-lifecycle-hints'
-import type { WorkspaceCreationsSnapshot } from '../../../../shared/sidebar-list/workspace-creations'
+} from '../../../../shared/sidebar-list/feed-facts/workspace-lifecycle-hints'
+import type { WorkspaceCreationsSnapshot } from '../../../../shared/sidebar-list/feed-facts/workspace-creations'
 import {
   WORKSPACE_DELETED_ERROR,
   attemptLifecycleCommand,

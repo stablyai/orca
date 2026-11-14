@@ -1,4 +1,4 @@
-import type { PreflightStatus } from '../../../../../preload/api/preflight-api'
+import type { PreflightStatus } from '../../../../../preload/api/preflight/preflight-api'
 
 export type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
 export type GlabStatus = GhStatus

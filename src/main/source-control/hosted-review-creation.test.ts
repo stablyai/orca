@@ -120,7 +120,7 @@ vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/source-control/upstream', () => ({
+vi.mock('../git/source-control/upstream/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
 

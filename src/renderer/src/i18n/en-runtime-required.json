@@ -441,6 +441,8 @@
             "discardFailedSampleMore_other": "{{paths}}, +{{count}} more",
             "discardFailed_one": "Failed to discard {{count}} file",
             "discardFailed_other": "Failed to discard {{count}} files",
+            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
+            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
             "noteCount_one": "{{count}} note",
             "noteCount_other": "{{count}} notes"
           },
@@ -935,11 +937,6 @@
           "hiddenWorktreesNoun_other": "hidden worktrees",
           "reviewHiddenWorktrees_one": "Review {{count}} hidden worktree in {{scope}}",
           "reviewHiddenWorktrees_other": "Review {{count}} hidden worktrees in {{scope}}"
-        },
-        "PreservedBranchBatchReviewDialog": {
-          "a0f9863597": "Force Delete {{count}} Branches",
-          "a0f9863597_one": "Force Delete {{count}} Branch",
-          "a0f9863597_other": "Force Delete {{count}} Branches"
         },
         "ProjectGroupDeleteDialog": {
           "moreProjects_one": "+{{count}} more",
@@ -2126,6 +2123,36 @@
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
     },
+    "settings": {
+      "workspaceCleanup": {
+        "activity": {
+          "notListed_one": "1 more kept workspace is not listed.",
+          "notListed_other": "{{count}} more kept workspaces are not listed."
+        },
+        "change": {
+          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
+          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
+        },
+        "enable": {
+          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
+          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on."
+        },
+        "rules": {
+          "inactiveDescription": "No activity for {{count}} days.",
+          "inactiveDescription_one": "No activity for 1 day.",
+          "inactiveDescription_other": "No activity for {{count}} days.",
+          "matchesCount": "Matches {{count}} workspaces now",
+          "matchesCount_one": "Matches 1 workspace now",
+          "matchesCount_other": "Matches {{count}} workspaces now"
+        },
+        "status": {
+          "lastRunFreed_one": "Last run {{when}} removed 1 workspace and freed {{size}}.",
+          "lastRunFreed_other": "Last run {{when}} removed {{count}} workspaces and freed {{size}}.",
+          "lastRunRemoved_one": "Last run {{when}} removed 1 workspace.",
+          "lastRunRemoved_other": "Last run {{when}} removed {{count}} workspaces."
+        }
+      }
+    },
     "tab": {
       "bar": {
         "bulkClose": {
@@ -2153,8 +2180,6 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "confirm": {
-          "deleteTitle_one": "Delete {{count}} workspace?",
-          "deleteTitle_other": "Delete {{count}} workspaces?",
           "deletingTitle_one": "Deleting {{count}} workspace",
           "deletingTitle_other": "Deleting {{count}} workspaces"
         },
@@ -2591,8 +2616,6 @@
     "discard": {
       "deleteUntrackedFilesDescription_one": "This will permanently delete {{count}} untracked file. This cannot be undone.",
       "deleteUntrackedFilesDescription_other": "This will permanently delete these {{count}} untracked files. This cannot be undone.",
-      "deleteUntrackedTitle_one": "Delete {{count}} untracked file?",
-      "deleteUntrackedTitle_other": "Delete {{count}} untracked files?",
       "unstagedFilesIncludingUntrackedDescription_one": "This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone.",
       "unstagedFilesIncludingUntrackedDescription_other": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone."
     },

@@ -15,7 +15,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
 globalThis.window = { api: {} }
 
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { resetDeferredPeerChecksForTests } from './runtime-environment-peer-replacement'
 
