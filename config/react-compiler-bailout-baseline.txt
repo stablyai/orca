@@ -65,7 +65,6 @@
 2 src/renderer/src/components/browser-pane/passwords/BrowserPasswordFillDropdown.tsx
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-input.ts
 4 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-lifecycle.ts
-1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-navigation.ts
 2 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-wheel.ts
 3 src/renderer/src/components/browser-pane/workspace-doc/doc-preview-directory-access.tsx
 1 src/renderer/src/components/browser-pane/workspace-doc/doc-preview-overflow-menu.tsx
