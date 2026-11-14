@@ -105,7 +105,9 @@ export async function classifyBundledSkillPath(
     : null
   const skillDigest = bytes ? bundledSkillTextDigest(bytes) : null
   const observed: BundledSkillObserved = { kind: 'folder', entries, skillDigest }
-  if (entries.length === 1 && skillDigest !== null) {
+  // A bundled skill ships only SKILL.md. A neighbour the bundle never listed,
+  // such as Codex's agents/openai.yaml, is not an edit of that file (#40181).
+  if (skillDigest !== null) {
     if (skillDigest === currentDigest) {
       return { folderClass: 'current', observed }
     }
