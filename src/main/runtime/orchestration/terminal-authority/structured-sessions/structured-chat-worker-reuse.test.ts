@@ -239,6 +239,9 @@ describe('a send to a finished structured worker', () => {
       follow_up_of_dispatch_id: firstDispatchId,
       assignee_orca_session_id: identity.sessionId
     })
+    // The sender learns its message started work, and how to undo that.
+    expect(followUp.next).toContain(`follow-up Dispatch ${String(followUp.dispatchId)}`)
+    expect(followUp.next).toContain(`worker-stop --dispatch ${String(followUp.dispatchId)}`)
   })
 
   it('queued behind the turn the worker reported from is accepted, not unknown', async () => {

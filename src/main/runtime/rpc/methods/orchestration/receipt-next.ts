@@ -43,6 +43,22 @@ export function withWorkerStartNext(
   return { ...ready.data, next }
 }
 
+/** A send that started a finished worker's follow-up says so: the sender may have meant only to inform. */
+export function withWorkerFollowUpNext(receipt: Record<string, unknown>): Record<string, unknown> {
+  const { dispatchId, followUpOf } = receipt
+  if (
+    !ReadyWorkerStart.safeParse(receipt).success ||
+    typeof dispatchId !== 'string' ||
+    typeof followUpOf !== 'string'
+  ) {
+    return receipt
+  }
+  return {
+    ...receipt,
+    next: `Dispatch ${followUpOf} had finished, so this message started follow-up Dispatch ${dispatchId}: the same worker works on it as a new task. If it was only for information, \`orca orchestration worker-stop --dispatch ${dispatchId}\` ends it and closes that worker. ${AWAIT_WAKE}`
+  }
+}
+
 export async function withRunCheckNext(
   runtime: OrcaRuntimeService,
   result: unknown

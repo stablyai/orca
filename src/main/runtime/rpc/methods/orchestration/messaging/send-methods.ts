@@ -26,6 +26,7 @@ import { sendFederatedControlMail } from '../../../../orchestration/legacy-remot
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { withWorkerFollowUpNext } from '../receipt-next'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
@@ -227,7 +228,7 @@ export const ORCHESTRATION_SEND_METHODS = [
               if (typeof followUp.receipt.dispatchId === 'string') {
                 passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
               }
-              return followUp.receipt
+              return withWorkerFollowUpNext(followUp.receipt)
             }
             if (followUp) {
               addressedDispatchId = followUp.dispatchId
