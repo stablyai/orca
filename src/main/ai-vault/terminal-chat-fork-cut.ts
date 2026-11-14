@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -9,6 +9,7 @@ import { materializeClaudeConversationTranscript } from '../claude/transcripts/c
 import { homedir } from 'node:os'
 import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
+import { isWslUncPath } from '../../shared/wsl-paths'
 
 /** A terminal Claude chat's fork: a new conversation ending at one transcript entry, placed in the
  *  project folder Claude resumes from (the destination worktree's, or the source's). Null when the
@@ -25,17 +26,16 @@ export async function copyTerminalChatForkCut(
       'This chat cannot be forked at that message. Open the chat again and try again.'
     )
   }
-  const bucket = claudeDestinationBucket(args.destinationCwd)
-  // Sessions sit in <home>/projects/<bucket>/<id>.jsonl, so the destination is a sibling bucket.
-  const destinationDirectory = bucket ? join(dirname(dirname(args.filePath)), bucket) : undefined
-  if (destinationDirectory) {
-    await mkdir(destinationDirectory, { recursive: true })
-  }
+  // Sessions sit in <home>/projects/<bucket>/<id>.jsonl; the copy goes where the new terminal's
+  // Claude resumes from: the launch's home and the destination worktree's bucket.
+  const bucket = claudeDestinationBucket(args.destinationCwd) ?? basename(dirname(args.filePath))
+  const destinationDirectory = join(claudeTerminalLaunchProjectsDir(args.filePath), bucket)
+  await mkdir(destinationDirectory, { recursive: true })
   const copy = await materializeClaudeConversationTranscript({
     sourcePath: args.filePath,
     sourceSessionId: args.sessionId,
     throughEntryId: args.forkThroughEntryId,
-    ...(destinationDirectory ? { destinationDirectory } : {})
+    destinationDirectory
   })
   if (!copy) {
     throw new Error(
@@ -46,6 +46,23 @@ export async function copyTerminalChatForkCut(
     useRealCodexHome: false,
     forkedSession: { agent: 'claude', sessionId: copy.sessionId, filePath: copy.filePath }
   }
+}
+
+/** The projects folder of the Claude home a new terminal launches with (the routed account's, or
+ *  the system default); the source's own home for a WSL chat or when routing is unavailable. */
+function claudeTerminalLaunchProjectsDir(sourcePath: string): string {
+  if (isWslUncPath(sourcePath)) {
+    return dirname(dirname(sourcePath))
+  }
+  try {
+    const home = getClaudeProfileRouter()?.preparation().configDir
+    if (home) {
+      return join(home, 'projects')
+    }
+  } catch {
+    // A missing routed folder fails the launch itself with its own message.
+  }
+  return dirname(dirname(sourcePath))
 }
 
 /** The phone's fork of a terminal Claude chat it names only by session id: find the transcript among
