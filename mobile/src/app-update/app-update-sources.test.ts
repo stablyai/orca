@@ -37,7 +37,7 @@ describe('GitHub release source (Android sideload)', () => {
       [releaseUrl('0.0.50')]: { status: 200, body: release050 }
     })
     await expect(
-      createGithubReleaseUpdateSource(fetchImpl).check('0.0.47', signal)
+      createGithubReleaseUpdateSource(fetchImpl, 'mobile-android-v').check('0.0.47', signal)
     ).resolves.toEqual({
       kind: 'available',
       version: '0.0.50',
@@ -54,7 +54,7 @@ describe('GitHub release source (Android sideload)', () => {
       [releaseUrl('0.0.48')]: { status: 200, body: release048 }
     })
     await expect(
-      createGithubReleaseUpdateSource(fetchImpl).check('0.0.47', signal)
+      createGithubReleaseUpdateSource(fetchImpl, 'mobile-android-v').check('0.0.47', signal)
     ).resolves.toEqual({
       kind: 'available',
       version: '0.0.48',
@@ -68,7 +68,7 @@ describe('GitHub release source (Android sideload)', () => {
       [releaseUrl('0.0.50')]: { status: 502 }
     })
     await expect(
-      createGithubReleaseUpdateSource(fetchImpl).check('0.0.47', signal)
+      createGithubReleaseUpdateSource(fetchImpl, 'mobile-android-v').check('0.0.47', signal)
     ).rejects.toThrow('release HTTP 502')
     expect(requested).toEqual([REFS_URL, releaseUrl('0.0.50')])
   })

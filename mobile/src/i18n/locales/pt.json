@@ -1087,8 +1087,10 @@
       "desktopTooOldBody": "A versão do app desktop pareado é antiga demais para a sua versão atual do Orca Mobile. Atualize o Orca no seu computador e tente se conectar a este host novamente.",
       "getVersion": "Baixar o Orca {{version}}",
       "mobileTooOldAppStore": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "mobileTooOldGooglePlay": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
       "mobileTooOldGitHubReleases": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente.",
       "openAppStore": "Abrir a App Store",
+      "openGooglePlay": "Abrir o Google Play",
       "openGitHubReleases": "Abrir GitHub Releases",
       "refreshRecoveryNote": "Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
       "refreshWorkspaceBody": "O espaço de trabalho em cache deste host é mais antigo do que o desktop espera. Reconecte-se a este host para baixar a versão atual.",
@@ -1097,6 +1099,7 @@
       "updateMobileTitle": "Atualizar o Orca Mobile",
       "updateRecoveryNote": "Já atualizou? Volte para Hosts e atualize a conexão. Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
       "workspaceNeedsUpdateAppStore": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "workspaceNeedsUpdateGooglePlay": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
       "workspaceNeedsUpdateGitHubReleases": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente."
     },
     "richMarkdownEditor": {

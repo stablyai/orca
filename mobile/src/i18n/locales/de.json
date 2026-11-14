@@ -970,8 +970,10 @@
       "desktopTooOldBody": "Die gekoppelte Desktop-App ist für die aktuelle Version von Orca Mobile zu alt. Orca auf dem Computer aktualisieren und dann erneut mit diesem Host verbinden.",
       "getVersion": "Orca {{version}} herunterladen",
       "mobileTooOldAppStore": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
+      "mobileTooOldGooglePlay": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
       "mobileTooOldGitHubReleases": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden.",
       "openAppStore": "App Store öffnen",
+      "openGooglePlay": "Google Play öffnen",
       "openGitHubReleases": "GitHub Releases öffnen",
       "refreshRecoveryNote": "Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
       "refreshWorkspaceBody": "Der für diesen Host zwischengespeicherte Arbeitsbereich ist älter als von der Desktop-App erwartet. Erneut mit diesem Host verbinden, um die aktuelle Version herunterzuladen.",
@@ -980,6 +982,7 @@
       "updateMobileTitle": "Orca Mobile aktualisieren",
       "updateRecoveryNote": "Bereits aktualisiert? Zu „Hosts“ zurückkehren und die Verbindung erneuern. Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
       "workspaceNeedsUpdateAppStore": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
+      "workspaceNeedsUpdateGooglePlay": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
       "workspaceNeedsUpdateGitHubReleases": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden."
     },
     "richMarkdownEditor": {
