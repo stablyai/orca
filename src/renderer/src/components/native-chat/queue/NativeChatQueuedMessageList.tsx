@@ -129,7 +129,9 @@ export function NativeChatQueuedMessageList({
   })
   const toggle = (): void => {
     if (fitFolded) {
+      // A list the person folded before the dock did opens too, in one activation.
       setUserOpen(true)
+      setExpanded(true)
       return
     }
     // Folding hides the focused row; keep focus on the control that folded it.

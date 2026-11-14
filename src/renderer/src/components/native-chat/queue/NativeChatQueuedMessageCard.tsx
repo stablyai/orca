@@ -169,6 +169,8 @@ export function NativeChatQueuedMessageCard({
   const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
   const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
   const attention = queuedMessageCardNeedsAttention(card)
+  // Only a stated failure reads as one: an unconfirmed delivery has no notice, so no "Couldn't send".
+  const failed = attention && caption !== null
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
   const isMac = isMacPlatform()
@@ -270,7 +272,7 @@ export function NativeChatQueuedMessageCard({
       >
         {line}
       </button>
-      {attention ? (
+      {failed ? (
         // Never truncated: the reason a row needs the person comes first; the full words are in its tooltip.
         <Tooltip>
           <TooltipTrigger asChild>
@@ -284,14 +286,12 @@ export function NativeChatQueuedMessageCard({
               {withdrawn
                 ? caption
                 : t('components.native-chat.queuedMessages.couldNotSend', "Couldn't send")}
-              {caption && !withdrawn ? <span className="sr-only">{`: ${caption}`}</span> : null}
+              {withdrawn ? null : <span className="sr-only">{`: ${caption}`}</span>}
             </span>
           </TooltipTrigger>
-          {caption ? (
-            <TooltipContent side="top" sideOffset={4}>
-              {caption}
-            </TooltipContent>
-          ) : null}
+          <TooltipContent side="top" sideOffset={4}>
+            {caption}
+          </TooltipContent>
         </Tooltip>
       ) : caption ? (
         <span
@@ -327,7 +327,7 @@ export function NativeChatQueuedMessageCard({
                       <Send className="size-3" />
                     )}
                   </NativeChatPendingIcon>
-                  {attention
+                  {failed
                     ? t('components.native-chat.queuedMessages.retry', 'Retry')
                     : sendNow.label}
                 </Button>

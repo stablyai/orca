@@ -167,3 +167,26 @@ it('keeps a list folded for room folded while only its header has focus, and say
   act(() => fold.focus())
   expect(fold.getAttribute('aria-expanded')).toBe('false')
 })
+
+it('keeps an unconfirmed delivery’s Send instead of calling it a failure', () => {
+  renderQueue(
+    controller([
+      card(1, { state: 'returned', hold: 'returned', returnedRejection: { kind: 'unconfirmed' } })
+    ])
+  )
+  expect(screen.queryByText("Couldn't send")).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+})
+
+it('opens a list the person had folded in one activation once the dock folds it too', async () => {
+  renderQueue(controller([card(1), card(2)]))
+  const fold = screen.getByRole('button', { name: 'Queued messages' })
+  fireEvent.click(fold)
+  expect(document.querySelector('ul')!.hidden).toBe(true)
+  const root = document.querySelector('[data-native-chat-root]')!
+  await act(async () => root.setAttribute('data-native-chat-dock-fit', 'queue'))
+  fireEvent.click(fold)
+  expect(document.querySelector('ul')!.hidden).toBe(false)
+  expect(fold.getAttribute('aria-expanded')).toBe('true')
+})

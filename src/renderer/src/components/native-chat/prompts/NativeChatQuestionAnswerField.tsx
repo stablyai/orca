@@ -56,6 +56,7 @@ export function NativeChatQuestionAnswerField({
       {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
       {multiline ? (
         <ImeTextarea
+          ref={inputRef}
           data-native-chat-answer-field
           data-native-chat-dock-content
           data-native-chat-prompt-card-focus-target={takesFocus || undefined}
