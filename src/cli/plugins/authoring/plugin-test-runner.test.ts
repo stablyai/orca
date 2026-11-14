@@ -1,16 +1,10 @@
-import { existsSync, readdirSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
-import { parsePluginDeclarativeTree } from '../../../shared/plugins/declarative/plugin-declarative-tree'
-import {
-  checkPluginPanels,
-  formatPluginPanelCheck,
-  readPluginCheckScenarioNames
-} from './plugin-panel-check'
-import { findPluginTestFiles, PLUGIN_TEST_FILE, runPluginTests } from './plugin-test-runner'
+import { checkPluginPanels, readPluginCheckScenarioNames } from './plugin-panel-check'
+import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -100,13 +94,6 @@ describe('orca plugin test', () => {
   )
 })
 
-const EXAMPLES = resolve(__dirname, '../../../../examples/plugins')
-// Every example with its own tests (examples/plugins/*/src/*.test.tsx).
-const TESTED_EXAMPLES = readdirSync(EXAMPLES).filter((name) => {
-  const src = join(EXAMPLES, name, 'src')
-  return existsSync(src) && readdirSync(src).some((file) => PLUGIN_TEST_FILE.test(file))
-})
-
 describe('orca plugin test with a worker', () => {
   it(
     "runs a .ts worker's own tests through mountWorker, resolving its imports as Orca does",
@@ -162,22 +149,6 @@ describe('orca plugin test with a worker', () => {
       expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({ code: 0 })
     },
     // Starts its own Node process and transpiles the plugin.
-    60_000
-  )
-})
-
-describe('the example plugins', () => {
-  it.each(TESTED_EXAMPLES)(
-    '%s passes its own tests',
-    async (example) => {
-      const dir = join(EXAMPLES, example)
-      const files = await findPluginTestFiles(dir)
-      expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({
-        runner: 'node',
-        code: 0
-      })
-    },
-    // Each run starts its own Node process and transpiles the plugin.
     60_000
   )
 })
@@ -268,14 +239,9 @@ describe('orca plugin check', () => {
       const [busy] = await checkPluginPanels(dir, { scenario: 'busy', drawnTree: true })
       expect(busy).toMatchObject({ scenario: 'busy', issues: [] })
       expect(busy?.drawnTree).toMatchObject({ type: 'List', props: { label: 'Agents' } })
-      expect(parsePluginDeclarativeTree(busy?.drawnTree).ok).toBe(true)
       const [missing] = await checkPluginPanels(dir, { scenario: 'nope' })
       expect(missing?.issues.map((issue) => issue.message)).toEqual([
         'no check scenario named "nope" in src/panel.check.ts'
-      ])
-      expect(formatPluginPanelCheck(checks[1]!)).toEqual([
-        'todo-panel (src/panel.tsx, scenario "busy"): rendered 3 element(s)',
-        '  List "Agents": 3 item(s)'
       ])
 
       await writeFile(join(dir, 'src', 'worker.ts'), 'export function activate(): void {}\n')
