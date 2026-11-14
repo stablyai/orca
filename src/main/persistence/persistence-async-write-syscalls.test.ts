@@ -6,7 +6,7 @@ import {
 import { borrowWorkspaceSession } from './loading-store/workspace-sessions/session-host-partitions'
 import { describe, it, expect, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { makeSessionWithTerminalBuffers } from './persistence-session-fixtures'
+import { makeSessionWithTerminalBuffers, TEST_LEAF_1 } from './persistence-session-fixtures'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 import {
@@ -108,6 +108,32 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
       }
     }
   )
+
+  it('keeps an in-place binding full when its write listener publishes a field patch', async () => {
+    const { store, readState } = await createWorkerMaintenanceFixture()
+    const input = makeSessionWithTerminalBuffers()
+    admitDetachedWorkspaceSessionInput(store, input)
+    setDetachedWorkspaceSession(store, input)
+    await store.flushPendingOrThrowAsync()
+    const stop = store.onWorkspaceSessionWritten(() => {
+      stop()
+      patchDetachedWorkspaceSession(store, { activeTabId: 'listener' })
+    })
+    expect(
+      await store.persistPtyBinding({
+        worktreeId: 'local-repo::/local',
+        tabId: 'local-tab',
+        leafId: TEST_LEAF_1,
+        ptyId: 'replacement',
+        incarnationId: 'replacement-incarnation'
+      })
+    ).toBe(true)
+    const saved = readState().workspaceSession
+    expect(saved.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId[TEST_LEAF_1]).toBe(
+      'replacement'
+    )
+    expect(saved.activeTabId).toBe('listener')
+  })
 
   it('persists an alias retained by a refused layout admission before a detached patch', async () => {
     const { store, readState } = await createWorkerMaintenanceFixture()

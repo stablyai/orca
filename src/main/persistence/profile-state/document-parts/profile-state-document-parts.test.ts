@@ -202,29 +202,32 @@ describe('profile state document parts', () => {
     }
   })
 
-  it.each(['a', 'b'])('does not conceal a corrupt %s row with a field replacement', (target) => {
-    const db = open()
-    try {
-      write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]}}' })
-      db.prepare(
-        'UPDATE profile_state_document_parts SET payload = ? WHERE domain = ? AND part_key = ?'
-      ).run('["corrupt"]', 'workspaceSession', JSON.stringify(['tabsByWorktree', target]))
-      expect(() =>
-        writeProfileStateDomains(db, {
-          expectedRevision: readProfileStateRevision(db),
-          replacements: [],
-          patches: [
-            {
-              domain: 'workspaceSession',
-              operations: [{ kind: 'set', path: ['tabsByWorktree'], payload: '{"a":[],"b":[]}' }]
-            }
-          ]
-        })
-      ).toThrow('part is invalid')
-    } finally {
-      db.close()
+  it.each([{ path: ['tabsByWorktree', 'a'] }, { path: ['activeTabId'] }])(
+    'does not conceal a corrupt $path row with a field replacement',
+    ({ path }) => {
+      const db = open()
+      try {
+        write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]},"activeTabId":"old"}' })
+        db.prepare(
+          'UPDATE profile_state_document_parts SET payload = ? WHERE domain = ? AND part_key = ?'
+        ).run('["corrupt"]', 'workspaceSession', JSON.stringify(path))
+        expect(() =>
+          writeProfileStateDomains(db, {
+            expectedRevision: readProfileStateRevision(db),
+            replacements: [],
+            patches: [
+              {
+                domain: 'workspaceSession',
+                operations: [{ kind: 'set', path: ['tabsByWorktree'], payload: '{"a":[],"b":[]}' }]
+              }
+            ]
+          })
+        ).toThrow('part is invalid')
+      } finally {
+        db.close()
+      }
     }
-  })
+  )
 
   it('reads back the exact document after entries change, appear and move', () => {
     const db = open()
