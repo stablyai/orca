@@ -8,7 +8,8 @@ import {
 import { buildProjectSectionCatalog } from '../project-sections/project-section-catalog'
 import { readServedProjectSections } from '../project-sections/project-sections-operations'
 import { buildSections } from './workspace-list-sections'
-import type { SectionRepo, Worktree } from './workspace-list-types'
+import type { Worktree } from './workspace-list-types'
+import type { ServedProjectSections } from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 
 function rows(): Worktree[] {
@@ -100,7 +101,7 @@ function row(worktreeId: string, repoId: string, fields: Partial<Worktree> = {})
 }
 
 describe('Project groups on the phone', () => {
-  const repos: SectionRepo[] = [
+  const repos: ServedProjectSections['repos'] = [
     { id: 'infra-tf', displayName: 'infra-tf', path: '/src/infra-tf', projectGroupId: 'g-infra' },
     { id: 'dotfiles', displayName: 'dotfiles', path: '/src/dotfiles', projectGroupOrder: 1000 },
     { id: 'orca-docs', displayName: 'orca-docs', path: '/src/orca-docs', projectGroupId: 'g-docs' },
