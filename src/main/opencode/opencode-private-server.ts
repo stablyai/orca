@@ -77,6 +77,35 @@ export function resetOpenCodeSharedServiceClaimForTests(): void {
   sharedServiceClaim = undefined
 }
 
+/** OpenCode 1 rejects --standalone, which a chat copied from OpenCode 2 carries in its launch command. */
+export function withoutOpenCodeStandaloneServer(command: string, shell: AgentStartupShell): string {
+  const parsed = tokenizeStartupCommand(command, shell)
+  if (!parsed.ok) {
+    return command
+  }
+  const { tokens, spans } = parsed
+  const executable = shell === 'powershell' && tokens[0] === '&' ? 1 : 0
+  if (!OPENCODE_EXECUTABLE.test(getCommandTokenPathBasename(tokens[executable] ?? ''))) {
+    return command
+  }
+  const found: number[] = []
+  let option = findOptionOccurrence(tokens, ['--standalone'], true, [], executable + 1, false)
+  while (option) {
+    found.push(option.index)
+    option = findOptionOccurrence(tokens, ['--standalone'], true, [], option.index + 1, false)
+  }
+  if (found.some((index) => spans[index].divergesFromShell)) {
+    return command
+  }
+  let result = command
+  for (const index of found.toReversed()) {
+    const after = result.slice(spans[index].end).trimStart()
+    const before = result.slice(0, spans[index].start)
+    result = after ? `${before}${after}` : before.trimEnd()
+  }
+  return result
+}
+
 /** OpenCode 2's one-port background service serves one data dir; a private server picks its own port. */
 export function withOpenCodeStandaloneServer(command: string, shell: AgentStartupShell): string {
   const parsed = tokenizeStartupCommand(command, shell)
