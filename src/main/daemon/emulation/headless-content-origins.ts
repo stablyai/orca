@@ -1,6 +1,7 @@
 import type { Terminal } from '@xterm/headless'
+import { HeadlessOriginCellSnapshots } from './headless-origin-cell-snapshots'
 import { HeadlessOriginBuffers } from './headless-origin-buffers'
-import { HeadlessOriginPrintHooks } from './headless-origin-print-hooks'
+import { captureOriginLineMethods, createOriginLineHooks } from './headless-origin-line-hooks'
 import { HeadlessOriginLineEdits, replaceOriginCells } from './headless-origin-line-edits'
 import {
   terminalOriginAt,
@@ -11,6 +12,10 @@ import {
 } from '../../../shared/terminal/output/terminal-content-origin'
 import {
   readOriginScreenLines,
+  readOriginLineAttachment,
+  attachOriginLineState,
+  type OriginLineAttachment,
+  type OriginLineMethods,
   type OriginBufferLine,
   type OriginCell,
   type OriginLineState,
@@ -19,19 +24,39 @@ import {
 
 /** Certificates follow the editor's actual line identities; no second screen or global patch. */
 export class HeadlessContentOrigins {
-  private readonly lines = new WeakMap<OriginBufferLine, OriginLineState>()
-  private readonly cells = new WeakMap<
-    OriginCell,
-    {
-      runs: TerminalOriginRuns
-      index: number
-      component?: TerminalOriginRuns
-    }
-  >()
-  private readonly printHooks = new HeadlessOriginPrintHooks(
-    (line, index, width, code) => this.printed(line, index, width, code),
-    (line, index, code, width, combine) => this.combined(line, index, code, width, combine)
+  private readonly cells = new HeadlessOriginCellSnapshots((line) => this.state(line))
+  private sharedOriginals?: OriginLineMethods
+  private readonly edits = new HeadlessOriginLineEdits(
+    (line) => this.state(line),
+    (line, state) => this.assign(line, state)
   )
+  private readonly hooks = createOriginLineHooks({
+    loadCell: (line, index, cell) => this.cells.load(line, index, cell),
+    setCell: (line, index, cell) => this.setCell(line, index, cell),
+    setCellFromCodepoint: (line, index, code, width, attrs) => {
+      const state = readOriginLineAttachment(line)!
+      state.originals.setCellFromCodepoint.call(line, index, code, width, attrs)
+      if (!this.edits.collect(state, index, true)) {
+        this.printed(line, index, width, code)
+      }
+    },
+    addCodepointToCell: (line, index, code, width) => this.combined(line, index, code, width),
+    set: (line, index, cell) => {
+      readOriginLineAttachment(line)!.originals.set.call(line, index, cell)
+      this.writeCell(line, index)
+    },
+    insertCells: (line, position, count, fill) => this.edits.insert(line, position, count, fill),
+    deleteCells: (line, position, count, fill) => this.edits.remove(line, position, count, fill),
+    replaceCells: (line, start, end, fill, protect) =>
+      this.edits.replace(line, start, end, fill, protect),
+    fill: (line, cell, protect) => this.edits.fill(line, cell, protect),
+    resize: (line, cols, cell) => this.edits.resize(line, cols, cell),
+    copyFrom: (line, source, blank) => this.copyFrom(line, source, blank),
+    clone: (line, blank) => this.clone(line, blank),
+    copyCellsFrom: (line, source, from, to, count, reverse) =>
+      this.copyCells(line, source, from, to, count, reverse)
+  })
+  private readonly requiredHooks = (({ set: _set, ...hooks }) => hooks)(this.hooks)
   private readonly attachments: HeadlessOriginBuffers
   private pending?: {
     line: OriginBufferLine
@@ -72,7 +97,7 @@ export class HeadlessContentOrigins {
     ) {
       return cached.lines
     }
-    const lines = readOriginScreenLines(this.terminal, this.lines)
+    const lines = readOriginScreenLines(this.terminal, this)
     this.cached = { revision: this.revision, scope, lines }
     return lines
   }
@@ -82,14 +107,16 @@ export class HeadlessContentOrigins {
     this.attachments.attach()
   }
 
-  private state(line: OriginBufferLine): OriginLineState {
+  private state(line: OriginBufferLine): OriginLineAttachment {
     this.flush()
     this.attachLine(line)
-    return this.lines.get(line)!
+    return readOriginLineAttachment(line)!
   }
 
   private assign(line: OriginBufferLine, state: OriginLineState): void {
-    this.lines.set(line, state)
+    const attached = readOriginLineAttachment(line)!
+    attached.runs = state.runs
+    attached.components = state.components?.size ? state.components : undefined
     this.revision++
   }
 
@@ -99,9 +126,9 @@ export class HeadlessContentOrigins {
       return
     }
     this.pending = undefined
-    const state = this.lines.get(pending.line)!
+    const state = readOriginLineAttachment(pending.line)!
     const components = state.components
-    if (components.size) {
+    if (components?.size) {
       for (let index = pending.start; index < pending.end; index++) {
         components.delete(index)
       }
@@ -131,13 +158,8 @@ export class HeadlessContentOrigins {
     }
   }
 
-  private combined(
-    line: OriginBufferLine,
-    index: number,
-    code: number,
-    width: number,
-    combine: OriginBufferLine['addCodepointToCell']
-  ): void {
+  private combined(line: OriginBufferLine, index: number, code: number, width: number): void {
+    const combine = readOriginLineAttachment(line)!.originals.addCodepointToCell
     const pending = this.pending
     if (
       pending?.line === line &&
@@ -151,7 +173,7 @@ export class HeadlessContentOrigins {
     const state = this.state(line)
     const baseOrigin = terminalOriginAt(state.runs, index)
     if (
-      !state.components.has(index) &&
+      !state.components?.has(index) &&
       (baseOrigin === this.origin ||
         (baseOrigin &&
           this.origin &&
@@ -164,10 +186,10 @@ export class HeadlessContentOrigins {
     }
     const before = line.getString(index)
     const base =
-      state.components.get(index) ??
+      state.components?.get(index) ??
       terminalOriginSpan(before.length, terminalOriginAt(state.runs, index))
     combine.call(line, index, code, width)
-    const components = state.components
+    let components = state.components
     const after = line.getString(index)
     const joined = writeTerminalOrigins(
       base,
@@ -179,109 +201,106 @@ export class HeadlessContentOrigins {
       ? joined.length === 1 && joined[0]!.start === 0 && joined[0]!.end === after.length
       : joined.length === 0
     if (uniform) {
-      components.delete(index)
+      components?.delete(index)
     } else {
+      components ??= new Map()
       components.set(index, joined)
     }
     this.assign(line, { runs: state.runs, components })
   }
 
-  private writeCell(line: OriginBufferLine, index: number, state?: OriginLineState): void {
+  private writeCell(
+    line: OriginBufferLine,
+    index: number,
+    runs?: TerminalOriginRuns,
+    component?: TerminalOriginRuns
+  ): void {
     const previous = this.state(line)
-    const components = previous.components
-    const copied = state?.components.get(0)
-    components.delete(index)
-    if (copied) {
-      components.set(index, copied)
+    let components = previous.components
+    components?.delete(index)
+    if (component) {
+      components ??= new Map()
+      components.set(index, component)
     }
     this.assign(line, {
       runs: writeTerminalOrigins(
         previous.runs,
         index,
         index + 1,
-        state?.runs ?? terminalOriginSpan(1, line.getString(index) ? this.origin : undefined)
+        runs ?? terminalOriginSpan(1, line.getString(index) ? this.origin : undefined)
       ),
       components
     })
   }
 
+  private setCell(line: OriginBufferLine, index: number, cell: OriginCell): void {
+    const state = readOriginLineAttachment(line)!
+    const origin = this.cells.get(cell)
+    state.originals.setCell.call(line, index, cell)
+    if (state.editing) {
+      if (state.recordSets) {
+        this.edits.erase(state, index)
+      }
+    } else {
+      this.writeCell(
+        line,
+        index,
+        origin ? terminalOriginSpan(1, terminalOriginAt(origin.runs, origin.index)) : [],
+        origin?.component
+      )
+    }
+  }
+
+  private copyFrom(line: OriginBufferLine, source: OriginBufferLine, blank?: boolean): void {
+    const state = this.state(source)
+    readOriginLineAttachment(line)!.originals.copyFrom.call(line, source, blank)
+    this.assign(line, {
+      runs: state.runs,
+      components: !blank && state.components?.size ? new Map(state.components) : undefined
+    })
+  }
+
+  private clone(line: OriginBufferLine, blank?: boolean): OriginBufferLine {
+    const result = this.attachLine(
+      readOriginLineAttachment(line)!.originals.clone.call(line, blank)
+    )
+    const state = this.state(line)
+    this.assign(result, {
+      runs: state.runs,
+      components: !blank && state.components?.size ? new Map(state.components) : undefined
+    })
+    return result
+  }
+
+  private copyCells(
+    line: OriginBufferLine,
+    source: OriginBufferLine,
+    from: number,
+    to: number,
+    count: number,
+    reverse: boolean
+  ): void {
+    const original = this.state(source)
+    const target = this.state(line)
+    const next = replaceOriginCells(target, to, to + count, original, from)
+    target.originals.copyCellsFrom.call(line, source, from, to, count, reverse)
+    this.assign(line, next)
+  }
+
   private attachLine(line: OriginBufferLine): OriginBufferLine {
-    if (this.lines.has(line)) {
+    if (readOriginLineAttachment(line)?.owner === this) {
       return line
     }
-    this.lines.set(line, { runs: [], components: new Map() })
-    const edits = new HeadlessOriginLineEdits(
-      () => this.state(line),
-      (state) => this.assign(line, state)
-    )
-    const load = line.loadCell
-    line.loadCell = (index, cell) => {
-      const result = load.call(line, index, cell)
-      if (edits.active) {
-        return result
-      }
-      const state = this.state(line)
-      const snapshot = this.cells.get(result)
-      if (snapshot) {
-        snapshot.runs = state.runs
-        snapshot.index = index
-        snapshot.component = state.components.get(index)
-      } else {
-        this.cells.set(result, {
-          runs: state.runs,
-          index,
-          component: state.components.get(index)
-        })
-      }
-      return result
-    }
-    const set = line.setCell
-    line.setCell = (index, cell) => {
-      const origin = this.cells.get(cell)
-      set.call(line, index, cell)
-      if (!edits.collect(index, false)) {
-        this.writeCell(line, index, {
-          runs: origin ? terminalOriginSpan(1, terminalOriginAt(origin.runs, origin.index)) : [],
-          components: origin?.component ? new Map([[0, origin.component]]) : new Map()
-        })
-      }
-    }
-    const setData = line.set
-    if (setData) {
-      line.set = (index, cell) => {
-        setData.call(line, index, cell)
-        this.writeCell(line, index)
-      }
-    }
-    const copy = line.copyFrom
-    line.copyFrom = (source, blank) => {
-      const state = this.state(source)
-      copy.call(line, source, blank)
-      this.assign(line, {
-        runs: state.runs,
-        components: blank ? new Map() : new Map(state.components)
-      })
-    }
-    const clone = line.clone
-    line.clone = (blank) => {
-      const result = this.attachLine(clone.call(line, blank))
-      const state = this.state(line)
-      this.assign(result, {
-        runs: state.runs,
-        components: blank ? new Map() : new Map(state.components)
-      })
-      return result
-    }
-    const copyCells = line.copyCellsFrom
-    line.copyCellsFrom = (source, from, to, count, reverse) => {
-      const original = this.state(source)
-      const target = this.state(line)
-      const next = replaceOriginCells(target, to, to + count, original, from)
-      copyCells.call(line, source, from, to, count, reverse)
-      this.assign(line, next)
-    }
-    this.printHooks.attach(line, edits)
-    edits.attach(line)
+    const originals = captureOriginLineMethods(line, this.sharedOriginals)
+    this.sharedOriginals ??= originals
+    attachOriginLineState(line, {
+      owner: this,
+      originals,
+      runs: [],
+      editing: false,
+      recordSets: true
+    })
+    Object.assign(line, originals.set ? this.hooks : this.requiredHooks)
     return line
   }
 }

@@ -389,7 +389,7 @@ it.each([100, 1000])(
     const spy = vi.spyOn(seam, 'assign').mockImplementation((line, state) => {
       assign(line, {
         runs: observeRuns(state.runs),
-        components: observeComponents(state.components)
+        components: state.components ? observeComponents(state.components) : undefined
       })
     })
     const write = async (data: string) => {

@@ -68,14 +68,47 @@ export function originTerminalCore(terminal: Terminal): OriginTerminalCore | und
 
 export type OriginLineState = {
   runs: TerminalOriginRuns
-  components: Map<number, TerminalOriginRuns>
+  components?: Map<number, TerminalOriginRuns>
+}
+
+export type OriginLineMethods = Pick<
+  OriginBufferLine,
+  | 'loadCell'
+  | 'setCell'
+  | 'setCellFromCodepoint'
+  | 'addCodepointToCell'
+  | 'set'
+  | 'insertCells'
+  | 'deleteCells'
+  | 'replaceCells'
+  | 'fill'
+  | 'resize'
+  | 'copyFrom'
+  | 'clone'
+  | 'copyCellsFrom'
+>
+export type OriginLineAttachment = OriginLineState & {
+  owner: object
+  originals: OriginLineMethods
+  editing: boolean
+  recordSets: boolean
+  erased?: { start: number; end: number }[]
+}
+const ORIGIN_LINE_ATTACHMENT = Symbol('terminalContentOrigin')
+
+export function readOriginLineAttachment(line: OriginBufferLine): OriginLineAttachment | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this module owns the private editor attachment symbol.
+  return (line as OriginBufferLine & { [ORIGIN_LINE_ATTACHMENT]?: OriginLineAttachment })[
+    ORIGIN_LINE_ATTACHMENT
+  ]
+}
+
+export function attachOriginLineState(line: OriginBufferLine, state: OriginLineAttachment): void {
+  Object.defineProperty(line, ORIGIN_LINE_ATTACHMENT, { value: state, configurable: true })
 }
 
 /** Build coordinates from xterm's own translation, including wide and combined glyphs. */
-export function readOriginScreenLines(
-  terminal: Terminal,
-  states: WeakMap<OriginBufferLine, OriginLineState>
-): string[] {
+export function readOriginScreenLines(terminal: Terminal, owner: object): string[] {
   const core = originTerminalCore(terminal)
   const buffer = terminal.buffer.active
   const lines: string[] = []
@@ -84,7 +117,8 @@ export function readOriginScreenLines(
     const line = core?.buffers.active.lines.get(index)
     const columns: number[] = []
     const text = line?.translateToString(true, 0, undefined, columns) ?? ''
-    const state = line ? states.get(line) : undefined
+    const attached = line ? readOriginLineAttachment(line) : undefined
+    const state = attached?.owner === owner ? attached : undefined
     const runs: TerminalOriginRun[] = []
     const append = (start: number, end: number, origin: TerminalContentOrigin): void => {
       const previous = runs.at(-1)
@@ -106,7 +140,7 @@ export function readOriginScreenLines(
       while (end < text.length && columns[end] === column) {
         end++
       }
-      const component = state?.components.get(column)
+      const component = state?.components?.get(column)
       if (component) {
         for (const run of component) {
           append(at + run.start, Math.min(end, at + run.end), run.origin)
