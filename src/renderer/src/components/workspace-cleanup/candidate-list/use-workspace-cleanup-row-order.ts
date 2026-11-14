@@ -1,109 +1,130 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import type { WorkspaceCleanupSortState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 
-type OrderedRow = { worktreeId: string }
+type HeldRow = { identity: string }
 
-export type WorkspaceCleanupFrozenRowOrder = {
-  sortSignature: string
-  positions: Map<string, number>
+export type WorkspaceCleanupHeldRowOrder = {
+  /** Order is only valid for the reset key it was captured under. */
+  key: string
+  /** Host-qualified identity -> slot. Slots are never reused, so a row keeps its place. */
+  positions: ReadonlyMap<string, number>
 }
 
-const UNCOMMITTED_ROW_ORDER: WorkspaceCleanupFrozenRowOrder = {
-  sortSignature: '',
-  positions: new Map()
-}
-
-export function createWorkspaceCleanupFrozenRowOrder(
-  rows: readonly OrderedRow[],
-  sortSignature: string
-): WorkspaceCleanupFrozenRowOrder {
+export function createWorkspaceCleanupHeldRowOrder(
+  rows: readonly HeldRow[],
+  key: string
+): WorkspaceCleanupHeldRowOrder {
   return {
-    sortSignature,
-    positions: new Map(rows.map((row, index) => [row.worktreeId, index]))
+    key,
+    positions: new Map(rows.map((row, index) => [row.identity, index]))
   }
 }
 
-/** Keep visible rows in place while streaming; append new rows in their current sort order, then retain those slots too. */
-export function arrangeWorkspaceCleanupRowsByFrozenOrder<Row extends OrderedRow>(
-  sortedRows: readonly Row[],
-  order: WorkspaceCleanupFrozenRowOrder
-): Row[] {
-  const known: Row[] = []
-  const fresh: Row[] = []
-  for (const row of sortedRows) {
-    if (order.positions.has(row.worktreeId)) {
-      known.push(row)
-    } else {
-      fresh.push(row)
-    }
-  }
-  known.sort(
-    (left, right) =>
-      (order.positions.get(left.worktreeId) ?? 0) - (order.positions.get(right.worktreeId) ?? 0)
-  )
-  return [...known, ...fresh]
-}
-
-export function extendWorkspaceCleanupFrozenRowOrder(
-  rows: readonly OrderedRow[],
-  order: WorkspaceCleanupFrozenRowOrder
-): WorkspaceCleanupFrozenRowOrder {
+/** Rows that first appear later take the next free slot, so they land at the end. */
+export function extendWorkspaceCleanupHeldRowOrder(
+  rows: readonly HeldRow[],
+  order: WorkspaceCleanupHeldRowOrder
+): WorkspaceCleanupHeldRowOrder {
   let positions: Map<string, number> | null = null
   for (const row of rows) {
-    if (order.positions.has(row.worktreeId)) {
+    if (order.positions.has(row.identity)) {
       continue
     }
     positions ??= new Map(order.positions)
-    if (!positions.has(row.worktreeId)) {
-      positions.set(row.worktreeId, positions.size)
-    }
+    positions.set(row.identity, positions.size)
   }
   return positions === null ? order : { ...order, positions }
 }
 
-/** Apply sort immediately, hold row positions during streaming, then resort once at settlement or explicit sort change. */
-export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
-  rows,
-  streaming,
-  sort
-}: {
-  rows: readonly Row[]
-  streaming: boolean
-  sort: WorkspaceCleanupSortState
-}): readonly Row[] {
-  // Render reads React-owned order state; idle capture stays in commit-only refs to avoid mixing concurrent render passes.
-  const [frozenOrder, setFrozenOrder] =
-    useState<WorkspaceCleanupFrozenRowOrder>(UNCOMMITTED_ROW_ORDER)
-  const idleOrderRef = useRef<WorkspaceCleanupFrozenRowOrder>(UNCOMMITTED_ROW_ORDER)
-  const sortSignature = `${sort.field}:${sort.direction}`
-  const orderedRows = useMemo(
-    () =>
-      !streaming || frozenOrder.sortSignature !== sortSignature
-        ? rows
-        : arrangeWorkspaceCleanupRowsByFrozenOrder(rows, frozenOrder),
-    [frozenOrder, rows, sortSignature, streaming]
-  )
-  const commitFrozenOrder = useEffectEvent(() => {
-    // Why: only committed renders may advance the order a later stream holds.
-    if (!streaming) {
-      idleOrderRef.current = createWorkspaceCleanupFrozenRowOrder(rows, sortSignature)
-      setFrozenOrder((current) =>
-        current === UNCOMMITTED_ROW_ORDER ? current : UNCOMMITTED_ROW_ORDER
-      )
-      return
+/**
+ * Lay out rows in their held slots using each row's CURRENT data. A row that left the
+ * filtered result but still exists stays in place; a row that no longer exists drops out;
+ * rows without a slot follow in the current sort order.
+ */
+export function arrangeWorkspaceCleanupHeldRows<Row extends HeldRow>(
+  liveRows: readonly Row[],
+  liveRowByIdentity: ReadonlyMap<string, Row>,
+  order: WorkspaceCleanupHeldRowOrder
+): Row[] {
+  const held: { row: Row; slot: number }[] = []
+  for (const [identity, slot] of order.positions) {
+    const row = liveRowByIdentity.get(identity)
+    if (row !== undefined) {
+      held.push({ row, slot })
     }
-    setFrozenOrder((current) => {
-      const base =
-        current !== UNCOMMITTED_ROW_ORDER && current.sortSignature === sortSignature
-          ? current
-          : idleOrderRef.current.sortSignature === sortSignature
-            ? idleOrderRef.current
-            : createWorkspaceCleanupFrozenRowOrder(rows, sortSignature)
-      return extendWorkspaceCleanupFrozenRowOrder(rows, base)
-    })
+  }
+  held.sort((left, right) => left.slot - right.slot)
+  const arranged = held.map((entry) => entry.row)
+  // Only rows that matched at some point hold a slot; unseen matches append in sort order.
+  for (const row of liveRows) {
+    if (!order.positions.has(row.identity)) {
+      arranged.push(row)
+    }
+  }
+  return arranged
+}
+
+/**
+ * Hold row order for the whole time the dialog is open. Late git/size/agent/review updates
+ * refresh row data in place but never move a row. The order is re-derived only when:
+ * the sort or filters change (`resetKey`), the dialog opens, a scan starts (Refresh), a
+ * scan settles with nothing the user is mid-way through, or `resetOrder()` is called.
+ */
+export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
+  liveRows,
+  liveRowByIdentity,
+  resetKey,
+  open,
+  loading,
+  shouldResortAtSettle
+}: {
+  /** Query result in the active sort; the order a reset adopts. */
+  liveRows: readonly Row[]
+  /** Every candidate's live row (unfiltered), so held rows keep updating. */
+  liveRowByIdentity: ReadonlyMap<string, Row>
+  /** Changes when the sort, filters or search change. */
+  resetKey: string
+  open: boolean
+  loading: boolean
+  /** Read at scan settle: false once the user is mid-selection, scrolling or pointing at rows. */
+  shouldResortAtSettle: () => boolean
+}): { rows: readonly Row[]; resetOrder: () => void } {
+  const [epoch, setEpoch] = useState(0)
+  const [held, setHeld] = useState<WorkspaceCleanupHeldRowOrder | null>(null)
+  const fullKey = `${resetKey}#${epoch}`
+  const previousRef = useRef({ open, loading })
+
+  const rows = useMemo(
+    () =>
+      held === null || held.key !== fullKey
+        ? liveRows
+        : arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, held),
+    [fullKey, held, liveRowByIdentity, liveRows]
+  )
+
+  const resetOrder = useCallback(() => setEpoch((current) => current + 1), [])
+  const readSettlePolicy = useEffectEvent(() => shouldResortAtSettle())
+  useEffect(() => {
+    const previous = previousRef.current
+    previousRef.current = { open, loading }
+    const opened = open && !previous.open
+    const scanStarted = open && loading && !previous.loading
+    const scanSettled = open && !loading && previous.loading && readSettlePolicy()
+    if (opened || scanStarted || scanSettled) {
+      setEpoch((current) => current + 1)
+    }
+  }, [loading, open])
+
+  const captureOrder = useEffectEvent(() => {
+    // Only committed renders advance the held order.
+    setHeld((current) =>
+      current !== null && current.key === fullKey
+        ? extendWorkspaceCleanupHeldRowOrder(liveRows, current)
+        : createWorkspaceCleanupHeldRowOrder(liveRows, fullKey)
+    )
   })
   useEffect(() => {
-    commitFrozenOrder()
-  }, [rows, sortSignature, streaming])
-  return orderedRows
+    captureOrder()
+  }, [fullKey, liveRows])
+
+  return { rows, resetOrder }
 }

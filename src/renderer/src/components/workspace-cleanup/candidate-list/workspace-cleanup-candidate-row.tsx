@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -74,7 +75,7 @@ type CandidateRowProps = {
   repo: Pick<Repo, 'badgeColor' | 'repoIcon'> | null
   /** Host repeats on every row when the fleet is single-host, so it only shows once hosts differ. */
   showHostLabel: boolean
-  /** False until any row has a measured size; the scan card is the action to fill it. */
+  /** The size column is reserved from open ('—' until measured) so a measurement never reflows rows. */
   showSizeColumn: boolean
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
@@ -139,6 +140,13 @@ export const CandidateRow = React.memo(function CandidateRow({
     candidate.branch.length > 0 ||
     contextDetails !== null ||
     branchSafetyDetails.length > 0
+
+  const gitSlotText = deletionPhase
+    ? null
+    : [
+        ...gitStatuses.map((status) => status.label),
+        ...(!gitEvidencePending && showGitChip && dirtyLabel ? [dirtyLabel] : [])
+      ].join(' · ') || null
 
   const visibleFlags = flags.length > FLAG_LIMIT ? flags.slice(0, FLAG_LIMIT - 1) : flags
   const hiddenFlagCount = flags.length - visibleFlags.length
@@ -224,43 +232,60 @@ export const CandidateRow = React.memo(function CandidateRow({
           </div>
 
           <div className="mt-0.5 flex min-h-5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {deletionPhase ? (
-              <StatusPill tone="destructive">
-                {deletionPhase === 'queued'
-                  ? t(
-                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
-                      'Queued for deletion'
-                    )
-                  : t(
-                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
-                      'Deleting…'
+            {queueable || deletionPhase ? (
+              // Fixed-size slot: evidence arriving swaps its contents without resizing the row.
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex h-5 w-60 max-w-full shrink-0 items-center gap-1.5 overflow-hidden">
+                    {deletionPhase ? (
+                      <StatusPill tone="destructive">
+                        {deletionPhase === 'queued'
+                          ? t(
+                              'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
+                              'Queued for deletion'
+                            )
+                          : t(
+                              'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
+                              'Deleting…'
+                            )}
+                      </StatusPill>
+                    ) : (
+                      gitStatuses.map((status) => (
+                        <StatusPill key={status.label} tone={status.tone}>
+                          {status.label}
+                        </StatusPill>
+                      ))
                     )}
-              </StatusPill>
-            ) : (
-              gitStatuses.map((status) => (
-                <StatusPill key={status.label} tone={status.tone}>
-                  {status.label}
-                </StatusPill>
-              ))
-            )}
-            {gitEvidencePending ? (
-              <span
-                role="status"
-                className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
-              >
-                <Loader2
-                  className="size-3 animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-                {t('components.workspace.cleanup.browse.checkingGitRow', 'Checking git status')}
-              </span>
-            ) : showGitChip && dirtyLabel ? (
-              <WorkspaceCleanupMetadataChip
-                icon={FileWarning}
-                label={dirtyLabel}
-                value={dirtyLabel}
-                tone="destructive"
-              />
+                    {gitEvidencePending ? (
+                      <span
+                        role="status"
+                        className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
+                      >
+                        <Loader2
+                          className="size-3 animate-spin motion-reduce:animate-none"
+                          aria-hidden="true"
+                        />
+                        {t(
+                          'components.workspace.cleanup.browse.checkingGitRow',
+                          'Checking git status'
+                        )}
+                      </span>
+                    ) : showGitChip && dirtyLabel ? (
+                      <WorkspaceCleanupMetadataChip
+                        icon={FileWarning}
+                        label={dirtyLabel}
+                        value={dirtyLabel}
+                        tone="destructive"
+                      />
+                    ) : null}
+                  </span>
+                </TooltipTrigger>
+                {gitSlotText ? (
+                  <TooltipContent side="top" sideOffset={4}>
+                    {gitSlotText}
+                  </TooltipContent>
+                ) : null}
+              </Tooltip>
             ) : null}
             {!deletionPhase && visibleFlags.length > 0 ? (
               <span className="inline-flex h-5 min-w-0 items-center gap-1 text-xs text-muted-foreground">
