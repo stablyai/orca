@@ -3,7 +3,7 @@ import {
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
 } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   storedItem,
   storedMessageBody,

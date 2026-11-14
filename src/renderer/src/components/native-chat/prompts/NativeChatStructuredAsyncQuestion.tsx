@@ -3,17 +3,17 @@ import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-sessi
 import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
-import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
 import { useMemo, useState } from 'react'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import {
   nativeChatAnswerOperationPending,
   type NativeChatAnswerOperation,
   formatAskAnswer
-} from '../../../../../shared/native-chat/input/native-chat-ask-answer'
-import { nativeChatAnswerSendIntent } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+} from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import { nativeChatAnswerSendIntent } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'

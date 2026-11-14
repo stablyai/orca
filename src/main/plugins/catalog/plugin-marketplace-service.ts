@@ -17,7 +17,7 @@ import {
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
 import type { PluginKillListEntry } from '../../../shared/plugins/catalog/plugin-kill-list'
-import type { PluginImageCache } from '../plugin-image-cache'
+import type { PluginImageCache } from '../media/plugin-image-cache'
 import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'

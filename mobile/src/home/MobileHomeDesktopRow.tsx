@@ -12,7 +12,10 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  homeHostWorktreeSummary,
+  type HostWorktreeInfo
+} from '../worktree/catalog/home-worktree-info'
 import { homeListStyles as styles } from './home-list-styles'
 
 const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', LucideIcon> = {

@@ -1,6 +1,7 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
+import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -10,7 +11,7 @@ import {
   patchLiveEntriesByWorktree
 } from './worktree-agent-live-index-patch'
 import './worktree-agent-orchestration-index'
-import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
+import { createWorktreeRecordSelector } from '@/components/sidebar/workspace-card/activity/worktree-terminal-record-selector'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 // Why frozen and exported: card hooks return these from their inactive branch,
@@ -55,7 +56,6 @@ type RetainedEntriesByWorktreeCache = {
   entriesByWorktree: Map<string, RetainedAgentEntry[]>
 }
 
-let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
 let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
 let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
@@ -74,24 +74,10 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
   return previous
 }
 
-// Settings reuses this tab index to avoid rescanning every bucket on each store write.
-export function getTabIdToWorktreeId(
-  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
-): Map<string, string> {
-  if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
-    return tabWorktreeIndexCache.tabIdToWorktreeId
-  }
-  const tabIdToWorktreeId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
-    }
-  }
-  tabWorktreeIndexCache = { tabsByWorktree, tabIdToWorktreeId }
-  return tabIdToWorktreeId
-}
+export { getTabIdToWorktreeId }
 
-function getLiveTabIdToWorktreeId(
+/** Terminal tabs plus agent-session chat tabs: the tab map live status is bucketed by. */
+export function getLiveTabIdToWorktreeId(
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree'],
   unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
 ): Map<string, string> {

@@ -25,7 +25,7 @@ import {
   normalizeWorktreeLinkedItemMetadata
 } from '../../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../../scheduling-automations/automation-context-migration'
-import { migrateAutomationOwners } from '../../../automations/automation-owner-migration'
+import { migrateAutomationOwners } from '../../../automations/ownership/automation-owner-migration'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery

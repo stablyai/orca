@@ -6,7 +6,7 @@ import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoi
 import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 

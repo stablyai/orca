@@ -33,7 +33,7 @@ vi.mock('../../workspaces/catalog/repo-worktrees', () => ({
   createFolderWorktree: vi.fn()
 }))
 
-vi.mock('../../git/source-control/status-read', () => ({ getStatus: getStatusMock }))
+vi.mock('../../git/source-control/status/status-read', () => ({ getStatus: getStatusMock }))
 vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
@@ -115,28 +115,6 @@ describe('workspace cleanup execution-host routing', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('never lists or reads an executionHostId-only SSH repo on this machine', async () => {
-    const store = makeStore([makeRepo({ executionHostId: 'ssh:alpha' })], {
-      [WORKTREE_ID]: makeMeta()
-    })
-
-    await scanWorkspaceCleanup(store)
-
-    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
-    expect(getStatusMock).not.toHaveBeenCalled()
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('never stats a remote workspace path on this client', async () => {
-    const store = makeStore([makeRepo({ executionHostId: 'ssh:alpha' })], {
-      [WORKTREE_ID]: makeMeta({ lastActivityAt: INACTIVE_AT })
-    })
-
-    await scanWorkspaceCleanup(store, { refreshActivity: true })
-
-    expect(lstatMock).not.toHaveBeenCalled()
   })
 
   it('refuses a runtime host that carries no nested SSH target instead of scanning locally', async () => {

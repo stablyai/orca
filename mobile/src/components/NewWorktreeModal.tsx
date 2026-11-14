@@ -14,11 +14,11 @@ import { useMobileComposerSource } from '../new-workspace/source-selection/use-m
 import { useNewWorktreeRuntimeCapabilities } from '../new-workspace/creation/worktree-create-capability'
 import { useWorktreeCreateBasePrefetch } from '../new-workspace/creation/use-worktree-create-base-prefetch'
 import { useHostDescriptor } from '../host-descriptors/host-descriptor-store'
-import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
+import { isSameMobileWorkspaceRepo } from '../worktree/repositories/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
-} from '../worktree/use-retired-worktree-names'
+} from '../worktree/catalog/use-retired-worktree-names'
 import { durableDraftRowKey } from '../drafts/durable-draft-rows'
 import { useDurableDraftField } from '../drafts/durable-draft-fields'
 import { BottomDrawerModalHost } from './bottom-drawer/bottom-drawer-modal-host'

@@ -27,6 +27,8 @@ export type PaneSpawnHints = {
 export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
+  /** False for a split the user did not ask for: the active pane and keyboard focus stay put. */
+  activate?: boolean
 }
 
 export type ClosedPaneInfo = {

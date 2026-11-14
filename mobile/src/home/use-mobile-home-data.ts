@@ -21,7 +21,7 @@ import {
   HOST_LIST_TARGET,
   homeWorktreeCountsKey,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useNow } from '../hooks/use-now'
 import {
   loadMobileOnboardingSteps,
@@ -39,8 +39,8 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
-import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+} from '../worktree/catalog/home-host-worktree-fetch'
+import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { projectHomeHostConnections } from './home-host-connection-projection'

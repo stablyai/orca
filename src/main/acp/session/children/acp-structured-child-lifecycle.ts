@@ -148,6 +148,7 @@ export class AcpStructuredChildren {
     }
     if (requested && session.journalClosed === null) {
       // Allow the running turn to settle before closing the process.
+      session.historyCatchUp?.abort()
       session.closeRequested = true
       await windDownAcpTurn(session, this.stopGraceMs())
       if (session.ended) {
@@ -230,6 +231,7 @@ export class AcpStructuredChildren {
     // Orca refusing what the agent wrote outranks the exit its cleanup then causes.
     this.recordEnding(session, error)
     if (!isAcpReadySession(session)) {
+      session.historyCatchUp?.abort()
       session.journalClosed = error.message || error.name
       return
     }

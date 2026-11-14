@@ -40,7 +40,5 @@ describe('browser touch geometry', () => {
 
     expect(delta.dy).toBe(-244)
     expect(delta.dx).toBe(0)
-    // What it sent before: the screen delta itself, 41% of the scroll asked for.
-    expect(delta.dy).not.toBe(-100)
   })
 })

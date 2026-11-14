@@ -28,7 +28,7 @@ import type { DictationContext, OpenAiCompatibleSpeechProvider } from '../../sha
 import type { Store } from '../persistence/loading-store/store'
 import type { DictationCleanupResult } from '../../shared/dictation-cleanup'
 import { cancelDictationCleanup, cleanUpDictatedText } from '../speech/dictation-cleanup-service'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
 // Ten minutes of fast speech is under 20,000 characters; anything far past it isn't dictation.
 const MAX_CLEANUP_TEXT_LENGTH = 100_000

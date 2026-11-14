@@ -1,7 +1,7 @@
 import {
   CLOUD_DICTATION_MAX_SECONDS,
   DICTATION_SAMPLE_RATE
-} from '../../../../shared/rpc-contract/speech-params'
+} from '../../../../shared/rpc-contract/speech/speech-params'
 import type { DictationContext } from '../../../../shared/speech-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 import type { DictationTranscriptDelivery } from './dictation-transcript-delivery'

@@ -9,10 +9,11 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../../../sha
 import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { isRepoHidden } from '../../../../../../shared/hidden-projects'
+import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/worktree/ownership'
+} from '../../../../../../shared/external-worktree-visibility'
 import type { ImportedWorktreesCardCandidate } from '../../../../../../shared/sidebar-list/row-types'
 
 export function buildImportedWorktreesCardCandidates(args: {

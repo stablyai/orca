@@ -11,11 +11,11 @@ import {
   agentDotState,
   agentRowTimeAt,
   formatTimeAgo
-} from '../worktree/agent-row-display'
+} from '../worktree/agent-lineage/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
-import { mobileAgentChildRowText } from '../worktree/mobile-agent-child-row-text'
+import { mobileAgentChildRowText } from '../worktree/agent-lineage/mobile-agent-child-row-text'
 
 export const AGENT_ROW_INDENT_PER_DEPTH = 14
 

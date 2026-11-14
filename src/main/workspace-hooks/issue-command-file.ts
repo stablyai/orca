@@ -3,8 +3,8 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
 import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
-import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
-import { listTrackedPathSpecs } from '../git/source-control/discard-changes'
+import { checkIgnoredPaths } from '../git/source-control/ignores/check-ignored-paths'
+import { listTrackedPathSpecs } from '../git/source-control/mutations/discard-changes'
 import {
   guardWslUncPathAccess,
   WslDistroStoppedError,

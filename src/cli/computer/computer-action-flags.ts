@@ -11,7 +11,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   validateDragTarget,
   validateElementOrCoordinates,
@@ -141,6 +141,15 @@ export async function getComputerTextActionFlags(flags: Map<string, string | boo
   text: string
 }> {
   return { text: await getTextPayload(flags, 'text') }
+}
+
+export async function getComputerTypeTextActionFlags(
+  flags: Map<string, string | boolean>
+): Promise<{ elementIndex?: number; text: string }> {
+  return {
+    elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
+    ...(await getComputerTextActionFlags(flags))
+  }
 }
 
 export function getComputerKeyActionFlags(flags: Map<string, string | boolean>): {

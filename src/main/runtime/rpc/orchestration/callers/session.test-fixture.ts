@@ -1,4 +1,5 @@
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { vi } from 'vitest'
 import type {
   AgentSessionLease,
@@ -7,7 +8,7 @@ import type {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { OrchestrationCompatibilityEvidence } from '../../../../../shared/orchestration/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
@@ -23,7 +24,7 @@ import { structuredWorkerIdentities } from '../../../orchestration/terminal-auth
 import type { RpcRequest, RpcResponse } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../methods/orchestration/orchestration'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export const SESSION_X = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 export const SESSION_Y = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
@@ -91,7 +92,34 @@ export function createSessionCallerHarness(
     [SESSION_X, sessionRecord(SESSION_X, { providerId: PROVIDER_ID_X })],
     [SESSION_Y, sessionRecord(SESSION_Y)]
   ])
+  // This host has records but no journal that can prove a handoff.
+  const mailSource: Pick<
+    StructuredAgentSessionHost,
+    'holdMailSources' | 'observeConversationPublications'
+  > = {
+    async holdMailSources(attempts, signal) {
+      signal.throwIfAborted()
+      let held = true
+      return {
+        observations: attempts.map((attempt) => ({
+          attempt,
+          observation: {
+            epoch: '',
+            state: { kind: 'unreadable' as const },
+            body: null,
+            withdrawal: 'unknown' as const
+          }
+        })),
+        current: () => held && !signal.aborted,
+        release: () => {
+          held = false
+        }
+      }
+    },
+    observeConversationPublications: () => () => {}
+  }
   hostRef.current = {
+    ...mailSource,
     deps: {
       store: {
         getRecord: (sessionId: string) => records.get(sessionId) ?? null,

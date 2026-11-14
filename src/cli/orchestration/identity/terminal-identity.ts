@@ -1,12 +1,12 @@
 import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/flags'
 import type { RuntimeClient } from '../../runtime/client'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { getTerminalHandle } from '../../terminals/terminal-selector'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId
-} from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+} from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { sessionAddressForHost } from './session-caller-flags'
 
 // --worktree/--terminal name the command's target, possibly on another host; only the caller's cwd scopes inference.

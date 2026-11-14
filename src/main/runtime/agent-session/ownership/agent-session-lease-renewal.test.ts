@@ -9,7 +9,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
 } from '../records/agent-session-record-store-test-harness'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const MATCHED = { outcome: 'identity-matched', matchedOn: ['spawn-token'] } as const
@@ -111,7 +111,7 @@ describe('agent-session lease renewal batch', () => {
 
     expect(store.getRecord('session-a')).toEqual(beforeFirst)
     expect(await readPersistedTestAgentSessionStoreText(directory)).toBe(beforeDisk)
-    const reopened = await openTestAgentSessionRecordStore(directory)
+    const reopened = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(
       reopened
         .listRecords()

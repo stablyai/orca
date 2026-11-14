@@ -21,7 +21,6 @@ import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions
 import { isMacAppPasteInput } from '../editing/mac-app-paste-input'
 import { dictationShortcutMode } from '../../../shared/dictation-shortcut-mode'
 import {
-  nativeChatPromptClaimsShortcut,
   textInputOwnsComposition,
   type TextShortcutInput
 } from '../../../shared/text-input-shortcut-policy'
@@ -45,14 +44,6 @@ export function installMainWindowShortcutRouting(args: {
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
-    // The IPC carries no key event; preserve prompt editing before consuming a destructive chord.
-    if (
-      action.type === 'deleteCurrentWorkspace' &&
-      focusedShortcutContext.context !== 'terminal' &&
-      nativeChatPromptClaimsShortcut(options.input, process.platform, 'workspace.delete')
-    ) {
-      return false
-    }
     if (
       focus.isFloatingTerminalInputFocused() &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
@@ -108,10 +99,7 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
-    if (
-      (action.type === 'toggleQuickCommandsMenu' || action.type === 'deleteCurrentWorkspace') &&
-      isAutoRepeat
-    ) {
+    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
       event.preventDefault()
       return true
     }

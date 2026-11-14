@@ -1,7 +1,7 @@
+import type { FakeAcpChild } from '../../process/testing/acp-scripted-connection.test-fixture'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { messageText } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'
@@ -10,20 +10,22 @@ import {
   envelope,
   hostTestState,
   replaceHostTestState
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { openTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type {
   AcpScriptedAgent,
   FakeFrame
 } from '../../process/testing/acp-scripted-agent.test-support'
 import { GROK, openAcpAdapterRig, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
-import type { FakeAcpChild } from '../../process/testing/acp-scripted-connection.test-fixture'
 import {
   ACP_HANDLE_TRANSPORT,
   acpStructuredAgentDefinition
@@ -67,8 +69,8 @@ export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStr
             agent: spec.agent,
             nativeId: PROVIDER_SESSION
           }),
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          mayBeUnsaved: async () => false,
+          lossKeys: []
         }
       : null
   })
@@ -90,7 +92,7 @@ export async function openHostRig(
   let generation = 0
   // Forward lifecycle and late-send settlements as the runtime does.
   const hosted: { host: StructuredAgentSessionHost | null } = { host: null }
-  const journalDatabase = openTestJournalHostDatabase(state.root)
+  const journalDatabase = await openTestAgentSessionDatabase(state.root)
   const rig = await openAcpAdapterRig({
     ...options,
     deps: {

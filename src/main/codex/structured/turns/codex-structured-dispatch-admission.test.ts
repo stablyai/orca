@@ -6,7 +6,7 @@ import {
   type StructuredAgentSessionEventSink
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createFixture } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-store-contract-test-fixture'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { StructuredAgentSessionCurrentWork } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import { MAX_CODEX_PENDING_DISPATCH_ECHOES } from './codex-structured-dispatch-echo'
 import {
@@ -228,30 +228,49 @@ describe('ordered Codex admission publication', () => {
     const revise = deferred.sink.tryReviseResolvedItem!
     deferred.sink.tryReviseResolvedItem = (...args) =>
       refuse ? { accepted: false, reason: 'backpressure' } : revise(...args)
-    const write = journal.appendResolvedItem.bind(journal)
+    const write = journal.appendSteps.bind(journal)
     const delay = Promise.withResolvers<void>()
     let delayed = false
-    vi.spyOn(journal, 'appendResolvedItem').mockImplementation(async (...args) => {
+    vi.spyOn(journal, 'appendSteps').mockImplementation(async (...args) => {
       delayed = true
       await delay.promise
       return write(...args)
     })
     const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'ordered-turn' } }) })
-    let work: StructuredAgentSessionCurrentWork | undefined
-    const observed: { active: string | null; working: boolean }[] = []
+    let observeWork: (() => Promise<StructuredAgentSessionCurrentWork>) | undefined
+    const observed: Promise<{ active: string | null; working: boolean }>[] = []
     const adapter = await acquiredCodexAdapter({
       codex,
       settlements: [],
       sink: deferred.sink,
       onHeldSendsChanged: () => {
-        if (work) {
-          observed.push({ active: work.activeTurnId(), working: work.working() })
+        if (observeWork) {
+          observed.push(
+            observeWork().then((work) => ({ active: work.activeTurnId(), working: work.working() }))
+          )
         }
       }
     })
-    work = new StructuredAgentSessionCurrentWork(journal, 7, 0, undefined, undefined, false, () =>
-      adapter.heldSends('session-1')
-    )
+    const work = async () => {
+      const { state } = await journal.readWork(
+        () => ({
+          handle: journal.observationHandle(),
+          record: {
+            currentFence: 7,
+            ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+          },
+          child: { fence: 7, heldSends: [...(adapter.heldSends('session-1') ?? [])] },
+          handingOver: [],
+          continuingUnadmitted: [],
+          finalizing: [],
+          openedThrough: journal.openingCursor(),
+          operationalRevision: 0
+        }),
+        { kind: 'state' }
+      )
+      return new StructuredAgentSessionCurrentWork(journal, state, journal.cursor())
+    }
+    observeWork = work
     await journal.appendSubmission({
       clientMessageId: 'ordered',
       payloadFingerprint: 'ordered-input',
@@ -259,29 +278,33 @@ describe('ordered Codex admission publication', () => {
       fence: 7
     })
     await send(adapter, 'ordered')
-    const submission = journal.submission('ordered')!
-    expect(work.publishedSubmission(submission)).toMatchObject({ dispatchState: 'pending' })
-    expect(work.working()).toBe(true)
+    const submission = (await journal.reads.submission('ordered'))!
+    expect((await work()).publishedSubmission(submission)).toMatchObject({
+      dispatchState: 'pending'
+    })
+    expect((await work()).working()).toBe(true)
 
     startTurn(codex.connections[0]!, 'ordered-turn')
-    expect(work.activeTurnId()).toBeNull()
-    expect(work.working()).toBe(true)
+    expect((await work()).activeTurnId()).toBeNull()
+    expect((await work()).working()).toBe(true)
     refuse = false
     await vi.waitFor(() => expect(delayed).toBe(true))
-    expect(work.activeTurnId()).toBeNull()
-    expect(work.publishedSubmission(submission)).toMatchObject({ dispatchState: 'pending' })
+    expect((await work()).activeTurnId()).toBeNull()
+    expect((await work()).publishedSubmission(submission)).toMatchObject({
+      dispatchState: 'pending'
+    })
     delay.resolve()
     await deferred.sink.written!()
-    await vi.waitFor(() =>
-      expect(work!.publishedSubmission(submission)).toMatchObject({
+    await vi.waitFor(async () =>
+      expect((await work()).publishedSubmission(submission)).toMatchObject({
         dispatchState: 'unknown',
         recovered: true,
         reason: 'provider_write_outcome_unknown'
       })
     )
-    expect(work.activeTurnId()).toBe('ordered-turn')
-    expect(work.working()).toBe(true)
-    expect(observed).toEqual([{ active: 'ordered-turn', working: true }])
+    expect((await work()).activeTurnId()).toBe('ordered-turn')
+    expect((await work()).working()).toBe(true)
+    expect(await Promise.all(observed)).toEqual([{ active: 'ordered-turn', working: true }])
     await adapter.closeSession('session-1')
     deferred.close()
   })

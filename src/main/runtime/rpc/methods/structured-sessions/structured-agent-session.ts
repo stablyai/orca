@@ -49,10 +49,10 @@ import {
   SendParams,
   SleepWorkspaceParams,
   UnsubscribeParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { sendStructuredAgentSessionForClient } from './conversation/structured-agent-session-send-compatibility'
 import { runConversationCommandForClient } from './conversation/structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'

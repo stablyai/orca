@@ -9,16 +9,16 @@ import type {
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../lifecycle/agent-session-turn-record'
+} from '../lifecycle/records/agent-session-turn-record'
 import {
   agentTurnVerdict,
   type AgentTurnOutcome
 } from '../../agent-status/lifecycle/agent-turn-outcome'
-import { structuredAgentTurnAnchors } from '../../native-chat/transcript/native-chat-turn-membership'
+import { structuredAgentTurnAnchors } from '../../native-chat/transcript/turns/native-chat-turn-membership'
 import type {
   NativeChatSettledTurn,
   NativeChatSettledTurns
-} from '../../native-chat/transcript/native-chat-turn-status'
+} from '../../native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from '../agent-session-wire'
 
 export type StructuredAgentTurnTiming = {

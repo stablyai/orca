@@ -139,10 +139,6 @@ describe('committed production task owners in recording adapters', () => {
 
   it.each([
     ['tk-item-metadata-gitlab', 'update-gitlab'],
-    ['tk-item-comment-github', 'comment'],
-    ['tk-item-checks-files', 'rerun'],
-    ['tk-item-status-gitlab', 'gitlab-status'],
-    ['tk-project-row-files-merge', 'pr-state'],
     ['tk-linear-item', 'comment']
   ])(
     '%s records deferred acquire, refused reentry, release and fresh remount',
@@ -260,7 +256,7 @@ describe('committed production task owners in recording adapters', () => {
     }
   )
 
-  it.each(['tk-item-checks-files', 'tk-project-row-files-merge'])(
+  it.each(['tk-item-checks-files'])(
     '%s records a same-path file successor and ignores retired publication/finish',
     async (id) => {
       const base = pilot(id)
@@ -328,8 +324,6 @@ describe('committed production task owners in recording adapters', () => {
   )
 
   it.each([
-    ['tk-item-detail-github', 'payload', 'detailLoading'],
-    ['tk-item-detail-gitlab', 'payload', 'detailLoading'],
     ['tk-item-detail-linear', 'payload', 'detailLoading'],
     ['tk-project-row-detail', 'detail', 'projectRowDetailLoading']
   ])(

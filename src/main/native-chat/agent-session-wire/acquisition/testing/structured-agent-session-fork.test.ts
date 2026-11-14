@@ -4,12 +4,12 @@ import { resolveUncommittedStructuredCreate } from '../../../../runtime/rpc/meth
 import { handleStructuredAgentSessionCreate } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create-handler'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../testing/agent-session-record-test-fixture'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../host/testing/structured-agent-session-rest-test-rig'
+} from '../../host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 
 import { setStructuredAgentSessionHost } from '../../host/structured-agent-session-registry'
@@ -78,9 +78,12 @@ it('keeps an earlier immutable response available while an unrelated later turn 
     })
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({
-    fork: { itemId: 'legacy:codex:source:selected-response' }
-  })
+  const prepared = await test.prepare()
+  try {
+    expect(prepared).toMatchObject({ fork: { itemId: 'legacy:codex:source:selected-response' } })
+  } finally {
+    await prepared.fork?.prepared.close()
+  }
 })
 
 it('keeps a checkpoint copy valid across a same-root source relaunch', async () => {
@@ -99,9 +102,12 @@ it('keeps a checkpoint copy valid across a same-root source relaunch', async () 
     ]
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({
-    fork: { itemId: 'legacy:codex:source:selected-response' }
-  })
+  const prepared = await test.prepare()
+  try {
+    expect(prepared).toMatchObject({ fork: { itemId: 'legacy:codex:source:selected-response' } })
+  } finally {
+    await prepared.fork?.prepared.close()
+  }
 })
 
 it('refuses a tip copy after its source head relaunches', async () => {
@@ -136,7 +142,7 @@ it('coalesces concurrent fork create replay and refuses a conflicting fork inten
   const getRecord = rig.store.getRecord.bind(rig.store)
   const writable = rig.store.requireWritableRecord.bind(rig.store)
   const select = rig.store.selectWritableRecord.bind(rig.store)
-  const snapshot = rig.host.journalSnapshot.bind(rig.host)
+  const boundary = rig.host.forkBoundary.bind(rig.host)
   vi.spyOn(rig.store, 'getRecord').mockImplementation((id) =>
     id === 'source-chat' ? test.record : getRecord(id)
   )
@@ -146,8 +152,10 @@ it('coalesces concurrent fork create replay and refuses a conflicting fork inten
   vi.spyOn(rig.store, 'selectWritableRecord').mockImplementation((id) =>
     id === 'source-chat' ? { kind: 'writable', record: test.record } : select(id)
   )
-  vi.spyOn(rig.host, 'journalSnapshot').mockImplementation((id) =>
-    id === 'source-chat' ? Promise.resolve(test.snapshot) : snapshot(id)
+  vi.spyOn(rig.host, 'forkBoundary').mockImplementation((id, itemId, anchor, compare) =>
+    id === 'source-chat'
+      ? test.host.forkBoundary(id, itemId, anchor, compare)
+      : boundary(id, itemId, anchor, compare)
   )
   const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
   vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {
@@ -232,7 +240,7 @@ it('forks an inherited Codex reply through its original and refuses it after the
     selectWritableRecord: (id: string) => ({ kind: records.has(id) ? 'writable' : 'missing' }),
     requireWritableRecord: (id: string) => records.get(id)!
   })
-  test.host.journalSnapshot = async (id) => {
+  test.snapshots.read = async (id) => {
     if (id === 'source-chat') {
       return test.snapshot
     }
@@ -255,20 +263,25 @@ it('forks an inherited Codex reply through its original and refuses it after the
       location: test.record.location,
       envelope: test.intent.envelope
     })
-  expect((await prepare()).fork).toMatchObject({
-    sessionId: 'source-chat',
-    itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1'
-  })
+  const prepared = await prepare()
+  try {
+    expect(prepared.fork).toMatchObject({
+      sessionId: 'source-chat',
+      itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1'
+    })
+  } finally {
+    await prepared.fork?.prepared.close()
+  }
   expect(test.copy.mock.calls[0]![0]).toMatchObject({
     record: { sessionId: 'source-chat' },
     providerSessionId: '019e6b26-18e2-7103-b7a0-7ba6bb071123',
     checkpoint: { selectedItemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1' }
   })
   const retainedCopies = new Map([
-    ['first-fork', await test.host.journalSnapshot('first-fork')],
-    ['second-fork', await test.host.journalSnapshot('second-fork')]
+    ['first-fork', await test.snapshots.read('first-fork')],
+    ['second-fork', await test.snapshots.read('second-fork')]
   ])
-  test.host.journalSnapshot = async (id) => retainedCopies.get(id) ?? test.snapshot
+  test.snapshots.read = async (id) => retainedCopies.get(id) ?? test.snapshot
   test.snapshot.items = test.snapshot.items.slice(0, 1)
   expect(await resolveUncommittedStructuredCreate(prepare)).toMatchObject({
     refusal: {
@@ -296,11 +309,21 @@ it('checks an inherited tip against the original and refuses after the original 
     itemId: 'legacy:codex:source:selected-response',
     childBoundary: { kind: 'item', itemId: 'legacy:codex:source:selected-response' }
   }
-  const original = { ...test.record, sessionId: 'original', forkedFrom: undefined }
+  const original = {
+    ...test.record,
+    sessionId: 'original',
+    lease: { ...test.record.lease, sessionId: 'original' },
+    forkedFrom: undefined
+  }
   test.host.deps.store.requireWritableRecord = (id) => (id === 'original' ? original : test.record)
   test.host.deps.store.getRecord = (id) => (id === 'original' ? original : test.record)
-  test.host.journalSnapshot = async (id) => (id === 'original' ? test.snapshot : inherited)
-  expect((await test.prepare()).fork?.sessionId).toBe('original')
+  test.snapshots.read = async (id) => (id === 'original' ? test.snapshot : inherited)
+  const prepared = await test.prepare()
+  try {
+    expect(prepared.fork?.sessionId).toBe('original')
+  } finally {
+    await prepared.fork?.prepared.close()
+  }
   test.snapshot.items.push({
     itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:later-user:0',
     sequence: 10,

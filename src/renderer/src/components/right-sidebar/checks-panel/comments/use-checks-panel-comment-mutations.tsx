@@ -13,10 +13,10 @@ import {
   canPostPRReviewThreadReply,
   resolvePRReviewReplyThreadId
 } from './pr-comments-ai-launch-ack'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comment-resolution'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
 import { isMutablePRConversationComment } from '../../../../../../shared/github/comments/pr-comment-mutability'
 import type {
@@ -156,7 +156,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         return
       }
       const confirmed = await confirm({
-        title: translate('auto.components.right.sidebar.ChecksPanel.ea9b649ce3', 'Delete comment?'),
+        title: translate('common.delete', 'Delete'),
         description: translate(
           'auto.components.right.sidebar.ChecksPanel.3b203c62f8',
           'This will permanently remove the comment from the PR.'

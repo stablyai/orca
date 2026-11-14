@@ -1,6 +1,6 @@
 import { lstat, readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { checkIgnoredPaths } from '../../source-control/check-ignored-paths'
+import { checkIgnoredPaths } from '../../source-control/ignores/check-ignored-paths'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 

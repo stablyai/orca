@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { REPEATED_FLAG_SEPARATOR } from './args'
 import { describeQuoteStrippedJsonFlag } from './quote-stripped-json-flag'
 import type { RepoKind } from '../../shared/repo-types'

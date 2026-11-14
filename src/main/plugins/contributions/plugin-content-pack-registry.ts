@@ -1,9 +1,9 @@
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
-} from '../plugin-discovery'
+} from '../discovery/plugin-discovery'
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
 import { PluginIconThemeRegistry } from './plugin-icon-theme-registry'
 import { PluginSyntaxRegistry } from './plugin-syntax-registry'
@@ -11,9 +11,9 @@ import {
   createPluginTerminalThemeRegistry,
   createPluginThemeRegistry
 } from './plugin-theme-registries'
-import { PluginVmRecipeRegistry } from '../plugin-vm-recipe-registry'
-import { PluginCommandRegistry } from '../plugin-command-registry'
-import { verifyDeclarativePluginContent } from '../plugin-declarative-content-integrity'
+import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
+import { PluginCommandRegistry } from '../commands/plugin-command-registry'
+import { verifyDeclarativePluginContent } from '../artifacts/plugin-declarative-content-integrity'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
 import type { PluginServiceOptions } from '../plugin-service-options'

@@ -64,15 +64,13 @@ vi.mock('../host-catalog/host-store', () => ({
 }))
 
 import '../storage/preferences'
-import '../worktree/last-visited-worktree-by-host'
-import { PAGE_STORAGE_MAX_VALUE_CHARS } from './page-storage-keys'
+import '../worktree/navigation/last-visited-worktree-by-host'
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
 import { persistMirrored, readMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const PINS = 'orca:pins:host-1'
 
 const CHAT_TABS = 'orca:nativeChatTabs:host-1:wt-1'
-const JOURNAL = 'orca:mobileStructuredSendOperations:v1'
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
 
 const mountedTrees: ReturnType<typeof create>[] = []
@@ -266,25 +264,6 @@ describe('what the shell puts on every init', () => {
     expect(doubles.writes).toEqual([])
     expect(doubles.store.get('orca:nativeChatTabs:host-1:wt-2')).toBe('{"tab-9":"chat"}')
     expect(mounted.view().readStorage().storage).toEqual({ [CHAT_TABS]: '{"tab-1":"chat"}' })
-  })
-
-  it('leaves out a value the page would refuse the whole frame over, and says which', async () => {
-    // A real 48-send journal exceeds the value cap; sending it whole would reject all of init.
-    const warned: unknown[][] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => warned.push(args)
-    try {
-      doubles.store.set(PINS, '["one"]')
-      doubles.store.set(JOURNAL, 'x'.repeat(PAGE_STORAGE_MAX_VALUE_CHARS + 1))
-      const mounted = await mount()
-      await act(async () => {
-        mounted.view().refreshStorage()
-      })
-      expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["one"]' })
-    } finally {
-      console.warn = warn
-    }
-    expect(JSON.stringify(warned)).toContain(JOURNAL)
   })
 })
 

@@ -12,7 +12,7 @@ import {
   FileOpen,
   FileWatch,
   WorktreeSelector
-} from '../../../../../shared/rpc-contract/files-target-params'
+} from '../../../../../shared/rpc-contract/filesystem/files-target-params'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
   ChatImageRead,
@@ -30,7 +30,7 @@ import {
   FileUnwatch,
   ResolveTerminalPath,
   ServerDirectoryBrowse
-} from '../../../../../shared/rpc-contract/files-params'
+} from '../../../../../shared/rpc-contract/filesystem/files-params'
 import { limitSearchResultToContentBudget } from '../../../../../shared/file-search/search-result-transport-budget'
 
 let filesWatchSubscriptionSeq = 0
@@ -79,7 +79,7 @@ export const FILE_METHODS = [
       runtime.openMobileFile(
         params.worktree,
         params.relativePath,
-        params.navigation,
+        params.navigation ?? 'caller',
         ...(params.line === undefined ? [] : [{ line: params.line, column: params.column }])
       )
   }),
@@ -92,7 +92,7 @@ export const FILE_METHODS = [
         params.worktree,
         params.relativePath,
         params.staged === true,
-        params.navigation,
+        params.navigation ?? 'caller',
         ...(params.oldPath ? ([params.oldPath] as const) : [])
       )
   }),

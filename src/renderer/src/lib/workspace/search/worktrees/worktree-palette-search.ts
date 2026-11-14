@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { matchPaletteDocument } from '../../../../../../shared/palette-match/match-document'
 import { preparePaletteQuery } from '../../../../../../shared/palette-match/palette-query'
 import type { MatchRange } from '../../../../../../shared/palette-match/normalized-text'

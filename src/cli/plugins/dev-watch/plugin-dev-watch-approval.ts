@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline'
 import { z } from 'zod'
 import { formatPluginGrantLines } from '../plugin-grant-lines'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { DevLoadResult } from '../plugin-runtime'
 
 /** Asks a yes/no question; false on anything but yes, end of input or Ctrl-C. */

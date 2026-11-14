@@ -62,15 +62,14 @@ export function useWorktreeCardSecondaryDetails({
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardDetails.inlineAgents
-  const compactInlineAgentRows = useWorktreeAgentRows(
+  const inlineAgentRows = useWorktreeAgentRows(
     worktree.id,
-    showInlineAgentList && agentActivityDisplayMode === 'compact'
+    newCardStyle || showInlineAgentList,
+    worktree.hostId
   )
-  const compactInlineAgentRowsVisible =
-    showInlineAgentList &&
-    agentActivityDisplayMode === 'compact' &&
-    compactInlineAgentRows.length > 0
-  const showAggregateCacheTimer = !compactCards && !compactInlineAgentRowsVisible
+  const inlineAgentRowsVisible =
+    showInlineAgentList && agentActivityDisplayMode === 'compact' && inlineAgentRows.length > 0
+  const showAggregateCacheTimer = !compactCards && !inlineAgentRowsVisible
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -225,13 +224,15 @@ export function useWorktreeCardSecondaryDetails({
     },
     [linearIssue, openTaskPage]
   )
+  // The experimental card draws the PR in its status lane; Classic lists it with the other details.
+  const reviewInStatusLane = newCardStyle
   const hasDetails =
     getWorkspaceAttachments(worktree).length > 0 ||
     hasWorktreeCardDetails({
       issue: metaIssue,
       linearIssue: metaLinearIssue,
       jiraIssue: metaJiraIssue,
-      review: newCardStyle ? null : metaReview,
+      review: reviewInStatusLane ? null : metaReview,
       comment: metaComment,
       automationProvenance: metaAutomationProvenance,
       cliProvenance: metaCliProvenance
@@ -257,7 +258,7 @@ export function useWorktreeCardSecondaryDetails({
     metaCliProvenance,
     metaComment,
     showInlineAgentList,
-    compactInlineAgentRows,
+    inlineAgentRows,
     handleOpenGitHubIssueInOrca,
     handleOpenIssueInBrowser,
     handleOpenReviewInOrca,
@@ -266,6 +267,7 @@ export function useWorktreeCardSecondaryDetails({
     hasExplicitLinkedReview,
     handleUnlinkReview,
     handleOpenLinearIssueInOrca,
+    reviewInStatusLane,
     hasDetails,
     hasPorts,
     cacheStartedAt,

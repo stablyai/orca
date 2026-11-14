@@ -1,15 +1,22 @@
+import { busyChat, settleTurn, editableMail } from './structured-chat-mail-custody.test-fixture'
+import { journalOf, queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 // A queued mail card is the chat's to hand over only while the chat still owes it: its message unread in
 // its mailbox, and that mailbox still this chat's. The queue asks at handover; cleanup is visible only.
 
 import { describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import { agentSessionRefusalNotice } from '../../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionWriteKindForMethod } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { captureHostStructuredAgentSessionWork } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-read-work'
+import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
+import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-test-harness'
+import { createStructuredMailboxPointerHost } from '../../mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   COORDINATOR,
   PEER_CHAT,
@@ -21,36 +28,10 @@ import {
   host,
   isWholeMail,
   openChat,
-  queuedCardTexts,
+  root,
   runtime,
-  sendUserMessage,
-  settleTurn,
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
-
-/** A running turn, optionally with its first handover still unanswered. */
-async function busyChat(sessionId: string, startReply?: Promise<void>) {
-  const chat = await openChat(sessionId)
-  if (startReply) {
-    const request = chat.request
-    chat.request = async (...args) => {
-      const response = await request(...args)
-      if (args[0] === 'turn/start') {
-        await startReply
-      }
-      return response
-    }
-  }
-  expect(await sendUserMessage(sessionId, 'go')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-  chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
-  await host.flushStreamedEvents(sessionId)
-  return chat
-}
-
-function journalOf(sessionId: string): AgentSessionJournal {
-  return host.collaboratorsForTests().sessions.get(sessionId)!.journal
-}
 
 /** Queue a card behind the running turn: the person's own, or another agent's with `from`. */
 async function queueCard(text: string, from?: AgentMessageSource): Promise<string> {
@@ -144,6 +125,144 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     await vi.waitFor(() => expect(db.getUnreadMessages(`run:${runId}`)).toEqual([]), WAIT)
   })
 
+  it('refuses an explicit Send of a card no longer owed, removing it without a turn', async () => {
+    const { chat, runId } = await editableMail()
+    vi.spyOn(runtime, 'withdrawStaleChatMail').mockImplementation(() => {})
+    // The consuming check's durable claim excludes this card before final handover.
+    const claim = db.getOrCreateRunDelivery({
+      runId,
+      consumerGeneration: db.getRun(runId)!.consumer_generation
+    })
+    expect(claim?.messages).toHaveLength(1)
+    const [reserved] = db.getStructuredMailSends(`run:${runId}`)
+    const [card] = await journalOf(COORDINATOR).queuedMessages.list()
+    const fields = { messageId: card!.messageId }
+    const sent = await host.queuedMessageSend(
+      { callerKey: 'test-surface' },
+      {
+        envelope: {
+          sessionId: COORDINATOR,
+          clientOperationId: operationId(),
+          expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.queuedMessageSend',
+            sessionId: COORDINATOR,
+            fields
+          })
+        },
+        ...fields
+      }
+    )
+    if (sent.ok) {
+      throw new Error('a stale Send went through')
+    }
+    // The person is told why the card went, on desktop and phone alike.
+    expect(agentSessionRefusalNotice(sent.refusal, 'send', { agentName: 'Codex' })).toContain(
+      'This chat has moved on.'
+    )
+    expect(await queuedCardTexts()).toEqual([])
+    expect(await host.mailObservation(reserved!)).toMatchObject({
+      state: { kind: 'withdrawn' },
+      withdrawal: 'system'
+    })
+    expect(db.getMessageById(reserved!.message_id)?.read).toBe(0)
+    expect(chat.turns).toHaveLength(1)
+  })
+
+  it('answers a dispatched Delete from the actual send, never as a withdrawal', async () => {
+    const { chat } = await editableMail()
+    const [card] = await journalOf(COORDINATOR).queuedMessages.list()
+    const fields = { messageId: card!.messageId }
+    expect(
+      await host.queuedMessageSend(
+        { callerKey: 'test-surface' },
+        {
+          envelope: {
+            sessionId: COORDINATOR,
+            clientOperationId: operationId(),
+            expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.queuedMessageSend',
+              sessionId: COORDINATOR,
+              fields
+            })
+          },
+          ...fields
+        }
+      )
+    ).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
+    const pointerHost = createStructuredMailboxPointerHost()
+    expect(await pointerHost.withdraw(COORDINATOR, fields.messageId)).toEqual({ kind: 'waiting' })
+    expect(await journalOf(COORDINATOR).queuedMessages.get(fields.messageId)).toMatchObject({
+      state: 'dispatched'
+    })
+    chat.handlers.onNotification?.('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-claimed-mail',
+        clientId: chat.steers[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: chat.steers[0]!.text }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
+    expect(await pointerHost.withdraw(COORDINATOR, fields.messageId)).toEqual({ kind: 'accepted' })
+  })
+
+  it('retains stale mail custody when the writer refuses its withdrawal', async () => {
+    const { chat, runId } = await editableMail()
+    const mailbox = `run:${runId}`
+    const [reserved] = db.getStructuredMailSends(mailbox)
+    expect(reserved).toBeDefined()
+    const [card] = await journalOf(COORDINATOR).queuedMessages.list()
+    const fields = { messageId: card!.messageId }
+    db.bindRun({
+      runId,
+      coordinatorHandle: 'term_taker',
+      coordinatorPaneKey: 'tab_taker:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    })
+    await withTestAgentSessionDatabase(root, (database) =>
+      database.exec(`CREATE TRIGGER refuse_mail_withdrawal BEFORE UPDATE ON journal_queue_cards
+        WHEN NEW.state = 'withdrawn'
+        BEGIN SELECT RAISE(ABORT, 'withdrawal unavailable'); END`)
+    )
+    try {
+      const sending = host.queuedMessageSend(
+        { callerKey: 'test-surface' },
+        {
+          envelope: {
+            sessionId: COORDINATOR,
+            clientOperationId: operationId(),
+            expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.queuedMessageSend',
+              sessionId: COORDINATOR,
+              fields
+            })
+          },
+          ...fields
+        }
+      )
+      await expect(sending).rejects.toThrow('withdrawal unavailable')
+      expect(db.getStructuredMailSends(mailbox)).toEqual([reserved])
+      expect(await journalOf(COORDINATOR).queuedMessages.get(fields.messageId)).toMatchObject({
+        state: 'waiting'
+      })
+      expect(db.getUnreadMessages(mailbox)).toMatchObject([
+        { read: 0, delivered_at: expect.any(String) }
+      ])
+      expect(chat.turns).toHaveLength(1)
+    } finally {
+      await withTestAgentSessionDatabase(root, (database) =>
+        database.exec('DROP TRIGGER refuse_mail_withdrawal')
+      )
+    }
+    runtime.withdrawStaleChatMail([mailbox])
+    await vi.waitFor(() => expect(db.getStructuredMailSends(mailbox)).toEqual([]), WAIT)
+    expect(await queuedCardTexts()).toEqual([])
+    expect(db.getUnreadMessages(mailbox)).toMatchObject([{ read: 0, delivered_at: null }])
+  })
+
   it("lets the person's cards pass mail it cannot decide on now, then hands the mail over first once it can", async () => {
     const reply = Promise.withResolvers<void>()
     try {
@@ -221,6 +340,63 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     await vi.waitFor(() => expect(selectable).toContain(1), WAIT)
   })
 
+  it('publishes nothing as next while only undecidable mail waits, and hands it over once readable', async () => {
+    const chat = await busyChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    const unreadable = vi.spyOn(db, 'areUnreadMessages').mockImplementation(() => {
+      throw new Error('database unavailable')
+    })
+    await settleTurn(COORDINATOR, 0)
+    const journal = journalOf(COORDINATOR)
+    const work = (await host.currentWork(COORDINATOR))!
+    // Idle with nothing to hand over: not working, so /clear and the person's sends go through.
+    await vi.waitFor(() => expect(work.working()).toBe(false), WAIT)
+    const record = host.deps.store.getRecord(COORDINATOR)
+    const authority = captureHostStructuredAgentSessionWork(
+      { store: host.deps.store, sessions: host.collaboratorsForTests().sessions },
+      COORDINATOR,
+      journal
+    )
+    expect(await nextStructuredQueuedMessage({ journal, record, work, authority })).toBeNull()
+    // The person's Send of that card says what happened, never that Orca restarted.
+    const card = (await journal.queuedMessages.list()).find((row) => row.state === 'waiting')
+    const fields = { messageId: card!.messageId }
+    const sent = await host.queuedMessageSend(
+      { callerKey: 'test-surface' },
+      {
+        envelope: {
+          sessionId: COORDINATOR,
+          clientOperationId: operationId(),
+          expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.queuedMessageSend',
+            sessionId: COORDINATOR,
+            fields
+          })
+        },
+        ...fields
+      }
+    )
+    if (sent.ok) {
+      throw new Error('an undecidable Send went through')
+    }
+    // Worded as the card's Send is, desktop and phone alike, with its step even beside a Retry.
+    const write = agentSessionWriteKindForMethod('agentSession.queuedMessageSend', fields)
+    for (const retryControl of [false, true]) {
+      expect(agentSessionRefusalNotice(sent.refusal, write, { retryControl })).toBe(
+        "Orca couldn't confirm this message is still meant for this chat. Your message was not sent. Try again."
+      )
+    }
+    expect(chat.turns).toHaveLength(1)
+    // Readable again: the lane's next look wakes the queue, with no action from the person.
+    unreadable.mockRestore()
+    runtime.withdrawStaleChatMail()
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
+  })
+
   it('sends a report refused for queue room once the queue frees room', async () => {
     const reply = Promise.withResolvers<void>()
     try {
@@ -252,7 +428,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
         WAIT
       )
       // Deleting the person's cards frees room: that journal edge alone sends the report.
-      for (const card of journalOf(COORDINATOR).queuedMessages.list()) {
+      for (const card of await journalOf(COORDINATOR).queuedMessages.list()) {
         const fields = { messageId: card.messageId }
         expect(
           await host.queuedMessageDelete(

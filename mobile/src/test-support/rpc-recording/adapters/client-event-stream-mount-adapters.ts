@@ -1,6 +1,6 @@
-import type * as UseLiveWorktreeNameModule from '../../../worktree/use-live-worktree-name'
-import type * as HostWorktreeRefreshModule from '../../../worktree/host-worktree-refresh'
-import type * as HostListQueries from '../../../host-screen/host-list-queries'
+import type * as UseLiveWorktreeNameModule from '../../../worktree/row-presentation/use-live-worktree-name'
+import type * as HostWorktreeRefreshModule from '../../../worktree/execution-hosts/host-worktree-refresh'
+import type * as HostListQueries from '../../../host-screen/catalog/host-list-queries'
 import type * as HostQueryModule from '../../../query/host-query'
 import { hookMount } from '../hook-mount'
 import { hookScreenMount } from '../mounted-screen-tree'
@@ -18,7 +18,7 @@ export function clientEventStreamMountAdapters(
   return {
     'session.live-worktree-name': ({ client, effect }) => {
       const useLiveWorktreeName = modules.load<typeof UseLiveWorktreeNameModule>(
-        'mobile/src/worktree/use-live-worktree-name.ts'
+        'mobile/src/worktree/row-presentation/use-live-worktree-name.ts'
       ).useLiveWorktreeName
       let value: ReturnType<typeof useLiveWorktreeName> | undefined
       const screen = hookScreenMount(() => {
@@ -53,7 +53,7 @@ export function clientEventStreamMountAdapters(
         'mobile/src/query/host-query.ts'
       )
       const queries = modules.load<typeof HostListQueries>(
-        'mobile/src/host-screen/host-list-queries.ts'
+        'mobile/src/host-screen/catalog/host-list-queries.ts'
       )
       let status: string | null = null
       const hook = hookMount(() => {
@@ -80,7 +80,7 @@ export function clientEventStreamMountAdapters(
     },
     'worktree.host-refresh': ({ client, effect }) => {
       const startHostWorktreeRefresh = modules.load<typeof HostWorktreeRefreshModule>(
-        'mobile/src/worktree/host-worktree-refresh.ts'
+        'mobile/src/worktree/execution-hosts/host-worktree-refresh.ts'
       ).startHostWorktreeRefresh
       const counts = { refreshWorktrees: 0, syncViewSettings: 0 }
       let stop: (() => void) | null = null

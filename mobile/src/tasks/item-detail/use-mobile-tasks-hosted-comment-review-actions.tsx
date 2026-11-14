@@ -1,6 +1,6 @@
 import { refreshMobileTaskPRChecks } from '../hosted-review/mobile-task-pr-check-refresh'
 import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
-import { useClipboardWriter } from '../../platform/clipboard'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
 import { scheduleMobileTaskCopyFeedbackReset } from '../screen/mobile-task-copy-feedback-timer'
 import { useCallback } from 'react'

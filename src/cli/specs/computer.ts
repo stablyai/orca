@@ -35,6 +35,18 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'id']
   },
   {
+    path: ['computer', 'launch-app'],
+    summary: 'Start a closed app without taking the foreground',
+    usage: 'orca computer launch-app <name|bundle|path> [--activate] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'app', 'activate'],
+    positionalArgs: ['app'],
+    notes: [
+      'Leaves an app that is already running as it is. Use this instead of `open -a` or Start-Process, which bring the app to the front.',
+      'Use --activate only when the user asked for the app to come forward: it takes the keyboard from whatever they are doing. It applies only when launch-app starts the app.',
+      'macOS and Windows only.'
+    ]
+  },
+  {
     path: ['computer', 'list-windows'],
     summary: 'List windows for an app available to computer-use',
     usage: 'orca computer list-windows --app <name|bundle|pid:N> [--json]',
@@ -112,10 +124,10 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['computer', 'type-text'],
-    summary: 'Type literal text at the current app focus',
+    summary: 'Type literal text at the current app focus or into an element',
     usage:
-      'orca computer type-text --app <app> (--text <text> | --text-stdin) [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'text', 'text-stdin']
+      'orca computer type-text --app <app> (--text <text> | --text-stdin) [--element-index <n>] [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'element-index', 'text', 'text-stdin']
   },
   {
     path: ['computer', 'press-key'],

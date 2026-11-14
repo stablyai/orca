@@ -1,5 +1,5 @@
 import type { DictationTerm } from './dictation-dictionary'
-import type { SmartTier } from './sidebar-list/sort-stamps'
+import type { SmartTier } from './sidebar-list/sorting/sort-stamps'
 import type {
   AgentStatusState,
   AgentType,
@@ -34,6 +34,8 @@ export type RuntimeWorktreeSetResult = {
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
+  /** The host's Orca id for this terminal agent's conversation; old hosts omit it. */
+  orcaSessionId?: string
   parentPaneKey: string | null
   state: AgentStatusState
   workingMode?: AgentWorkingMode

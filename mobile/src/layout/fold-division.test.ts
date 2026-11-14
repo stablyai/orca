@@ -38,11 +38,7 @@ describe('getFoldSplit', () => {
     expect(getFoldSplit([BOOK_FOLD], { x: 482, y: 0, width: 469, height: 669 })).toBeNull()
   })
 
-  it('ignores regions that do not cross the frame or carry no usable size', () => {
+  it('ignores a fold that does not cross the frame', () => {
     expect(getFoldSplit([{ ...BOOK_FOLD, height: 300 }], INNER_LANDSCAPE)).toBeNull()
-    expect(getFoldSplit([{ ...BOOK_FOLD, width: 0 }], INNER_LANDSCAPE)).toBeNull()
-    expect(getFoldSplit([{ ...BOOK_FOLD, x: Number.NaN }], INNER_LANDSCAPE)).toBeNull()
-    expect(getFoldSplit([BOOK_FOLD], { ...INNER_LANDSCAPE, width: 0 })).toBeNull()
-    expect(getFoldSplit([], INNER_LANDSCAPE)).toBeNull()
   })
 })

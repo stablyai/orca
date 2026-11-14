@@ -36,8 +36,10 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
   const [expanded, setExpanded] = useState(false)
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set())
   // Name hosts only when one is not this computer; a local-only list needs no host column.
+  // Why: this selector reruns on every store write; skip it while the list is collapsed.
   const hostLabels = useAppStore(
     useShallow((state) =>
+      expanded &&
       hiddenRepos.some((repo) => getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID)
         ? hiddenRepos.map((repo) =>
             selectExecutionHostDisplayLabel(state, getRepoExecutionHostId(repo))

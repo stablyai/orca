@@ -6,8 +6,8 @@ import type { AppState } from '@/store/types'
 import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
-import { selectChecksPanelReview } from '../right-sidebar/checks-panel/checks-panel-review'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
+import { selectChecksPanelReview } from '../right-sidebar/checks-panel/review-state/checks-panel-review'
 
 type WorktreeChecksReviewIndexArgs = {
   worktrees: readonly Worktree[]

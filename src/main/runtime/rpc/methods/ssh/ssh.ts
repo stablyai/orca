@@ -30,7 +30,7 @@ import {
   SshTarget,
   SshTargetAdd,
   SshTargetUpdate
-} from '../../../../../shared/rpc-contract/ssh-params'
+} from '../../../../../shared/rpc-contract/ssh/ssh-params'
 
 // Keep generation optional so older server rows still key by target id.
 function toSshTargetSummary(

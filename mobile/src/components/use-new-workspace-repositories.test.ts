@@ -11,8 +11,10 @@ const servers = vi.hoisted(() => {
   const state: { repos: ReadonlyMap<string, unknown[]> } = { repos: new Map() }
   return state
 })
-vi.mock('../worktree/use-server-repos', () => ({ useServerRepos: () => servers.repos }))
-vi.mock('../worktree/use-last-visited-worktree-repo', () => ({
+vi.mock('../worktree/repositories/use-server-repos', () => ({
+  useServerRepos: () => servers.repos
+}))
+vi.mock('../worktree/navigation/use-last-visited-worktree-repo', () => ({
   useLastVisitedWorktreeRepoId: () => ({ loaded: true, repoId: 'api' })
 }))
 

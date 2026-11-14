@@ -1,11 +1,11 @@
 /** Share worker-read transcript and terminal-read text rendering so peers see identical tool-call output through either surface. */
 
-import { claimBackgroundTaskTwins } from './native-chat/input/native-chat-background-task-row'
+import { claimBackgroundTaskTwins } from './native-chat/input/task-lists/native-chat-background-task-row'
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
-} from './native-chat/transcript/native-chat-subagent-summary'
-import { subagentFallbackText } from './native-chat/transcript/native-chat-subagent-items'
+} from './native-chat/transcript/subagents/native-chat-subagent-summary'
+import { subagentFallbackText } from './native-chat/transcript/subagents/native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { isInlineDataUrl } from './native-chat/native-chat-inline-data-url'
 

@@ -1,5 +1,5 @@
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
-import { readClaudePermissionMode } from './provider-session-live-settings'
+import { readClaudePermissionMode } from './resume/provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
 import type { RefusedPaneResume } from '../../agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
@@ -194,23 +194,6 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
     ...(effort ? { effort } : {}),
     ...(permissionMode ? { permissionMode } : {})
   }
-}
-
-/** Compare the provider-owned values that identify the CLI resume target.
- *  Pi-family transcript resumes use file identity; other agents use provider ids. */
-export function agentProviderSessionsEqual(
-  agent: string | undefined,
-  left: AgentProviderSessionMetadata | undefined,
-  right: AgentProviderSessionMetadata | undefined
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right
-  }
-  return (
-    left.key === right.key &&
-    left.id === right.id &&
-    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
-  )
 }
 
 export function extractAgentProviderSession(

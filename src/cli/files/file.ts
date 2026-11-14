@@ -8,7 +8,7 @@ import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/ws
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { callFileOpen } from './file-open-call'
 import {
   getOptionalWorktreeSelector,

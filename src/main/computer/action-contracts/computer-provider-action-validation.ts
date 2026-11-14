@@ -45,6 +45,9 @@ export async function validateComputerProviderActionParams(
       validateDragTarget(params)
       return app
     case 'typeText':
+      if (params.elementIndex !== undefined) {
+        requireNonNegativeInteger(params, 'elementIndex')
+      }
       requireNonEmptyString(params, 'text')
       return app
     case 'pasteText':

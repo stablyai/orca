@@ -1,11 +1,11 @@
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   getMobileWorkspaceLineageChildren,
   type MobileLineageRow,
   type MobileLineageStores
-} from '../../worktree/mobile-workspace-lineage'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+} from '../../worktree/agent-lineage/mobile-workspace-lineage'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import { serializeFolderLineage } from './folder-lineage-serialization'
 
 /** What a folder list row shows of a host row. */

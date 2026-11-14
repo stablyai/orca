@@ -1,7 +1,7 @@
 import { isAgentStatusHooksEnabledForAgent } from '../../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../../codex/hooks/installation/managed-wsl-home-shell-preflight'
 import { defineMethod } from '../../core'
-import { PrepareCodexForWslPaneParams } from '../../../../../shared/rpc-contract/agent-hooks-params'
+import { PrepareCodexForWslPaneParams } from '../../../../../shared/rpc-contract/accounts/agent-hooks-params'
 
 export const AGENT_HOOK_METHODS = [
   defineMethod({

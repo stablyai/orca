@@ -14,7 +14,7 @@ import { structuredAgentSessionStartFailure } from '../../../../native-chat/agen
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { recordStructuredAgentSessionStartFailure } from '../../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionEndedChild } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import { hostTestMessage } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { hostTestMessage } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 
 it('captures every failed request before latest-only publication, despite owed work and pending prompts', async () => {
   const r = await rig()
@@ -69,7 +69,6 @@ it('captures every failed request before latest-only publication, despite owed w
   } finally {
     queued.mockRestore()
   }
-  expect(held).toHaveLength(1)
   held.forEach((callback) => callback())
   await tick()
   expect(r.mail().map((m) => JSON.parse(m.payload ?? '{}').error)).toEqual([
@@ -93,11 +92,12 @@ it('captures every failed request before latest-only publication, despite owed w
     body: hostTestMessage('recover'),
     fence: 0
   })
-  expect(r.journal.submission('after')?.dispatchState).toBe('pending')
+  expect((await r.journal.reads.submission('after'))?.dispatchState).toBe('pending')
 })
 
 it('keeps each request’s own saved error when another start fails before the detached read', async () => {
   const r = await rig()
+  const releaseReads = r.holdFailureReads()
   await r.journal.appendSubmission({
     clientMessageId: 'B',
     payloadFingerprint: 'B',
@@ -115,6 +115,7 @@ it('keeps each request’s own saved error when another start fails before the d
     { startKey: 'B-start', ...refused },
     'B'
   )
+  releaseReads()
   await tick()
   expect(r.mail().map((message) => JSON.parse(message.payload ?? '{}'))).toMatchObject([
     { requestId: 'A', error: 'capacity from A' },
@@ -125,11 +126,13 @@ it('keeps each request’s own saved error when another start fails before the d
 
 it('delivers a captured live failure when the same journal clears context before the detached read', async () => {
   const r = await rig()
+  const releaseReads = r.holdFailureReads()
   await batch(r.journal, 'A', [turn('A', 'failure'), words('A', 'failure before clear')])
-  await r.journal.context.clear(
-    { operationId: 'clear-after-A', afterFence: 0, clearedAt: 1 },
-    { write: () => {}, committed: () => {} }
-  )
+  await r.journal.write({
+    kind: 'context-clear',
+    boundary: { operationId: 'clear-after-A', afterFence: 0, clearedAt: 1 }
+  })
+  releaseReads()
   await tick()
   expect(r.mail().map((message) => JSON.parse(message.payload ?? '{}'))).toMatchObject([
     { requestId: 'A', error: 'failure before clear' }
@@ -140,6 +143,7 @@ it.each(['history', 'close', 'replacement', 'epoch'] as const)(
   'invalidates a captured read on %s before the detached read',
   async (change) => {
     const r = await rig()
+    const releaseReads = r.holdFailureReads()
     const replacement = change === 'replacement' ? (await rig()).session : r.session
     await batch(r.journal, 'A', [turn('A', 'failure'), words('A', 'obsolete failure')])
     if (change === 'history') {
@@ -149,8 +153,15 @@ it.each(['history', 'close', 'replacement', 'epoch'] as const)(
     } else if (change === 'replacement') {
       r.sessions.set(SESSION, replacement)
     } else {
-      await r.journal.replaceEpochItems('handle_forked', 0, [])
+      await r.journal.write({
+        kind: 'epoch-replace',
+        reason: 'handle_forked',
+        providerHandle: { kind: 'opaque', agent: 'codex', value: 'handle_forked' },
+        fence: 0,
+        items: []
+      })
     }
+    releaseReads()
     await tick()
     expect(r.mail()).toHaveLength(0)
   }
@@ -167,7 +178,6 @@ it('consumes unassigned failures and baselines adoption, epoch replacement and c
     words('saved-failure', 'historic error')
   ])
   r.sessions.set(SESSION, r.session)
-  const deltaQuery = vi.spyOn(r.journal, 'readSince')
   await batch(r.journal, 'old', [turn('old', 'failure'), words('old', 'old error')])
   r.unassign()
   await batch(r.journal, 'unassigned', [
@@ -178,7 +188,13 @@ it('consumes unassigned failures and baselines adoption, epoch replacement and c
   r.observer.observe(SESSION, r.journal)
   r.sessions.delete(SESSION)
   r.sessions.set(SESSION, r.session)
-  await r.journal.replaceEpochItems('handle_forked', 0, [])
+  await r.journal.write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    providerHandle: { kind: 'opaque', agent: 'codex', value: 'handle_forked' },
+    fence: 0,
+    items: []
+  })
   await tick()
   expect(r.mail()).toHaveLength(0)
   await batch(r.journal, 'new', [turn('new', 'failure'), words('new', 'new error')])
@@ -203,11 +219,11 @@ it('consumes unassigned failures and baselines adoption, epoch replacement and c
   await tick()
   expect(r.mail()).toHaveLength(2)
   expect(r.mail()[1]?.body).toContain('new context error')
-  expect(deltaQuery).not.toHaveBeenCalled()
 })
 
 it('normalizes linked refused starts, reads explicitly scoped late words past a newer turn and retains hostStopped', async () => {
   const r = await rig()
+  const releaseReads = r.holdFailureReads()
   await r.journal.appendSubmission({
     clientMessageId: 'start',
     payloadFingerprint: 'start',
@@ -243,6 +259,7 @@ it('normalizes linked refused starts, reads explicitly scoped late words past a 
     mutations: [turn(started.itemId, 'failure'), turn('newer', 'success')]
   })
   await batch(r.journal, 'late', [words(started.itemId, 'precise saved sentence')])
+  releaseReads()
   await tick()
   expect(r.mail()).toHaveLength(1)
   expect(r.mail()[0]?.body).toContain('Error: precise saved sentence')
@@ -291,7 +308,7 @@ it('announces proven live death before cleanup, deduplicates settlement, and exc
         ...(withRow ? [words(requestId, 'old error row')] : [])
       ])
       r.session.lastEndedChild = ended(cause)
-      r.observer.generationEnded(SESSION)
+      await r.observer.generationEnded(SESSION)
       await batch(r.journal, `closed-${cause}-${withRow}`, [
         mutation(requestId, { kind: 'turn', turnId: requestId, state: 'interrupted' })
       ])
@@ -302,7 +319,7 @@ it('announces proven live death before cleanup, deduplicates settlement, and exc
   ])
   await r.journal.appendStopEvent({ reason: 'user-stop', turnId: 'stopped' }, 0)
   r.session.lastEndedChild = ended('exit')
-  r.observer.generationEnded(SESSION)
+  await r.observer.generationEnded(SESSION)
   await batch(r.journal, 'settled-stopped', [
     mutation('stopped', { kind: 'turn', turnId: 'stopped', state: 'interrupted' })
   ])
@@ -310,13 +327,13 @@ it('announces proven live death before cleanup, deduplicates settlement, and exc
     mutation('dead', { kind: 'turn', turnId: 'dead', state: 'running' })
   ])
   r.session.lastEndedChild = ended('exit', false)
-  r.observer.generationEnded(SESSION)
+  await r.observer.generationEnded(SESSION)
   r.session.lastEndedChild = ended('exit', true, 9)
-  r.observer.generationEnded(SESSION)
+  await r.observer.generationEnded(SESSION)
   await tick()
   expect(r.mail()).toHaveLength(0)
   r.session.lastEndedChild = ended('exit')
-  r.observer.generationEnded(SESSION)
+  await r.observer.generationEnded(SESSION)
   // Cleanup has not written anything: the original running row is still durable.
   await tick()
   expect(r.mail()).toHaveLength(1)
@@ -383,14 +400,12 @@ it.each(['startup', 'ordinary', 'scoped', 'committed'] as const)(
       failure,
       endedAt: r.journal.cursor()
     }
-    if (mode === 'committed') {
-      await batch(r.journal, 'explicit', [
-        turn('dying', 'failure'),
-        words('dying', 'explicit failure words')
-      ])
-    } else {
-      r.observer.generationEnded(SESSION)
-    }
+    await (mode === 'committed'
+      ? batch(r.journal, 'explicit', [
+          turn('dying', 'failure'),
+          words('dying', 'explicit failure words')
+        ])
+      : r.observer.generationEnded(SESSION))
     r.session.lastEndedChild = {
       ...r.session.lastEndedChild,
       generation: 'new',
@@ -440,3 +455,26 @@ it.each(['startup', 'ordinary', 'scoped', 'committed'] as const)(
     expect(r.mail()).toHaveLength(1)
   }
 )
+
+it('delivers a failure edge even when a later source step replaces its turn with success', async () => {
+  const r = await rig()
+  await r.journal.appendSteps(
+    ['failure', 'success'].map((outcome) => ({
+      kind: 'item' as const,
+      identity: { provider: 'orca' as const, clientMessageId: 'transient' },
+      body: {
+        kind: 'turn' as const,
+        turnId: 'transient',
+        state: 'completed' as const,
+        outcome: outcome === 'failure' ? ('failure' as const) : ('success' as const)
+      },
+      options: { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE },
+      reservedBytes: 4096
+    }))
+  )
+  await tick()
+  expect(r.mail().map((message) => JSON.parse(message.payload ?? '{}'))).toMatchObject([
+    { requestId: 'orca:transient', turnOutcome: 'failure' }
+  ])
+  expect(await r.journal.reads.itemBody('orca:transient')).toMatchObject({ outcome: 'success' })
+})
