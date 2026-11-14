@@ -9,17 +9,14 @@ import {
 
 const BOT_LOGIN = 'github-actions[bot]'
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
-const RELEASE_APP_BOT_LOGIN = 'orca-release[bot]'
+const BOT_ID_PATTERN = /^[1-9][0-9]*$/
 
 // Why: release-cut drafts and publishes with the release GitHub App, whose releases (unlike GITHUB_TOKEN's)
-// emit release events. Match its bot by repo variable RELEASE_APP_BOT_ID (its user ID, stable across App
-// renames) or by its login, which only that App can hold.
+// emit release events. Match its bot only by the numeric user ID in repo variable RELEASE_APP_BOT_ID: a login
+// could be registered again by another App if this one were ever deleted. No valid ID means no App author.
 export function isReleaseAppBot(author, botId = process.env.RELEASE_APP_BOT_ID) {
-  const id = botId?.trim()
-  return (
-    author?.type === 'Bot' &&
-    (author.login === RELEASE_APP_BOT_LOGIN || (Boolean(id) && String(author.id) === id))
-  )
+  const id = botId?.trim() ?? ''
+  return BOT_ID_PATTERN.test(id) && author?.type === 'Bot' && String(author.id) === id
 }
 
 // Bot-authored agent-state prereleases need separate policy because updater follows Latest, which prereleases cannot become.
@@ -127,6 +124,11 @@ export async function enforceReleasePolicy({ github, context, core }) {
   const author = release.author?.login
   const repoRef = context.repo
   const expectedPrerelease = isPrereleaseTag(tag)
+  if (!BOT_ID_PATTERN.test(process.env.RELEASE_APP_BOT_ID?.trim() ?? '')) {
+    core.warning(
+      'Repository variable RELEASE_APP_BOT_ID is not the release App bot user ID; releases by the App are not authorized.'
+    )
+  }
 
   if (await isAuthorizedRelease(github, repoRef, release)) {
     if (release.prerelease !== expectedPrerelease) {

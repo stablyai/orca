@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { runProcessSync } from '@orca/process-host'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
 import { enforceReleasePolicy, isReleaseAppBot, restoreLatestStable } from './release-policy.mjs'
 
 const appBot = { login: 'orca-release[bot]', id: 356766123, type: 'Bot' }
@@ -35,6 +40,9 @@ async function publish(author) {
 }
 
 describe('release policy release authors', () => {
+  beforeEach(() => vi.stubEnv('RELEASE_APP_BOT_ID', '356766123'))
+  afterEach(() => vi.unstubAllEnvs())
+
   it('keeps a human-tagged release the release App published', async () => {
     const rest = await publish(appBot)
     expect(rest.repos.deleteRelease).not.toHaveBeenCalled()
@@ -47,14 +55,26 @@ describe('release policy release authors', () => {
     expect(rest.git.deleteRef).toHaveBeenCalledWith({ owner: 'o', repo: 'r', ref: 'tags/v1.4.259' })
   })
 
-  it('matches the App bot by its configured user ID after a rename, and never a User', () => {
+  it('deletes an App-login release when the variable is missing, and warns', async () => {
+    vi.stubEnv('RELEASE_APP_BOT_ID', '')
+    const rest = await publish(appBot)
+    expect(rest.repos.deleteRelease).toHaveBeenCalled()
+  })
+
+  it('matches the App bot only by its configured numeric user ID', () => {
+    expect(isReleaseAppBot(appBot, '356766123')).toBe(true)
     expect(isReleaseAppBot({ ...appBot, login: 'renamed[bot]' }, '356766123')).toBe(true)
-    expect(isReleaseAppBot({ ...appBot, login: 'renamed[bot]' }, '')).toBe(false)
+    expect(isReleaseAppBot({ ...appBot, id: 999 }, '356766123')).toBe(false)
+    expect(isReleaseAppBot(appBot, '')).toBe(false)
+    expect(isReleaseAppBot(appBot, null)).toBe(false)
+    expect(isReleaseAppBot(appBot, 'orca-release[bot]')).toBe(false)
     expect(isReleaseAppBot({ ...appBot, type: 'User' }, '356766123')).toBe(false)
   })
 })
 
 describe('restoreLatestStable', () => {
+  beforeEach(() => vi.stubEnv('RELEASE_APP_BOT_ID', '356766123'))
+  afterEach(() => vi.unstubAllEnvs())
   const stable = { id: 7, tag_name: 'v1.4.260', draft: false, prerelease: false, author: appBot }
   function github({ latestId, updateError }) {
     return {
@@ -90,5 +110,45 @@ describe('restoreLatestStable', () => {
       expect.objectContaining({ tag_name: 'v1.4.260', make_latest: 'true' })
     )
     expect(core.error).toHaveBeenCalledWith(expect.stringContaining('403'))
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('docs release gate', () => {
+  const docs = parse(readFileSync('.github/workflows/docs.yml', 'utf8'))
+  const gate = docs.jobs.release_gate.steps.find((step) => step.id === 'validate').run
+  // Any later API call fails at once; these cases only differ at the author check.
+  const stubs = mkdtempSync(join(tmpdir(), 'docs-gate-'))
+  for (const name of ['gh', 'sleep']) {
+    writeFileSync(join(stubs, name), '#!/bin/sh\nexit 1\n')
+    chmodSync(join(stubs, name), 0o755)
+  }
+  const run = (authorId, botId) =>
+    runProcessSync({
+      program: 'bash',
+      args: ['-c', gate],
+      env: {
+        PATH: `${stubs}:${process.env.PATH}`,
+        GITHUB_OUTPUT: '/dev/null',
+        EVENT_NAME: 'release',
+        INPUT_TAG: '',
+        RELEASE_PRERELEASE: 'false',
+        RELEASE_DRAFT: 'false',
+        DEFAULT_BRANCH: 'main',
+        WORKFLOW_REF: 'refs/tags/v1.4.260',
+        RELEASE_TAG: 'v1.4.260',
+        RELEASE_AUTHOR: 'orca-release[bot]',
+        RELEASE_AUTHOR_ID: authorId,
+        RELEASE_AUTHOR_TYPE: 'Bot',
+        RELEASE_APP_BOT_ID: botId,
+        GH_TOKEN: ''
+      }
+    }).stdout
+
+  it.each([
+    ['the configured ID', '356766123', '356766123', true],
+    ['the App login with another ID', '999', '356766123', false],
+    ['a missing variable', '356766123', '', false]
+  ])('leaves the deploy to release-cut only for %s', (_name, authorId, botId, skipped) => {
+    expect(run(authorId, botId).includes('published by the release App')).toBe(skipped)
   })
 })
