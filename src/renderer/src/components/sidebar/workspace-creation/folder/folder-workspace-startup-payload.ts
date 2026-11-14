@@ -3,12 +3,17 @@ import type { FolderWorkspaceCreateInput } from '../../../../../../shared/folder
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 import type { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
-import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
+import type {
+  FreshWorkspaceAgentLaunch,
+  WorktreeStartupPayload
+} from '@/lib/workspace/creation/worktree-startup-payload'
 
 type FolderStartupPayloadInput = Pick<
   SubmitFolderWorkspaceCreateParams,
-  'quickAgent' | 'launchInputs' | 'sessionOptions' | 'note'
+  'quickAgent' | 'launchInputs' | 'sessionOptions'
 > & {
+  prompt: string
+  promptDelivery: FreshWorkspaceAgentLaunch['promptDelivery']
   startupPlan: ReturnType<typeof buildAgentStartupPlan> | null
   requestedAgentArgs: SubmitFolderWorkspaceCreateParams['agentArgs']
   launchDraftPrompt: string | null
@@ -22,7 +27,8 @@ export function buildFolderWorkspaceStartupPayload({
   requestedAgentArgs,
   sessionOptions,
   launchDraftPrompt,
-  note,
+  prompt,
+  promptDelivery,
   launchSource
 }: FolderStartupPayloadInput): WorktreeStartupPayload | undefined {
   return quickAgent && startupPlan
@@ -35,8 +41,8 @@ export function buildFolderWorkspaceStartupPayload({
         freshAgentLaunch: {
           agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
           sessionOptions,
-          prompt: launchDraftPrompt ?? note,
-          promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
+          prompt: launchDraftPrompt ?? prompt,
+          promptDelivery,
           legacy: () => ({
             startupPlan,
             pasteDraftAfterLaunch: startupPlan.draftPrompt ?? startupPlan.followupPrompt ?? null,
@@ -61,17 +67,18 @@ export function buildFolderWorkspaceHostStartupPayload({
   agentArgs,
   sessionOptions,
   launchSource,
-  note,
+  prompt,
+  submitPromptAfterReady,
   launchDraftPrompt
-}: Pick<
-  SubmitFolderWorkspaceCreateParams,
-  'quickAgent' | 'agentArgs' | 'sessionOptions' | 'note'
-> & {
+}: Pick<SubmitFolderWorkspaceCreateParams, 'quickAgent' | 'agentArgs' | 'sessionOptions'> & {
+  prompt: string
+  submitPromptAfterReady: boolean
   launchSource: NonNullable<SubmitFolderWorkspaceCreateParams['launchSource']>
   launchDraftPrompt: string | null
 }): Partial<FolderWorkspaceCreateInput> {
   return {
-    ...(launchDraftPrompt ? { startupDraft: launchDraftPrompt } : { startupPrompt: note }),
+    ...(launchDraftPrompt ? { startupDraft: launchDraftPrompt } : { startupPrompt: prompt }),
+    ...(submitPromptAfterReady ? { startupPromptAfterReady: true } : {}),
     startupAgent: quickAgent ?? undefined,
     startupAgentArgs: agentArgs,
     startupSessionOptions: sessionOptions,

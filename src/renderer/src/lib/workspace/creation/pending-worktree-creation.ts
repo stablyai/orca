@@ -102,7 +102,7 @@ export type WorktreeCreationRequest = {
     launchToken?: string
     legacy: (
       prompt?: string,
-      delivery?: 'draft' | 'auto-submit'
+      delivery?: WorktreeCreationRequest['promptDelivery']
     ) => {
       startupPlan: AgentStartupPlan | null
       backendStartup: WorktreeStartupLaunch | undefined
@@ -136,7 +136,7 @@ export type WorktreeCreationRequest = {
    *  startup paste); completion seeds the chat-composer copy from it. */
   launchDraftPrompt?: string
   // Composer fixes launchDraftPrompt/quickPrompt delivery beside agentLaunchRoute; never rederive it later.
-  promptDelivery?: 'draft' | 'auto-submit'
+  promptDelivery?: 'draft' | 'auto-submit' | 'submit-after-ready'
   quickTelemetry: AgentStartedTelemetry | null
   // Sequential-create completion must preserve focus in the next workspace name field.
   suppressTerminalFocusOnCompletion?: boolean
@@ -214,7 +214,12 @@ export function withPendingChatInput(
   const held = pendingCreationHeldChatMessage({ ...entry, request })
   // The draft prompt was seeded into the pending composer, whose draft the launch moves over.
   const { launchDraftPrompt: _seeded, ...rest } = request
-  return { ...rest, quickPrompt: held ?? '', promptDelivery: 'auto-submit' }
+  return {
+    ...rest,
+    quickPrompt: held ?? '',
+    promptDelivery:
+      request.promptDelivery === 'submit-after-ready' ? 'submit-after-ready' : 'auto-submit'
+  }
 }
 
 /** True when this creation ends in a native chat, so its pending surface is the chat itself. */

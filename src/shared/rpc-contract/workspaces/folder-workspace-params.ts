@@ -22,6 +22,7 @@ export const FolderWorkspaceHookCreateShape = {
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   startupAgent: z.string().refine(isTuiAgent).optional(),
   startupPrompt: OptionalString,
+  startupPromptAfterReady: z.literal(true).optional(),
   startupDraft: OptionalString,
   startupAgentArgs: AgentArgs.optional(),
   startupSessionOptions: z.record(z.string(), z.string()).optional(),

@@ -138,8 +138,7 @@ function QuickTabBody({
     selectAddedProjectGroup
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
-    // Quick create ignores legacy prompt-prefill payloads.
-    initialPrompt: '',
+    initialPrompt: modalData.initialAgentPrompt ?? '',
     initialNote: modalData.recovery?.note,
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
@@ -234,6 +233,7 @@ function QuickTabBody({
     await submitQuick(quickAgent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
+      initialPrompt: cardProps.agentPrompt,
       launchChoice: launchSelection.choice,
       onLegacyPreparationFailure: (error) => {
         if (isSubmissionCancelled()) {
@@ -242,6 +242,7 @@ function QuickTabBody({
         const snapshot = {
           ...modalData,
           prefilledName: cardProps.name,
+          initialAgentPrompt: cardProps.agentPrompt,
           initialRepoId: cardProps.repoId,
           initialBaseBranch: cardProps.baseBranch,
           initialWorkspaceTarget:

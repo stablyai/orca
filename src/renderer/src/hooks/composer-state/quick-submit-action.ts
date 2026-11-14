@@ -170,6 +170,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         reopenComposer: () =>
           useAppStore.getState().openModal('new-workspace-composer', {
             prefilledName: name,
+            initialAgentPrompt: options?.initialPrompt,
             initialRepoId: repoId,
             linkedWorkItem,
             taskSourceContext,

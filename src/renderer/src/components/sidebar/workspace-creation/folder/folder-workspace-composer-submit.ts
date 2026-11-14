@@ -7,12 +7,11 @@ import { reviewSetupTrustMismatch } from '@/store/slices/worktrees/create/create
 import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-hook-owner'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import '@/diagnostics/telemetry/telemetry'
+import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/prompt/native-chat-launch-prompt-delivery'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import './folder-workspace-source-repos'
@@ -32,6 +31,7 @@ import { useAppStore } from '@/store/index'
 import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
+  buildFolderWorkspaceStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
@@ -52,6 +52,7 @@ export async function submitFolderWorkspaceCreate({
   note,
   quickAgent,
   launchChoice,
+  initialPrompt,
   launchInputs,
   legacyLaunchInputs,
   sessionOptions: requestedSessionOptions,
@@ -100,40 +101,49 @@ export async function submitFolderWorkspaceCreate({
           : (preferences?.agentLaunchChoices ?? settings.agentLaunchChoices)
       }
     : settings
-  const startupPlan =
-    quickAgent && launchPlatform && linkedWorkItem
-      ? buildFolderWorkspaceLinkedStartupPlan({
-          agent: quickAgent,
-          settings: effectiveSettings,
-          linkedWorkItem,
-          note,
-          agentCmdOverrides,
-          agentArgs,
-          sessionOptions,
-          agentEnv,
-          platform: launchPlatform,
-          shell: launchShell,
-          isRemote: launchIsRemote
-        })
-      : quickAgent && launchPlatform
-        ? buildAgentStartupPlan({
-            ...resolveAgentStartupPlanInputs({
-              agent: quickAgent,
-              settings: effectiveSettings ?? { agentCmdOverrides },
-              agentArgs: settings ? agentArgs : (agentArgs ?? null),
-              sessionOptions,
-              platform: launchPlatform,
-              shell: launchShell,
-              isRemote: launchIsRemote
-            }),
-            ...(agentEnv ? { agentEnv } : {}),
-            prompt: note,
-            allowEmptyPromptLaunch: true
-          })
-        : null
+  const typedPrompt = quickAgent && initialPrompt?.trim() ? initialPrompt : null
+  const prompt = typedPrompt ?? note
+  let startupPlan: AgentStartupPlan | null = null
+  if (quickAgent && launchPlatform && linkedWorkItem && !typedPrompt) {
+    startupPlan = buildFolderWorkspaceLinkedStartupPlan({
+      agent: quickAgent,
+      settings: effectiveSettings,
+      linkedWorkItem,
+      note,
+      agentCmdOverrides,
+      agentArgs,
+      sessionOptions,
+      agentEnv,
+      platform: launchPlatform,
+      shell: launchShell,
+      isRemote: launchIsRemote
+    })
+  } else if (quickAgent && launchPlatform) {
+    startupPlan = buildFolderWorkspaceStartupPlan(
+      {
+        agent: quickAgent,
+        settings: effectiveSettings ?? { agentCmdOverrides },
+        agentArgs: settings ? agentArgs : (agentArgs ?? null),
+        sessionOptions,
+        platform: launchPlatform,
+        shell: launchShell,
+        isRemote: launchIsRemote
+      },
+      agentEnv,
+      prompt,
+      Boolean(typedPrompt)
+    )
+  }
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem && !typedPrompt
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note)
+      : null
+  const promptDelivery: NativeChatLaunchPromptDelivery = launchDraftPrompt
+    ? 'draft'
+    : typedPrompt
+      ? 'submit-after-ready'
+      : 'auto-submit'
   const launchRequest = quickAgent
     ? {
         requestId: createBrowserUuid(),
@@ -145,8 +155,8 @@ export async function submitFolderWorkspaceCreate({
           runtimeEnvironmentId,
           executionHostId: getRepoExecutionHostId(projectGroup)
         },
-        prompt: launchDraftPrompt ?? note,
-        promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
+        prompt: launchDraftPrompt ?? prompt,
+        promptDelivery
       }
     : null
   // Creation retains its chosen route, but admission after materialization may fall back.
@@ -180,7 +190,7 @@ export async function submitFolderWorkspaceCreate({
     !name.trim() &&
     !linkedWorkItem &&
     Boolean(quickAgent) &&
-    note.trim().length > 0
+    prompt.trim().length > 0
 
   if (startupPlan && !startupPlan.launchToken) {
     startupPlan.launchToken = createBrowserUuid()
@@ -189,16 +199,15 @@ export async function submitFolderWorkspaceCreate({
     ...(setupSupported ? setupApproval : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal
-      ? {
-          ...buildFolderWorkspaceHostStartupPayload({
-            quickAgent,
-            note,
-            launchDraftPrompt,
-            agentArgs,
-            sessionOptions,
-            launchSource
-          })
-        }
+      ? buildFolderWorkspaceHostStartupPayload({
+          quickAgent,
+          prompt,
+          submitPromptAfterReady: promptDelivery === 'submit-after-ready',
+          launchDraftPrompt,
+          agentArgs,
+          sessionOptions,
+          launchSource
+        })
       : {}),
     projectGroupId: projectGroup.id,
     name: workspaceName,
@@ -223,7 +232,6 @@ export async function submitFolderWorkspaceCreate({
       : { kind: 'local' }
   )
   const launchFailed = isCancelled()
-
   const startup = buildFolderWorkspaceStartupPayload({
     quickAgent,
     startupPlan,
@@ -231,7 +239,8 @@ export async function submitFolderWorkspaceCreate({
     requestedAgentArgs,
     sessionOptions,
     launchDraftPrompt,
-    note,
+    prompt,
+    promptDelivery,
     launchSource
   })
   if (result.warning) {

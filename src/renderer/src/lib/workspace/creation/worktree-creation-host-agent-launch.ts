@@ -21,6 +21,7 @@ export function hostPlannableAgentLaunch(
   if (
     !request.agent ||
     request.launchInputs !== undefined ||
+    request.promptDelivery === 'submit-after-ready' ||
     !request.startupPlan ||
     request.launchDraftPrompt ||
     request.agentLaunchRoute === 'structured-native-chat' ||
@@ -102,6 +103,7 @@ export function worktreeCreationAgentLaunchOptions(
     request.ephemeralVmCheckoutMode === 'provisioned-root' ||
     request.ephemeralVmRecipe ||
     !request.agent ||
+    request.promptDelivery === 'submit-after-ready' ||
     (request.launchInputs === undefined && !request.launchDraftPrompt)
   ) {
     return {}

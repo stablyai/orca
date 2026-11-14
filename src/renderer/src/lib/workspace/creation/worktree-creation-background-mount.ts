@@ -1,3 +1,4 @@
+import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
@@ -36,6 +37,10 @@ export function openBackgroundDeclinedTerminal(
       ? { ...built, draftPrompt: heldChatMessage }
       : built
   if (host.kind === 'environment' && args.request.agent) {
+    const promptDelivery =
+      heldChatMessage || args.request.launchDraftPrompt
+        ? 'draft'
+        : (args.request.promptDelivery ?? 'auto-submit')
     const completion = launchAgentInWebHostTab({
       ...(built?.freshAgentLaunch ?? args.request.launchInputs),
       submitFollowup: true,
@@ -43,14 +48,14 @@ export function openBackgroundDeclinedTerminal(
       environmentId: host.environmentId,
       worktreeId: args.worktreeId,
       prompt: heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
-      promptDelivery: heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit',
+      promptDelivery,
       activate: false,
       selectWorktree: false,
       isCancelled: () => signal?.aborted === true,
       buildStartup: () => {
         const rebuilt = args.request.creationStartup?.legacy(
           heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
-          heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit'
+          promptDelivery
         )
         if (rebuilt?.promptPlan) {
           return rebuilt.promptPlan
@@ -86,5 +91,16 @@ export function openBackgroundDeclinedTerminal(
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
   mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
+  const plan = args.request.startupPlan
+  if (tabId && !heldChatMessage && args.request.promptDelivery === 'submit-after-ready' && plan) {
+    if (startup.launchToken) {
+      plan.launchToken = startup.launchToken
+    }
+    void ensureAgentStartupInTerminal({
+      worktreeId: args.worktreeId,
+      primaryTabId: tabId,
+      startup: plan
+    })
+  }
   return { opened: tabId !== null }
 }

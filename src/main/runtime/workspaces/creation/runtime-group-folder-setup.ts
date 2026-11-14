@@ -115,8 +115,11 @@ export async function prepareGroupFolderCreation(args: {
     observeSetupCompletion: input.agentLaunchMode === 'structured',
     setupOnly: input.agentLaunchMode === 'structured'
   }
+  const followupPrompt = input.startupPromptAfterReady ? input.startupPrompt : undefined
   const built = await resolveManagedWorktreeCreateStartup(
-    request,
+    followupPrompt
+      ? { ...request, startupPrompt: undefined, startupSuppressUpdatePrompt: true }
+      : request,
     args.settings.disabledTuiAgents,
     args.startupBuilders
   )
@@ -126,7 +129,10 @@ export async function prepareGroupFolderCreation(args: {
     worktree: folderWorkspaceToWorktree(workspace),
     setup: prepared?.setup,
     startup: built.effectiveStartup,
-    startupFollowup: built.effectiveStartupFollowup,
+    startupFollowup:
+      followupPrompt && input.startupAgent
+        ? { agent: input.startupAgent, prompt: followupPrompt }
+        : built.effectiveStartupFollowup,
     draftPaste: built.effectiveDraftPaste,
     startupLaunchRuntime: built.startupLaunchRuntime,
     createdWithAgent: built.effectiveCreatedWithAgent,

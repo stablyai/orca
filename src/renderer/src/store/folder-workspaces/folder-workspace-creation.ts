@@ -3,7 +3,10 @@ import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
 import type { FolderWorkspaceCreateResult } from '../../../../shared/folder-workspaces/folder-workspace-create'
 import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import {
+  FOLDER_WORKSPACE_PROMPT_AFTER_READY_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../../shared/worktree-runtime-capabilities'
 import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
@@ -31,6 +34,13 @@ export function createFolderWorkspaceCreateAction(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
+        )
+      }
+      if (target.kind === 'environment' && args.startupPromptAfterReady) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          FOLDER_WORKSPACE_PROMPT_AFTER_READY_RUNTIME_CAPABILITY,
+          'Update the remote runtime to launch a folder workspace with an initial prompt'
         )
       }
       const result =
