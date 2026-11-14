@@ -13,8 +13,18 @@ import { createSshHostAsleepError, isSshHostHeldAsleep } from './ssh-host-sleep-
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
 function signInEndpoint(target: SshTarget): string {
-  const { configHost, host, port, username, identityFile, proxyCommand, jumpHost } = target
-  return JSON.stringify([configHost, host, port, username, identityFile, proxyCommand, jumpHost])
+  const { configHost, host, port, username, identityFile, identityFiles, proxyCommand, jumpHost } =
+    target
+  return JSON.stringify([
+    configHost,
+    host,
+    port,
+    username,
+    identityFile,
+    identityFiles,
+    proxyCommand,
+    jumpHost
+  ])
 }
 
 export class SshConnectionManager {

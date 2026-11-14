@@ -1,6 +1,7 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
 import type { NodeDistMirrorAttempt } from './node-dist-mirror'
+import type { SshRepoReadoption } from './ssh-repo-readoption'
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
@@ -41,6 +42,8 @@ export type SshTarget = {
   username: string
   /** Path to private key file, if using key-based auth. */
   identityFile?: string
+  /** All configured private key paths in OpenSSH directive order. */
+  identityFiles?: string[]
   /** SSH agent socket path from IdentityAgent, if configured. */
   identityAgent?: string
   /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
@@ -136,12 +139,7 @@ export type RemovedSshTargetTombstone = {
   removedAt: number
 }
 
-/** Exact repo ownership changes made while re-adopting a removed SSH host. */
-export type SshRepoReadoption = {
-  oldTargetId: string
-  newTargetId: string
-  repoIds: string[]
-}
+export type { SshRepoReadoption }
 
 export type SshTargetAddResult = {
   target: SshTarget

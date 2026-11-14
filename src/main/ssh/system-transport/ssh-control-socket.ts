@@ -55,6 +55,7 @@ export function getControlSocketPath(
       proxyCommand: target.proxyCommand || '',
       jumpHost: target.jumpHost || '',
       identityFile: target.identityFile || '',
+      identityFiles: target.identityFiles || [],
       identityAgent: target.identityAgent || '',
       identitiesOnly: target.identitiesOnly || false
     },
