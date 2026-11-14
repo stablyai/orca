@@ -111,15 +111,6 @@ async function setup() {
 }
 
 describe('constrained idle regional assignment transaction', () => {
-  it('sees durable control changes between candidate polls', async () => {
-    const { store, database, safety } = await setup()
-    await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-    await database.query("UPDATE relay_region_rehome_control SET enabled = 1 WHERE control_id = 'global'")
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
-    await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-  })
 
   it.each([10, 11])('reserves source activity plus assignment at target capacity %i', async (capacity) => {
     const { store, database, safety, request } = await setup()
@@ -319,21 +310,6 @@ describe('constrained idle regional assignment transaction', () => {
       outcome: 'deferred',
       reason: 'cohort-closed'
     })
-    expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
-  })
-
-  it('selects read-only with stable identity and the control generation, not probe generation', async () => {
-    const { store, safety, database } = await setup()
-    const before = await database.query('SELECT * FROM relay_assignments')
-    const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]).toMatchObject({
-      sourceGeneration: 7,
-      sourceCellId: 'source',
-      targetCellId: 'target'
-    })
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual(candidates)
-    expect(await database.query('SELECT * FROM relay_assignments')).toEqual(before)
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
   })
 })

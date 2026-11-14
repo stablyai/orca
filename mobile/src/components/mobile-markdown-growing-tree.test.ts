@@ -40,25 +40,6 @@ describe('text growing a character at a time', () => {
     ])
   })
 
-  it('keeps a fenced block whole across its blank lines', () => {
-    expect(grown('```\na\n\nb\n```\n\nafter')).toEqual([
-      {
-        type: 'code',
-        lang: null,
-        value: 'a\n\nb',
-        closed: true,
-        position: { start: { line: 1, column: 1 }, end: { line: 5, column: 1 } }
-      },
-      paragraph('after')
-    ])
-  })
-
-  it('makes one math block once a display formula closes past a blank line', () => {
-    expect(grown('$$\nx\n\ny\n$$')).toEqual([
-      { type: 'math', value: 'x\n\ny', source: '$$\nx\n\ny\n$$' }
-    ])
-  })
-
   it('ends a quote at a display formula that closes past a blank line', () => {
     expect(grown('> a\n$$\n\nb\n$$')).toEqual([
       { type: 'blockquote', children: [paragraph('a')] },

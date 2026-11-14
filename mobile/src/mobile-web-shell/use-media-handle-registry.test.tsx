@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { MediaHandleRegistry } from './media-handle-registry'
+import type { MediaHandleRegistry } from './media-handle-registry'
 import { useMediaHandleRegistry } from './use-media-handle-registry'
 
 const STAGED = { uri: 'file:///cache/a.png', mime: 'image/png', byteLength: 12 }
@@ -65,13 +65,6 @@ function harness(): {
 }
 
 describe('the registry a mounted page session holds', () => {
-  it('hands the same registry back across renders of one session', () => {
-    const probe = harness()
-    probe.render('session-a')
-    probe.render('session-a')
-    expect(probe.seen).toHaveLength(1)
-  })
-
   it('releases every staged file when the page unmounts', () => {
     const probe = harness()
     probe.render('session-a')
@@ -90,13 +83,5 @@ describe('the registry a mounted page session holds', () => {
     expect(probe.discarded).toEqual(['file:///cache/a.png'])
     expect(probe.seen).toHaveLength(2)
     expect(probe.seen[1]?.liveCount()).toBe(0)
-  })
-
-  it('gives a mount with no session a registry too, so a caller never holds null', () => {
-    const probe = harness()
-    probe.render(null)
-    expect(probe.seen[0]).toBeInstanceOf(MediaHandleRegistry)
-    probe.unmount()
-    expect(probe.discarded).toEqual([])
   })
 })

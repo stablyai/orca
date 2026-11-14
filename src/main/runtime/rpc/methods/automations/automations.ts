@@ -10,7 +10,7 @@ import {
   AutomationList,
   AutomationRuns,
   AutomationUpdate
-} from '../../../../../shared/rpc-contract/automation-params'
+} from '../../../../../shared/rpc-contract/automations/automation-params'
 
 function mutationOwner(
   id: string,

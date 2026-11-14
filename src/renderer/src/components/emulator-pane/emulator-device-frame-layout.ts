@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { RotateOrientation } from '../../../../shared/rpc-contract/emulator-params'
+import type { RotateOrientation } from '../../../../shared/rpc-contract/emulator/emulator-params'
 
 export type DeviceFrameKind = 'phone' | 'tablet'
 

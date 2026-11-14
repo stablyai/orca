@@ -17564,8 +17564,6 @@
           "18763ded26": "Zeitplan",
           "dbef8dc110": "Diese SSH-Automatisierung wird nur ausgeführt, solange Orca den SSH-Host erreichen kann. Wenn die erneute Verbindung eine interaktive Eingabe von Anmeldedaten erfordert oder der Host nicht verfügbar ist, wird die Ausführung als übersprungen erfasst.",
           "1f6026358e": "Automatisierung löschen",
-          "d79452fb30": "Automatisierung fortsetzen",
-          "91a4155e95": "Automatisierung pausieren",
           "2fb1605beb": "Jetzt ausführen",
           "221916d93c": "Eine Automatisierung erstellen, um Agentenaufgaben zeitlich zu planen.",
           "b09b2384fd": "Pausiert",
@@ -17648,18 +17646,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Bisher gibt es keine Ausführungen.",
-          "9974a2b429": "Status",
           "13988187b3": "Tokens",
           "86a248187e": "Ausgaben",
           "149c0b49c7": "Arbeitsbereich",
           "8faaa00726": "Ausführung",
-          "53fc5f07ab": "Ausführungsverlauf",
-          "a00e38d1a3": "Nicht verfügbar",
+          "a00e38d1a3": "—",
           "historyUnavailable": "Der Ausführungsverlauf ist von diesem Host aus nicht verfügbar. Dies bedeutet nicht, dass die Automatisierung fehlgeschlagen ist oder keine Ausführungen hat."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Ausführungskontext",
-          "33741dd973": "Zurück zu den Ausführungen"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Minute",
@@ -17685,10 +17677,8 @@
           "5ad314118e": "Sitzung"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Eine Automatisierung auswählen, um ihre Ausführungen anzuzeigen.",
           "295698292f": "Erneut ausführen",
           "0e110a3469": "Ausführungen",
-          "bb1b2cd31e": "Übersicht",
           "25060635c6": "Neu hinzufügen",
           "d207ab4c25": "Mit Vorlage beginnen",
           "15e0bfb13b": "Löschen",
@@ -17726,8 +17716,6 @@
           "8500baacb4": "externe Quelle",
           "36f71740a7": "Ausgewählter Arbeitsbereich",
           "cd8397cc32": "Neuer Arbeitsbereich pro Ausführung",
-          "pendingAutomationMissing": "Die Automatisierung ist nicht mehr verfügbar.",
-          "pendingAutomationRunMissing": "Der Ausführungsverlauf ist nicht mehr verfügbar.",
           "paused": "Pausiert",
           "missingWorkspace": "Arbeitsbereich fehlt",
           "usageUnavailable": "Nutzungsdaten nicht verfügbar",
@@ -17736,7 +17724,6 @@
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
           "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
           "retryFullOutput": "Erneut versuchen",
-          "backToList": "Alle Automatisierungen",
           "tableName": "Name",
           "tableProject": "Projekt",
           "tableHost": "Host",
@@ -17746,7 +17733,6 @@
           "rowActions": "Automatisierungsaktionen",
           "tableLastRun": "Letzte Ausführung",
           "ownerChanged": "Der Host dieser Automatisierung hat sich geändert. Aktualisieren und erneut versuchen.",
-          "runError": "Fehler:",
           "deleteAutomationDescription": "<name/> und den Ausführungsverlauf löschen. Arbeitsbereiche aus früheren Ausführungen werden nicht gelöscht.",
           "deleteExternalAutomationDescription": "<name/> aus <provider/> auf <host/> löschen.",
           "runUsageSummaryTokens_one": "ca. {{cost}} · {{tokens}} Token",
@@ -18014,8 +18000,7 @@
           "historyUnavailable_other": "Für {{count}} Automatisierungen ist kein Ausführungsverlauf verfügbar. Die Zählwerte berücksichtigen nur den verfügbaren Verlauf."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Navigationspfad für Automatisierungen",
-          "runDetails": "Ausführungsdetails"
+          "ariaLabel": "Navigationspfad für Automatisierungen"
         },
         "extraAgentArgs": {
           "advanced": "Erweitert",
@@ -18074,13 +18059,12 @@
           "noWorkspaceLaunched": "Kein Arbeitsbereich gestartet"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Nicht gestartet",
-          "namedWorkspaceGone": "{{name}} (nicht mehr verfügbar)"
+          "notLaunched": "Nicht gestartet"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
-          "costUnavailable": "k. A."
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",
@@ -19012,7 +18996,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Öffnen mit (wenn der Fokus nicht in einem bearbeitbaren Feld liegt)"
+            "openWith": "Öffnen mit (außer beim Tippen in einem Orca-Textfeld)"
           }
         },
         "pluginInstallCount": {
@@ -19781,8 +19765,7 @@
         "stateIdleCount_one": "{{value0}} gestoppt",
         "stateIdleCount_other": "{{value0}} gestoppt",
         "stateUnverifiableCount_one": "{{value0}} mit nicht verfügbarem Status",
-        "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status",
-        "showAgent": "{{value0}} im Gespräch anzeigen"
+        "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
       "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",

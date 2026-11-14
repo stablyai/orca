@@ -12,7 +12,7 @@ import { readLocalGitConfigSignature } from './local-git-config-signature'
 
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../../git/remotes/stable-missing-git-remote-error'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import { resolveGitHubProjectAccount } from '../accounts/github-project-account'
@@ -59,6 +59,15 @@ export async function withGitHubRepoExecution<T>(
     )
   }
   return operations.run(context, operation)
+}
+
+export function captureGitHubRepoExecution(): <T>(operation: () => Promise<T>) => Promise<T> {
+  const context = operations.getStore()
+  return (operation) => (context ? operations.run(context, operation) : operation())
+}
+
+export function outsideGitHubRepoExecution<T>(operation: () => T): T {
+  return operations.exit(operation)
 }
 
 export function githubRepoContext(

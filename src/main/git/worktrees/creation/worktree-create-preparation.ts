@@ -2,7 +2,7 @@ import { runStandalonePreparation } from './worktree-preparation-standalone'
 import { performPreparedWorktreeFinalization } from './worktree-preparation-finalization-work'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
-import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
+import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-refs/base-ref'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult,
@@ -98,7 +98,11 @@ export async function prepareWorktreeCreateCheckout(
             '--hard',
             materializationBase
           ],
-          { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          {
+            ...gitExecOptions(worktreePath, options),
+            admissionClass: 'checkout',
+            timeout: resolveWorktreeAddTimeoutMs()
+          }
         )
         await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
       })

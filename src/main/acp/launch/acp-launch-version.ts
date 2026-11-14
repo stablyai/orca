@@ -1,3 +1,4 @@
+import type { StructuredAgentResolutionOperation } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
@@ -9,7 +10,9 @@ import { noteAcpForkVersion } from '../capabilities/acp-fork-support'
 
 export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
-  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
+  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'> & {
+    operation?: StructuredAgentResolutionOperation
+  },
   wantVersion: boolean,
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
@@ -18,7 +21,13 @@ export async function checkAcpLaunchVersion(
     return { status: 'unknown', version: null }
   }
   const result = await checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
+    {
+      program: launch.command,
+      prefixArgs: launch.prefixArgs,
+      cwd: launch.cwd,
+      env: launch.env,
+      operation: launch.operation
+    },
     spec.minimumVersions ?? [],
     read
   )

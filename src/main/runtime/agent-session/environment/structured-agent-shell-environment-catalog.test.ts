@@ -1,3 +1,9 @@
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, delimiter } from 'node:path'
+import { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
+import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
+import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
@@ -11,8 +17,8 @@ import {
 
 const shell = vi.hoisted(
   (): {
-    current: { PATH: string; IGNORED: string }
-    next: { PATH: string; IGNORED: string }
+    current: { PATH: string; Path?: string; path?: string; IGNORED: string }
+    next: { PATH: string; Path?: string; path?: string; IGNORED: string }
     saved: string[]
     nextSaved: string[]
   } => ({
@@ -68,11 +74,12 @@ function rig(overlay?: Record<string, string>) {
     workspaceMayOverrideDefaultModel: defaults
   })
   const environment = createStructuredAgentEnvironmentResolvers({
-    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] }),
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: ['IGNORED'] }),
     resolveAgentLaunchEnv: () => overlay ?? {}
   })
   cleanups.push(service.stop, environment.bindCatalogSources(['grok']))
   const listing = (id: string) => ({
+    origin: 'probe' as const,
     models: [{ id, label: id, isDefault: true, efforts: [] }],
     configuredDefault: { modelId: id, effort: 'high' }
   })
@@ -86,21 +93,38 @@ function rig(overlay?: Record<string, string>) {
   }
 }
 
-it('keeps a Windows catalog source while only a shadowed inherited path changes', async () => {
-  vi.stubGlobal('process', { ...process, platform: 'win32' })
-  const overlay = { path: '/configured/bin' }
-  const h = rig(overlay)
-  const source = h.service.captureSource(h.record)
-  cleanups.push(() => source.release?.())
-  await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/changed', IGNORED: 'a' }
-  })
-  expect(source()).toBe(true)
-  await captureHostShellEnvironment(async () => {
-    overlay.path = '/new-configured/bin'
-  })
-  expect(source()).toBe(false)
-})
+it.each(['darwin', 'win32'] as const)(
+  'keeps a %s catalog source through PATH-only and overlay-shadowed changes',
+  async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
+    shell.current = { PATH: '/a', Path: '/shadow-a', path: '/shadow-b', IGNORED: 'a' }
+    const overlay = { IGNORED: 'configured' }
+    const h = rig(overlay)
+    const source = h.service.captureSource(h.record)
+    cleanups.push(() => source.release?.())
+    agentModelCatalogStore.recordSuccess(h.fingerprint, 'grok', h.listing('saved'), 'discovery')
+    const held = Promise.withResolvers<ReturnType<typeof h.listing>>()
+    const flight = agentModelCatalogStore.refresh(h.fingerprint, 'grok', () => held.promise)
+    await Promise.resolve()
+    await captureHostShellEnvironment(async () => {
+      shell.next = {
+        PATH: '/changed',
+        Path: '/other-shadow-a',
+        path: '/other-shadow-b',
+        IGNORED: 'shadowed'
+      }
+    })
+    expect(source()).toBe(true)
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('saved')
+    held.resolve(h.listing('current'))
+    await flight
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('current')
+    await captureHostShellEnvironment(async () => {
+      overlay.IGNORED = 'new-configured'
+    })
+    expect(source()).toBe(false)
+  }
+)
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
   const h = rig()
@@ -116,7 +140,7 @@ it('retires a producer on effective Refresh before new publication and fences la
   h.service.recordLiveListing(h.record.sessionId, h.listing('A'), sourceA)
   await vi.waitFor(() => expect(h.defaults).toHaveBeenCalledOnce())
   await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/b', IGNORED: 'a' }
+    shell.next = { PATH: '/b', IGNORED: 'b' }
   })
   expect(sourceA()).toBe(false)
   const sourceB = h.service.captureSource(h.record)
@@ -169,3 +193,113 @@ it.each([true, false])(
     expect(env.CODEX_CI).toBe('set-by-user')
   }
 )
+
+it('reuses the selected Codex across folders and capture, then follows a different PATH executable', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-capture-'))
+  const [a, b, bin, replacement, unrelated] = ['a', 'b', 'bin', 'replacement', 'unrelated'].map(
+    (name) => join(folder, name)
+  )
+  await Promise.all([a, b, bin, replacement, unrelated].map((path) => mkdir(path)))
+  const executable = process.platform === 'win32' ? 'catalog-codex.cmd' : 'catalog-codex'
+  await Promise.all(
+    [bin, replacement].map((path) =>
+      writeFile(join(path, executable), 'test binary identity', { mode: 0o755 })
+    )
+  )
+  shell.current = {
+    PATH: `../bin${delimiter}./node_modules/.bin${delimiter}${folder}/unused-one${delimiter}`,
+    IGNORED: 'a'
+  }
+  shell.next = { ...shell.current }
+  const environment = createStructuredAgentEnvironmentResolvers({
+    prewarm: false,
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] })
+  })
+  const firstStarted = Promise.withResolvers<void>()
+  const otherStarted = Promise.withResolvers<void>()
+  const first = Promise.withResolvers<void>()
+  const other = Promise.withResolvers<void>()
+  let duplicate = false
+  const probe = createCodexModelCatalogProbe({
+    resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
+    resolveSavedEnvironment: () => environment.resolveAgentEnvironment('codex', true),
+    resolveCommand: (options) => ({
+      command: resolveCliCommand('catalog-codex', options),
+      prefixArgs: []
+    }),
+    runSession: async (invocation, body) => {
+      let id = 'replacement'
+      if (invocation.command === join(bin, executable)) {
+        id = duplicate ? 'duplicate' : 'original'
+        duplicate = true
+        firstStarted.resolve()
+        await first.promise
+      }
+      return body({
+        request: async (method) =>
+          method === 'model/list'
+            ? {
+                data: [
+                  {
+                    model: id,
+                    displayName: id,
+                    hidden: false,
+                    supportedReasoningEfforts: [],
+                    isDefault: true
+                  }
+                ],
+                nextCursor: null
+              }
+            : method === 'config/read'
+              ? { config: {} }
+              : {},
+        notify: () => {}
+      })
+    }
+  })
+  const service = createAgentModelCatalogService({
+    store: agentModelCatalogStore,
+    getConversation: () => undefined,
+    getRecord: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: folder }),
+    probes: { codex: probe }
+  })
+  cleanups.push(environment.bindCatalogSources(['codex']), service.stop, () => {
+    void rm(folder, { recursive: true, force: true })
+  })
+  const read = (workspacePath: string) =>
+    service.read({ agent: 'codex', workspacePath, waitForListing: true })
+  const firstRead = read(a)
+  await firstStarted.promise
+  await refreshAtRestCommandContext(() =>
+    captureHostShellEnvironment(async () => {
+      shell.next = { ...shell.current, PATH: `../bin${delimiter}${folder}/unused-two${delimiter}` }
+    })
+  )
+  const shared = read(b)
+  first.resolve()
+  await firstRead
+  expect(await shared).toMatchObject({ models: [{ id: 'original' }] })
+  const unrelatedRead = agentModelCatalogStore.refresh(
+    'unrelated-input-fixture',
+    'codex',
+    async () => {
+      otherStarted.resolve()
+      await other.promise
+      return {
+        origin: 'probe',
+        models: [{ id: 'unrelated', label: 'Unrelated', efforts: [], isDefault: true }]
+      }
+    }
+  )
+  await otherStarted.promise
+  await refreshAtRestCommandContext(() =>
+    captureHostShellEnvironment(async () => {
+      shell.next = { ...shell.current, PATH: `${replacement}${delimiter}../bin${delimiter}` }
+    })
+  )
+  expect(await read(a)).toMatchObject({ models: [{ id: 'replacement' }] })
+  other.resolve()
+  expect(await unrelatedRead).toMatchObject({ models: [{ id: 'unrelated' }] })
+})

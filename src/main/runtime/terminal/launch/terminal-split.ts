@@ -101,7 +101,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       worktreeId: leaf.worktreeId,
       sourceLeafId: leaf.leafId,
       telemetrySource: opts.telemetrySource,
-      newLeafId
+      newLeafId,
+      ...(opts.activate === false ? { activate: false } : {})
     })
     return await this.awaitRendererSplit(split, newLeafId)
   }

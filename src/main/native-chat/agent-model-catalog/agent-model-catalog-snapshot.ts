@@ -8,10 +8,7 @@ import type { AgentSessionConversationView } from '../../../shared/agent-session
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
 import { agentModelCatalogDefaultFollowsAccount } from './agent-model-catalog-workspace'
-import {
-  independentAgentModelCatalog,
-  usesModelSpecificAcpEfforts
-} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
@@ -239,11 +236,11 @@ export function projectAgentModelCatalogSnapshot(
     ...(!params.savedOnly &&
     !params.verifiedOnly &&
     (deps.store.isListing(bound.fingerprint) ||
+      (resolving && bound.projecting !== undefined) ||
       (resolving &&
         (deps.store.probeDue(bound.fingerprint) ||
           // The picked model's menu is listed by the refresh this read just asked for.
-          deps.store.efforts.due(bound.fingerprint, params.selectedModel)))) &&
-    (independent || !listed || usesModelSpecificAcpEfforts(params.agent))
+          deps.store.efforts.due(bound.fingerprint, params.selectedModel))))
       ? { listingInProgress: true as const }
       : {}),
     ...(deps.store.failure(bound.fingerprint)?.unavailable

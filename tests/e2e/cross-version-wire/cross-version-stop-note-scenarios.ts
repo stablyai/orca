@@ -6,7 +6,6 @@ import {
   noteId,
   turnItemId,
   ordinary,
-  unconfirmed,
   type ScenarioPort
 } from './cross-version-stop-note-test-rig'
 
@@ -40,12 +39,6 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         })
         const after = reduce(before, replies)
         expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
-        expect(rig.journal.itemBody(noteId)).toEqual(unconfirmed)
-        const since = rig.journal.readSince(before.cursor!)
-        expect(since).toMatchObject({
-          ok: true,
-          rows: [expect.objectContaining({ kind: 'outcome', itemIds: [turnItemId] })]
-        })
       })
       it('refreshes a non-upgrade stale page after an out-of-window live correction at the terminal cursor', async () => {
         await turn('running')

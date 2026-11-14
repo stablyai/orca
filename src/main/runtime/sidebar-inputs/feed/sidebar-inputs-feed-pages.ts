@@ -1,4 +1,4 @@
-import type { SidebarInputsDomainChange } from '../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { SidebarInputsDomainChange } from '../../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 
 /** One published entity: its value and that value's JSON, which the feed diffs and measures. */
 export type FeedEntity = { value: unknown; json: string; bytes: number }

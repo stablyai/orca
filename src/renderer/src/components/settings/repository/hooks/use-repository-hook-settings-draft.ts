@@ -13,7 +13,7 @@ export function useRepositoryHookSettingsDraft({
   repoHostIdentity,
   onUpdateHookSettings
 }: {
-  repo: Repo
+  repo: Pick<Repo, 'hookSettings'>
   repoHostIdentity: string
   onUpdateHookSettings: (settings: RepoHookSettings) => void
 }): {

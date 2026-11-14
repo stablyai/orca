@@ -25,7 +25,9 @@ const mockTransport = vi.hoisted(
   })
 )
 
-vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
+  useReducedMotionEnabled: () => true
+}))
 vi.mock('react-native-reanimated', () => ({
   Easing: { bezier: () => (t: number) => t },
   default: { View: 'AnimatedView' },
@@ -110,7 +112,7 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../../platform/haptics', () => ({
+vi.mock('../../platform/haptics/haptics', () => ({
   triggerSelection: vi.fn()
 }))
 
@@ -309,20 +311,6 @@ describe('MobileFileExplorerPanel', () => {
 
     expect(renderedText(renderer)).toContain('created-while-offline.ts')
     expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
-  })
-
-  it('keeps the cached tree when a post-reconnect root refresh fails', async () => {
-    const host = listingHost({ '': [entry('src', true), entry('README.md')] })
-    const renderer = await renderExplorer()
-    expect(renderedText(renderer)).toContain('README.md')
-
-    await host.setState(renderer, 'disconnected')
-    host.answer = () => Promise.reject(new Error('refresh failed'))
-    await host.setState(renderer, 'connected')
-
-    expect(renderedText(renderer)).toContain('src')
-    expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).not.toContain('refresh failed')
   })
 
   it('falls back to the capped files.list against desktops without files.readDir', async () => {

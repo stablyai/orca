@@ -14,7 +14,7 @@ import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launc
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
+} from '../../../shared/worktree/visibility/visibility-sources'
 
 export function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (value === undefined) {

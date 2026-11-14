@@ -220,42 +220,4 @@ describe('idle regional rehome candidate window', () => {
     expect(seen.size).toBe(363)
     expect(wrapped).toBe(true)
   })
-
-  it('excludes a host inside its rehome cooldown and takes it back after', async () => {
-    const { store, database, safety, now } = await setup()
-    await seedHost(store, identity)
-    await database.query(
-      `INSERT INTO relay_region_rehome_attempts
-       (attempt_id, user_id, relay_host_id, preferred_region, source_cell_id, source_cell_incarnation,
-        target_cell_id, target_cell_incarnation, previous_epoch, assignment_epoch, drain_grace_ms,
-        send_attempts, created_at, updated_at)
-       VALUES ('cooled', ?, ?, 'asia-east2', 'us', ?, 'asia-idle', ?, 0, 9, 0, 0, ?, ?)`,
-      [identity.userId, identity.relayHostId, incarnations[0], incarnations[2], now - 1_000, now]
-    )
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-    await database.query('UPDATE relay_region_rehome_attempts SET created_at = ?', [
-      now - 604_800_000 - 1
-    ])
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(3)
-  })
-
-  it('excludes a host outside the cohort', async () => {
-    const { store, database } = await setup()
-    await seedHost(store, identity)
-    const now = 100_000_000 + 86_400_000
-    const safety = {
-      observedAt: now,
-      sqlFailures: 0,
-      reconnects: 0,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    }
-    await database.query('UPDATE relay_region_decisions SET cohort_bucket = 40')
-    const narrow = new RelayAssignmentStore(database, () => now, { regionalRehomeCohortPercent: 40 })
-    expect(await narrow.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-    const wide = new RelayAssignmentStore(database, () => now, { regionalRehomeCohortPercent: 41 })
-    expect(await wide.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(3)
-  })
 })

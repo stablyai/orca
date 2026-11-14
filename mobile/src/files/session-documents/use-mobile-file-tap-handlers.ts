@@ -5,7 +5,7 @@ import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/f
 import { hostStackRouteHref } from '../../navigation/host-stack-navigation'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
-import { triggerSelection } from '../../platform/haptics'
+import { triggerSelection } from '../../platform/haptics/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
 import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
 import { openMobileNativeChatFileTap } from '../../session/native-chat/visual/mobile-native-chat-open-file'

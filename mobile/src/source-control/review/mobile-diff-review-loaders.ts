@@ -10,12 +10,12 @@ import {
   reviewFileDiffRead
 } from './mobile-diff-review-operations'
 import type { MobileReviewGitDiffResult } from './diff-review-reply-schema'
-import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
+import type { MobileGitBranchCompareReply as MobileGitBranchCompareResult } from '../branches/git-compare-reply-schema'
 import {
   resolveMobileBranchCompareBaseRef,
   type MobileBranchCompareTarget
-} from '../mobile-branch-base-ref'
-import { isMobileGitUnavailable } from '../mobile-git-status'
+} from '../branches/mobile-branch-base-ref'
+import { isMobileGitUnavailable } from '../changes/mobile-git-status'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'

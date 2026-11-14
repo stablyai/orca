@@ -138,7 +138,6 @@ export type ComputerActionFollowUpTarget = {
   worktree?: string
   windowId?: number
   windowIndex?: number
-  restoreWindow?: boolean
 }
 
 export function formatComputerAction(
@@ -189,9 +188,6 @@ function formatComputerFollowUpCommand(
     } else if (windowIndex !== null && windowIndex !== undefined) {
       args.push('--window-index', String(windowIndex))
     }
-  }
-  if (target.restoreWindow) {
-    args.push('--restore-window')
   }
   return args.join(' ')
 }

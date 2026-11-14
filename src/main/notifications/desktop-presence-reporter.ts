@@ -2,11 +2,11 @@ import {
   DESKTOP_PRESENCE_REPORT_INTERVAL_MS,
   NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY
 } from '../../shared/desktop-client-presence'
-import { getRuntimeEnvironmentStatusSnapshots } from '../ipc/runtime-environments/runtime-environment-request-connections'
+import { getRuntimeEnvironmentStatusSnapshots } from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import {
   listReadySharedControlSockets,
   type ReadySharedControlSocket
-} from '../ipc/runtime-environments/runtime-environment-shared-control-answers'
+} from '../ipc/runtime-environments/connections/runtime-environment-shared-control-answers'
 
 const SAMPLE_INTERVAL_MS = 5_000
 const REPORT_TIMEOUT_MS = 10_000

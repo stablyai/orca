@@ -20,7 +20,6 @@
 1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 4 src/renderer/src/components/agent/AgentSettingsDialog.tsx
 1 src/renderer/src/components/automations/authoring/use-automations-page-destination-form.ts
-1 src/renderer/src/components/automations/automations-page-fixtures.ts
 1 src/renderer/src/components/automations/hosts/automation-host-client.ts
 1 src/renderer/src/components/automations/use-automations-page-controller.ts
 1 src/renderer/src/components/browser-pane/ReopenBrowserPageOnServerButton.tsx
@@ -318,10 +317,10 @@
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-actions.ts
 3 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-host-merge.ts
 3 src/renderer/src/store/slices/worktrees/session/worktree-terminal-reference.ts
-1 src/renderer/src/store/terminals/terminal-active-workspace-creation.ts
-1 src/renderer/src/store/terminals/terminal-tab-appearance.ts
-1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts
-1 src/renderer/src/store/terminals/terminal-tab-retirement.ts
+1 src/renderer/src/store/terminals/tabs/creation/terminal-active-workspace-creation.ts
+1 src/renderer/src/store/terminals/tabs/presentation/terminal-tab-appearance.ts
+1 src/renderer/src/store/terminals/retirement/terminal-tab-close-providers.ts
+1 src/renderer/src/store/terminals/retirement/terminal-tab-retirement.ts
 1 src/renderer/src/web/preload-api/web-app-api.ts
 3 src/renderer/src/web/preload-api/web-preference-normalization.ts
 20 src/renderer/src/web/preload-api/web-preferences-store.ts

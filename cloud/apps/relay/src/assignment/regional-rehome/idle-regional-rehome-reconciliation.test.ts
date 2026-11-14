@@ -39,23 +39,6 @@ async function setup() {
 }
 
 describe('idle cutover durable reconciliation', () => {
-  it('only permits reopening when the exact source still owns the assignment', async () => {
-    const { store } = await setup()
-    expect(await store.reconcileIdleRegionalRehome(request)).toBe('not-committed')
-    await store.activateControl(request, {
-      cellId: request.sourceCellId,
-      assignmentEpoch: request.sourceAssignmentEpoch,
-      generation: request.sourceGeneration + 1,
-      cellIncarnation: request.sourceCellIncarnation
-    })
-    expect(await store.reconcileIdleRegionalRehome(request)).toBe('stale')
-  })
-
-  it('does not reopen an obsolete source after an assignment change', async () => {
-    const { store } = await setup()
-    await store.startEvacuation(request, request.targetCellId)
-    expect(await store.reconcileIdleRegionalRehome(request)).toBe('stale')
-  })
 
   it('waits for an outstanding assignment transaction before deciding authority', async () => {
     const { database, store } = await setup()

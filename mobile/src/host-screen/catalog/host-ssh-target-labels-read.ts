@@ -4,7 +4,7 @@ import type { RpcAcceptedResult } from '../../transport/rpc/rpc-accepted-result'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import '../../worktree/worktree-host-context-labels'
-import { buildHostLabelById } from '../../../../src/shared/worktree/host-context-labels'
+import { buildHostLabelById } from '../../../../src/shared/worktree/row-display/host-context-labels'
 import { hostSshTargetSummariesRead } from '../host-screen-operations'
 
 export async function settledMetadataReply(

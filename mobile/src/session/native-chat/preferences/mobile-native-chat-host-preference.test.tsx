@@ -8,27 +8,20 @@ import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 
 function connection() {
   let state: ConnectionState = 'connected'
-  let generation = 0
   const callbacks: ((event: unknown) => void)[] = []
-  const routedCallbacks: { host: string | undefined; callback: (event: unknown) => void }[] = []
   const states = new Set<(state: ConnectionState) => void>()
-  const stops = vi.fn()
   const replies: ((reply: RpcResponse) => void)[] = []
-  const failures: ((reason: Error) => void)[] = []
   const sendRequest = vi.fn<RpcClient['sendRequest']>(
     () =>
-      new Promise((resolve, reject) => {
+      new Promise((resolve) => {
         replies.push(resolve)
-        failures.push(reject)
       })
   )
   const client: RpcClient = {
     sendRequest,
-    subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, callback, options) => {
+    subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, callback) => {
       callbacks.push(callback)
-      const host = options?.envelope?.executionHost
-      routedCallbacks.push({ host: typeof host === 'string' ? host : undefined, callback })
-      return stops
+      return () => {}
     }),
     onStateChange: (callback) => {
       states.add(callback)
@@ -37,7 +30,6 @@ function connection() {
       }
     },
     getState: () => state,
-    getGeneration: () => generation,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => null,
     notifyForeground: () => {},
@@ -46,19 +38,10 @@ function connection() {
   }
   return {
     client,
-    stops,
     replies,
-    failures,
-    callbacks,
-    states,
     emit: (event: unknown) => callbacks.at(-1)?.(event),
-    emitAt: (host: string | undefined, event: unknown) =>
-      routedCallbacks.findLast((entry) => entry.host === host)?.callback(event),
-    change: (next: ConnectionState, migrate = false) => {
+    change: (next: ConnectionState) => {
       state = next
-      if (migrate) {
-        generation++
-      }
       for (const callback of states) {
         callback(state)
       }

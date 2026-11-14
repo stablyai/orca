@@ -19,11 +19,19 @@ export type MainWindowStateLifecycle = {
 export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
   revealOnDidFinishLoad: boolean
+  revealInBackground?: boolean
   savedMaximized: boolean
   savedFullScreen: boolean
   store: Store | null
 }): MainWindowStateLifecycle {
-  const { mainWindow, revealOnDidFinishLoad, savedMaximized, savedFullScreen, store } = args
+  const {
+    mainWindow,
+    revealOnDidFinishLoad,
+    revealInBackground = false,
+    savedMaximized,
+    savedFullScreen,
+    store
+  } = args
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
@@ -67,12 +75,20 @@ export function installMainWindowStateLifecycle(args: {
     if (isWindowlessLaunch()) {
       return
     }
-    if (savedMaximized) {
-      mainWindow.maximize()
+    if (revealInBackground) {
+      // Maximizing a hidden window shows it active; Windows activates on any maximize, so it stays restored there.
+      mainWindow.showInactive()
+      if (savedMaximized && process.platform !== 'win32') {
+        mainWindow.maximize()
+      }
+    } else {
+      if (savedMaximized) {
+        mainWindow.maximize()
+      }
+      showWindowWithoutStealingFocus(mainWindow)
     }
-    showWindowWithoutStealingFocus(mainWindow)
     // Fullscreen needs a shown window; after maximize so leaving it returns there. Background launches must not take a Space.
-    if (savedFullScreen && !isBackgroundLaunch()) {
+    if (savedFullScreen && !isBackgroundLaunch() && !revealInBackground) {
       mainWindow.setFullScreen(true)
     }
   }

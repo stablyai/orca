@@ -1121,7 +1121,9 @@ jobs:
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
-          - os: ubuntu-latest
+          # Why: ubuntu-latest moved to the amd64v3 Ubuntu 26.04 image, whose GCC
+          # defaults to -march=x86-64-v3 and ships AVX in node-pty (#41637).
+          - os: ubuntu-24.04
             platform: linux-x64
             release_command: node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-unpacked
