@@ -132,6 +132,8 @@ export function NativeChatQuestionCard({
   }
 
   const currentAnswered = answerFor(index).length > 0 || acceptsEmpty(index)
+  const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
+  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered)
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -190,7 +192,6 @@ export function NativeChatQuestionCard({
 
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
-    const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
     const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
@@ -416,9 +417,9 @@ export function NativeChatQuestionCard({
               label={
                 isSubmitting
                   ? t('components.native-chat.question.sending', 'Sending…')
-                  : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()
+                  : CONFIRM_LABEL[confirmLabel]()
               }
-              answered={currentAnswered}
+              answered={confirmLabel !== 'skip'}
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }

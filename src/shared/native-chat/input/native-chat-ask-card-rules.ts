@@ -49,12 +49,14 @@ export function askConfirmAction(args: {
   return args.fromKeyboard ? 'stay' : 'cancel'
 }
 
+/** The last step says Submit whenever any answer will be sent, even if its own question was skipped. */
 export function askConfirmLabel(
   currentAnswered: boolean,
-  isLast: boolean
+  isLast: boolean,
+  anyAnswered: boolean
 ): 'submit' | 'next' | 'skip' {
-  if (!currentAnswered) {
-    return 'skip'
+  if (isLast) {
+    return anyAnswered ? 'submit' : 'skip'
   }
-  return isLast ? 'submit' : 'next'
+  return currentAnswered ? 'next' : 'skip'
 }

@@ -223,4 +223,52 @@ describe('NativeChatQuestionCard', () => {
     act(() => vi.runAllTimers())
     expect(onAnswer).toHaveBeenCalledTimes(1)
   })
+
+  it('offers Submit on the last step once an earlier question is answered, even after skipping', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    const onCancel = vi.fn()
+    const question = (header: string): AskPrompt['questions'][number] => ({
+      question: `${header}?`,
+      header,
+      multiSelect: false,
+      options: [{ label: `${header} A` }, { label: `${header} B` }]
+    })
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{ questions: [question('One'), question('Two'), question('Three')] }}
+          onAnswer={onAnswer}
+          onCancel={onCancel}
+          shouldFocus
+        />
+      )
+    })
+    const rows = (): HTMLButtonElement[] => [
+      ...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    ]
+    const skip = (): void => act(() => getByRole(container, 'button', { name: 'Skip' }).click())
+    skip()
+    skip()
+    expect(rows()[0]!.textContent).toContain('Three A')
+    // With nothing answered, the last step still offers Skip, which dismisses.
+    expect(getByRole(container, 'button', { name: 'Skip' })).toBeTruthy()
+
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-native-chat-question-step]')!.click()
+    )
+    act(() => rows()[1]!.click())
+    act(() => vi.runAllTimers())
+    skip()
+    expect(rows()[0]!.textContent).toContain('Three A')
+    expect(queryByRole(container, 'button', { name: 'Skip' })).toBeNull()
+    act(() => getByRole(container, 'button', { name: 'Submit' }).click())
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(onAnswer).toHaveBeenCalledWith([
+      { indices: [1], other: '' },
+      { indices: [], other: '' },
+      { indices: [], other: '' }
+    ])
+  })
 })
