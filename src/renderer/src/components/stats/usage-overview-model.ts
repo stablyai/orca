@@ -10,7 +10,10 @@ import {
   createMuseProvider,
   createOpenCodeProvider
 } from './usage-provider-normalization'
-import { getIntlLocale } from '@/i18n/i18n'
+export {
+  formatCost as formatUsageCost,
+  formatTokens as formatUsageTokens
+} from './usage-formatters'
 import type { Translate } from '@/i18n/use-translate'
 
 export function buildUsageOverview(input: UsageOverviewInput, t?: Translate): UsageOverviewModel {
@@ -77,24 +80,4 @@ export function buildUsageOverview(input: UsageOverviewInput, t?: Translate): Us
     bestDay,
     lastUpdatedAt
   }
-}
-
-export function formatUsageTokens(value: number, intlLocale: string = getIntlLocale()): string {
-  if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(1)}B`
-  }
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString(intlLocale)
-}
-
-export function formatUsageCost(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }

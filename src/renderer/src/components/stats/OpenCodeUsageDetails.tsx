@@ -27,7 +27,7 @@ export function OpenCodeUsageDetails({
   const t = useTranslate()
   return (
     <>
-      <CodexUsageDailyChart daily={daily} />
+      <CodexUsageDailyChart daily={daily} reasoningIncludedInOutput={false} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <UsageBreakdownSection

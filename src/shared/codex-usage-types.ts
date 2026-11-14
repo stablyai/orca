@@ -1,3 +1,5 @@
+import type { UsageHistoryRow } from './usage-history-types'
+
 export type CodexUsageScope = 'orca' | 'all'
 export type CodexUsageRange = '7d' | '30d' | '90d' | 'all'
 export type CodexUsageBreakdownKind = 'model' | 'project'
@@ -53,9 +55,11 @@ export type CodexUsageBreakdownRow = {
 }
 
 export type CodexUsageSessionRow = {
+  lastActiveDay?: string
+  totalsScope?: 'lifetime' | 'selection'
   sessionId: string
   lastActiveAt: string
-  durationMinutes: number
+  durationMinutes: number | null
   projectLabel: string
   model: string | null
   events: number
@@ -74,4 +78,8 @@ export type CodexUsageSnapshot = {
   modelBreakdown: CodexUsageBreakdownRow[]
   projectBreakdown: CodexUsageBreakdownRow[]
   recentSessions: CodexUsageSessionRow[]
+  /** Calendar day on the recording host, using the same local boundary as history rows. */
+  historyToday?: string
+  history?: UsageHistoryRow[]
+  historyNeedsRescan?: boolean
 }

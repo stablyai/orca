@@ -150,7 +150,7 @@ export function renderStatsSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate
 ): React.JSX.Element {
-  const { navigation, view } = context
+  const { model, navigation, view } = context
   return (
     <SettingsSection
       id="stats"
@@ -163,7 +163,7 @@ export function renderStatsSettingsSection(
     >
       {view.isSectionMounted('stats') ? (
         <SettingsGroup bodyClassName="py-4">
-          <StatsPane />
+          <StatsPane hostScope={model.settingsHostScope} />
         </SettingsGroup>
       ) : null}
     </SettingsSection>

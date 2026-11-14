@@ -1,3 +1,5 @@
+import { localUsageDay } from '../../shared/usage-history-range'
+import { projectEventUsageHistory } from '../usage/usage-history-projection'
 import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
@@ -48,7 +50,11 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedDatabases',
       dataPresenceKey: 'hasAnyOpenCodeData',
-      scan: openCodeUsageProvider.scan,
+      scan: async (worktrees, sourceCache) => {
+        const accountRoots = await host.accountRoots?.('opencode')
+        host.signal.throwIfAborted()
+        return openCodeUsageProvider.scan(worktrees, sourceCache, accountRoots)
+      },
       splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
@@ -56,10 +62,17 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   getSnapshot(
     scope: OpenCodeUsageScope,
     range: OpenCodeUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    includeHistory = false
   ): OpenCodeUsageSnapshot {
     return {
       scanState: this.getScanState(),
+      ...(includeHistory
+        ? {
+            historyToday: localUsageDay(new Date()),
+            history: projectEventUsageHistory('opencode', this.getFilteredDaily(scope, range))
+          }
+        : {}),
       summary: this.buildSummary(scope, range),
       daily: this.buildDaily(scope, range),
       modelBreakdown: this.buildBreakdown(scope, range, 'model'),
@@ -135,7 +148,12 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     range: OpenCodeUsageRange,
     limit = 10
   ): OpenCodeUsageSessionRow[] {
-    return buildOpenCodeUsageRecentSessions(this.getFilteredSessions(scope, range), limit)
+    return buildOpenCodeUsageRecentSessions(
+      this.getFilteredSessions(scope, range),
+      limit,
+      this.getFilteredDaily(scope, range),
+      range
+    )
   }
 
   private getFilteredDaily(

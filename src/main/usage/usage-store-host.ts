@@ -1,5 +1,6 @@
 import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
 import type { UsageWorktreeRef } from './worktree-attribution/usage-worktree-metadata'
+import type { UsageAccountRoot } from './usage-account-attribution'
 
 export type UsageWorktreeCatalog = {
   repoIds: string[]
@@ -16,5 +17,6 @@ export type UsageStoreHost = {
   userDataPath: string
   readCatalog(): Promise<UsageWorktreeCatalog>
   claudeProfileDirs(): Promise<string[]>
+  accountRoots?(provider: 'claude' | 'opencode'): Promise<UsageAccountRoot[]>
   telemetry: UsageTelemetryHost
 }

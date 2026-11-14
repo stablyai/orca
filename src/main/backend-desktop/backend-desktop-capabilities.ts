@@ -2,12 +2,17 @@ import { BrowserWindow, type WebContents, type WebFrameMain } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
-import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
+import {
+  claudeProfileTranscriptDirs,
+  claudeProfileTranscriptSources
+} from '../claude-usage/transcript-file-discovery'
 import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usage-worktree-metadata'
+import { openCodeUsageAccountRoots } from '../opencode-usage/opencode-usage-account-roots'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
+import { BACKEND_CONNECTION_CHANGED } from '../../shared/backend-service-contract'
 
 export function trustsBackendRenderer(contents: WebContents): boolean {
   if (
@@ -41,6 +46,12 @@ export function createBackendDesktopCapabilities(
     if (method === 'usage.claudeProfileDirs') {
       return claudeProfileTranscriptDirs()
     }
+    if (method === 'usage.accountRoots' && params === 'claude') {
+      return claudeProfileTranscriptSources()
+    }
+    if (method === 'usage.accountRoots' && params === 'opencode') {
+      return openCodeUsageAccountRoots()
+    }
     if (method === 'usage.telemetry.enabled') {
       return isTelemetryEnabled()
     }
@@ -56,6 +67,18 @@ export type BackendDocument = {
   frame: WebFrameMain
   token: string
   retire(): void
+}
+
+export function notifyBackendDocuments(
+  documents: ReadonlyMap<number, BackendDocument>,
+  connected: boolean,
+  unavailable: boolean
+): void {
+  for (const document of documents.values()) {
+    if (!document.contents.isDestroyed() && document.contents.mainFrame === document.frame) {
+      document.frame.postMessage(BACKEND_CONNECTION_CHANGED, { connected, unavailable })
+    }
+  }
 }
 
 export function trackBackendDocument(

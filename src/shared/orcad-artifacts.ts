@@ -243,6 +243,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'command-path-directory-worker-entry.js' },
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
+  { filename: 'usage-scan-worker-entry.js' },
   { filename: 'journal-sql-worker-entry.js' },
   { filename: 'journal-sql-reader-entry.js' },
   // Terminal agent identity SQL runs in this worker thread, off the hook server's loop.

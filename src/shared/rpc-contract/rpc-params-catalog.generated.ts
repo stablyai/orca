@@ -748,6 +748,11 @@ import {
 } from './terminal/terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater/updater-params'
 import {
+  UsageRefreshParams,
+  UsageSetEnabledParams,
+  UsageSnapshotParams
+} from './usage-history-params'
+import {
   WorkspaceCleanupPreviewParams,
   WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
@@ -1668,6 +1673,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'usage.getSnapshot': UsageSnapshotParams,
+  'usage.refresh': UsageRefreshParams,
+  'usage.setEnabled': UsageSetEnabledParams,
   'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
   'workspaceCleanup.report': null,
   'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,

@@ -22,6 +22,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   backup: 'src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts',
   sessionSearch: 'src/main/ai-vault-search/worker/session-search-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
+  usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   journalSql: 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts',
   journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',
   agentIdentityWorker: 'src/main/agent-hooks/identity/agent-identity-worker-entry.ts',

@@ -22,8 +22,8 @@ import { buildClaudeUsageProjectionIntegrity } from './transcript-projection-int
 import { addLongContext } from './claude-billable-tokens'
 import { longContextTurnTokens } from './claude-model-pricing'
 
-/** Bump when a change to projected rows needs saved files reparsed (v2: long-context subsets). */
-export const CLAUDE_USAGE_PROJECTION_VERSION = 2
+/** Bump when a change to projected rows needs saved files reparsed (v3: session/day attribution). */
+export const CLAUDE_USAGE_PROJECTION_VERSION = 3
 
 function maximaTotals(row: Readonly<ClaudeUsageTokenMaxima>): ClaudeUsageTokenTotals {
   return {
@@ -35,8 +35,14 @@ function maximaTotals(row: Readonly<ClaudeUsageTokenMaxima>): ClaudeUsageTokenTo
   }
 }
 
-function dailyKey(day: string, model: string | null, projectKey: string): string {
-  return [day, model ?? 'unknown', projectKey].join('::')
+function dailyKey(
+  day: string,
+  model: string | null,
+  projectKey: string,
+  sessionId: string,
+  accountId?: string | null
+): string {
+  return [day, model ?? 'unknown', projectKey, sessionId, accountId ?? ''].join('::')
 }
 
 function applyTokenCorrection(
@@ -52,7 +58,15 @@ function applyTokenCorrection(
   const location = session?.locationBreakdown.find(
     (entry) => entry.locationKey === projection.projectKey
   )
-  const aggregate = daily.get(dailyKey(projection.day, projection.model, projection.projectKey))
+  const aggregate = daily.get(
+    dailyKey(
+      projection.day,
+      projection.model,
+      projection.projectKey,
+      projection.sessionId,
+      projection.accountId
+    )
+  )
   if (!session || !location || !aggregate) {
     throw new Error('Claude usage checkpoint does not match its cached projection.')
   }
@@ -118,9 +132,13 @@ export async function projectClaudeUsageScanFile(
   read: ClaudeUsageScanFile,
   worktreeLookup: Map<string, ClaudeUsageWorktreeRef>,
   claimKey: (key: string) => boolean,
-  previous?: ClaudeUsagePersistedFile
+  previous?: ClaudeUsagePersistedFile,
+  accountIdForTurn?: (key: string | null) => string | null
 ): Promise<ClaudeUsagePersistedFile> {
   const retained = read.resumed ? previous : undefined
+  const retainedAccounts = new Map(
+    retained?.ownedDedupeKeys.map((key, index) => [key, retained.ownedAccountIds?.[index] ?? null])
+  )
   const sessions = new Map<string, ClaudeUsageSession>()
   const daily = new Map<string, ClaudeUsageDailyAggregate>()
   mergeClaudeSessions(sessions, retained?.sessions ?? [])
@@ -134,7 +152,16 @@ export async function projectClaudeUsageScanFile(
   )
   let hasDeferredClaims = retained?.hasDeferredClaims ?? false
   const newTurns: ClaudeUsageParsedSourceTurn[] = []
+  const accountIds = new Map<string, string | null>()
+  const turnAccounts = new Map<ClaudeUsageParsedSourceTurn, string | null>()
   for (const turn of read.turns) {
+    if (accountIdForTurn) {
+      const accountId = accountIdForTurn(turn.dedupeKey)
+      turnAccounts.set(turn, accountId)
+      if (turn.dedupeKey) {
+        accountIds.set(turn.dedupeKey, accountId)
+      }
+    }
     if (turn.dedupeKey && !claimKey(turn.dedupeKey)) {
       hasDeferredClaims = true
       continue
@@ -154,6 +181,10 @@ export async function projectClaudeUsageScanFile(
     const attribution = Number.isNaN(new Date(turn.timestamp).getTime())
       ? undefined
       : attributed[attributedIndex++]
+    const accountId = turnAccounts.get(turn)
+    if (attribution && accountId) {
+      attribution.accountId = accountId
+    }
     if (turn.dedupeKey) {
       owned.append(
         turn.dedupeKey,
@@ -163,7 +194,8 @@ export async function projectClaudeUsageScanFile(
               sessionId: attribution.sessionId,
               day: attribution.day,
               model: attribution.model,
-              projectKey: attribution.projectKey
+              projectKey: attribution.projectKey,
+              ...(attribution.accountId ? { accountId: attribution.accountId } : {})
             }
           : null
       )
@@ -173,6 +205,9 @@ export async function projectClaudeUsageScanFile(
   mergeClaudeSessions(sessions, appended.sessions)
   mergeClaudeDailyAggregates(daily, appended.dailyAggregates)
   retainEncounterOrder(order, attributed)
+  const ownedAccountIds = owned.ownedDedupeKeys.map((key) =>
+    accountIds.has(key) ? (accountIds.get(key) ?? null) : (retainedAccounts.get(key) ?? null)
+  )
   const projected: ClaudeUsagePersistedFile = {
     ...read.processedFile,
     sessions: finalizeClaudeSessions(restoreEncounterOrder(sessions, order)),
@@ -180,6 +215,7 @@ export async function projectClaudeUsageScanFile(
       a.day === b.day ? a.projectLabel.localeCompare(b.projectLabel) : a.day.localeCompare(b.day)
     ),
     ownedDedupeKeys: owned.ownedDedupeKeys,
+    ...(ownedAccountIds.some((id) => id !== null) ? { ownedAccountIds } : {}),
     hasDeferredClaims,
     projectionVersion: CLAUDE_USAGE_PROJECTION_VERSION,
     parseResumeState: read.checkpoint

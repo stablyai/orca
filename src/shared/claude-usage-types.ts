@@ -1,3 +1,5 @@
+import type { UsageHistoryRow } from './usage-history-types'
+
 export type ClaudeUsageScope = 'orca' | 'all'
 export type ClaudeUsageRange = '7d' | '30d' | '90d' | 'all'
 export type ClaudeUsageBreakdownKind = 'model' | 'project'
@@ -51,9 +53,11 @@ export type ClaudeUsageBreakdownRow = {
 }
 
 export type ClaudeUsageSessionRow = {
+  lastActiveDay?: string
+  totalsScope?: 'lifetime' | 'selection'
   sessionId: string
   lastActiveAt: string
-  durationMinutes: number
+  durationMinutes: number | null
   projectLabel: string
   branch: string | null
   model: string | null
@@ -71,4 +75,8 @@ export type ClaudeUsageSnapshot = {
   modelBreakdown: ClaudeUsageBreakdownRow[]
   projectBreakdown: ClaudeUsageBreakdownRow[]
   recentSessions: ClaudeUsageSessionRow[]
+  /** Calendar day on the recording host, using the same local boundary as history rows. */
+  historyToday?: string
+  history?: UsageHistoryRow[]
+  historyNeedsRescan?: boolean
 }

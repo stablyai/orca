@@ -37,7 +37,7 @@ export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKi
   setEnabled: (args: { enabled: boolean }) => Promise<Snapshot['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<Snapshot['scanState']>
   getSnapshot: (
-    args: UsageQueryArgs<Snapshot> & { limit?: number },
+    args: UsageQueryArgs<Snapshot> & { limit?: number; includeHistory?: boolean },
     purpose?: BackendConnectionPurpose
   ) => Promise<Snapshot>
   getSummary: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['summary']>

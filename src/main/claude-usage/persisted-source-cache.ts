@@ -1,3 +1,4 @@
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
 import { encodeClaudeUsagePersistedFiles } from './persisted-token-columns'
 import { writeClaudeUsageJson, readClaudeUsageJson } from './source-cache-compression'
@@ -23,6 +24,8 @@ const SOURCE_DOMAIN = 'claude-usage-sources-v1'
 export type ClaudeUsageLoadedSourceCache = {
   sources: ClaudeUsagePersistedFile[]
   verifiedSources?: ClaudeUsageVerifiedSources
+  reuseProjections?: boolean
+  accountAttributionAvailable?: boolean
   unchangedSourceCache?: {
     ref: UsageSourceCacheRef
     sources: readonly ClaudeUsagePersistedFile[]
@@ -30,10 +33,11 @@ export type ClaudeUsageLoadedSourceCache = {
 }
 
 export async function readClaudeUsageSourceCache(
-  ref: UsageSourceCacheRef
+  ref: UsageSourceCacheRef,
+  preserveAccountClaims = false
 ): Promise<ClaudeUsageLoadedSourceCache> {
   const cacheRef = { ...ref }
-  if (!cacheRef.reuse) {
+  if (!cacheRef.reuse && !preserveAccountClaims) {
     return { sources: [] }
   }
   try {
@@ -46,13 +50,18 @@ export async function readClaudeUsageSourceCache(
     if (
       (parsed?.schemaVersion !== cacheRef.schemaVersion &&
         !(cacheRef.schemaVersion === 7 && parsed?.schemaVersion === 6)) ||
-      parsed.worktreeFingerprint !== cacheRef.worktreeFingerprint ||
+      (!preserveAccountClaims && parsed.worktreeFingerprint !== cacheRef.worktreeFingerprint) ||
       !Array.isArray(parsed.sources) ||
       (parsed.schemaVersion === 7 && !verified) ||
       (parsed.schemaVersion === 6 && verified)
     ) {
-      return { sources: [] }
+      return {
+        sources: [],
+        ...(preserveAccountClaims ? { accountAttributionAvailable: false } : {})
+      }
     }
+    const reuseProjections =
+      cacheRef.reuse && parsed.worktreeFingerprint === cacheRef.worktreeFingerprint
     if (verified) {
       const normalized = normalizeClaudeUsageSourceFiles(
         parsed.sources,
@@ -61,7 +70,16 @@ export async function readClaudeUsageSourceCache(
       return {
         sources: normalized.processedFiles,
         verifiedSources: new WeakSet(normalized.processedFiles),
+        ...(preserveAccountClaims
+          ? {
+              reuseProjections,
+              accountAttributionAvailable:
+                !normalized.invalidated &&
+                (normalized.processedFiles.length > 0 || cacheRef.hadPreviousHistory !== true)
+            }
+          : {}),
         unchangedSourceCache:
+          reuseProjections &&
           !normalized.invalidated &&
           normalized.processedFiles.length === parsed.sources.length &&
           normalized.processedFiles.every((file, index) => file === parsed.sources[index])
@@ -69,9 +87,27 @@ export async function readClaudeUsageSourceCache(
             : undefined
       }
     }
+    if (preserveAccountClaims) {
+      const normalized = normalizeClaudeUsageSourceFiles(parsed.sources)
+      return {
+        sources: normalized.processedFiles,
+        reuseProjections: reuseProjections && !normalized.invalidated,
+        accountAttributionAvailable:
+          !normalized.invalidated &&
+          (normalized.processedFiles.length > 0 || cacheRef.hadPreviousHistory !== true)
+      }
+    }
     return { sources: parsed.sources }
-  } catch {
-    return { sources: [] }
+  } catch (error) {
+    return {
+      sources: [],
+      ...(preserveAccountClaims
+        ? {
+            accountAttributionAvailable:
+              isDefinitiveAbsence(error) && cacheRef.hadPreviousHistory !== true
+          }
+        : {})
+    }
   }
 }
 

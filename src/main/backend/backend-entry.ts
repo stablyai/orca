@@ -16,6 +16,7 @@ import { dropE2eSpawnLogOutsideE2e } from '../startup/testing/e2e-spawn-log-env'
 import { ignoreInheritedWslHostsGateState } from '../../shared/wsl-host-internal-gate'
 import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
+import { parseUsageAccountRoots } from '../usage/usage-account-attribution'
 
 dropE2eSpawnLogOutsideE2e()
 clearWindowsStdHandleInheritance()
@@ -149,6 +150,8 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
         readCatalog: async () => (await call('usage.catalog')) as UsageWorktreeCatalog,
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private control peer returns the account owner's typed string array.
         claudeProfileDirs: async () => (await call('usage.claudeProfileDirs')) as string[],
+        accountRoots: async (provider) =>
+          parseUsageAccountRoots(await call('usage.accountRoots', provider)),
         telemetry: {
           isEnabled: async () => (await call('usage.telemetry.enabled')) === true,
           capture: async (snapshot) =>

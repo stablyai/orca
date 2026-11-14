@@ -8,7 +8,8 @@ import {
 import {
   compareOpenCodeClaimPriority,
   getProcessedDatabaseInfo,
-  listOpenCodeDatabases
+  listOpenCodeDatabases,
+  listOpenCodeDatabasesInDirectory
 } from './opencode-database-discovery'
 import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
 import { selectUsageRows } from './opencode-usage-row-queries'
@@ -22,6 +23,11 @@ import type {
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
 } from './types'
+import {
+  createUsageAccountAttribution,
+  createUsageAccountRootResolver,
+  type UsageAccountRoot
+} from '../usage/usage-account-attribution'
 
 const YIELD_EVERY_DATABASES = 2
 
@@ -62,7 +68,10 @@ const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregat
 export async function parseOpenCodeUsageDatabase(
   dbPath: string,
   resolveWorktree: UsageWorktreeResolver,
-  options: { claimSession?: (sessionId: string) => boolean } = {}
+  options: {
+    claimSession?: (sessionId: string) => boolean
+    accountIdForSession?: (sessionId: string) => string | null
+  } = {}
 ): Promise<OpenCodeUsagePersistedDatabase> {
   const processedDatabase = await getProcessedDatabaseInfo(dbPath)
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
@@ -70,6 +79,7 @@ export async function parseOpenCodeUsageDatabase(
     db.pragma('query_only = ON')
     const events: OpenCodeUsageAttributedEvent[] = []
     const claimedBySessionId = new Map<string, boolean>()
+    const accountBySessionId = new Map<string, string | null>()
     let hasDeferredClaims = false
     for (const row of selectUsageRows(db)) {
       const parsed = parseOpenCodeUsageRow(row)
@@ -79,6 +89,10 @@ export async function parseOpenCodeUsageDatabase(
       // Sibling backups duplicate sessions; count each from one owner.
       let owned = claimedBySessionId.get(parsed.sessionId)
       if (owned === undefined) {
+        accountBySessionId.set(
+          parsed.sessionId,
+          options.accountIdForSession?.(parsed.sessionId) ?? null
+        )
         owned = options.claimSession ? options.claimSession(parsed.sessionId) : true
         claimedBySessionId.set(parsed.sessionId, owned)
       }
@@ -88,15 +102,19 @@ export async function parseOpenCodeUsageDatabase(
       }
       const attributed = await attributeOpenCodeUsageEvent(parsed, resolveWorktree)
       if (attributed) {
-        events.push(attributed)
+        const accountId = accountBySessionId.get(parsed.sessionId)
+        events.push(accountId ? { ...attributed, accountId } : attributed)
       }
     }
+    const ownedSessionIds = [...claimedBySessionId.entries()]
+      .filter(([, owned]) => owned)
+      .map(([id]) => id)
+    const ownedAccountIds = ownedSessionIds.map((id) => accountBySessionId.get(id) ?? null)
     return {
       ...processedDatabase,
       ...openCodeUsageAggregation.aggregate(events),
-      ownedSessionIds: [...claimedBySessionId.entries()]
-        .filter(([, owned]) => owned)
-        .map(([sessionId]) => sessionId),
+      ownedSessionIds,
+      ...(ownedAccountIds.some((id) => id !== null) ? { ownedAccountIds } : {}),
       hasDeferredClaims
     }
   } finally {
@@ -107,15 +125,37 @@ export async function parseOpenCodeUsageDatabase(
 export async function scanOpenCodeUsageDatabases(
   worktrees: OpenCodeUsageWorktreeRef[],
   previousProcessedDatabases: OpenCodeUsagePersistedDatabase[],
-  onFilesScanned?: (count: number) => void
+  onFilesScanned?: (count: number) => void,
+  accountRoots: UsageAccountRoot[] = [],
+  reuseProjections = true,
+  accountAttributionAvailable = true
 ): Promise<{
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
-  const dbPaths = await listOpenCodeDatabases()
+  const dbPaths = [
+    ...new Set([
+      ...(await listOpenCodeDatabases()),
+      ...(
+        await Promise.all(accountRoots.map((root) => listOpenCodeDatabasesInDirectory(root.path)))
+      ).flat()
+    ])
+  ].sort()
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
+  )
+  const accountAttribution = createUsageAccountAttribution(
+    previousProcessedDatabases.map((database) => ({
+      keys: database.ownedSessionIds ?? [],
+      accountIds: database.ownedAccountIds
+    }))
+  )
+  const resolveAccount = createUsageAccountRootResolver(
+    accountAttributionAvailable ? accountRoots : []
+  )
+  const sourceAccounts = new Map(
+    await Promise.all(dbPaths.map(async (path) => [path, await resolveAccount(path)] as const))
   )
   // Share per-cwd resolution memoization across databases.
   const resolveWorktree = await createUsageWorktreeResolver(worktrees)
@@ -136,6 +176,7 @@ export async function scanOpenCodeUsageDatabases(
     const previous = previousByPath.get(dbPath)
     const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const canReuse =
+      reuseProjections &&
       !mustReclaimDeferred &&
       previous &&
       previous.mtimeMs === databaseInfo.mtimeMs &&
@@ -183,6 +224,8 @@ export async function scanOpenCodeUsageDatabases(
   const orderedPathsToParse = [...pathsToParse].sort(compareOpenCodeClaimPriority)
   for (const [index, dbPath] of orderedPathsToParse.entries()) {
     const processed = await parseOpenCodeUsageDatabase(dbPath, resolveWorktree, {
+      accountIdForSession: (id) =>
+        accountAttribution.observe(id, sourceAccounts.get(dbPath) ?? null),
       claimSession: (sessionId) => {
         const owner = sessionOwnerById.get(sessionId)
         if (owner !== undefined && owner !== dbPath) {
@@ -197,6 +240,26 @@ export async function scanOpenCodeUsageDatabases(
     onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_DATABASES === 0) {
       await yieldToEventLoop()
+    }
+  }
+
+  for (const dbPath of dbPaths) {
+    const current = parsedByPath.get(dbPath) ?? reusedByPath.get(dbPath)
+    if (
+      current &&
+      accountAttribution.needsReprojection({
+        keys: current.ownedSessionIds,
+        accountIds: current.ownedAccountIds
+      })
+    ) {
+      const processed = await parseOpenCodeUsageDatabase(dbPath, resolveWorktree, {
+        accountIdForSession: (id) =>
+          accountAttribution.observe(id, sourceAccounts.get(dbPath) ?? null),
+        claimSession: (id) => sessionOwnerById.get(id) === dbPath
+      })
+      reusedByPath.delete(dbPath)
+      parsedByPath.set(dbPath, processed)
+      onFilesScanned?.(1)
     }
   }
 
