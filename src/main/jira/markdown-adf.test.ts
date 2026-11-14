@@ -301,7 +301,7 @@ it('preserves prose-separated URLs, IPv6 authorities and surrounding literal del
     ['https://a.com。https://b.com', '<https://a.com>。<https://b.com>'],
     [
       'http://[::1]。next http://user@[::1]:8080/path',
-      '<http://[::1]>。next http://user@[::1]:8080/path'
+      '<http://[::1]>。next <http://user@[::1]:8080/path>'
     ],
     [
       'https://example.com/Foo_(bar)) www.example.com',
