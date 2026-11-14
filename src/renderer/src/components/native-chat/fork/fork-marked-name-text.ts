@@ -16,3 +16,20 @@ export function forkMarkedNameText(t: Translate, name: string): string {
     .map((part) => (part.kind === 'mark' ? mark : part.kind === 'name' ? name : part.text))
     .join('')
 }
+
+/** A fork tab's hover-card line naming its source, marked when the source is itself a fork;
+ *  `source` is undefined when the host has said nothing of that chat. */
+export function forkSourceTooltipText(
+  t: Translate,
+  source: { name: string | null; forked: boolean } | undefined,
+  unnamedLabel: string
+): string {
+  if (!source) {
+    return t('components.native-chat.fork.unknownSourceTooltip', 'Fork of another chat')
+  }
+  const name = source.name ?? unnamedLabel
+  return t('components.native-chat.fork.sourceTooltip', 'Fork of {{name}}', {
+    name: source.forked ? forkMarkedNameText(t, name) : name,
+    interpolation: { escapeValue: false }
+  })
+}

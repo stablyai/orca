@@ -2,6 +2,9 @@ import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import SortableTab from './SortableTab'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
+import { i18n } from '@/i18n/i18n'
+import { NativeChatForkedFromContext } from '../native-chat/messages/actions/native-chat-fork-context'
+import { NativeChatNoticeRow } from '../native-chat/messages/notices/NativeChatNoticeRow'
 
 const noop = (): void => {}
 
@@ -51,7 +54,14 @@ function ChatTab({
           color: null
         }}
         canSplitTerminal={false}
-        fork={forked ? { describeSource: () => 'Fork of Annotate capabilities' } : undefined}
+        fork={
+          forked
+            ? {
+                describeSource: () => 'Fork of Annotate capabilities',
+                markedTitle: `Fork · ${title}`
+              }
+            : undefined
+        }
       />
     </div>
   )
@@ -102,4 +112,48 @@ export const hoverCard = defineFixture({
   interact: (frame) => {
     frame.querySelector<HTMLElement>('[data-testid="sortable-tab"]')?.focus()
   }
+})
+
+function localized(language: string) {
+  return defineFixture({
+    width: 760,
+    render: () => (
+      <div className="space-y-3">
+        <Strip>
+          <ChatTab id="fork" title="Annotate capabilities" forked active />
+          <ChatTab id="fork-narrow" title="Annotate capabilities" forked width={170} />
+        </Strip>
+        <div className="native-chat-appearance bg-background px-4">
+          <NativeChatForkedFromContext.Provider value={noop}>
+            <NativeChatNoticeRow
+              block={{
+                type: 'text',
+                text: 'Forked from Annotate capabilities',
+                presentation: 'forked-from',
+                forkedFrom: { sessionId: 'source', sourceForked: true }
+              }}
+            />
+          </NativeChatForkedFromContext.Provider>
+        </div>
+      </div>
+    ),
+    // Fixture pages share one i18n instance; run these shots last, then restart the server.
+    interact: async () => {
+      await i18n.changeLanguage(language)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
+  })
+}
+
+export const german = localized('de')
+export const japanese = localized('ja')
+export const russianNarrow = defineFixture({
+  ...localized('ru'),
+  width: 460,
+  render: () => (
+    <Strip>
+      <ChatTab id="fork-200" title="Annotate capabilities" forked active width={200} />
+      <ChatTab id="fork-170" title="Annotate capabilities" forked width={170} />
+    </Strip>
+  )
 })

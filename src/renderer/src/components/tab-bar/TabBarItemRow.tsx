@@ -15,7 +15,12 @@ import {
   useStructuredChatTabNaming,
   useStructuredChatTabNamingFailure
 } from '@/runtime/native-chat/naming/structured-conversation-name'
-import { readStructuredChatSessionShownNameOnTabHost } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import { readStructuredChatSessionNamingOnTabHost } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import {
+  forkMarkedNameText,
+  forkSourceTooltipText
+} from '../native-chat/fork/fork-marked-name-text'
+import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-status/title/agent-title-decoration'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import { useAppStore } from '../../store/index'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
@@ -130,19 +135,21 @@ function TabBarItemRow({
     const forkSourceId = chatNaming.forkSourceId
     const fork = forkSourceId
       ? {
-          describeSource: () => {
-            const source = readStructuredChatSessionShownNameOnTabHost(
-              chatTab,
-              forkSourceId,
-              useAppStore.getState()
+          markedTitle: forkMarkedNameText(
+            t,
+            chatTab.customLabel ??
+              stripLeadingAgentTitleDecoration(conversationName ?? chatTab.label)
+          ),
+          describeSource: () =>
+            forkSourceTooltipText(
+              t,
+              readStructuredChatSessionNamingOnTabHost(
+                chatTab,
+                forkSourceId,
+                useAppStore.getState()
+              ),
+              defaultAgentChatLabel(chatTab.agentSessionAgent)
             )
-            return source === undefined
-              ? t('components.native-chat.fork.unknownSourceTooltip', 'Fork of another chat')
-              : t('components.native-chat.fork.sourceTooltip', 'Fork of {{name}}', {
-                  name: source ?? defaultAgentChatLabel(chatTab.agentSessionAgent),
-                  interpolation: { escapeValue: false }
-                })
-          }
         }
       : undefined
     return (

@@ -21679,9 +21679,9 @@
         "failed": "{{agent}} não conseguiu ramificar este chat",
         "failedDetail": "Seu chat não foi alterado. Tente novamente.",
         "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar.",
-        "mark": "Ramificação ·",
+        "mark": "Fork ·",
         "markedName": "{{mark}} {{name}}",
-        "accessibleName": "Ramificação: {{name}}",
+        "accessibleName": "Fork: {{name}}",
         "sourceTooltip": "Ramificação de {{name}}",
         "unknownSourceTooltip": "Ramificação de outro chat"
       },

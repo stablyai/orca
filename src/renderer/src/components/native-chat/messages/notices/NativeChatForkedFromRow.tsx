@@ -18,7 +18,11 @@ export function NativeChatForkedFromRow({
   const t = useTranslate()
   const openForkSource = useContext(NativeChatForkedFromContext)
   const label = t('components.native-chat.notices.forkedFrom', NATIVE_CHAT_NOTICE_COPY.forkedFrom)
-  const name = look.sourceForked ? <ForkMarkedName name={look.sourceName} /> : look.sourceName
+  const name = look.sourceForked ? (
+    <ForkMarkedName name={look.sourceName} />
+  ) : (
+    <bdi>{look.sourceName}</bdi>
+  )
   return (
     // Plain text with decorative rules: a separator role would hide the source button from screen readers.
     <div className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint">
@@ -39,7 +43,7 @@ export function NativeChatForkedFromRow({
           <GitFork aria-hidden className="size-3.5 shrink-0" />
           <span className="shrink-0">{label}</span>
           <span className="min-w-0 truncate font-semibold text-chat-foreground">{name}</span>
-          <span aria-hidden className="shrink-0">
+          <span aria-hidden className="inline-block shrink-0 rtl:rotate-180">
             ›
           </span>
         </button>

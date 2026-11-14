@@ -61,16 +61,17 @@ export function readStructuredChatTabName(tab: ChatTabNameSource, state: AppStat
   return readStructuredChatTabSavedName(tab, state) ?? tab.label
 }
 
-/** Another chat's shown name on this tab's host, read once (a fork tab's source, when its card
- *  opens): null while that chat is unnamed, undefined when the host has said nothing of it. */
-export function readStructuredChatSessionShownNameOnTabHost(
+/** Another chat's shown name and fork mark on this tab's host, read once (a fork tab's source,
+ *  when its card opens): name null while unnamed; undefined when the host has said nothing of it. */
+export function readStructuredChatSessionNamingOnTabHost(
   tab: ChatTabNameSource,
   sessionId: string,
   state: AppState
-): string | null | undefined {
+): { name: string | null; forked: boolean } | undefined {
   const target = structuredAgentSessionTargetForHost(structuredAgentSessionOwnerForTab(state, tab))
   const feed = target ? getStructuredAgentSessionStatusFeed(target) : null
-  return feed?.getNamingSnapshot().has(sessionId)
-    ? structuredChatShownName(feed, sessionId)
+  const note = feed?.getNamingSnapshot().get(sessionId)
+  return feed && note
+    ? { name: structuredChatShownName(feed, sessionId), forked: !!note.forkedFrom }
     : undefined
 }

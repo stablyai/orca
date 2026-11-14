@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { projectForkMarker, readForkMarker, FORK_MARKER_ITEM_ID } from './agent-session-fork-marker'
 import { ForkMarkerSubscriptions } from '../subscribers/agent-session-fork-marker-delivery'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -76,29 +76,66 @@ describe('projectForkMarker', () => {
 })
 
 describe('ForkMarkerSubscriptions', () => {
-  it("refreshes a fork's divider when its source's own source is renamed", () => {
-    const marker = {
-      forkedFrom: link('parent', true)!,
-      sourceName: 'Annotate',
-      sourceForked: true,
-      sourceMissing: false,
-      sourceParentId: 'root'
+  it("re-delivers a fork's divider when its source's own source is renamed", () => {
+    const root: NamedRecord = { sessionId: 'root', provider: 'codex', conversationName: 'Annotate' }
+    const records = store(
+      root,
+      {
+        sessionId: 'parent',
+        provider: 'codex',
+        conversationName: 'Annotate fork',
+        forkedFrom: link('root')
+      },
+      { sessionId: 'child', provider: 'codex', forkedFrom: link('parent', true) }
+    )
+    const emitted: unknown[] = []
+    const fields = {
+      sessionId: 'child',
+      boundedFrames: false,
+      cursor: { epoch: 'e', sequence: 0 },
+      fence: 1,
+      readForkMarker: () => readForkMarker(records, 'child')
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refresh is spied, so delivery fields are never read.
-    const subscriber = { sessionId: 'child', readForkMarker: () => marker } as unknown as Subscriber
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refresh is spied, so the journal is never read.
-    const journal = {} as AgentSessionJournal
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marker delivery reads only these subscriber fields.
+    const subscriber = fields as unknown as Subscriber
+    subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
+    const snapshot: AgentJournalSnapshot = {
+      sessionId: 'child',
+      cursor: { epoch: 'e', sequence: 0 },
+      submissions: [],
+      items: []
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marker delivery reads only the journal's items.
+    const journal = { itemsRead: () => snapshot } as unknown as AgentSessionJournal
     const markers = new ForkMarkerSubscriptions(
-      vi.fn(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delivery calls only emit.
+      () => ({ emit: (_target: Subscriber, event: unknown) => emitted.push(event) }) as never,
       () => [subscriber],
       () => 0,
       () => journal
     )
-    const refresh = vi.spyOn(markers, 'refresh').mockImplementation(() => {})
     markers.add(subscriber)
+
+    // The parent's older " fork" title no longer matches, so its shown name becomes its saved one.
+    root.conversationName = 'Annotate v2'
     markers.refreshSources(() => journal, ['root'])
     markers.refreshSources(() => journal, ['unrelated'])
     markers.delete(subscriber)
-    expect(refresh).toHaveBeenCalledTimes(1)
+
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0]).toMatchObject({
+      type: 'batch',
+      batch: {
+        items: [
+          {
+            itemId: FORK_MARKER_ITEM_ID,
+            body: {
+              text: 'Forked from Annotate fork',
+              forkedFrom: { sessionId: 'parent', sourceForked: true }
+            }
+          }
+        ]
+      }
+    })
   })
 })

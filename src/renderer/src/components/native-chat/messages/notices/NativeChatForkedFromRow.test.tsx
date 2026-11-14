@@ -56,5 +56,5 @@ it('offers no button for a source the host has no record of', () => {
 it('shows the last known name as plain words while the source cannot be opened', () => {
   render(<NativeChatNoticeRow block={divider('Annotate capabilities')} />)
   expect(screen.queryByRole('button')).toBeNull()
-  expect(screen.getByText('Forked from Annotate capabilities')).toBeInTheDocument()
+  expect(document.body).toHaveTextContent('Forked from Annotate capabilities')
 })

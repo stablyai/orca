@@ -20883,9 +20883,9 @@
         "failed": "{{agent}} не удалось создать ответвление этого чата",
         "failedDetail": "Ваш чат не изменился. Попробуйте ещё раз.",
         "commandWorking": "Нельзя создать ответвление, пока {{agent}} отвечает. Запустите /fork снова, когда ответ завершится.",
-        "mark": "Ответвление ·",
+        "mark": "Форк ·",
         "markedName": "{{mark}} {{name}}",
-        "accessibleName": "Ответвление: {{name}}",
+        "accessibleName": "Форк: {{name}}",
         "sourceTooltip": "Ответвление от {{name}}",
         "unknownSourceTooltip": "Ответвление от другого чата"
       },

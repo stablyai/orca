@@ -81,7 +81,7 @@ export type SortableTabProps = {
   /** A native chat whose generated name failed, unless the user named the tab. */
   namingFailure?: StructuredChatTabNamingFailure | null
   /** A forked chat: the title carries the fork mark; the hover card names the source. */
-  fork?: { describeSource: () => string }
+  fork?: { describeSource: () => string; markedTitle: string }
 }
 
 export default function SortableTab({
@@ -325,7 +325,7 @@ export default function SortableTab({
           }`}
           // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
           aria-label={t('auto.components.tab.bar.SortableTab.6df69d9388', 'Close tab {{value0}}', {
-            value0: tabTitle
+            value0: fork?.markedTitle ?? tabTitle
           })}
           type="button"
           data-tab-close-button="true"
