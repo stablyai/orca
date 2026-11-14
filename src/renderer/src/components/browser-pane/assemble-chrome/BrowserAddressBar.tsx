@@ -27,6 +27,7 @@ import BrowserHistoryDialog from '../history/BrowserHistoryDialog'
 import { clearTimerRef, useClearTimersOnFormUnmount } from './use-browser-address-bar-close-timers'
 
 type BrowserAddressBarProps = {
+  disabled?: boolean
   /** The page this bar edits; its worktree's other open pages are offered as "Switch to tab". */
   pageId: string
   value: string
@@ -52,6 +53,7 @@ type BrowserAddressBarProps = {
 }
 
 export default function BrowserAddressBar({
+  disabled = false,
   pageId,
   value,
   committedValue,
@@ -361,6 +363,7 @@ export default function BrowserAddressBar({
             {leadingIcon ?? <Globe className="size-4 shrink-0 text-muted-foreground" />}
             <Input
               ref={inputRef}
+              disabled={disabled}
               value={value}
               placeholder={t(
                 'auto.components.browser.pane.browser.address.bar.placeholder',
