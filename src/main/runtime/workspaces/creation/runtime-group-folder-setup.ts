@@ -20,8 +20,8 @@ import {
   startRuntimeLocalWorktreeTerminals,
   type RuntimeLocalWorktreeTerminalPorts
 } from '../startup/runtime-local-worktree-terminal-startup'
-import { resolveWorktreeCreateAgentStartup } from '../startup/runtime-worktree-agent-startup'
-import { groupSetupAgentOutcome } from './group-setup-agent-outcome'
+import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
+import { waitForStructuredSetup } from '../../rpc/methods/agent-launch/agent-launch-worktree-creation'
 
 export type RuntimeGroupFolderCreateInput = FolderWorkspaceCreateInput &
   Pick<
@@ -54,16 +54,13 @@ export async function prepareGroupFolderCreation(args: {
   workspace: FolderWorkspace
   settings: ReturnType<RuntimeStore['getSettings']>
   ports: RuntimeLocalWorktreeTerminalPorts
-  buildStartup: Parameters<typeof resolveWorktreeCreateAgentStartup>[1]
+  startupBuilders: Parameters<typeof resolveManagedWorktreeCreateStartup>[2]
   wait: (handle: string, signal: AbortSignal) => Promise<{ exitCode: number | null }>
 }): Promise<FolderWorkspaceCreateResult> {
   const { input, workspace, group } = args
   const result: FolderWorkspaceCreateResult = { folderWorkspace: workspace }
   const owner = projectGroupHookOwner(group)
   const skip = resolveRuntimeSetupDecision(input) === 'skip'
-  if (!owner || !isRepoOnCatalogHost(owner) || skip) {
-    result.agentLaunchOutcome = { status: 'not-required' }
-  }
   let prepared: Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>> | undefined
   if (owner && isRepoOnCatalogHost(owner) && !skip) {
     try {
@@ -85,8 +82,7 @@ export async function prepareGroupFolderCreation(args: {
         },
         settings: args.settings,
         runtimeTarget: undefined,
-        shouldUseSetupRunner: true,
-        requireReadableConfig: true
+        shouldUseSetupRunner: true
       })
       if (prepared.setup) {
         prepared.setup = { ...prepared.setup, cwd: owner.path }
@@ -96,18 +92,10 @@ export async function prepareGroupFolderCreation(args: {
     } catch (error) {
       console.warn('[hooks] group setup preparation failed:', error)
       result.warning = 'Setup did not run. Check the group’s workspace hooks and try Setup again.'
-      result.agentLaunchOutcome = { status: 'failed', reason: 'preparation' }
     }
-  }
-  const required = Boolean(prepared?.shouldRunSetup && prepared.waitForAgentStartup)
-  if (required && !prepared?.setup) {
-    result.agentLaunchOutcome = { status: 'failed', reason: 'preparation' }
   }
   if (input.rendererOwnsSetup && input.agentLaunchMode !== 'structured') {
     result.setup = prepared?.setup
-    return result
-  }
-  if (result.agentLaunchOutcome?.status === 'failed') {
     return result
   }
   const request = {
@@ -127,16 +115,21 @@ export async function prepareGroupFolderCreation(args: {
     observeSetupCompletion: input.agentLaunchMode === 'structured',
     setupOnly: input.agentLaunchMode === 'structured'
   }
-  const built = await resolveWorktreeCreateAgentStartup(request, args.buildStartup)
+  const built = await resolveManagedWorktreeCreateStartup(
+    request,
+    args.settings.disabledTuiAgents,
+    args.startupBuilders
+  )
   const started = await startRuntimeLocalWorktreeTerminals({
     request,
     repo: { id: group.id },
     worktree: folderWorkspaceToWorktree(workspace),
     setup: prepared?.setup,
-    startup: request.startup ?? built?.startup,
-    startupFollowup: built?.followup,
-    startupLaunchRuntime: built?.launchRuntime,
-    createdWithAgent: input.createdWithAgent,
+    startup: built.effectiveStartup,
+    startupFollowup: built.effectiveStartupFollowup,
+    draftPaste: built.effectiveDraftPaste,
+    startupLaunchRuntime: built.startupLaunchRuntime,
+    createdWithAgent: built.effectiveCreatedWithAgent,
     promisedAgentChat: input.agentLaunchMode === 'structured',
     ports: args.ports
   })
@@ -161,13 +154,7 @@ export async function prepareGroupFolderCreation(args: {
     }
   }
   if (input.agentLaunchMode === 'structured') {
-    result.agentLaunchOutcome = await groupSetupAgentOutcome({
-      required,
-      prepared: Boolean(prepared?.setup),
-      terminalHandle: started.setupTerminalHandle,
-      wait: args.wait,
-      signal: input.signal
-    })
+    await waitForStructuredSetup({ waitForSetupTerminalCompletion: args.wait }, result.setupReceipt)
   }
   return result
 }

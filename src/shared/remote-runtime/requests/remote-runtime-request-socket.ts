@@ -1,9 +1,3 @@
-import {
-  clearRuntimeRequestTimer,
-  startRuntimeRequestTimer,
-  isRuntimeRequestDeadline,
-  runtimeProbeTimeout
-} from './group-delete-request-deadline'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
@@ -43,7 +37,7 @@ import type {
   RuntimeRpcResponse
 } from '../../runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../runtime-session-contracts'
-import { MAX_TIMER_DELAY_MS } from '../../timer-delay'
+import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
 
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   connection: PairedRuntimeConnection,
@@ -60,7 +54,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   latchedHostCheck?: RemoteRuntimeClientHandshake
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
-  if (!isRuntimeRequestDeadline(method, timeoutMs)) {
+  if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -119,7 +113,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
       }
 
-      let timeout = startRuntimeRequestTimer(method, timeoutMs, onTimeout)
+      let timeout = setTimeout(onTimeout, timeoutMs)
 
       function onTimeout(): void {
         finishError(
@@ -141,8 +135,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
           refreshableTimeout.refresh()
           return
         }
-        clearRuntimeRequestTimer(timeout)
-        timeout = startRuntimeRequestTimer(method, timeoutMs, onTimeout)
+        clearTimeout(timeout)
+        timeout = setTimeout(onTimeout, timeoutMs)
       }
 
       const finish = (
@@ -152,7 +146,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
           return
         }
         settled = true
-        clearRuntimeRequestTimer(timeout)
+        clearTimeout(timeout)
         try {
           cleanupSocketListeners()
           ws?.close()
@@ -278,7 +272,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
             connection,
             'status.get',
             undefined,
-            runtimeProbeTimeout(method, timeoutMs),
+            timeoutMs,
             undefined,
             undefined,
             signal,

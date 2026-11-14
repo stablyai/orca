@@ -18,42 +18,6 @@ import type { QueuedChatTabChange } from '../agent-session/agent-session-tab-lay
 
 type Surface = { worktreeId: string; tabId: string }
 
-export function captureStructuredSessionPresentations(
-  sessionIds: readonly string[],
-  input: {
-    raw: (sessionId: string) => Surface | null
-    saved: NonNullable<WorkspaceSessionState['unifiedTabs']>
-    pending: readonly QueuedChatTabChange[]
-  }
-): Map<string, { raw: Surface | null; saved: Surface[] }> {
-  const captured = new Map<string, { raw: Surface | null; saved: Surface[] }>()
-  for (const id of sessionIds) {
-    try {
-      captured.set(id, { raw: input.raw(id), saved: [] })
-    } catch {
-      // A foreign or unreadable scope supplies no presentation authority.
-    }
-  }
-  for (const [worktreeId, tabs] of Object.entries(input.saved)) {
-    for (const tab of tabs) {
-      const sessionId = savedSessionId(tab)
-      const entry = sessionId && captured.get(sessionId)
-      if (entry) {
-        entry.saved.push({ worktreeId, tabId: tab.id })
-      }
-    }
-  }
-  for (const queued of input.pending) {
-    if ('open' in queued.change) {
-      captured.get(queued.change.open.sessionId)?.saved.push({
-        worktreeId: queued.worktreeId,
-        tabId: queued.change.open.tabId
-      })
-    }
-  }
-  return captured
-}
-
 export function captureStructuredSessionPresentation(
   sessionId: string,
   input: {
@@ -62,10 +26,17 @@ export function captureStructuredSessionPresentation(
     pending: readonly QueuedChatTabChange[]
   }
 ): { raw: Surface | null; saved: Surface[] } {
-  return captureStructuredSessionPresentations([sessionId], {
-    ...input,
-    raw: () => input.raw
-  }).get(sessionId)!
+  const saved = Object.entries(input.saved).flatMap(([worktreeId, tabs]) =>
+    tabs.flatMap((tab) =>
+      savedSessionId(tab) === sessionId ? [{ worktreeId, tabId: tab.id }] : []
+    )
+  )
+  for (const queued of input.pending) {
+    if ('open' in queued.change && queued.change.open.sessionId === sessionId) {
+      saved.push({ worktreeId: queued.worktreeId, tabId: queued.change.open.tabId })
+    }
+  }
+  return { raw: input.raw, saved }
 }
 
 /** Resolve only captured IDs at queue execution, including opens already queued at capture. */

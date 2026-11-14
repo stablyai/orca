@@ -1,4 +1,4 @@
-import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/repo-params'
+import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/projects/repo-params'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
@@ -11,7 +11,7 @@ import {
   ProjectGroupCreateArgs,
   ProjectGroupMoveProjectArgs,
   ProjectGroupScanNestedArgs,
-  ProjectGroupDeleteArgs,
+  ProjectGroupSelectorArgs,
   ProjectGroupUpdateArgs,
   ProjectGroupUpdateManyArgs,
   parseProjectGroupIpcArgs
@@ -26,7 +26,7 @@ import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/
 export function registerProjectGroupHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: Pick<OrcaRuntimeService, 'deleteProjectGroup' | 'checkProjectGroupHooks'>
+  runtime: Pick<OrcaRuntimeService, 'checkProjectGroupHooks'>
 ): void {
   ipcMain.handle('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(
@@ -81,13 +81,17 @@ export function registerProjectGroupHandlers(
     return updated
   })
 
-  ipcMain.handle('projectGroups:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
+  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
     const args = parseProjectGroupIpcArgs(
-      ProjectGroupDeleteArgs,
+      ProjectGroupSelectorArgs,
       rawArgs,
       'invalid_project_group_delete_args'
     )
-    return (await runtime.deleteProjectGroup(args.groupId, args)).deleted
+    const deleted = store.deleteProjectGroup(args.groupId)
+    if (deleted) {
+      notifyReposChanged(mainWindow)
+    }
+    return deleted
   })
 
   ipcMain.handle('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {

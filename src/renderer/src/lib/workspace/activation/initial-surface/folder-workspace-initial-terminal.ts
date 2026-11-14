@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/launch-types'
+import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
 import type { InitialTerminalOptions } from '@/lib/workspace/activation/worktree-activation-store-contract'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'

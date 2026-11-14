@@ -5,16 +5,15 @@ import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { DegradedDaemonListeners } from './degraded-daemon-listeners'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
-import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import type {
   IPtyProvider,
-  PtyBackgroundStreamEvent,
-  PtyDataEvent,
-  PtyProcessInfo,
   PtyProviderBufferSnapshot,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+  PtySpawnOptions
+} from '../../../providers/pty/provider-contract'
+import type { PtyBackgroundStreamEvent, PtyDataEvent } from '../../../providers/pty/events'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
@@ -115,9 +114,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   supportsFencedTermination = (id: string): boolean =>
     this.ownerRecovery.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
-
-  resolveEstablishedShutdownOwner = (id: string, expectedIncarnationId: string) =>
-    this.ownerRecovery.captureEstablishedShutdownOwner(id, expectedIncarnationId)
 
   killFenced = (request: PtyFencedTerminationRequest) =>
     terminateResolvedDaemonSession(request, () =>

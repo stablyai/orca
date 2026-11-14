@@ -18,7 +18,7 @@ import {
   LinearSaveIssue,
   LinearTeamLookup,
   LinearWorkspaceRead
-} from '../../../../../../shared/rpc-contract/linear-agent-access-params'
+} from '../../../../../../shared/rpc-contract/linear/linear-agent-access-params'
 
 function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {

@@ -1,11 +1,3 @@
-import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
-import { createProjectGroupMoveAction } from './project-group-project-move'
-import { collectProjectGroupArchiveDecisions } from './project-group-archive-decisions'
-import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
-import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
-import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
-import { projectGroupDeleteTimeoutMs } from '../../../../shared/project-group-removal'
-import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { initializeNewRootProjectGroupOrder } from './project-group-update-persistence'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -13,20 +5,37 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import {
+  isProjectGroupJoinableFromCatalog,
   projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
 } from './project-group-owner-routing'
-import { findRepoForHost, repoMatchesHostIdentity } from '../repos/repo-host-identity'
+import {
+  findRepoForHost,
+  isSameRepoRow,
+  repoMatchesHostIdentity
+} from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { runtimeEnvironmentSupportsCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
+import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+
+function notifyProjectGroupOnOtherHost(): void {
+  toast.error(
+    translate('auto.store.slices.repos.moveToGroupOtherHost', 'Could not move project to group'),
+    {
+      description: translate(
+        'auto.store.slices.repos.moveToGroupOtherHostDesc',
+        'The computer this project runs on does not have this group. A project can only join groups saved on its own computer.'
+      )
+    }
+  )
+}
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -98,50 +107,16 @@ export function createProjectGroupMutationActions(
         if (!target) {
           return false
         }
-        const group = get().projectGroups.find(
-          (entry) => entry.id === groupId && getRepoExecutionHostId(entry) === ownerHostId
-        )
-        const supported =
-          group &&
-          (target.kind === 'environment'
-            ? await runtimeEnvironmentSupportsCapability(
-                target.environmentId,
-                PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
-              )
-            : await resolveFolderSetupSupported(
-                projectGroupHookOwner(group),
-                PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
-              ))
-        const folders =
-          supported && ownerHostId && target.kind === 'environment'
-            ? selectFolderWorkspaces(
-                await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
-                  target,
-                  'folderWorkspace.list'
-                )
-              ).map((row) =>
-                adoptFromEndpoint(target, {
-                  kind: 'folderWorkspace',
-                  row,
-                  resolveOwnHostId: () => ownerHostId
-                })
-              )
-            : selectFolderWorkspaces(get())
-        const archive =
-          supported && ownerHostId
-            ? await collectProjectGroupArchiveDecisions(get, groupId, ownerHostId, folders)
-            : undefined
-        const request = {
-          groupId,
-          ...(archive ? { archiveDecisions: archive.archiveDecisions } : {})
-        }
         const deleted =
           target.kind === 'local'
-            ? await window.api.projectGroups.delete(request)
+            ? await window.api.projectGroups.delete({ groupId })
             : (
-                await callRuntimeRpc<{ deleted: boolean }>(target, 'projectGroup.delete', request, {
-                  timeoutMs: archive ? projectGroupDeleteTimeoutMs(archive.workspaceCount) : 15_000
-                })
+                await callRuntimeRpc<{ deleted: boolean }>(
+                  target,
+                  'projectGroup.delete',
+                  { groupId },
+                  { timeoutMs: 15_000 }
+                )
               ).deleted
         if (!deleted) {
           return false
@@ -150,12 +125,6 @@ export function createProjectGroupMutationActions(
         return true
       } catch (err) {
         console.error('Failed to delete project group:', err)
-        toast.error(
-          translate(
-            'settings.groupHooks.removalUnconfirmed',
-            'Group removal could not be confirmed. Refresh projects to check its status.'
-          )
-        )
         return false
       }
     },
@@ -255,6 +224,64 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: createProjectGroupMoveAction(set, get)
+    moveProjectToGroup: async (project, groupId, order) => {
+      try {
+        const repo = get().repos.find((candidate) => isSameRepoRow(candidate, project))
+        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+        const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
+        if (!repo || !repoHostId || !target) {
+          return false
+        }
+        if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
+          notifyProjectGroupOnOtherHost()
+          return false
+        }
+        const moved =
+          target.kind === 'local'
+            ? await window.api.projectGroups.moveProject({
+                projectId: repo.id,
+                groupId,
+                order,
+                hostId: repoHostId
+              })
+            : (
+                await callRuntimeRpc<{ repo: Repo | null }>(
+                  target,
+                  'projectGroup.moveProject',
+                  // Why connectionId: the server's own twins differ only by their SSH target there.
+                  { repo: repo.id, groupId, order, connectionId: repo.connectionId ?? null },
+                  { timeoutMs: 15_000 }
+                )
+              ).repo
+        if (!moved) {
+          return false
+        }
+        const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
+        const movedHostId = getRepoExecutionHostId(ownedMoved)
+        set((s) => {
+          const nextRepos = s.repos.map((candidate) =>
+            isSameRepoRow(candidate, repo) ? ownedMoved : candidate
+          )
+          return {
+            repos: nextRepos,
+            ...mergeProjectCompatibilityForHostRepoChange({
+              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
+              nextRepos,
+              hostId: movedHostId
+            }),
+            folderWorkspacePathStatuses: {}
+          }
+        })
+        // Why: hosts store an unknown group id as "no group" and still return the row (#13699).
+        if (groupId && (moved.projectGroupId ?? null) !== groupId) {
+          notifyProjectGroupOnOtherHost()
+          return false
+        }
+        return true
+      } catch (err) {
+        console.error('Failed to move repo to group:', err)
+        return false
+      }
+    }
   }
 }

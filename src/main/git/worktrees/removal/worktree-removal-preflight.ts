@@ -4,7 +4,7 @@ import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-remo
 import {
   SUBMODULE_DIRTY_REMOVAL_DETAIL,
   SUBMODULE_REMOVAL_REFUSAL
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { resolveGitDir } from '../../source-control/resolve-git-dir'
 import type { WorktreeRemovalPreflightOptions } from '../worktree-operation-options'

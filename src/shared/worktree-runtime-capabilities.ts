@@ -105,6 +105,7 @@ export const WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY =
 // Hosts that run a folder project's setup and archive scripts when its workspaces are created and removed.
 export const WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY = 'worktree.folder-setup.v1' as const
 
+// Hosts that support setup settings, trust and creation for project-group folder workspaces.
 export const PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY = 'projectGroup.folder-setup.v1' as const
 
 // Hosts that honor branchIntent 'create-exact': the unsuffixed new branch, or a coded refusal.

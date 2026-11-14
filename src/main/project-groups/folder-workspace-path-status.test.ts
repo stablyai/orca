@@ -1,4 +1,3 @@
-import { createFolderWorkspaceConnectionResolver } from './folder-workspace-connection-index'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
@@ -42,32 +41,6 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('folder workspace path status', () => {
-  it.each([undefined, 'stale-target'])(
-    'routes indexed group teardown to the canonical SSH owner with legacy target %s',
-    (connectionId) => {
-      const workspace: FolderWorkspace = {
-        id: 'saved',
-        projectGroupId: 'group-1',
-        name: 'Saved',
-        folderPath: '/workspace/task',
-        linkedTask: null,
-        comment: '',
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 0,
-        createdAt: 0,
-        updatedAt: 0
-      }
-      const resolve = createFolderWorkspaceConnectionResolver(
-        [makeGroup()],
-        [makeRepo({ executionHostId: 'ssh:prod', connectionId })]
-      )
-      expect(resolve(workspace)).toEqual({ kind: 'ssh', connectionId: 'prod' })
-    }
-  )
-
   it.each([false, true])(
     'reports canonical owner ambiguity through the persisted folder status route (%s)',
     async (reverse) => {

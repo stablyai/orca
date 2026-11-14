@@ -5,7 +5,7 @@ import {
   FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
   FolderWorkspaceUpdate
-} from '../../../../../shared/rpc-contract/folder-workspace-params'
+} from '../../../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
@@ -45,7 +45,6 @@ export const FOLDER_WORKSPACE_METHODS = [
     params: FolderWorkspaceDelete,
     handler: async (params, { runtime }) =>
       runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
-        ...params,
         requireUniqueId: params.requireUniqueId
       })
   }),

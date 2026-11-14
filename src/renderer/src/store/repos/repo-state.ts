@@ -73,6 +73,7 @@ export type RepoUpdate = Partial<
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -261,7 +262,7 @@ export type RepoSlice = {
   ) => Promise<boolean>
   deleteFolderWorkspace: (
     folderWorkspaceId: string,
-    options?: { executionHostId?: ExecutionHostId; allowFailedArchiveHook?: boolean }
+    options?: { executionHostId?: ExecutionHostId }
   ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (

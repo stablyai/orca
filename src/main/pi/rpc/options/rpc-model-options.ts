@@ -35,9 +35,12 @@ export function parsePiModelOptionId(value: string): { provider: string; modelId
 
 /** Native inventory projection shared by running chats and the pre-session catalog. */
 export async function readPiRpcModelOptions(
-  rpc: PiRpcRequester
+  rpc: PiRpcRequester,
+  options?: { timeoutMs?: number | null }
 ): Promise<AgentSessionOptionsResult['models']> {
-  const models = modelsSchema.parse(await rpc.request('get_available_models')).models
+  const models = modelsSchema.parse(
+    await rpc.request('get_available_models', undefined, options)
+  ).models
   return models.map((model) => {
     const id = piModelOptionId(model.provider, model.id)
     const efforts =

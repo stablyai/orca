@@ -21,11 +21,11 @@ import {
   Scroll,
   SetValue,
   TypeText
-} from '../../../../../shared/rpc-contract/computer-schemas-params'
+} from '../../../../../shared/rpc-contract/computer/computer-schemas-params'
 import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
-} from '../../../../../shared/rpc-contract/computer-params'
+} from '../../../../../shared/rpc-contract/computer/computer-params'
 
 export function resetComputerSessionsForTest(): void {
   resetComputerSidecarForTest()
@@ -55,7 +55,7 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
-      return openComputerUsePermissions(params.id)
+      return openComputerUsePermissions(params.id, { skipGranted: params.skipGranted === true })
     }
   }),
   defineMethod({

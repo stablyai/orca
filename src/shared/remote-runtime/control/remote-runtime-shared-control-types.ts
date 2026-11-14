@@ -1,4 +1,3 @@
-import type { RuntimeRequestTimer } from '../requests/group-delete-request-deadline'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
@@ -23,7 +22,7 @@ export type SharedControlPendingRequest<TResult> = {
   method: string
   resolve: (response: RuntimeRpcResponse<TResult>) => void
   reject: (error: Error) => void
-  timeout: RuntimeRequestTimer
+  timeout: ReturnType<typeof setTimeout>
   preparedRequest?: RemoteRuntimePreparedRequest | null
   // Only opted-in long-polls refresh on unrelated keepalives; short RPCs time out independently of socket liveness.
   refreshTimeoutOnKeepalive: boolean

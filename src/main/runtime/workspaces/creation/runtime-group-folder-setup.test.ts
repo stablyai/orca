@@ -99,7 +99,7 @@ function fixture(input: Partial<FolderWorkspaceCreateInput> = {}) {
     workspace,
     settings: getDefaultSettings(root),
     ports,
-    buildStartup,
+    startupBuilders: { agent: buildStartup, draft: vi.fn() },
     wait
   }
   return { args, createTerminal, buildStartup, wait }
@@ -152,7 +152,7 @@ describe('group folder setup lifecycle', () => {
     }
   )
 
-  it('does not release structured creation until observed successful Setup', async () => {
+  it('waits for structured Setup through the worktree completion observer', async () => {
     const { args, wait, createTerminal, buildStartup } = fixture({ agentLaunchMode: 'structured' })
     let complete: ((value: { exitCode: number | null }) => void) | undefined
     wait.mockImplementation(
@@ -177,44 +177,17 @@ describe('group folder setup lifecycle', () => {
     expect(settled).toBe(false)
     complete?.({ exitCode: 0 })
     expect(await creating).toMatchObject({
-      folderWorkspace: { id: 'task-a' },
-      agentLaunchOutcome: { status: 'successful' }
+      folderWorkspace: { id: 'task-a' }
     })
   })
 
-  it.each([1, null])(
-    'retains the folder and withholds a structured launch after Setup exit %s',
-    async (exitCode) => {
-      const { args, wait } = fixture({ agentLaunchMode: 'structured' })
-      wait.mockResolvedValue({ exitCode })
-      expect(await prepareGroupFolderCreation(args)).toMatchObject({
-        folderWorkspace: { id: 'task-a' },
-        agentLaunchOutcome: { status: 'failed', reason: 'exit' }
-      })
-    }
-  )
-
-  it('runs a fully selected local setup despite malformed unused shared config', async () => {
-    const { args } = fixture({ agentLaunchMode: 'structured' })
-    writeFileSync(join(root, 'orca.yaml'), 'scripts: [invalid')
+  it('keeps the worktree structured launch behavior after Setup fails', async () => {
+    const { args, wait } = fixture({ agentLaunchMode: 'structured' })
+    wait.mockResolvedValue({ exitCode: 1 })
     expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      agentLaunchOutcome: { status: 'successful' }
+      folderWorkspace: { id: 'task-a' }
     })
-    args.group.hookSettings!.commandSourcePolicy = 'run-both'
-    expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      agentLaunchOutcome: { status: 'failed', reason: 'preparation' }
-    })
-  })
-
-  it('withholds startup when shared wait policy cannot be read despite a local immediate preference', async () => {
-    const { args, createTerminal } = fixture({ agentLaunchMode: 'structured' })
-    args.group.hookSettings!.setupAgentStartupPolicy = 'start-immediately'
-    args.group.hookSettings!.commandSourcePolicy = 'run-both'
-    writeFileSync(join(root, 'orca.yaml'), 'scripts: [invalid')
-    expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      agentLaunchOutcome: { status: 'failed', reason: 'preparation' }
-    })
-    expect(createTerminal).not.toHaveBeenCalled()
+    expect(wait).toHaveBeenCalledOnce()
   })
 
   it('lets an explicit agent create reach a stopped distro with no configured hooks', async () => {
@@ -224,8 +197,7 @@ describe('group folder setup lifecycle', () => {
     const { args } = fixture({ agentLaunchMode: 'structured' })
     delete args.group.hookSettings
     expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      folderWorkspace: { id: 'task-a' },
-      agentLaunchOutcome: { status: 'not-required' }
+      folderWorkspace: { id: 'task-a' }
     })
     blocked.mockRestore()
   })
@@ -266,15 +238,6 @@ describe('group folder setup lifecycle', () => {
     }
   })
 
-  it('retains the elected wait policy when runner preparation fails', async () => {
-    const { args, createTerminal } = fixture({ agentLaunchMode: 'structured' })
-    writeFileSync(join(root, '.orca'), 'not a directory')
-    expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      agentLaunchOutcome: { status: 'failed', reason: 'preparation' }
-    })
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
   it('skips unapproved YAML for legacy requests but still returns a usable workspace', async () => {
     const { args, wait } = fixture({ agentLaunchMode: 'structured' })
     delete args.group.hookSettings
@@ -283,38 +246,8 @@ describe('group folder setup lifecycle', () => {
       'setupRunPolicy: run-by-default\nsetupAgentStartupPolicy: wait-for-setup\nscripts:\n  setup: echo shared\n'
     )
     expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      folderWorkspace: { id: 'task-a' },
-      agentLaunchOutcome: { status: 'not-required' }
+      folderWorkspace: { id: 'task-a' }
     })
     expect(wait).not.toHaveBeenCalled()
   })
-  it.each(['observation', 'cancelled'] as const)(
-    'withholds structured startup after %s and ignores late success',
-    async (reason) => {
-      const { args, wait, buildStartup } = fixture({ agentLaunchMode: 'structured' })
-      const signal = new AbortController()
-      let complete: ((value: { exitCode: number | null }) => void) | undefined
-      wait.mockImplementation(() =>
-        reason === 'observation'
-          ? Promise.reject(new Error('observer disconnected'))
-          : new Promise((resolve) => {
-              complete = resolve
-            })
-      )
-      const creating = prepareGroupFolderCreation({
-        ...args,
-        input: { ...args.input, signal: signal.signal }
-      })
-      await vi.waitFor(() => expect(wait).toHaveBeenCalled())
-      if (reason === 'cancelled') {
-        signal.abort()
-      }
-      const result = await creating
-      expect(result).toMatchObject({ agentLaunchOutcome: { status: 'failed', reason } })
-      complete?.({ exitCode: 0 })
-      await Promise.resolve()
-      expect(result.agentLaunchOutcome?.status).toBe('failed')
-      expect(buildStartup).not.toHaveBeenCalled()
-    }
-  )
 })

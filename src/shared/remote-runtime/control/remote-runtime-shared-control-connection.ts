@@ -1,4 +1,3 @@
-import { runtimeProbeTimeout } from '../requests/group-delete-request-deadline'
 import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
@@ -82,8 +81,7 @@ export class RemoteRuntimeSharedControlConnection {
       params,
       timeoutMs,
       envelope,
-      ensureReady: () =>
-        this.ensureReadyWithTimeout(runtimeProbeTimeout(method, timeoutMs), signal),
+      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs, signal),
       send: (requestId) =>
         sharedControlActions.sendSharedControlRequest({
           pendingRequests: this.pendingRequests,
@@ -110,8 +108,7 @@ export class RemoteRuntimeSharedControlConnection {
       params,
       callbacks,
       signal,
-      ensureReady: () =>
-        this.ensureReadyWithTimeout(runtimeProbeTimeout(method, timeoutMs), signal),
+      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs, signal),
       sendSubscription: (subscription) =>
         sendSharedControlSubscription({
           subscriptions: this.subscriptions,

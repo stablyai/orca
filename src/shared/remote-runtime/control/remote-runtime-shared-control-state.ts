@@ -1,4 +1,3 @@
-import { clearRuntimeRequestTimer } from '../requests/group-delete-request-deadline'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { releaseRemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
@@ -21,7 +20,7 @@ export function rejectSharedControlPendingRequest(
     return
   }
   pendingRequests.delete(requestId)
-  clearRuntimeRequestTimer(pending.timeout)
+  clearTimeout(pending.timeout)
   releaseRemoteRuntimePreparedRequest(pending)
   pending.reject(error)
 }
@@ -36,7 +35,7 @@ export function resolveSharedControlPendingResponse(
     return
   }
   pendingRequests.delete(requestId)
-  clearRuntimeRequestTimer(pending.timeout)
+  clearTimeout(pending.timeout)
   releaseRemoteRuntimePreparedRequest(pending)
   pending.resolve(response)
 }
@@ -60,7 +59,7 @@ export function rejectAllSharedControlPendingRequests(
 ): void {
   const closeError = error ?? remoteRuntimeUnavailableError()
   for (const [requestId, pending] of pendingRequests) {
-    clearRuntimeRequestTimer(pending.timeout)
+    clearTimeout(pending.timeout)
     pendingRequests.delete(requestId)
     releaseRemoteRuntimePreparedRequest(pending)
     pending.reject(closeError)

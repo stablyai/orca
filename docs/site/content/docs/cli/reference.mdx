@@ -39,6 +39,8 @@ orca open --json
 orca status --json
 ```
 
+`orca open` starts Orca without taking keyboard focus from the app you're using. If an Orca window is already open, it does nothing.
+
 Use `--json` when another tool will parse the result. Human-readable output is for quick terminal checks.
 
 ## Selectors
@@ -150,6 +152,16 @@ orca worktree set --worktree active --pr null --gitlab-mr null --json
 Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only the named link; `create` refuses `null`. Each provider has separate fields, so setting a GitLab issue or merge request preserves GitHub and Linear links.
 
 Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
+
+### Workspace cleanup
+
+```bash
+orca workspace cleanup preview --json
+orca workspace cleanup run --json
+orca workspace cleanup report --json
+```
+
+`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
 
 ## Ports
 

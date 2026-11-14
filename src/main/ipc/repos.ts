@@ -35,6 +35,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('projectHostSetups:setupExistingFolder')
   ipcMain.removeHandler('projectHostSetups:update')
   ipcMain.removeHandler('projectHostSetups:delete')
+  ipcMain.removeHandler('projectGroups:checkHooks')
   ipcMain.removeHandler('projectGroups:list')
   ipcMain.removeHandler('projectGroups:create')
   ipcMain.removeHandler('projectGroups:update')

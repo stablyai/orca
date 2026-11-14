@@ -110,6 +110,13 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
         if (isSubmissionCancelled()) {
           return
         }
+        const policySettlement = await settleComposerSubmit(
+          groupSetup.waitForStartupPolicySave(),
+          isSubmissionCancelled
+        )
+        if (policySettlement.status === 'cancelled' || !policySettlement.value) {
+          return
+        }
         const owner = projectGroupHookOwner(selectedProjectGroup)
         const setupSupported = await resolveFolderSetupSupported(
           owner,

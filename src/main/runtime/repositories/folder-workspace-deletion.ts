@@ -1,21 +1,18 @@
-import type { FolderWorkspaceDeleteOptions } from '../../../shared/project-group-removal'
-import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
-import {
-  gateFolderWorkspaceRemovalOnArchiveHook,
-  removeFolderWorkspaceRunnerFiles
-} from '../../workspaces/removal/folder-workspace-archive-hook'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   assertWslMoveProjectWritable,
   isLocalWslMoveRow
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
-import { assertUniqueIdWhenRequired } from './folder-workspace-unique-id-mutation'
+import {
+  assertUniqueIdWhenRequired,
+  type FolderWorkspaceMutationOptions
+} from './folder-workspace-unique-id-mutation'
 import type { RuntimeProjectGroupDependencies } from './runtime-project-group-controller'
 
 export async function deleteFolderWorkspaceRow(
   deps: RuntimeProjectGroupDependencies,
   folderWorkspaceId: string,
-  options: FolderWorkspaceDeleteOptions
+  options: FolderWorkspaceMutationOptions
 ): Promise<{ deleted: boolean }> {
   const store = deps.getStore()
   if (!store?.removeFolderWorkspace) {
@@ -36,21 +33,6 @@ export async function deleteFolderWorkspaceRow(
   try {
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      const group = store
-        .getProjectGroups?.()
-        .find((entry) => entry.id === workspace.projectGroupId)
-      const owner = group && projectGroupHookOwner(group)
-      const archiveOverride =
-        owner &&
-        (await gateFolderWorkspaceRemovalOnArchiveHook({
-          repo: owner,
-          worktreeId,
-          displayName: workspace.name,
-          workspacePath: workspace.folderPath,
-          runArchive: options.runHooks === true && options.skipArchive !== true,
-          allowFailure: options.allowFailedArchiveHook === true,
-          runtimeTarget: () => undefined
-        }))
       // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
       try {
@@ -60,10 +42,7 @@ export async function deleteFolderWorkspaceRow(
       }
       if (connectionId !== undefined) {
         gate = await deps.acquireFileWatcherRemoval(workspace.folderPath, connectionId ?? undefined)
-        const stopped = await deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
-        if (stopped && owner && archiveOverride?.outcome !== 'unverifiable') {
-          removeFolderWorkspaceRunnerFiles(owner, worktreeId)
-        }
+        await deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
       }
       // Twins share every record keyed by the id, so a twin added during teardown stops the delete here.
       assertUniqueIdWhenRequired(

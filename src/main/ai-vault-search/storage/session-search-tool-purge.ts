@@ -101,7 +101,7 @@ export class SessionSearchToolPurge {
             break
           }
           if (page.ids.length) {
-            const deleted = traceSessionSearch('purge', () => this.deletePage(page.ids))
+            const deleted = traceSessionSearch('toolPurge', () => this.deletePage(page.ids))
             this.onMessagesChanged(-deleted)
             changed ||= deleted > 0
           }

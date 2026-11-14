@@ -11,6 +11,7 @@ import {
 import { hashOrcaHookScript } from './orca-hook-trust'
 import type { OrcaHookTrustKind } from '../../../../shared/orca-hook-trust-entries'
 import { getVmRecipeTrustContent } from './vm-recipe-trust-content'
+import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 import { getIssueCommandTrustContent, isUserOwnedIssueCommand } from './issue-command-trust-content'
 import {
   checkRuntimeHooks,
@@ -229,7 +230,9 @@ export async function ensureHooksApproved(
   hostId?: ExecutionHostId,
   runtimeOwnerEnvironmentId?: string | null,
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Setup for a create: read orca.yaml at the ref it checks out, not the project checkout. */
+  createSource?: SetupHooksCreateSource
 ): Promise<HookTrustApproval> {
   return enqueueTrustPrompt(async () => {
     if (isCancelled() || signal?.aborted) {
@@ -279,7 +282,8 @@ export async function ensureHooksApproved(
           ? await checkRuntimeGroupHooks(getRepoExecutionHostId(group), group.id)
           : await checkRuntimeHooks(
               hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-              repoId
+              repoId,
+              scriptKind === 'setup' && createSource ? { createSource } : {}
             )
         if (result.status === 'error') {
           return SKIP
@@ -306,21 +310,5 @@ export async function ensureHooksApproved(
       isCancelled,
       signal
     )
-  })
-}
-
-/** Approval and its execution hash describe one inspected archive snapshot, including whole-owner trust. */
-export function confirmInspectedArchiveHook(
-  stateOrGetter: AppState | (() => AppState),
-  ownerId: string,
-  hostId: ExecutionHostId,
-  scriptContent: string
-): Promise<HookTrustApproval> {
-  return enqueueTrustPrompt(async () => {
-    const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
-    const approval = await confirmScriptContent(state, ownerId, 'archive', scriptContent, hostId)
-    return approval.decision === 'run'
-      ? { decision: 'run', approvedContentHash: await hashOrcaHookScript(scriptContent) }
-      : approval
   })
 }

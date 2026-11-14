@@ -1,8 +1,3 @@
-import {
-  captureStructuredSessionPresentation,
-  captureStructuredSessionPresentations
-} from './structured-session-tab-presentation'
-import type { QueuedChatTabChange } from '../agent-session/agent-session-tab-layout-queue'
 import { OrcaRuntimeWithCloseMobileSessionTab } from '../session-lifecycle/close/close-mobile-session-tab'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
@@ -41,24 +36,6 @@ export function restoredChatTabChanges(
 }
 
 export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends OrcaRuntimeWithCloseMobileSessionTab {
-  protected abstract pendingStructuredSessionTabChanges(): readonly QueuedChatTabChange[]
-
-  captureStructuredAgentSessionPresentation(sessionId: string) {
-    return captureStructuredSessionPresentation(sessionId, {
-      raw: this.currentLocalStructuredSessionPresentation(sessionId),
-      saved: this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {},
-      pending: this.pendingStructuredSessionTabChanges()
-    })
-  }
-
-  captureStructuredAgentSessionPresentations(sessionIds: readonly string[]) {
-    return captureStructuredSessionPresentations(sessionIds, {
-      raw: (id) => this.currentLocalStructuredSessionPresentation(id),
-      saved: this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {},
-      pending: this.pendingStructuredSessionTabChanges()
-    })
-  }
-
   protected passiveStructuredSessionTabChangeEligible(change: ChatTabChange): boolean {
     const host = getStructuredAgentSessionHost()
     if ('open' in change) {
@@ -85,13 +62,7 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
       return false
     }
     let retired = false
-    const expected = expectedWorktreeId && this.mobileSessionTabsByWorktree.get(expectedWorktreeId)
-    const snapshots = expectedWorktreeId
-      ? expected
-        ? [[expectedWorktreeId, expected] as const]
-        : []
-      : this.mobileSessionTabsByWorktree
-    for (const [worktreeId, snapshot] of snapshots) {
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       if (
         (expectedWorktreeId && expectedWorktreeId !== worktreeId) ||
         this.workspaceSessions.tryGetHostId(worktreeId) !== LOCAL_EXECUTION_HOST_ID

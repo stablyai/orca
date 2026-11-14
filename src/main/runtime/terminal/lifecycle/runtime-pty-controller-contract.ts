@@ -1,5 +1,4 @@
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
-import type { WorktreePtyStopContext } from '../stop/worktree-terminal-stop-options'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate
@@ -21,14 +20,14 @@ import type {
 } from '../../../../shared/agent-session/agent-session-host-authority'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
@@ -159,12 +158,7 @@ export type RuntimePtyController = {
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
-    opts?: WorktreePtyStopContext & {
-      keepHistory?: boolean
-      deadlineMs?: number
-      observeExitOnly?: boolean
-      expectedIncarnationId?: PtyIncarnationId
-    }
+    opts?: { keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>

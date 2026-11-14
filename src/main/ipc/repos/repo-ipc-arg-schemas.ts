@@ -1,4 +1,3 @@
-import { ProjectGroupArchiveDecisionsSchema } from '../../../shared/project-group-removal'
 import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
@@ -8,7 +7,10 @@ import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
-import { FolderWorkspaceHookCreateShape } from '../../../shared/rpc-contract/folder-workspace-params'
+import {
+  FolderWorkspaceHookCreateShape,
+  assertFolderWorkspaceStartup
+} from '../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -32,10 +34,6 @@ export const ProjectGroupUpdateArgs = z.object({
 
 export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
-})
-
-export const ProjectGroupDeleteArgs = ProjectGroupSelectorArgs.extend({
-  archiveDecisions: ProjectGroupArchiveDecisionsSchema.optional()
 })
 
 export const ProjectGroupUpdateManyArgs = z.object({
@@ -166,6 +164,7 @@ export const FolderWorkspaceCreateArgs = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
+  .superRefine(assertFolderWorkspaceStartup)
 
 export const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
@@ -195,9 +194,6 @@ export const FolderWorkspaceUpdateArgs = z.object({
 })
 
 export const FolderWorkspaceSelectorArgs = z.object({
-  runHooks: z.boolean().optional(),
-  skipArchive: z.boolean().optional(),
-  allowFailedArchiveHook: z.boolean().optional(),
   folderWorkspaceId: z.string().min(1)
 })
 

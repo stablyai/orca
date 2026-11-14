@@ -40,16 +40,12 @@ import { RuntimeRepositoryForkBackfill } from '../repositories/runtime-repositor
 import { RuntimeWorkspaceSessionController } from '../workspaces/session-hosts/runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from '../integrations/ai-vault/runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from '../terminal/agent-teams/claude-agent-teams-service'
-import { bindFolderWorkspacePtyTeardown } from '../workspaces/removal/folder-workspace-pty-teardown'
+import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
-  protected abstract finishGroupFolderCreation: NonNullable<
-    ConstructorParameters<typeof RuntimeProjectGroupController>[0]['finishFolderCreation']
-  >
-  declare acquireFileWatcherRemoval: ConstructorParameters<
-    typeof RuntimeProjectGroupController
-  >[0]['acquireFileWatcherRemoval']
+  protected abstract finishGroupFolderCreation: Calls.FinishGroupFolderCreation
+  declare acquireFileWatcherRemoval: Calls.AcquireFileWatcherRemoval
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(
     worktreeId: string
   ): ExecutionHostId | null
@@ -300,11 +296,15 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
     acquireFileWatcherRemoval: (path, connectionId) =>
       this.acquireFileWatcherRemoval(path, connectionId),
-    ...bindFolderWorkspacePtyTeardown({
-      runtime: this,
-      getLocalProvider: () => this.getLocalProvider(),
-      onPtyStopped: this.onPtyStopped
-    }),
+    teardownFolderWorkspacePtys: (...target) =>
+      teardownFolderWorkspacePtys(
+        {
+          runtime: this,
+          getLocalProvider: () => this.getLocalProvider(),
+          onPtyStopped: this.onPtyStopped
+        },
+        ...target
+      ),
     cleanupRemovedFolderWorkspaceState: (worktreeId): void | Promise<void> => {
       // Retire runs after the awaited store cleanup, so the delete cannot
       // report before the Codex pretrust purge lands; failures degrade here.

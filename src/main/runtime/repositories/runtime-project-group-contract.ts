@@ -6,7 +6,6 @@ import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
-import type { WorktreeRemovalTarget } from '../workspaces/removal/worktree-removal-targets'
 
 export type RuntimeProjectGroupDependencies = {
   getStore: () => RuntimeStore | null
@@ -14,13 +13,7 @@ export type RuntimeProjectGroupDependencies = {
   resolveRepo: (selector: string, connectionId?: string | null) => Promise<Repo>
   notifyReposChanged: () => void
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
-  teardownFolderWorkspacePtys: (
-    worktreeId: string,
-    connectionId: string | null
-  ) => Promise<boolean | void>
-  teardownFolderWorkspacesPtys?: (
-    targets: readonly WorktreeRemovalTarget[]
-  ) => Promise<ReadonlyMap<string, boolean>>
+  teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
   acquireFileWatcherRemoval: (
     path: string,
     connectionId?: string

@@ -1,4 +1,3 @@
-import { assertDaemonShutdownIncarnation } from './daemon-pty-shutdown-incarnation'
 import {
   coldRestorePayloadFromInfo,
   type ColdRestorePayload
@@ -16,8 +15,8 @@ import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from '../wsl/daemo
 import * as unlistedSession from '../routing/daemon-unlisted-session'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
-import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
+import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
@@ -106,8 +105,10 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.listingDaemons = daemons
   }
 
-  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
-    assertDaemonShutdownIncarnation(this.sessionIncarnations.get(id), opts)
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
@@ -131,11 +132,10 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
 
   protected async shutdownWithHistoryLock(
     id: string,
-    opts: Parameters<IPtyProvider['shutdown']>[1]
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
     // Connect lazily, sharing one deadline with checkpoint waits and kill; durable writes themselves remain unbounded.
     await this.ensureConnected(opts.deadlineMs)
-    assertDaemonShutdownIncarnation(this.sessionIncarnations.get(id), opts)
     // Sleep may precede the first periodic checkpoint; persist the screen before killing.
     if (opts.keepHistory) {
       const sleepWslDistro = this.wslDistrosBySessionId.get(id)
@@ -206,7 +206,6 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         this.historyManager?.suspendSession(id)
       }
     }
-    assertDaemonShutdownIncarnation(this.sessionIncarnations.get(id), opts)
     try {
       await this.client.request(
         'kill',
@@ -232,7 +231,6 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         throw error
       }
     }
-    assertDaemonShutdownIncarnation(this.sessionIncarnations.get(id), opts, true)
     await this.completeShutdownWithHistoryLock(id, opts)
   }
 

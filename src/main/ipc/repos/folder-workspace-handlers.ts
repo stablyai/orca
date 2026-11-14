@@ -104,6 +104,6 @@ export function registerFolderWorkspaceHandlers(
       'invalid_folder_workspace_delete_args'
     )
     // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
-    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
+    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
   })
 }

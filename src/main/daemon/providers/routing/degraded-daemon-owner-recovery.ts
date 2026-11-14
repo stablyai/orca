@@ -1,9 +1,6 @@
-import type {
-  IPtyProvider,
-  PtyProcessInfo,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
@@ -41,21 +38,6 @@ export class DegradedDaemonOwnerRecovery {
 
   getVerifiedRoute = (id: string): IPtyProvider | undefined =>
     this.attachResolver.getVerifiedRoute(id)
-
-  captureEstablishedShutdownOwner = (id: string, expectedIncarnationId: string) => {
-    const owner = this.attachResolver.captureEstablishedShutdownOwner(id, expectedIncarnationId)
-    return (
-      owner && {
-        ...owner,
-        release: () => {
-          owner.assertCurrent(true)
-          if (this.routes.get(id) === owner.provider) {
-            this.forgetRoute(id)
-          }
-        }
-      }
-    )
-  }
 
   probe = async (sessionId: string): Promise<boolean | null> =>
     await this.livenessResolver.probe(sessionId)

@@ -3,11 +3,6 @@ import type {
   FolderWorkspaceUpdates
 } from './runtime-project-group-contract'
 export type { RuntimeProjectGroupDependencies } from './runtime-project-group-contract'
-import { deleteProjectGroupWithWorkspaceEffects } from './project-group-deletion'
-import type {
-  ProjectGroupDeleteOptions,
-  FolderWorkspaceDeleteOptions
-} from '../../../shared/project-group-removal'
 import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
 import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
@@ -76,7 +71,8 @@ export class RuntimeProjectGroupController {
       throw new Error('folder_workspace_project_group_not_found')
     }
     const checked = await new RuntimeRepositoryHooksCommands({
-      resolveRepo: async () => owner
+      resolveRepo: async () => owner,
+      readCreateSourceHooks: async () => undefined
     }).checkRepoHooks(groupId, options)
     return {
       ...checked,
@@ -120,11 +116,16 @@ export class RuntimeProjectGroupController {
     return updated
   }
 
-  async deleteGroup(
-    groupId: string,
-    options: ProjectGroupDeleteOptions = {}
-  ): Promise<{ deleted: boolean }> {
-    return deleteProjectGroupWithWorkspaceEffects(this.deps, groupId, options)
+  async deleteGroup(groupId: string): Promise<{ deleted: boolean }> {
+    const store = this.deps.getStore()
+    if (!store?.deleteProjectGroup) {
+      throw new Error('runtime_unavailable')
+    }
+    const deleted = store.deleteProjectGroup(groupId)
+    if (deleted) {
+      this.deps.notifyReposChanged()
+    }
+    return { deleted }
   }
 
   async updateGroups(mutations: readonly ProjectGroupMutation[]): Promise<ProjectGroup[] | null> {
@@ -210,7 +211,6 @@ export class RuntimeProjectGroupController {
       console.warn('[hooks] group workspace startup failed:', error)
       return {
         folderWorkspace: workspace,
-        agentLaunchOutcome: { status: 'failed', reason: 'spawn' },
         warning: 'Setup or the agent could not start. Open the workspace and try again.'
       }
     }
@@ -275,7 +275,7 @@ export class RuntimeProjectGroupController {
 
   async deleteFolderWorkspace(
     folderWorkspaceId: string,
-    options: FolderWorkspaceDeleteOptions = {}
+    options: FolderWorkspaceMutationOptions = {}
   ): Promise<{ deleted: boolean }> {
     return deleteFolderWorkspaceRow(this.deps, folderWorkspaceId, options)
   }

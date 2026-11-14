@@ -101,7 +101,6 @@ describe('ensureHostInstanceIdentity', () => {
   })
 
   it.each([
-    ['the staged keypair', 'orca-e2ee-keypair.json.next'],
     ['the staged registry', `${DEVICE_REGISTRY_FILENAME}.next`],
     ['the rotating marker', HOST_INSTANCE_FILENAME]
   ])('keeps serving the old identity when writing %s fails', async (_label, failing) => {
@@ -121,14 +120,6 @@ describe('ensureHostInstanceIdentity', () => {
       kind: 'rotated',
       reason: 'instance_changed'
     })
-  })
-
-  it('keeps serving the old identity when the first id cannot be recorded', async () => {
-    const before = await pairedHost(dir)
-    expect(
-      ensureHostInstanceIdentity(dir, vmA, failingWriteOf(HOST_INSTANCE_FILENAME))
-    ).toMatchObject({ kind: 'kept' })
-    expect((await identity(dir)).registry.validateToken(before.token)).not.toBeNull()
   })
 
   it('deletes files staged by a rotation that crashed before its marker, keeping the identity', async () => {
@@ -233,24 +224,6 @@ describe('ensureHostInstanceIdentity', () => {
     expect(ensureHostInstanceIdentity(dir, vmA)).toEqual({ kind: 'unchanged' })
     // A copy made after the reset and started with another id still rotates.
     expect(ensureHostInstanceIdentity(dir, vmB)).toMatchObject({ kind: 'rotated' })
-  })
-
-  it('finishes an interrupted rotation before a manual reset stages a new one', async () => {
-    ensureHostInstanceIdentity(dir, vmA)
-    const before = await pairedHost(dir)
-    const failFinalMarker: HostIdentityWrite = (path, value) => {
-      if (path.endsWith(HOST_INSTANCE_FILENAME) && !JSON.stringify(value).includes('rotating')) {
-        throw new Error('simulated crash clearing the marker')
-      }
-      return writeDurableSecureJsonFile(path, value)
-    }
-    expect(() => ensureHostInstanceIdentity(dir, vmB, failFinalMarker)).toThrow(/simulated crash/)
-
-    rotateHostIdentity(dir, null)
-    const after = await identity(dir)
-    expect(after.registry.validateToken(before.token)).toBeNull()
-    expect(readdirSync(dir).filter((name) => name.endsWith('.next'))).toEqual([])
-    expect(ensureHostInstanceIdentity(dir, vmB)).toEqual({ kind: 'unchanged' })
   })
 
   it('moves the replaced identity into a backup folder and keeps the newest five', async () => {

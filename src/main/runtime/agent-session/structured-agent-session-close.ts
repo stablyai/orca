@@ -19,12 +19,10 @@ export type StructuredSessionSurfaceRuntime = Pick<
   | 'captureStructuredAgentSessionPresentation'
   | 'retireStructuredAgentSessionTabFromSnapshot'
   | 'removeCapturedStructuredSessionSavedTabs'
-> &
-  Partial<Pick<OrcaRuntimeService, 'captureStructuredAgentSessionPresentations'>>
+>
 
 export type StructuredSessionSurface = {
   tableId: string | null
-  owner?: { executionHostId: string; workspaceId: string }
   presentation?: ReturnType<
     StructuredSessionSurfaceRuntime['captureStructuredAgentSessionPresentation']
   >
@@ -126,13 +124,6 @@ export function structuredSessionSurfaceIsCurrent(
   try {
     if (host.getSessionTabId(sessionId) !== (hidden ? null : surface.tableId)) {
       return false
-    }
-    if (surface.owner) {
-      const current = host.deps.store.getConversation(sessionId)?.location
-      return (
-        current?.executionHostId === surface.owner.executionHostId &&
-        current.workspaceId === surface.owner.workspaceId
-      )
     }
     if (!surface.presentation) {
       return !runtime

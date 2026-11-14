@@ -3,12 +3,11 @@
 
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { STILL_LIVE_DETAIL_PREFIX } from '../../../../shared/worktree/removal'
+import { STILL_LIVE_DETAIL_PREFIX } from '../../../../shared/worktree/removal/removal'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   observeStructuredSession,
@@ -18,22 +17,15 @@ import {
   closeStructuredAgentSessionChild,
   captureStructuredSessionSurface,
   retireCapturedStructuredSessionSurface,
-  type StructuredSessionSurface,
   type StructuredSessionSurfaceRuntime
 } from '../../agent-session/structured-agent-session-close'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import {
-  indexWorktreeRemovalTargets,
-  worktreeRemovalTargetKey,
-  type WorktreeRemovalTarget
-} from './worktree-removal-targets'
 
 export type StructuredSessionInWorkspace = {
   sessionId: string
   agent: StructuredAgentId
-  surface?: StructuredSessionSurface | null
 }
 
 export type UnclosedStructuredSession = StructuredSessionInWorkspace & {
@@ -64,83 +56,6 @@ export type StructuredSessionsForWorktree = {
   members: StructuredSessionInWorkspace[]
   /** The subset with a proven-live provider child: what the sweep closes and may refuse over. */
   live: StructuredSessionInWorkspace[]
-}
-
-/** Dispatch one host catalog to the requested folders without one filter per workspace. */
-export function listStructuredSessionsForWorktrees(
-  targets: readonly WorktreeRemovalTarget[],
-  runtime?: StructuredWorktreeSweepRuntime
-): {
-  complete: boolean
-  sessions: Map<string, StructuredSessionsForWorktree>
-} {
-  const sessions = new Map<string, StructuredSessionsForWorktree>(
-    targets.map((target) => [worktreeRemovalTargetKey(target), { members: [], live: [] }])
-  )
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return { complete: true, sessions }
-  }
-  const index = indexWorktreeRemovalTargets(targets)
-  try {
-    for (const record of host.deps.store.listConversations()) {
-      const hosts = index.get(record.location.workspaceId)
-      if (!hosts) {
-        continue
-      }
-      const hostId = parseExecutionHostId(record.location.executionHostId)
-      const connectionId =
-        hostId?.kind === 'local' ? null : hostId?.kind === 'ssh' ? hostId.targetId : undefined
-      if (connectionId === undefined) {
-        continue
-      }
-      const target = hosts.get(connectionId)
-      const bucket = target && sessions.get(worktreeRemovalTargetKey(target))
-      if (!bucket) {
-        continue
-      }
-      const member: StructuredSessionInWorkspace = {
-        sessionId: record.sessionId,
-        agent: record.provider
-      }
-      if (hostId?.kind === 'ssh') {
-        member.surface = {
-          tableId: host.getSessionTabId(record.sessionId),
-          owner: {
-            executionHostId: record.location.executionHostId,
-            workspaceId: record.location.workspaceId
-          }
-        }
-      }
-      bucket.members.push(member)
-      if (observeStructuredSession(member.sessionId).status === 'live') {
-        bucket.live.push(member)
-      }
-    }
-    if (runtime) {
-      const members = [...sessions.values()].flatMap((bucket) => bucket.members)
-      const ids = members
-        .filter((member) => member.surface === undefined)
-        .map((member) => member.sessionId)
-      const presentations = runtime.captureStructuredAgentSessionPresentations?.(ids)
-      for (const member of members) {
-        if (member.surface !== undefined) {
-          continue
-        }
-        member.surface = presentations
-          ? presentations.has(member.sessionId)
-            ? {
-                tableId: host.getSessionTabId(member.sessionId),
-                presentation: presentations.get(member.sessionId)
-              }
-            : null
-          : captureStructuredSessionSurface(host, member.sessionId, runtime)
-      }
-    }
-    return { complete: true, sessions }
-  } catch {
-    return { complete: false, sessions }
-  }
 }
 
 /** Enumerate/observe members once; an uninstalled host answers empty. Reading persisted storage would force-install it during teardown. */
@@ -180,21 +95,7 @@ function listFencedStructuredSessions(
     .filter(
       (record) => inScope(record.location.workspaceId) && record.location.executionHostId === hostId
     )
-    .map((record): StructuredSessionInWorkspace => ({
-      sessionId: record.sessionId,
-      agent: record.provider,
-      ...(parseExecutionHostId(record.location.executionHostId)?.kind === 'ssh'
-        ? {
-            surface: {
-              tableId: host.getSessionTabId(record.sessionId),
-              owner: {
-                executionHostId: record.location.executionHostId,
-                workspaceId: record.location.workspaceId
-              }
-            }
-          }
-        : {})
-    }))
+    .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
   return {
     members,
     live: members.filter((session) => observeStructuredSession(session.sessionId).status === 'live')
@@ -271,12 +172,7 @@ export async function closeStructuredSessionsForWorktree(
       return
     }
     const host = getStructuredAgentSessionHost()
-    const surface =
-      session.surface !== undefined
-        ? session.surface
-        : host
-          ? captureStructuredSessionSurface(host, session.sessionId, runtime)
-          : null
+    const surface = host ? captureStructuredSessionSurface(host, session.sessionId, runtime) : null
     const outcome = await closeStructuredAgentSessionChild(session.sessionId, {
       ...(runtime ? { runtime } : {}),
       surface
@@ -313,9 +209,7 @@ export async function retireStructuredSessionTabsForWorktree(
       await retireCapturedStructuredSessionSurface(
         host,
         session.sessionId,
-        session.surface !== undefined
-          ? session.surface
-          : captureStructuredSessionSurface(host, session.sessionId, runtime),
+        captureStructuredSessionSurface(host, session.sessionId, runtime),
         runtime
       )
     }

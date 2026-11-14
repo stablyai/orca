@@ -176,6 +176,7 @@ function getCommandSourceLabel(policy: HookCommandSourcePolicy, t: Translate = t
 export function RepositoryHookCommandSourceSetting({
   searchQuery,
   selectedPolicy,
+  setupOnly = false,
   yamlState,
   yamlHooks,
   copiedTemplate,
@@ -186,6 +187,7 @@ export function RepositoryHookCommandSourceSetting({
 }: {
   searchQuery: string
   selectedPolicy: HookCommandSourcePolicy
+  setupOnly?: boolean
   yamlState: string
   yamlHooks: OrcaHooks | null
   copiedTemplate: boolean
@@ -250,7 +252,7 @@ export function RepositoryHookCommandSourceSetting({
           {getCommandSourceLabel(selectedPolicy, t)}
         </span>
       </summary>
-      <div className="space-y-5 pt-4">
+      <div className="space-y-5 pt-4 pl-5.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">
@@ -279,6 +281,7 @@ export function RepositoryHookCommandSourceSetting({
           </div>
         </div>
         <RepositoryHooksYamlStatus
+          setupOnly={setupOnly}
           yamlState={yamlState}
           yamlHooks={yamlHooks}
           copiedTemplate={copiedTemplate}

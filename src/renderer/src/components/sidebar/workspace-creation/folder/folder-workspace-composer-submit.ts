@@ -1,10 +1,12 @@
-import { showFolderWorkspaceSetupOutcome } from './folder-workspace-setup-feedback'
-import { buildFolderWorkspaceStartupPayload } from './folder-workspace-startup-payload'
+import { toast } from 'sonner'
+import {
+  buildFolderWorkspaceStartupPayload,
+  buildFolderWorkspaceHostStartupPayload
+} from './folder-workspace-startup-payload'
 import { reviewSetupTrustMismatch } from '@/store/slices/worktrees/create/created-worktree-setup-trust'
 import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-hook-owner'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
@@ -78,9 +80,6 @@ export async function submitFolderWorkspaceCreate({
     linkedWorkItem
   })
   const launchHost = getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)
-  if (quickAgent && launchHost.kind === 'withheld') {
-    throw new Error(launchHost.reason)
-  }
   const launchPlatform = launchHost.kind === 'known' ? launchHost.platform : null
   // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
@@ -161,7 +160,12 @@ export async function submitFolderWorkspaceCreate({
       : planAgentSessionLaunch(useAppStore.getState(), launchRequest)
     : null
   const structuredLaunch = plan?.route === 'structured-native-chat'
-  if (quickAgent && !structuredLaunch && !startupPlan) {
+  const hostStartsTerminal =
+    setupSupported && Boolean(runtimeEnvironmentId) && Boolean(quickAgent) && !structuredLaunch
+  if (quickAgent && !hostStartsTerminal && launchHost.kind === 'withheld') {
+    throw new Error(launchHost.reason)
+  }
+  if (quickAgent && !structuredLaunch && !hostStartsTerminal && !startupPlan) {
     throw new Error(
       translate(
         'agentPicker.workspaceStartupFailed',
@@ -181,24 +185,19 @@ export async function submitFolderWorkspaceCreate({
   if (startupPlan && !startupPlan.launchToken) {
     startupPlan.launchToken = createBrowserUuid()
   }
-  const hostStartsTerminal = setupSupported && Boolean(runtimeEnvironmentId) && !structuredLaunch
   const result = await createFolderWorkspace({
     ...(setupSupported ? setupApproval : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
-    ...(hostStartsTerminal && startupPlan
+    ...(hostStartsTerminal
       ? {
-          startupCommand: startupPlan.launchCommand,
-          startupEnv: startupPlan.env,
-          startupLaunchConfig: startupPlan.launchConfig,
-          startupCommandDelivery: startupPlan.startupCommandDelivery,
-          startupAgent: quickAgent ?? undefined,
-          startupPrompt: launchDraftPrompt ?? note,
-          startupAgentArgs: agentArgs,
-          startupSessionOptions: sessionOptions,
-          startupLaunchPreferences: quickAgent
-            ? toAgentLaunchPreferences(sessionOptions, quickAgent)
-            : undefined,
-          launchSource
+          ...buildFolderWorkspaceHostStartupPayload({
+            quickAgent,
+            note,
+            launchDraftPrompt,
+            agentArgs,
+            sessionOptions,
+            launchSource
+          })
         }
       : {}),
     projectGroupId: projectGroup.id,
@@ -223,7 +222,7 @@ export async function submitFolderWorkspaceCreate({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
   )
-  const launchFailed = result.agentLaunchOutcome?.status === 'failed' || isCancelled()
+  const launchFailed = isCancelled()
 
   const startup = buildFolderWorkspaceStartupPayload({
     quickAgent,
@@ -235,7 +234,9 @@ export async function submitFolderWorkspaceCreate({
     note,
     launchSource
   })
-  showFolderWorkspaceSetupOutcome(result, quickAgent, isCancelled())
+  if (result.warning) {
+    toast.warning(result.warning)
+  }
   onOpenChange(false)
   try {
     const activationHolder: {
@@ -266,19 +267,15 @@ export async function submitFolderWorkspaceCreate({
       revealWorkspace()
     }
     const activation = activationHolder.value
-    if (
-      !launchFailed &&
-      !hostStartsTerminal &&
-      !structuredLaunch &&
-      quickAgent &&
-      startupPlan &&
-      launchDraftPrompt &&
-      activation !== false &&
-      activation.primaryTabId
-    ) {
+    const draftTabId = hostStartsTerminal
+      ? result.startupTerminal?.tabId
+      : activation !== false
+        ? activation.primaryTabId
+        : undefined
+    if (!launchFailed && !structuredLaunch && quickAgent && launchDraftPrompt && draftTabId) {
       // TUI prefill needs a separate chat-composer copy to remain visible after switching views.
       seedNativeChatLaunchDraftForAgentTab({
-        tabId: activation.primaryTabId,
+        tabId: draftTabId,
         agent: quickAgent,
         text: launchDraftPrompt
       })

@@ -15,6 +15,20 @@ export type AutomationRunStatus =
 export type AutomationRunTrigger = 'scheduled' | 'manual'
 
 /** Statuses a run can never leave; only these are safe to evict from history. */
+/**
+ * The time a run is listed under everywhere (list, detail, rail, run tables): its scheduled
+ * slot. A folded run (repeated identical refusals) is listed under its latest occurrence.
+ */
+export function getAutomationRunListedAt(
+  run: Pick<AutomationRun, 'scheduledFor' | 'occurrenceCount' | 'lastOccurrenceAt'>
+): number {
+  return (run.occurrenceCount ?? 1) > 1 &&
+    run.lastOccurrenceAt !== undefined &&
+    run.lastOccurrenceAt > run.scheduledFor
+    ? run.lastOccurrenceAt
+    : run.scheduledFor
+}
+
 export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
   return (
     status === 'completed' ||
@@ -24,6 +38,19 @@ export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean
     status === 'skipped_unavailable' ||
     status === 'skipped_needs_interactive_auth'
   )
+}
+
+/** Folded runs keep their first occurrence's timestamps, so the latest occurrence is when it last ran. */
+export function getAutomationRunLastRunAt(
+  run: Pick<
+    AutomationRun,
+    'dispatchedAt' | 'startedAt' | 'createdAt' | 'occurrenceCount' | 'lastOccurrenceAt'
+  >
+): number {
+  const at = run.dispatchedAt ?? run.startedAt ?? run.createdAt
+  return (run.occurrenceCount ?? 1) > 1 && run.lastOccurrenceAt && run.lastOccurrenceAt > at
+    ? run.lastOccurrenceAt
+    : at
 }
 
 export type AutomationRunUsageProvider = 'claude' | 'codex'

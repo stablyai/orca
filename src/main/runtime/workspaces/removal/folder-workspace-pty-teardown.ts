@@ -1,7 +1,6 @@
-import type { WorktreeTeardownRuntime } from './worktree-teardown'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { killAllProcessesForWorktrees } from './worktree-batch-teardown'
-import { worktreeRemovalTargetKey, type WorktreeRemovalTarget } from './worktree-removal-targets'
+import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { teardownStops } from './owned-session-teardown-policy'
 
 export type FolderWorkspacePtyTeardownDeps = {
   runtime: WorktreeTeardownRuntime
@@ -14,35 +13,21 @@ export async function teardownFolderWorkspacePtys(
   deps: FolderWorkspacePtyTeardownDeps,
   worktreeId: string,
   connectionId: string | null
-): Promise<boolean> {
-  const target = { worktreeId, connectionId }
-  return (
-    (await teardownFolderWorkspacesPtys(deps, [target])).get(worktreeRemovalTargetKey(target)) ===
-    true
-  )
-}
-
-export async function teardownFolderWorkspacesPtys(
-  deps: FolderWorkspacePtyTeardownDeps,
-  targets: readonly WorktreeRemovalTarget[]
-): Promise<ReadonlyMap<string, boolean>> {
-  try {
-    return await killAllProcessesForWorktrees(targets, {
-      runtime: deps.runtime,
-      localProvider: deps.getLocalProvider(),
-      onPtyStopped: deps.onPtyStopped ?? undefined
-    })
-  } catch (error) {
-    console.warn('[worktree-teardown] folder cleanup incomplete:', error)
-    return new Map(targets.map((target) => [worktreeRemovalTargetKey(target), false]))
+): Promise<void> {
+  const ptyProvider = deps.getLocalProvider()
+  if (!ptyProvider) {
+    return
   }
-}
-
-export function bindFolderWorkspacePtyTeardown(deps: FolderWorkspacePtyTeardownDeps) {
-  return {
-    teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) =>
-      teardownFolderWorkspacePtys(deps, worktreeId, connectionId),
-    teardownFolderWorkspacesPtys: (targets: readonly WorktreeRemovalTarget[]) =>
-      teardownFolderWorkspacesPtys(deps, targets)
-  }
+  await killAllProcessesForWorktree(worktreeId, {
+    runtime: deps.runtime,
+    resolvedWorktreeId: worktreeId,
+    ...(connectionId ? { resolvedConnectionId: connectionId } : {}),
+    localProvider: ptyProvider,
+    onPtyStopped: deps.onPtyStopped ?? undefined,
+    // PTY sweeps miss structured chats; close them too before forgetting the workspace.
+    closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
+    ...(connectionId ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
+  }).catch((error) => {
+    console.warn(`[worktree-teardown] failed for ${worktreeId}:`, error)
+  })
 }

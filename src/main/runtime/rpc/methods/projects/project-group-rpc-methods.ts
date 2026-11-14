@@ -6,10 +6,10 @@ import {
   ProjectGroupImportNested,
   ProjectGroupMoveProject,
   ProjectGroupScanNested,
-  ProjectGroupDelete,
+  ProjectGroupSelector,
   ProjectGroupUpdate,
   ProjectGroupUpdateMany
-} from '../../../../../shared/rpc-contract/repo-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
 
 export const PROJECT_GROUP_METHODS = [
   defineMethod({
@@ -44,8 +44,8 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.delete',
     permission: 'workspace',
-    params: ProjectGroupDelete,
-    handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId, params)
+    params: ProjectGroupSelector,
+    handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
   }),
   defineMethod({
     name: 'projectGroup.updateMany',

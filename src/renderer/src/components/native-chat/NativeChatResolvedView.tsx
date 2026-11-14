@@ -9,7 +9,8 @@ import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
-import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
+import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -205,7 +206,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady
+    composerReady,
+    surfaceReady: shownPromptCard !== null
   })
 
   const pendingMessages = useMemo(
@@ -324,6 +326,7 @@ export function NativeChatResolvedView({
         }
         rootInput.onKeyDownCapture(event)
       }}
+      onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
@@ -348,7 +351,9 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatMessageList
+          <NativeChatSubagentTranscripts
+            find={find}
+            paneKey={paneKey}
             ref={messageListRef}
             session={sessionWithPending}
             isVisible={isVisible}

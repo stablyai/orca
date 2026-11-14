@@ -10,7 +10,10 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { wslUserAct } from '../startup/workspace-create-activation'
-import { buildWorktreeStartupForAgent } from '../startup/runtime-worktree-agent-startup'
+import {
+  buildWorktreeStartupForAgent,
+  buildWorktreeStartupForDraft
+} from '../startup/runtime-worktree-agent-startup'
 import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
 
@@ -40,22 +43,42 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
       settings: store.getSettings(),
       ports: this.localWorktreeTerminalPorts(activation, () => {}, worktree),
       wait: (handle, signal) => this.waitForSetupTerminalCompletion(handle, signal),
-      buildStartup: (agent, prompt, launchPreferences, inputs) =>
-        buildWorktreeStartupForAgent({
-          repo: owner ?? {
-            path: workspace.folderPath,
-            connectionId: workspace.connectionId,
-            executionHostId: workspace.executionHostId
-          },
-          agent,
-          prompt,
-          launchPreferences,
-          ...inputs,
-          settings: store.getSettings(),
-          getLaunchRuntime: (requested) =>
-            resolveStartupAgentLaunchRuntime(store, scope, requested),
-          toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-        })
+      startupBuilders: {
+        agent: (agent, prompt, launchPreferences, inputs) =>
+          buildWorktreeStartupForAgent({
+            repo: owner ?? {
+              path: workspace.folderPath,
+              connectionId: workspace.connectionId,
+              executionHostId: workspace.executionHostId
+            },
+            agent,
+            prompt,
+            launchPreferences,
+            ...inputs,
+            settings: store.getSettings(),
+            getLaunchRuntime: (requested) =>
+              resolveStartupAgentLaunchRuntime(store, scope, requested),
+            toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
+          }),
+        draft: (draft, requestedAgent, launchSource, inputs) =>
+          buildWorktreeStartupForDraft({
+            repo: owner ?? {
+              path: workspace.folderPath,
+              connectionId: workspace.connectionId,
+              executionHostId: workspace.executionHostId
+            },
+            draft,
+            requestedAgent,
+            originalAgent: inputs?.createdWithAgent ?? requestedAgent,
+            agentArgs: inputs?.startupAgentArgs,
+            sessionOptions:
+              inputs?.startupSessionOptions ??
+              this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
+            launchSource,
+            settings: store.getSettings(),
+            getLaunchRuntime: (agent) => resolveStartupAgentLaunchRuntime(store, scope, agent)
+          })
+      }
     })
   }
   protected localWorktreeTerminalPorts(
@@ -71,8 +94,9 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
           ? this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree)
           : this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
       pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-      sendFollowup: (handle, followup, terminal) =>
-        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
+      sendFollowup: (handle, followup, terminal) => {
+        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+      },
       provision: (options) =>
         this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
       activate

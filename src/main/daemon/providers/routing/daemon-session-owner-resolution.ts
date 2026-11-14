@@ -6,12 +6,9 @@ import {
   type OwnerInventory,
   type ProviderInventory
 } from './daemon-session-owner-inventory'
-import type {
-  IPtyProvider,
-  PtyProcessInfo,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
 import { spawnDaemonAttachOnly } from './daemon-session-owner-attach'
 import { probeDaemonSessionOwner } from './daemon-session-owner-liveness'
@@ -185,40 +182,6 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
 
   getVerifiedRoute(sessionId: string): IPtyProvider | undefined {
     return this.routeIncarnations.has(sessionId) ? this.routes.get(sessionId) : undefined
-  }
-
-  captureEstablishedShutdownOwner(sessionId: string, expectedIncarnationId: string) {
-    const provider = this.getVerifiedRoute(sessionId)
-    const incarnationId = this.getRouteIncarnation(sessionId)
-    if (
-      !provider ||
-      (incarnationId && incarnationId !== expectedIncarnationId) ||
-      (provider.supportsFencedTermination?.(sessionId) === true &&
-        incarnationId !== expectedIncarnationId)
-    ) {
-      return null
-    }
-    return {
-      provider,
-      release: () => {
-        if (
-          this.getVerifiedRoute(sessionId) === provider &&
-          this.getRouteIncarnation(sessionId) === incarnationId
-        ) {
-          this.forgetRoute(sessionId)
-        }
-      },
-      assertCurrent: (allowAbsent = false) => {
-        const current = this.routes.get(sessionId)
-        if (
-          !(allowAbsent && !current) &&
-          (this.getVerifiedRoute(sessionId) !== provider ||
-            this.getRouteIncarnation(sessionId) !== incarnationId)
-        ) {
-          throw new Error('Terminal shutdown owner changed')
-        }
-      }
-    }
   }
 
   private setRoute(sessionId: string, provider: T, incarnationId?: string): void {

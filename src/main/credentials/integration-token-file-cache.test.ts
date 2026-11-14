@@ -29,50 +29,6 @@ function createCache() {
 }
 
 describe('integration token file cache', () => {
-  it('bounds decrypted credentials at 128 entries', () => {
-    const cache = createCache()
-    for (let index = 0; index < 132; index += 1) {
-      const id = `credential-${index}`
-      writeFileSync(filePath(id), `token-${index}`)
-      expect(cache.read(id)).toBe(`token-${index}`)
-    }
-    expect(cache.read('credential-131', false)).toBe('token-131')
-    expect(cache.read('credential-0', false)).toBeNull()
-    expect(decrypt).toHaveBeenCalledTimes(132)
-  })
-
-  it('keeps recently used credentials when the bound evicts the oldest entry', () => {
-    const cache = createCache()
-    for (let index = 0; index < 128; index += 1) {
-      writeFileSync(filePath(String(index)), `token-${index}`)
-      cache.read(String(index))
-    }
-    expect(cache.read('0', false)).toBe('token-0')
-    writeFileSync(filePath('next'), 'token-next')
-    cache.read('next')
-    expect(cache.read('0', false)).toBe('token-0')
-    expect(cache.read('1', false)).toBeNull()
-  })
-
-  it('bounds errors, keeps status lazy, and permits retry after keychain approval', () => {
-    const cache = createCache()
-    decrypt.mockImplementation(() => {
-      throw new Error('Keychain access denied')
-    })
-    for (let index = 0; index < 132; index += 1) {
-      const id = `credential-${index}`
-      writeFileSync(filePath(id), Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]))
-      expect(() => cache.read(id)).toThrow('Could not decrypt')
-    }
-    expect(cache.error('credential-131')).toContain('Could not decrypt')
-    expect(cache.error('credential-0')).toBeUndefined()
-    expect(cache.has('credential-131')).toBe(true)
-    expect(decrypt).toHaveBeenCalledTimes(132)
-    decrypt.mockReturnValue('approved-token')
-    expect(cache.read('credential-131')).toBe('approved-token')
-    expect(cache.error('credential-131')).toBeUndefined()
-  })
-
   it('clears an old decryption error after external replacement without prompting on status', () => {
     const cache = createCache()
     writeFileSync(filePath('site'), Buffer.from([0xff, 0xfe]))

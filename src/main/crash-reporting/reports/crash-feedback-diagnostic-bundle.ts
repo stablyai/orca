@@ -27,7 +27,9 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
   }
 }
 
-async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnosticBundleAttachment> {
+async function collectCrashDiagnosticBundleAttachment(
+  nativeHangCaptureId?: string
+): Promise<CrashDiagnosticBundleAttachment> {
   const status = getDiagnosticsStatus()
   if (!status.bundleEnabled) {
     return {
@@ -47,7 +49,8 @@ async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnostic
       osRelease: os.release(),
       orcaChannel: resolveDiagnosticOrcaChannel(),
       // Reports after relaunch need logs older than the default 30-minute support window.
-      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
+      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES,
+      nativeHangCaptureId
     })
   } catch (error) {
     return { diagnosticBundle: { status: 'not_uploaded', reason: formatUnknownError(error) } }
@@ -70,10 +73,11 @@ async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnostic
 }
 
 export async function prepareCrashDiagnosticBundle(
-  includeDiagnosticLogs: boolean
+  includeDiagnosticLogs: boolean,
+  nativeHangCaptureId?: string
 ): Promise<CrashDiagnosticBundleAttachment> {
   return includeDiagnosticLogs
-    ? collectCrashDiagnosticBundleAttachment()
+    ? collectCrashDiagnosticBundleAttachment(nativeHangCaptureId)
     : skippedCrashDiagnosticBundle()
 }
 

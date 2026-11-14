@@ -1,6 +1,4 @@
-import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import type { WorktreePtyStopContext } from '../../../runtime/terminal/stop/worktree-terminal-stop-options'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { isCurrentPtyExit, ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import {
@@ -182,12 +180,7 @@ export function retireRejectedPtyFromRuntimeController(
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: WorktreePtyStopContext & {
-    keepHistory?: boolean
-    deadlineMs?: number
-    observeExitOnly?: boolean
-    expectedIncarnationId?: PtyIncarnationId
-  }
+  opts?: { keepHistory?: boolean; deadlineMs?: number }
 ): Promise<boolean> {
   // A final relay stop is owed until the relay proves it, so an unproven one still reads as closing.
   const relayOwesStop =
@@ -207,12 +200,7 @@ export async function stopAndWaitPtyFromRuntimeController(
 async function stopAndWaitPty(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: WorktreePtyStopContext & {
-    keepHistory?: boolean
-    deadlineMs?: number
-    observeExitOnly?: boolean
-    expectedIncarnationId?: PtyIncarnationId
-  }
+  opts?: { keepHistory?: boolean; deadlineMs?: number }
 ): Promise<boolean> {
   const {
     runtime,
@@ -221,9 +209,6 @@ async function stopAndWaitPty(
     shutdownProviderAndDetectExit,
     finishPtyShutdown
   } = deps
-  if (opts?.expectedIncarnationId && ptyIncarnationById.get(ptyId) !== opts.expectedIncarnationId) {
-    return false
-  }
   runtime?.markPtyStopRequested?.(ptyId)
   const connectionId = getPtySshConnectionId(ptyId)
   if (connectionId && isLegacyRelayBridgedPty(ptyId)) {
@@ -279,18 +264,12 @@ async function stopAndWaitPty(
     }
     return false
   }
-  if (opts?.expectedIncarnationId && ptyIncarnationById.get(ptyId) !== opts.expectedIncarnationId) {
-    return false
-  }
   const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
   let providerExitObserved = false
   try {
     providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
       immediate: true,
       keepHistory: opts?.keepHistory ?? false,
-      expectedIncarnationId: opts?.expectedIncarnationId,
-      establishedOwnerOnly: opts?.establishedOwnerOnly,
-      onExitEvidence: opts?.onExitEvidence,
       deadlineMs
     })
   } catch (err) {
@@ -300,12 +279,7 @@ async function stopAndWaitPty(
     }
   }
   try {
-    // A bulk removal verifies its union once; do not inventory the host for every PTY.
-    if (
-      !(opts?.observeExitOnly
-        ? providerExitObserved
-        : await verifyPtyStopped(provider, ptyId, opts, providerExitObserved))
-    ) {
+    if (!(await verifyPtyStopped(provider, ptyId, opts, providerExitObserved))) {
       runtime?.markPtyLivenessLive?.(ptyId)
       return false
     }

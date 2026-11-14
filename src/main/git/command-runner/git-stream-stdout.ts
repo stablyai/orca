@@ -7,7 +7,7 @@ import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-k
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import {
   pendingWslDirectGitReadEnvironment,
@@ -41,6 +41,8 @@ export type GitStreamOptions = {
   signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
+  /** Independent stderr cap for parsers that stream an arbitrarily large population. */
+  maxStderrBuffer?: number
   /** Explicit wall-clock deadline; read commands default to the production backstop. */
   timeoutMs?: number
   /** Overrides only the default read deadline in tests. */
@@ -67,7 +69,8 @@ function streamInSpan(
   maxBuffer: number,
   timeoutMs: number | undefined
 ): Promise<GitStreamResult> {
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
+  return withGitSpan(meta, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
     if (checkoutRoutingReady) {
       await checkoutRoutingReady
@@ -212,7 +215,7 @@ function streamInSpan(
         }
         function onStderrData(chunk: Buffer): void {
           stderrBytes += chunk.byteLength
-          if (stderrBytes > maxBuffer) {
+          if (stderrBytes > (options.maxStderrBuffer ?? maxBuffer)) {
             void killSpawnedCommandTree(child)
             finish(new Error('git stderr exceeded maxBuffer.'))
             return

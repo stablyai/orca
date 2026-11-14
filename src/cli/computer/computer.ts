@@ -33,8 +33,10 @@ import {
   getComputerScrollActionFlags,
   getComputerSecondaryActionFlags,
   getComputerSetValueActionFlags,
-  getComputerTextActionFlags
+  getComputerTextActionFlags,
+  getComputerTypeTextActionFlags
 } from './computer-action-flags'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer capabilities': async ({ client, json }) => {
@@ -47,6 +49,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer permissions': async ({ flags, client, json }) => {
     const id = getComputerPermissionSetupId(flags)
+    // Agents run this on errors; System Settings over the user's work is only worth it when something is missing.
     const result = await client.call<{
       platform: NodeJS.Platform
       helperAppPath: string | null
@@ -55,7 +58,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       launchQueued?: boolean
       permissions?: { id: string; status: string }[]
       nextStep?: string | null
-    }>('computer.permissions', id ? { id } : {})
+    }>('computer.permissions', id ? { id, skipGranted: true } : {})
     printResult(result, json, (value) => {
       if (value.platform !== 'darwin') {
         return 'Computer-use permission setup is only required on macOS.'
@@ -169,8 +172,19 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer type-text': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
-    const actionParams = await getComputerTextActionFlags(flags)
+    const actionParams = await getComputerTypeTextActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    if (actionParams.elementIndex !== undefined) {
+      // Why: older runtimes strip elementIndex, so ask first rather than type into the focused field.
+      const capabilities = await client.call<ComputerProviderCapabilities>(
+        'computer.capabilities',
+        {}
+      )
+      const unsupported = computerTypeTextTargetUnsupportedMessage(capabilities.result)
+      if (unsupported) {
+        throw new RuntimeClientError('unsupported_capability', unsupported)
+      }
+    }
     const result = await client.call<ComputerActionResult>('computer.typeText', {
       ...target,
       ...actionParams,
