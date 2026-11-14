@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { AiVaultRowsEvent } from '../../../../../../shared/ai-vault-scan-rows'
 import { useAppStore } from '@/store/index'
 import {
   resetAiVaultForcedRescanThrottleForTest,
@@ -50,6 +51,11 @@ const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListRes
 const cancelListSessionsMock = vi.fn<(args: { requestToken: string }) => Promise<void>>()
 
 const onWindowFocusedMock = vi.fn(() => () => {})
+const rowObservers = new Set<(event: AiVaultRowsEvent) => void>()
+const onScanRowsMock = vi.fn((observe: (event: AiVaultRowsEvent) => void) => {
+  rowObservers.add(observe)
+  return () => rowObservers.delete(observe)
+})
 
 const initialAppState = useAppStore.getInitialState()
 
@@ -147,11 +153,13 @@ beforeEach(() => {
   vi.useFakeTimers()
   listSessionsMock.mockReset().mockResolvedValue(EMPTY_RESULT)
   cancelListSessionsMock.mockReset().mockResolvedValue()
+  rowObservers.clear()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
   ;(window as any).api = {
     aiVault: {
       listSessions: listSessionsMock,
       cancelListSessions: cancelListSessionsMock,
+      onScanRows: onScanRowsMock,
       onWindowFocused: onWindowFocusedMock
     }
   }
@@ -250,6 +258,46 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await act(async () => failDeeper(new Error('scan failed')))
     await flushMicrotasks()
     expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+  })
+
+  it('retains committed rows during preview and replaces them with the completed list', async () => {
+    const initial = deferredList()
+    const next = deferredList()
+    listSessionsMock.mockReturnValueOnce(initial.promise).mockReturnValueOnce(next.promise)
+    await renderHook()
+    await act(async () => {
+      initial.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1), makeVaultSession(2)] })
+    })
+    await flushMicrotasks()
+    expect(latest?.sessions).toHaveLength(2)
+    await act(async () => {
+      void latest?.refresh({ force: true })
+    })
+    const requestToken = listSessionsMock.mock.calls[1]?.[0].requestToken
+    if (!requestToken) {
+      throw new Error('refresh must supply its row request token')
+    }
+    await act(async () => {
+      for (const observe of rowObservers) {
+        observe({
+          requestToken,
+          scanId: 'next',
+          sequence: 1,
+          reset: true,
+          upserts: [makeVaultSession(3)],
+          removed: []
+        })
+      }
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(latest?.sessions.map((row) => row.id).sort()).toEqual([
+      'session-1',
+      'session-2',
+      'session-3'
+    ])
+    await act(async () => next.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(3)] }))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((row) => row.id)).toEqual(['session-3'])
   })
 
   it('sends manual Refresh to the host while the leading request is still pending, under its own token', async () => {
